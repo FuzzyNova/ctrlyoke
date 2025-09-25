@@ -1,0 +1,12 @@
+{
+  "prompt": "Analyze the current file and suggest improvements for code quality, readability, and performance",
+  "context": {
+    "includeCurrentFile": true,
+    "includeSelection": false
+  },
+  "endCondition": {
+    "script": "check_improvements.py",
+    "returns": "true",
+    "timeout": 30000
+  }
+}

@@ -1,0 +1,314 @@
+import * as vscode from 'vscode';
+import { PromptItem, QueueState, PromptResult } from '../types/FlightPathTypes';
+
+export class PromptQueue {
+    private state: QueueState;
+    private onStateChanged: vscode.EventEmitter<QueueState> = new vscode.EventEmitter<QueueState>();
+    private executionTimer?: NodeJS.Timeout;
+    private isPaused: boolean = false;
+
+    // Public event for state changes
+    public readonly onDidChangeState: vscode.Event<QueueState> = this.onStateChanged.event;
+
+    constructor() {
+        this.state = {
+            currentIndex: 0,
+            status: 'idle',
+            prompts: [],
+            results: []
+        };
+    }
+
+    /**
+     * Load prompts into the queue
+     */
+    loadPrompts(prompts: PromptItem[]): void {
+        this.state = {
+            currentIndex: 0,
+            status: 'idle',
+            prompts: [...prompts],
+            results: prompts.map(prompt => ({
+                prompt: prompt.prompt,
+                status: 'pending',
+                timestamp: new Date()
+            }))
+        };
+        
+        this.emitStateChange();
+        console.log(`FlightPath: Loaded ${prompts.length} prompts into queue`);
+    }
+
+    /**
+     * Start queue execution
+     */
+    async start(): Promise<void> {
+        if (this.state.status === 'running') {
+            console.log('FlightPath: Queue is already running');
+            return;
+        }
+
+        if (this.state.prompts.length === 0) {
+            vscode.window.showWarningMessage('FlightPath: No prompts to execute');
+            return;
+        }
+
+        this.state.status = 'running';
+        this.isPaused = false;
+        this.emitStateChange();
+        
+        console.log('FlightPath: Starting queue execution');
+        await this.executeNext();
+    }
+
+    /**
+     * Pause queue execution
+     */
+    pause(): void {
+        if (this.state.status !== 'running') {
+            return;
+        }
+
+        this.isPaused = true;
+        this.state.status = 'paused';
+        
+        if (this.executionTimer) {
+            clearTimeout(this.executionTimer);
+            this.executionTimer = undefined;
+        }
+        
+        this.emitStateChange();
+        console.log('FlightPath: Queue execution paused');
+    }
+
+    /**
+     * Resume queue execution
+     */
+    async resume(): Promise<void> {
+        if (this.state.status !== 'paused') {
+            return;
+        }
+
+        this.isPaused = false;
+        this.state.status = 'running';
+        this.emitStateChange();
+        
+        console.log('FlightPath: Resuming queue execution');
+        await this.executeNext();
+    }
+
+    /**
+     * Stop and reset queue
+     */
+    stop(): void {
+        this.isPaused = false;
+        this.state.status = 'idle';
+        this.state.currentIndex = 0;
+        
+        if (this.executionTimer) {
+            clearTimeout(this.executionTimer);
+            this.executionTimer = undefined;
+        }
+        
+        // Reset all pending results to pending
+        this.state.results.forEach(result => {
+            if (result.status === 'sent') {
+                result.status = 'pending';
+            }
+        });
+        
+        this.emitStateChange();
+        console.log('FlightPath: Queue execution stopped');
+    }
+
+    /**
+     * Clear queue and results
+     */
+    clear(): void {
+        this.stop();
+        this.state.prompts = [];
+        this.state.results = [];
+        this.emitStateChange();
+        console.log('FlightPath: Queue cleared');
+    }
+
+    /**
+     * Get current queue state
+     */
+    getState(): QueueState {
+        return { ...this.state };
+    }
+
+    /**
+     * Check if queue has more prompts to execute
+     */
+    hasNext(): boolean {
+        return this.state.currentIndex < this.state.prompts.length;
+    }
+
+    /**
+     * Get current prompt
+     */
+    getCurrentPrompt(): PromptItem | null {
+        if (!this.hasNext()) {
+            return null;
+        }
+        return this.state.prompts[this.state.currentIndex];
+    }
+
+    /**
+     * Mark current prompt as sent and move to next
+     */
+    async markCurrentAsSent(): Promise<void> {
+        if (!this.hasNext()) {
+            return;
+        }
+
+        const currentResult = this.state.results[this.state.currentIndex];
+        currentResult.status = 'sent';
+        currentResult.timestamp = new Date();
+        
+        this.emitStateChange();
+        
+        // If there's an end condition, wait for it
+        const currentPrompt = this.getCurrentPrompt();
+        if (currentPrompt?.endCondition) {
+            console.log(`FlightPath: Waiting for end condition for prompt ${this.state.currentIndex + 1}`);
+            // This would integrate with EndConditionEvaluator
+            // For now, simulate a delay
+            await this.waitForEndCondition(currentPrompt);
+        } else {
+            // No end condition, move to next immediately
+            await this.completeCurrentAndMoveNext();
+        }
+    }
+
+    /**
+     * Mark current prompt as completed and move to next
+     */
+    async completeCurrentAndMoveNext(): Promise<void> {
+        if (!this.hasNext()) {
+            return;
+        }
+
+        const currentResult = this.state.results[this.state.currentIndex];
+        currentResult.status = 'completed';
+        currentResult.timestamp = new Date();
+        
+        this.state.currentIndex++;
+        this.emitStateChange();
+        
+        // Continue with next prompt if not paused
+        if (!this.isPaused && this.state.status === 'running') {
+            await this.executeNext();
+        }
+    }
+
+    /**
+     * Mark current prompt as failed
+     */
+    markCurrentAsFailed(error: string): void {
+        if (!this.hasNext()) {
+            return;
+        }
+
+        const currentResult = this.state.results[this.state.currentIndex];
+        currentResult.status = 'failed';
+        currentResult.error = error;
+        currentResult.timestamp = new Date();
+        
+        this.state.status = 'error';
+        this.emitStateChange();
+        
+        console.error(`FlightPath: Prompt ${this.state.currentIndex + 1} failed:`, error);
+        vscode.window.showErrorMessage(`FlightPath: Execution failed at prompt ${this.state.currentIndex + 1}: ${error}`);
+    }
+
+    /**
+     * Execute next prompt in queue
+     */
+    private async executeNext(): Promise<void> {
+        if (this.isPaused || this.state.status !== 'running') {
+            return;
+        }
+
+        if (!this.hasNext()) {
+            // All prompts completed
+            this.state.status = 'completed';
+            this.emitStateChange();
+            console.log('FlightPath: All prompts completed successfully');
+            vscode.window.showInformationMessage('FlightPath: Workflow completed successfully!');
+            return;
+        }
+
+        const currentPrompt = this.getCurrentPrompt();
+        if (!currentPrompt) {
+            return;
+        }
+
+        console.log(`FlightPath: Processing prompt ${this.state.currentIndex + 1}/${this.state.prompts.length}`);
+        
+        // This is where we would integrate with CopilotIntegration
+        // For now, we'll emit an event that the FlightPathManager can handle
+        this.emitPromptReady(currentPrompt);
+    }
+
+    /**
+     * Wait for end condition to be met
+     */
+    private async waitForEndCondition(prompt: PromptItem): Promise<void> {
+        if (!prompt.endCondition) {
+            await this.completeCurrentAndMoveNext();
+            return;
+        }
+
+        // This would integrate with EndConditionEvaluator
+        // For now, simulate waiting with a timeout
+        const timeout = prompt.endCondition.timeout || 30000;
+        
+        this.executionTimer = setTimeout(async () => {
+            console.log(`FlightPath: End condition timeout reached for prompt ${this.state.currentIndex + 1}`);
+            // In a real implementation, we would check the actual condition here
+            await this.completeCurrentAndMoveNext();
+        }, timeout);
+    }
+
+    /**
+     * Emit state change event
+     */
+    private emitStateChange(): void {
+        this.onStateChanged.fire({ ...this.state });
+    }
+
+    /**
+     * Emit prompt ready event (to be handled by FlightPathManager)
+     */
+    private emitPromptReady(prompt: PromptItem): void {
+        // This would be handled by FlightPathManager to send to Copilot
+        console.log('FlightPath: Prompt ready for execution:', prompt.prompt.substring(0, 100) + '...');
+    }
+
+    /**
+     * Get execution progress
+     */
+    getProgress(): { current: number; total: number; percentage: number } {
+        const total = this.state.prompts.length;
+        const current = this.state.currentIndex;
+        const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+        
+        return { current, total, percentage };
+    }
+
+    /**
+     * Get completed prompts count
+     */
+    getCompletedCount(): number {
+        return this.state.results.filter(result => result.status === 'completed').length;
+    }
+
+    /**
+     * Get failed prompts count
+     */
+    getFailedCount(): number {
+        return this.state.results.filter(result => result.status === 'failed').length;
+    }
+}

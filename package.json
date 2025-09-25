@@ -33,6 +33,29 @@
         "command": "flightpath.createPromptFile",
         "title": "Create Prompt File",
         "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.pause",
+        "title": "Pause Execution",
+        "category": "FlightPath",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "flightpath.resume",
+        "title": "Resume Execution",
+        "category": "FlightPath",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "flightpath.stop",
+        "title": "Stop Execution",
+        "category": "FlightPath",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "flightpath.debugState",
+        "title": "Show Debug State",
+        "category": "FlightPath"
       }
     ],
     "menus": {
@@ -45,6 +68,18 @@
         },
         {
           "command": "flightpath.createPromptFile"
+        },
+        {
+          "command": "flightpath.pause"
+        },
+        {
+          "command": "flightpath.resume"
+        },
+        {
+          "command": "flightpath.stop"
+        },
+        {
+          "command": "flightpath.debugState"
         }
       ],
       "explorer/context": [

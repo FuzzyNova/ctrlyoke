@@ -1,26 +1,91 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { FlightPathManager } from './flightpath/FlightPathManager';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+let flightPathManager: FlightPathManager;
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "flightpath" is now active!');
+export async function activate(context: vscode.ExtensionContext) {
+    console.log('FlightPath: Extension activating...');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('flightpath.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from FlightPath!');
-	});
+    try {
+        // Initialize FlightPath manager
+        flightPathManager = new FlightPathManager(context);
+        await flightPathManager.initialize();
 
-	context.subscriptions.push(disposable);
+        // Register commands
+        registerCommands(context);
+
+        console.log('FlightPath: Extension activated successfully!');
+        vscode.window.showInformationMessage('FlightPath is ready for takeoff! 🚀');
+
+    } catch (error) {
+        console.error('FlightPath: Failed to activate extension:', error);
+        vscode.window.showErrorMessage(`FlightPath: Activation failed: ${error}`);
+    }
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+function registerCommands(context: vscode.ExtensionContext) {
+    // Take Off command - main execution command
+    const takeOffCommand = vscode.commands.registerCommand('flightpath.takeOff', async () => {
+        await flightPathManager.takeOff();
+    });
+
+    // Open Panel command
+    const openPanelCommand = vscode.commands.registerCommand('flightpath.openPanel', async () => {
+        await flightPathManager.openPanel();
+    });
+
+    // Create Prompt File command
+    const createPromptFileCommand = vscode.commands.registerCommand('flightpath.createPromptFile', async () => {
+        await flightPathManager.createPromptFile();
+    });
+
+    // Pause execution command
+    const pauseCommand = vscode.commands.registerCommand('flightpath.pause', () => {
+        flightPathManager.pause();
+    });
+
+    // Resume execution command
+    const resumeCommand = vscode.commands.registerCommand('flightpath.resume', async () => {
+        await flightPathManager.resume();
+    });
+
+    // Stop execution command
+    const stopCommand = vscode.commands.registerCommand('flightpath.stop', () => {
+        flightPathManager.stop();
+    });
+
+    // Debug command to show current state
+    const debugStateCommand = vscode.commands.registerCommand('flightpath.debugState', () => {
+        const state = flightPathManager.getQueueState();
+        const stateInfo = `FlightPath Debug State:
+Status: ${state.status}
+Current Index: ${state.currentIndex}
+Total Prompts: ${state.prompts.length}
+Results: ${state.results.length}`;
+        
+        vscode.window.showInformationMessage(stateInfo, { modal: true });
+    });
+
+    // Add all commands to subscriptions
+    context.subscriptions.push(
+        takeOffCommand,
+        openPanelCommand,
+        createPromptFileCommand,
+        pauseCommand,
+        resumeCommand,
+        stopCommand,
+        debugStateCommand
+    );
+
+    console.log('FlightPath: Commands registered successfully');
+}
+
+export function deactivate() {
+    console.log('FlightPath: Extension deactivating...');
+    
+    if (flightPathManager) {
+        flightPathManager.dispose();
+    }
+    
+    console.log('FlightPath: Extension deactivated');
+}
