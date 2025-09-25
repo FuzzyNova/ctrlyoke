@@ -1,0 +1,27 @@
+{
+  "prompts": [
+    {
+      "prompt": "Review the current file for code quality improvements",
+      "context": {
+        "includeCurrentFile": true
+      }
+    },
+    {
+      "prompt": "Implement the suggested improvements focusing on ${selectedText}",
+      "context": {
+        "includeCurrentFile": true,
+        "includeSelection": true
+      },
+      "endCondition": {
+        "script": "lint_check.js",
+        "returns": "passed"
+      }
+    },
+    {
+      "prompt": "Add JSDoc comments for all public methods",
+      "context": {
+        "includeCurrentFile": true
+      }
+    }
+  ]
+}

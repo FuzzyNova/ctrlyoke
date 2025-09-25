@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlightPath Prompt Schema",
+  "type": "object",
+  "oneOf": [
+    {
+      "title": "Single Prompt",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "The prompt text to send to GitHub Copilot"
+        },
+        "endCondition": {
+          "$ref": "#/definitions/endCondition"
+        },
+        "context": {
+          "$ref": "#/definitions/context"
+        }
+      },
+      "required": ["prompt"],
+      "additionalProperties": false
+    },
+    {
+      "title": "Multiple Prompts",
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "endCondition": {
+                "$ref": "#/definitions/endCondition"
+              },
+              "context": {
+                "$ref": "#/definitions/context"
+              }
+            },
+            "required": ["prompt"]
+          }
+        }
+      },
+      "required": ["prompts"],
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "endCondition": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "description": "Path to script file to execute"
+        },
+        "returns": {
+          "type": "string",
+          "description": "Expected return value from script"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Timeout in milliseconds"
+        }
+      },
+      "required": ["script", "returns"]
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "includeCurrentFile": {
+          "type": "boolean",
+          "default": false
+        },
+        "includeSelection": {
+          "type": "boolean",
+          "default": false
+        },
+        "includeWorkspaceFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

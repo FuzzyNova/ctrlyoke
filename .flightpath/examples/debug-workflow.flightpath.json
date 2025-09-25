@@ -1,0 +1,28 @@
+{
+  "prompts": [
+    {
+      "prompt": "Analyze this codebase for potential bugs",
+      "context": {
+        "includeWorkspaceFiles": ["src/**/*.ts", "test/**/*.ts"]
+      }
+    },
+    {
+      "prompt": "Fix the bug in function ${selectedFunction}",
+      "endCondition": {
+        "script": "run_tests.py",
+        "returns": "all_passed"
+      },
+      "context": {
+        "includeCurrentFile": true,
+        "includeSelection": true
+      }
+    },
+    {
+      "prompt": "Add comprehensive unit tests for the fixed functionality",
+      "endCondition": {
+        "script": "check_coverage.js",
+        "returns": "90"
+      }
+    }
+  ]
+}
