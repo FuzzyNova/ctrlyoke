@@ -162,7 +162,7 @@ FlightPath/
 
 ### Status Bar Integration
 
-- Icon: Airplane symbol ($(airplane)) for FlightPath branding
+- Icon: Rocket symbol ($(rocket)) for FlightPath branding
 - States: Idle, Running, Paused, Error with visual indicators
 - Interactive: Click to show status, right-click for context menu
 
