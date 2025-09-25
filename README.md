@@ -64,7 +64,7 @@ Or create a `.prompt.json` file manually:
 ### 2. Execute Your Workflow
 
 - **Command Palette**: `FlightPath: Take Off`
-- **Status Bar**: Click the FlightPath rocket icon
+- **Status Bar**: Click the FlightPath airplane icon
 - **Keyboard**: Configure your own shortcut
 
 ### 3. Monitor Progress

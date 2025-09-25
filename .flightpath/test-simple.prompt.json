@@ -1,0 +1,7 @@
+{
+  "prompt": "Test prompt for FlightPath extension validation",
+  "context": {
+    "includeCurrentFile": false,
+    "includeSelection": false
+  }
+}

@@ -17,7 +17,7 @@ export class StatusBarManager {
      * Update status bar based on queue state
      */
     updateStatusBar(state?: QueueState): void {
-        let text = '$(rocket) FlightPath';
+        let text = '$(airplane) FlightPath';
         let tooltip = 'FlightPath - Click to open';
         let backgroundColor: vscode.ThemeColor | undefined;
 

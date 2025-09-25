@@ -308,7 +308,7 @@ export class FlightPathManager {
         const state = this.promptQueue.getState();
         const progress = this.promptQueue.getProgress();
         
-        let text = '$(rocket) FlightPath';
+        let text = '$(airplane) FlightPath';
         let tooltip = 'FlightPath - Click to open';
         
         switch (state.status) {

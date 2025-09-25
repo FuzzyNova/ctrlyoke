@@ -58,10 +58,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     const debugStateCommand = vscode.commands.registerCommand('flightpath.debugState', () => {
         const state = flightPathManager.getQueueState();
         const stateInfo = `FlightPath Debug State:
-Status: ${state.status}
-Current Index: ${state.currentIndex}
-Total Prompts: ${state.prompts.length}
-Results: ${state.results.length}`;
+                            Status: ${state.status}
+                            Current Index: ${state.currentIndex}
+                            Total Prompts: ${state.prompts.length}
+                            Results: ${state.results.length}`;
         
         vscode.window.showInformationMessage(stateInfo, { modal: true });
     });
