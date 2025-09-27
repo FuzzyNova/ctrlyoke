@@ -3,6 +3,80 @@ import { FlightPathManager } from './flightpath/FlightPathManager';
 
 let flightPathManager: FlightPathManager;
 
+/**
+ * Test Copilot Chat automation feasibility
+ */
+async function testCopilotAutomation(): Promise<boolean> {
+    const testMessage = "Hello Copilot! This is an automated test message from FlightPath. Please respond with 'Test received' if you can see this.";
+    
+    try {
+        console.log('🚀 FlightPath: Starting Copilot automation test...');
+        
+        // Show initial message
+        await vscode.window.showInformationMessage(
+            'FlightPath Test: Starting automation test. Watch the Copilot Chat panel!'
+        );
+        
+        // Step 1: Focus Copilot Chat
+        console.log('📋 Step 1: Focusing Copilot Chat panel...');
+        await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for focus
+        
+        // Step 2: Clear any existing text
+        console.log('🧹 Step 2: Clearing existing input...');
+        await vscode.commands.executeCommand('editor.action.selectAll');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Step 3: Type the test message
+        console.log('⌨️ Step 3: Typing test message...');
+        await vscode.commands.executeCommand('type', { text: testMessage });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Step 4: Submit the message
+        console.log('📤 Step 4: Submitting message...');
+        await vscode.commands.executeCommand('workbench.action.chat.submit');
+        
+        // Success!
+        console.log('✅ FlightPath: Automation test completed successfully!');
+        
+        const response = await vscode.window.showInformationMessage(
+            '🎉 FlightPath: Automation test completed! Check Copilot Chat for the test message. Did it work?',
+            'Yes, it worked!',
+            'No, it failed',
+            'Run again'
+        );
+        
+        if (response === 'Run again') {
+            // Re-run the test
+            return await testCopilotAutomation();
+        } else if (response === 'Yes, it worked!') {
+            vscode.window.showInformationMessage(
+                '🎉 Excellent! FlightPath Copilot automation is feasible. The full implementation can proceed.'
+            );
+            return true;
+        } else {
+            vscode.window.showWarningMessage(
+                '⚠️ Test may have failed. Check VS Code logs and ensure Copilot Chat is available.'
+            );
+            return false;
+        }
+        
+    } catch (error) {
+        console.error('❌ FlightPath: Automation test failed:', error);
+        
+        await vscode.window.showErrorMessage(
+            `FlightPath Test Failed: ${error}. This may indicate automation won't work in this VS Code version.`,
+            'View Error Details'
+        ).then(selection => {
+            if (selection === 'View Error Details') {
+                console.error('Full error details:', error);
+            }
+        });
+        
+        return false;
+    }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
     console.log('FlightPath: Extension activating...');
 
@@ -66,6 +140,11 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(stateInfo, { modal: true });
     });
 
+    // Test Copilot Automation command - feasibility test
+    const testCopilotCommand = vscode.commands.registerCommand('flightpath.test.copilotAutomation', async () => {
+        await testCopilotAutomation();
+    });
+
     // Add all commands to subscriptions
     context.subscriptions.push(
         takeOffCommand,
@@ -74,7 +153,8 @@ function registerCommands(context: vscode.ExtensionContext) {
         pauseCommand,
         resumeCommand,
         stopCommand,
-        debugStateCommand
+        debugStateCommand,
+        testCopilotCommand
     );
 
     console.log('FlightPath: Commands registered successfully');

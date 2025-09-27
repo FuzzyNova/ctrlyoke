@@ -56,6 +56,12 @@
         "command": "flightpath.debugState",
         "title": "Show Debug State",
         "category": "FlightPath"
+      },
+      {
+        "command": "flightpath.test.copilotAutomation",
+        "title": "Test Copilot Chat Automation",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
       }
     ],
     "menus": {
@@ -80,6 +86,9 @@
         },
         {
           "command": "flightpath.debugState"
+        },
+        {
+          "command": "flightpath.test.copilotAutomation"
         }
       ],
       "explorer/context": [

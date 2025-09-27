@@ -67,7 +67,15 @@ Or create a `.prompt.json` file manually:
 - **Status Bar**: Click the FlightPath rocket icon
 - **Keyboard**: Configure your own shortcut
 
-### 3. Monitor Progress
+### 3. Test Copilot Integration (Development)
+
+To test the Copilot Chat automation feasibility:
+
+- **Command Palette**: `FlightPath Test: Test Copilot Chat Automation`
+- **Purpose**: Verify that automated Copilot Chat interactions work in your VS Code environment
+- **What it does**: Automatically focuses Copilot Chat, types a test message, and submits it
+
+### 4. Monitor Progress
 
 Watch execution progress in:
 - Status bar (real-time updates)
@@ -84,10 +92,11 @@ FlightPath contributes the following settings:
 
 ## 🐛 Known Issues
 
-- GitHub Copilot Chat API integration is currently a stub implementation
+- GitHub Copilot Chat API integration is currently a stub implementation (use test command to verify automation feasibility)
 - End condition scripts run in separate processes (security limitation)
 - Windows PowerShell execution policy may require manual configuration
 - Large workspace file inclusion may impact performance
+- Copilot Chat automation requires active GitHub Copilot extension
 
 ## 🛠️ Development Status
 
@@ -99,11 +108,14 @@ FlightPath contributes the following settings:
 - [x] Status bar integration
 - [x] File system utilities and monitoring
 - [x] End condition script execution
+- [x] Copilot automation feasibility testing
 - [x] Basic unit tests
 
-### 📋 Next Phase - Enhanced Features
+### 📋 Current Phase - Copilot Integration
+- [x] Copilot Chat automation proof-of-concept
+- [ ] Enhanced GitHub Copilot integration with multi-strategy automation
+- [ ] Context-aware prompt formatting with @workspace syntax
 - [ ] WebView UI panel for file selection
-- [ ] Enhanced GitHub Copilot integration
 - [ ] Advanced context awareness features
 - [ ] Comprehensive test coverage
 
