@@ -30,27 +30,74 @@ export class CopilotIntegration {
 
     /**
      * Check if GitHub Copilot is available and automation commands are present
+     * @param activateIfNeeded - If true, will attempt to activate Copilot extensions if they're installed but not active
      */
-    private async checkCopilotAvailability(): Promise<void> {
+    private async checkCopilotAvailability(activateIfNeeded: boolean = false): Promise<void> {
         try {
+            console.log('🔍 FlightPath: Checking Copilot availability...');
+            
             // Check if GitHub Copilot extension is installed and active
-            const copilotExtension = vscode.extensions.getExtension('GitHub.copilot');
-            const copilotChatExtension = vscode.extensions.getExtension('GitHub.copilot-chat');
+            let copilotExtension = vscode.extensions.getExtension('GitHub.copilot');
+            let copilotChatExtension = vscode.extensions.getExtension('GitHub.copilot-chat');
+            
+            console.log('📦 Copilot extension:', copilotExtension ? 
+                `Found (Active: ${copilotExtension.isActive})` : 'Not found');
+            console.log('📦 Copilot Chat extension:', copilotChatExtension ? 
+                `Found (Active: ${copilotChatExtension.isActive})` : 'Not found');
+            
+            // Try to activate extensions if they're installed but not active
+            if (activateIfNeeded) {
+                if (copilotChatExtension && !copilotChatExtension.isActive) {
+                    console.log('🔄 FlightPath: Attempting to activate Copilot Chat extension...');
+                    try {
+                        await copilotChatExtension.activate();
+                        console.log('✅ FlightPath: Copilot Chat extension activated');
+                    } catch (activationError) {
+                        console.warn('⚠️ FlightPath: Could not activate Copilot Chat:', activationError);
+                    }
+                }
+                
+                if (copilotExtension && !copilotExtension.isActive) {
+                    console.log('🔄 FlightPath: Attempting to activate Copilot extension...');
+                    try {
+                        await copilotExtension.activate();
+                        console.log('✅ FlightPath: Copilot extension activated');
+                    } catch (activationError) {
+                        console.warn('⚠️ FlightPath: Could not activate Copilot:', activationError);
+                    }
+                }
+                
+                // Re-fetch extension references after activation attempts
+                copilotExtension = vscode.extensions.getExtension('GitHub.copilot');
+                copilotChatExtension = vscode.extensions.getExtension('GitHub.copilot-chat');
+            }
             
             const hasCopilot = !!(copilotExtension?.isActive || copilotChatExtension?.isActive);
             
             if (!hasCopilot) {
                 console.log('❌ FlightPath: GitHub Copilot not installed or not active');
+                if (!activateIfNeeded) {
+                    console.log('💡 FlightPath: Will retry with activation when sending prompts');
+                }
                 this.isAvailable = false;
                 return;
             }
             
             // Check for required automation commands (PROVEN strategy)
+            console.log('🔍 FlightPath: Checking for required automation commands...');
             const commands = await vscode.commands.getCommands();
+            console.log(`📊 Total VS Code commands available: ${commands.length}`);
+            
             const hasTypeCommand = commands.includes('type');
             const hasChatSubmit = commands.includes('workbench.action.chat.submit');
             const hasChatFocus = commands.includes('workbench.panel.chat.view.copilot.focus');
             const hasSelectAll = commands.includes('editor.action.selectAll');
+            
+            console.log('📋 Command availability check:');
+            console.log(`   - type: ${hasTypeCommand ? '✅' : '❌'}`);
+            console.log(`   - chat.submit: ${hasChatSubmit ? '✅' : '❌'}`);
+            console.log(`   - chat.focus: ${hasChatFocus ? '✅' : '❌'}`);
+            console.log(`   - selectAll: ${hasSelectAll ? '✅' : '❌'}`);
             
             this.isAvailable = hasTypeCommand && hasChatSubmit && hasChatFocus && hasSelectAll;
             
@@ -64,7 +111,8 @@ export class CopilotIntegration {
                 console.log(`   - selectAll: ${hasSelectAll}`);
             }
         } catch (error) {
-            console.error('FlightPath: Error checking Copilot availability:', error);
+            console.error('❌ FlightPath: Error checking Copilot availability:', error);
+            console.error('📊 Error details:', JSON.stringify(error, null, 2));
             this.isAvailable = false;
         }
     }
@@ -82,28 +130,52 @@ export class CopilotIntegration {
      */
     async sendPrompt(prompt: PromptItem): Promise<boolean> {
         try {
-            // Check if automation is available
+            console.log('🚀 FlightPath: sendPrompt() called');
+            console.log(`📊 Prompt item:`, {
+                prompt: prompt.prompt.substring(0, 100),
+                hasContext: !!prompt.context,
+                hasEndCondition: !!prompt.endCondition
+            });
+            
+            // Re-check automation availability and try to activate Copilot if needed
+            console.log(`🔍 Current automation availability: ${this.isAvailable}`);
             if (!this.isAvailable) {
-                const message = 'FlightPath: Direct automation unavailable. Required commands not found. Please ensure GitHub Copilot Chat is installed and VS Code is up to date.';
-                console.error('❌ ' + message);
-                vscode.window.showErrorMessage(message, 'Show Details').then(action => {
-                    if (action === 'Show Details') {
-                        this.showAutomationRequirements();
-                    }
-                });
-                return false;
+                console.log('🔄 FlightPath: Automation not available, attempting to activate Copilot extensions...');
+                await this.checkCopilotAvailability(true); // activateIfNeeded = true
+                
+                if (!this.isAvailable) {
+                    const message = 'FlightPath: Direct automation unavailable. Required commands not found. Please ensure GitHub Copilot Chat is installed and VS Code is up to date.';
+                    console.error('❌ ' + message);
+                    vscode.window.showErrorMessage(message, 'Show Details').then(action => {
+                        if (action === 'Show Details') {
+                            this.showAutomationRequirements();
+                        }
+                    });
+                    return false;
+                }
+                
+                console.log('✅ FlightPath: Automation now available after activation');
             }
             
             console.log('🚀 FlightPath: Sending prompt with direct automation (PROVEN strategy)');
             
             // Build prompt with Copilot Chat syntax
+            console.log('🔨 Building Copilot Chat prompt with context...');
             const chatPrompt = await this.buildCopilotChatPrompt(prompt);
+            console.log(`✅ Built chat prompt (${chatPrompt.length} characters)`);
+            console.log(`📝 Chat prompt preview: "${chatPrompt.substring(0, 150)}${chatPrompt.length > 150 ? '...' : ''}"`);
             
             // Execute direct automation
-            return await this.sendPromptWithDirectAutomation(chatPrompt);
+            console.log('🎬 Executing direct automation sequence...');
+            const result = await this.sendPromptWithDirectAutomation(chatPrompt);
+            console.log(`📊 Automation result: ${result ? '✅ SUCCESS' : '❌ FAILED'}`);
+            
+            return result;
             
         } catch (error) {
-            console.error('FlightPath: Failed to send prompt to Copilot:', error);
+            console.error('❌ FlightPath: Failed to send prompt to Copilot:', error);
+            console.error('📊 Error type:', typeof error);
+            console.error('📊 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
             vscode.window.showErrorMessage(`FlightPath: Failed to send prompt: ${error}`);
             return false;
         }
@@ -117,22 +189,65 @@ export class CopilotIntegration {
      */
     private async sendPromptWithDirectAutomation(chatPrompt: string): Promise<boolean> {
         try {
+            console.log('🔍 FlightPath: Starting direct automation sequence...');
+            console.log(`📝 Prompt to send: "${chatPrompt.substring(0, 100)}${chatPrompt.length > 100 ? '...' : ''}"`);
+            
             // Step 1: Focus Copilot Chat panel
-            await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+            console.log('📋 Step 1: Attempting to focus Copilot Chat panel...');
+            try {
+                await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+                console.log('✅ Step 1: Focus command executed successfully');
+            } catch (focusError) {
+                console.error('❌ Step 1 FAILED: Could not focus Copilot Chat panel:', focusError);
+                throw new Error(`Failed to focus Copilot Chat: ${focusError}`);
+            }
+            
+            console.log('⏳ Step 1: Waiting 1000ms for panel to focus...');
             await new Promise(resolve => setTimeout(resolve, 1000)); // PROVEN: 1000ms required
+            console.log('✅ Step 1: Wait complete');
             
             // Step 2: Clear any existing input
-            await vscode.commands.executeCommand('editor.action.selectAll');
+            console.log('🧹 Step 2: Attempting to select all existing text...');
+            try {
+                await vscode.commands.executeCommand('editor.action.selectAll');
+                console.log('✅ Step 2: Select all command executed successfully');
+            } catch (selectError) {
+                console.error('❌ Step 2 FAILED: Could not select all text:', selectError);
+                throw new Error(`Failed to select all: ${selectError}`);
+            }
+            
+            console.log('⏳ Step 2: Waiting 300ms for selection to complete...');
             await new Promise(resolve => setTimeout(resolve, 300)); // PROVEN: 300ms required
+            console.log('✅ Step 2: Wait complete');
             
             // Step 3: Type the prompt directly into chat input
-            await vscode.commands.executeCommand('type', { text: chatPrompt });
+            console.log('⌨️ Step 3: Attempting to type prompt text...');
+            console.log(`📊 Prompt length: ${chatPrompt.length} characters`);
+            try {
+                await vscode.commands.executeCommand('type', { text: chatPrompt });
+                console.log('✅ Step 3: Type command executed successfully');
+            } catch (typeError) {
+                console.error('❌ Step 3 FAILED: Could not type text:', typeError);
+                console.error('📋 Type command parameters:', { text: chatPrompt });
+                throw new Error(`Failed to type text: ${typeError}`);
+            }
+            
+            console.log('⏳ Step 3: Waiting 500ms for text to be processed...');
             await new Promise(resolve => setTimeout(resolve, 500)); // PROVEN: 500ms required
+            console.log('✅ Step 3: Wait complete');
             
             // Step 4: Submit automatically
-            await vscode.commands.executeCommand('workbench.action.chat.submit');
+            console.log('📤 Step 4: Attempting to submit message...');
+            try {
+                await vscode.commands.executeCommand('workbench.action.chat.submit');
+                console.log('✅ Step 4: Submit command executed successfully');
+            } catch (submitError) {
+                console.error('❌ Step 4 FAILED: Could not submit message:', submitError);
+                throw new Error(`Failed to submit message: ${submitError}`);
+            }
             
             console.log('✅ FlightPath: Prompt sent successfully with zero-interaction automation');
+            console.log('🎉 All automation steps completed successfully!');
             
             // Update workflow progress
             await this.updateWorkflowProgress();
@@ -140,10 +255,19 @@ export class CopilotIntegration {
             return true;
             
         } catch (error) {
-            console.error('❌ FlightPath: Direct automation failed:', error);
+            console.error('❌ FlightPath: Direct automation failed with error:', error);
+            console.error('📊 Error type:', typeof error);
+            console.error('📊 Error details:', JSON.stringify(error, null, 2));
+            
             vscode.window.showErrorMessage(
-                `FlightPath: Automation failed: ${error}. Check that Copilot Chat is open and responsive.`
-            );
+                `FlightPath: Automation failed: ${error}. Check that Copilot Chat is open and responsive.`,
+                'Show Output Log'
+            ).then(action => {
+                if (action === 'Show Output Log') {
+                    vscode.commands.executeCommand('workbench.action.output.toggleOutput');
+                }
+            });
+            
             return false;
         }
     }
@@ -319,9 +443,10 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
 
     /**
      * Refresh Copilot availability check
+     * @param activateIfNeeded - If true, will attempt to activate Copilot extensions
      */
-    async refresh(): Promise<void> {
-        await this.checkCopilotAvailability();
+    async refresh(activateIfNeeded: boolean = false): Promise<void> {
+        await this.checkCopilotAvailability(activateIfNeeded);
     }
 
     /**

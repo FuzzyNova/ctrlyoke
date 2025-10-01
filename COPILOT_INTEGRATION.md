@@ -33,6 +33,11 @@ FlightPath now features **proven zero-interaction Copilot Chat automation**, ena
   - Comprehensive error boundaries
   - User-friendly feedback with actionable next steps
 
+- ✅ **Smart Extension Activation**
+  - Automatic retry with extension activation on first use
+  - Handles VS Code's lazy extension loading
+  - Zero-interaction from first prompt execution
+
 ## Architecture
 
 ### Single Automation Strategy
@@ -151,6 +156,43 @@ if (automationAvailable) {
 - VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`, `editor.action.selectAll`
 - VS Code 1.85.0 or higher (for command availability)
 
+### Smart Extension Activation (Lazy Loading Fix)
+
+**Problem Solved**: VS Code extensions activate lazily, meaning Copilot Chat may not be active when FlightPath initializes.
+
+**Solution**: Just-in-time activation with automatic retry
+
+**How it works**:
+1. **During FlightPath Initialization** (passive check)
+   - Check if Copilot extensions are installed
+   - Check if they're already active
+   - Log status but don't block startup
+
+2. **Before Sending First Prompt** (active activation)
+   - If automation not available, attempt to activate Copilot Chat extension
+   - Re-check command availability after activation
+   - Proceed with automation if successful
+
+3. **Fallback Behavior**
+   - If activation fails, show clear error message
+   - Provide troubleshooting steps
+   - Guide user to check extension installation
+
+**Debug Logging**:
+```
+🔍 Current automation availability: false
+🔄 FlightPath: Automation not available, attempting to activate Copilot extensions...
+🔄 FlightPath: Attempting to activate Copilot Chat extension...
+✅ FlightPath: Copilot Chat extension activated
+✅ FlightPath: Automation now available after activation
+```
+
+**Benefits**:
+- Works reliably on first use without manual Copilot interaction
+- Handles VS Code's lazy extension loading transparently
+- No user intervention required
+- Clear feedback if activation fails
+
 **What Happens When It's Not Available**:
 - Clear error message with specific requirements
 - Detailed troubleshooting guide
@@ -240,24 +282,52 @@ class FlightPathManager {
 
 ### Automation Not Working
 
-1. **Check Copilot Chat is installed and activated**
+**Note**: FlightPath now automatically activates Copilot extensions on first use. If automation still fails, try these steps:
+
+1. **Check Copilot Chat is installed**
    ```
    Extensions → Search for "GitHub Copilot Chat"
    ```
+   - Must be installed (activation happens automatically)
+   - Verify you're signed in to GitHub Copilot
 
 2. **Check automation status**
    ```
    Command Palette → "FlightPath: Show Copilot Integration Status"
    ```
+   - Shows current automation strategy
+   - Displays which commands are available
 
 3. **Test automation**
    ```
    Command Palette → "FlightPath: Test Automation"
    ```
+   - Sends test message to verify automation works
+   - Check Debug Console for detailed logs
 
 4. **Check VS Code version**
    - Requires VS Code 1.85.0 or higher
    - Some commands may not be available in older versions
+
+5. **Review Debug Console logs**
+   - Help → Toggle Developer Tools → Console tab
+   - Look for FlightPath log messages with emoji indicators
+   - Check which step fails (Step 1-4)
+
+### Common Issues
+
+**"Extension not installed or not active"**
+- **Cause**: Copilot Chat extension not installed or failed to activate
+- **Solution**: Install GitHub Copilot Chat extension and reload VS Code
+
+**"Required commands not found"**
+- **Cause**: VS Code version too old or commands disabled
+- **Solution**: Update to VS Code 1.85.0 or higher
+
+**"First run does nothing, second run works"**
+- **Cause**: This issue is now fixed! Extension activation now happens automatically
+- **Previous behavior**: Required manual Copilot interaction before automation worked
+- **Current behavior**: Works reliably on first execution
 
 ### Prompts Not Being Sent
 
@@ -290,6 +360,23 @@ The automation uses proven timing delays based on successful testing:
 - Large files may slow context building
 - Consider using specific file patterns instead of wildcards
 
+## Recent Improvements
+
+### Version 0.1.1 - Extension Activation Fix (October 2025)
+
+**Fixed**: First-run automation failure due to lazy extension loading
+
+**Changes**:
+- Added automatic Copilot extension activation before sending prompts
+- Enhanced retry logic with just-in-time activation
+- Comprehensive debug logging for troubleshooting
+- Clear feedback when activation succeeds or fails
+
+**Impact**: 
+- ✅ Automation now works reliably on first execution
+- ✅ No manual Copilot interaction needed before using FlightPath
+- ✅ Better diagnostic information for debugging
+
 ## Future Enhancements
 
 Planned features for future releases:
@@ -300,6 +387,7 @@ Planned features for future releases:
 - [ ] Workflow templates and snippets
 - [ ] Integration with VS Code notebooks
 - [ ] Custom automation strategy configuration
+- [ ] Configurable activation retry delays and attempts
 
 ## Contributing
 
