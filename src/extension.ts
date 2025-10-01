@@ -140,9 +140,44 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(stateInfo, { modal: true });
     });
 
-    // Test Copilot Automation command - feasibility test
+    // Test Copilot Automation command - feasibility test (legacy POC)
     const testCopilotCommand = vscode.commands.registerCommand('flightpath.test.copilotAutomation', async () => {
         await testCopilotAutomation();
+    });
+
+    // Show Copilot Status command
+    const showCopilotStatusCommand = vscode.commands.registerCommand('flightpath.showCopilotStatus', () => {
+        const status = flightPathManager.getCopilotStatus();
+        const capabilities = flightPathManager.getCopilotCapabilities();
+        
+        const statusMessage = `FlightPath Copilot Integration Status:
+
+${status.message}
+
+Capabilities:
+• Direct Text Automation: ${capabilities.hasDirectAutomation ? '✅' : '❌'}
+• Command Sequence: ${capabilities.hasCommandSequence ? '✅' : '❌'}
+• Clipboard Fallback: ${capabilities.hasClipboardFallback ? '✅' : '❌'}
+• Zero-Interaction Support: ${capabilities.supportsZeroInteraction ? '✅' : '❌'}
+
+Current Strategy: ${status.strategy}`;
+        
+        vscode.window.showInformationMessage(statusMessage, { modal: true }, 'Test Automation', 'Close')
+            .then(action => {
+                if (action === 'Test Automation') {
+                    vscode.commands.executeCommand('flightpath.testAutomation');
+                }
+            });
+    });
+
+    // Test Automation command (integrated version)
+    const testAutomationCommand = vscode.commands.registerCommand('flightpath.testAutomation', async () => {
+        const result = await flightPathManager.testCopilotAutomation();
+        if (result) {
+            vscode.window.showInformationMessage('✅ FlightPath: Automation test passed!');
+        } else {
+            vscode.window.showWarningMessage('⚠️ FlightPath: Automation test failed. Check Copilot Chat availability.');
+        }
     });
 
     // Add all commands to subscriptions
@@ -154,7 +189,9 @@ function registerCommands(context: vscode.ExtensionContext) {
         resumeCommand,
         stopCommand,
         debugStateCommand,
-        testCopilotCommand
+        testCopilotCommand,
+        showCopilotStatusCommand,
+        testAutomationCommand
     );
 
     console.log('FlightPath: Commands registered successfully');

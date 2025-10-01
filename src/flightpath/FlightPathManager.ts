@@ -2,11 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { PromptFileParser } from './PromptFileParser';
 import { PromptQueue } from './PromptQueue';
+import { CopilotIntegration } from './CopilotIntegration';
 import { PromptFile, PromptItem, QueueState } from '../types/FlightPathTypes';
 
 export class FlightPathManager {
     private promptFileParser: PromptFileParser;
     private promptQueue: PromptQueue;
+    private copilotIntegration: CopilotIntegration;
     private context: vscode.ExtensionContext;
     private statusBarItem: vscode.StatusBarItem;
     private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
@@ -15,6 +17,7 @@ export class FlightPathManager {
         this.context = context;
         this.promptFileParser = new PromptFileParser();
         this.promptQueue = new PromptQueue();
+        this.copilotIntegration = new CopilotIntegration(context);
         
         // Create status bar item
         this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -40,6 +43,11 @@ export class FlightPathManager {
             
             // Discover existing prompt files
             await this.discoverPromptFiles();
+            
+            // Refresh Copilot integration and check automation capabilities
+            await this.copilotIntegration.refresh();
+            const status = this.copilotIntegration.getStatus();
+            console.log(`FlightPath: ${status.message}`);
             
             // Update status bar
             this.updateStatusBar();
@@ -76,23 +84,66 @@ export class FlightPathManager {
             // Load prompts into queue
             this.promptQueue.loadPrompts(promptFile.prompts);
             
-            // Show confirmation and start execution
+            // Check automation capabilities and show appropriate message
+            const capabilities = this.copilotIntegration.getCapabilities();
             const fileName = path.basename(filePath);
-            const confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
+            let confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
+            
+            if (capabilities.supportsZeroInteraction) {
+                confirmMessage += '\n\n✅ Zero-interaction automation enabled - workflow will run automatically!';
+            } else if (capabilities.hasClipboardFallback) {
+                confirmMessage += '\n\n⚠️ Manual paste required - prompts will be copied to clipboard.';
+            }
+            
             const action = await vscode.window.showInformationMessage(
                 confirmMessage,
                 { modal: true },
                 'Take Off',
+                'Test Automation',
                 'Cancel'
             );
             
             if (action === 'Take Off') {
-                await this.promptQueue.start();
+                // Set workflow progress in Copilot integration
+                this.copilotIntegration.setWorkflowProgress(1, promptFile.prompts.length);
+                await this.startWorkflowExecution();
+            } else if (action === 'Test Automation') {
+                await this.copilotIntegration.testAutomation();
             }
             
         } catch (error) {
             console.error('FlightPath: Failed to execute prompt file:', error);
             vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
+        }
+    }
+
+    /**
+     * Start workflow execution with Copilot integration
+     */
+    private async startWorkflowExecution(): Promise<void> {
+        const state = this.promptQueue.getState();
+        
+        for (let i = 0; i < state.prompts.length; i++) {
+            const prompt = state.prompts[i];
+            
+            // Update progress
+            this.copilotIntegration.setWorkflowProgress(i + 1, state.prompts.length);
+            
+            // Send prompt to Copilot
+            const result = await this.copilotIntegration.executePromptWithContext(prompt);
+            
+            if (!result.success) {
+                vscode.window.showErrorMessage(`FlightPath: Failed to execute prompt ${i + 1}: ${result.message}`);
+                break;
+            }
+            
+            // Mark as sent in queue
+            await this.promptQueue.markCurrentAsSent();
+            
+            // Check if workflow was paused
+            if (this.promptQueue.getState().status === 'paused') {
+                break;
+            }
         }
     }
 
@@ -234,6 +285,27 @@ export class FlightPathManager {
      */
     getQueueState(): QueueState {
         return this.promptQueue.getState();
+    }
+
+    /**
+     * Get Copilot integration status
+     */
+    getCopilotStatus(): { available: boolean; message: string; strategy: string } {
+        return this.copilotIntegration.getStatus();
+    }
+
+    /**
+     * Test Copilot automation
+     */
+    async testCopilotAutomation(): Promise<boolean> {
+        return await this.copilotIntegration.testAutomation();
+    }
+
+    /**
+     * Get Copilot integration capabilities
+     */
+    getCopilotCapabilities() {
+        return this.copilotIntegration.getCapabilities();
     }
 
     /**

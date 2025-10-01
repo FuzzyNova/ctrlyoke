@@ -59,9 +59,21 @@
       },
       {
         "command": "flightpath.test.copilotAutomation",
-        "title": "Test Copilot Chat Automation",
+        "title": "Test Copilot Chat Automation (POC)",
         "category": "FlightPath Test",
         "icon": "$(beaker)"
+      },
+      {
+        "command": "flightpath.showCopilotStatus",
+        "title": "Show Copilot Integration Status",
+        "category": "FlightPath",
+        "icon": "$(info)"
+      },
+      {
+        "command": "flightpath.testAutomation",
+        "title": "Test Automation",
+        "category": "FlightPath",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -89,6 +101,12 @@
         },
         {
           "command": "flightpath.test.copilotAutomation"
+        },
+        {
+          "command": "flightpath.showCopilotStatus"
+        },
+        {
+          "command": "flightpath.testAutomation"
         }
       ],
       "explorer/context": [
