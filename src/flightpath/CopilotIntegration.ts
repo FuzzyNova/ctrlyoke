@@ -2,11 +2,17 @@ import * as vscode from 'vscode';
 import { PromptItem, ContextConfig } from '../types/FlightPathTypes';
 
 /**
+ * Copilot initialization status
+ */
+export type CopilotStatus = 'initializing' | 'waiting' | 'ready' | 'unavailable';
+
+/**
  * GitHub Copilot Chat Integration with Direct Automation
  * 
  * Implements PROVEN zero-interaction automation for Copilot Chat using:
  * - Direct text insertion (validated in POC at extension.ts:testCopilotAutomation)
  * - Proven timing delays: 1000ms (focus), 300ms (clear), 500ms (type)
+ * - Background polling for Copilot availability (5s intervals, 30s max)
  * 
  * Fallback: If direct automation is unavailable, reports error clearly to user
  */
@@ -15,17 +21,33 @@ export class CopilotIntegration {
     private isAvailable: boolean = false;
     private workflowStep: number = 0;
     private totalSteps: number = 0;
+    
+    // Background polling state
+    private initializationStatus: CopilotStatus = 'initializing';
+    private pollingAttempts: number = 0;
+    private readonly maxPollingAttempts: number = 6; // 30 seconds / 5 seconds = 6 attempts
+    private readonly pollingInterval: number = 5000; // 5 seconds
+    private pollingTimer: NodeJS.Timeout | undefined;
+    private statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
+    
+    // Event for status changes
+    public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
+        
+        // Register disposal of event emitter
+        context.subscriptions.push(this.statusChangeEmitter);
+        
         this.initialize();
     }
 
     /**
-     * Initialize Copilot integration and detect automation capability
+     * Initialize Copilot integration with background polling
+     * Polls every 5 seconds for up to 30 seconds to detect Copilot availability
      */
     private async initialize(): Promise<void> {
-        await this.checkCopilotAvailability();
+        await this.startBackgroundPolling();
     }
 
     /**
@@ -118,6 +140,82 @@ export class CopilotIntegration {
     }
 
     /**
+     * Start background polling to detect Copilot availability
+     * Polls every 5 seconds for up to 30 seconds (6 attempts)
+     */
+    private async startBackgroundPolling(): Promise<void> {
+        console.log('🔄 FlightPath: Starting background polling for Copilot availability...');
+        this.pollingAttempts = 0;
+        this.initializationStatus = 'initializing';
+        this.statusChangeEmitter.fire('initializing');
+        
+        // Clear any existing polling timer
+        if (this.pollingTimer) {
+            clearTimeout(this.pollingTimer);
+        }
+        
+        await this.pollCopilotAvailability();
+    }
+
+    /**
+     * Poll Copilot availability with progressive strategy
+     */
+    private async pollCopilotAvailability(): Promise<void> {
+        this.pollingAttempts++;
+        console.log(`🔍 FlightPath: Polling attempt ${this.pollingAttempts}/${this.maxPollingAttempts}`);
+        
+        // Strategy: First check is passive, second check onwards we try activation
+        const shouldActivate = this.pollingAttempts >= 2;
+        await this.checkCopilotAvailability(shouldActivate);
+        
+        if (this.isAvailable) {
+            // Success! Copilot is available
+            console.log('✅ FlightPath: Copilot automation ready after polling');
+            this.initializationStatus = 'ready';
+            this.statusChangeEmitter.fire('ready');
+            
+            // Clear polling timer
+            if (this.pollingTimer) {
+                clearTimeout(this.pollingTimer);
+                this.pollingTimer = undefined;
+            }
+            return;
+        }
+        
+        // Check if we've exceeded max attempts
+        if (this.pollingAttempts >= this.maxPollingAttempts) {
+            console.log('❌ FlightPath: Polling timeout - Copilot not available after 30 seconds');
+            this.initializationStatus = 'unavailable';
+            this.statusChangeEmitter.fire('unavailable');
+            
+            // Clear polling timer
+            if (this.pollingTimer) {
+                clearTimeout(this.pollingTimer);
+                this.pollingTimer = undefined;
+            }
+            return;
+        }
+        
+        // Continue polling
+        console.log(`⏳ FlightPath: Copilot not ready, will retry in ${this.pollingInterval / 1000} seconds...`);
+        this.initializationStatus = 'waiting';
+        this.statusChangeEmitter.fire('waiting');
+        
+        this.pollingTimer = setTimeout(() => {
+            this.pollCopilotAvailability();
+        }, this.pollingInterval);
+    }
+
+    /**
+     * Manually retry Copilot detection (restart polling)
+     */
+    async retryDetection(): Promise<void> {
+        console.log('🔄 FlightPath: Manual retry of Copilot detection requested');
+        vscode.window.showInformationMessage('FlightPath: Retrying Copilot detection...');
+        await this.startBackgroundPolling();
+    }
+
+    /**
      * Send prompt to GitHub Copilot Chat with direct automation
      * 
      * Uses PROVEN zero-interaction strategy:
@@ -126,7 +224,8 @@ export class CopilotIntegration {
      * 3. Type prompt (500ms delay)
      * 4. Submit automatically
      * 
-     * If automation is unavailable, returns clear error to user
+     * Note: Assumes background polling has confirmed automation is available.
+     * FlightPathManager blocks workflow execution until status is 'ready'.
      */
     async sendPrompt(prompt: PromptItem): Promise<boolean> {
         try {
@@ -137,26 +236,15 @@ export class CopilotIntegration {
                 hasEndCondition: !!prompt.endCondition
             });
             
-            // Re-check automation availability and try to activate Copilot if needed
-            console.log(`🔍 Current automation availability: ${this.isAvailable}`);
+            // Verify automation is still available (should always be true due to workflow blocking)
             if (!this.isAvailable) {
-                console.log('🔄 FlightPath: Automation not available, attempting to activate Copilot extensions...');
-                await this.checkCopilotAvailability(true); // activateIfNeeded = true
-                
-                if (!this.isAvailable) {
-                    const message = 'FlightPath: Direct automation unavailable. Required commands not found. Please ensure GitHub Copilot Chat is installed and VS Code is up to date.';
-                    console.error('❌ ' + message);
-                    vscode.window.showErrorMessage(message, 'Show Details').then(action => {
-                        if (action === 'Show Details') {
-                            this.showAutomationRequirements();
-                        }
-                    });
-                    return false;
-                }
-                
-                console.log('✅ FlightPath: Automation now available after activation');
+                const message = 'FlightPath: Automation became unavailable. This should not happen if initialization completed successfully.';
+                console.error('❌ ' + message);
+                vscode.window.showErrorMessage(message);
+                return false;
             }
             
+            console.log('✅ FlightPath: Automation confirmed available');
             console.log('🚀 FlightPath: Sending prompt with direct automation (PROVEN strategy)');
             
             // Build prompt with Copilot Chat syntax
@@ -423,6 +511,20 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
     }
 
     /**
+     * Get initialization status
+     */
+    getInitializationStatus(): CopilotStatus {
+        return this.initializationStatus;
+    }
+
+    /**
+     * Check if Copilot is ready for workflows
+     */
+    isReady(): boolean {
+        return this.initializationStatus === 'ready';
+    }
+
+    /**
      * Get integration status
      */
     getStatus(): { available: boolean; message: string; strategy: string } {
@@ -439,6 +541,42 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
                 strategy: 'unavailable'
             };
         }
+    }
+
+    /**
+     * Get detailed status with initialization state
+     */
+    getDetailedStatus(): { 
+        initializationStatus: CopilotStatus; 
+        isReady: boolean; 
+        message: string;
+        pollingAttempts: number;
+        maxPollingAttempts: number;
+    } {
+        let message = '';
+        
+        switch (this.initializationStatus) {
+            case 'initializing':
+                message = '🔍 Initializing Copilot integration...';
+                break;
+            case 'waiting':
+                message = `⏳ Waiting for Copilot... (attempt ${this.pollingAttempts}/${this.maxPollingAttempts})`;
+                break;
+            case 'ready':
+                message = '✅ Copilot automation ready';
+                break;
+            case 'unavailable':
+                message = '❌ Copilot automation unavailable - setup required';
+                break;
+        }
+        
+        return {
+            initializationStatus: this.initializationStatus,
+            isReady: this.isReady(),
+            message,
+            pollingAttempts: this.pollingAttempts,
+            maxPollingAttempts: this.maxPollingAttempts
+        };
     }
 
     /**

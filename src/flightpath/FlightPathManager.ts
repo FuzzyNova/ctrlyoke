@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { PromptFileParser } from './PromptFileParser';
 import { PromptQueue } from './PromptQueue';
-import { CopilotIntegration } from './CopilotIntegration';
+import { CopilotIntegration, CopilotStatus } from './CopilotIntegration';
 import { PromptFile, PromptItem, QueueState } from '../types/FlightPathTypes';
 
 export class FlightPathManager {
@@ -28,6 +28,14 @@ export class FlightPathManager {
         // Listen to queue state changes
         this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
         
+        // Listen to Copilot status changes
+        context.subscriptions.push(
+            this.copilotIntegration.onDidChangeStatus((status) => {
+                console.log(`🔄 FlightPath: Copilot status changed to: ${status}`);
+                this.updateStatusBar();
+            })
+        );
+        
         // Get current workspace folder
         this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
         
@@ -44,13 +52,8 @@ export class FlightPathManager {
             // Discover existing prompt files
             await this.discoverPromptFiles();
             
-            // Refresh Copilot integration and check automation capabilities
-            await this.copilotIntegration.refresh();
-            const status = this.copilotIntegration.getStatus();
-            console.log(`FlightPath: ${status.message}`);
-            
-            // Update status bar
-            this.updateStatusBar();
+            // Note: Copilot integration starts background polling automatically in constructor
+            // Status bar will update via onDidChangeStatus event listener
             
             console.log('FlightPath: Manager initialization complete');
         } catch (error) {
@@ -65,6 +68,59 @@ export class FlightPathManager {
     async executePromptFile(filePath: string): Promise<void> {
         try {
             console.log(`FlightPath: Executing prompt file: ${filePath}`);
+            
+            // Check Copilot readiness FIRST
+            const detailedStatus = this.copilotIntegration.getDetailedStatus();
+            const fileName = path.basename(filePath);
+            
+            // Block execution if still initializing
+            if (detailedStatus.initializationStatus === 'initializing') {
+                const action = await vscode.window.showWarningMessage(
+                    `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
+                    'Retry',
+                    'Cancel'
+                );
+                
+                if (action === 'Retry') {
+                    // Try again after a short delay
+                    setTimeout(() => this.executePromptFile(filePath), 1000);
+                }
+                return;
+            }
+            
+            // Block execution if waiting for Copilot
+            if (detailedStatus.initializationStatus === 'waiting') {
+                const action = await vscode.window.showWarningMessage(
+                    `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
+                    'Retry',
+                    'Cancel'
+                );
+                
+                if (action === 'Retry') {
+                    // Try again after a short delay
+                    setTimeout(() => this.executePromptFile(filePath), 2000);
+                }
+                return;
+            }
+            
+            // Block execution if unavailable
+            if (detailedStatus.initializationStatus === 'unavailable') {
+                const action = await vscode.window.showErrorMessage(
+                    `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
+                    'Retry Detection',
+                    'View Requirements',
+                    'Cancel'
+                );
+                
+                if (action === 'Retry Detection') {
+                    await this.retryCopilotDetection();
+                    // Try executing again after retry starts
+                    setTimeout(() => this.executePromptFile(filePath), 2000);
+                } else if (action === 'View Requirements') {
+                    await this.copilotIntegration.testAutomation();
+                }
+                return;
+            }
             
             // Parse the prompt file
             const promptFile = await this.promptFileParser.parsePromptFile(filePath);
@@ -84,31 +140,21 @@ export class FlightPathManager {
             // Load prompts into queue
             this.promptQueue.loadPrompts(promptFile.prompts);
             
-            // Check automation capabilities and show appropriate message
-            const capabilities = this.copilotIntegration.getCapabilities();
-            const fileName = path.basename(filePath);
+            // At this point, we know Copilot is ready!
             let confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
-            
-            if (capabilities.supportsZeroInteraction) {
-                confirmMessage += '\n\n✅ Direct automation enabled - workflow will run automatically!';
-            } else {
-                confirmMessage += '\n\n❌ Direct automation unavailable - workflow cannot run. Check automation status for details.';
-            }
+            confirmMessage += '\n\n✅ Copilot automation is ready - workflow will run automatically!';
             
             const action = await vscode.window.showInformationMessage(
                 confirmMessage,
                 { modal: true },
-                'Take Off',
-                'Test Automation',
+                'Take Off 🚀',
                 'Cancel'
             );
             
-            if (action === 'Take Off') {
+            if (action === 'Take Off 🚀') {
                 // Set workflow progress in Copilot integration
                 this.copilotIntegration.setWorkflowProgress(1, promptFile.prompts.length);
                 await this.startWorkflowExecution();
-            } else if (action === 'Test Automation') {
-                await this.copilotIntegration.testAutomation();
             }
             
         } catch (error) {
@@ -275,6 +321,26 @@ export class FlightPathManager {
      * Open FlightPath panel
      */
     async openPanel(): Promise<void> {
+        // Check if Copilot is unavailable and offer retry
+        const copilotStatus = this.copilotIntegration.getDetailedStatus();
+        
+        if (copilotStatus.initializationStatus === 'unavailable') {
+            const action = await vscode.window.showWarningMessage(
+                'FlightPath: Copilot automation is unavailable. Would you like to retry detection?',
+                'Retry Detection',
+                'View Status',
+                'Continue Anyway'
+            );
+            
+            if (action === 'Retry Detection') {
+                await this.retryCopilotDetection();
+                return;
+            } else if (action === 'View Status') {
+                vscode.commands.executeCommand('flightpath.showCopilotStatus');
+                return;
+            }
+        }
+        
         // This would open the WebView panel
         // For now, just show the take off command
         await this.takeOff();
@@ -302,10 +368,24 @@ export class FlightPathManager {
     }
 
     /**
+     * Retry Copilot detection (restart polling)
+     */
+    async retryCopilotDetection(): Promise<void> {
+        await this.copilotIntegration.retryDetection();
+    }
+
+    /**
      * Get Copilot integration capabilities
      */
     getCopilotCapabilities() {
         return this.copilotIntegration.getCapabilities();
+    }
+
+    /**
+     * Get detailed Copilot status including initialization state
+     */
+    getCopilotDetailedStatus() {
+        return this.copilotIntegration.getDetailedStatus();
     }
 
     /**
@@ -379,27 +459,44 @@ export class FlightPathManager {
     private updateStatusBar(): void {
         const state = this.promptQueue.getState();
         const progress = this.promptQueue.getProgress();
+        const copilotStatus = this.copilotIntegration.getDetailedStatus();
         
         let text = '$(rocket) FlightPath';
         let tooltip = 'FlightPath - Click to open';
         
-        switch (state.status) {
-            case 'running':
-                text = `$(loading~spin) FlightPath ${progress.current}/${progress.total}`;
-                tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
-                break;
-            case 'paused':
-                text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
-                tooltip = 'FlightPath - Paused (click to resume)';
-                break;
-            case 'completed':
-                text = `$(check) FlightPath Complete`;
-                tooltip = 'FlightPath - Workflow completed successfully';
-                break;
-            case 'error':
-                text = `$(error) FlightPath Error`;
-                tooltip = 'FlightPath - Execution failed (click to retry)';
-                break;
+        // Priority 1: Show workflow execution status if running
+        if (state.status === 'running') {
+            text = `$(loading~spin) FlightPath ${progress.current}/${progress.total}`;
+            tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
+        } else if (state.status === 'paused') {
+            text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
+            tooltip = 'FlightPath - Paused (click to resume)';
+        } else if (state.status === 'completed') {
+            text = `$(check) FlightPath Complete`;
+            tooltip = 'FlightPath - Workflow completed successfully';
+        } else if (state.status === 'error') {
+            text = `$(error) FlightPath Error`;
+            tooltip = 'FlightPath - Execution failed (click to retry)';
+        } else {
+            // Priority 2: Show Copilot initialization status when idle
+            switch (copilotStatus.initializationStatus) {
+                case 'initializing':
+                    text = '$(loading~spin) FlightPath - Initializing...';
+                    tooltip = 'FlightPath - Checking Copilot availability...';
+                    break;
+                case 'waiting':
+                    text = `$(clock) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`;
+                    tooltip = 'FlightPath - Waiting for GitHub Copilot to activate...';
+                    break;
+                case 'ready':
+                    text = '$(rocket) FlightPath - Ready';
+                    tooltip = 'FlightPath - Ready to execute workflows with Copilot automation';
+                    break;
+                case 'unavailable':
+                    text = '$(warning) FlightPath - Setup Required';
+                    tooltip = 'FlightPath - Copilot automation unavailable. Click to retry detection.';
+                    break;
+            }
         }
         
         this.statusBarItem.text = text;

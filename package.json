@@ -74,6 +74,12 @@
         "title": "Test Automation",
         "category": "FlightPath",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "flightpath.retryCopilotDetection",
+        "title": "Retry Copilot Detection",
+        "category": "FlightPath",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -107,6 +113,9 @@
         },
         {
           "command": "flightpath.testAutomation"
+        },
+        {
+          "command": "flightpath.retryCopilotDetection"
         }
       ],
       "explorer/context": [

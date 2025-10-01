@@ -181,6 +181,11 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
         }
     });
 
+    // Retry Copilot Detection command
+    const retryCopilotDetectionCommand = vscode.commands.registerCommand('flightpath.retryCopilotDetection', async () => {
+        await flightPathManager.retryCopilotDetection();
+    });
+
     // Add all commands to subscriptions
     context.subscriptions.push(
         takeOffCommand,
@@ -192,7 +197,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
         debugStateCommand,
         testCopilotCommand,
         showCopilotStatusCommand,
-        testAutomationCommand
+        testAutomationCommand,
+        retryCopilotDetectionCommand
     );
 
     console.log('FlightPath: Commands registered successfully');

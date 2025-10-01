@@ -156,48 +156,51 @@ if (automationAvailable) {
 - VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`, `editor.action.selectAll`
 - VS Code 1.85.0 or higher (for command availability)
 
-### Smart Extension Activation (Lazy Loading Fix)
+### Background Polling (Lazy Loading Solution)
 
 **Problem Solved**: VS Code extensions activate lazily, meaning Copilot Chat may not be active when FlightPath initializes.
 
-**Solution**: Just-in-time activation with automatic retry
+**Solution**: Background polling with status updates instead of just-in-time activation
 
 **How it works**:
-1. **During FlightPath Initialization** (passive check)
-   - Check if Copilot extensions are installed
-   - Check if they're already active
-   - Log status but don't block startup
+1. **During FlightPath Initialization** (background polling starts)
+   - Start polling immediately on extension activation
+   - First check is passive (just check if active)
+   - Second check onwards attempts activation
+   - Poll every 5 seconds for up to 30 seconds
 
-2. **Before Sending First Prompt** (active activation)
-   - If automation not available, attempt to activate Copilot Chat extension
-   - Re-check command availability after activation
-   - Proceed with automation if successful
+2. **Real-time Status Updates**
+   - Status bar shows current initialization state
+   - States: Initializing → Waiting → Ready (or Unavailable)
+   - Event-driven updates to UI
 
-3. **Fallback Behavior**
-   - If activation fails, show clear error message
-   - Provide troubleshooting steps
-   - Guide user to check extension installation
+3. **Workflow Blocking**
+   - Workflows cannot run until status is 'ready'
+   - Clear messaging if user tries to run during initialization
+   - Automatic retry offers if still waiting
 
 **Debug Logging**:
 ```
-🔍 Current automation availability: false
-🔄 FlightPath: Automation not available, attempting to activate Copilot extensions...
+� FlightPath: Starting background polling for Copilot availability...
+� FlightPath: Polling attempt 1/6
 🔄 FlightPath: Attempting to activate Copilot Chat extension...
 ✅ FlightPath: Copilot Chat extension activated
-✅ FlightPath: Automation now available after activation
+✅ FlightPath: Copilot automation ready after polling
 ```
 
 **Benefits**:
-- Works reliably on first use without manual Copilot interaction
-- Handles VS Code's lazy extension loading transparently
-- No user intervention required
-- Clear feedback if activation fails
+- Transparent state - users always know what's happening
+- No false negatives during initialization period
+- Handles slow activation gracefully
+- Non-blocking - doesn't freeze VS Code
+- Clear feedback at all times
+- Manual retry available if needed
 
-**What Happens When It's Not Available**:
-- Clear error message with specific requirements
-- Detailed troubleshooting guide
-- No silent fallbacks or ambiguous states
-- You always know if automation will work before starting a workflow
+**Workflow Execution Behavior**:
+- If `initializing`: Show "Please wait and try again"
+- If `waiting`: Show "Waiting for Copilot... (attempt X/6)"
+- If `unavailable`: Show setup requirements with retry option
+- If `ready`: Proceed immediately with enthusiastic confirmation
 
 ## Copilot Chat Syntax Features
 
@@ -362,6 +365,27 @@ The automation uses proven timing delays based on successful testing:
 
 ## Recent Improvements
 
+### Version 0.2.0 - Background Polling Implementation (October 2025)
+
+**Major Change**: Replaced lazy initialization with proactive background polling
+
+**Changes**:
+- Background polling system (5s intervals, 30s max)
+- Real-time status bar updates showing initialization progress
+- Workflow blocking until Copilot is confirmed ready
+- Event-driven architecture with status change notifications
+- Manual retry detection command
+- Progressive activation strategy (passive → active)
+- Removed just-in-time activation from `sendPrompt()`
+
+**Impact**: 
+- ✅ Users always know system state (no confusion about availability)
+- ✅ No "automation unavailable" errors when it's actually available
+- ✅ Handles slow Copilot activation gracefully
+- ✅ Non-blocking initialization doesn't freeze VS Code
+- ✅ Clear feedback before workflow execution
+- ✅ Manual retry available if detection fails
+
 ### Version 0.1.1 - Extension Activation Fix (October 2025)
 
 **Fixed**: First-run automation failure due to lazy extension loading
@@ -372,10 +396,7 @@ The automation uses proven timing delays based on successful testing:
 - Comprehensive debug logging for troubleshooting
 - Clear feedback when activation succeeds or fails
 
-**Impact**: 
-- ✅ Automation now works reliably on first execution
-- ✅ No manual Copilot interaction needed before using FlightPath
-- ✅ Better diagnostic information for debugging
+**Status**: ⚠️ Superseded by v0.2.0 background polling approach
 
 ## Future Enhancements
 
