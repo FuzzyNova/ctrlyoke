@@ -2,21 +2,20 @@
 
 ## Overview
 
-FlightPath now features **proven zero-interaction Copilot Chat automation**, enabling true "set-and-forget" AI workflow orchestration. This implementation is based on a validated proof-of-concept and provides multiple automation strategies for maximum compatibility.
+FlightPath now features **proven zero-interaction Copilot Chat automation**, enabling true "set-and-forget" AI workflow orchestration. This implementation is based on a validated proof-of-concept and focuses on the single strategy that works reliably.
 
 ## ✅ Implementation Status
 
 ### Core Features - COMPLETED
 
-- ✅ **Multi-Strategy Automation System**
-  - Direct text insertion (primary - zero interaction)
-  - Command sequence automation (secondary)
-  - Enhanced clipboard fallback (tertiary)
-  - Intelligent strategy detection and selection
+- ✅ **Direct Automation (PROVEN Strategy)**
+  - Direct text insertion with zero interaction
+  - Validated timing delays: 1000ms (focus), 300ms (clear), 500ms (type)
+  - Clear error messaging when automation unavailable
 
 - ✅ **Proven Automation Approach**
   - Based on validated POC in `extension.ts:testCopilotAutomation()`
-  - Validated timing delays: 1000ms (focus), 300ms (clear), 500ms (type)
+  - Uses verified VS Code command sequence
   - Automatic command detection and capability assessment
 
 - ✅ **Intelligent Context Formatting**
@@ -29,21 +28,24 @@ FlightPath now features **proven zero-interaction Copilot Chat automation**, ena
   - Status bar updates during execution
   - Workflow state management across prompts
 
-- ✅ **Error Handling & Fallbacks**
-  - Graceful degradation through strategy chain
+- ✅ **Clear Error Handling**
+  - No silent fallbacks - you know when automation isn't working
   - Comprehensive error boundaries
-  - User-friendly feedback and recovery
+  - User-friendly feedback with actionable next steps
 
 ## Architecture
 
-### Automation Strategy Chain
+### Single Automation Strategy
+
+FlightPath uses **one proven strategy** that works or reports when it doesn't:
 
 ```typescript
-enum AutomationStrategy {
-    DirectTextInsertion = 'direct',      // Zero-interaction (primary)
-    CommandSequence = 'sequence',         // Minimal interaction (secondary)
-    EnhancedClipboard = 'clipboard',      // Manual paste required (tertiary)
-    Unavailable = 'unavailable'           // Error state
+// Direct automation: Available or Unavailable
+// No silent fallbacks - you always know the status
+if (automationAvailable) {
+    // Zero-interaction automation with PROVEN timing
+} else {
+    // Clear error with requirements and troubleshooting
 }
 ```
 
@@ -130,51 +132,30 @@ enum AutomationStrategy {
 }
 ```
 
-## Automation Strategies Explained
+## How Direct Automation Works
 
-### Strategy 1: Direct Text Insertion (Primary)
+### The PROVEN Strategy
 
-**Status**: ✅ PROVEN - Validated in POC
+**Status**: ✅ PROVEN - Validated in POC at `extension.ts:testCopilotAutomation()`
 
 **How it works**:
-1. Focus Copilot Chat panel
-2. Clear existing input
-3. Type prompt directly using `type` command
+1. Focus Copilot Chat panel (wait 1000ms for UI to settle)
+2. Clear existing input (wait 300ms for selection to complete)
+3. Type prompt directly using `type` command (wait 500ms for text processing)
 4. Submit automatically using `workbench.action.chat.submit`
 
 **User Experience**: Zero interaction required - true automation
 
 **Requirements**:
-- VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`
-- Copilot Chat extension installed
+- GitHub Copilot Chat extension (installed and active)
+- VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`, `editor.action.selectAll`
+- VS Code 1.85.0 or higher (for command availability)
 
-### Strategy 2: Command Sequence (Secondary)
-
-**How it works**:
-1. Copy prompt to clipboard
-2. Focus Copilot Chat panel
-3. Select all existing text
-4. Paste from clipboard
-5. Submit automatically
-
-**User Experience**: Minimal interaction - automated submission
-
-**Requirements**:
-- VS Code commands: `editor.action.clipboardPasteAction`, `workbench.action.chat.submit`
-
-### Strategy 3: Enhanced Clipboard (Tertiary)
-
-**How it works**:
-1. Copy formatted prompt to clipboard
-2. Focus Copilot Chat panel
-3. Show notification with instructions
-4. User pastes and presses Enter
-
-**User Experience**: Manual paste required, but workflow state maintained
-
-**Requirements**:
-- Basic clipboard access
-- User interaction for paste and submit
+**What Happens When It's Not Available**:
+- Clear error message with specific requirements
+- Detailed troubleshooting guide
+- No silent fallbacks or ambiguous states
+- You always know if automation will work before starting a workflow
 
 ## Copilot Chat Syntax Features
 
@@ -215,7 +196,7 @@ enum AutomationStrategy {
 
 ```typescript
 class CopilotIntegration {
-  // Send prompt with multi-strategy automation
+  // Send prompt with direct automation
   async sendPrompt(prompt: PromptItem): Promise<boolean>
   
   // Get integration status
@@ -224,8 +205,6 @@ class CopilotIntegration {
   // Get capabilities
   getCapabilities(): {
     hasDirectAutomation: boolean;
-    hasCommandSequence: boolean;
-    hasClipboardFallback: boolean;
     supportsZeroInteraction: boolean;
     currentStrategy: string;
   }
@@ -235,6 +214,10 @@ class CopilotIntegration {
   
   // Test automation
   async testAutomation(): Promise<boolean>
+  
+  // Check if automation is available
+  isIntegrationAvailable(): boolean
+  isZeroInteractionSupported(): boolean
 }
 ```
 

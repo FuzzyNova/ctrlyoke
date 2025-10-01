@@ -155,12 +155,13 @@ function registerCommands(context: vscode.ExtensionContext) {
 ${status.message}
 
 Capabilities:
-• Direct Text Automation: ${capabilities.hasDirectAutomation ? '✅' : '❌'}
-• Command Sequence: ${capabilities.hasCommandSequence ? '✅' : '❌'}
-• Clipboard Fallback: ${capabilities.hasClipboardFallback ? '✅' : '❌'}
+• Direct Automation (PROVEN): ${capabilities.hasDirectAutomation ? '✅' : '❌'}
 • Zero-Interaction Support: ${capabilities.supportsZeroInteraction ? '✅' : '❌'}
 
-Current Strategy: ${status.strategy}`;
+Current Strategy: ${status.strategy}
+
+Note: FlightPath uses a single proven strategy. When direct automation 
+is unavailable, you'll receive clear error messages with troubleshooting steps.`;
         
         vscode.window.showInformationMessage(statusMessage, { modal: true }, 'Test Automation', 'Close')
             .then(action => {

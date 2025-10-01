@@ -90,9 +90,9 @@ export class FlightPathManager {
             let confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
             
             if (capabilities.supportsZeroInteraction) {
-                confirmMessage += '\n\n✅ Zero-interaction automation enabled - workflow will run automatically!';
-            } else if (capabilities.hasClipboardFallback) {
-                confirmMessage += '\n\n⚠️ Manual paste required - prompts will be copied to clipboard.';
+                confirmMessage += '\n\n✅ Direct automation enabled - workflow will run automatically!';
+            } else {
+                confirmMessage += '\n\n❌ Direct automation unavailable - workflow cannot run. Check automation status for details.';
             }
             
             const action = await vscode.window.showInformationMessage(

@@ -12,16 +12,16 @@ Implement zero-interaction Copilot Chat automation for FlightPath VS Code extens
 
 ### Core Implementation Files
 
-1. **src/flightpath/CopilotIntegration.ts** (Major Rewrite - ~500 lines)
-   - Added `AutomationStrategy` enum for strategy management
-   - Implemented `detectBestAutomationStrategy()` for capability detection
-   - Implemented `sendPromptWithDirectAutomation()` - Primary strategy (PROVEN)
-   - Implemented `sendPromptWithCommandSequence()` - Secondary strategy
-   - Implemented `sendPromptWithEnhancedClipboard()` - Tertiary strategy
+1. **src/flightpath/CopilotIntegration.ts** (Major Rewrite - ~350 lines)
+   - **UPDATED**: Simplified to single strategy approach
+   - Implemented `sendPromptWithDirectAutomation()` - PROVEN strategy only
    - Implemented `buildCopilotChatPrompt()` - Smart context formatting
+   - Added clear availability checking with detailed error messages
+   - Added `showAutomationRequirements()` for troubleshooting
    - Added workflow progress tracking methods
    - Added testing and status methods
-   - Replaced stub implementation with full automation
+   - Replaced stub implementation with focused automation
+   - Removed multi-strategy fallback chain for clarity
 
 2. **src/flightpath/FlightPathManager.ts** (Integration Updates)
    - Added CopilotIntegration instance initialization
@@ -80,22 +80,26 @@ Implement zero-interaction Copilot Chat automation for FlightPath VS Code extens
 
 ## Key Features Implemented
 
-### Multi-Strategy Automation System ✅
+### Single Strategy Automation System ✅
+
+**UPDATED**: Simplified to focus on proven strategy only
 
 ```typescript
-enum AutomationStrategy {
-    DirectTextInsertion = 'direct',      // Zero-interaction (PRIMARY - PROVEN)
-    CommandSequence = 'sequence',         // Automated submission (SECONDARY)
-    EnhancedClipboard = 'clipboard',      // Manual paste (TERTIARY)
-    Unavailable = 'unavailable'           // Error state
-}
+// Direct automation: Available or Unavailable
+// Clear error reporting when automation is not available
 ```
+
+**Philosophy**: 
+- Focus on the one strategy that works reliably
+- No silent fallbacks that hide problems
+- Clear error messages when automation isn't available
+- You always know when the main strategy isn't working
 
 ### Proven Timing Delays ✅
 
 Based on validated POC:
 - 1000ms after focusing chat panel
-- 300ms after text selection
+- 300ms after text selection  
 - 500ms after typing text
 
 ### Copilot Chat Syntax Formatting ✅
