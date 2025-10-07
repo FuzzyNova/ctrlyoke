@@ -30,27 +30,21 @@
 │                                          │                          │
 │                                          ▼                          │
 │                       ┌──────────────────────────────────┐          │
-│                       │   Automation Strategy Chain      │          │
+│                       │   Automation Strategy            │          │
 │                       ├──────────────────────────────────┤          │
 │                       │                                  │          │
-│                       │      Direct Text Insertion       │          │
+│                       │  ✅ Direct Text Insertion        │          │
 │                       │     (Zero-interaction)           │          │
-│                       │     • Focus chat                 │          │
-│                       │     • Clear input                │          │
-│                       │     • Type prompt                │          │
-│                       │     • Submit auto                │          │
+│                       │     • Focus chat (1000ms)        │          │
+│                       │     • Clear input (300ms)        │          │
+│                       │     • Type prompt (500ms)        │          │
+│                       │     • Submit automatically       │          │
 │                       │                                  │          │
-│                       │  2️⃣ Command Sequence            │          │
-│                       │     (Minimal interaction)        │          │
-│                       │     • Clipboard copy             │          │
-│                       │     • Auto paste                 │          │
-│                       │     • Auto submit                │          │
-│                       │                                  │          │
-│                       │  3️⃣ Enhanced Clipboard          │          │
-│                       │     (Manual paste)               │          │
-│                       │     • Copy to clipboard          │          │
-│                       │     • User notification          │          │
-│                       │     • Preview option             │          │
+│                       │  ❌ No Fallback Strategies       │          │
+│                       │     If automation unavailable,   │          │
+│                       │     clear error is displayed     │          │
+│                       │     with requirements and        │          │
+│                       │     troubleshooting steps        │          │
 │                       └──────────────────────────────────┘          │
 │                                                                       │
 └─────────────────────────────────────────────────────────────────────┘
@@ -91,17 +85,17 @@ Select .flightpath.json
                                   ▼
                           Strategy Selected
                                   │
-         ┌────────────────────────┼────────────────────────┐
-         │                        │                        │
-         ▼                        ▼                        ▼
-    Direct Text             Command Seq.              Clipboard
-    Insertion               Automation                Fallback
-         │                        │                        │
-         │                        │                        │
-         ▼                        ▼                        ▼
-   Execute Commands         Execute Commands         Copy + Notify
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
+                                  │
+                                  ▼
+                        Direct Text Insertion
+                        (PROVEN zero-interaction)
+                                  │
+                                  ▼
+                         Execute Commands:
+                         1. Focus chat
+                         2. Clear input
+                         3. Type prompt
+                         4. Submit
                                   │
                                   ▼
                            Format Prompt
@@ -189,36 +183,39 @@ Select .flightpath.json
 ## Strategy Selection Flow
 
 ```
-Start
+Start (Background Polling)
   │
   ▼
-Check: 'type' command available?
+Check: Copilot extensions installed?
   │
-  ├─Yes──► Check: 'chat.submit' available?
+  ├─No──► [Status: unavailable] ❌
+  │
+  ├─Yes──► Attempt activation if needed
   │          │
-  │          ├─Yes──► Check: 'chat.focus' available?
-  │          │          │
-  │          │          ├─Yes──► [Direct Text Insertion] ✅ BEST
-  │          │          │
-  │          │          └─No───┐
-  │          │                 │
-  │          └─No──────────────┤
-  │                            │
-  └─No────────────────────────►│
-                               │
-                               ▼
-           Check: 'paste' command available?
-                               │
-                               ├─Yes──► [Command Sequence] ✅ GOOD
-                               │
-                               └─No───┐
-                                      │
-                                      ▼
-                    Check: 'chat.focus' available?
-                                      │
-                                      ├─Yes──► [Enhanced Clipboard] ⚠️ OK
-                                      │
-                                      └─No───► [Unavailable] ❌ ERROR
+  │          ▼
+  │      Check: All commands available?
+  │      • type
+  │      • workbench.action.chat.submit  
+  │      • workbench.panel.chat.view.copilot.focus
+  │      • editor.action.selectAll
+  │          │
+  │          ├─Yes──► [Status: ready] ✅
+  │          │        Direct automation available
+  │          │
+  │          └─No───► [Status: unavailable] ❌
+  │                   Show clear error with:
+  │                   • Requirements list
+  │                   • Troubleshooting steps
+  │                   • Manual retry option
+  │
+  ▼
+Poll up to 6 times (30 seconds total)
+  │
+  ├─Ready──► Status bar: "$(rocket) FlightPath - Ready"
+  │
+  ├─Timeout──► Status bar: "$(warning) FlightPath - Setup Required"
+  │
+  └─Initializing──► Status bar: "$(loading~spin) FlightPath - Initializing..."
 ```
 
 ## Context Building Process
@@ -256,32 +253,31 @@ buildCopilotChatPrompt()
     "/fix @workspace #file:src/extension.ts #selection Fix error handling"
 ```
 
-## Error Handling & Fallback Chain
+## Error Handling - No Fallback Chain
 
 ```
+Background Polling (initialization)
+    │
+    ├─Success──► Status: 'ready'
+    │            Allow workflow execution
+    │
+    └─Timeout (30s)
+        │
+        ▼
+    Status: 'unavailable'
+    Block workflow execution
+    Show requirements & troubleshooting
+
+During Workflow Execution:
+    │
+    ▼
 Try: Direct Text Insertion
     │
     ├─Success──► Return: true
     │
-    └─Error
-        │
-        ▼
-    Try: Command Sequence
-        │
-        ├─Success──► Return: true
-        │
-        └─Error
-            │
-            ▼
-        Try: Enhanced Clipboard
-            │
-            ├─Success──► Return: true
-            │
-            └─Error
-                │
-                ▼
-            Show: Error Dialog
-            Return: false
+    └─Error──► Show: Error Dialog
+               Return: false
+               (No clipboard fallback)
 ```
 
 ## State Management
@@ -313,32 +309,38 @@ Workflow Progress:
 
 ## Key Design Decisions
 
-### 1. Multi-Strategy Pattern
-- **Why**: Maximum compatibility across VS Code versions
-- **Benefit**: Graceful degradation ensures workflows always complete
-- **Trade-off**: Increased code complexity
+### 1. Single Proven Strategy (No Fallbacks)
+- **Why**: One validated approach is better than multiple untested fallbacks
+- **Benefit**: Clear error messages when automation unavailable
+- **Trade-off**: No silent degradation - user must have Copilot Chat working
 
-### 2. Command-Based Automation
+### 2. Background Polling for Availability
+- **Why**: Extensions activate lazily in VS Code
+- **Benefit**: Handles slow activation gracefully, transparent state for users
+- **Trade-off**: 30-second initialization period on first load
+
+### 3. Command-Based Automation
 - **Why**: Proven approach from POC validation
 - **Benefit**: Zero-interaction capability
-- **Trade-off**: Dependent on VS Code internal commands
+- **Trade-off**: Dependent on VS Code internal commands (requires VS Code 1.85.0+)
 
-### 3. Timing Delays
-- **Why**: UI stability and reliability
+### 4. Proven Timing Delays
+- **Why**: UI stability and reliability (validated in POC)
 - **Benefit**: Consistent automation success
 - **Trade-off**: Slight delay in execution (1.8s per prompt)
 
-### 4. Separation of Concerns
+### 5. Separation of Concerns
 - **Why**: SOLID principles and maintainability
 - **Benefit**: Easy to test, extend, and modify
 - **Trade-off**: More files and abstractions
 
-### 5. Native Copilot Syntax
+### 6. Native Copilot Syntax
 - **Why**: Preserve all Copilot Chat features
 - **Benefit**: Full compatibility with agents, tools, and commands
 - **Trade-off**: Dependent on Copilot Chat syntax stability
 
 ---
 
-*Architecture designed for: extensibility, reliability, and user experience*  
-*Implementation date: September 30, 2025*
+*Architecture designed for: simplicity, reliability, and transparent user experience*  
+*Last updated: October 7, 2025 (v0.2.0 - Background Polling)*  
+*Initial implementation: September 30, 2025*

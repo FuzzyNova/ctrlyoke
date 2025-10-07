@@ -40,25 +40,39 @@ FlightPath now features **proven zero-interaction Copilot Chat automation**, ena
 
 ## Architecture
 
-### Single Automation Strategy
+### Single Proven Strategy
 
-FlightPath uses **one proven strategy** that works or reports when it doesn't:
+FlightPath uses **one proven strategy** validated in a proof-of-concept:
+
+**Direct Text Insertion (Zero-Interaction)**
+- Focus Copilot Chat panel (1000ms delay)
+- Clear existing input (300ms delay)  
+- Type prompt text (500ms delay)
+- Submit automatically
+
+**No Fallback Strategies**: If automation is unavailable, FlightPath shows a clear error message with:
+- Requirements list (what's needed for automation)
+- Troubleshooting steps (how to fix common issues)
+- Manual retry option (restart detection)
 
 ```typescript
-// Direct automation: Available or Unavailable
-// No silent fallbacks - you always know the status
-if (automationAvailable) {
+// Background polling determines availability upfront
+// Workflows are blocked until status is 'ready'
+if (status === 'ready') {
     // Zero-interaction automation with PROVEN timing
+    executeDirectAutomation();
 } else {
-    // Clear error with requirements and troubleshooting
+    // Clear error - no silent fallbacks
+    showErrorWithTroubleshooting();
 }
 ```
 
 ### Key Components
 
 1. **CopilotIntegration** (`src/flightpath/CopilotIntegration.ts`)
-   - Multi-strategy automation implementation
-   - Intelligent capability detection
+   - Single proven automation strategy (direct text insertion)
+   - Background polling for availability detection (5s intervals, 30s max)
+   - Automatic extension activation on slow startup
    - Context formatting with Copilot Chat syntax
    - Workflow progress tracking
 
@@ -101,9 +115,11 @@ if (automationAvailable) {
    Select your workflow file and click "Take Off".
 
 3. **Zero-Interaction Execution**
-   - If direct automation is available, prompts are sent automatically
+   - Background polling ensures Copilot is ready before workflows start
+   - If status is 'ready', prompts are sent automatically with zero interaction
    - Watch the Copilot Chat panel for responses
    - Workflow progresses automatically through all prompts
+   - If status is 'initializing' or 'waiting', workflow execution is blocked with clear feedback
 
 ### Example Workflow Files
 
@@ -432,4 +448,5 @@ Implementation based on:
 
 **FlightPath** - Automate GitHub Copilot with structured prompt workflows
 
-*Version: 0.1.0 - Copilot Integration Complete*
+*Version: 0.2.0 - Background Polling & Single Proven Strategy*  
+*Last updated: October 7, 2025*
