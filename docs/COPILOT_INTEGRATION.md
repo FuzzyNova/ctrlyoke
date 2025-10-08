@@ -171,6 +171,9 @@ if (status === 'ready') {
 - GitHub Copilot Chat extension (installed and active)
 - VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`, `editor.action.selectAll`
 - VS Code 1.85.0 or higher (for command availability)
+  await vscode.commands.executeCommand(
+    "workbench.action.chat.openInEditor"
+  );
 
 ### Background Polling (Lazy Loading Solution)
 
