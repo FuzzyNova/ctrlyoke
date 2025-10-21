@@ -291,6 +291,34 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // List all available chat commands (debugging tool)
+  const listChatCommandsCommand = vscode.commands.registerCommand(
+    "flightpath.listChatCommands",
+    async () => {
+      const allCommands = await vscode.commands.getCommands(true);
+      const chatCommands = allCommands
+        .filter(
+          (cmd) =>
+            cmd.includes("chat") ||
+            cmd.includes("copilot") ||
+            cmd.includes("workbench.action.chat") ||
+            cmd.includes("github.copilot")
+        )
+        .sort();
+
+      console.log("=== ALL CHAT-RELATED COMMANDS ===");
+      console.log(`Found ${chatCommands.length} commands:\n`);
+      chatCommands.forEach((cmd) => console.log(`  ${cmd}`));
+
+      // Create a document to show the commands
+      const doc = await vscode.workspace.openTextDocument({
+        content: `FlightPath: Available Chat Commands (${chatCommands.length} found)\n\n${chatCommands.join("\n")}`,
+        language: "plaintext",
+      });
+      await vscode.window.showTextDocument(doc);
+    }
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -303,7 +331,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     testCopilotCommand,
     showCopilotStatusCommand,
     testAutomationCommand,
-    retryCopilotDetectionCommand
+    retryCopilotDetectionCommand,
+    listChatCommandsCommand
   );
 
   console.log("FlightPath: Commands registered successfully");

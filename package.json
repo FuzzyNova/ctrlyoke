@@ -80,6 +80,12 @@
         "title": "Retry Copilot Detection",
         "category": "FlightPath",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "flightpath.listChatCommands",
+        "title": "List All Chat Commands",
+        "category": "FlightPath Test",
+        "icon": "$(list-unordered)"
       }
     ],
     "menus": {
