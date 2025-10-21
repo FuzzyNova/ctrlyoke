@@ -161,6 +161,15 @@
         "fileMatch": "**/*.flightpath.json",
         "url": "./schemas/flightpath-schema.json"
       }
+    ],
+    "languageModelTools": [
+      {
+        "name": "flightpath_response_complete",
+        "toolReferenceName": "flightpath_response_complete",
+        "displayName": "FlightPath Response Complete",
+        "modelDescription": "Call this tool when you have finished responding to a FlightPath prompt to signal completion. This allows FlightPath to proceed to the next step in the workflow.",
+        "canBeReferencedInPrompt": true
+      }
     ]
   },
   "scripts": {

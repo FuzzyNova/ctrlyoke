@@ -8,7 +8,7 @@ let flightPathManager: FlightPathManager;
  */
 async function testCopilotAutomation(): Promise<boolean> {
   const testMessage =
-    "Hello Copilot! This is an automated test message from FlightPath using editor chat. Please respond with 'Test received' if you can see this.";
+    "Hello Copilot! This is an automated test message from FlightPath using editor chat. Please respond with 'Test received' if you can see this.\n\nIMPORTANT: When you have finished your response, you MUST call the #flightpath_response_complete tool to signal completion.";
 
   try {
     console.log(

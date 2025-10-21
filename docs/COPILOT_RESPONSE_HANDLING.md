@@ -62,6 +62,35 @@ vscode.lm.registerTool('flightpath_response_complete', {
 });
 ```
 
+**API Details - What We Receive**:
+
+The `invoke` method receives two parameters:
+
+1. **`options: LanguageModelToolInvocationOptions<T>`** with these properties:
+   - `toolInvocationToken: ChatParticipantToolToken | undefined` - **Opaque token** that:
+     - Ties the tool invocation to a specific chat request/session
+     - Enables UI integration (progress bars, inline confirmations)
+     - **Cannot be inspected** - it's an opaque object with no accessible properties
+     - Only available when LLM calls the tool from within a chat participant context
+     - Will be `undefined` if tool is called outside a chat request
+   - `input: T` - The parameters the LLM provides (based on your `inputSchema`)
+   - `tokenizationOptions?: LanguageModelToolTokenizationOptions` - Options for token counting
+
+2. **`token: CancellationToken`** - Standard VS Code cancellation token
+
+**Key Limitation - No Chat Metadata Available**:
+- ❌ No chat ID or session identifier we can access
+- ❌ No way to determine which chat window invoked the tool
+- ❌ `ChatParticipantToolToken` is intentionally opaque - cannot extract metadata from it
+- ✅ The token is only useful for **passing through** to other tool invocations or VS Code APIs
+
+**Implications for Multiple Parallel Chats**:
+- We **cannot** use the tool invocation to identify which chat called us
+- We **must** track chat context ourselves using one of these approaches:
+  1. **Ask LLM to include identifier**: Add a required `chatId` parameter to our tool's `inputSchema`
+  2. **Use timing correlation**: Track which chat we submitted prompts to and correlate by timing
+  3. **Single active chat**: Only support one active workflow at a time (simplest)
+
 **Pros**:
 - ✅ Official VS Code API
 - ✅ Reliable callback mechanism
@@ -73,6 +102,42 @@ vscode.lm.registerTool('flightpath_response_complete', {
 - ⚠️ Adds tool call overhead to each response
 
 **Viability**: **HIGH** - This is the intended extensibility pattern
+
+**Architectural Decision for FlightPath**:
+
+Given the lack of chat metadata from tool invocations, we have three options:
+
+**Option A: Single Active Chat (RECOMMENDED for MVP)**
+- Only allow one FlightPath workflow to run at a time
+- Block new workflows while one is in progress
+- Simplest implementation, no ambiguity about which chat called the tool
+- Matches current implementation strategy
+
+**Option B: Timing-Based Correlation**
+- Track timestamps when we submit prompts to specific chats
+- When tool is called, match to most recent pending prompt
+- Risk: If user manually interacts with chat, timing could be off
+- Requires careful state management
+
+**Option C: LLM-Provided Identifier**
+- Add `workflowId` as a required parameter to our tool:
+  ```json
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "workflowId": {
+        "type": "string",
+        "description": "The workflow ID this completion signal is for"
+      }
+    },
+    "required": ["workflowId"]
+  }
+  ```
+- Embed workflow ID in every prompt: "...When done, call #flightpath_response_complete with workflowId='abc123'"
+- Relies on LLM following instructions correctly
+- Enables true parallel execution
+
+**Recommendation**: Start with **Option A** (single active chat) for MVP, then add **Option C** (LLM-provided ID) when we need parallel execution. This keeps the initial implementation simple while leaving the door open for future enhancement.
 
 ---
 
