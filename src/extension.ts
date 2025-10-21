@@ -15,46 +15,76 @@ async function testCopilotAutomation(): Promise<boolean> {
       "🚀 FlightPath: Starting Copilot automation test (Editor Chat approach)..."
     );
 
-    // Show initial message
-    await vscode.window.showInformationMessage(
-      "FlightPath Test: Testing New Window approach. Watch for a chat to open in a new window!"
+    // Show method selection dialog
+    const methodChoice = await vscode.window.showQuickPick(
+      [
+        {
+          label: "$(window) New Window",
+          description: "Open Copilot Chat in a new window",
+          method: "newWindow",
+        },
+        {
+          label: "$(file) New Tab",
+          description: "Open Copilot Chat in an editor tab",
+          method: "newTab",
+        },
+        {
+          label: "$(comment-discussion) Chat Panel",
+          description: "Open Copilot Chat in the panel",
+          method: "chatPanel",
+        },
+      ],
+      {
+        placeHolder: "Choose how to open Copilot Chat for testing",
+        title: "FlightPath Test: Select Chat Opening Method",
+      }
     );
 
-    // Strategy 1: Try opening chat in new window
-    console.log("📋 Step 1: Opening Copilot Chat in New Window...");
+    if (!methodChoice) {
+      console.log("❌ Test cancelled: No method selected");
+      vscode.window.showInformationMessage("FlightPath Test: Cancelled");
+      return false;
+    }
+
+    console.log(
+      `📋 Step 1: Opening Copilot Chat using ${methodChoice.label}...`
+    );
 
     try {
-      await vscode.commands.executeCommand(
-        "workbench.action.chat.openInNewWindow"
-      );
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log("✅ Chat opened in new window");
-    } catch (newWindowError) {
-      console.warn(
-        "⚠️ workbench.action.chat.openInNewWindow failed, trying editor approach:",
-        newWindowError
-      );
+      switch (methodChoice.method) {
+        case "newWindow":
+          await vscode.commands.executeCommand(
+            "workbench.action.chat.openInNewWindow"
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          console.log("✅ Chat opened in new window");
+          break;
 
-      // Fallback: Try opening in editor tab
-      try {
-        await vscode.commands.executeCommand(
-          "workbench.action.chat.openInEditor"
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        console.log("✅ Chat opened in editor tab instead");
-      } catch (editorError) {
-        console.warn(
-          "⚠️ workbench.action.chat.openInEditor also failed, using panel approach:",
-          editorError
-        );
+        case "newTab":
+          await vscode.commands.executeCommand(
+            "workbench.action.chat.openInEditor"
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          console.log("✅ Chat opened in editor tab");
+          break;
 
-        // Final fallback: Use the original panel approach
-        await vscode.commands.executeCommand(
-          "workbench.panel.chat.view.copilot.focus"
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        console.log("✅ Falling back to panel approach");
+        case "chatPanel":
+          await vscode.commands.executeCommand(
+            "workbench.panel.chat.view.copilot.focus"
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          console.log("✅ Chat panel focused");
+          break;
       }
+    } catch (error) {
+      console.error(
+        `❌ Failed to open chat using ${methodChoice.label}:`,
+        error
+      );
+      vscode.window.showErrorMessage(
+        `Failed to open Copilot Chat using ${methodChoice.label}. Error: ${error}`
+      );
+      return false;
     }
 
     // Step 2: Clear any existing text
