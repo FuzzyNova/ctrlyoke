@@ -52,6 +52,27 @@ export class CopilotIntegration {
   }
 
   /**
+   * Get the chat window command based on user settings
+   * @returns The VS Code command to use for opening Copilot Chat
+   */
+  private getChatWindowCommand(): string {
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
+
+    const commandMap: Record<string, string> = {
+      chatPanel: "workbench.panel.chat.view.copilot.focus",
+      newTab: "workbench.action.chat.openInEditor",
+      newWindow: "workbench.action.chat.openInNewWindow",
+    };
+
+    const command = commandMap[chatLocation] || commandMap["chatPanel"];
+    console.log(
+      `⚙️ FlightPath: Using chat window location: ${chatLocation} → ${command}`
+    );
+    return command;
+  }
+
+  /**
    * Initialize Copilot integration with background polling
    * Polls every 5 seconds for up to 30 seconds to detect Copilot availability
    * Note: Language Model Tool will be registered AFTER Copilot becomes ready
@@ -214,19 +235,30 @@ export class CopilotIntegration {
 
       const hasTypeCommand = commands.includes("type");
       const hasChatSubmit = commands.includes("workbench.action.chat.submit");
-      const hasChatFocus = commands.includes(
+      const hasChatPanel = commands.includes(
         "workbench.panel.chat.view.copilot.focus"
+      );
+      const hasChatTab = commands.includes(
+        "workbench.action.chat.openInEditor"
+      );
+      const hasChatWindow = commands.includes(
+        "workbench.action.chat.openInNewWindow"
       );
       const hasSelectAll = commands.includes("editor.action.selectAll");
 
       console.log("📋 Command availability check:");
       console.log(`   - type: ${hasTypeCommand ? "✅" : "❌"}`);
       console.log(`   - chat.submit: ${hasChatSubmit ? "✅" : "❌"}`);
-      console.log(`   - chat.focus: ${hasChatFocus ? "✅" : "❌"}`);
+      console.log(`   - chat.panel.focus: ${hasChatPanel ? "✅" : "❌"}`);
+      console.log(`   - chat.openInEditor: ${hasChatTab ? "✅" : "❌"}`);
+      console.log(`   - chat.openInNewWindow: ${hasChatWindow ? "✅" : "❌"}`);
       console.log(`   - selectAll: ${hasSelectAll ? "✅" : "❌"}`);
 
+      // At least one chat opening method must be available
+      const hasChatOpenCommand = hasChatPanel || hasChatTab || hasChatWindow;
+
       this.isAvailable =
-        hasTypeCommand && hasChatSubmit && hasChatFocus && hasSelectAll;
+        hasTypeCommand && hasChatSubmit && hasChatOpenCommand && hasSelectAll;
 
       if (this.isAvailable) {
         console.log(
@@ -238,7 +270,7 @@ export class CopilotIntegration {
         );
         console.log(`   - type: ${hasTypeCommand}`);
         console.log(`   - chat.submit: ${hasChatSubmit}`);
-        console.log(`   - chat.focus: ${hasChatFocus}`);
+        console.log(`   - chat open command: ${hasChatOpenCommand}`);
         console.log(`   - selectAll: ${hasSelectAll}`);
       }
     } catch (error) {
@@ -421,23 +453,28 @@ export class CopilotIntegration {
         `📝 Prompt to send: "${chatPrompt.substring(0, 100)}${chatPrompt.length > 100 ? "..." : ""}"`
       );
 
-      // Step 1: Focus Copilot Chat panel
-      console.log("📋 Step 1: Attempting to focus Copilot Chat panel...");
+      // Step 1: Open/Focus Copilot Chat using configured location
+      const chatCommand = this.getChatWindowCommand();
+      console.log(`📋 Step 1: Opening Copilot Chat with: ${chatCommand}...`);
       try {
-        await vscode.commands.executeCommand(
-          "workbench.panel.chat.view.copilot.focus"
-        );
-        console.log("✅ Step 1: Focus command executed successfully");
+        await vscode.commands.executeCommand(chatCommand);
+        console.log("✅ Step 1: Chat open command executed successfully");
       } catch (focusError) {
         console.error(
-          "❌ Step 1 FAILED: Could not focus Copilot Chat panel:",
+          "❌ Step 1 FAILED: Could not open Copilot Chat:",
           focusError
         );
-        throw new Error(`Failed to focus Copilot Chat: ${focusError}`);
+        throw new Error(`Failed to open Copilot Chat: ${focusError}`);
       }
 
-      console.log("⏳ Step 1: Waiting 1000ms for panel to focus...");
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // PROVEN: 1000ms required
+      // Use longer delay for newWindow and newTab as they may need more setup time
+      const chatLocation = vscode.workspace
+        .getConfiguration("flightpath")
+        .get<string>("chatWindowLocation", "chatPanel");
+      const focusDelay = chatLocation === "chatPanel" ? 1000 : 1500;
+
+      console.log(`⏳ Step 1: Waiting ${focusDelay}ms for chat to open...`);
+      await new Promise((resolve) => setTimeout(resolve, focusDelay));
       console.log("✅ Step 1: Wait complete");
 
       // Step 2: Clear any existing input

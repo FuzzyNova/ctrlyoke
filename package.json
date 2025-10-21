@@ -149,6 +149,22 @@
           "type": "boolean",
           "default": true,
           "description": "Enable context-aware prompt generation"
+        },
+        "flightpath.chatWindowLocation": {
+          "type": "string",
+          "enum": [
+            "chatPanel",
+            "newTab",
+            "newWindow"
+          ],
+          "enumDescriptions": [
+            "Open Copilot Chat in the panel (recommended)",
+            "Open Copilot Chat in an editor tab",
+            "Open Copilot Chat in a new window"
+          ],
+          "default": "chatPanel",
+          "description": "Choose where to open GitHub Copilot Chat for automation",
+          "markdownDescription": "Choose where to open GitHub Copilot Chat for automation. **Chat Panel** is recommended for most users."
         }
       }
     },

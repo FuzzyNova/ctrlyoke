@@ -136,13 +136,32 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 | `FlightPath: Stop Execution` | Stop and reset workflow |
 | `FlightPath: Show Debug State` | View internal state |
 
-## �🔧 Configuration
+## 🔧 Configuration
 
 FlightPath contributes the following settings:
 
 - **`flightpath.promptsDirectory`**: Directory for prompt files (default: `.flightpath`)
 - **`flightpath.scriptTimeout`**: Default timeout for end condition scripts (default: 30000ms)
 - **`flightpath.enableContextAwareness`**: Enable automatic context inclusion (default: true)
+- **`flightpath.chatWindowLocation`**: Choose where to open Copilot Chat for automation
+  - `chatPanel` (default): Open in the Chat panel - recommended for most users
+  - `newTab`: Open in an editor tab
+  - `newWindow`: Open in a new window
+
+### Configuring Chat Window Location
+
+To change where FlightPath opens Copilot Chat:
+
+1. Open VS Code Settings (File > Preferences > Settings)
+2. Search for "FlightPath Chat Window"
+3. Select your preferred location from the dropdown
+
+Alternatively, edit your `settings.json`:
+```json
+{
+  "flightpath.chatWindowLocation": "chatPanel"
+}
+```
 
 ## 🎯 Automation Strategies
 

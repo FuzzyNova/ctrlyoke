@@ -235,6 +235,7 @@ FlightPath/
 - Real-time status updates via event emitters
 - Comprehensive error handling with clear user feedback
 - All core commands implemented and tested
+- **User-configurable chat window location** (chatPanel, newTab, newWindow)
 
 ### Phase 2 Complete (Core Architecture)
 
@@ -246,6 +247,30 @@ FlightPath/
 - End condition script execution framework
 - Comprehensive error handling and logging
 - Basic unit test coverage
+
+## Extension Settings
+
+FlightPath provides the following user-configurable settings (accessible via VS Code Settings UI):
+
+- **`flightpath.promptsDirectory`** (string, default: ".flightpath"): Directory containing prompt files relative to workspace root
+- **`flightpath.scriptTimeout`** (number, default: 30000): Timeout for end condition scripts in milliseconds
+- **`flightpath.enableContextAwareness`** (boolean, default: true): Enable context-aware prompt generation
+- **`flightpath.chatWindowLocation`** (enum, default: "chatPanel"): Choose where to open Copilot Chat
+  - "chatPanel": Open in the Chat panel (recommended)
+  - "newTab": Open in an editor tab
+  - "newWindow": Open in a new window
+
+### Adding New Settings
+
+When adding new extension settings:
+
+1. Add to `package.json` under `contributes.configuration.properties`
+2. Follow VS Code UX guidelines: https://code.visualstudio.com/api/ux-guidelines/settings
+3. Use enum with `enumDescriptions` for dropdown options
+4. Provide clear `description` and `markdownDescription` fields
+5. Always set a sensible `default` value
+6. Retrieve settings using `vscode.workspace.getConfiguration("flightpath").get<Type>("settingName", defaultValue)`
+7. Document the setting in README.md and update examples if applicable
 
 ### Future Enhancements
 

@@ -15,77 +15,54 @@ async function testCopilotAutomation(): Promise<boolean> {
       "🚀 FlightPath: Starting Copilot automation test (Editor Chat approach)..."
     );
 
-    // Show method selection dialog
-    const methodChoice = await vscode.window.showQuickPick(
-      [
-        {
-          label: "$(window) New Window",
-          description: "Open Copilot Chat in a new window",
-          method: "newWindow",
-        },
-        {
-          label: "$(file) New Tab",
-          description: "Open Copilot Chat in an editor tab",
-          method: "newTab",
-        },
-        {
-          label: "$(comment-discussion) Chat Panel",
-          description: "Open Copilot Chat in the panel",
-          method: "chatPanel",
-        },
-      ],
-      {
-        placeHolder: "Choose how to open Copilot Chat for testing",
-        title: "FlightPath Test: Select Chat Opening Method",
-      }
-    );
+    // Get chat window location from settings
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
 
-    if (!methodChoice) {
-      console.log("❌ Test cancelled: No method selected");
-      vscode.window.showInformationMessage("FlightPath Test: Cancelled");
-      return false;
-    }
+    const commandMap: Record<
+      string,
+      { command: string; label: string; delay: number }
+    > = {
+      chatPanel: {
+        command: "workbench.panel.chat.view.copilot.focus",
+        label: "Chat Panel",
+        delay: 1000,
+      },
+      newTab: {
+        command: "workbench.action.chat.openInEditor",
+        label: "Editor Tab",
+        delay: 1500,
+      },
+      newWindow: {
+        command: "workbench.action.chat.openInNewWindow",
+        label: "New Window",
+        delay: 1500,
+      },
+    };
+
+    const method = commandMap[chatLocation] || commandMap["chatPanel"];
 
     console.log(
-      `📋 Step 1: Opening Copilot Chat using ${methodChoice.label}...`
+      `📋 Step 1: Opening Copilot Chat using ${method.label} (configured in settings)...`
     );
 
     try {
-      switch (methodChoice.method) {
-        case "newWindow":
-          await vscode.commands.executeCommand(
-            "workbench.action.chat.openInNewWindow"
-          );
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          console.log("✅ Chat opened in new window");
-          break;
-
-        case "newTab":
-          await vscode.commands.executeCommand(
-            "workbench.action.chat.openInEditor"
-          );
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          console.log("✅ Chat opened in editor tab");
-          break;
-
-        case "chatPanel":
-          await vscode.commands.executeCommand(
-            "workbench.panel.chat.view.copilot.focus"
-          );
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          console.log("✅ Chat panel focused");
-          break;
-      }
+      await vscode.commands.executeCommand(method.command);
+      await new Promise((resolve) => setTimeout(resolve, method.delay));
+      console.log(`✅ Chat opened in ${method.label}`);
     } catch (error) {
-      console.error(
-        `❌ Failed to open chat using ${methodChoice.label}:`,
-        error
-      );
+      console.error(`❌ Failed to open chat using ${method.label}:`, error);
       vscode.window.showErrorMessage(
-        `Failed to open Copilot Chat using ${methodChoice.label}. Error: ${error}`
+        `Failed to open Copilot Chat using ${method.label}. Error: ${error}`
       );
       return false;
     }
+
+    // Note: Model selection cannot be automated via VS Code commands
+    // Users must manually select their desired model before running FlightPath workflows
+    console.log(
+      "ℹ️ Note: Using currently selected model (model switching cannot be automated)"
+    );
 
     // Step 2: Clear any existing text
     console.log("🧹 Step 2: Clearing existing input...");
