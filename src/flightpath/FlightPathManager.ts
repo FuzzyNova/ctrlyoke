@@ -247,9 +247,19 @@ export class FlightPathManager {
         resolve(); // Resolve anyway to continue workflow
       }, timeout);
 
-      // Subscribe to response complete event
+      // Subscribe to response complete event (with duplicate protection)
+      let responseHandled = false; // Prevent duplicate event handling
       const disposable = this.copilotIntegration.onResponseComplete(
         async () => {
+          // Ignore duplicate events (defense-in-depth)
+          if (responseHandled) {
+            console.log(
+              "⚠️ FlightPath: Duplicate response complete event ignored (already handled)"
+            );
+            return;
+          }
+          responseHandled = true;
+
           clearTimeout(timeoutHandle);
           disposable.dispose();
           console.log(

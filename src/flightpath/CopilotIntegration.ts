@@ -41,10 +41,11 @@ export class CopilotIntegration {
   private responseCompleteEmitter = new vscode.EventEmitter<void>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
   private isToolRegistered: boolean = false;
+  private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
 
   // Tool invocation instruction - single source of truth
   private readonly TOOL_INSTRUCTION =
-    "\n\n---\n\nCRITICAL INSTRUCTION: You MUST provide your COMPLETE response FIRST, including ALL code, explanations, and file modifications. ONLY after you have FULLY FINISHED your response and stopped streaming should you call the #flightpath_response_complete tool. Wait until you are 100% done responding before calling this tool. This is essential for workflow automation.";
+    "\n\n---\n\nCRITICAL INSTRUCTION: When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation.";
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
 
@@ -110,12 +111,49 @@ export class CopilotIntegration {
       const tool = vscode.lm.registerTool("flightpath_response_complete", {
         invoke: async (options, token) => {
           console.log("🎯 ===== TOOL CALLBACK RECEIVED =====");
+
+          // Prevent duplicate tool calls in same response (LLM loop behavior)
+          if (this.toolCalledForCurrentPrompt) {
+            console.log(
+              "⚠️ FlightPath: Tool already called for this prompt - LLM is looping!"
+            );
+            console.log(
+              "� FlightPath: Canceling chat to stop infinite loop..."
+            );
+
+            // Stop the chat to prevent infinite loop
+            try {
+              await vscode.commands.executeCommand(
+                "workbench.action.chat.cancel"
+              );
+              console.log("✅ FlightPath: Chat canceled successfully");
+            } catch (cancelError) {
+              console.warn(
+                "⚠️ FlightPath: Could not cancel chat:",
+                cancelError
+              );
+            }
+
+            console.log(
+              "💡 LLMs often try to add text after calling tools, which triggers loops"
+            );
+            console.log("🎯 =====================================");
+            return new vscode.LanguageModelToolResult([
+              new vscode.LanguageModelTextPart(
+                "Already acknowledged - stopping loop"
+              ),
+            ]);
+          }
+
           console.log("✅ FlightPath: Copilot called response complete tool!");
           console.log("📊 Tool invocation options:", {
             hasToolInvocationToken: !!options.toolInvocationToken,
             inputProvided: options.input,
           });
           console.log("🎯 =====================================");
+
+          // Mark tool as called for this prompt
+          this.toolCalledForCurrentPrompt = true;
 
           // Show success popup to user
           vscode.window.showInformationMessage(
@@ -452,18 +490,26 @@ export class CopilotIntegration {
 
   /**
    * Copy chat content to clipboard and return it
+   * Preserves user's original clipboard content by caching and restoring it
    * @returns The current chat conversation text
    */
   private async copyChatToClipboard(): Promise<string> {
     try {
+      // Cache user's original clipboard content
+      const originalClipboard = await vscode.env.clipboard.readText();
+
       // Execute copyAll command
       await vscode.commands.executeCommand("workbench.action.chat.copyAll");
 
       // Small delay to ensure clipboard is updated
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Read clipboard content
+      // Read chat content
       const chatContent = await vscode.env.clipboard.readText();
+
+      // Restore user's original clipboard content
+      await vscode.env.clipboard.writeText(originalClipboard);
+
       return chatContent;
     } catch (error) {
       console.error("❌ Failed to copy chat to clipboard:", error);
@@ -652,6 +698,10 @@ export class CopilotIntegration {
     chatPrompt: string
   ): Promise<boolean> {
     try {
+      // Reset tool call flag for new prompt
+      this.toolCalledForCurrentPrompt = false;
+      console.log("🔄 FlightPath: Reset tool call flag for new prompt");
+
       console.log("🔍 FlightPath: Starting direct automation sequence...");
       console.log(
         `📝 Prompt to send: "${chatPrompt.substring(0, 100)}${chatPrompt.length > 100 ? "..." : ""}"`

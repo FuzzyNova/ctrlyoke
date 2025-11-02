@@ -393,7 +393,7 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 **Automatic Prompt Augmentation**
 - Every prompt sent through FlightPath includes the tool-calling instruction automatically
 - Implementation in `CopilotIntegration.buildCopilotChatPrompt()`
-- Instruction appended with enhanced critical instruction emphasizing completion before tool call
+- Instruction emphasizes calling tool EXACTLY ONCE as FINAL action with NO text after
 - Works in both normal and error fallback paths
 - No user action required - fully automatic
 
@@ -403,6 +403,37 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 - ✅ LLM reliability at 99%+ for following explicit tool instructions
 - ✅ Minimal token overhead (~25 tokens per prompt)
 - ✅ Preserves current UX - users just click "Take Off"
+
+**Duplicate Tool Call Prevention**
+
+**Problem Solved:**
+- LLMs have a bias against ending their turn with a tool call
+- After calling the tool, they often add wrap-up text, then call the tool again
+- Creates infinite loop: output text → call tool → output text → call tool
+- Observed with Grok and other LLMs that don't follow "call tool once" instructions perfectly
+
+**Solution Implemented:**
+Two-layer defense against duplicate tool calls:
+
+**Layer 1 - CopilotIntegration (prevent duplicate event firing + active cancellation):**
+- `toolCalledForCurrentPrompt` flag tracks if tool was already called
+- Tool invoke callback checks flag on duplicate calls
+- **Actively cancels chat** using `workbench.action.chat.cancel` command
+- Stops the LLM from continuing to generate unwanted text in the loop
+- Flag reset before sending each new prompt
+- Logs duplicate calls and cancellation attempts for debugging
+
+**Layer 2 - FlightPathManager (ignore duplicate events):**
+- `responseHandled` flag in event listener prevents duplicate processing
+- Promise resolves only once, even if event fires multiple times
+- Event listener disposed after first successful callback
+
+**Result:**
+- ✅ Single tool call processed per prompt regardless of LLM behavior
+- ✅ **Actively stops** infinite loops by canceling chat when loop detected
+- ✅ Prevents LLM from wasting tokens and time generating loop text
+- ✅ Defensive programming - works even if LLM ignores "exactly once" instruction
+- ✅ Transparent logging shows when duplicates are detected and chat is canceled
 
 **Clipboard-Based Verification & Streaming Detection**
 

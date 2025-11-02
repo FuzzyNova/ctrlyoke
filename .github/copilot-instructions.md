@@ -65,19 +65,36 @@ Implements zero-interaction Copilot Chat automation:
 
 ### Response Completion Detection
 
-Uses Language Model Tool API to detect when Copilot finishes responding:
+Uses hybrid approach combining Language Model Tool + clipboard polling:
+
+**Tool Callback (Intent Signal):**
 
 1. Tool registration: flightpath_response_complete registered after Copilot activates
 2. Prompt augmentation: Every prompt gets tool-calling instruction appended automatically
-3. Tool invocation: When called, fires responseCompleteEmitter event
-4. Event handling: FlightPathManager subscribes and waits for streaming to complete
+3. Tool invocation: When called, fires responseCompleteEmitter event (ONLY FIRST CALL)
+4. Duplicate protection: toolCalledForCurrentPrompt flag ignores subsequent calls in same response
+
+**Clipboard Polling (Verification):**
+
+1. Tool callback triggers streaming detection (not immediate polling)
+2. Polls chat content every 500ms via clipboard
+3. Requires 3 consecutive stable checks (1.5s) to confirm completion
+4. Efficient: only polls after tool indicates "near completion"
+
+**LLM Loop Prevention:**
+
+- LLMs often call tools multiple times (output → tool → output → tool loop)
+- Two-layer defense: flag in CopilotIntegration + flag in FlightPathManager
+- **Active cancellation**: Calls `workbench.action.chat.cancel` when loop detected
+- Stops LLM from continuing to generate unwanted text in the loop
+- Saves tokens and prevents workflow disruption
 
 Implementation notes:
 
 - Tool registered only once (isToolRegistered flag prevents duplicates)
-- Instruction added in CopilotIntegration.buildCopilotChatPrompt()
+- Instruction emphasizes "EXACTLY ONCE" and "FINAL action"
 - Single active workflow limitation (no chat session metadata in tool invocations)
-- See docs/COPILOT_RESPONSE_HANDLING.md for full research
+- See docs/COPILOT_RESPONSE_HANDLING.md for full research and design decisions
 
 ### PromptFileParser
 
