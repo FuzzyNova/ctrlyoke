@@ -1,6 +1,6 @@
 # Extension Activation Timing Fix
 
-> **⚠️ HISTORICAL DOCUMENT**: This approach has been superseded by the Background Polling Implementation (v0.2.0). See `POLLING_IMPLEMENTATION.md` for the current approach.
+> **⚠️ HISTORICAL DOCUMENT**: This approach has been superseded by the Background Polling Implementation. See `POLLING_IMPLEMENTATION.md` for the current approach.
 > 
 > This document is preserved for historical reference to understand the evolution of the Copilot integration strategy.
 
@@ -130,7 +130,6 @@ Added comprehensive logging at every step to track:
 
 ---
 
-**Fix Implemented**: October 1, 2025  
 **Issue**: Extension lazy activation timing  
-**Status**: ⚠️ Superseded by Background Polling (v0.2.0 - October 2025)  
+**Status**: ⚠️ Superseded by Background Polling Implementation  
 **Current Approach**: See `POLLING_IMPLEMENTATION.md`

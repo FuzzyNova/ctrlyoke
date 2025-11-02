@@ -341,6 +341,4 @@ Workflow Progress:
 
 ---
 
-*Architecture designed for: simplicity, reliability, and transparent user experience*  
-*Last updated: October 7, 2025 (v0.2.0 - Background Polling)*  
-*Initial implementation: September 30, 2025*
+*Architecture designed for: simplicity, reliability, and transparent user experience*

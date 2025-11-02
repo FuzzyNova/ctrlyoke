@@ -4,33 +4,33 @@
 
 FlightPath is a VS Code extension that enables developers to create automated, sequential workflows using GitHub Copilot through JSON-based prompt files with programmable end conditions.
 
-## 🎯 New: Zero-Interaction Automation! ✨
+## 🎯 Zero-Interaction Automation
 
-**Press "Take Off" and walk away** - FlightPath now features proven, zero-interaction Copilot Chat automation:
+**Press "Take Off" and walk away** - FlightPath features proven, zero-interaction Copilot Chat automation:
 
 - ✅ **Automatic Prompt Execution**: Prompts are typed and submitted automatically
-- ✅ **Multi-Strategy Fallback**: Graceful degradation ensures workflows always complete  
+- ✅ **Response Detection**: Language Model Tool API detects when Copilot finishes responding
 - ✅ **Native Copilot Syntax**: Full support for `@workspace`, `#file`, slash commands
 - ✅ **Real-Time Progress**: Watch workflows execute with live status updates
 
-📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Full Documentation](./COPILOT_INTEGRATION.md)** | 🎓 **[Implementation Details](./IMPLEMENTATION_SUMMARY.md)**
+📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Full Documentation](./docs/COPILOT_INTEGRATION.md)**
 
 ## ✨ Features
 
 ### Core Functionality
 - **🤖 Zero-Interaction Automation**: True "set-and-forget" Copilot Chat integration
 - **📝 Structured Prompt Sequences**: Define multi-step workflows using JSON files
-- **✅ End Condition Scripts**: Validate completion with Python, JavaScript, or shell scripts
 - **🎯 Context-Aware Prompts**: Automatically include file content, selections, and workspace context
 - **⏯️ Queue Management**: Pause, resume, and monitor execution progress
 - **📊 Status Bar Integration**: Real-time workflow status and progress tracking
 
-### Copilot Chat Automation (NEW!)
+### Copilot Chat Automation
 - **Direct Text Insertion**: Zero interaction - validated and proven approach
-- **Command Sequence**: Automated submission with minimal user interaction
-- **Enhanced Clipboard**: Intelligent fallback with prompt preview
+- **Response Detection**: Language Model Tool API detects completion automatically
+- **Submit Verification**: Clipboard-based verification ensures prompts are sent
+- **Streaming Detection**: Monitors chat stability before proceeding to next prompt
 - **Smart Context Formatting**: Automatic `@workspace`, `#file:path`, slash commands
-- **Multi-Strategy Detection**: Automatically selects best available automation method
+- **Background Polling**: Detects Copilot availability on startup (5s intervals, 30s max)
 
 ### File Format Support
 - **`.prompt.json`**: Single prompt files for simple tasks
@@ -163,29 +163,29 @@ Alternatively, edit your `settings.json`:
 }
 ```
 
-## 🎯 Automation Strategies
+## 🎯 How Automation Works
 
-FlightPath uses a multi-strategy approach for maximum reliability:
+FlightPath uses a proven single-strategy approach for reliable automation:
 
-### 1. Direct Text Insertion (Primary) ✅
-- **Status**: Proven and validated
+### Direct Text Insertion with Verification
+- **Status**: Proven and validated through extensive testing
 - **Experience**: Zero interaction required
-- **How**: Types prompts directly using VS Code commands
-- **Speed**: Fastest execution
+- **Process**:
+  1. **Background Polling**: Detects Copilot availability on startup
+  2. **Focus Chat**: Opens Copilot Chat in configured location (panel/tab/window)
+  3. **Clear Input**: Selects and clears any existing text
+  4. **Type Prompt**: Types formatted prompt with context (@workspace, #file, etc.)
+  5. **Submit & Verify**: Submits and verifies prompt appears in chat (with retry)
+  6. **Wait for Tool**: Language Model Tool signals when Copilot finishes
+  7. **Streaming Check**: Monitors chat stability before next prompt (3 consecutive stable checks)
 
-### 2. Command Sequence (Secondary) ✅
-- **Status**: Reliable fallback
-- **Experience**: Minimal interaction
-- **How**: Clipboard + automated paste + submit
-- **Speed**: Fast execution
+### What If It Fails?
+If Copilot Chat isn't available or automation fails, FlightPath shows a clear error message with:
+- **Requirements**: What's needed for automation to work
+- **Troubleshooting Steps**: How to resolve common issues
+- **Manual Retry**: Option to restart detection
 
-### 3. Enhanced Clipboard (Tertiary) ✅
-- **Status**: Always available
-- **Experience**: Manual paste required
-- **How**: Clipboard with helpful instructions
-- **Speed**: Depends on user
-
-FlightPath automatically detects and uses the best available strategy!
+No silent fallbacks - you always know the system state!
 
 ## 🐛 Known Issues
 
@@ -194,34 +194,28 @@ FlightPath automatically detects and uses the best available strategy!
 - Large workspace file inclusion may impact performance
 - Automation requires active GitHub Copilot Chat extension
 
-## 🛠️ Development Status
+## 🛠️ Current Features
 
-### ✅ Phase 2.5 Complete - Copilot Chat Integration
-- [x] Zero-interaction automation (PROVEN)
-- [x] Multi-strategy fallback system
-- [x] Copilot Chat syntax formatting
-- [x] Workflow progress tracking
-- [x] Capability detection system
-- [x] Status and testing commands
+### ✅ Implemented
+- Zero-interaction Copilot Chat automation
+- Language Model Tool API for response detection
+- Clipboard-based submit verification with retry logic
+- Streaming completion detection (monitors chat stability)
+- Background polling for Copilot availability detection
+- Copilot Chat syntax formatting (@workspace, #file, slash commands)
+- Workflow progress tracking and status bar updates
+- Configurable chat window location (panel/tab/window)
+- JSON schema validation with IntelliSense
+- Command registration and lifecycle management
+- File system utilities and prompt file discovery
 
-### ✅ Phase 2 Complete - Core Architecture
-- [x] Extension structure and build system
-- [x] JSON schema validation with IntelliSense
-- [x] Core architecture implementation
-- [x] Command registration and lifecycle management
-- [x] Status bar integration
-- [x] File system utilities and monitoring
-- [x] End condition script execution
-- [x] Copilot automation feasibility testing
-- [x] Basic unit tests
-
-### 📋 Current Phase - Copilot Integration
-- [x] Copilot Chat automation proof-of-concept
-- [ ] Enhanced GitHub Copilot integration with multi-strategy automation
-- [ ] Context-aware prompt formatting with @workspace syntax
-- [ ] WebView UI panel for file selection
-- [ ] Advanced context awareness features
-- [ ] Comprehensive test coverage
+### � Planned Features
+- End condition script execution and validation
+- WebView UI panel for visual workflow management
+- Advanced context awareness features
+- Workflow templates and snippets
+- Comprehensive test coverage
+- Integration with VS Code notebooks
 
 ---
 

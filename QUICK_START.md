@@ -9,11 +9,9 @@ Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) and run:
 FlightPath: Show Copilot Integration Status
 ```
 
-You should see one of:
-- ✅ **Zero-interaction automation available** - Best case! Full automation enabled
-- ✅ **Automated workflow available** - Good! Minor interaction may be needed
-- ⚠️ **Semi-automated** - Prompts copied, manual paste required
-- ❌ **No automation available** - Check Copilot Chat installation
+You should see:
+- ✅ **Direct automation available** - Ready to go! Full automation enabled
+- ❌ **Direct automation unavailable** - Copilot Chat not ready, follow troubleshooting steps
 
 ### Step 2: Test Automation (Optional but Recommended)
 
@@ -44,7 +42,9 @@ This sends a test message to Copilot Chat. If you see the message appear automat
 When you click "Take Off":
 - FlightPath opens Copilot Chat
 - Types your prompts automatically
-- Submits them one by one
+- Submits and verifies each prompt
+- Waits for Copilot to finish responding (using Language Model Tool)
+- Proceeds to next prompt automatically
 - No manual intervention needed! ✨
 
 ---
@@ -163,27 +163,48 @@ Example: Your prompt "Fix the error" becomes → `/fix #file:yourfile.ts Fix the
 
 ## 🛠️ Troubleshooting
 
+### Automation Not Available?
+
+If you see "Direct automation unavailable":
+
+1. **Ensure Copilot Chat is installed**:
+   - Extensions → Search for "GitHub Copilot Chat"
+   - Install and reload VS Code if needed
+
+2. **Wait for initialization**:
+   - FlightPath polls for Copilot availability on startup (up to 30 seconds)
+   - Check status bar for initialization status
+   - Status bar shows: Initializing → Waiting → Ready
+
+3. **Manually retry detection**:
+   - Run: `FlightPath: Retry Copilot Detection`
+   - This restarts the background polling process
+
+4. **Check required commands**:
+   - Run: `FlightPath: Show Copilot Integration Status`
+   - Verify all required VS Code commands are available
+   - Update VS Code if using an older version (requires 1.85.0+)
+
 ### Prompts Not Sending?
 
-1. **Check Copilot Chat is open**: Look for the chat panel
-2. **Check automation status**: Run `FlightPath: Show Copilot Integration Status`
+1. **Check Copilot is responding**: Open Copilot Chat manually and send a test message
+2. **Check status**: Run `FlightPath: Show Copilot Integration Status`
 3. **Test automation**: Run `FlightPath: Test Automation`
-4. **Check console**: View → Output → FlightPath
-
-### Automation Strategy Fallback?
-
-If you see "Manual paste required":
-1. FlightPath copies prompts to clipboard automatically
-2. Click in Copilot Chat input
-3. Press `Ctrl+V` (or `Cmd+V`)
-4. Press `Enter`
-5. FlightPath continues to next prompt
+4. **View logs**: View → Output → FlightPath (Debug Console)
 
 ### Workflow Stuck?
 
 - **Pause**: `FlightPath: Pause Execution`
 - **Resume**: `FlightPath: Resume Execution`
 - **Stop**: `FlightPath: Stop Execution`
+
+### Submit Keeps Retrying?
+
+If you see "Submit verification failed" messages:
+- Copilot may still be responding to the previous prompt
+- FlightPath automatically retries with exponential backoff (up to 5 attempts)
+- If it fails after retries, the workflow will show an error
+- Try increasing wait time by stopping and restarting the workflow
 
 ---
 
@@ -203,8 +224,9 @@ You can also store them anywhere in your workspace!
 
 ## 🎓 Learning Resources
 
-- **Full Documentation**: See `COPILOT_INTEGRATION.md`
-- **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md`
+- **Full Documentation**: See `docs/COPILOT_INTEGRATION.md`
+- **Architecture Overview**: See `docs/ARCHITECTURE.md`
+- **Response Handling Details**: See `docs/COPILOT_RESPONSE_HANDLING.md`
 - **Example Files**: Check `.flightpath/examples/`
 - **Schema Files**: See `schemas/` for JSON validation
 

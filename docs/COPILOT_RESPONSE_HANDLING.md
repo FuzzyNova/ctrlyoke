@@ -378,7 +378,7 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 ## Next Steps
 
 1. ✅ **Implement Language Model Tool approach** (Primary) - COMPLETE
-2. ✅ **Automatic prompt augmentation** - COMPLETE (v0.3.0)
+2. ✅ **Automatic prompt augmentation** - COMPLETE
 3. ⚠️ Test tool reliability with various prompts
 4. 🔄 Implement clipboard fallback for edge cases
 5. 📋 Consider Chat Participant as alternative UX
@@ -388,10 +388,10 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 
 ## Implementation Status
 
-### ✅ Completed (v0.3.0)
+### ✅ Implemented Features
 
 **Automatic Prompt Augmentation**
-- Every prompt sent through FlightPath now includes the tool-calling instruction
+- Every prompt sent through FlightPath includes the tool-calling instruction automatically
 - Implementation in `CopilotIntegration.buildCopilotChatPrompt()`
 - Instruction appended with enhanced critical instruction emphasizing completion before tool call
 - Works in both normal and error fallback paths
@@ -404,7 +404,7 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 - ✅ Minimal token overhead (~25 tokens per prompt)
 - ✅ Preserves current UX - users just click "Take Off"
 
-### ✅ Completed (v0.3.1) - Clipboard-Based Verification & Streaming Detection
+**Clipboard-Based Verification & Streaming Detection**
 
 **Problem Solved:**
 - Race condition: Copilot calls `#flightpath_response_complete` tool **before** finishing streaming response

@@ -1,154 +1,97 @@
-# FlightPath VS Code Extension - GitHub Copilot Instructions
+# FlightPath VS Code Extension
 
-## Project Overview
+## Core Purpose
 
-FlightPath is a VS Code extension that automates GitHub Copilot through structured prompt workflows. The extension enables developers to create JSON-based prompt sequences with programmable end conditions for automated development workflows.
+Automate GitHub Copilot Chat through structured JSON-based prompt workflows with automated execution, response detection, and context awareness.
 
-Core Purpose: Orchestrate GitHub Copilot Chat interactions through automated prompt queues with validation scripts and context awareness.
+## Technical Stack
 
-## Architecture & Technical Stack
+- TypeScript 5.x (strict mode)
+- Node.js 22.17.0
+- esbuild (bundling)
+- VS Code Extension API (Language Model Tool API, Chat integration)
+- JSON Schema validation (AJV)
+- Mocha (testing)
 
-### Technology Stack (2025 Best Practices)
+## Architecture Principles
 
-- **TypeScript 5.x** with strict configuration and modern language features
-- **Node.js 18+** (project uses v22.17.0) for runtime compatibility
-- **esbuild** for fast bundling and development (not webpack)
-- **VS Code Extension API** with Chat integration capabilities
-- **JSON Schema validation** (AJV) for prompt file validation and IntelliSense
-- **Child process execution** for end condition script validation
-- **Chokidar** for file system monitoring
+SOLID principles with strict separation of concerns:
 
-### Build System
+- FlightPathManager: Orchestration and command handling
+- PromptQueue: Sequential execution and state management
+- CopilotIntegration: Chat automation and response detection
+- PromptFileParser: JSON validation and parsing
+- EndConditionEvaluator: Script execution and validation
 
-- **esbuild**: Primary bundler with watch mode and problem matchers
-- **TypeScript Strict Mode**: All strict flags enabled for type safety
-- **ESLint + Prettier**: Code quality and formatting enforcement
-- **Mocha**: Testing framework for VS Code extension testing
-- **npm scripts**: Standard build, watch, test, and package workflows
-
-## Code Architecture Principles
-
-### SOLID Principles Implementation
-
-- Single Responsibility: Each component has one well-defined purpose
-  - FlightPathManager: Orchestration only
-  - PromptQueue: Queue management only
-  - CopilotIntegration: Chat API interface only
-- Open/Closed: Extensible for new prompt formats and end condition types
-- Liskov Substitution: Abstract interfaces for prompt types and execution strategies
-- Interface Segregation: Focused interfaces (ICopilotIntegration, IEndConditionEvaluator)
-- Dependency Inversion: Abstract VS Code API dependencies and external integrations
-
-### Code Quality Standards
-
-- DRY: Eliminate duplication through shared utilities and abstractions
-- KISS: Maintain simplicity, avoid over-engineering
-- Modular Architecture: Clean separation between core logic, UI, and integrations
-- Error Boundaries: Comprehensive error handling with user feedback
-- Type Safety: Leverage TypeScript's strict mode for compile-time safety
+Code quality: TypeScript strict mode, comprehensive error handling, no duplication.
 
 ## Project Structure
 
 ```
-FlightPath/
-├── src/
-│   ├── extension.ts              # Extension activation and command registration
-│   ├── flightpath/               # Core business logic
-│   │   ├── FlightPathManager.ts      # Main orchestration controller
-│   │   ├── PromptQueue.ts            # Queue management and execution
-│   │   ├── CopilotIntegration.ts     # GitHub Copilot Chat API (stub)
-│   │   ├── PromptFileParser.ts       # JSON prompt parsing with validation
-│   │   └── EndConditionEvaluator.ts  # Script execution and validation
-│   ├── ui/
-│   │   └── StatusBarManager.ts       # VS Code status bar integration
-│   ├── utils/
-│   │   ├── FileSystemUtils.ts        # File operations and monitoring
-│   │   ├── ValidationUtils.ts        # Schema validation helpers
-│   │   └── LoggingUtils.ts           # Structured logging system
-│   ├── types/
-│   │   ├── FlightPathTypes.ts        # Core type definitions
-│   │   └── CopilotTypes.ts           # Copilot integration types
-│   └── schemas/
-│       ├── prompt-schema.json        # Single prompt validation
-│       └── flightpath-schema.json    # Workflow validation
-├── .flightpath/examples/         # Example prompt and workflow files
-└── test/                         # Unit and integration tests
+src/
+├── extension.ts                  # Entry point
+├── flightpath/                   # Core logic
+│   ├── FlightPathManager.ts      # Orchestration
+│   ├── PromptQueue.ts            # Execution queue
+│   ├── CopilotIntegration.ts     # Chat automation
+│   ├── PromptFileParser.ts       # JSON parsing
+│   └── EndConditionEvaluator.ts  # Script validation
+├── types/                        # Type definitions
+├── schemas/                      # JSON schemas
+└── test/                         # Tests
 ```
 
 ## Core Components
 
-### FlightPathManager (Main Controller)
+### FlightPathManager
 
-- Purpose: Central orchestrator for all extension functionality
-- Responsibilities: Command handling, lifecycle management, component coordination
-- Key Methods: `takeOff()`, `pauseExecution()`, `resumeExecution()`, `stopExecution()`
-- State Management: Maintains current execution state and queue references
+Main orchestrator handling commands, lifecycle, and workflow execution. Coordinates PromptQueue and CopilotIntegration. Subscribes to status changes and response completion events.
 
-### PromptQueue (Execution Engine)
+### PromptQueue
 
-- Purpose: Manages sequential prompt execution with state tracking
-- Features: Pause/resume/cancel, progress tracking, error recovery
-- State Persistence: Queue state maintained across VS Code sessions
-- Integration: Coordinates with CopilotIntegration for chat interactions
+Manages sequential prompt execution with pause/resume/cancel. Tracks state and progress. Does not directly handle response detection (delegated to FlightPathManager).
 
-### CopilotIntegration (Chat Interface)
+### CopilotIntegration
 
-- Current Status: Fully implemented with zero-interaction automation
-- Strategy: Direct text insertion using proven VS Code command sequence
-- Automation Steps: Focus chat (1000ms) → Clear input (300ms) → Type prompt (500ms) → Submit
-- Background Polling: Starts on extension activation, 5s intervals, max 6 attempts (30s)
-- Progressive Activation: First attempt passive, subsequent attempts actively activate extensions
-- States: 'initializing' | 'waiting' | 'ready' | 'unavailable'
-- Event System: Emits status changes that FlightPathManager subscribes to
-- Workflow Blocking: Users cannot execute workflows until status is 'ready' or 'unavailable'
-- Error Handling: Clear error messages with troubleshooting steps
-- **Response Detection**: Language Model Tool (`flightpath_response_complete`) registered for completion callbacks
-- **Automatic Prompt Augmentation**: Every prompt automatically includes tool-calling instruction to ensure reliable completion detection
+Implements zero-interaction Copilot Chat automation:
 
-#### Response Completion Detection (v0.3.0)
+- Direct text insertion: Focus (1000ms) → Clear (300ms) → Type (500ms) → Submit
+- Background polling: 5s intervals, 30s max, detects Copilot availability on startup
+- States: initializing | waiting | ready | unavailable
+- Response detection: Language Model Tool (flightpath_response_complete)
+- Automatic prompt augmentation: Adds tool-calling instruction to every prompt
+- Submit verification: Clipboard-based retry with exponential backoff
+- Streaming detection: Polls chat stability (3 consecutive stable checks)
 
-FlightPath uses the **Language Model Tool API** to detect when Copilot has finished responding to a prompt. This enables reliable workflow automation without polling or manual intervention.
+### Response Completion Detection
 
-**Architecture:**
+Uses Language Model Tool API to detect when Copilot finishes responding:
 
-1. **Tool Registration**: On Copilot becoming ready, FlightPath registers a Language Model Tool named `flightpath_response_complete`
-2. **Automatic Prompt Augmentation**: Every prompt sent through `buildCopilotChatPrompt()` automatically appends:
-   ```
-   IMPORTANT: When you have finished your complete response, you MUST call the #flightpath_response_complete tool to signal completion.
-   ```
-3. **Tool Invocation**: When Copilot calls the tool, FlightPath's `invoke` handler fires the `responseCompleteEmitter` event
-4. **Event Handling**: PromptQueue listens for the event to trigger end condition evaluation and proceed to the next prompt
+1. Tool registration: flightpath_response_complete registered after Copilot activates
+2. Prompt augmentation: Every prompt gets tool-calling instruction appended automatically
+3. Tool invocation: When called, fires responseCompleteEmitter event
+4. Event handling: FlightPathManager subscribes and waits for streaming to complete
 
-**Key Implementation Details:**
+Implementation notes:
 
-- Tool registered AFTER Copilot extensions are active (prevents registration errors)
-- Prevents duplicate registration with `isToolRegistered` flag
-- Instruction added in both normal and error fallback code paths
-- LLM reliability: 99%+ at following explicit tool-calling instructions
-- Token overhead: ~25 tokens per prompt
-- User experience: Completely transparent - no manual steps required
+- Tool registered only once (isToolRegistered flag prevents duplicates)
+- Instruction added in CopilotIntegration.buildCopilotChatPrompt()
+- Single active workflow limitation (no chat session metadata in tool invocations)
+- See docs/COPILOT_RESPONSE_HANDLING.md for full research
 
-**Architectural Decision - Single Active Chat:**
-Given that tool invocations don't provide chat session metadata, FlightPath currently supports one active workflow at a time. This prevents ambiguity about which chat invoked the completion tool. Future enhancement: Add workflow ID parameter to tool for parallel execution support.
+### PromptFileParser
 
-**See Also:**
+- Schema validation with AJV
+- Supports .prompt.json (single) and .flightpath.json (workflow)
+- Handles file inclusion and workspace context
+- Detailed validation error reporting
 
-- Full research and options analysis: `docs/COPILOT_RESPONSE_HANDLING.md`
-- Implementation: `src/flightpath/CopilotIntegration.ts` (lines ~90-145 for tool registration, lines ~660-680 for prompt augmentation)
+### EndConditionEvaluator
 
-### PromptFileParser (JSON Processing)
-
-- Schema Validation: Uses AJV for strict JSON schema validation
-- File Types: `.prompt.json` (single) and `.flightpath.json` (workflow)
-- Context Processing: Handles file inclusion and workspace context
-- Error Reporting: Detailed validation error messages
-
-### EndConditionEvaluator (Script Execution)
-
-- Security: Path validation and process isolation
-- Languages: Python, JavaScript, shell scripts
-- Timeout Management: Configurable execution timeouts
-- Safety: No direct file system access from scripts
+- Path validation and process isolation
+- Supports Python, JavaScript, shell scripts
+- Configurable timeouts
+- Scripts cannot access file system directly
 
 ## File Formats & Schema
 
@@ -186,137 +129,88 @@ Given that tool invocations don't provide chat session metadata, FlightPath curr
 }
 ```
 
-## Commands & Features
+## Commands
 
-### VS Code Commands (11 registered)
+11 registered commands:
 
-- `flightpath.takeOff`: Start prompt workflow execution
-- `flightpath.openPanel`: Open FlightPath panel
-- `flightpath.createPromptFile`: Create new prompt file
-- `flightpath.pause`: Pause current execution
-- `flightpath.resume`: Resume paused execution
-- `flightpath.stop`: Stop and reset current workflow
-- `flightpath.debugState`: Debug current workflow state
-- `flightpath.test.copilotAutomation`: Legacy POC test function
-- `flightpath.showCopilotStatus`: Display Copilot integration status
-- `flightpath.testAutomation`: Test automation with integrated approach
-- `flightpath.retryCopilotDetection`: Manually restart background polling
+- flightpath.takeOff: Start workflow
+- flightpath.openPanel: Open panel
+- flightpath.createPromptFile: Create file
+- flightpath.pause/resume/stop: Execution control
+- flightpath.debugState: Debug state
+- flightpath.showCopilotStatus: Show status
+- flightpath.testAutomation: Test automation
+- flightpath.retryCopilotDetection: Retry polling
 
-### Status Bar Integration
+Status bar shows: Initializing, Waiting, Ready, Running, Paused, Setup Required
 
-- Icon: Rocket symbol ($(rocket)) for FlightPath branding
-- States: Initializing, Waiting for Copilot, Ready, Running, Paused, Setup Required
-- Visual indicators: Loading spinner, clock, rocket, warning icons
-- Interactive: Click to open panel
-- Real-time updates: Reflects Copilot initialization and workflow progress
+## Testing
 
-## Testing Strategy
+- Unit tests: Core logic with mocking
+- Integration tests: VS Code API interactions
+- Test files: extension.test.ts, flightpath.test.ts
+- Framework: Mocha with VS Code test utilities
 
-### Test Structure
+## Security
 
-- Unit Tests: Core logic components with mocking
-- Integration Tests: VS Code API interactions
-- File System Tests: Prompt file parsing and validation
-- Mock Framework: VS Code test utilities and Mocha
+Script execution:
 
-### Test Files
+- Path validation: Scripts must be in .flightpath/ directory
+- Process isolation: Separate child processes
+- Timeout protection: Default 30s
+- No network access or direct file modification
 
-- `extension.test.ts`: Extension lifecycle and command registration
-- `flightpath.test.ts`: Core functionality and component integration
-- Fixture files in `test/fixtures/` for parsing validation
+File system:
 
-## Security & Safety
+- Operations limited to workspace scope
+- JSON validated against strict schemas
 
-### Script Execution Safety
+## Development
 
-- Path Validation: Only allow scripts in `.flightpath/` directory
-- Process Isolation: Scripts run in separate child processes
-- Timeout Protection: Configurable execution timeouts (default: 30s)
-- No Network Access: Scripts cannot make external network calls
+- F5 debugging with breakpoints
+- npm run watch for compilation
+- TypeScript strict mode
+- ESLint + Prettier for code quality
 
-### File System Security
+## Implementation Status
 
-- Workspace Boundary: All operations within workspace scope
-- Read-Only Context: Scripts cannot modify workspace files directly
-- Validation: All JSON files validated against strict schemas
+Completed:
 
-## Development Workflow
-
-### Development Environment
-
-- F5 Debugging: Extension Development Host with breakpoint support
-- Watch Mode: `npm run watch` for automatic compilation
-- Live Testing: Commands available in Command Palette during development
-- Build Verification: `npm run compile` for production builds
-
-### Code Style & Quality
-
-- TypeScript Strict: All strict compiler options enabled
-- ESLint Rules: Consistent code quality enforcement
-- Prettier Formatting: Automatic code formatting on save
-- Import Organization: Clear module boundaries and dependencies
-
-## Current Implementation Status
-
-### Phase 3 Complete (Copilot Integration & Response Detection)
-
-- Zero-interaction Copilot Chat automation fully implemented
-- Background polling for Copilot availability detection
-- Direct text insertion with proven timing delays
-- Progressive activation strategy (passive → active)
-- Workflow blocking until Copilot is ready
-- Real-time status updates via event emitters
-- Comprehensive error handling with clear user feedback
-- All core commands implemented and tested
-- **User-configurable chat window location** (chatPanel, newTab, newWindow)
-- **Language Model Tool for response completion detection** (v0.3.0)
-- **Automatic prompt augmentation** - every prompt includes tool-calling instruction (v0.3.0)
-
-### Phase 2 Complete (Core Architecture)
-
-- All core components implemented and tested
-- Command registration and lifecycle management working
-- JSON schema validation with VS Code IntelliSense
+- Zero-interaction Copilot Chat automation
+- Language Model Tool for response detection
+- Clipboard-based submit verification and streaming detection
+- Background polling with progressive activation
+- User-configurable chat window location
+- Automatic prompt augmentation with tool instructions
+- JSON schema validation with IntelliSense
+- Command registration and lifecycle management
 - Status bar integration with real-time updates
-- File system monitoring for `.flightpath/` directory
-- End condition script execution framework
-- Comprehensive error handling and logging
-- Basic unit test coverage
+- File system monitoring and prompt discovery
+
+Planned:
+
+- End condition script execution
+- WebView UI panel
+- Advanced context awareness
+- Comprehensive test coverage
 
 ## Extension Settings
 
-FlightPath provides the following user-configurable settings (accessible via VS Code Settings UI):
+- flightpath.promptsDirectory (string, default: ".flightpath")
+- flightpath.scriptTimeout (number, default: 30000)
+- flightpath.enableContextAwareness (boolean, default: true)
+- flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow")
 
-- **`flightpath.promptsDirectory`** (string, default: ".flightpath"): Directory containing prompt files relative to workspace root
-- **`flightpath.scriptTimeout`** (number, default: 30000): Timeout for end condition scripts in milliseconds
-- **`flightpath.enableContextAwareness`** (boolean, default: true): Enable context-aware prompt generation
-- **`flightpath.chatWindowLocation`** (enum, default: "chatPanel"): Choose where to open Copilot Chat
-  - "chatPanel": Open in the Chat panel (recommended)
-  - "newTab": Open in an editor tab
-  - "newWindow": Open in a new window
+When adding settings:
 
-### Adding New Settings
-
-When adding new extension settings:
-
-1. Add to `package.json` under `contributes.configuration.properties`
-2. Follow VS Code UX guidelines: https://code.visualstudio.com/api/ux-guidelines/settings
-3. Use enum with `enumDescriptions` for dropdown options
-4. Provide clear `description` and `markdownDescription` fields
-5. Always set a sensible `default` value
-6. Retrieve settings using `vscode.workspace.getConfiguration("flightpath").get<Type>("settingName", defaultValue)`
-7. Document the setting in README.md and update examples if applicable
-
-### Future Enhancements
-
-- WebView UI panel for visual workflow management
-- Advanced context awareness features
-- Comprehensive test coverage expansion
-- Performance optimization for large workspaces
+1. Add to package.json under contributes.configuration.properties
+2. Use enum with enumDescriptions for dropdowns
+3. Set sensible defaults
+4. Retrieve: vscode.workspace.getConfiguration("flightpath").get<Type>("settingName", defaultValue)
 
 ## Development Guidelines
 
-### When Adding New Features
+When adding features:
 
 1. Follow SOLID principles - single responsibility per component
 2. Add TypeScript types - leverage strict mode for safety
@@ -325,29 +219,20 @@ When adding new extension settings:
 5. Update schemas - maintain JSON validation for prompt files
 6. Document changes - keep README and examples current
 
-### Code Review Focus Areas
+Code review focus:
 
-- Type Safety: Proper TypeScript usage with strict mode
-- Error Boundaries: All external operations must have error handling
-- Security: Script execution and file system access validation
-- Performance: Avoid blocking operations in extension host
-- User Experience: Clear feedback and status communication
+- Type safety with strict mode
+- Error boundaries for all external operations
+- Security validation for script execution and file system access
+- Performance: avoid blocking operations, use async/await
+- User experience: clear feedback and status communication
 
-### Performance Considerations
+## Extension Goals
 
-- Async Operations: Use async/await for all I/O operations
-- Memory Management: Clean up watchers and subscriptions
-- Large Files: Stream processing for large workspace file inclusion
-- Background Tasks: Use background execution for long-running scripts
+FlightPath bridges manual AI assistance and full automation through:
 
-## Extension Goals & Vision
-
-FlightPath aims to bridge the gap between manual AI assistance and full automation by providing:
-
-- Structured Automation: Repeatable workflows through JSON configuration
-- Intelligent Validation: Script-based verification of AI outputs
-- Developer Control: Fine-grained control over AI interaction sequences
-- Workspace Integration: Seamless VS Code integration with context awareness
-- Safety First: Secure script execution with clear boundaries
-
-This extension represents a modern approach to AI-assisted development, emphasizing structure, safety, and developer control over AI interactions.
+- Structured automation via JSON configuration
+- Script-based validation of AI outputs
+- Fine-grained control over AI interaction sequences
+- Seamless VS Code integration with context awareness
+- Secure script execution with clear boundaries
