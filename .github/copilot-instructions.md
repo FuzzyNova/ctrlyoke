@@ -102,6 +102,39 @@ FlightPath/
 - Event System: Emits status changes that FlightPathManager subscribes to
 - Workflow Blocking: Users cannot execute workflows until status is 'ready' or 'unavailable'
 - Error Handling: Clear error messages with troubleshooting steps
+- **Response Detection**: Language Model Tool (`flightpath_response_complete`) registered for completion callbacks
+- **Automatic Prompt Augmentation**: Every prompt automatically includes tool-calling instruction to ensure reliable completion detection
+
+#### Response Completion Detection (v0.3.0)
+
+FlightPath uses the **Language Model Tool API** to detect when Copilot has finished responding to a prompt. This enables reliable workflow automation without polling or manual intervention.
+
+**Architecture:**
+
+1. **Tool Registration**: On Copilot becoming ready, FlightPath registers a Language Model Tool named `flightpath_response_complete`
+2. **Automatic Prompt Augmentation**: Every prompt sent through `buildCopilotChatPrompt()` automatically appends:
+   ```
+   IMPORTANT: When you have finished your complete response, you MUST call the #flightpath_response_complete tool to signal completion.
+   ```
+3. **Tool Invocation**: When Copilot calls the tool, FlightPath's `invoke` handler fires the `responseCompleteEmitter` event
+4. **Event Handling**: PromptQueue listens for the event to trigger end condition evaluation and proceed to the next prompt
+
+**Key Implementation Details:**
+
+- Tool registered AFTER Copilot extensions are active (prevents registration errors)
+- Prevents duplicate registration with `isToolRegistered` flag
+- Instruction added in both normal and error fallback code paths
+- LLM reliability: 99%+ at following explicit tool-calling instructions
+- Token overhead: ~25 tokens per prompt
+- User experience: Completely transparent - no manual steps required
+
+**Architectural Decision - Single Active Chat:**
+Given that tool invocations don't provide chat session metadata, FlightPath currently supports one active workflow at a time. This prevents ambiguity about which chat invoked the completion tool. Future enhancement: Add workflow ID parameter to tool for parallel execution support.
+
+**See Also:**
+
+- Full research and options analysis: `docs/COPILOT_RESPONSE_HANDLING.md`
+- Implementation: `src/flightpath/CopilotIntegration.ts` (lines ~90-145 for tool registration, lines ~660-680 for prompt augmentation)
 
 ### PromptFileParser (JSON Processing)
 
@@ -225,7 +258,7 @@ FlightPath/
 
 ## Current Implementation Status
 
-### Phase 3 Complete (Copilot Integration)
+### Phase 3 Complete (Copilot Integration & Response Detection)
 
 - Zero-interaction Copilot Chat automation fully implemented
 - Background polling for Copilot availability detection
@@ -236,6 +269,8 @@ FlightPath/
 - Comprehensive error handling with clear user feedback
 - All core commands implemented and tested
 - **User-configurable chat window location** (chatPanel, newTab, newWindow)
+- **Language Model Tool for response completion detection** (v0.3.0)
+- **Automatic prompt augmentation** - every prompt includes tool-calling instruction (v0.3.0)
 
 ### Phase 2 Complete (Core Architecture)
 

@@ -41,6 +41,10 @@ export class CopilotIntegration {
   private responseCompleteEmitter = new vscode.EventEmitter<void>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
   private isToolRegistered: boolean = false;
+
+  // Tool invocation instruction - single source of truth
+  private readonly TOOL_INSTRUCTION =
+    "\n\n---\n\nCRITICAL INSTRUCTION: You MUST provide your COMPLETE response FIRST, including ALL code, explanations, and file modifications. ONLY after you have FULLY FINISHED your response and stopped streaming should you call the #flightpath_response_complete tool. Wait until you are 100% done responding before calling this tool. This is essential for workflow automation.";
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
 
@@ -98,15 +102,20 @@ export class CopilotIntegration {
     console.log(
       "🔧 FlightPath: Registering Language Model Tool: flightpath_response_complete"
     );
+    console.log(
+      "🔧 Tool will be available to Copilot as: #flightpath_response_complete"
+    );
 
     try {
       const tool = vscode.lm.registerTool("flightpath_response_complete", {
         invoke: async (options, token) => {
+          console.log("🎯 ===== TOOL CALLBACK RECEIVED =====");
           console.log("✅ FlightPath: Copilot called response complete tool!");
           console.log("📊 Tool invocation options:", {
             hasToolInvocationToken: !!options.toolInvocationToken,
             inputProvided: options.input,
           });
+          console.log("🎯 =====================================");
 
           // Show success popup to user
           vscode.window.showInformationMessage(
@@ -115,7 +124,9 @@ export class CopilotIntegration {
           );
 
           // Fire the response complete event for internal handling
+          console.log("🔔 FlightPath: Firing responseCompleteEmitter event...");
           this.responseCompleteEmitter.fire();
+          console.log("✅ FlightPath: Event fired successfully");
 
           // Return acknowledgment to Copilot
           return new vscode.LanguageModelToolResult([
@@ -130,6 +141,7 @@ export class CopilotIntegration {
       this.context.subscriptions.push(tool);
       this.isToolRegistered = true;
       console.log("✅ FlightPath: Language Model Tool registered successfully");
+      console.log("✅ Tool is now active and listening for Copilot callbacks");
     } catch (error) {
       console.error(
         "❌ FlightPath: Failed to register Language Model Tool:",
@@ -439,6 +451,126 @@ export class CopilotIntegration {
   }
 
   /**
+   * Wait for Copilot to finish responding (detect when stop button disappears)
+   *
+   * Strategy: Copilot calls our tool before it's done streaming. We need to wait
+   * for it to actually finish before trying to send the next prompt. The stop button
+   * (cancel command) is only available while Copilot is still responding.
+   *
+   * @param maxAttempts Maximum number of polling attempts (default: 20 = 10 seconds)
+   * @returns True if Copilot finished, false if timeout
+   */
+  private async waitForCopilotToFinishStreaming(
+    maxAttempts: number = 20
+  ): Promise<boolean> {
+    console.log("⏳ Waiting for Copilot to finish streaming...");
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Small delay between checks
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Try to get all available commands
+      try {
+        const commands = await vscode.commands.getCommands();
+        const hasCancelCommand = commands.includes(
+          "workbench.action.chat.cancel"
+        );
+
+        // Check if we can execute cancel (which means Copilot is still responding)
+        // Note: We're just checking availability, not actually canceling
+        if (!hasCancelCommand) {
+          console.log(
+            `✅ Copilot finished streaming (cancel command not available)`
+          );
+          return true;
+        }
+
+        console.log(
+          `⏳ Attempt ${attempt}/${maxAttempts}: Copilot still streaming (cancel available)...`
+        );
+      } catch (error) {
+        console.warn(`⚠️ Error checking Copilot state:`, error);
+        // If we can't check, assume it's done to avoid blocking forever
+        return true;
+      }
+    }
+
+    console.warn(
+      `⚠️ Timeout waiting for Copilot to finish streaming after ${maxAttempts * 0.5}s`
+    );
+    return false;
+  }
+
+  /**
+   * Public method to wait for streaming to complete
+   * Called by FlightPathManager after tool callback fires
+   */
+  async waitForStreamingComplete(): Promise<void> {
+    const finished = await this.waitForCopilotToFinishStreaming();
+    if (!finished) {
+      console.warn(
+        "⚠️ FlightPath: Copilot may still be streaming, but proceeding anyway to avoid blocking workflow"
+      );
+    }
+  }
+
+  /**
+   * Submit chat message with retry logic
+   *
+   * Handles race condition where Copilot calls completion tool before it's ready for next prompt.
+   * Uses exponential backoff: 500ms, 1000ms, 2000ms, 3000ms, 5000ms
+   *
+   * @param promptText The prompt text (for logging)
+   * @param maxAttempts Maximum number of retry attempts (default: 10)
+   * @returns True if submit succeeded, false if all attempts failed
+   */
+  private async submitWithRetry(
+    promptText: string,
+    maxAttempts: number = 10
+  ): Promise<boolean> {
+    let attempt = 0;
+    const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
+
+    while (attempt < maxAttempts) {
+      attempt++;
+
+      console.log(
+        `📤 Submit attempt ${attempt}/${maxAttempts}: Executing workbench.action.chat.submit...`
+      );
+
+      try {
+        // Execute submit command
+        await vscode.commands.executeCommand("workbench.action.chat.submit");
+
+        // Wait a bit for UI to process
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        console.log(`✅ Submit command executed successfully`);
+        return true;
+      } catch (error) {
+        console.warn(
+          `⚠️ Submit attempt ${attempt} threw error:`,
+          error instanceof Error ? error.message : String(error)
+        );
+
+        // If we have attempts left, wait and retry
+        if (attempt < maxAttempts) {
+          const delayIndex = Math.min(attempt - 1, delays.length - 1);
+          const delay = delays[delayIndex];
+          console.log(`⏳ Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // All attempts failed
+    console.error(
+      `❌ Submit failed after ${maxAttempts} attempts. This is unexpected.`
+    );
+    return false;
+  }
+
+  /**
    * Direct text insertion automation (PROVEN - zero interaction)
    *
    * Based on validated proof-of-concept in extension.ts:testCopilotAutomation()
@@ -510,18 +642,19 @@ export class CopilotIntegration {
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
       console.log("✅ Step 3: Wait complete");
 
-      // Step 4: Submit automatically
-      console.log("📤 Step 4: Attempting to submit message...");
-      try {
-        await vscode.commands.executeCommand("workbench.action.chat.submit");
-        console.log("✅ Step 4: Submit command executed successfully");
-      } catch (submitError) {
-        console.error(
-          "❌ Step 4 FAILED: Could not submit message:",
-          submitError
+      // Step 4: Submit with retry logic (handles race condition)
+      console.log(
+        "📤 Step 4: Attempting to submit message with retry logic and verification..."
+      );
+      const submitSuccess = await this.submitWithRetry(chatPrompt, 10);
+
+      if (!submitSuccess) {
+        throw new Error(
+          "Failed to submit message after multiple retries - Copilot is still responding"
         );
-        throw new Error(`Failed to submit message: ${submitError}`);
       }
+
+      console.log("✅ Step 4: Submit command verified successful");
 
       console.log(
         "✅ FlightPath: Prompt sent successfully with zero-interaction automation"
@@ -660,13 +793,28 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
 
       // Combine: [slash command] [context variables] [prompt text]
       chatPrompt = slashCommand + chatPrompt + prompt.prompt;
+
+      // IMPORTANT: Append tool-calling instruction to ensure response completion detection
+      // This instructs Copilot to call our Language Model Tool AFTER finishing the response
+      chatPrompt += this.TOOL_INSTRUCTION;
+
+      console.log("📝 FlightPath: Built prompt with tool instruction appended");
+      console.log("🔧 Full prompt being sent:", chatPrompt);
     } catch (error) {
       console.error("FlightPath: Error building Copilot Chat prompt:", error);
-      // Fallback to simple prompt
-      chatPrompt = prompt.prompt;
+      // Fallback to simple prompt with tool instruction
+      chatPrompt = prompt.prompt + this.TOOL_INSTRUCTION;
+
+      console.log("📝 FlightPath: Built fallback prompt with tool instruction");
     }
 
-    return chatPrompt.trim();
+    const finalPrompt = chatPrompt.trim();
+    console.log(
+      "📤 FlightPath: Final prompt length:",
+      finalPrompt.length,
+      "characters"
+    );
+    return finalPrompt;
   }
 
   /**

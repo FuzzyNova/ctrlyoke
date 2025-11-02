@@ -1,0 +1,10 @@
+{
+  "prompts": [
+    {
+      "prompt": "What is the SOLID principle of Single Responsibility? Keep your response brief (2-3 sentences)."
+    },
+    {
+      "prompt": "Now explain the Open/Closed principle, also briefly (2-3 sentences)."
+    }
+  ]
+}
