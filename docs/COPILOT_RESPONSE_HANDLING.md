@@ -404,53 +404,91 @@ const handler: vscode.ChatRequestHandler = async (request, context, stream, toke
 - ✅ Minimal token overhead (~25 tokens per prompt)
 - ✅ Preserves current UX - users just click "Take Off"
 
-### ✅ Completed (v0.3.1) - Submit Retry Logic with Clipboard Verification
+### ✅ Completed (v0.3.1) - Clipboard-Based Verification & Streaming Detection
 
 **Problem Solved:**
-- Race condition: Copilot sometimes calls `#flightpath_response_complete` tool while still streaming
+- Race condition: Copilot calls `#flightpath_response_complete` tool **before** finishing streaming response
 - When FlightPath tries to send next prompt, submit button not available (stop button still showing)
 - `workbench.action.chat.submit` **silently fails** without throwing errors - cannot rely on try-catch
-- Need reliable way to detect if prompt was actually sent
+- No programmatic way to detect when Copilot actually finishes responding
+- Command availability checking doesn't work (`getCommands()` returns all commands regardless of state)
 
 **Solution Implemented:**
-- `submitWithRetry()` method with **clipboard-based verification**
-- After each submit attempt, verifies success by checking input field contents
-- Uses exponential backoff: 500ms, 1000ms, 2000ms, 3000ms, 5000ms (up to 10 attempts)
-- Total retry window: ~16 seconds maximum
-- Comprehensive logging for debugging each attempt
+Two clipboard-based verification mechanisms:
 
-**Verification Strategy:**
-1. Execute `workbench.action.chat.submit` command
-2. Wait 800ms for UI to react
-3. Select all text in chat input field
-4. Copy to clipboard (preserving original clipboard content)
-5. Check if copied text matches original prompt:
-   - **Empty input** → Submit succeeded ✅
-   - **Different text** → Submit succeeded (follow-up or new state) ✅
-   - **Same prompt text** → Submit failed (text still in input) ❌ Retry
-6. Restore original clipboard content
+**1. Submit Verification (`submitWithRetry()`)**
+- Verifies submit succeeded by checking if prompt appears in chat
+- Uses `workbench.action.chat.copyAll` + `vscode.env.clipboard.readText()`
+- Compares chat content before and after submit
+- Uses exponential backoff: 500ms, 1000ms, 2000ms, 3000ms, 5000ms (5 attempts)
+- Total retry window: ~15 seconds maximum
+
+**Verification Flow:**
+1. Copy chat content BEFORE submitting → baseline
+2. Execute `workbench.action.chat.submit` command
+3. Wait 1000ms for UI to process
+4. Copy chat content AFTER submitting → current state
+5. Check if our prompt text appears in current state but not in baseline:
+   - **Prompt found in chat** → Submit succeeded ✅
+   - **Prompt NOT in chat** → Submit failed ❌ Retry with exponential backoff
+6. Retry until verified or max attempts reached
+
+**2. Streaming Completion Detection (`waitForCopilotToFinishStreaming()`)**
+- Monitors chat content stability via clipboard polling
+- Polls every 500ms and compares content
+- Requires 3 consecutive stable checks (1.5 seconds of no changes)
+- Resets counter if content changes (still streaming)
+- Maximum 40 attempts (20 seconds timeout)
+
+**Streaming Detection Flow:**
+1. Tool callback fires (Copilot thinks it's done, but often still streaming)
+2. Start polling loop every 500ms:
+   - Copy chat content via clipboard
+   - Compare with previous copy
+   - If identical: increment stable counter
+   - If different: reset counter to 0 (still streaming)
+3. After 3 consecutive identical copies (1.5s stable):
+   - ✅ Copilot confirmed finished
+   - Proceed to next prompt
+4. Timeout after 20 seconds if unstable
 
 **Technical Details:**
 - `workbench.action.chat.submit` does NOT throw errors when it fails silently
 - Cannot rely on try-catch for failure detection
-- Clipboard verification is the only reliable way to detect submit status
-- Preserves user's clipboard content (save → verify → restore)
+- `getCommands()` returns ALL registered commands regardless of enabled/visible state
+- Context keys API exists but not accessible from extensions
+- Clipboard verification is the ONLY reliable way to detect chat state
 - Each retry logs verification results with character counts
 - Succeeds as soon as verification confirms prompt was sent
-- Fails gracefully after max attempts with clear error message
+- Handles race conditions automatically
+
+**Proven Results (from Debug Console logs):**
+```
+✅ Submit verified - prompt appears in chat!
+✅ Chat content stable (1/3 checks)
+✅ Chat content stable (2/3 checks)
+✅ Chat content stable (3/3 checks)
+✅ Copilot finished streaming (content stable for 1.5s)
+```
 
 **Benefits:**
-- ✅ Handles timing race conditions automatically
-- ✅ **Detects silent failures** that try-catch cannot catch
-- ✅ No fixed delays - adapts to actual Copilot response time
-- ✅ Robust verification with clipboard-based state detection
-- ✅ Transparent retry process with full logging
-- ✅ Preserves user's clipboard content
-- ✅ Graceful degradation if chat never becomes ready
+- ✅ **Submit verification** - Know for certain our prompt made it into chat
+- ✅ **Streaming detection** - Detect when Copilot actually stops responding
+- ✅ **No guessing** - Direct observation of chat state via clipboard
+- ✅ **Self-correcting** - Automatically detects and retries failed submits
+- ✅ **Handles timing races** - Adapts to actual Copilot response time
+- ✅ **Transparent logging** - Full visibility into verification process
+- ✅ **Graceful degradation** - Clear error messages if verification fails
+- ✅ **Fast in practice** - Most responses stable within 2-3 seconds after tool callback
+
+**Limitations:**
+- ⚠️ Clipboard operations add ~100-200ms overhead per check
+- ⚠️ User switching focus during execution could theoretically cause issues (rare)
+- ⚠️ Relies on `workbench.action.chat.copyAll` being available
 
 **Next Phase:**
-- Monitor retry patterns in production to optimize backoff timing
-- Consider adding visual feedback during retries (status bar updates)
+- Monitor performance in production workflows
+- Consider optimizing polling intervals based on observed patterns
 - Explore VS Code APIs for direct chat state access (if/when available)
 
 ---

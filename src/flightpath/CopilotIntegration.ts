@@ -451,45 +451,82 @@ export class CopilotIntegration {
   }
 
   /**
-   * Wait for Copilot to finish responding (detect when stop button disappears)
+   * Copy chat content to clipboard and return it
+   * @returns The current chat conversation text
+   */
+  private async copyChatToClipboard(): Promise<string> {
+    try {
+      // Execute copyAll command
+      await vscode.commands.executeCommand("workbench.action.chat.copyAll");
+
+      // Small delay to ensure clipboard is updated
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Read clipboard content
+      const chatContent = await vscode.env.clipboard.readText();
+      return chatContent;
+    } catch (error) {
+      console.error("❌ Failed to copy chat to clipboard:", error);
+      return "";
+    }
+  }
+
+  /**
+   * Wait for Copilot to finish responding by monitoring chat content stability
    *
-   * Strategy: Copilot calls our tool before it's done streaming. We need to wait
-   * for it to actually finish before trying to send the next prompt. The stop button
-   * (cancel command) is only available while Copilot is still responding.
+   * Strategy: Copilot calls our tool before it's done streaming. We poll the chat
+   * content via clipboard and wait for it to stop changing (3 consecutive stable checks).
    *
-   * @param maxAttempts Maximum number of polling attempts (default: 20 = 10 seconds)
+   * @param maxAttempts Maximum number of polling attempts (default: 40 = 20 seconds)
    * @returns True if Copilot finished, false if timeout
    */
   private async waitForCopilotToFinishStreaming(
-    maxAttempts: number = 20
+    maxAttempts: number = 40
   ): Promise<boolean> {
-    console.log("⏳ Waiting for Copilot to finish streaming...");
+    console.log(
+      "⏳ Waiting for Copilot to finish streaming (clipboard monitoring)..."
+    );
+
+    let previousContent = "";
+    let unchangedCount = 0;
+    const requiredStableChecks = 3; // 3 consecutive stable checks = 1.5 seconds
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // Small delay between checks
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Try to get all available commands
       try {
-        const commands = await vscode.commands.getCommands();
-        const hasCancelCommand = commands.includes(
-          "workbench.action.chat.cancel"
-        );
+        // Copy current chat content
+        const currentContent = await this.copyChatToClipboard();
 
-        // Check if we can execute cancel (which means Copilot is still responding)
-        // Note: We're just checking availability, not actually canceling
-        if (!hasCancelCommand) {
+        // Check if content has changed
+        if (currentContent === previousContent && currentContent.length > 0) {
+          unchangedCount++;
           console.log(
-            `✅ Copilot finished streaming (cancel command not available)`
+            `✅ Chat content stable (${unchangedCount}/${requiredStableChecks} checks)`
           );
-          return true;
+
+          // If content has been stable for required checks, we're done
+          if (unchangedCount >= requiredStableChecks) {
+            console.log(
+              `✅ Copilot finished streaming (content stable for ${unchangedCount * 0.5}s)`
+            );
+            return true;
+          }
+        } else {
+          // Content changed, reset counter
+          if (unchangedCount > 0) {
+            console.log(`⏳ Chat content changed, resetting stability counter`);
+          }
+          unchangedCount = 0;
+          previousContent = currentContent;
         }
 
         console.log(
-          `⏳ Attempt ${attempt}/${maxAttempts}: Copilot still streaming (cancel available)...`
+          `⏳ Attempt ${attempt}/${maxAttempts}: Copilot still streaming...`
         );
       } catch (error) {
-        console.warn(`⚠️ Error checking Copilot state:`, error);
+        console.warn(`⚠️ Error checking chat content:`, error);
         // If we can't check, assume it's done to avoid blocking forever
         return true;
       }
@@ -515,21 +552,26 @@ export class CopilotIntegration {
   }
 
   /**
-   * Submit chat message with retry logic
+   * Submit chat message with clipboard verification and retry logic
    *
-   * Handles race condition where Copilot calls completion tool before it's ready for next prompt.
+   * Verifies submit succeeded by checking if our prompt appears in the chat.
    * Uses exponential backoff: 500ms, 1000ms, 2000ms, 3000ms, 5000ms
    *
-   * @param promptText The prompt text (for logging)
-   * @param maxAttempts Maximum number of retry attempts (default: 10)
-   * @returns True if submit succeeded, false if all attempts failed
+   * @param promptText The prompt text to verify in chat
+   * @param maxAttempts Maximum number of retry attempts (default: 5)
+   * @returns True if submit succeeded and verified, false if all attempts failed
    */
   private async submitWithRetry(
     promptText: string,
-    maxAttempts: number = 10
+    maxAttempts: number = 5
   ): Promise<boolean> {
     let attempt = 0;
     const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
+
+    // Get chat content BEFORE submitting (to verify it changes)
+    console.log("📋 Copying chat content before submit...");
+    const chatBeforeSubmit = await this.copyChatToClipboard();
+    console.log(`📊 Chat before submit: ${chatBeforeSubmit.length} characters`);
 
     while (attempt < maxAttempts) {
       attempt++;
@@ -542,30 +584,60 @@ export class CopilotIntegration {
         // Execute submit command
         await vscode.commands.executeCommand("workbench.action.chat.submit");
 
-        // Wait a bit for UI to process
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Wait for UI to process and chat to update
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        console.log(`✅ Submit command executed successfully`);
-        return true;
+        // Verify submit worked by checking if our prompt appears in chat
+        console.log("🔍 Verifying submit by checking clipboard...");
+        const chatAfterSubmit = await this.copyChatToClipboard();
+        console.log(
+          `📊 Chat after submit: ${chatAfterSubmit.length} characters`
+        );
+
+        // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
+        const promptToVerify = promptText
+          .replace(this.TOOL_INSTRUCTION, "")
+          .trim()
+          .substring(0, 100);
+
+        // Check if our prompt appears in the chat and wasn't there before
+        if (
+          chatAfterSubmit.includes(promptToVerify) &&
+          !chatBeforeSubmit.includes(promptToVerify)
+        ) {
+          console.log(`✅ Submit verified - prompt appears in chat!`);
+          return true;
+        } else {
+          console.warn(
+            `⚠️ Submit verification failed - prompt not found in chat`
+          );
+          console.log(`🔍 Looking for: "${promptToVerify}"`);
+          console.log(
+            `📊 Chat changed: ${chatBeforeSubmit.length} → ${chatAfterSubmit.length} chars`
+          );
+        }
       } catch (error) {
         console.warn(
           `⚠️ Submit attempt ${attempt} threw error:`,
           error instanceof Error ? error.message : String(error)
         );
+      }
 
-        // If we have attempts left, wait and retry
-        if (attempt < maxAttempts) {
-          const delayIndex = Math.min(attempt - 1, delays.length - 1);
-          const delay = delays[delayIndex];
-          console.log(`⏳ Retrying in ${delay}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        }
+      // If we have attempts left, wait and retry
+      if (attempt < maxAttempts) {
+        const delayIndex = Math.min(attempt - 1, delays.length - 1);
+        const delay = delays[delayIndex];
+        console.log(`⏳ Retrying submit in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
     // All attempts failed
     console.error(
-      `❌ Submit failed after ${maxAttempts} attempts. This is unexpected.`
+      `❌ Submit failed after ${maxAttempts} attempts - prompt never appeared in chat.`
+    );
+    console.error(
+      `💡 This suggests Copilot is still responding to previous prompt.`
     );
     return false;
   }
