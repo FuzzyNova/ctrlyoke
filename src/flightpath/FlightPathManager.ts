@@ -3,12 +3,14 @@ import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
 import { CopilotIntegration, CopilotStatus } from "./CopilotIntegration";
+import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { PromptFile, PromptItem, QueueState } from "../types/FlightPathTypes";
 
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
   private promptQueue: PromptQueue;
   private copilotIntegration: CopilotIntegration;
+  private endConditionEvaluator: EndConditionEvaluator;
   private context: vscode.ExtensionContext;
   private statusBarItem: vscode.StatusBarItem;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
@@ -18,6 +20,7 @@ export class FlightPathManager {
     this.promptFileParser = new PromptFileParser();
     this.promptQueue = new PromptQueue();
     this.copilotIntegration = new CopilotIntegration(context);
+    this.endConditionEvaluator = new EndConditionEvaluator(context);
 
     // Create status bar item
     this.statusBarItem = vscode.window.createStatusBarItem(
@@ -671,10 +674,83 @@ export class FlightPathManager {
   }
 
   /**
+   * Create an end condition script from templates
+   */
+  async createEndConditionScript(): Promise<void> {
+    try {
+      // Ask user which type of script to create
+      const scriptType = await vscode.window.showQuickPick(
+        [
+          {
+            label: "$(file-code) Python",
+            description: "Create a Python end condition script",
+            value: "python" as const,
+          },
+          {
+            label: "$(file-code) JavaScript",
+            description: "Create a JavaScript/Node.js end condition script",
+            value: "javascript" as const,
+          },
+          {
+            label: "$(terminal) Shell Script",
+            description:
+              process.platform === "win32"
+                ? "Create a Windows batch script"
+                : "Create a bash shell script",
+            value: "shell" as const,
+          },
+        ],
+        {
+          placeHolder: "Select the type of end condition script to create",
+          title: "FlightPath: Create End Condition Script",
+        }
+      );
+
+      if (!scriptType) {
+        return; // User cancelled
+      }
+
+      // Create the script
+      const scriptPath = await this.endConditionEvaluator.createSampleScript(
+        scriptType.value
+      );
+
+      if (scriptPath) {
+        // Show success message with option to open
+        const action = await vscode.window.showInformationMessage(
+          `✅ Created end condition script: ${path.basename(scriptPath)}`,
+          "Open Script",
+          "Show in Explorer"
+        );
+
+        if (action === "Open Script") {
+          const doc = await vscode.workspace.openTextDocument(scriptPath);
+          await vscode.window.showTextDocument(doc);
+        } else if (action === "Show in Explorer") {
+          await vscode.commands.executeCommand(
+            "revealFileInOS",
+            vscode.Uri.file(scriptPath)
+          );
+        }
+      } else {
+        vscode.window.showErrorMessage(
+          "❌ Failed to create end condition script. Check that you have a workspace folder open."
+        );
+      }
+    } catch (error) {
+      console.error("FlightPath: Error creating end condition script:", error);
+      vscode.window.showErrorMessage(
+        `❌ Failed to create end condition script: ${error}`
+      );
+    }
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
     this.statusBarItem.dispose();
+    this.endConditionEvaluator.dispose();
     console.log("FlightPath: Manager disposed");
   }
 }

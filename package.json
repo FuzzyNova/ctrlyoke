@@ -92,6 +92,12 @@
         "title": "List All VS Code Commands",
         "category": "FlightPath Test",
         "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "flightpath.createEndConditionScript",
+        "title": "Create End Condition Script",
+        "category": "FlightPath",
+        "icon": "$(new-file)"
       }
     ],
     "menus": {
@@ -128,6 +134,9 @@
         },
         {
           "command": "flightpath.retryCopilotDetection"
+        },
+        {
+          "command": "flightpath.createEndConditionScript"
         }
       ],
       "explorer/context": [

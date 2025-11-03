@@ -38,10 +38,17 @@ src/
 │   ├── CopilotIntegration.ts     # Chat automation
 │   ├── PromptFileParser.ts       # JSON parsing
 │   └── EndConditionEvaluator.ts  # Script validation
+├── templates/                    # End condition script templates
+│   ├── check_condition.py        # Python template
+│   ├── check_condition.js        # JavaScript template
+│   ├── check_condition.sh        # Bash template
+│   └── check_condition.bat       # Windows batch template
 ├── types/                        # Type definitions
 ├── schemas/                      # JSON schemas
 └── test/                         # Tests
 ```
+
+**Build Output**: Templates copied to `out/templates/` during build, bundled in VSIX package.
 
 ## Core Components
 
@@ -108,9 +115,11 @@ Implementation notes:
 ### EndConditionEvaluator
 
 - Path validation and process isolation
-- Supports Python, JavaScript, shell scripts
-- Configurable timeouts
+- Supports Python, JavaScript, shell scripts (.py, .js, .ts, .sh, .bat, .ps1)
+- Configurable timeouts (default 30s)
 - Scripts cannot access file system directly
+- Template files stored in `src/templates/` and copied to `out/templates/` during build
+- `createSampleScript()` copies from bundled templates at runtime using `context.extensionPath`
 
 ## File Formats & Schema
 
@@ -148,11 +157,12 @@ Implementation notes:
 
 ## Commands
 
-11 registered commands:
+12 registered commands:
 
 - flightpath.takeOff: Start workflow
 - flightpath.openPanel: Open panel
 - flightpath.createPromptFile: Create file
+- flightpath.createEndConditionScript: Create end condition script from templates
 - flightpath.pause/resume/stop: Execution control
 - flightpath.debugState: Debug state
 - flightpath.showCopilotStatus: Show status

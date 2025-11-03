@@ -315,6 +315,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Create End Condition Script command
+  const createEndConditionScriptCommand = vscode.commands.registerCommand(
+    "flightpath.createEndConditionScript",
+    async () => {
+      await flightPathManager.createEndConditionScript();
+    }
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -329,7 +337,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     testAutomationCommand,
     retryCopilotDetectionCommand,
     listChatCommandsCommand,
-    listAllCommandsCommand
+    listAllCommandsCommand,
+    createEndConditionScriptCommand
   );
 
   console.log("FlightPath: Commands registered successfully");
