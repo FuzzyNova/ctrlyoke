@@ -64,6 +64,12 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "flightpath.test.fileAttachment",
+        "title": "Test File Attachment Commands",
+        "category": "FlightPath Test",
+        "icon": "$(link)"
+      },
+      {
         "command": "flightpath.showCopilotStatus",
         "title": "Show Copilot Integration Status",
         "category": "FlightPath",
@@ -125,6 +131,9 @@
         },
         {
           "command": "flightpath.test.copilotAutomation"
+        },
+        {
+          "command": "flightpath.test.fileAttachment"
         },
         {
           "command": "flightpath.showCopilotStatus"

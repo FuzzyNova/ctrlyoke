@@ -4,6 +4,95 @@ import { FlightPathManager } from "./flightpath/FlightPathManager";
 let flightPathManager: FlightPathManager;
 
 /**
+ * Test File Attachment - Test github.copilot.chat.attachFile and attachSelection commands
+ */
+async function testFileAttachment(): Promise<void> {
+  console.log("🧪 Testing File Attachment Commands...");
+
+  try {
+    // Step 1: Open Copilot Chat
+    console.log("📋 Step 1: Opening Copilot Chat...");
+    await vscode.commands.executeCommand(
+      "workbench.panel.chat.view.copilot.focus"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Step 2: Test attachFile with this file
+    const thisFileUri = vscode.Uri.file(__filename);
+    console.log(`📎 Step 2: Testing attachFile with: ${thisFileUri.fsPath}`);
+
+    try {
+      await vscode.commands.executeCommand(
+        "github.copilot.chat.attachFile",
+        thisFileUri
+      );
+      console.log("✅ attachFile command executed successfully");
+    } catch (error) {
+      console.error("❌ attachFile command failed:", error);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Step 3: Test attachSelection - open a file with a selection
+    console.log("📋 Step 3: Testing attachSelection...");
+
+    // Open a file and create a selection
+    const doc = await vscode.workspace.openTextDocument(thisFileUri);
+    const editor = await vscode.window.showTextDocument(doc);
+
+    // Select lines 10-20
+    const startLine = 10;
+    const endLine = 20;
+    const selection = new vscode.Selection(
+      new vscode.Position(startLine, 0),
+      new vscode.Position(endLine, 0)
+    );
+    editor.selection = selection;
+
+    console.log(`✂️ Selected lines ${startLine}-${endLine}`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // Focus back to chat and try attachSelection
+    await vscode.commands.executeCommand(
+      "workbench.panel.chat.view.copilot.focus"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    try {
+      await vscode.commands.executeCommand(
+        "github.copilot.chat.attachSelection"
+      );
+      console.log("✅ attachSelection command executed successfully");
+    } catch (error) {
+      console.error("❌ attachSelection command failed:", error);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Step 4: Try typing a prompt to see if attachments worked
+    console.log("⌨️ Step 4: Typing test prompt...");
+    const testPrompt = "Explain what these attachments contain";
+    await vscode.commands.executeCommand("type", { text: testPrompt });
+
+    vscode.window
+      .showInformationMessage(
+        "🧪 File attachment test complete! Check the Copilot Chat to see if files were attached. Review the console for details.",
+        "View Console"
+      )
+      .then((action) => {
+        if (action === "View Console") {
+          vscode.commands.executeCommand("workbench.action.output.show");
+        }
+      });
+
+    console.log("✅ Test completed - check chat window for results");
+  } catch (error) {
+    console.error("❌ File attachment test failed:", error);
+    vscode.window.showErrorMessage(`File attachment test failed: ${error}`);
+  }
+}
+
+/**
  * Test Copilot Chat automation feasibility - Testing Editor Chat approach
  */
 async function testCopilotAutomation(): Promise<boolean> {
@@ -208,6 +297,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
+  // Test File Attachment command - test github.copilot.chat.attachFile/attachSelection
+  const testFileAttachmentCommand = vscode.commands.registerCommand(
+    "flightpath.test.fileAttachment",
+    async () => {
+      await testFileAttachment();
+    }
+  );
+
   // Show Copilot Status command
   const showCopilotStatusCommand = vscode.commands.registerCommand(
     "flightpath.showCopilotStatus",
@@ -333,6 +430,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     stopCommand,
     debugStateCommand,
     testCopilotCommand,
+    testFileAttachmentCommand,
     showCopilotStatusCommand,
     testAutomationCommand,
     retryCopilotDetectionCommand,
