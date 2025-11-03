@@ -185,12 +185,8 @@
     },
     "jsonValidation": [
       {
-        "fileMatch": "**/*.prompt.json",
+        "fileMatch": ["**/*.prompt.json", "**/*.flightpath.json"],
         "url": "./schemas/prompt-schema.json"
-      },
-      {
-        "fileMatch": "**/*.flightpath.json",
-        "url": "./schemas/flightpath-schema.json"
       }
     ],
     "languageModelTools": [

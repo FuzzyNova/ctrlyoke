@@ -59,6 +59,37 @@ const copyTemplatesPlugin = {
 	},
 };
 
+/**
+ * Plugin to copy schema files to output directory
+ * @type {import('esbuild').Plugin}
+ */
+const copySchemasPlugin = {
+	name: 'copy-schemas',
+
+	setup(build) {
+		build.onEnd(() => {
+			const srcSchemas = path.join(__dirname, 'schemas');
+			const outSchemas = path.join(__dirname, 'out', 'schemas');
+
+			// Create output schemas directory if it doesn't exist
+			if (!fs.existsSync(outSchemas)) {
+				fs.mkdirSync(outSchemas, { recursive: true });
+			}
+
+			// Copy all schema files
+			if (fs.existsSync(srcSchemas)) {
+				const files = fs.readdirSync(srcSchemas);
+				files.forEach(file => {
+					const srcFile = path.join(srcSchemas, file);
+					const outFile = path.join(outSchemas, file);
+					fs.copyFileSync(srcFile, outFile);
+					console.log(`[copy] ${file} -> out/schemas/${file}`);
+				});
+			}
+		});
+	},
+};
+
 async function main() {
 	const ctx = await esbuild.context({
 		entryPoints: [
@@ -77,6 +108,7 @@ async function main() {
 			/* add to the end of plugins array */
 			esbuildProblemMatcherPlugin,
 			copyTemplatesPlugin,
+			copySchemasPlugin,
 		],
 	});
 	if (watch) {

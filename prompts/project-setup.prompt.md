@@ -99,8 +99,7 @@ FlightPath/
 │   │   ├── PromptFileProvider.ts     # Tree view for .flightpath files
 │   │   └── StatusBarManager.ts       # Status bar integration
 │   ├── schemas/
-│   │   ├── prompt-schema.json        # JSON schema for prompt files
-│   │   └── flightpath-schema.json    # JSON schema for workflow files
+│   │   └── prompt-schema.json        # Unified JSON schema for both .prompt.json and .flightpath.json
 │   ├── types/
 │   │   ├── FlightPathTypes.ts        # Core type definitions
 │   │   └── CopilotTypes.ts           # Copilot integration types
@@ -441,12 +440,8 @@ main().catch((e) => {
     },
     "jsonValidation": [
       {
-        "fileMatch": "**/*.prompt.json",
+        "fileMatch": ["**/*.prompt.json", "**/*.flightpath.json"],
         "url": "./schemas/prompt-schema.json"
-      },
-      {
-        "fileMatch": "**/*.flightpath.json",
-        "url": "./schemas/flightpath-schema.json"
       }
     ]
   },

@@ -44,11 +44,16 @@ src/
 │   ├── check_condition.sh        # Bash template
 │   └── check_condition.bat       # Windows batch template
 ├── types/                        # Type definitions
-├── schemas/                      # JSON schemas
 └── test/                         # Tests
+schemas/                          # JSON schemas (source)
+└── prompt-schema.json            # Unified schema for both file types
 ```
 
-**Build Output**: Templates copied to `out/templates/` during build, bundled in VSIX package.
+**Build Output**:
+
+- Templates copied from `src/templates/` to `out/templates/` during build
+- Schemas copied from `schemas/` to `out/schemas/` during build
+- Single source of truth: `/schemas/prompt-schema.json` used for both VS Code IntelliSense and runtime validation
 
 ## Core Components
 
@@ -107,8 +112,9 @@ Implementation notes:
 
 ### PromptFileParser
 
-- Schema validation with AJV
-- Supports .prompt.json (single) and .flightpath.json (workflow)
+- Schema validation with AJV using single unified schema (prompt-schema.json)
+- Both .prompt.json and .flightpath.json use the same schema
+- Supports both single prompt and multiple prompts format (via oneOf)
 - Validates final-form prompts (no runtime context injection)
 - Detailed validation error reporting
 
@@ -125,7 +131,11 @@ Implementation notes:
 
 **Important: Prompts are stored in final-form format** - All context variables (@workspace, #file:path, slash commands) are included directly in the prompt text.
 
-### Single Prompt Format (`.prompt.json`)
+**Schema: Both file types use the same unified schema (prompt-schema.json)**
+
+Both `.prompt.json` and `.flightpath.json` files support the same two formats:
+
+### Single Prompt Format
 
 ```json
 {
@@ -138,7 +148,7 @@ Implementation notes:
 }
 ```
 
-### Workflow Format (`.flightpath.json`)
+### Multiple Prompts Format
 
 ```json
 {
@@ -154,6 +164,13 @@ Implementation notes:
   ]
 }
 ```
+
+**File naming conventions:**
+
+- `.prompt.json` - Typically for single prompts or simple workflows
+- `.flightpath.json` - Typically for complex multi-step workflows
+
+Both extensions support both formats. Use naming to signal intent, not to restrict functionality.
 
 ## Commands
 

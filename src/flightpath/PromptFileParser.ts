@@ -7,7 +7,6 @@ import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 export class PromptFileParser {
   private ajv = new Ajv();
   private promptSchema: any;
-  private flightpathSchema: any;
 
   constructor() {
     this.loadSchemas();
@@ -15,52 +14,38 @@ export class PromptFileParser {
 
   private async loadSchemas(): Promise<void> {
     try {
+      // Load schema from bundled location (copied from /schemas during build)
       const promptSchemaPath = path.join(
         __dirname,
         "..",
         "schemas",
         "prompt-schema.json"
       );
-      const flightpathSchemaPath = path.join(
-        __dirname,
-        "..",
-        "schemas",
-        "flightpath-schema.json"
-      );
 
       const promptSchemaContent = await fs.readFile(promptSchemaPath, "utf8");
-      const flightpathSchemaContent = await fs.readFile(
-        flightpathSchemaPath,
-        "utf8"
-      );
 
       this.promptSchema = JSON.parse(promptSchemaContent);
-      this.flightpathSchema = JSON.parse(flightpathSchemaContent);
 
-      console.log("FlightPath: JSON schemas loaded successfully");
+      console.log("FlightPath: JSON schema loaded successfully");
     } catch (error) {
-      console.error("FlightPath: Failed to load JSON schemas:", error);
+      console.error("FlightPath: Failed to load JSON schema:", error);
       vscode.window.showErrorMessage(
-        "FlightPath: Failed to load validation schemas"
+        "FlightPath: Failed to load validation schema"
       );
     }
   }
 
   /**
    * Parse and validate a prompt file
+   * Supports both .prompt.json and .flightpath.json files with the same schema
    */
   async parsePromptFile(filePath: string): Promise<PromptFile | null> {
     try {
       const content = await fs.readFile(filePath, "utf8");
       const parsed = JSON.parse(content);
 
-      // Determine which schema to use based on file extension
-      const isFlightpathFile = filePath.endsWith(".flightpath.json");
-      const schema = isFlightpathFile
-        ? this.flightpathSchema
-        : this.promptSchema;
-
-      if (schema && !this.ajv.validate(schema, parsed)) {
+      // Use the same schema for both .prompt.json and .flightpath.json files
+      if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
         const errors = this.ajv.errors
           ?.map((err) => `${err.instancePath}: ${err.message}`)
           .join(", ");
