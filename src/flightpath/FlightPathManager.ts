@@ -628,11 +628,8 @@ export class FlightPathManager {
   private createExamplePromptContent(): string {
     return JSON.stringify(
       {
-        prompt: "Analyze the current file and suggest improvements",
-        context: {
-          includeCurrentFile: true,
-          includeSelection: false,
-        },
+        prompt:
+          "/explain #file:src/extension.ts Analyze this file and suggest improvements",
         endCondition: {
           script: "check_improvements.py",
           returns: "true",
@@ -651,16 +648,11 @@ export class FlightPathManager {
       {
         prompts: [
           {
-            prompt: "Analyze this codebase for potential bugs",
-            context: {
-              includeWorkspaceFiles: ["src/**/*.ts"],
-            },
+            prompt:
+              "/explain @workspace #file:src/**/*.ts Analyze this codebase for potential bugs",
           },
           {
-            prompt: "Fix any issues found in the analysis",
-            context: {
-              includeCurrentFile: true,
-            },
+            prompt: "/fix @workspace Fix any issues found in the analysis",
             endCondition: {
               script: "run_tests.py",
               returns: "all_passed",

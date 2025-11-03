@@ -13,9 +13,6 @@
           },
           "endCondition": {
             "$ref": "#/definitions/endCondition"
-          },
-          "context": {
-            "$ref": "#/definitions/context"
           }
         },
         "required": ["prompt"]
@@ -42,25 +39,6 @@
         }
       },
       "required": ["script", "returns"]
-    },
-    "context": {
-      "type": "object",
-      "properties": {
-        "includeCurrentFile": {
-          "type": "boolean",
-          "default": false
-        },
-        "includeSelection": {
-          "type": "boolean",
-          "default": false
-        },
-        "includeWorkspaceFiles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
     }
   }
 }
