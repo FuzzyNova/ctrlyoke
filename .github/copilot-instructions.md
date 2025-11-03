@@ -227,6 +227,8 @@ When adding settings:
 
 ## Development Guidelines
 
+**Project Status**: Pre-release - No backward compatibility required. Break things freely to improve architecture.
+
 When adding features:
 
 1. Follow SOLID principles - single responsibility per component
@@ -243,6 +245,8 @@ Code review focus:
 - Security validation for script execution and file system access
 - Performance: avoid blocking operations, use async/await
 - User experience: clear feedback and status communication
+
+**Breaking Changes**: Since this extension is not yet released, prioritize clean architecture over backward compatibility. Make bold improvements without hesitation.
 
 ## Extension Goals
 

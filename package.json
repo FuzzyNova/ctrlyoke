@@ -86,6 +86,12 @@
         "title": "List All Chat Commands",
         "category": "FlightPath Test",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "flightpath.listAllCommands",
+        "title": "List All VS Code Commands",
+        "category": "FlightPath Test",
+        "icon": "$(symbol-keyword)"
       }
     ],
     "menus": {

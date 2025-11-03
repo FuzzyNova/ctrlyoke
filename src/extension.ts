@@ -268,31 +268,50 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  /**
+   * Helper function to list and display VS Code commands
+   */
+  async function listAndDisplayCommands(
+    title: string,
+    filterFn?: (cmd: string) => boolean
+  ): Promise<void> {
+    const allCommands = await vscode.commands.getCommands(true);
+    const filteredCommands = filterFn
+      ? allCommands.filter(filterFn).sort()
+      : allCommands.sort();
+
+    console.log(`=== ${title.toUpperCase()} ===`);
+    console.log(`Found ${filteredCommands.length} commands:\n`);
+    filteredCommands.forEach((cmd) => console.log(`  ${cmd}`));
+
+    // Create a document to show the commands
+    const doc = await vscode.workspace.openTextDocument({
+      content: `FlightPath: ${title} (${filteredCommands.length} found)\n\n${filteredCommands.join("\n")}`,
+      language: "plaintext",
+    });
+    await vscode.window.showTextDocument(doc);
+  }
+
   // List all available chat commands (debugging tool)
   const listChatCommandsCommand = vscode.commands.registerCommand(
     "flightpath.listChatCommands",
     async () => {
-      const allCommands = await vscode.commands.getCommands(true);
-      const chatCommands = allCommands
-        .filter(
-          (cmd) =>
-            cmd.includes("chat") ||
-            cmd.includes("copilot") ||
-            cmd.includes("workbench.action.chat") ||
-            cmd.includes("github.copilot")
-        )
-        .sort();
+      await listAndDisplayCommands(
+        "Available Chat Commands",
+        (cmd) =>
+          cmd.includes("chat") ||
+          cmd.includes("copilot") ||
+          cmd.includes("workbench.action.chat") ||
+          cmd.includes("github.copilot")
+      );
+    }
+  );
 
-      console.log("=== ALL CHAT-RELATED COMMANDS ===");
-      console.log(`Found ${chatCommands.length} commands:\n`);
-      chatCommands.forEach((cmd) => console.log(`  ${cmd}`));
-
-      // Create a document to show the commands
-      const doc = await vscode.workspace.openTextDocument({
-        content: `FlightPath: Available Chat Commands (${chatCommands.length} found)\n\n${chatCommands.join("\n")}`,
-        language: "plaintext",
-      });
-      await vscode.window.showTextDocument(doc);
+  // List all available VS Code commands (debugging tool)
+  const listAllCommandsCommand = vscode.commands.registerCommand(
+    "flightpath.listAllCommands",
+    async () => {
+      await listAndDisplayCommands("All Available VS Code Commands");
     }
   );
 
@@ -309,7 +328,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     showCopilotStatusCommand,
     testAutomationCommand,
     retryCopilotDetectionCommand,
-    listChatCommandsCommand
+    listChatCommandsCommand,
+    listAllCommandsCommand
   );
 
   console.log("FlightPath: Commands registered successfully");
