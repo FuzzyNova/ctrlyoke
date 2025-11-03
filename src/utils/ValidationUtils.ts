@@ -1,267 +1,257 @@
-import Ajv, { JSONSchemaType, ValidateFunction } from 'ajv';
-import { PromptFile, PromptItem, EndCondition, ContextConfig } from '../types/FlightPathTypes';
+import Ajv, { JSONSchemaType, ValidateFunction } from "ajv";
+import { PromptFile, PromptItem, EndCondition } from "../types/FlightPathTypes";
 
 export class ValidationUtils {
-    private static ajv = new Ajv({ allErrors: true });
-    
-    // Schema for PromptItem
-    private static promptItemSchema: JSONSchemaType<PromptItem> = {
-        type: 'object',
+  private static ajv = new Ajv({ allErrors: true });
+
+  // Schema for PromptItem
+  private static promptItemSchema: JSONSchemaType<PromptItem> = {
+    type: "object",
+    properties: {
+      prompt: { type: "string" },
+      endCondition: {
+        type: "object",
         properties: {
-            prompt: { type: 'string' },
-            endCondition: {
-                type: 'object',
-                properties: {
-                    script: { type: 'string' },
-                    returns: { type: 'string' },
-                    timeout: { type: 'number', nullable: true }
-                },
-                required: ['script', 'returns'],
-                nullable: true
-            },
-            context: {
-                type: 'object',
-                properties: {
-                    includeCurrentFile: { type: 'boolean', nullable: true },
-                    includeSelection: { type: 'boolean', nullable: true },
-                    includeWorkspaceFiles: {
-                        type: 'array',
-                        items: { type: 'string' },
-                        nullable: true
-                    }
-                },
-                nullable: true
-            }
+          script: { type: "string" },
+          returns: { type: "string" },
+          timeout: { type: "number", nullable: true },
         },
-        required: ['prompt'],
-        additionalProperties: false
+        required: ["script", "returns"],
+        nullable: true,
+      },
+    },
+    required: ["prompt"],
+    additionalProperties: false,
+  };
+
+  // Compiled validators
+  private static promptItemValidator = ValidationUtils.ajv.compile(
+    ValidationUtils.promptItemSchema
+  );
+
+  static validatePromptItem(item: any): { valid: boolean; errors: string[] } {
+    const valid = ValidationUtils.promptItemValidator(item);
+    const errors =
+      ValidationUtils.promptItemValidator.errors?.map(
+        (err) => `${err.instancePath || "root"}: ${err.message}`
+      ) || [];
+
+    return { valid, errors };
+  }
+
+  static validatePromptItems(items: any[]): {
+    valid: boolean;
+    errors: string[];
+  } {
+    if (!Array.isArray(items)) {
+      return { valid: false, errors: ["Expected array of prompt items"] };
+    }
+
+    const allErrors: string[] = [];
+    let allValid = true;
+
+    items.forEach((item, index) => {
+      const result = ValidationUtils.validatePromptItem(item);
+      if (!result.valid) {
+        allValid = false;
+        allErrors.push(
+          ...result.errors.map((error) => `Item ${index + 1}: ${error}`)
+        );
+      }
+    });
+
+    return { valid: allValid, errors: allErrors };
+  }
+
+  static validateEndCondition(condition: any): {
+    valid: boolean;
+    errors: string[];
+  } {
+    const errors: string[] = [];
+
+    if (!condition) {
+      return { valid: true, errors: [] }; // End condition is optional
+    }
+
+    if (typeof condition !== "object") {
+      return { valid: false, errors: ["End condition must be an object"] };
+    }
+
+    if (!condition.script || typeof condition.script !== "string") {
+      errors.push("End condition must have a script property (string)");
+    }
+
+    if (!condition.returns || typeof condition.returns !== "string") {
+      errors.push("End condition must have a returns property (string)");
+    }
+
+    if (
+      condition.timeout !== undefined &&
+      (typeof condition.timeout !== "number" || condition.timeout <= 0)
+    ) {
+      errors.push("End condition timeout must be a positive number");
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  static validatePromptFile(file: any): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!file || typeof file !== "object") {
+      return { valid: false, errors: ["Prompt file must be an object"] };
+    }
+
+    // Check if it's a single prompt or multiple prompts format
+    const hasSinglePrompt = file.prompt && typeof file.prompt === "string";
+    const hasMultiplePrompts = file.prompts && Array.isArray(file.prompts);
+
+    if (!hasSinglePrompt && !hasMultiplePrompts) {
+      errors.push(
+        'Prompt file must have either a "prompt" string or "prompts" array'
+      );
+    }
+
+    if (hasSinglePrompt && hasMultiplePrompts) {
+      errors.push(
+        'Prompt file cannot have both "prompt" and "prompts" properties'
+      );
+    }
+
+    if (hasSinglePrompt) {
+      // Validate single prompt format
+      const promptItem = {
+        prompt: file.prompt,
+        endCondition: file.endCondition,
+      };
+      const result = ValidationUtils.validatePromptItem(promptItem);
+      if (!result.valid) {
+        errors.push(...result.errors);
+      }
+    }
+
+    if (hasMultiplePrompts) {
+      // Validate multiple prompts format
+      const result = ValidationUtils.validatePromptItems(file.prompts);
+      if (!result.valid) {
+        errors.push(...result.errors);
+      }
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  static sanitizePromptText(prompt: string): string {
+    if (typeof prompt !== "string") {
+      return "";
+    }
+
+    // Remove potentially harmful characters or patterns
+    return prompt
+      .trim()
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
+      .replace(/\${[^}]*}/g, (match) => {
+        // Keep template variables but log them
+        console.log(`FlightPath: Template variable found: ${match}`);
+        return match;
+      });
+  }
+
+  static validateScriptPath(scriptPath: string): {
+    valid: boolean;
+    errors: string[];
+  } {
+    const errors: string[] = [];
+
+    if (!scriptPath || typeof scriptPath !== "string") {
+      errors.push("Script path must be a non-empty string");
+      return { valid: false, errors };
+    }
+
+    // Check for potentially dangerous patterns
+    const dangerousPatterns = [
+      /\.\./, // Directory traversal
+      /[<>|]/, // Shell redirection
+      /[;&`$]/, // Shell command injection
+    ];
+
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(scriptPath)) {
+        errors.push(
+          `Script path contains potentially dangerous characters: ${scriptPath}`
+        );
+        break;
+      }
+    }
+
+    // Check file extension
+    const allowedExtensions = [
+      ".py",
+      ".js",
+      ".ts",
+      ".sh",
+      ".bat",
+      ".cmd",
+      ".ps1",
+    ];
+    const hasValidExtension = allowedExtensions.some((ext) =>
+      scriptPath.toLowerCase().endsWith(ext)
+    );
+
+    if (!hasValidExtension) {
+      errors.push(
+        `Script must have one of the allowed extensions: ${allowedExtensions.join(", ")}`
+      );
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  static validateTimeout(timeout: any): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (timeout === undefined || timeout === null) {
+      return { valid: true, errors: [] }; // Timeout is optional
+    }
+
+    if (typeof timeout !== "number") {
+      errors.push("Timeout must be a number");
+      return { valid: false, errors };
+    }
+
+    if (timeout <= 0) {
+      errors.push("Timeout must be positive");
+    }
+
+    if (timeout > 300000) {
+      // 5 minutes max
+      errors.push("Timeout cannot exceed 5 minutes (300000ms)");
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  static createValidationSummary(
+    validationResults: Array<{ valid: boolean; errors: string[] }>
+  ): {
+    valid: boolean;
+    errorCount: number;
+    errors: string[];
+  } {
+    const allErrors: string[] = [];
+    let allValid = true;
+
+    validationResults.forEach((result) => {
+      if (!result.valid) {
+        allValid = false;
+        allErrors.push(...result.errors);
+      }
+    });
+
+    return {
+      valid: allValid,
+      errorCount: allErrors.length,
+      errors: allErrors,
     };
-
-    // Compiled validators
-    private static promptItemValidator = ValidationUtils.ajv.compile(ValidationUtils.promptItemSchema);
-
-    static validatePromptItem(item: any): { valid: boolean; errors: string[] } {
-        const valid = ValidationUtils.promptItemValidator(item);
-        const errors = ValidationUtils.promptItemValidator.errors?.map(err => 
-            `${err.instancePath || 'root'}: ${err.message}`
-        ) || [];
-        
-        return { valid, errors };
-    }
-
-    static validatePromptItems(items: any[]): { valid: boolean; errors: string[] } {
-        if (!Array.isArray(items)) {
-            return { valid: false, errors: ['Expected array of prompt items'] };
-        }
-
-        const allErrors: string[] = [];
-        let allValid = true;
-
-        items.forEach((item, index) => {
-            const result = ValidationUtils.validatePromptItem(item);
-            if (!result.valid) {
-                allValid = false;
-                allErrors.push(...result.errors.map(error => `Item ${index + 1}: ${error}`));
-            }
-        });
-
-        return { valid: allValid, errors: allErrors };
-    }
-
-    static validateEndCondition(condition: any): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (!condition) {
-            return { valid: true, errors: [] }; // End condition is optional
-        }
-
-        if (typeof condition !== 'object') {
-            return { valid: false, errors: ['End condition must be an object'] };
-        }
-
-        if (!condition.script || typeof condition.script !== 'string') {
-            errors.push('End condition must have a script property (string)');
-        }
-
-        if (!condition.returns || typeof condition.returns !== 'string') {
-            errors.push('End condition must have a returns property (string)');
-        }
-
-        if (condition.timeout !== undefined && (typeof condition.timeout !== 'number' || condition.timeout <= 0)) {
-            errors.push('End condition timeout must be a positive number');
-        }
-
-        return { valid: errors.length === 0, errors };
-    }
-
-    static validateContextConfig(context: any): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (!context) {
-            return { valid: true, errors: [] }; // Context is optional
-        }
-
-        if (typeof context !== 'object') {
-            return { valid: false, errors: ['Context must be an object'] };
-        }
-
-        if (context.includeCurrentFile !== undefined && typeof context.includeCurrentFile !== 'boolean') {
-            errors.push('includeCurrentFile must be a boolean');
-        }
-
-        if (context.includeSelection !== undefined && typeof context.includeSelection !== 'boolean') {
-            errors.push('includeSelection must be a boolean');
-        }
-
-        if (context.includeWorkspaceFiles !== undefined) {
-            if (!Array.isArray(context.includeWorkspaceFiles)) {
-                errors.push('includeWorkspaceFiles must be an array');
-            } else {
-                context.includeWorkspaceFiles.forEach((pattern: any, index: number) => {
-                    if (typeof pattern !== 'string') {
-                        errors.push(`includeWorkspaceFiles[${index}] must be a string`);
-                    }
-                });
-            }
-        }
-
-        return { valid: errors.length === 0, errors };
-    }
-
-    static validatePromptFile(file: any): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (!file || typeof file !== 'object') {
-            return { valid: false, errors: ['Prompt file must be an object'] };
-        }
-
-        // Check if it's a single prompt or multiple prompts format
-        const hasSinglePrompt = file.prompt && typeof file.prompt === 'string';
-        const hasMultiplePrompts = file.prompts && Array.isArray(file.prompts);
-
-        if (!hasSinglePrompt && !hasMultiplePrompts) {
-            errors.push('Prompt file must have either a "prompt" string or "prompts" array');
-        }
-
-        if (hasSinglePrompt && hasMultiplePrompts) {
-            errors.push('Prompt file cannot have both "prompt" and "prompts" properties');
-        }
-
-        if (hasSinglePrompt) {
-            // Validate single prompt format
-            const promptItem = {
-                prompt: file.prompt,
-                endCondition: file.endCondition,
-                context: file.context
-            };
-            const result = ValidationUtils.validatePromptItem(promptItem);
-            if (!result.valid) {
-                errors.push(...result.errors);
-            }
-        }
-
-        if (hasMultiplePrompts) {
-            // Validate multiple prompts format
-            const result = ValidationUtils.validatePromptItems(file.prompts);
-            if (!result.valid) {
-                errors.push(...result.errors);
-            }
-        }
-
-        return { valid: errors.length === 0, errors };
-    }
-
-    static sanitizePromptText(prompt: string): string {
-        if (typeof prompt !== 'string') {
-            return '';
-        }
-
-        // Remove potentially harmful characters or patterns
-        return prompt
-            .trim()
-            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters
-            .replace(/\${[^}]*}/g, (match) => {
-                // Keep template variables but log them
-                console.log(`FlightPath: Template variable found: ${match}`);
-                return match;
-            });
-    }
-
-    static validateScriptPath(scriptPath: string): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (!scriptPath || typeof scriptPath !== 'string') {
-            errors.push('Script path must be a non-empty string');
-            return { valid: false, errors };
-        }
-
-        // Check for potentially dangerous patterns
-        const dangerousPatterns = [
-            /\.\./,  // Directory traversal
-            /[<>|]/,  // Shell redirection
-            /[;&`$]/,  // Shell command injection
-        ];
-
-        for (const pattern of dangerousPatterns) {
-            if (pattern.test(scriptPath)) {
-                errors.push(`Script path contains potentially dangerous characters: ${scriptPath}`);
-                break;
-            }
-        }
-
-        // Check file extension
-        const allowedExtensions = ['.py', '.js', '.ts', '.sh', '.bat', '.cmd', '.ps1'];
-        const hasValidExtension = allowedExtensions.some(ext => scriptPath.toLowerCase().endsWith(ext));
-        
-        if (!hasValidExtension) {
-            errors.push(`Script must have one of the allowed extensions: ${allowedExtensions.join(', ')}`);
-        }
-
-        return { valid: errors.length === 0, errors };
-    }
-
-    static validateTimeout(timeout: any): { valid: boolean; errors: string[] } {
-        const errors: string[] = [];
-
-        if (timeout === undefined || timeout === null) {
-            return { valid: true, errors: [] }; // Timeout is optional
-        }
-
-        if (typeof timeout !== 'number') {
-            errors.push('Timeout must be a number');
-            return { valid: false, errors };
-        }
-
-        if (timeout <= 0) {
-            errors.push('Timeout must be positive');
-        }
-
-        if (timeout > 300000) { // 5 minutes max
-            errors.push('Timeout cannot exceed 5 minutes (300000ms)');
-        }
-
-        return { valid: errors.length === 0, errors };
-    }
-
-    static createValidationSummary(validationResults: Array<{ valid: boolean; errors: string[] }>): {
-        valid: boolean;
-        errorCount: number;
-        errors: string[];
-    } {
-        const allErrors: string[] = [];
-        let allValid = true;
-
-        validationResults.forEach(result => {
-            if (!result.valid) {
-                allValid = false;
-                allErrors.push(...result.errors);
-            }
-        });
-
-        return {
-            valid: allValid,
-            errorCount: allErrors.length,
-            errors: allErrors
-        };
-    }
+  }
 }

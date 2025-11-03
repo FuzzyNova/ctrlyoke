@@ -1,25 +1,17 @@
 export interface PromptFile {
   prompt?: string;
   prompts?: PromptItem[];
-  context?: ContextConfig;
 }
 
 export interface PromptItem {
   prompt: string;
   endCondition?: EndCondition;
-  context?: ContextConfig;
 }
 
 export interface EndCondition {
   script: string;
   returns: string;
   timeout?: number;
-}
-
-export interface ContextConfig {
-  includeCurrentFile?: boolean;
-  includeSelection?: boolean;
-  includeWorkspaceFiles?: string[];
 }
 
 export interface QueueState {

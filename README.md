@@ -20,7 +20,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ### Core Functionality
 - **🤖 Zero-Interaction Automation**: True "set-and-forget" Copilot Chat integration
 - **📝 Structured Prompt Sequences**: Define multi-step workflows using JSON files
-- **🎯 Context-Aware Prompts**: Automatically include file content, selections, and workspace context
+- **🎯 Final-Form Prompts**: Store prompts with context variables (@workspace, #file, slash commands) ready to send
 - **⏯️ Queue Management**: Pause, resume, and monitor execution progress
 - **📊 Status Bar Integration**: Real-time workflow status and progress tracking
 
@@ -86,10 +86,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 **Simple Analysis** (`.prompt.json`):
 ```json
 {
-  "prompt": "Analyze this code for potential improvements",
-  "context": {
-    "includeCurrentFile": true
-  }
+  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements"
 }
 ```
 
@@ -98,18 +95,24 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 {
   "prompts": [
     {
-      "prompt": "Identify code smells in this file",
-      "context": { "includeCurrentFile": true }
+      "prompt": "/explain #file:src/extension.ts Identify code smells in this file"
     },
     {
-      "prompt": "Suggest refactoring strategies"
+      "prompt": "/explain #file:src/extension.ts Suggest refactoring strategies"
     },
     {
-      "prompt": "Show example implementation"
+      "prompt": "/new #file:src/extension.ts Show example implementation"
     }
   ]
 }
 ```
+
+**Using Context Variables**:
+- `@workspace` - Include workspace-wide context
+- `#file:path/to/file.ext` - Reference specific files
+- `#file:path/to/file.ext:45-120` - Reference specific line ranges
+- `#selection` - Reference current editor selection
+- `/fix`, `/explain`, `/new`, `/tests` - Slash commands for specific tasks
 
 ### Execute Workflows
 
@@ -142,7 +145,6 @@ FlightPath contributes the following settings:
 
 - **`flightpath.promptsDirectory`**: Directory for prompt files (default: `.flightpath`)
 - **`flightpath.scriptTimeout`**: Default timeout for end condition scripts (default: 30000ms)
-- **`flightpath.enableContextAwareness`**: Enable automatic context inclusion (default: true)
 - **`flightpath.chatWindowLocation`**: Choose where to open Copilot Chat for automation
   - `chatPanel` (default): Open in the Chat panel - recommended for most users
   - `newTab`: Open in an editor tab

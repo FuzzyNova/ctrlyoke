@@ -1,27 +1,17 @@
 {
   "prompts": [
     {
-      "prompt": "Review the current file for code quality improvements",
-      "context": {
-        "includeCurrentFile": true
-      }
+      "prompt": "/explain #file:src/extension.ts Review the current file for code quality improvements"
     },
     {
-      "prompt": "Implement the suggested improvements focusing on ${selectedText}",
-      "context": {
-        "includeCurrentFile": true,
-        "includeSelection": true
-      },
+      "prompt": "/fix #file:src/extension.ts #selection Implement the suggested improvements",
       "endCondition": {
         "script": "lint_check.js",
         "returns": "passed"
       }
     },
     {
-      "prompt": "Add JSDoc comments for all public methods",
-      "context": {
-        "includeCurrentFile": true
-      }
+      "prompt": "/new #file:src/extension.ts Add JSDoc comments for all public methods"
     }
   ]
 }

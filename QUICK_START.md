@@ -56,10 +56,7 @@ When you click "Take Off":
 Create: `analyze-code.prompt.json`
 ```json
 {
-  "prompt": "Analyze this code for potential improvements",
-  "context": {
-    "includeCurrentFile": true
-  }
+  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements"
 }
 ```
 
@@ -70,16 +67,13 @@ Create: `refactor-workflow.flightpath.json`
 {
   "prompts": [
     {
-      "prompt": "Identify code smells in this file",
-      "context": {
-        "includeCurrentFile": true
-      }
+      "prompt": "/explain #file:src/extension.ts Identify code smells in this file"
     },
     {
-      "prompt": "Suggest refactoring strategies"
+      "prompt": "/explain #file:src/extension.ts Suggest refactoring strategies"
     },
     {
-      "prompt": "Show an example of the improved code"
+      "prompt": "/new #file:src/extension.ts Show an example of the improved code"
     }
   ]
 }
@@ -91,16 +85,10 @@ Create: `refactor-workflow.flightpath.json`
 {
   "prompts": [
     {
-      "prompt": "Analyze the architecture of this project",
-      "context": {
-        "includeWorkspaceFiles": ["src/**/*.ts"]
-      }
+      "prompt": "@workspace /explain Analyze the architecture of this project"
     },
     {
-      "prompt": "What SOLID principles are being followed?",
-      "context": {
-        "includeWorkspaceFiles": ["src/flightpath/*.ts"]
-      }
+      "prompt": "/explain #file:src/flightpath/FlightPathManager.ts #file:src/flightpath/CopilotIntegration.ts What SOLID principles are being followed?"
     }
   ]
 }
@@ -112,26 +100,35 @@ Create: `refactor-workflow.flightpath.json`
 
 ### 1. Use Copilot Chat Syntax
 
-FlightPath automatically formats prompts with:
-- `@workspace` - For workspace-wide context
-- `#file:path` - For specific file references
-- `/fix` - Auto-detected for fix prompts
-- `/explain` - Auto-detected for explanations
+FlightPath prompts use native Copilot Chat syntax:
+- `@workspace` - Include workspace-wide context
+- `#file:path/to/file.ext` - Reference specific files
+- `#file:path/to/file.ext:45-120` - Reference line ranges
+- `#selection` - Reference current editor selection
+- `/fix` - For fixing errors or issues
+- `/explain` - For explanations and analysis
+- `/new` - For creating new code
+- `/tests` - For generating or fixing tests
 
-Example: Your prompt "Fix the error" becomes → `/fix #file:yourfile.ts Fix the error`
-
-### 2. Smart Context Inclusion
-
+Example final-form prompt:
 ```json
 {
-  "context": {
-    "includeCurrentFile": true,        // Current editor file
-    "includeSelection": true,           // Selected text
-    "includeWorkspaceFiles": [          // Specific files
-      "src/**/*.ts",
-      "package.json"
-    ]
-  }
+  "prompt": "/fix #file:src/app.ts:45-67 Fix the memory leak in the event handler"
+}
+```
+
+### 2. Context Variables
+
+Include context directly in your prompt text:
+- **Workspace**: `@workspace` at the start
+- **Files**: `#file:relative/path/to/file.ext`
+- **Line Ranges**: `#file:path/to/file.ext:startLine-endLine`
+- **Selection**: `#selection` (when you have text selected)
+
+Example:
+```json
+{
+  "prompt": "/explain @workspace #file:src/extension.ts #file:package.json Analyze the project structure"
 }
 ```
 
@@ -141,9 +138,9 @@ Example: Your prompt "Fix the error" becomes → `/fix #file:yourfile.ts Fix the
 ```json
 {
   "prompts": [
-    { "prompt": "Analyze current code" },
-    { "prompt": "Suggest improvements" },
-    { "prompt": "Show example implementation" }
+    { "prompt": "/explain #file:src/app.ts Analyze current code" },
+    { "prompt": "/explain #file:src/app.ts Suggest improvements" },
+    { "prompt": "/new #file:src/app.ts Show example implementation" }
   ]
 }
 ```
@@ -152,9 +149,9 @@ Example: Your prompt "Fix the error" becomes → `/fix #file:yourfile.ts Fix the
 ```json
 {
   "prompts": [
-    { "prompt": "Create a function to handle user input" },
-    { "prompt": "Add error handling to the previous function" },
-    { "prompt": "Add input validation and sanitization" }
+    { "prompt": "/new #file:src/utils/input.ts Create a function to handle user input" },
+    { "prompt": "/fix #file:src/utils/input.ts Add error handling to the previous function" },
+    { "prompt": "/fix #file:src/utils/input.ts Add input validation and sanitization" }
   ]
 }
 ```

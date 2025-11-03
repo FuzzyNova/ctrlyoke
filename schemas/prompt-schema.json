@@ -2,19 +2,17 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "FlightPath Prompt Schema",
   "type": "object",
+  "description": "Schema for FlightPath prompts. Prompts should be in final-form format with all context variables (e.g., @workspace, #file:path, #selection) and slash commands (e.g., /fix, /explain) included directly in the prompt text.",
   "oneOf": [
     {
       "title": "Single Prompt",
       "properties": {
         "prompt": {
           "type": "string",
-          "description": "The prompt text to send to GitHub Copilot"
+          "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
         },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
-        },
-        "context": {
-          "$ref": "#/definitions/context"
         }
       },
       "required": ["prompt"],
@@ -29,13 +27,11 @@
             "type": "object",
             "properties": {
               "prompt": {
-                "type": "string"
+                "type": "string",
+                "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
               },
               "endCondition": {
                 "$ref": "#/definitions/endCondition"
-              },
-              "context": {
-                "$ref": "#/definitions/context"
               }
             },
             "required": ["prompt"]
@@ -64,25 +60,6 @@
         }
       },
       "required": ["script", "returns"]
-    },
-    "context": {
-      "type": "object",
-      "properties": {
-        "includeCurrentFile": {
-          "type": "boolean",
-          "default": false
-        },
-        "includeSelection": {
-          "type": "boolean",
-          "default": false
-        },
-        "includeWorkspaceFiles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
     }
   }
 }

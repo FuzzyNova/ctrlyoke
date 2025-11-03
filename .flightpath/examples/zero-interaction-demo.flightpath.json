@@ -1,23 +1,13 @@
 {
   "prompts": [
     {
-      "prompt": "Analyze the FlightPath extension architecture and identify the main components.",
-      "context": {
-        "includeWorkspaceFiles": ["src/**/*.ts"],
-        "includeCurrentFile": false
-      }
+      "prompt": "@workspace #file:src/extension.ts #file:src/flightpath/FlightPathManager.ts #file:src/flightpath/CopilotIntegration.ts #file:src/flightpath/PromptQueue.ts Analyze the FlightPath extension architecture and identify the main components."
     },
     {
-      "prompt": "Based on your analysis, what are the key SOLID principles being applied in the CopilotIntegration class?",
-      "context": {
-        "includeWorkspaceFiles": ["src/flightpath/CopilotIntegration.ts"]
-      }
+      "prompt": "/explain #file:src/flightpath/CopilotIntegration.ts Based on your analysis, what are the key SOLID principles being applied in the CopilotIntegration class?"
     },
     {
-      "prompt": "Suggest improvements for the multi-strategy automation approach in CopilotIntegration.",
-      "context": {
-        "includeWorkspaceFiles": ["src/flightpath/CopilotIntegration.ts"]
-      }
+      "prompt": "/explain #file:src/flightpath/CopilotIntegration.ts Suggest improvements for the multi-strategy automation approach in CopilotIntegration."
     }
   ]
 }

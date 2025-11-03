@@ -15,6 +15,8 @@ Automate GitHub Copilot Chat through structured JSON-based prompt workflows with
 
 ## Architecture Principles
 
+**Prompt Format**: Final-form storage - Prompts stored in JSON files are ready to send to Copilot with all context variables (@workspace, #file:path:line-line, slash commands) included directly in the text. No runtime context injection.
+
 SOLID principles with strict separation of concerns:
 
 - FlightPathManager: Orchestration and command handling
@@ -100,7 +102,7 @@ Implementation notes:
 
 - Schema validation with AJV
 - Supports .prompt.json (single) and .flightpath.json (workflow)
-- Handles file inclusion and workspace context
+- Validates final-form prompts (no runtime context injection)
 - Detailed validation error reporting
 
 ### EndConditionEvaluator
@@ -112,15 +114,13 @@ Implementation notes:
 
 ## File Formats & Schema
 
+**Important: Prompts are stored in final-form format** - All context variables (@workspace, #file:path, slash commands) are included directly in the prompt text.
+
 ### Single Prompt Format (`.prompt.json`)
 
 ```json
 {
-  "prompt": "Analyze and improve this code",
-  "context": {
-    "includeCurrentFile": true,
-    "includeSelection": false
-  },
+  "prompt": "/explain #file:src/extension.ts Analyze and improve this code",
   "endCondition": {
     "script": "validate_improvements.py",
     "returns": "true",
@@ -135,7 +135,7 @@ Implementation notes:
 {
   "prompts": [
     {
-      "prompt": "Step 1: Analyze code structure",
+      "prompt": "/explain @workspace Step 1: Analyze code structure",
       "endCondition": { "script": "check_analysis.js", "returns": "true" }
     },
     {
@@ -215,7 +215,6 @@ Planned:
 
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30000)
-- flightpath.enableContextAwareness (boolean, default: true)
 - flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow")
 
 When adding settings:

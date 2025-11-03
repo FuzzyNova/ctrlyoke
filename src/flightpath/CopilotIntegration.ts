@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { PromptItem, ContextConfig } from "../types/FlightPathTypes";
+import { PromptItem } from "../types/FlightPathTypes";
 
 /**
  * Copilot initialization status
@@ -440,7 +440,6 @@ export class CopilotIntegration {
       console.log("🚀 FlightPath: sendPrompt() called");
       console.log(`📊 Prompt item:`, {
         prompt: prompt.prompt.substring(0, 100),
-        hasContext: !!prompt.context,
         hasEndCondition: !!prompt.endCondition,
       });
 
@@ -847,88 +846,16 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
   }
 
   /**
-   * Build prompt with Copilot Chat syntax and context
-   * Uses native Copilot Chat variables (@workspace, #file, #selection)
+   * Build final prompt by appending TOOL_INSTRUCTION
+   * Prompts are now stored in final-form (ready to send) in JSON files
    */
   private async buildCopilotChatPrompt(prompt: PromptItem): Promise<string> {
-    let chatPrompt = "";
-    const contextParts: string[] = [];
+    // Prompt text is already in final form with all context variables
+    // Only append the TOOL_INSTRUCTION for response completion detection
+    const chatPrompt = prompt.prompt + this.TOOL_INSTRUCTION;
 
-    try {
-      // Add workspace context using Copilot Chat variables
-      if (
-        prompt.context?.includeWorkspaceFiles &&
-        prompt.context.includeWorkspaceFiles.length > 0
-      ) {
-        chatPrompt += "@workspace ";
-
-        // Also add specific file patterns as context
-        for (const pattern of prompt.context.includeWorkspaceFiles) {
-          const files = await vscode.workspace.findFiles(pattern, null, 5);
-          for (const file of files) {
-            const fileName = vscode.workspace.asRelativePath(file);
-            chatPrompt += `#file:${fileName} `;
-          }
-        }
-      }
-
-      // Add current file reference
-      if (prompt.context?.includeCurrentFile) {
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-          const fileName = vscode.workspace.asRelativePath(
-            activeEditor.document.uri
-          );
-          chatPrompt += `#file:${fileName} `;
-        }
-      }
-
-      // Add selection context
-      if (prompt.context?.includeSelection) {
-        chatPrompt += "#selection ";
-      }
-
-      // Detect and apply slash commands based on prompt content
-      const promptLower = prompt.prompt.toLowerCase();
-      let slashCommand = "";
-
-      if (
-        promptLower.includes("fix") ||
-        promptLower.includes("error") ||
-        promptLower.includes("bug")
-      ) {
-        slashCommand = "/fix ";
-      } else if (
-        promptLower.includes("explain") ||
-        promptLower.includes("what does")
-      ) {
-        slashCommand = "/explain ";
-      } else if (
-        promptLower.includes("create") ||
-        promptLower.includes("generate") ||
-        promptLower.includes("new")
-      ) {
-        slashCommand = "/new ";
-      } else if (promptLower.includes("test")) {
-        slashCommand = "/tests ";
-      }
-
-      // Combine: [slash command] [context variables] [prompt text]
-      chatPrompt = slashCommand + chatPrompt + prompt.prompt;
-
-      // IMPORTANT: Append tool-calling instruction to ensure response completion detection
-      // This instructs Copilot to call our Language Model Tool AFTER finishing the response
-      chatPrompt += this.TOOL_INSTRUCTION;
-
-      console.log("📝 FlightPath: Built prompt with tool instruction appended");
-      console.log("🔧 Full prompt being sent:", chatPrompt);
-    } catch (error) {
-      console.error("FlightPath: Error building Copilot Chat prompt:", error);
-      // Fallback to simple prompt with tool instruction
-      chatPrompt = prompt.prompt + this.TOOL_INSTRUCTION;
-
-      console.log("📝 FlightPath: Built fallback prompt with tool instruction");
-    }
+    console.log("📝 FlightPath: Built prompt with tool instruction appended");
+    console.log("🔧 Full prompt being sent:", chatPrompt);
 
     const finalPrompt = chatPrompt.trim();
     console.log(
