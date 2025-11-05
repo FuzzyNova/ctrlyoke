@@ -1,0 +1,272 @@
+# XML Prompting Guidelines for FlightPath
+
+## Overview
+
+FlightPath uses XML tags to structure prompts sent to GitHub Copilot (which is powered by Claude). This document explains why XML is preferred and how to use it effectively in this project.
+
+## 🎉 Hidden Feature: Invisible Automation Instructions
+
+**Discovery**: Copilot Chat UI hides XML tags from the chat view but still processes them correctly!
+
+This means:
+- ✅ FlightPath's `<criticalInstruction>` tag is completely hidden from users
+- ✅ Chat history stays clean and readable
+- ✅ Copilot still follows the automation instructions perfectly
+- ✅ Users see only their actual prompts, not our internal automation logic
+
+This is a **perfect** solution for embedding automation directives without cluttering the UI!
+
+## Why XML?
+
+Based on Anthropic's official recommendations and extensive testing, XML tags provide:
+
+1. **Semantic Clarity**: XML tags clearly define the purpose of each section
+2. **Improved Accuracy**: Reduces misinterpretation by the AI
+3. **Better Parseability**: Easier to extract and process structured responses
+4. **Consistency**: Standardized approach across all prompts
+5. **Nested Structure**: Hierarchical organization for complex instructions
+6. **Hidden in UI**: Certain XML tags (like automation directives) are hidden from chat view while still being processed
+
+**Source**: [Anthropic's XML Prompting Documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags)
+
+## FlightPath's XML Structure
+
+### Outgoing Prompts (Sent to Copilot)
+
+Every prompt sent to Copilot follows this structure:
+
+```
+[User's prompt text with context variables like @workspace, #file:path, slash commands, etc.]
+
+<criticalInstruction>
+When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+</criticalInstruction>
+```
+
+**Key Discovery**: Copilot Chat UI hides XML tags in the chat view but still processes them correctly!
+- User prompt is sent as plain text → Visible in chat history
+- Tool instruction wrapped in `<criticalInstruction>` XML tag → Hidden from chat UI but processed by Copilot
+- This gives us clean chat history while maintaining automation functionality
+
+**Implementation**: See `CopilotIntegration.ts` → `buildCopilotChatPrompt()` method
+
+### Why User Prompts Aren't Wrapped in XML
+
+Originally, we wrapped user prompts in `<request>` tags, but discovered that Copilot hides ALL XML tags from the chat view. This meant:
+- ❌ User prompts wrapped in `<request>` disappeared from chat history (confusing!)
+- ✅ Tool instructions wrapped in `<criticalInstruction>` hide perfectly (clean chat!)
+
+So we only wrap FlightPath's automation instructions in XML, keeping user prompts as plain text.
+
+### Incoming Prompts (User Requests to You)
+
+You are currently reading prompts wrapped in `<userRequest>` tags. When you see this structure, understand that:
+
+- The `<userRequest>` contains the actual user instruction
+- Any `<criticalInstruction>` is a FlightPath automation directive (always follow it!)
+
+## XML Best Practices for This Project
+
+### 1. Be Consistent
+
+Use the same tag names throughout. Don't mix `<instruction>` and `<instructions>` randomly.
+
+✅ Good:
+```xml
+<context>Background info</context>
+<task>Main task</task>
+```
+
+❌ Bad:
+```xml
+<context>Background info</context>
+<task_description>Main task</task_description>
+```
+
+### 2. Use Descriptive Tag Names
+
+Tag names should clearly indicate their content.
+
+✅ Good:
+```xml
+<technicalStack>
+- TypeScript 5.x
+- Node.js 22.17.0
+</technicalStack>
+```
+
+❌ Bad:
+```xml
+<info>
+- TypeScript 5.x
+- Node.js 22.17.0
+</info>
+```
+
+### 3. Nest Tags When Appropriate
+
+Use hierarchical structure for related content.
+
+✅ Good:
+```xml
+<architecturePrinciples>
+  <promptFormat>
+    Final-form storage with no runtime injection
+  </promptFormat>
+  <solidPrinciples>
+    Single responsibility per component
+  </solidPrinciples>
+</architecturePrinciples>
+```
+
+### 4. Always Close Tags
+
+Self-explanatory but critical.
+
+✅ Good:
+```xml
+<task>Fix the bug</task>
+```
+
+❌ Bad:
+```xml
+<task>Fix the bug
+```
+
+### 5. Combine with Other Techniques
+
+XML works great with:
+- **Examples**: Use `<examples>` with nested `<example>` tags
+- **Chain of Thought**: Use `<thinking>` and `<answer>` tags
+- **Requirements**: Use `<requirements>` with nested `<item>` tags
+
+## Common XML Tags in FlightPath
+
+### Documentation Tags (copilot-instructions.md)
+
+- `<projectPurpose>` - High-level project description
+- `<technicalStack>` - Tech stack list
+- `<architecturePrinciples>` - Architectural decisions
+- `<promptFormat>` - Prompt formatting rules
+- `<solidPrinciples>` - SOLID principles application
+- `<codeQuality>` - Quality standards
+- `<coreComponents>` - Component descriptions
+
+### Prompt Tags (sent to Copilot)
+
+- `<criticalInstruction>` - FlightPath automation directive (hidden in chat UI)
+- User prompts are NOT wrapped in XML (kept as plain text for chat visibility)
+
+**Note**: Users can add their own XML structure in prompts if they want (e.g., `<context>`, `<requirements>`), but FlightPath doesn't wrap them automatically.
+
+### Response Tags (when asking Copilot to structure output)
+
+- `<thinking>` - Reasoning process
+- `<answer>` - Final answer
+- `<code>` - Code blocks
+- `<explanation>` - Code explanations
+- `<analysis>` - Analysis sections
+
+## Examples
+
+### Simple Task Prompt
+
+```
+/fix #file:src/extension.ts Fix the activation error
+
+<criticalInstruction>
+When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+</criticalInstruction>
+```
+
+**What user sees in chat**: `/fix #file:src/extension.ts Fix the activation error`
+**What Copilot processes**: The full prompt including the hidden `<criticalInstruction>` tag
+
+### Complex Prompt with User-Defined XML Structure
+
+Users can add their own XML tags within their prompts if they want:
+
+```
+<task>
+Refactor the CopilotIntegration class to improve error handling
+</task>
+
+<context>
+The current implementation catches errors but doesn't provide detailed user feedback. We need better error messages and retry logic.
+</context>
+
+<requirements>
+- Add specific error types for different failure modes
+- Implement exponential backoff for retries
+- Log all errors to console with timestamps
+- Show user-friendly messages in VS Code notifications
+</requirements>
+
+<constraints>
+- Must maintain backward compatibility with existing workflows
+- Keep response detection mechanism unchanged
+- Follow SOLID principles
+</constraints>
+
+<criticalInstruction>
+When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+</criticalInstruction>
+```
+
+**What user sees in chat**: All the XML tags (task, context, requirements, constraints) are visible! Only the `<criticalInstruction>` is hidden.
+
+**Why?** Copilot only hides XML tags it recognizes as automation directives. User-defined tags in the prompt text are displayed normally.
+
+### Asking for Structured Output
+
+When you want Copilot to provide structured responses:
+
+```
+Analyze the current error handling strategy in FlightPathManager.
+
+Please structure your response as:
+<analysis>
+  <current_approach>...</current_approach>
+  <strengths>...</strengths>
+  <weaknesses>...</weaknesses>
+  <recommendations>...</recommendations>
+</analysis>
+
+<criticalInstruction>
+When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+</criticalInstruction>
+```
+
+## When NOT to Use XML
+
+- **User-facing messages**: VS Code notifications, status bar text, error messages shown to users should remain plain strings
+- **Console logs**: Keep logs simple and readable (unless logging structured data)
+- **File names and paths**: Never wrap file paths in XML tags
+- **JSON files**: Prompt files (`.prompt.json`, `.flightpath.json`) remain valid JSON - users can put XML in the prompt string value if they want, but the file structure is JSON
+
+## Migrating Existing Prompts
+
+If you find prompts without XML structure:
+
+1. **Don't break them**: Old-style prompts still work
+2. **Wrap when updating**: If you're editing a prompt, consider adding XML structure
+3. **Use the pattern**: Follow the `<request>` + `<criticalInstruction>` pattern
+
+## Testing XML Prompts
+
+To verify XML structure works:
+
+1. Check console logs in VS Code Output panel (FlightPath channel)
+2. Look for "Built prompt with XML structure" message
+3. Verify the full prompt shows proper XML tags
+4. Ensure Copilot responds correctly and calls the completion tool
+
+## References
+
+- [Anthropic: Use XML Tags](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/use-xml-tags)
+- [Anthropic: Prompt Engineering](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)
+- [XML Tags vs Other Dividers](https://beginswithai.com/xml-tags-vs-other-dividers-in-prompt-quality/)
+
+## Questions?
+
+If you're unsure whether to use XML for a specific prompt, default to YES. The benefits outweigh the minor verbosity cost.

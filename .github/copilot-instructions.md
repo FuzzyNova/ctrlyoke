@@ -1,22 +1,32 @@
 # FlightPath VS Code Extension
 
-## Core Purpose
-
+<projectPurpose>
 Automate GitHub Copilot Chat through structured JSON-based prompt workflows with automated execution, response detection, and context awareness.
+</projectPurpose>
 
-## Technical Stack
-
+<technicalStack>
 - TypeScript 5.x (strict mode)
 - Node.js 22.17.0
 - esbuild (bundling)
 - VS Code Extension API (Language Model Tool API, Chat integration)
 - JSON Schema validation (AJV)
 - Mocha (testing)
+</technicalStack>
 
-## Architecture Principles
+<architecturePrinciples>
 
-**Prompt Format**: Final-form storage - Prompts stored in JSON files are ready to send to Copilot with all context variables (@workspace, #file:path:line-line, slash commands) included directly in the text. No runtime context injection.
+<promptFormat>
+**Final-form storage**: Prompts stored in JSON files are ready to send to Copilot with all context variables (@workspace, #file:path:line-line, slash commands) included directly in the text. No runtime context injection.
 
+**XML structure**: FlightPath wraps automation instructions in XML tags:
+
+- User prompt sent as-is (visible in chat history)
+- FlightPath automation instructions wrapped in `<criticalInstruction>` tag (hidden in chat UI but processed correctly)
+
+**Note**: Copilot Chat UI hides XML tags in the chat view but still processes them. This allows FlightPath to send automation instructions that Copilot follows without cluttering the user's chat history.
+</promptFormat>
+
+<solidPrinciples>
 SOLID principles with strict separation of concerns:
 
 - FlightPathManager: Orchestration and command handling
@@ -24,8 +34,13 @@ SOLID principles with strict separation of concerns:
 - CopilotIntegration: Chat automation and response detection
 - PromptFileParser: JSON validation and parsing
 - EndConditionEvaluator: Script execution and validation
+  </solidPrinciples>
 
-Code quality: TypeScript strict mode, comprehensive error handling, no duplication.
+<codeQuality>
+TypeScript strict mode, comprehensive error handling, no duplication.
+</codeQuality>
+
+</architecturePrinciples>
 
 ## Project Structure
 
@@ -55,17 +70,17 @@ schemas/                          # JSON schemas (source)
 - Schemas copied from `schemas/` to `out/schemas/` during build
 - Single source of truth: `/schemas/prompt-schema.json` used for both VS Code IntelliSense and runtime validation
 
-## Core Components
+<coreComponents>
 
-### FlightPathManager
+## FlightPathManager
 
 Main orchestrator handling commands, lifecycle, and workflow execution. Coordinates PromptQueue and CopilotIntegration. Subscribes to status changes and response completion events.
 
-### PromptQueue
+## PromptQueue
 
 Manages sequential prompt execution with pause/resume/cancel. Tracks state and progress. Does not directly handle response detection (delegated to FlightPathManager).
 
-### CopilotIntegration
+## CopilotIntegration
 
 Implements zero-interaction Copilot Chat automation:
 
@@ -73,7 +88,7 @@ Implements zero-interaction Copilot Chat automation:
 - Background polling: 5s intervals, 30s max, detects Copilot availability on startup
 - States: initializing | waiting | ready | unavailable
 - Response detection: Language Model Tool (flightpath_response_complete)
-- Automatic prompt augmentation: Adds tool-calling instruction to every prompt
+- Automatic prompt augmentation: Appends tool instruction in `<criticalInstruction>` XML tag (hidden in chat UI but processed correctly)
 - Submit verification: Clipboard-based retry with exponential backoff
 - Streaming detection: Polls chat stability (3 consecutive stable checks)
 
@@ -118,7 +133,7 @@ Implementation notes:
 - Validates final-form prompts (no runtime context injection)
 - Detailed validation error reporting
 
-### EndConditionEvaluator
+## EndConditionEvaluator
 
 - Path validation and process isolation
 - Supports Python, JavaScript, shell scripts (.py, .js, .ts, .sh, .bat, .ps1)
@@ -126,6 +141,8 @@ Implementation notes:
 - Scripts cannot access file system directly
 - Template files stored in `src/templates/` and copied to `out/templates/` during build
 - `createSampleScript()` copies from bundled templates at runtime using `context.extensionPath`
+
+</coreComponents>
 
 ## File Formats & Schema
 

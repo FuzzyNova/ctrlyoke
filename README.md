@@ -13,7 +13,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - ✅ **Native Copilot Syntax**: Full support for `@workspace`, `#file`, slash commands
 - ✅ **Real-Time Progress**: Watch workflows execute with live status updates
 
-📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Full Documentation](./docs/COPILOT_INTEGRATION.md)**
+📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Full Documentation](./docs/COPILOT_INTEGRATION.md)** | ✨ **[XML Prompting Guidelines](./docs/XML_PROMPTING_GUIDELINES.md)**
 
 ## ✨ Features
 
@@ -29,6 +29,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **Response Detection**: Language Model Tool API detects completion automatically
 - **Submit Verification**: Clipboard-based verification ensures prompts are sent
 - **Streaming Detection**: Monitors chat stability before proceeding to next prompt
+- **XML-Structured Prompts**: Uses XML tags for clarity and better AI comprehension (see [XML Guidelines](./docs/XML_PROMPTING_GUIDELINES.md))
 - **Smart Context Formatting**: Automatic `@workspace`, `#file:path`, slash commands
 - **Background Polling**: Detects Copilot availability on startup (5s intervals, 30s max)
 

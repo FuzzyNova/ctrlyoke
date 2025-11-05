@@ -44,8 +44,11 @@ export class CopilotIntegration {
   private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
 
   // Tool invocation instruction - single source of truth
-  private readonly TOOL_INSTRUCTION =
-    "\n\n---\n\nCRITICAL INSTRUCTION: When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation.";
+  private readonly TOOL_INSTRUCTION = `
+<criticalInstruction>
+When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+</criticalInstruction>`;
+
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
 
@@ -846,15 +849,21 @@ Use Command Palette: "FlightPath: Test Automation" to verify setup
   }
 
   /**
-   * Build final prompt by appending TOOL_INSTRUCTION
-   * Prompts are now stored in final-form (ready to send) in JSON files
+   * Build final prompt with XML structure for tool instruction
+   * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
+   * Prompts are stored in final-form (ready to send) in JSON files
    */
   private async buildCopilotChatPrompt(prompt: PromptItem): Promise<string> {
-    // Prompt text is already in final form with all context variables
-    // Only append the TOOL_INSTRUCTION for response completion detection
-    const chatPrompt = prompt.prompt + this.TOOL_INSTRUCTION;
+    // User's prompt text is already in final form with all context variables (@workspace, #file, etc.)
+    // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
+    // This gives us a clean chat history while maintaining automation functionality
+    const chatPrompt = `${prompt.prompt}
 
-    console.log("📝 FlightPath: Built prompt with tool instruction appended");
+${this.TOOL_INSTRUCTION}`;
+
+    console.log(
+      "📝 FlightPath: Built prompt with XML-wrapped tool instruction"
+    );
     console.log("🔧 Full prompt being sent:", chatPrompt);
 
     const finalPrompt = chatPrompt.trim();
