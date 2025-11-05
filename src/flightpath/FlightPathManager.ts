@@ -2,7 +2,9 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
-import { CopilotIntegration, CopilotStatus } from "./CopilotIntegration";
+import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
+import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
+import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { PromptFile, PromptItem, QueueState } from "../types/FlightPathTypes";
 
@@ -14,12 +16,18 @@ export class FlightPathManager {
   private context: vscode.ExtensionContext;
   private statusBarItem: vscode.StatusBarItem;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
+  private outputChannel: vscode.OutputChannel;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
     this.promptFileParser = new PromptFileParser();
     this.promptQueue = new PromptQueue();
-    this.copilotIntegration = new CopilotIntegration(context);
+
+    // Create output channel for CLI output
+    this.outputChannel = vscode.window.createOutputChannel("FlightPath");
+    context.subscriptions.push(this.outputChannel);
+
+    this.copilotIntegration = this.createCopilotIntegration(context);
     this.endConditionEvaluator = new EndConditionEvaluator(context);
 
     // Create status bar item
@@ -46,6 +54,53 @@ export class FlightPathManager {
     this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
     console.log("FlightPath: Manager initialized");
+  }
+
+  /**
+   * Type guard to check if integration is chat-based
+   */
+  private isChatIntegration(
+    integration: CopilotIntegration
+  ): integration is CopilotChatIntegration {
+    return integration instanceof CopilotChatIntegration;
+  }
+
+  /**
+   * Type guard to check if integration is CLI-based
+   */
+  private isCliIntegration(
+    integration: CopilotIntegration
+  ): integration is CopilotCommandLineIntegration {
+    return integration instanceof CopilotCommandLineIntegration;
+  }
+
+  /**
+   * Factory method to create the appropriate Copilot integration
+   * based on user settings
+   */
+  private createCopilotIntegration(
+    context: vscode.ExtensionContext
+  ): CopilotIntegration {
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const integrationMode = config.get<string>("copilotIntegrationMode", "cli");
+
+    console.log(
+      `🏭 FlightPath: Creating Copilot integration with mode: ${integrationMode}`
+    );
+
+    switch (integrationMode) {
+      case "cli":
+        console.log("✅ FlightPath: Using CLI integration");
+        return new CopilotCommandLineIntegration(context, this.outputChannel);
+      case "chat":
+        console.log("✅ FlightPath: Using Chat integration");
+        return new CopilotChatIntegration(context);
+      default:
+        console.log(
+          `⚠️ FlightPath: Unknown integration mode "${integrationMode}", defaulting to CLI`
+        );
+        return new CopilotCommandLineIntegration(context, this.outputChannel);
+    }
   }
 
   /**
@@ -125,7 +180,14 @@ export class FlightPathManager {
           // Try executing again after retry starts
           setTimeout(() => this.executePromptFile(filePath), 2000);
         } else if (action === "View Requirements") {
-          await this.copilotIntegration.testAutomation();
+          // Test automation only available for chat integration
+          if (this.isChatIntegration(this.copilotIntegration)) {
+            await this.copilotIntegration.testAutomation();
+          } else {
+            vscode.window.showInformationMessage(
+              "FlightPath: Using CLI integration. Test automation is not needed."
+            );
+          }
         }
         return;
       }
@@ -186,6 +248,32 @@ export class FlightPathManager {
   private async startWorkflowExecution(): Promise<void> {
     const state = this.promptQueue.getState();
 
+    // Log workflow start to output channel
+    const shouldShowOutput = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("showCliOutput", true);
+
+    if (shouldShowOutput && this.isCliIntegration(this.copilotIntegration)) {
+      this.outputChannel.clear();
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+      this.outputChannel.appendLine("        FLIGHTPATH WORKFLOW STARTED");
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+      this.outputChannel.appendLine(`Started: ${new Date().toLocaleString()}`);
+      this.outputChannel.appendLine(`Total prompts: ${state.prompts.length}`);
+      this.outputChannel.appendLine(
+        `Integration: ${this.copilotIntegration.getStatus().strategy.toUpperCase()}`
+      );
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+      this.outputChannel.appendLine("");
+      this.outputChannel.show(true); // Show but preserve focus
+    }
+
     for (let i = 0; i < state.prompts.length; i++) {
       const prompt = state.prompts[i];
 
@@ -196,13 +284,15 @@ export class FlightPathManager {
         `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
       );
 
-      // Send prompt to Copilot and wait for response completion
-      const result =
-        await this.copilotIntegration.executePromptWithContext(prompt);
+      // Set up response listener BEFORE sending prompt to avoid race condition
+      const responsePromise = this.waitForResponseComplete(prompt);
 
-      if (!result.success) {
+      // Send prompt to Copilot
+      const success = await this.copilotIntegration.sendPrompt(prompt);
+
+      if (!success) {
         vscode.window.showErrorMessage(
-          `FlightPath: Failed to execute prompt ${i + 1}: ${result.message}`
+          `FlightPath: Failed to execute prompt ${i + 1}`
         );
         break;
       }
@@ -210,13 +300,22 @@ export class FlightPathManager {
       // Mark as sent in queue
       await this.promptQueue.markCurrentAsSent();
 
-      // Wait for Copilot to finish responding (via tool callback)
+      // Wait for Copilot to finish responding
       console.log(
         `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
       );
-      await this.waitForResponseComplete(prompt);
+      const responseText = await responsePromise;
 
       console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
+
+      // Evaluate end condition if present (now with response text available)
+      if (prompt.endCondition) {
+        console.log(
+          `🔍 FlightPath: Evaluating end condition for prompt ${i + 1}...`
+        );
+        // TODO: Implement end condition evaluation with response text
+        // This will be handled by EndConditionEvaluator with response text passed as env var
+      }
 
       // Check if workflow was paused
       if (this.promptQueue.getState().status === "paused") {
@@ -226,19 +325,40 @@ export class FlightPathManager {
     }
 
     console.log("🎉 FlightPath: Workflow execution complete");
+
+    // Log workflow completion to output channel
+    if (shouldShowOutput && this.isCliIntegration(this.copilotIntegration)) {
+      this.outputChannel.appendLine("");
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+      this.outputChannel.appendLine("        WORKFLOW COMPLETE ✓");
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+      this.outputChannel.appendLine(
+        `Completed: ${new Date().toLocaleString()}`
+      );
+      this.outputChannel.appendLine(
+        `Prompts completed: ${state.prompts.length}/${state.prompts.length}`
+      );
+      this.outputChannel.appendLine(
+        "═══════════════════════════════════════════════════════════"
+      );
+    }
   }
 
   /**
    * Wait for Copilot to call the response complete tool
    * @param prompt The current prompt being executed
-   * @returns Promise that resolves when response is complete or timeout occurs
+   * @returns Promise that resolves with response text when response is complete or timeout occurs
    */
-  private async waitForResponseComplete(prompt: PromptItem): Promise<void> {
+  private async waitForResponseComplete(prompt: PromptItem): Promise<string> {
     // Use endCondition timeout if specified, otherwise use 30 minutes as safety net
     // This should be long enough for any reasonable Copilot response
     const timeout = prompt.endCondition?.timeout || 1800000; // Default 30 minutes (1,800,000ms)
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<string>((resolve, reject) => {
       const timeoutHandle = setTimeout(() => {
         disposable.dispose();
         console.warn(
@@ -247,13 +367,13 @@ export class FlightPathManager {
         vscode.window.showWarningMessage(
           `FlightPath: Response timeout after ${Math.round(timeout / 60000)} minutes - Copilot did not call the completion tool. Proceeding to next prompt.`
         );
-        resolve(); // Resolve anyway to continue workflow
+        resolve(""); // Resolve with empty string to continue workflow
       }, timeout);
 
       // Subscribe to response complete event (with duplicate protection)
       let responseHandled = false; // Prevent duplicate event handling
       const disposable = this.copilotIntegration.onResponseComplete(
-        async () => {
+        async (responseText: string) => {
           // Ignore duplicate events (defense-in-depth)
           if (responseHandled) {
             console.log(
@@ -265,21 +385,25 @@ export class FlightPathManager {
 
           clearTimeout(timeoutHandle);
           disposable.dispose();
+          console.log("✅ FlightPath: Response complete signal received");
           console.log(
-            "✅ FlightPath: Response complete signal received from tool callback"
+            `📊 Response text length: ${responseText.length} characters`
           );
 
-          // IMPORTANT: Tool callback fires BEFORE Copilot finishes streaming
+          // IMPORTANT: For chat integration, tool callback fires BEFORE Copilot finishes streaming
           // Wait for streaming to actually finish before proceeding
-          console.log(
-            "⏳ FlightPath: Waiting for Copilot to finish streaming..."
-          );
-          await this.copilotIntegration.waitForStreamingComplete();
-          console.log(
-            "✅ FlightPath: Copilot finished streaming, ready for next prompt"
-          );
+          // CLI integration doesn't need this as the command returns when complete
+          if (this.isChatIntegration(this.copilotIntegration)) {
+            console.log(
+              "⏳ FlightPath: Waiting for Copilot chat to finish streaming..."
+            );
+            await this.copilotIntegration.waitForStreamingComplete();
+            console.log(
+              "✅ FlightPath: Copilot finished streaming, ready for next prompt"
+            );
+          }
 
-          resolve();
+          resolve(responseText);
         }
       );
     });
@@ -473,24 +597,45 @@ export class FlightPathManager {
   }
 
   /**
-   * Test Copilot automation
+   * Test Copilot automation (chat integration only)
    */
   async testCopilotAutomation(): Promise<boolean> {
-    return await this.copilotIntegration.testAutomation();
+    if (this.isChatIntegration(this.copilotIntegration)) {
+      return await this.copilotIntegration.testAutomation();
+    } else {
+      vscode.window.showInformationMessage(
+        "FlightPath: Test automation is only available for chat integration. CLI integration is ready when initialized."
+      );
+      return this.copilotIntegration.isReady();
+    }
   }
 
   /**
-   * Retry Copilot detection (restart polling)
+   * Retry Copilot detection (restart polling - chat integration only)
    */
   async retryCopilotDetection(): Promise<void> {
-    await this.copilotIntegration.retryDetection();
+    if (this.isChatIntegration(this.copilotIntegration)) {
+      await this.copilotIntegration.retryDetection();
+    } else {
+      // For CLI integration, just re-initialize
+      await this.copilotIntegration.initialize();
+    }
   }
 
   /**
-   * Get Copilot integration capabilities
+   * Get Copilot integration capabilities (chat integration only)
    */
   getCopilotCapabilities() {
-    return this.copilotIntegration.getCapabilities();
+    if (this.isChatIntegration(this.copilotIntegration)) {
+      return this.copilotIntegration.getCapabilities();
+    } else {
+      // Return basic capabilities for CLI integration
+      return {
+        hasDirectAutomation: true,
+        supportsZeroInteraction: true,
+        currentStrategy: "cli",
+      };
+    }
   }
 
   /**

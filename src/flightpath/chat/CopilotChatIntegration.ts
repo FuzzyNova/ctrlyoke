@@ -1,14 +1,6 @@
 import * as vscode from "vscode";
-import { PromptItem } from "../types/FlightPathTypes";
-
-/**
- * Copilot initialization status
- */
-export type CopilotStatus =
-  | "initializing"
-  | "waiting"
-  | "ready"
-  | "unavailable";
+import { PromptItem } from "../../types/FlightPathTypes";
+import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 
 /**
  * GitHub Copilot Chat Integration with Direct Automation
@@ -20,26 +12,15 @@ export type CopilotStatus =
  *
  * Fallback: If direct automation is unavailable, reports error clearly to user
  */
-export class CopilotIntegration {
-  private context: vscode.ExtensionContext;
-  private isAvailable: boolean = false;
-  private workflowStep: number = 0;
-  private totalSteps: number = 0;
-
+export class CopilotChatIntegration extends CopilotIntegration {
   // Background polling state
   private initializationStatus: CopilotStatus = "initializing";
   private pollingAttempts: number = 0;
   private readonly maxPollingAttempts: number = 6; // 30 seconds / 5 seconds = 6 attempts
   private readonly pollingInterval: number = 5000; // 5 seconds
   private pollingTimer: NodeJS.Timeout | undefined;
-  private statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
-
-  // Event for status changes
-  public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
   // Language Model Tool for response completion detection
-  private responseCompleteEmitter = new vscode.EventEmitter<void>();
-  public readonly onResponseComplete = this.responseCompleteEmitter.event;
   private isToolRegistered: boolean = false;
   private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
 
@@ -50,12 +31,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 </criticalInstruction>`;
 
   constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-
-    // Register disposal of event emitters
-    context.subscriptions.push(this.statusChangeEmitter);
-    context.subscriptions.push(this.responseCompleteEmitter);
-
+    super(context);
     this.initialize();
   }
 
@@ -85,7 +61,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Polls every 5 seconds for up to 30 seconds to detect Copilot availability
    * Note: Language Model Tool will be registered AFTER Copilot becomes ready
    */
-  private async initialize(): Promise<void> {
+  async initialize(): Promise<void> {
     await this.startBackgroundPolling();
   }
 
@@ -121,7 +97,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
               "⚠️ FlightPath: Tool already called for this prompt - LLM is looping!"
             );
             console.log(
-              "� FlightPath: Canceling chat to stop infinite loop..."
+              "🛑 FlightPath: Canceling chat to stop infinite loop..."
             );
 
             // Stop the chat to prevent infinite loop
@@ -165,8 +141,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
           );
 
           // Fire the response complete event for internal handling
+          // Note: Chat mode cannot access response text directly, so we fire with empty string
           console.log("🔔 FlightPath: Firing responseCompleteEmitter event...");
-          this.responseCompleteEmitter.fire();
+          this.responseCompleteEmitter.fire("");
           console.log("✅ FlightPath: Event fired successfully");
 
           // Return acknowledgment to Copilot
@@ -815,40 +792,6 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   }
 
   /**
-   * Show detailed requirements for automation to work
-   */
-  private async showAutomationRequirements(): Promise<void> {
-    const requirements = `# FlightPath Automation Requirements
-
-For zero-interaction automation to work, the following are required:
-
-## Required Extensions
-- GitHub Copilot Chat (installed and activated)
-
-## Required VS Code Commands
-- \`type\` - Insert text at cursor
-- \`workbench.action.chat.submit\` - Submit chat message
-- \`workbench.panel.chat.view.copilot.focus\` - Focus Copilot Chat
-- \`editor.action.selectAll\` - Select all text
-
-## Troubleshooting
-1. Ensure GitHub Copilot Chat extension is installed and active
-2. Try reloading VS Code window (Ctrl+Shift+P → "Reload Window")
-3. Update VS Code to the latest version
-4. Check VS Code Output panel for detailed error messages
-
-## Testing
-Use Command Palette: "FlightPath: Test Automation" to verify setup
-`;
-
-    const doc = await vscode.workspace.openTextDocument({
-      content: requirements,
-      language: "markdown",
-    });
-    await vscode.window.showTextDocument(doc, { preview: false });
-  }
-
-  /**
    * Build final prompt with XML structure for tool instruction
    * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
    * Prompts are stored in final-form (ready to send) in JSON files
@@ -876,50 +819,24 @@ ${this.TOOL_INSTRUCTION}`;
   }
 
   /**
-   * Legacy method for backward compatibility
-   * @deprecated Use buildCopilotChatPrompt instead
+   * Get integration status
    */
-  private async buildPromptWithContext(prompt: PromptItem): Promise<string> {
-    return await this.buildCopilotChatPrompt(prompt);
-  }
-
-  /**
-   * Update workflow progress tracking
-   */
-  private async updateWorkflowProgress(): Promise<void> {
-    if (this.totalSteps > 0) {
-      const progress = `${this.workflowStep}/${this.totalSteps}`;
-      vscode.window.setStatusBarMessage(
-        `$(rocket) FlightPath: Step ${progress} completed`,
-        3000
-      );
+  getStatus(): { available: boolean; message: string; strategy: string } {
+    if (this.isAvailable) {
+      return {
+        available: true,
+        message:
+          "✅ Direct automation available (PROVEN zero-interaction strategy)",
+        strategy: "chat",
+      };
+    } else {
+      return {
+        available: false,
+        message:
+          "❌ Direct automation unavailable - required commands not found",
+        strategy: "chat",
+      };
     }
-  }
-
-  /**
-   * Show prompt preview in a document
-   */
-  private async showPromptPreview(prompt: string): Promise<void> {
-    try {
-      const doc = await vscode.workspace.openTextDocument({
-        content: `# FlightPath Generated Copilot Chat Prompt\n\n${prompt}\n\n---\n\n*Copy this prompt and paste it into Copilot Chat*`,
-        language: "markdown",
-      });
-      await vscode.window.showTextDocument(doc, {
-        preview: true,
-        viewColumn: vscode.ViewColumn.Beside,
-      });
-    } catch (error) {
-      console.error("FlightPath: Failed to show prompt preview:", error);
-    }
-  }
-
-  /**
-   * Set workflow progress tracking (called by PromptQueue)
-   */
-  setWorkflowProgress(currentStep: number, totalSteps: number): void {
-    this.workflowStep = currentStep;
-    this.totalSteps = totalSteps;
   }
 
   /**
@@ -941,27 +858,6 @@ ${this.TOOL_INSTRUCTION}`;
    */
   isReady(): boolean {
     return this.initializationStatus === "ready";
-  }
-
-  /**
-   * Get integration status
-   */
-  getStatus(): { available: boolean; message: string; strategy: string } {
-    if (this.isAvailable) {
-      return {
-        available: true,
-        message:
-          "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: "direct",
-      };
-    } else {
-      return {
-        available: false,
-        message:
-          "❌ Direct automation unavailable - required commands not found",
-        strategy: "unavailable",
-      };
-    }
   }
 
   /**
@@ -1033,51 +929,6 @@ ${this.TOOL_INSTRUCTION}`;
   }
 
   /**
-   * Execute prompt with enhanced context awareness and automation
-   */
-  async executePromptWithContext(prompt: PromptItem): Promise<{
-    success: boolean;
-    message: string;
-    requiresManualExecution?: boolean;
-    strategy?: string;
-  }> {
-    try {
-      const success = await this.sendPrompt(prompt);
-
-      if (success) {
-        return {
-          success: true,
-          message: "Prompt sent successfully using direct automation",
-          requiresManualExecution: false,
-          strategy: "direct",
-        };
-      } else {
-        return {
-          success: false,
-          message:
-            "Direct automation unavailable - required commands not found",
-          requiresManualExecution: true,
-          strategy: "unavailable",
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: `Copilot integration error: ${error}`,
-        requiresManualExecution: true,
-        strategy: "error",
-      };
-    }
-  }
-
-  /**
-   * Check if zero-interaction automation is supported
-   */
-  isZeroInteractionSupported(): boolean {
-    return this.isAvailable;
-  }
-
-  /**
    * Get detailed capability information
    */
   getCapabilities(): {
@@ -1088,7 +939,7 @@ ${this.TOOL_INSTRUCTION}`;
     return {
       hasDirectAutomation: this.isAvailable,
       supportsZeroInteraction: this.isAvailable,
-      currentStrategy: this.isAvailable ? "direct" : "unavailable",
+      currentStrategy: this.isAvailable ? "chat" : "unavailable",
     };
   }
 }

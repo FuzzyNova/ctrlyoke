@@ -189,6 +189,61 @@
           "default": "chatPanel",
           "description": "Choose where to open GitHub Copilot Chat for automation",
           "markdownDescription": "Choose where to open GitHub Copilot Chat for automation. **Chat Panel** is recommended for most users."
+        },
+        "flightpath.showCliOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Copilot CLI output in the Output panel",
+          "markdownDescription": "Show Copilot CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
+        },
+        "flightpath.copilotIntegrationMode": {
+          "type": "string",
+          "enum": [
+            "cli",
+            "chat"
+          ],
+          "enumDescriptions": [
+            "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
+            "Use Copilot Chat window (legacy UI automation, fallback if CLI unavailable)"
+          ],
+          "default": "cli",
+          "description": "Choose how FlightPath interacts with GitHub Copilot",
+          "markdownDescription": "Choose how FlightPath interacts with GitHub Copilot. **CLI mode** (default) provides better reliability, deterministic completion, and model selection. Chat mode is available as fallback."
+        },
+        "flightpath.copilotCliModel": {
+          "type": "string",
+          "enum": [
+            "claude-sonnet-4.5",
+            "claude-sonnet-4",
+            "claude-haiku-4.5",
+            "gpt-5"
+          ],
+          "default": "claude-sonnet-4.5",
+          "description": "AI model to use with Copilot CLI",
+          "markdownDescription": "Select the AI model for Copilot CLI. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
+        },
+        "flightpath.copilotCliAllowedDirs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional directories to allow Copilot CLI to access (beyond workspace)",
+          "markdownDescription": "List of additional directory paths that Copilot CLI can access. Workspace folders are automatically included."
+        },
+        "flightpath.copilotCliToolPermissions": {
+          "type": "string",
+          "enum": [
+            "allowAll",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "Allow all tools (--allow-all-tools)",
+            "Custom tool permissions (configure specific tools)"
+          ],
+          "default": "allowAll",
+          "description": "Tool permission mode for Copilot CLI",
+          "markdownDescription": "Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools."
         }
       }
     },

@@ -31,7 +31,9 @@ SOLID principles with strict separation of concerns:
 
 - FlightPathManager: Orchestration and command handling
 - PromptQueue: Sequential execution and state management
-- CopilotIntegration: Chat automation and response detection
+- CopilotIntegration (abstract base): Defines integration contract
+  - CopilotChatIntegration: Chat window automation with UI interactions
+  - CopilotCommandLineIntegration: CLI-based automation (default)
 - PromptFileParser: JSON validation and parsing
 - EndConditionEvaluator: Script execution and validation
   </solidPrinciples>
@@ -48,9 +50,14 @@ TypeScript strict mode, comprehensive error handling, no duplication.
 src/
 ├── extension.ts                  # Entry point
 ├── flightpath/                   # Core logic
-│   ├── FlightPathManager.ts      # Orchestration
+│   ├── base/
+│   │   └── CopilotIntegration.ts # Abstract base class
+│   ├── chat/
+│   │   └── CopilotChatIntegration.ts  # Chat window automation
+│   ├── cli/
+│   │   └── CopilotCommandLineIntegration.ts  # CLI automation (default)
+│   ├── FlightPathManager.ts      # Orchestration with factory pattern
 │   ├── PromptQueue.ts            # Execution queue
-│   ├── CopilotIntegration.ts     # Chat automation
 │   ├── PromptFileParser.ts       # JSON parsing
 │   └── EndConditionEvaluator.ts  # Script validation
 ├── templates/                    # End condition script templates
@@ -82,7 +89,18 @@ Manages sequential prompt execution with pause/resume/cancel. Tracks state and p
 
 ## CopilotIntegration
 
-Implements zero-interaction Copilot Chat automation:
+**Architecture**: Abstract base class with two implementations selected via factory pattern.
+
+### CopilotCommandLineIntegration (Default)
+
+- **Deterministic completion**: Command returns when complete (no polling needed)
+- **Structured output**: Parses response text and statistics separately
+- **Model selection**: User-configurable AI model (claude-sonnet-4.5, gpt-5, etc.)
+- **Simple initialization**: Check `copilot --version` for availability
+- **Response text**: Directly available for end condition evaluation
+- **No UI dependencies**: Pure command-line execution
+
+### CopilotChatIntegration (Fallback)
 
 - Direct text insertion: Focus (1000ms) → Clear (300ms) → Type (500ms) → Submit
 - Background polling: 5s intervals, 30s max, detects Copilot availability on startup
@@ -237,12 +255,16 @@ File system:
 
 Completed:
 
-- Zero-interaction Copilot Chat automation
-- Language Model Tool for response detection
-- Clipboard-based submit verification and streaming detection
-- Background polling with progressive activation
+- Copilot CLI integration with factory pattern architecture
+- CLI deterministic completion detection (no polling needed)
+- Output Channel integration for real-time CLI output visibility
+- User-configurable CLI settings (model, directories, tool permissions)
+- Zero-interaction Copilot Chat automation (fallback mode)
+- Language Model Tool for response detection (chat mode)
+- Clipboard-based submit verification and streaming detection (chat mode)
+- Background polling with progressive activation (chat mode)
 - User-configurable chat window location
-- Automatic prompt augmentation with tool instructions
+- Automatic prompt augmentation with tool instructions (chat mode)
 - JSON schema validation with IntelliSense
 - Command registration and lifecycle management
 - Status bar integration with real-time updates
@@ -250,16 +272,22 @@ Completed:
 
 Planned:
 
-- End condition script execution
-- WebView UI panel
-- Advanced context awareness
+- End condition script execution with response text validation
+- WebView UI panel for workflow visualization
+- Session management for multi-turn CLI conversations
+- Custom tool permission configuration
 - Comprehensive test coverage
 
 ## Extension Settings
 
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30000)
-- flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow")
+- flightpath.copilotIntegrationMode (enum: "cli" | "chat", default: "cli")
+- flightpath.copilotCliModel (enum: "claude-sonnet-4.5" | "claude-sonnet-4" | "claude-haiku-4.5" | "gpt-5", default: "claude-sonnet-4.5")
+- flightpath.copilotCliAllowedDirs (array of strings, default: [])
+- flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
+- flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel
+- flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow", default: "chatPanel")
 
 When adding settings:
 
