@@ -9,6 +9,16 @@ export class ValidationUtils {
     type: "object",
     properties: {
       prompt: { type: "string" },
+      model: {
+        type: "string",
+        enum: [
+          "claude-sonnet-4.5",
+          "claude-sonnet-4",
+          "claude-haiku-4.5",
+          "gpt-5",
+        ],
+        nullable: true,
+      },
       endCondition: {
         type: "object",
         properties: {

@@ -11,6 +11,11 @@
           "type": "string",
           "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
         },
+        "model": {
+          "type": "string",
+          "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
+          "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
+        },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
         }
@@ -29,6 +34,11 @@
               "prompt": {
                 "type": "string",
                 "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
+              },
+              "model": {
+                "type": "string",
+                "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
+                "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
               },
               "endCondition": {
                 "$ref": "#/definitions/endCondition"

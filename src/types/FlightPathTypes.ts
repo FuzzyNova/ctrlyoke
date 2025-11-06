@@ -5,6 +5,11 @@ export interface PromptFile {
 
 export interface PromptItem {
   prompt: string;
+  model?:
+    | "claude-sonnet-4.5"
+    | "claude-sonnet-4"
+    | "claude-haiku-4.5"
+    | "gpt-5";
   endCondition?: EndCondition;
 }
 

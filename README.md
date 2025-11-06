@@ -87,7 +87,8 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 **Simple Analysis** (`.prompt.json`):
 ```json
 {
-  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements"
+  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements",
+  "model": "claude-haiku-4.5"
 }
 ```
 
@@ -96,17 +97,22 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 {
   "prompts": [
     {
-      "prompt": "/explain #file:src/extension.ts Identify code smells in this file"
+      "prompt": "/explain #file:src/extension.ts Identify code smells in this file",
+      "model": "claude-sonnet-4.5"
     },
     {
       "prompt": "/explain #file:src/extension.ts Suggest refactoring strategies"
     },
     {
-      "prompt": "/new #file:src/extension.ts Show example implementation"
+      "prompt": "/new #file:src/extension.ts Show example implementation",
+      "model": "gpt-5"
     }
   ]
 }
 ```
+
+**Optional Fields**:
+- `model` - Override AI model per prompt (`claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`)
 
 **Using Context Variables**:
 - `@workspace` - Include workspace-wide context

@@ -175,6 +175,7 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
 ```json
 {
   "prompt": "/explain #file:src/extension.ts Analyze and improve this code",
+  "model": "claude-haiku-4.5",
   "endCondition": {
     "script": "validate_improvements.py",
     "returns": "true",
@@ -190,6 +191,7 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
   "prompts": [
     {
       "prompt": "/explain @workspace Step 1: Analyze code structure",
+      "model": "claude-sonnet-4.5",
       "endCondition": { "script": "check_analysis.js", "returns": "true" }
     },
     {
@@ -199,6 +201,10 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
   ]
 }
 ```
+
+**Optional Fields:**
+
+- `model` - Override the AI model for a specific prompt. Valid values: `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`. If omitted, uses the default configured in settings (`flightpath.copilotCliModel`).
 
 **File naming conventions:**
 

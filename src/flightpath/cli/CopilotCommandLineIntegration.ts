@@ -128,12 +128,19 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         this.outputChannel?.appendLine("");
       }
 
-      // Get CLI options from configuration
+      // Get CLI options from configuration (or per-prompt override)
       const options: CopilotCliOptions = {
         addDirs: this.getWorkspaceDirs(),
-        model: this.getConfiguredModel(),
+        model: prompt.model || this.getConfiguredModel(),
         resumeSession: this.sessionId,
       };
+
+      // Log model selection
+      if (prompt.model) {
+        this.log(`🤖 Using prompt-specific model: ${prompt.model}`);
+      } else {
+        this.log(`🤖 Using configured model: ${options.model}`);
+      }
 
       // Execute CLI command
       const result = await this.executeCopilotCommand(promptText, options);
