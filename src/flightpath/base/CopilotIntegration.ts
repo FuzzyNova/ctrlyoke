@@ -47,9 +47,13 @@ export abstract class CopilotIntegration {
    * Send a prompt to Copilot
    * Must be implemented by subclasses
    * @param prompt The prompt item to send
+   * @param needsCompletionDetection If true, set up completion detection mechanisms (default: true)
    * @returns True if prompt was sent successfully
    */
-  abstract sendPrompt(prompt: PromptItem): Promise<boolean>;
+  abstract sendPrompt(
+    prompt: PromptItem,
+    needsCompletionDetection?: boolean
+  ): Promise<boolean>;
 
   /**
    * Get the current status of the integration

@@ -414,8 +414,14 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    *
    * Note: Assumes background polling has confirmed automation is available.
    * FlightPathManager blocks workflow execution until status is 'ready'.
+   *
+   * @param prompt The prompt item to send
+   * @param needsCompletionDetection If true, attach tool instructions for completion detection (default: true)
    */
-  async sendPrompt(prompt: PromptItem): Promise<boolean> {
+  async sendPrompt(
+    prompt: PromptItem,
+    needsCompletionDetection: boolean = true
+  ): Promise<boolean> {
     try {
       console.log("🚀 FlightPath: sendPrompt() called");
       console.log(`📊 Prompt item:`, {
@@ -436,10 +442,16 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       console.log(
         "🚀 FlightPath: Sending prompt with direct automation (PROVEN strategy)"
       );
+      console.log(
+        `🔧 Completion detection: ${needsCompletionDetection ? "ENABLED" : "DISABLED (single prompt)"}`
+      );
 
       // Build prompt with Copilot Chat syntax
       console.log("🔨 Building Copilot Chat prompt with context...");
-      const chatPrompt = await this.buildCopilotChatPrompt(prompt);
+      const chatPrompt = await this.buildCopilotChatPrompt(
+        prompt,
+        needsCompletionDetection
+      );
       console.log(`✅ Built chat prompt (${chatPrompt.length} characters)`);
       console.log(
         `📝 Chat prompt preview: "${chatPrompt.substring(0, 150)}${chatPrompt.length > 150 ? "..." : ""}"`
@@ -447,7 +459,10 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
       // Execute direct automation
       console.log("🎬 Executing direct automation sequence...");
-      const result = await this.sendPromptWithDirectAutomation(chatPrompt);
+      const result = await this.sendPromptWithDirectAutomation(
+        chatPrompt,
+        needsCompletionDetection
+      );
       console.log(
         `📊 Automation result: ${result ? "✅ SUCCESS" : "❌ FAILED"}`
       );
@@ -672,14 +687,20 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    *
    * Based on validated proof-of-concept in extension.ts:testCopilotAutomation()
    * Timing delays are proven and validated - do not reduce!
+   *
+   * @param chatPrompt The full prompt text to send
+   * @param needsCompletionDetection If true, reset tool flags for completion detection
    */
   private async sendPromptWithDirectAutomation(
-    chatPrompt: string
+    chatPrompt: string,
+    needsCompletionDetection: boolean = true
   ): Promise<boolean> {
     try {
-      // Reset tool call flag for new prompt
-      this.toolCalledForCurrentPrompt = false;
-      console.log("🔄 FlightPath: Reset tool call flag for new prompt");
+      // Only reset tool call flag if we're using completion detection
+      if (needsCompletionDetection) {
+        this.toolCalledForCurrentPrompt = false;
+        console.log("🔄 FlightPath: Reset tool call flag for new prompt");
+      }
 
       console.log("🔍 FlightPath: Starting direct automation sequence...");
       console.log(
@@ -795,18 +816,34 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Build final prompt with XML structure for tool instruction
    * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
    * Prompts are stored in final-form (ready to send) in JSON files
+   *
+   * @param prompt The prompt item
+   * @param includeToolInstruction If true, append tool instruction for completion detection
    */
-  private async buildCopilotChatPrompt(prompt: PromptItem): Promise<string> {
+  private async buildCopilotChatPrompt(
+    prompt: PromptItem,
+    includeToolInstruction: boolean = true
+  ): Promise<string> {
     // User's prompt text is already in final form with all context variables (@workspace, #file, etc.)
-    // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
-    // This gives us a clean chat history while maintaining automation functionality
-    const chatPrompt = `${prompt.prompt}
+    let chatPrompt = prompt.prompt;
+
+    // Only append tool instruction if needed (multi-prompt workflows)
+    if (includeToolInstruction) {
+      // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
+      // This gives us a clean chat history while maintaining automation functionality
+      chatPrompt = `${prompt.prompt}
 
 ${this.TOOL_INSTRUCTION}`;
 
-    console.log(
-      "📝 FlightPath: Built prompt with XML-wrapped tool instruction"
-    );
+      console.log(
+        "📝 FlightPath: Built prompt with XML-wrapped tool instruction"
+      );
+    } else {
+      console.log(
+        "📝 FlightPath: Built prompt WITHOUT tool instruction (single prompt workflow)"
+      );
+    }
+
     console.log("🔧 Full prompt being sent:", chatPrompt);
 
     const finalPrompt = chatPrompt.trim();

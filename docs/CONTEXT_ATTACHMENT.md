@@ -181,7 +181,7 @@ ${content}
    const finalPrompt = `${attachmentsSection}\n\n${originalPromptText}\n\n${TOOL_INSTRUCTION}`;
    ```
 
-4. **Remove or keep `#file:` references in prompt text** (see UX considerations below)
+4. **Keep `#file:` references in prompt text**
 
 5. **Focus Copilot Chat**
 

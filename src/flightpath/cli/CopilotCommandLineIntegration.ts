@@ -91,8 +91,12 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
 
   /**
    * Send prompt to Copilot via CLI
+   * @param needsCompletionDetection Ignored for CLI mode (completion is deterministic)
    */
-  async sendPrompt(prompt: PromptItem): Promise<boolean> {
+  async sendPrompt(
+    prompt: PromptItem,
+    needsCompletionDetection: boolean = true
+  ): Promise<boolean> {
     if (!this.isAvailable) {
       console.error(
         "❌ FlightPath: Cannot send prompt - Copilot CLI not available"

@@ -284,11 +284,19 @@ export class FlightPathManager {
         `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
       );
 
-      // Set up response listener BEFORE sending prompt to avoid race condition
-      const responsePromise = this.waitForResponseComplete(prompt);
+      // Only need completion detection for multi-prompt workflows
+      const needsCompletionDetection = state.prompts.length > 1;
+
+      // Set up response listener BEFORE sending prompt to avoid race condition (only if needed)
+      const responsePromise = needsCompletionDetection
+        ? this.waitForResponseComplete(prompt)
+        : Promise.resolve(""); // Single prompt - no need to wait
 
       // Send prompt to Copilot
-      const success = await this.copilotIntegration.sendPrompt(prompt);
+      const success = await this.copilotIntegration.sendPrompt(
+        prompt,
+        needsCompletionDetection
+      );
 
       if (!success) {
         vscode.window.showErrorMessage(
@@ -300,21 +308,29 @@ export class FlightPathManager {
       // Mark as sent in queue
       await this.promptQueue.markCurrentAsSent();
 
-      // Wait for Copilot to finish responding
-      console.log(
-        `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
-      );
-      const responseText = await responsePromise;
-
-      console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
-
-      // Evaluate end condition if present (now with response text available)
-      if (prompt.endCondition) {
+      // Wait for Copilot to finish responding (only for multi-prompt workflows)
+      let responseText = "";
+      if (needsCompletionDetection) {
         console.log(
-          `🔍 FlightPath: Evaluating end condition for prompt ${i + 1}...`
+          `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
         );
-        // TODO: Implement end condition evaluation with response text
-        // This will be handled by EndConditionEvaluator with response text passed as env var
+        responseText = await responsePromise;
+        console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
+
+        // Evaluate end condition if present (now with response text available)
+        if (prompt.endCondition) {
+          console.log(
+            `🔍 FlightPath: Evaluating end condition for prompt ${i + 1}...`
+          );
+          // TODO: Implement end condition evaluation with response text
+          // This will be handled by EndConditionEvaluator with response text passed as env var
+        }
+      } else {
+        console.log(
+          `✅ FlightPath: Single prompt sent successfully - workflow complete`
+        );
+        // Note: End conditions are not evaluated for single-prompt workflows
+        // since we don't wait for completion
       }
 
       // Check if workflow was paused
