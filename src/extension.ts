@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
+import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 
 let flightPathManager: FlightPathManager;
 
@@ -217,6 +218,23 @@ export async function activate(context: vscode.ExtensionContext) {
     flightPathManager = new FlightPathManager(context);
     await flightPathManager.initialize();
 
+    // Register completion provider for prompt JSON and Markdown files
+    const promptCompletionProvider = new PromptCompletionProvider();
+    context.subscriptions.push(
+      vscode.languages.registerCompletionItemProvider(
+        [
+          { pattern: "**/*.{prompt,flightpath}.json" },
+          { pattern: "**/*.prompt.md" },
+          { language: "prompt" }, // VS Code's prompt language (used by Copilot)
+        ],
+        promptCompletionProvider,
+        "#" // Trigger on # character
+      )
+    );
+    console.log(
+      "FlightPath: Registered completion provider for prompt files (.json, .md, and prompt language)"
+    );
+
     // Register commands
     registerCommands(context);
 
@@ -420,6 +438,23 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Debug: Show current document language ID
+  const showLanguageIdCommand = vscode.commands.registerCommand(
+    "flightpath.showLanguageId",
+    () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        const doc = editor.document;
+        vscode.window.showInformationMessage(
+          `Language ID: ${doc.languageId}\nFile: ${doc.fileName}`,
+          { modal: true }
+        );
+      } else {
+        vscode.window.showWarningMessage("No active editor");
+      }
+    }
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -436,7 +471,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     retryCopilotDetectionCommand,
     listChatCommandsCommand,
     listAllCommandsCommand,
-    createEndConditionScriptCommand
+    createEndConditionScriptCommand,
+    showLanguageIdCommand
   );
 
   console.log("FlightPath: Commands registered successfully");

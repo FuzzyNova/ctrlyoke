@@ -49,6 +49,8 @@ TypeScript strict mode, comprehensive error handling, no duplication.
 ```
 src/
 ├── extension.ts                  # Entry point
+├── completions/                  # IntelliSense providers
+│   └── PromptCompletionProvider.ts  # File/selection completions for prompt files
 ├── flightpath/                   # Core logic
 │   ├── base/
 │   │   └── CopilotIntegration.ts # Abstract base class
@@ -150,6 +152,17 @@ Implementation notes:
 - Supports both single prompt and multiple prompts format (via oneOf)
 - Validates final-form prompts (no runtime context injection)
 - Detailed validation error reporting
+
+## PromptCompletionProvider
+
+IntelliSense provider for prompt files with context-aware completions:
+
+- **JSON files** (`.prompt.json`, `.flightpath.json`): Triggers on `#` inside "prompt" string values
+- **Markdown files** (`.prompt.md`): Triggers on `#` anywhere in the document
+- **File completions**: Shows all workspace files with fuzzy filtering
+- **Selection completions**: Captures current editor selection as `#file:path:startLine-endLine`
+- **Performance**: 5-second file cache, limited to 500 results
+- **Multiple selections**: Supports multiple visible editors with selections
 
 ## EndConditionEvaluator
 
