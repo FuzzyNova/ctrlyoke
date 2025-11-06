@@ -195,10 +195,8 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   ): Promise<CopilotCliResult> {
     const args: string[] = [];
 
-    // Add prompt with -p flag
-    // Quote the prompt to handle spaces and special characters
-    args.push("-p");
-    args.push(this.escapeShellArg(prompt));
+    // NOTE: Prompt is sent via stdin (no -p flag needed!)
+    // This avoids shell escaping issues and command-line length limits
 
     // Add tool permissions
     const toolPermissions = this.getToolPermissionArgs();
@@ -207,8 +205,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     // Add optional flags
     if (options.addDirs && options.addDirs.length > 0) {
       options.addDirs.forEach((dir) => {
-        args.push("--add-dir");
-        args.push(this.escapeShellArg(dir));
+        args.push("--add-dir", dir);
       });
     }
 
@@ -223,13 +220,16 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     console.log("📋 FlightPath: Executing copilot command:", {
       command: "copilot",
       promptLength: prompt.length,
-      additionalArgs: args.filter((a) => a !== this.escapeShellArg(prompt)),
+      model: options.model,
+      addDirs: options.addDirs?.length || 0,
+      resumeSession: !!options.resumeSession,
     });
 
-    // Execute command with longer timeout (5 minutes)
-    const { stdout, stderr, exitCode } = await this.spawnProcess(
+    // Execute command with stdin for prompt (5 minute timeout)
+    const { stdout, stderr, exitCode } = await this.spawnProcessWithStdin(
       "copilot",
       args,
+      prompt,
       {
         timeout: 300000, // 5 minutes
       }
@@ -245,21 +245,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       error: stderr || undefined,
       exitCode,
     };
-  }
-
-  /**
-   * Escape shell argument for safe passing with shell: true
-   * Handles spaces, quotes, and special characters
-   */
-  private escapeShellArg(arg: string): string {
-    // On Windows with PowerShell/cmd, use double quotes and escape internal quotes
-    if (process.platform === "win32") {
-      // Escape double quotes by doubling them, then wrap in double quotes
-      return `"${arg.replace(/"/g, '""')}"`;
-    } else {
-      // On Unix, escape single quotes and wrap in single quotes
-      return `'${arg.replace(/'/g, "'\\''")}'`;
-    }
   }
 
   /**
@@ -314,6 +299,81 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         const text = data.toString();
         stderr += text;
         // Log stderr separately
+        console.log(`📤 [Copilot stderr]: ${text.trim()}`);
+      });
+
+      child.on("error", (error) => {
+        console.error("❌ Process error:", error);
+        reject(error);
+      });
+
+      child.on("close", (code) => {
+        console.log(`✅ Process closed with exit code: ${code}`);
+        resolve({
+          stdout,
+          stderr,
+          exitCode: code ?? 1,
+        });
+      });
+
+      // Handle timeout
+      if (options.timeout) {
+        setTimeout(() => {
+          console.warn(
+            `⏱️ Process timeout after ${options.timeout}ms, killing...`
+          );
+          child.kill();
+          reject(new Error(`Process timeout after ${options.timeout}ms`));
+        }, options.timeout);
+      }
+    });
+  }
+
+  /**
+   * Spawn a child process with stdin input
+   * Use this for sending prompts to copilot CLI to avoid shell escaping issues
+   */
+  private spawnProcessWithStdin(
+    command: string,
+    args: string[],
+    stdinInput: string,
+    options: { timeout?: number } = {}
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+
+      console.log(
+        `🔧 FlightPath: Spawning process with stdin: ${command} ${args.join(" ")}`
+      );
+      console.log(
+        `📝 FlightPath: Stdin length: ${stdinInput.length} characters`
+      );
+
+      const child = spawn(command, args, {
+        cwd: this.getWorkspaceRoot(),
+        shell: true, // Required for copilot.ps1 on Windows
+      });
+
+      // Write prompt to stdin
+      if (child.stdin) {
+        child.stdin.write(stdinInput);
+        child.stdin.end();
+      } else {
+        reject(new Error("Failed to access stdin"));
+        return;
+      }
+
+      // Stream output to console in real-time
+      child.stdout.on("data", (data) => {
+        const text = data.toString();
+        stdout += text;
+        console.log(`📤 [Copilot stdout]: ${text.trim()}`);
+      });
+
+      child.stderr.on("data", (data) => {
+        const text = data.toString();
+        stderr += text;
         console.log(`📤 [Copilot stderr]: ${text.trim()}`);
       });
 
