@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import { PromptItem } from "../../types/FlightPathTypes";
+import {
+  PromptItem,
+  CopilotIntegrationMode,
+} from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 
 /**
@@ -14,7 +17,7 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
  */
 export class CopilotChatIntegration extends CopilotIntegration {
   // Background polling state
-  private initializationStatus: CopilotStatus = "initializing";
+  private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
   private pollingAttempts: number = 0;
   private readonly maxPollingAttempts: number = 6; // 30 seconds / 5 seconds = 6 attempts
   private readonly pollingInterval: number = 5000; // 5 seconds
@@ -49,11 +52,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       newWindow: "workbench.action.chat.openInNewWindow",
     };
 
-    const command = commandMap[chatLocation] || commandMap["chatPanel"];
-    console.log(
-      `⚙️ FlightPath: Using chat window location: ${chatLocation} → ${command}`
-    );
-    return command;
+    return commandMap[chatLocation] || commandMap["chatPanel"];
   }
 
   /**
@@ -73,50 +72,25 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   private registerResponseTool(): void {
     // Prevent duplicate registration
     if (this.isToolRegistered) {
-      console.log(
-        "⚠️ FlightPath: Language Model Tool already registered, skipping..."
-      );
       return;
     }
-
-    console.log(
-      "🔧 FlightPath: Registering Language Model Tool: flightpath_response_complete"
-    );
-    console.log(
-      "🔧 Tool will be available to Copilot as: #flightpath_response_complete"
-    );
 
     try {
       const tool = vscode.lm.registerTool("flightpath_response_complete", {
         invoke: async (options, token) => {
-          console.log("🎯 ===== TOOL CALLBACK RECEIVED =====");
-
           // Prevent duplicate tool calls in same response (LLM loop behavior)
           if (this.toolCalledForCurrentPrompt) {
-            console.log(
-              "⚠️ FlightPath: Tool already called for this prompt - LLM is looping!"
-            );
-            console.log(
-              "🛑 FlightPath: Canceling chat to stop infinite loop..."
-            );
+            console.log("⚠️ Tool called multiple times - stopping LLM loop");
 
             // Stop the chat to prevent infinite loop
             try {
               await vscode.commands.executeCommand(
                 "workbench.action.chat.cancel"
               );
-              console.log("✅ FlightPath: Chat canceled successfully");
             } catch (cancelError) {
-              console.warn(
-                "⚠️ FlightPath: Could not cancel chat:",
-                cancelError
-              );
+              console.warn("⚠️ Could not cancel chat:", cancelError);
             }
 
-            console.log(
-              "💡 LLMs often try to add text after calling tools, which triggers loops"
-            );
-            console.log("🎯 =====================================");
             return new vscode.LanguageModelToolResult([
               new vscode.LanguageModelTextPart(
                 "Already acknowledged - stopping loop"
@@ -124,27 +98,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
             ]);
           }
 
-          console.log("✅ FlightPath: Copilot called response complete tool!");
-          console.log("📊 Tool invocation options:", {
-            hasToolInvocationToken: !!options.toolInvocationToken,
-            inputProvided: options.input,
-          });
-          console.log("🎯 =====================================");
-
           // Mark tool as called for this prompt
           this.toolCalledForCurrentPrompt = true;
 
-          // Show success popup to user
-          vscode.window.showInformationMessage(
-            "🎉 FlightPath: Copilot has finished responding!",
-            "OK"
-          );
-
           // Fire the response complete event for internal handling
           // Note: Chat mode cannot access response text directly, so we fire with empty string
-          console.log("🔔 FlightPath: Firing responseCompleteEmitter event...");
           this.responseCompleteEmitter.fire("");
-          console.log("✅ FlightPath: Event fired successfully");
 
           // Return acknowledgment to Copilot
           return new vscode.LanguageModelToolResult([
@@ -158,13 +117,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       // Register for disposal
       this.context.subscriptions.push(tool);
       this.isToolRegistered = true;
-      console.log("✅ FlightPath: Language Model Tool registered successfully");
-      console.log("✅ Tool is now active and listening for Copilot callbacks");
+      console.log("✅ Language Model Tool registered");
     } catch (error) {
-      console.error(
-        "❌ FlightPath: Failed to register Language Model Tool:",
-        error
-      );
+      console.error("❌ Failed to register Language Model Tool:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to register response detection tool: ${error}`
       );
@@ -179,56 +134,30 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     activateIfNeeded: boolean = false
   ): Promise<void> {
     try {
-      console.log("🔍 FlightPath: Checking Copilot availability...");
-
       // Check if GitHub Copilot extension is installed and active
       let copilotExtension = vscode.extensions.getExtension("GitHub.copilot");
       let copilotChatExtension = vscode.extensions.getExtension(
         "GitHub.copilot-chat"
       );
 
-      console.log(
-        "📦 Copilot extension:",
-        copilotExtension
-          ? `Found (Active: ${copilotExtension.isActive})`
-          : "Not found"
-      );
-      console.log(
-        "📦 Copilot Chat extension:",
-        copilotChatExtension
-          ? `Found (Active: ${copilotChatExtension.isActive})`
-          : "Not found"
-      );
-
       // Try to activate extensions if they're installed but not active
       if (activateIfNeeded) {
         if (copilotChatExtension && !copilotChatExtension.isActive) {
-          console.log(
-            "🔄 FlightPath: Attempting to activate Copilot Chat extension..."
-          );
           try {
             await copilotChatExtension.activate();
-            console.log("✅ FlightPath: Copilot Chat extension activated");
           } catch (activationError) {
             console.warn(
-              "⚠️ FlightPath: Could not activate Copilot Chat:",
+              "⚠️ Could not activate Copilot Chat:",
               activationError
             );
           }
         }
 
         if (copilotExtension && !copilotExtension.isActive) {
-          console.log(
-            "🔄 FlightPath: Attempting to activate Copilot extension..."
-          );
           try {
             await copilotExtension.activate();
-            console.log("✅ FlightPath: Copilot extension activated");
           } catch (activationError) {
-            console.warn(
-              "⚠️ FlightPath: Could not activate Copilot:",
-              activationError
-            );
+            console.warn("⚠️ Could not activate Copilot:", activationError);
           }
         }
 
@@ -244,24 +173,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       );
 
       if (!hasCopilot) {
-        console.log(
-          "❌ FlightPath: GitHub Copilot not installed or not active"
-        );
-        if (!activateIfNeeded) {
-          console.log(
-            "💡 FlightPath: Will retry with activation when sending prompts"
-          );
-        }
         this.isAvailable = false;
         return;
       }
 
-      // Check for required automation commands (PROVEN strategy)
-      console.log(
-        "🔍 FlightPath: Checking for required automation commands..."
-      );
+      // Check for required automation commands
       const commands = await vscode.commands.getCommands();
-      console.log(`📊 Total VS Code commands available: ${commands.length}`);
 
       const hasTypeCommand = commands.includes("type");
       const hasChatSubmit = commands.includes("workbench.action.chat.submit");
@@ -276,14 +193,6 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       );
       const hasSelectAll = commands.includes("editor.action.selectAll");
 
-      console.log("📋 Command availability check:");
-      console.log(`   - type: ${hasTypeCommand ? "✅" : "❌"}`);
-      console.log(`   - chat.submit: ${hasChatSubmit ? "✅" : "❌"}`);
-      console.log(`   - chat.panel.focus: ${hasChatPanel ? "✅" : "❌"}`);
-      console.log(`   - chat.openInEditor: ${hasChatTab ? "✅" : "❌"}`);
-      console.log(`   - chat.openInNewWindow: ${hasChatWindow ? "✅" : "❌"}`);
-      console.log(`   - selectAll: ${hasSelectAll ? "✅" : "❌"}`);
-
       // At least one chat opening method must be available
       const hasChatOpenCommand = hasChatPanel || hasChatTab || hasChatWindow;
 
@@ -291,24 +200,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         hasTypeCommand && hasChatSubmit && hasChatOpenCommand && hasSelectAll;
 
       if (this.isAvailable) {
-        console.log(
-          "✅ FlightPath: Direct automation available (PROVEN strategy)"
-        );
+        console.log("✅ Copilot Chat automation available");
       } else {
-        console.log(
-          "❌ FlightPath: Required automation commands not available"
-        );
-        console.log(`   - type: ${hasTypeCommand}`);
-        console.log(`   - chat.submit: ${hasChatSubmit}`);
-        console.log(`   - chat open command: ${hasChatOpenCommand}`);
-        console.log(`   - selectAll: ${hasSelectAll}`);
+        console.error("❌ Required automation commands not available");
       }
     } catch (error) {
-      console.error(
-        "❌ FlightPath: Error checking Copilot availability:",
-        error
-      );
-      console.error("📊 Error details:", JSON.stringify(error, null, 2));
+      console.error("❌ Error checking Copilot availability:", error);
       this.isAvailable = false;
     }
   }
@@ -318,12 +215,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Polls every 5 seconds for up to 30 seconds (6 attempts)
    */
   private async startBackgroundPolling(): Promise<void> {
-    console.log(
-      "🔄 FlightPath: Starting background polling for Copilot availability..."
-    );
     this.pollingAttempts = 0;
-    this.initializationStatus = "initializing";
-    this.statusChangeEmitter.fire("initializing");
+    this.initializationStatus = CopilotStatus.Initializing;
+    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
 
     // Clear any existing polling timer
     if (this.pollingTimer) {
@@ -338,9 +232,6 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    */
   private async pollCopilotAvailability(): Promise<void> {
     this.pollingAttempts++;
-    console.log(
-      `🔍 FlightPath: Polling attempt ${this.pollingAttempts}/${this.maxPollingAttempts}`
-    );
 
     // Strategy: First check is passive, second check onwards we try activation
     const shouldActivate = this.pollingAttempts >= 2;
@@ -348,13 +239,13 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
     if (this.isAvailable) {
       // Success! Copilot is available
-      console.log("✅ FlightPath: Copilot automation ready after polling");
+      console.log("✅ Copilot Chat ready");
 
       // Now that Copilot is ready, register the Language Model Tool
       this.registerResponseTool();
 
-      this.initializationStatus = "ready";
-      this.statusChangeEmitter.fire("ready");
+      this.initializationStatus = CopilotStatus.Ready;
+      this.statusChangeEmitter.fire(CopilotStatus.Ready);
 
       // Clear polling timer
       if (this.pollingTimer) {
@@ -366,11 +257,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
     // Check if we've exceeded max attempts
     if (this.pollingAttempts >= this.maxPollingAttempts) {
-      console.log(
-        "❌ FlightPath: Polling timeout - Copilot not available after 30 seconds"
-      );
-      this.initializationStatus = "unavailable";
-      this.statusChangeEmitter.fire("unavailable");
+      console.error("❌ Copilot not available after 30 seconds");
+      this.initializationStatus = CopilotStatus.Unavailable;
+      this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
 
       // Clear polling timer
       if (this.pollingTimer) {
@@ -381,11 +270,8 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     }
 
     // Continue polling
-    console.log(
-      `⏳ FlightPath: Copilot not ready, will retry in ${this.pollingInterval / 1000} seconds...`
-    );
-    this.initializationStatus = "waiting";
-    this.statusChangeEmitter.fire("waiting");
+    this.initializationStatus = CopilotStatus.Waiting;
+    this.statusChangeEmitter.fire(CopilotStatus.Waiting);
 
     this.pollingTimer = setTimeout(() => {
       this.pollCopilotAvailability();
@@ -396,7 +282,6 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Manually retry Copilot detection (restart polling)
    */
   async retryDetection(): Promise<void> {
-    console.log("🔄 FlightPath: Manual retry of Copilot detection requested");
     vscode.window.showInformationMessage(
       "FlightPath: Retrying Copilot detection..."
     );
@@ -423,58 +308,30 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     needsCompletionDetection: boolean = true
   ): Promise<boolean> {
     try {
-      console.log("🚀 FlightPath: sendPrompt() called");
-      console.log(`📊 Prompt item:`, {
-        prompt: prompt.prompt.substring(0, 100),
-        hasEndCondition: !!prompt.endCondition,
-      });
-
-      // Verify automation is still available (should always be true due to workflow blocking)
+      // Verify automation is still available
       if (!this.isAvailable) {
-        const message =
-          "FlightPath: Automation became unavailable. This should not happen if initialization completed successfully.";
-        console.error("❌ " + message);
-        vscode.window.showErrorMessage(message);
+        console.error("❌ Automation became unavailable");
+        vscode.window.showErrorMessage(
+          "FlightPath: Automation became unavailable"
+        );
         return false;
       }
 
-      console.log("✅ FlightPath: Automation confirmed available");
-      console.log(
-        "🚀 FlightPath: Sending prompt with direct automation (PROVEN strategy)"
-      );
-      console.log(
-        `🔧 Completion detection: ${needsCompletionDetection ? "ENABLED" : "DISABLED (single prompt)"}`
-      );
-
       // Build prompt with Copilot Chat syntax
-      console.log("🔨 Building Copilot Chat prompt with context...");
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
         needsCompletionDetection
       );
-      console.log(`✅ Built chat prompt (${chatPrompt.length} characters)`);
-      console.log(
-        `📝 Chat prompt preview: "${chatPrompt.substring(0, 150)}${chatPrompt.length > 150 ? "..." : ""}"`
-      );
 
       // Execute direct automation
-      console.log("🎬 Executing direct automation sequence...");
       const result = await this.sendPromptWithDirectAutomation(
         chatPrompt,
         needsCompletionDetection
       );
-      console.log(
-        `📊 Automation result: ${result ? "✅ SUCCESS" : "❌ FAILED"}`
-      );
 
       return result;
     } catch (error) {
-      console.error("❌ FlightPath: Failed to send prompt to Copilot:", error);
-      console.error("📊 Error type:", typeof error);
-      console.error(
-        "📊 Error stack:",
-        error instanceof Error ? error.stack : "No stack trace"
-      );
+      console.error("❌ Failed to send prompt:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to send prompt: ${error}`
       );
@@ -523,10 +380,6 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   private async waitForCopilotToFinishStreaming(
     maxAttempts: number = 40
   ): Promise<boolean> {
-    console.log(
-      "⏳ Waiting for Copilot to finish streaming (clipboard monitoring)..."
-    );
-
     let previousContent = "";
     let unchangedCount = 0;
     const requiredStableChecks = 3; // 3 consecutive stable checks = 1.5 seconds
@@ -542,31 +395,18 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         // Check if content has changed
         if (currentContent === previousContent && currentContent.length > 0) {
           unchangedCount++;
-          console.log(
-            `✅ Chat content stable (${unchangedCount}/${requiredStableChecks} checks)`
-          );
 
           // If content has been stable for required checks, we're done
           if (unchangedCount >= requiredStableChecks) {
-            console.log(
-              `✅ Copilot finished streaming (content stable for ${unchangedCount * 0.5}s)`
-            );
             return true;
           }
         } else {
           // Content changed, reset counter
-          if (unchangedCount > 0) {
-            console.log(`⏳ Chat content changed, resetting stability counter`);
-          }
           unchangedCount = 0;
           previousContent = currentContent;
         }
-
-        console.log(
-          `⏳ Attempt ${attempt}/${maxAttempts}: Copilot still streaming...`
-        );
       } catch (error) {
-        console.warn(`⚠️ Error checking chat content:`, error);
+        console.warn("⚠️ Error checking chat content:", error);
         // If we can't check, assume it's done to avoid blocking forever
         return true;
       }
@@ -583,12 +423,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Called by FlightPathManager after tool callback fires
    */
   async waitForStreamingComplete(): Promise<void> {
-    const finished = await this.waitForCopilotToFinishStreaming();
-    if (!finished) {
-      console.warn(
-        "⚠️ FlightPath: Copilot may still be streaming, but proceeding anyway to avoid blocking workflow"
-      );
-    }
+    await this.waitForCopilotToFinishStreaming();
   }
 
   /**
@@ -609,16 +444,10 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
 
     // Get chat content BEFORE submitting (to verify it changes)
-    console.log("📋 Copying chat content before submit...");
     const chatBeforeSubmit = await this.copyChatToClipboard();
-    console.log(`📊 Chat before submit: ${chatBeforeSubmit.length} characters`);
 
     while (attempt < maxAttempts) {
       attempt++;
-
-      console.log(
-        `📤 Submit attempt ${attempt}/${maxAttempts}: Executing workbench.action.chat.submit...`
-      );
 
       try {
         // Execute submit command
@@ -628,11 +457,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Verify submit worked by checking if our prompt appears in chat
-        console.log("🔍 Verifying submit by checking clipboard...");
         const chatAfterSubmit = await this.copyChatToClipboard();
-        console.log(
-          `📊 Chat after submit: ${chatAfterSubmit.length} characters`
-        );
 
         // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
         const promptToVerify = promptText
@@ -645,20 +470,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
           chatAfterSubmit.includes(promptToVerify) &&
           !chatBeforeSubmit.includes(promptToVerify)
         ) {
-          console.log(`✅ Submit verified - prompt appears in chat!`);
           return true;
-        } else {
-          console.warn(
-            `⚠️ Submit verification failed - prompt not found in chat`
-          );
-          console.log(`🔍 Looking for: "${promptToVerify}"`);
-          console.log(
-            `📊 Chat changed: ${chatBeforeSubmit.length} → ${chatAfterSubmit.length} chars`
-          );
         }
       } catch (error) {
         console.warn(
-          `⚠️ Submit attempt ${attempt} threw error:`,
+          "⚠️ Submit attempt failed:",
           error instanceof Error ? error.message : String(error)
         );
       }
@@ -667,17 +483,13 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       if (attempt < maxAttempts) {
         const delayIndex = Math.min(attempt - 1, delays.length - 1);
         const delay = delays[delayIndex];
-        console.log(`⏳ Retrying submit in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
     // All attempts failed
     console.error(
-      `❌ Submit failed after ${maxAttempts} attempts - prompt never appeared in chat.`
-    );
-    console.error(
-      `💡 This suggests Copilot is still responding to previous prompt.`
+      `❌ Submit failed after ${maxAttempts} attempts - Copilot may still be responding`
     );
     return false;
   }
@@ -699,25 +511,14 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       // Only reset tool call flag if we're using completion detection
       if (needsCompletionDetection) {
         this.toolCalledForCurrentPrompt = false;
-        console.log("🔄 FlightPath: Reset tool call flag for new prompt");
       }
-
-      console.log("🔍 FlightPath: Starting direct automation sequence...");
-      console.log(
-        `📝 Prompt to send: "${chatPrompt.substring(0, 100)}${chatPrompt.length > 100 ? "..." : ""}"`
-      );
 
       // Step 1: Open/Focus Copilot Chat using configured location
       const chatCommand = this.getChatWindowCommand();
-      console.log(`📋 Step 1: Opening Copilot Chat with: ${chatCommand}...`);
       try {
         await vscode.commands.executeCommand(chatCommand);
-        console.log("✅ Step 1: Chat open command executed successfully");
       } catch (focusError) {
-        console.error(
-          "❌ Step 1 FAILED: Could not open Copilot Chat:",
-          focusError
-        );
+        console.error("❌ Could not open Copilot Chat:", focusError);
         throw new Error(`Failed to open Copilot Chat: ${focusError}`);
       }
 
@@ -727,47 +528,29 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         .get<string>("chatWindowLocation", "chatPanel");
       const focusDelay = chatLocation === "chatPanel" ? 1000 : 1500;
 
-      console.log(`⏳ Step 1: Waiting ${focusDelay}ms for chat to open...`);
       await new Promise((resolve) => setTimeout(resolve, focusDelay));
-      console.log("✅ Step 1: Wait complete");
 
       // Step 2: Clear any existing input
-      console.log("🧹 Step 2: Attempting to select all existing text...");
       try {
         await vscode.commands.executeCommand("editor.action.selectAll");
-        console.log("✅ Step 2: Select all command executed successfully");
       } catch (selectError) {
-        console.error(
-          "❌ Step 2 FAILED: Could not select all text:",
-          selectError
-        );
+        console.error("❌ Could not select all text:", selectError);
         throw new Error(`Failed to select all: ${selectError}`);
       }
 
-      console.log("⏳ Step 2: Waiting 300ms for selection to complete...");
       await new Promise((resolve) => setTimeout(resolve, 300)); // PROVEN: 300ms required
-      console.log("✅ Step 2: Wait complete");
 
       // Step 3: Type the prompt directly into chat input
-      console.log("⌨️ Step 3: Attempting to type prompt text...");
-      console.log(`📊 Prompt length: ${chatPrompt.length} characters`);
       try {
         await vscode.commands.executeCommand("type", { text: chatPrompt });
-        console.log("✅ Step 3: Type command executed successfully");
       } catch (typeError) {
-        console.error("❌ Step 3 FAILED: Could not type text:", typeError);
-        console.error("📋 Type command parameters:", { text: chatPrompt });
+        console.error("❌ Could not type text:", typeError);
         throw new Error(`Failed to type text: ${typeError}`);
       }
 
-      console.log("⏳ Step 3: Waiting 500ms for text to be processed...");
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
-      console.log("✅ Step 3: Wait complete");
 
       // Step 4: Submit with retry logic (handles race condition)
-      console.log(
-        "📤 Step 4: Attempting to submit message with retry logic and verification..."
-      );
       const submitSuccess = await this.submitWithRetry(chatPrompt, 10);
 
       if (!submitSuccess) {
@@ -776,24 +559,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         );
       }
 
-      console.log("✅ Step 4: Submit command verified successful");
-
-      console.log(
-        "✅ FlightPath: Prompt sent successfully with zero-interaction automation"
-      );
-      console.log("🎉 All automation steps completed successfully!");
-
       // Update workflow progress
       await this.updateWorkflowProgress();
 
       return true;
     } catch (error) {
-      console.error(
-        "❌ FlightPath: Direct automation failed with error:",
-        error
-      );
-      console.error("📊 Error type:", typeof error);
-      console.error("📊 Error details:", JSON.stringify(error, null, 2));
+      console.error("❌ Direct automation failed:", error);
 
       vscode.window
         .showErrorMessage(
@@ -834,25 +605,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       chatPrompt = `${prompt.prompt}
 
 ${this.TOOL_INSTRUCTION}`;
-
-      console.log(
-        "📝 FlightPath: Built prompt with XML-wrapped tool instruction"
-      );
-    } else {
-      console.log(
-        "📝 FlightPath: Built prompt WITHOUT tool instruction (single prompt workflow)"
-      );
     }
 
-    console.log("🔧 Full prompt being sent:", chatPrompt);
-
-    const finalPrompt = chatPrompt.trim();
-    console.log(
-      "📤 FlightPath: Final prompt length:",
-      finalPrompt.length,
-      "characters"
-    );
-    return finalPrompt;
+    return chatPrompt.trim();
   }
 
   /**
@@ -864,14 +619,14 @@ ${this.TOOL_INSTRUCTION}`;
         available: true,
         message:
           "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: "chat",
+        strategy: CopilotIntegrationMode.Chat,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Direct automation unavailable - required commands not found",
-        strategy: "chat",
+        strategy: CopilotIntegrationMode.Chat,
       };
     }
   }
@@ -894,7 +649,7 @@ ${this.TOOL_INSTRUCTION}`;
    * Check if Copilot is ready for workflows
    */
   isReady(): boolean {
-    return this.initializationStatus === "ready";
+    return this.initializationStatus === CopilotStatus.Ready;
   }
 
   /**
@@ -910,16 +665,16 @@ ${this.TOOL_INSTRUCTION}`;
     let message = "";
 
     switch (this.initializationStatus) {
-      case "initializing":
+      case CopilotStatus.Initializing:
         message = "🔍 Initializing Copilot integration...";
         break;
-      case "waiting":
+      case CopilotStatus.Waiting:
         message = `⏳ Waiting for Copilot... (attempt ${this.pollingAttempts}/${this.maxPollingAttempts})`;
         break;
-      case "ready":
+      case CopilotStatus.Ready:
         message = "✅ Copilot automation ready";
         break;
-      case "unavailable":
+      case CopilotStatus.Unavailable:
         message = "❌ Copilot automation unavailable - setup required";
         break;
     }

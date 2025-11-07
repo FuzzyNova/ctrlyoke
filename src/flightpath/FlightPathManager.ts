@@ -6,12 +6,18 @@ import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
-import { PromptFile, PromptItem, QueueState } from "../types/FlightPathTypes";
+import {
+  PromptFile,
+  PromptItem,
+  QueueState,
+  CopilotIntegrationMode,
+} from "../types/FlightPathTypes";
 
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
   private promptQueue: PromptQueue;
-  private copilotIntegration: CopilotIntegration;
+  private cliIntegration: CopilotCommandLineIntegration;
+  private chatIntegration: CopilotChatIntegration;
   private endConditionEvaluator: EndConditionEvaluator;
   private context: vscode.ExtensionContext;
   private statusBarItem: vscode.StatusBarItem;
@@ -27,7 +33,13 @@ export class FlightPathManager {
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     context.subscriptions.push(this.outputChannel);
 
-    this.copilotIntegration = this.createCopilotIntegration(context);
+    // Initialize BOTH integrations so they're always ready to use
+    this.cliIntegration = new CopilotCommandLineIntegration(
+      context,
+      this.outputChannel
+    );
+    this.chatIntegration = new CopilotChatIntegration(context);
+
     this.endConditionEvaluator = new EndConditionEvaluator(context);
 
     // Create status bar item
@@ -42,9 +54,10 @@ export class FlightPathManager {
     // Listen to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
 
-    // Listen to Copilot status changes
+    // Listen to Copilot status changes from the default integration
+    const defaultIntegration = this.getDefaultIntegration();
     context.subscriptions.push(
-      this.copilotIntegration.onDidChangeStatus((status) => {
+      defaultIntegration.onDidChangeStatus((status) => {
         console.log(`🔄 FlightPath: Copilot status changed to: ${status}`);
         this.updateStatusBar();
       })
@@ -75,32 +88,37 @@ export class FlightPathManager {
   }
 
   /**
-   * Factory method to create the appropriate Copilot integration
-   * based on user settings
+   * Get the default Copilot integration based on user settings
    */
-  private createCopilotIntegration(
-    context: vscode.ExtensionContext
-  ): CopilotIntegration {
+  private getDefaultIntegration(): CopilotIntegration {
     const config = vscode.workspace.getConfiguration("flightpath");
-    const integrationMode = config.get<string>("copilotIntegrationMode", "cli");
-
-    console.log(
-      `🏭 FlightPath: Creating Copilot integration with mode: ${integrationMode}`
+    const integrationMode = config.get<string>(
+      "copilotIntegrationMode",
+      CopilotIntegrationMode.CLI
     );
 
-    switch (integrationMode) {
-      case "cli":
-        console.log("✅ FlightPath: Using CLI integration");
-        return new CopilotCommandLineIntegration(context, this.outputChannel);
-      case "chat":
-        console.log("✅ FlightPath: Using Chat integration");
-        return new CopilotChatIntegration(context);
-      default:
-        console.log(
-          `⚠️ FlightPath: Unknown integration mode "${integrationMode}", defaulting to CLI`
-        );
-        return new CopilotCommandLineIntegration(context, this.outputChannel);
+    return integrationMode === CopilotIntegrationMode.Chat
+      ? this.chatIntegration
+      : this.cliIntegration;
+  }
+
+  /**
+   * Create integration instance based on mode override or user settings
+   * @param modeOverride Optional mode to override user settings
+   * @returns Integration instance (either override or default)
+   */
+  private createIntegrationForMode(
+    modeOverride?: CopilotIntegrationMode
+  ): CopilotIntegration {
+    if (modeOverride) {
+      console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
+      return modeOverride === CopilotIntegrationMode.Chat
+        ? this.chatIntegration
+        : this.cliIntegration;
     }
+
+    // Use default integration based on user settings
+    return this.getDefaultIntegration();
   }
 
   /**
@@ -127,17 +145,25 @@ export class FlightPathManager {
 
   /**
    * Execute a prompt file
+   * @param filePath Path to the prompt file
+   * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */
-  async executePromptFile(filePath: string): Promise<void> {
+  async executePromptFile(
+    filePath: string,
+    modeOverride?: CopilotIntegrationMode
+  ): Promise<void> {
     try {
       console.log(`FlightPath: Executing prompt file: ${filePath}`);
 
+      // Create integration for this execution (either override or default)
+      const integration = this.createIntegrationForMode(modeOverride);
+
       // Check Copilot readiness FIRST
-      const detailedStatus = this.copilotIntegration.getDetailedStatus();
+      const detailedStatus = integration.getDetailedStatus();
       const fileName = path.basename(filePath);
 
       // Block execution if still initializing
-      if (detailedStatus.initializationStatus === "initializing") {
+      if (detailedStatus.initializationStatus === CopilotStatus.Initializing) {
         const action = await vscode.window.showWarningMessage(
           `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
           "Retry",
@@ -146,13 +172,16 @@ export class FlightPathManager {
 
         if (action === "Retry") {
           // Try again after a short delay
-          setTimeout(() => this.executePromptFile(filePath), 1000);
+          setTimeout(
+            () => this.executePromptFile(filePath, modeOverride),
+            1000
+          );
         }
         return;
       }
 
       // Block execution if waiting for Copilot
-      if (detailedStatus.initializationStatus === "waiting") {
+      if (detailedStatus.initializationStatus === CopilotStatus.Waiting) {
         const action = await vscode.window.showWarningMessage(
           `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
           "Retry",
@@ -161,13 +190,16 @@ export class FlightPathManager {
 
         if (action === "Retry") {
           // Try again after a short delay
-          setTimeout(() => this.executePromptFile(filePath), 2000);
+          setTimeout(
+            () => this.executePromptFile(filePath, modeOverride),
+            2000
+          );
         }
         return;
       }
 
       // Block execution if unavailable
-      if (detailedStatus.initializationStatus === "unavailable") {
+      if (detailedStatus.initializationStatus === CopilotStatus.Unavailable) {
         const action = await vscode.window.showErrorMessage(
           `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
           "Retry Detection",
@@ -178,11 +210,14 @@ export class FlightPathManager {
         if (action === "Retry Detection") {
           await this.retryCopilotDetection();
           // Try executing again after retry starts
-          setTimeout(() => this.executePromptFile(filePath), 2000);
+          setTimeout(
+            () => this.executePromptFile(filePath, modeOverride),
+            2000
+          );
         } else if (action === "View Requirements") {
           // Test automation only available for chat integration
-          if (this.isChatIntegration(this.copilotIntegration)) {
-            await this.copilotIntegration.testAutomation();
+          if (this.isChatIntegration(integration)) {
+            await integration.testAutomation();
           } else {
             vscode.window.showInformationMessage(
               "FlightPath: Using CLI integration. Test automation is not needed."
@@ -230,11 +265,8 @@ export class FlightPathManager {
 
       if (action === "Take Off 🚀") {
         // Set workflow progress in Copilot integration
-        this.copilotIntegration.setWorkflowProgress(
-          1,
-          promptFile.prompts.length
-        );
-        await this.startWorkflowExecution();
+        integration.setWorkflowProgress(1, promptFile.prompts.length);
+        await this.startWorkflowExecution(integration);
       }
     } catch (error) {
       console.error("FlightPath: Failed to execute prompt file:", error);
@@ -244,8 +276,12 @@ export class FlightPathManager {
 
   /**
    * Start workflow execution with Copilot integration
+   * @param integration Optional integration to use (defaults to instance integration)
    */
-  private async startWorkflowExecution(): Promise<void> {
+  private async startWorkflowExecution(
+    integration?: CopilotIntegration
+  ): Promise<void> {
+    const activeIntegration = integration || this.getDefaultIntegration();
     const state = this.promptQueue.getState();
 
     // Log workflow start to output channel
@@ -253,7 +289,7 @@ export class FlightPathManager {
       .getConfiguration("flightpath")
       .get<boolean>("showCliOutput", true);
 
-    if (shouldShowOutput && this.isCliIntegration(this.copilotIntegration)) {
+    if (shouldShowOutput && this.isCliIntegration(activeIntegration)) {
       this.outputChannel.clear();
       this.outputChannel.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -265,7 +301,7 @@ export class FlightPathManager {
       this.outputChannel.appendLine(`Started: ${new Date().toLocaleString()}`);
       this.outputChannel.appendLine(`Total prompts: ${state.prompts.length}`);
       this.outputChannel.appendLine(
-        `Integration: ${this.copilotIntegration.getStatus().strategy.toUpperCase()}`
+        `Integration: ${activeIntegration.getStatus().strategy.toUpperCase()}`
       );
       this.outputChannel.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -278,7 +314,7 @@ export class FlightPathManager {
       const prompt = state.prompts[i];
 
       // Update progress
-      this.copilotIntegration.setWorkflowProgress(i + 1, state.prompts.length);
+      activeIntegration.setWorkflowProgress(i + 1, state.prompts.length);
 
       console.log(
         `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
@@ -289,11 +325,11 @@ export class FlightPathManager {
 
       // Set up response listener BEFORE sending prompt to avoid race condition (only if needed)
       const responsePromise = needsCompletionDetection
-        ? this.waitForResponseComplete(prompt)
+        ? this.waitForResponseComplete(prompt, activeIntegration)
         : Promise.resolve(""); // Single prompt - no need to wait
 
       // Send prompt to Copilot
-      const success = await this.copilotIntegration.sendPrompt(
+      const success = await activeIntegration.sendPrompt(
         prompt,
         needsCompletionDetection
       );
@@ -343,7 +379,7 @@ export class FlightPathManager {
     console.log("🎉 FlightPath: Workflow execution complete");
 
     // Log workflow completion to output channel
-    if (shouldShowOutput && this.isCliIntegration(this.copilotIntegration)) {
+    if (shouldShowOutput && this.isCliIntegration(activeIntegration)) {
       this.outputChannel.appendLine("");
       this.outputChannel.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -367,9 +403,13 @@ export class FlightPathManager {
   /**
    * Wait for Copilot to call the response complete tool
    * @param prompt The current prompt being executed
+   * @param integration The integration instance to use
    * @returns Promise that resolves with response text when response is complete or timeout occurs
    */
-  private async waitForResponseComplete(prompt: PromptItem): Promise<string> {
+  private async waitForResponseComplete(
+    prompt: PromptItem,
+    integration: CopilotIntegration
+  ): Promise<string> {
     // Use endCondition timeout if specified, otherwise use 30 minutes as safety net
     // This should be long enough for any reasonable Copilot response
     const timeout = prompt.endCondition?.timeout || 1800000; // Default 30 minutes (1,800,000ms)
@@ -388,7 +428,7 @@ export class FlightPathManager {
 
       // Subscribe to response complete event (with duplicate protection)
       let responseHandled = false; // Prevent duplicate event handling
-      const disposable = this.copilotIntegration.onResponseComplete(
+      const disposable = integration.onResponseComplete(
         async (responseText: string) => {
           // Ignore duplicate events (defense-in-depth)
           if (responseHandled) {
@@ -409,11 +449,11 @@ export class FlightPathManager {
           // IMPORTANT: For chat integration, tool callback fires BEFORE Copilot finishes streaming
           // Wait for streaming to actually finish before proceeding
           // CLI integration doesn't need this as the command returns when complete
-          if (this.isChatIntegration(this.copilotIntegration)) {
+          if (this.isChatIntegration(integration)) {
             console.log(
               "⏳ FlightPath: Waiting for Copilot chat to finish streaming..."
             );
-            await this.copilotIntegration.waitForStreamingComplete();
+            await integration.waitForStreamingComplete();
             console.log(
               "✅ FlightPath: Copilot finished streaming, ready for next prompt"
             );
@@ -570,9 +610,9 @@ export class FlightPathManager {
    */
   async openPanel(): Promise<void> {
     // Check if Copilot is unavailable and offer retry
-    const copilotStatus = this.copilotIntegration.getDetailedStatus();
+    const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
 
-    if (copilotStatus.initializationStatus === "unavailable") {
+    if (copilotStatus.initializationStatus === CopilotStatus.Unavailable) {
       const action = await vscode.window.showWarningMessage(
         "FlightPath: Copilot automation is unavailable. Would you like to retry detection?",
         "Retry Detection",
@@ -609,20 +649,21 @@ export class FlightPathManager {
     message: string;
     strategy: string;
   } {
-    return this.copilotIntegration.getStatus();
+    return this.getDefaultIntegration().getStatus();
   }
 
   /**
    * Test Copilot automation (chat integration only)
    */
   async testCopilotAutomation(): Promise<boolean> {
-    if (this.isChatIntegration(this.copilotIntegration)) {
-      return await this.copilotIntegration.testAutomation();
+    const defaultIntegration = this.getDefaultIntegration();
+    if (this.isChatIntegration(defaultIntegration)) {
+      return await defaultIntegration.testAutomation();
     } else {
       vscode.window.showInformationMessage(
         "FlightPath: Test automation is only available for chat integration. CLI integration is ready when initialized."
       );
-      return this.copilotIntegration.isReady();
+      return defaultIntegration.isReady();
     }
   }
 
@@ -630,11 +671,12 @@ export class FlightPathManager {
    * Retry Copilot detection (restart polling - chat integration only)
    */
   async retryCopilotDetection(): Promise<void> {
-    if (this.isChatIntegration(this.copilotIntegration)) {
-      await this.copilotIntegration.retryDetection();
+    const defaultIntegration = this.getDefaultIntegration();
+    if (this.isChatIntegration(defaultIntegration)) {
+      await defaultIntegration.retryDetection();
     } else {
       // For CLI integration, just re-initialize
-      await this.copilotIntegration.initialize();
+      await defaultIntegration.initialize();
     }
   }
 
@@ -642,14 +684,15 @@ export class FlightPathManager {
    * Get Copilot integration capabilities (chat integration only)
    */
   getCopilotCapabilities() {
-    if (this.isChatIntegration(this.copilotIntegration)) {
-      return this.copilotIntegration.getCapabilities();
+    const defaultIntegration = this.getDefaultIntegration();
+    if (this.isChatIntegration(defaultIntegration)) {
+      return defaultIntegration.getCapabilities();
     } else {
       // Return basic capabilities for CLI integration
       return {
         hasDirectAutomation: true,
         supportsZeroInteraction: true,
-        currentStrategy: "cli",
+        currentStrategy: CopilotIntegrationMode.CLI,
       };
     }
   }
@@ -658,7 +701,7 @@ export class FlightPathManager {
    * Get detailed Copilot status including initialization state
    */
   getCopilotDetailedStatus() {
-    return this.copilotIntegration.getDetailedStatus();
+    return this.getDefaultIntegration().getDetailedStatus();
   }
 
   /**
@@ -736,7 +779,7 @@ export class FlightPathManager {
   private updateStatusBar(): void {
     const state = this.promptQueue.getState();
     const progress = this.promptQueue.getProgress();
-    const copilotStatus = this.copilotIntegration.getDetailedStatus();
+    const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
 
     let text = "$(rocket) FlightPath";
     let tooltip = "FlightPath - Click to open";
@@ -757,20 +800,20 @@ export class FlightPathManager {
     } else {
       // Priority 2: Show Copilot initialization status when idle
       switch (copilotStatus.initializationStatus) {
-        case "initializing":
+        case CopilotStatus.Initializing:
           text = "$(loading~spin) FlightPath - Initializing...";
           tooltip = "FlightPath - Checking Copilot availability...";
           break;
-        case "waiting":
+        case CopilotStatus.Waiting:
           text = `$(clock) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`;
           tooltip = "FlightPath - Waiting for GitHub Copilot to activate...";
           break;
-        case "ready":
+        case CopilotStatus.Ready:
           text = "$(rocket) FlightPath - Ready";
           tooltip =
             "FlightPath - Ready to execute workflows with Copilot automation";
           break;
-        case "unavailable":
+        case CopilotStatus.Unavailable:
           text = "$(warning) FlightPath - Setup Required";
           tooltip =
             "FlightPath - Copilot automation unavailable. Click to retry detection.";

@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import { spawn } from "child_process";
-import { PromptItem } from "../../types/FlightPathTypes";
+import {
+  PromptItem,
+  CopilotIntegrationMode,
+} from "../../types/FlightPathTypes";
 import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 
@@ -20,7 +23,7 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
  */
 export class CopilotCommandLineIntegration extends CopilotIntegration {
   private sessionId?: string;
-  private initializationStatus: CopilotStatus = "initializing";
+  private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
   private outputChannel?: vscode.OutputChannel;
 
   constructor(
@@ -55,10 +58,8 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    * Initialize CLI integration by checking if copilot CLI is available
    */
   async initialize(): Promise<void> {
-    console.log("🔍 FlightPath: Checking Copilot CLI availability...");
-
-    this.initializationStatus = "initializing";
-    this.statusChangeEmitter.fire("initializing");
+    this.initializationStatus = CopilotStatus.Initializing;
+    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
 
     try {
       // Check if copilot CLI is available by running --version
@@ -67,25 +68,21 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       });
 
       if (result.exitCode === 0) {
-        console.log("✅ FlightPath: Copilot CLI available");
-        console.log(`📊 Version: ${result.stdout.trim()}`);
+        console.log("✅ Copilot CLI available:", result.stdout.trim());
         this.isAvailable = true;
-        this.initializationStatus = "ready";
-        this.statusChangeEmitter.fire("ready");
+        this.initializationStatus = CopilotStatus.Ready;
+        this.statusChangeEmitter.fire(CopilotStatus.Ready);
       } else {
-        console.log("❌ FlightPath: Copilot CLI not found or not working");
+        console.error("❌ Copilot CLI not found or not working");
         this.isAvailable = false;
-        this.initializationStatus = "unavailable";
-        this.statusChangeEmitter.fire("unavailable");
+        this.initializationStatus = CopilotStatus.Unavailable;
+        this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
       }
     } catch (error) {
-      console.error("❌ FlightPath: Error checking Copilot CLI:", error);
-      console.log(
-        "💡 FlightPath: Make sure GitHub Copilot CLI is installed and in PATH"
-      );
+      console.error("❌ Error checking Copilot CLI:", error);
       this.isAvailable = false;
-      this.initializationStatus = "unavailable";
-      this.statusChangeEmitter.fire("unavailable");
+      this.initializationStatus = CopilotStatus.Unavailable;
+      this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
     }
   }
 
@@ -108,8 +105,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     }
 
     try {
-      this.log("🚀 FlightPath: Sending prompt via Copilot CLI...");
-
       // Build prompt text (no XML tool instruction needed for CLI!)
       const promptText = await this.buildPromptText(prompt);
 
@@ -139,19 +134,10 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         resumeSession: this.sessionId,
       };
 
-      // Log model selection
-      if (prompt.model) {
-        this.log(`🤖 Using prompt-specific model: ${prompt.model}`);
-      } else {
-        this.log(`🤖 Using configured model: ${options.model}`);
-      }
-
       // Execute CLI command
       const result = await this.executeCopilotCommand(promptText, options);
 
       if (result.success) {
-        this.log("✅ FlightPath: Copilot CLI completed successfully");
-
         // Log response to output channel
         if (this.shouldShowOutput()) {
           this.outputChannel?.appendLine("[RESPONSE] ✓ Complete");
@@ -171,9 +157,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
           this.outputChannel?.appendLine("");
         }
 
-        console.log(`📊 Response length: ${result.response.length} characters`);
-        console.log(`📊 Statistics: ${result.statistics}`);
-
         // Fire response complete event WITH THE ACTUAL RESPONSE TEXT
         this.responseCompleteEmitter.fire(result.response);
 
@@ -182,14 +165,14 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
 
         return true;
       } else {
-        console.error("❌ FlightPath: Copilot CLI failed:", result.error);
+        console.error("❌ Copilot CLI failed:", result.error);
         vscode.window.showErrorMessage(
           `FlightPath: Copilot CLI error: ${result.error}`
         );
         return false;
       }
     } catch (error) {
-      console.error("❌ FlightPath: CLI execution error:", error);
+      console.error("❌ CLI execution error:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to execute Copilot CLI: ${error}`
       );
@@ -228,20 +211,12 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       args.push("--resume", options.resumeSession);
     }
 
-    console.log("📋 FlightPath: Executing copilot command:", {
-      command: "copilot",
-      promptLength: prompt.length,
-      model: options.model,
-      addDirs: options.addDirs?.length || 0,
-      resumeSession: !!options.resumeSession,
-    });
-
     // Execute command with stdin for prompt (5 minute timeout)
-    const { stdout, stderr, exitCode } = await this.spawnProcessWithStdin(
+    const { stdout, stderr, exitCode } = await this.spawnProcess(
       "copilot",
       args,
-      prompt,
       {
+        stdin: prompt,
         timeout: 300000, // 5 minutes
       }
     );
@@ -277,19 +252,16 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
 
   /**
    * Spawn a child process and capture output
+   * Optionally writes to stdin if provided (for sending prompts to copilot CLI)
    */
   private spawnProcess(
     command: string,
     args: string[],
-    options: { timeout?: number } = {}
+    options: { timeout?: number; stdin?: string } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
-
-      console.log(
-        `🔧 FlightPath: Spawning process: ${command} ${args.join(" ")}`
-      );
 
       // On Windows, copilot is a PowerShell script, so we need shell: true
       // We carefully construct args to avoid injection issues
@@ -298,19 +270,23 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         shell: true, // Required for copilot.ps1 on Windows
       });
 
-      // Stream output to console in real-time
+      // Write to stdin if provided
+      if (options.stdin !== undefined) {
+        if (child.stdin) {
+          child.stdin.write(options.stdin);
+          child.stdin.end();
+        } else {
+          reject(new Error("Failed to access stdin"));
+          return;
+        }
+      }
+
       child.stdout.on("data", (data) => {
-        const text = data.toString();
-        stdout += text;
-        // Log chunks as they arrive so you can see progress
-        console.log(`📤 [Copilot stdout]: ${text.trim()}`);
+        stdout += data.toString();
       });
 
       child.stderr.on("data", (data) => {
-        const text = data.toString();
-        stderr += text;
-        // Log stderr separately
-        console.log(`📤 [Copilot stderr]: ${text.trim()}`);
+        stderr += data.toString();
       });
 
       child.on("error", (error) => {
@@ -319,7 +295,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       });
 
       child.on("close", (code) => {
-        console.log(`✅ Process closed with exit code: ${code}`);
         resolve({
           stdout,
           stderr,
@@ -330,84 +305,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       // Handle timeout
       if (options.timeout) {
         setTimeout(() => {
-          console.warn(
-            `⏱️ Process timeout after ${options.timeout}ms, killing...`
-          );
-          child.kill();
-          reject(new Error(`Process timeout after ${options.timeout}ms`));
-        }, options.timeout);
-      }
-    });
-  }
-
-  /**
-   * Spawn a child process with stdin input
-   * Use this for sending prompts to copilot CLI to avoid shell escaping issues
-   */
-  private spawnProcessWithStdin(
-    command: string,
-    args: string[],
-    stdinInput: string,
-    options: { timeout?: number } = {}
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-
-      console.log(
-        `🔧 FlightPath: Spawning process with stdin: ${command} ${args.join(" ")}`
-      );
-      console.log(
-        `📝 FlightPath: Stdin length: ${stdinInput.length} characters`
-      );
-
-      const child = spawn(command, args, {
-        cwd: this.getWorkspaceRoot(),
-        shell: true, // Required for copilot.ps1 on Windows
-      });
-
-      // Write prompt to stdin
-      if (child.stdin) {
-        child.stdin.write(stdinInput);
-        child.stdin.end();
-      } else {
-        reject(new Error("Failed to access stdin"));
-        return;
-      }
-
-      // Stream output to console in real-time
-      child.stdout.on("data", (data) => {
-        const text = data.toString();
-        stdout += text;
-        console.log(`📤 [Copilot stdout]: ${text.trim()}`);
-      });
-
-      child.stderr.on("data", (data) => {
-        const text = data.toString();
-        stderr += text;
-        console.log(`📤 [Copilot stderr]: ${text.trim()}`);
-      });
-
-      child.on("error", (error) => {
-        console.error("❌ Process error:", error);
-        reject(error);
-      });
-
-      child.on("close", (code) => {
-        console.log(`✅ Process closed with exit code: ${code}`);
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code ?? 1,
-        });
-      });
-
-      // Handle timeout
-      if (options.timeout) {
-        setTimeout(() => {
-          console.warn(
-            `⏱️ Process timeout after ${options.timeout}ms, killing...`
-          );
           child.kill();
           reject(new Error(`Process timeout after ${options.timeout}ms`));
         }, options.timeout);
@@ -470,14 +367,14 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       return {
         available: true,
         message: "✅ Copilot CLI available",
-        strategy: "cli",
+        strategy: CopilotIntegrationMode.CLI,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Copilot CLI unavailable - please install GitHub Copilot CLI",
-        strategy: "cli",
+        strategy: CopilotIntegrationMode.CLI,
       };
     }
   }
@@ -493,7 +390,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    * Check if Copilot is ready
    */
   isReady(): boolean {
-    return this.initializationStatus === "ready";
+    return this.initializationStatus === CopilotStatus.Ready;
   }
 
   /**
@@ -508,7 +405,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    */
   startNewSession(): void {
     this.sessionId = undefined;
-    console.log("🔄 FlightPath: Started new CLI session");
   }
 
   /**
@@ -516,7 +412,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    */
   continueSession(sessionId: string): void {
     this.sessionId = sessionId;
-    console.log(`🔄 FlightPath: Continuing CLI session: ${sessionId}`);
   }
 
   /**

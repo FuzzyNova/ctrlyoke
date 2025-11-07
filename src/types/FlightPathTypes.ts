@@ -1,3 +1,11 @@
+/**
+ * Copilot integration mode
+ */
+export enum CopilotIntegrationMode {
+  CLI = "cli",
+  Chat = "chat",
+}
+
 export interface PromptFile {
   prompt?: string;
   prompts?: PromptItem[];

@@ -104,6 +104,18 @@
         "title": "Create End Condition Script",
         "category": "FlightPath",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "flightpath.sendToCli",
+        "title": "Send to CLI",
+        "category": "FlightPath",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "flightpath.sendToChat",
+        "title": "Send to Chat",
+        "category": "FlightPath",
+        "icon": "$(comment)"
       }
     ],
     "menus": {
@@ -146,6 +158,14 @@
         },
         {
           "command": "flightpath.createEndConditionScript"
+        },
+        {
+          "command": "flightpath.sendToCli",
+          "when": "false"
+        },
+        {
+          "command": "flightpath.sendToChat",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -153,6 +173,16 @@
           "command": "flightpath.createPromptFile",
           "when": "explorerResourceIsFolder",
           "group": "2_workspace"
+        },
+        {
+          "command": "flightpath.sendToCli",
+          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@1"
+        },
+        {
+          "command": "flightpath.sendToChat",
+          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@2"
         }
       ]
     },

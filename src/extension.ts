@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
+import { CopilotIntegrationMode } from "./types/FlightPathTypes";
 
 let flightPathManager: FlightPathManager;
 
@@ -438,6 +439,60 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Send to CLI command (context menu)
+  const sendToCliCommand = vscode.commands.registerCommand(
+    "flightpath.sendToCli",
+    async (uri: vscode.Uri) => {
+      if (!uri) {
+        vscode.window.showErrorMessage(
+          "No file selected. Please right-click on a prompt file."
+        );
+        return;
+      }
+
+      try {
+        await flightPathManager.executePromptFile(
+          uri.fsPath,
+          CopilotIntegrationMode.CLI
+        );
+        vscode.window.showInformationMessage(
+          "FlightPath workflow started using CLI"
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to execute FlightPath workflow: ${error}`
+        );
+      }
+    }
+  );
+
+  // Send to Chat command (context menu)
+  const sendToChatCommand = vscode.commands.registerCommand(
+    "flightpath.sendToChat",
+    async (uri: vscode.Uri) => {
+      if (!uri) {
+        vscode.window.showErrorMessage(
+          "No file selected. Please right-click on a prompt file."
+        );
+        return;
+      }
+
+      try {
+        await flightPathManager.executePromptFile(
+          uri.fsPath,
+          CopilotIntegrationMode.Chat
+        );
+        vscode.window.showInformationMessage(
+          "FlightPath workflow started using Chat"
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to execute FlightPath workflow: ${error}`
+        );
+      }
+    }
+  );
+
   // Debug: Show current document language ID
   const showLanguageIdCommand = vscode.commands.registerCommand(
     "flightpath.showLanguageId",
@@ -472,6 +527,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     listChatCommandsCommand,
     listAllCommandsCommand,
     createEndConditionScriptCommand,
+    sendToCliCommand,
+    sendToChatCommand,
     showLanguageIdCommand
   );
 

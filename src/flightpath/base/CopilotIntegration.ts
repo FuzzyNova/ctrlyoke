@@ -4,11 +4,12 @@ import { PromptItem } from "../../types/FlightPathTypes";
 /**
  * Copilot initialization status
  */
-export type CopilotStatus =
-  | "initializing"
-  | "waiting"
-  | "ready"
-  | "unavailable";
+export enum CopilotStatus {
+  Initializing = "initializing",
+  Waiting = "waiting",
+  Ready = "ready",
+  Unavailable = "unavailable",
+}
 
 /**
  * Base class for Copilot integrations
@@ -129,16 +130,16 @@ export abstract class CopilotIntegration {
     let message = "";
 
     switch (status) {
-      case "initializing":
+      case CopilotStatus.Initializing:
         message = "🔍 Initializing Copilot integration...";
         break;
-      case "waiting":
+      case CopilotStatus.Waiting:
         message = "⏳ Waiting for Copilot...";
         break;
-      case "ready":
+      case CopilotStatus.Ready:
         message = "✅ Copilot ready";
         break;
-      case "unavailable":
+      case CopilotStatus.Unavailable:
         message = "❌ Copilot unavailable";
         break;
     }
