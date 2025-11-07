@@ -37,6 +37,8 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ### File Format Support
 - **`.prompt.json`**: Single prompt files for simple tasks
 - **`.flightpath.json`**: Multi-prompt workflows for complex automation
+- **`.prompt.md`**: Markdown-based single prompts (no JSON needed)
+- **Context Menu Integration**: Right-click any prompt file → Send to CLI or Send to Chat
 - **JSON Schema Validation**: IntelliSense and validation in VS Code
 - **Example Files**: Ready-to-use templates in `.flightpath/examples/`
 
@@ -85,7 +87,12 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 
 ### Create Your First Workflow
 
-**Simple Analysis** (`.prompt.json`):
+**Simple Markdown Prompt** (`.prompt.md`):
+```markdown
+Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
+```
+
+**Simple JSON Analysis** (`.prompt.json`):
 ```json
 {
   "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements",
@@ -124,9 +131,16 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 
 ### Execute Workflows
 
+**Via Command Palette**:
 - **Command Palette**: `FlightPath: Take Off`
-- **Select File**: Choose your `.prompt.json` or `.flightpath.json`
+- **Select File**: Choose your `.prompt.json`, `.flightpath.json`, or `.prompt.md`
 - **Click "Take Off"**: Workflow executes automatically!
+
+**Via Context Menu** (Right-click on any prompt file):
+- **FlightPath: Send to CLI** - Execute using Copilot CLI (default, deterministic completion)
+- **FlightPath: Send to Chat** - Execute using Copilot Chat (streaming with tool-based detection)
+
+The context menu allows you to override your default integration mode for a specific execution, making it easy to test both CLI and Chat modes.
 
 ### Monitor Progress
 

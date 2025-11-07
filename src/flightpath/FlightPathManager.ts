@@ -227,8 +227,19 @@ export class FlightPathManager {
         return;
       }
 
-      // Parse the prompt file
-      const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+      // Handle .prompt.md files differently (direct text, no parsing)
+      let promptFile: PromptFile | null = null;
+
+      if (filePath.endsWith(".prompt.md")) {
+        console.log(
+          "FlightPath: Detected .prompt.md file - reading as plain text"
+        );
+        promptFile = await this.parseMarkdownPromptFile(filePath);
+      } else {
+        // Parse JSON files (.prompt.json, .flightpath.json)
+        promptFile = await this.promptFileParser.parsePromptFile(filePath);
+      }
+
       if (!promptFile || !promptFile.prompts) {
         vscode.window.showErrorMessage(
           "FlightPath: Failed to parse prompt file"
@@ -271,6 +282,46 @@ export class FlightPathManager {
     } catch (error) {
       console.error("FlightPath: Failed to execute prompt file:", error);
       vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
+    }
+  }
+
+  /**
+   * Parse a .prompt.md file as a single prompt
+   * @param filePath Path to the .prompt.md file
+   * @returns PromptFile with single prompt item
+   */
+  private async parseMarkdownPromptFile(
+    filePath: string
+  ): Promise<PromptFile | null> {
+    try {
+      const fs = await import("fs/promises");
+      const content = await fs.readFile(filePath, "utf8");
+
+      // Trim whitespace but preserve the prompt text as-is
+      const promptText = content.trim();
+
+      if (!promptText) {
+        throw new Error("Prompt file is empty");
+      }
+
+      return {
+        prompts: [
+          {
+            prompt: promptText,
+            // No end condition for markdown files (they're single prompts)
+            endCondition: undefined,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(
+        `FlightPath: Failed to read markdown prompt file ${filePath}:`,
+        error
+      );
+      vscode.window.showErrorMessage(
+        `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
+      );
+      return null;
     }
   }
 

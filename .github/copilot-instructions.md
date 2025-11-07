@@ -215,16 +215,33 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
 }
 ```
 
+### Markdown Prompt Format
+
+For simple single prompts, use `.prompt.md` files (no JSON needed):
+
+```markdown
+Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
+```
+
+**Markdown file handling**:
+
+- `.prompt.md` files are read as plain text (entire file content becomes the prompt)
+- No JSON parsing or schema validation needed
+- Cannot include `model` override or `endCondition` (single prompt execution only)
+- Supports same context variables: `@workspace`, `#file:path`, slash commands
+- Use context menu (right-click) to execute: **Send to CLI** or **Send to Chat**
+
 **Optional Fields:**
 
 - `model` - Override the AI model for a specific prompt. Valid values: `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`. If omitted, uses the default configured in settings (`flightpath.copilotCliModel`).
 
 **File naming conventions:**
 
+- `.prompt.md` - Single markdown-based prompts (no JSON, simplest format)
 - `.prompt.json` - Typically for single prompts or simple workflows
 - `.flightpath.json` - Typically for complex multi-step workflows
 
-Both extensions support both formats. Use naming to signal intent, not to restrict functionality.
+All three formats support context menu execution with mode override (Send to CLI / Send to Chat).
 
 ## Commands
 

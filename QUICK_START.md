@@ -51,7 +51,16 @@ When you click "Take Off":
 
 ## 📝 Workflow File Examples
 
-### Simple Single Prompt
+### Simple Markdown Prompt
+
+Create: `analyze-code.prompt.md`
+```markdown
+Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
+```
+
+Then right-click the file and select **FlightPath: Send to CLI** or **FlightPath: Send to Chat**.
+
+### Simple Single Prompt (JSON)
 
 Create: `analyze-code.prompt.json`
 ```json
