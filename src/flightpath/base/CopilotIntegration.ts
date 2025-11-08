@@ -97,7 +97,7 @@ export abstract class CopilotIntegration {
     if (this.totalSteps > 0) {
       const progress = `${this.workflowStep}/${this.totalSteps}`;
       vscode.window.setStatusBarMessage(
-        `$(rocket) FlightPath: Step ${progress} completed`,
+        `$(compass-dot) FlightPath: Step ${progress} completed`,
         3000
       );
     }

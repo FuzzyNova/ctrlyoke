@@ -832,12 +832,12 @@ export class FlightPathManager {
     const progress = this.promptQueue.getProgress();
     const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
 
-    let text = "$(rocket) FlightPath";
+    let text = "$(compass) FlightPath";
     let tooltip = "FlightPath - Click to open";
 
     // Priority 1: Show workflow execution status if running
     if (state.status === "running") {
-      text = `$(loading~spin) FlightPath ${progress.current}/${progress.total}`;
+      text = `$(compass-dot) FlightPath ${progress.current}/${progress.total}`;
       tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
     } else if (state.status === "paused") {
       text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
@@ -852,15 +852,15 @@ export class FlightPathManager {
       // Priority 2: Show Copilot initialization status when idle
       switch (copilotStatus.initializationStatus) {
         case CopilotStatus.Initializing:
-          text = "$(loading~spin) FlightPath - Initializing...";
+          text = "$(compass) FlightPath - Initializing...";
           tooltip = "FlightPath - Checking Copilot availability...";
           break;
         case CopilotStatus.Waiting:
-          text = `$(clock) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`;
+          text = `$(compass) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`;
           tooltip = "FlightPath - Waiting for GitHub Copilot to activate...";
           break;
         case CopilotStatus.Ready:
-          text = "$(rocket) FlightPath - Ready";
+          text = "$(compass-active) FlightPath - Ready";
           tooltip =
             "FlightPath - Ready to execute workflows with Copilot automation";
           break;

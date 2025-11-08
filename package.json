@@ -22,7 +22,7 @@
         "command": "flightpath.takeOff",
         "title": "Take Off",
         "category": "FlightPath",
-        "icon": "$(rocket)"
+        "icon": "$(compass)"
       },
       {
         "command": "flightpath.openPanel",
