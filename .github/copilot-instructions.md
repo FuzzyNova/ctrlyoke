@@ -93,6 +93,16 @@ Manages sequential prompt execution with pause/resume/cancel. Tracks state and p
 
 **Architecture**: Abstract base class with two implementations selected via factory pattern.
 
+**Automatic File Attachment**:
+
+- Processes `#file:path` and `#file:path:startLine-endLine` references in prompts
+- Reads file content and builds Copilot's internal attachment XML format
+- Prepends attachment XML to prompt before sending (keeps `#file:` syntax in prompt text for LLM context)
+- Supports both entire files and specific line ranges
+- Works with both CLI and Chat modes
+- Can be disabled via `flightpath.autoAttachFiles` setting (default: enabled)
+- See docs/CONTEXT_ATTACHMENT.md for implementation details
+
 ### CopilotCommandLineIntegration (Default)
 
 - **Deterministic completion**: Command returns when complete (no polling needed)
@@ -291,6 +301,7 @@ File system:
 
 Completed:
 
+- Automatic file attachment for `#file:` references (CLI and Chat modes)
 - Copilot CLI integration with factory pattern architecture
 - CLI deterministic completion detection (no polling needed)
 - Output Channel integration for real-time CLI output visibility
@@ -318,6 +329,7 @@ Planned:
 
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30000)
+- flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
 - flightpath.copilotIntegrationMode (enum: "cli" | "chat", default: "cli")
 - flightpath.copilotCliModel (enum: "claude-sonnet-4.5" | "claude-sonnet-4" | "claude-haiku-4.5" | "gpt-5", default: "claude-sonnet-4.5")
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])

@@ -204,6 +204,12 @@
           "default": true,
           "description": "Enable context-aware prompt generation"
         },
+        "flightpath.autoAttachFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically attach files referenced with #file: syntax",
+          "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
+        },
         "flightpath.chatWindowLocation": {
           "type": "string",
           "enum": [

@@ -595,19 +595,19 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     prompt: PromptItem,
     includeToolInstruction: boolean = true
   ): Promise<string> {
-    // User's prompt text is already in final form with all context variables (@workspace, #file, etc.)
-    let chatPrompt = prompt.prompt;
+    // Use base class method to get prompt text with file attachments processed
+    const promptText = await this.buildPromptText(prompt);
 
     // Only append tool instruction if needed (multi-prompt workflows)
     if (includeToolInstruction) {
       // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
       // This gives us a clean chat history while maintaining automation functionality
-      chatPrompt = `${prompt.prompt}
+      return `${promptText}
 
 ${this.TOOL_INSTRUCTION}`;
     }
 
-    return chatPrompt.trim();
+    return promptText.trim();
   }
 
   /**

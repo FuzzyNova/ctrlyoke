@@ -4,8 +4,8 @@
 
 This document captures research findings on programmatically attaching files and selections to GitHub Copilot Chat in VS Code.
 
-**Status**: Completed (2025-11-03)  
-**Conclusion**: Hybrid approach required - `attachFile` for whole files, manual selection for line ranges
+**Status**: ✅ Implemented (2025-11-07)  
+**Conclusion**: Manual attachment XML construction - works with both CLI and Chat modes
 
 ---
 
@@ -410,11 +410,11 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 - 👻 **Invisible**: No visible UI changes during attachment
 
 **Next Steps**:
-1. Implement `processPromptAttachments()` method in `CopilotIntegration.ts`
-2. Add `parseFileReferences()` regex parser
-3. Add `buildAttachmentXml()` XML builder
-4. Add `resolveWorkspacePath()` path resolver
-5. Integrate into `sendPromptToCopilot()` workflow
-6. Test with various prompt formats (multiple files, line ranges, full files)
-7. Update prompt examples in documentation
-8. Test with Copilot CLI to verify compatibility
+1. ✅ Implemented `processPromptAttachments()` method in `CopilotIntegration.ts`
+2. ✅ Added `parseFileReferences()` regex parser
+3. ✅ Added `buildAttachmentXml()` XML builder
+4. ✅ Added `resolveWorkspacePath()` path resolver (now protected method)
+5. ✅ Integrated into `buildPromptText()` workflow
+6. ✅ Added `flightpath.autoAttachFiles` setting to disable feature
+7. ✅ Created test prompt file: `.flightpath/test-file-attachments.prompt.json`
+8. ⏭️ **Ready for testing** - Use the test prompt to verify attachments work correctly

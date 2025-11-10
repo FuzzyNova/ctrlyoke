@@ -328,13 +328,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
-   * Get workspace root directory
-   */
-  private getWorkspaceRoot(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  }
-
-  /**
    * Get configured AI model
    */
   private getConfiguredModel(): string {

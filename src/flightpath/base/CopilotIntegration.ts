@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
 
 /**
@@ -77,8 +78,167 @@ export abstract class CopilotIntegration {
    * Common logic for extracting prompt text (without tool instruction XML)
    */
   protected async buildPromptText(prompt: PromptItem): Promise<string> {
+    // Check if auto-attachment is enabled
+    const autoAttach = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("autoAttachFiles", true);
+
     // User's prompt text is already in final form with all context variables
-    return prompt.prompt.trim();
+    const promptText = prompt.prompt.trim();
+
+    // Process file attachments if enabled
+    if (autoAttach) {
+      return await this.processPromptAttachments(promptText);
+    }
+
+    return promptText;
+  }
+
+  /**
+   * Process #file: references in prompt and build Copilot attachment XML
+   * @param prompt Original prompt text with #file: references
+   * @returns Final prompt with attachment XML prepended (keeps #file: syntax in prompt text)
+   */
+  private async processPromptAttachments(prompt: string): Promise<string> {
+    try {
+      // Parse file references from prompt
+      const fileReferences = this.parseFileReferences(prompt);
+
+      if (fileReferences.length === 0) {
+        return prompt; // No attachments needed
+      }
+
+      // Build attachments in parallel for performance
+      const attachmentPromises = fileReferences.map((ref) =>
+        this.buildAttachmentXml(ref.path, ref.startLine, ref.endLine).catch(
+          (err) => {
+            console.error(
+              `Failed to attach ${ref.path}${ref.startLine ? `:${ref.startLine}-${ref.endLine}` : ""}:`,
+              err
+            );
+            return null; // Skip failed attachments
+          }
+        )
+      );
+
+      const attachments = await Promise.all(attachmentPromises);
+      const validAttachments = attachments.filter(
+        (a) => a !== null
+      ) as string[];
+
+      if (validAttachments.length === 0) {
+        return prompt; // No valid attachments
+      }
+
+      // Prepend attachments to prompt (keeps #file: syntax in prompt body)
+      const attachmentsSection = validAttachments.join("\n\n");
+      return `${attachmentsSection}\n\n${prompt}`;
+    } catch (error) {
+      console.error("Error processing prompt attachments:", error);
+      // Return original prompt on error
+      return prompt;
+    }
+  }
+
+  /**
+   * Parse #file: references from prompt text
+   * Supports formats:
+   * - #file:path (entire file)
+   * - #file:"path with spaces" (quoted path)
+   * - #file:path:startLine-endLine (line range)
+   * - #file:"path with spaces":startLine-endLine (quoted path with line range)
+   */
+  private parseFileReferences(
+    prompt: string
+  ): Array<{ path: string; startLine?: number; endLine?: number }> {
+    const fileReferences: Array<{
+      path: string;
+      startLine?: number;
+      endLine?: number;
+    }> = [];
+
+    // Regex to match #file:path or #file:"path with spaces" with optional :start-end
+    // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
+    const regex = /#file:(?:"([^"]+)"|([^:\s]+))(?::(\d+)-(\d+))?/g;
+    let match;
+
+    while ((match = regex.exec(prompt)) !== null) {
+      const [, quotedPath, unquotedPath, startLine, endLine] = match;
+      const filePath = quotedPath || unquotedPath; // Use quoted path if present, otherwise unquoted
+
+      fileReferences.push({
+        path: filePath,
+        startLine: startLine ? parseInt(startLine, 10) : undefined,
+        endLine: endLine ? parseInt(endLine, 10) : undefined,
+      });
+    }
+
+    return fileReferences;
+  }
+
+  /**
+   * Build Copilot attachment XML for a file or file excerpt
+   */
+  private async buildAttachmentXml(
+    filePath: string,
+    startLine?: number,
+    endLine?: number
+  ): Promise<string> {
+    // Resolve to absolute path
+    const absolutePath = this.resolveWorkspacePath(filePath);
+    const uri = vscode.Uri.file(absolutePath);
+
+    // Read file content
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const language = doc.languageId;
+
+    // If no line range, attach entire file
+    if (!startLine || !endLine) {
+      const content = doc.getText();
+      return `<attachment id="file:${filePath}">
+File: ${filePath}
+\`\`\`${language}
+${content}
+\`\`\`
+</attachment>`;
+    }
+
+    // Extract line range (convert to 0-indexed)
+    const start = new vscode.Position(startLine - 1, 0);
+    const end = new vscode.Position(endLine - 1, Number.MAX_SAFE_INTEGER);
+    const range = new vscode.Range(start, end);
+    const content = doc.getText(range);
+
+    return `<attachment id="file:${filePath}:${startLine}-${endLine}">
+Excerpt from ${filePath}, lines ${startLine} to ${endLine}:
+\`\`\`${language}
+${content}
+\`\`\`
+</attachment>`;
+  }
+
+  /**
+   * Resolve relative path to absolute workspace path
+   * Uses Node.js path.resolve for cross-platform compatibility
+   */
+  private resolveWorkspacePath(relativePath: string): string {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace folder open");
+    }
+
+    // path.resolve handles both absolute and relative paths correctly
+    // If relativePath is already absolute, it returns it as-is
+    // If relative, it joins with workspaceRoot
+    return path.resolve(workspaceRoot, relativePath);
+  }
+
+  /**
+   * Get workspace root directory
+   */
+  protected getWorkspaceRoot(): string | undefined {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    return workspaceFolder?.uri.fsPath;
   }
 
   /**
