@@ -4,7 +4,8 @@
 
 All features from this plan have been successfully implemented:
 - ✅ Context menu commands for `.prompt.json`, `.flightpath.json`, and `.prompt.md` files
-- ✅ Send to CLI and Send to Chat commands
+- ✅ Send to CLI and Send to Chat commands in Explorer view (right-click file)
+- ✅ Send to CLI and Send to Chat commands in Editor tab (right-click tab)
 - ✅ Mode override support in FlightPathManager
 - ✅ Markdown prompt file support (`.prompt.md`)
 - ✅ Documentation updated (README.md, QUICK_START.md, copilot-instructions.md)
@@ -13,6 +14,7 @@ All features from this plan have been successfully implemented:
 - Markdown files (`.prompt.md`) are read as plain text and treated as single prompts
 - No JSON parsing required for `.prompt.md` files
 - All three file formats work with both context menu commands
+- Context menus available in both Explorer view and Editor tab
 - Mode override properly handled without affecting user settings
 
 ---
@@ -60,6 +62,18 @@ Add menu contributions:
       "group": "flightpath@2"
     }
   ],
+  "editor/title/context": [
+    {
+      "command": "flightpath.sendToCli",
+      "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+      "group": "flightpath@1"
+    },
+    {
+      "command": "flightpath.sendToChat",
+      "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+      "group": "flightpath@2"
+    }
+  ],
   "commandPalette": [
     {
       "command": "flightpath.sendToCli",
@@ -77,6 +91,8 @@ Add menu contributions:
 - Regex pattern matches all three file types: `.prompt.json`, `.flightpath.json`, `.prompt.md`
 - `resourceScheme == file` ensures local files only
 - `group: "flightpath@1"` and `@2` creates grouped section in context menu
+- `explorer/context` adds commands to file explorer right-click menu
+- `editor/title/context` adds commands to editor tab right-click menu
 - `commandPalette` with `"when": "false"` hides commands from palette (they need file context)
 
 ### 2. Register Command Handlers in extension.ts
@@ -421,11 +437,17 @@ private async waitForResponseComplete(
 
 ## Testing Checklist
 
-### File Extension Matching
-- [ ] Right-click `.flightpath.json` → Both commands appear
-- [ ] Right-click `.prompt.json` → Both commands appear  
-- [ ] Right-click `.prompt.md` → Both commands appear
-- [ ] Right-click regular `.json` → Commands do NOT appear
+### File Extension Matching (Explorer View)
+- [ ] Right-click `.flightpath.json` in explorer → Both commands appear
+- [ ] Right-click `.prompt.json` in explorer → Both commands appear  
+- [ ] Right-click `.prompt.md` in explorer → Both commands appear
+- [ ] Right-click regular `.json` in explorer → Commands do NOT appear
+
+### File Extension Matching (Editor Tab)
+- [ ] Right-click `.flightpath.json` tab → Both commands appear
+- [ ] Right-click `.prompt.json` tab → Both commands appear  
+- [ ] Right-click `.prompt.md` tab → Both commands appear
+- [ ] Right-click regular `.json` tab → Commands do NOT appear
 
 ### Command Execution
 - [ ] "Send to CLI" executes workflow using CLI integration

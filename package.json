@@ -184,6 +184,18 @@
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
         }
+      ],
+      "editor/title/context": [
+        {
+          "command": "flightpath.sendToCli",
+          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@1"
+        },
+        {
+          "command": "flightpath.sendToChat",
+          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@2"
+        }
       ]
     },
     "configuration": {
