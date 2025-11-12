@@ -584,6 +584,150 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   }
 
   /**
+   * Override buildPromptText to handle chat-specific attachment strategy
+   * Uses native VS Code attachment commands when enabled for clean chat UI
+   */
+  protected async buildPromptText(prompt: PromptItem): Promise<string> {
+    // Check if auto-attachment is enabled
+    const autoAttach = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("autoAttachFiles", true);
+
+    // Check if native attachments are enabled for chat mode
+    const useNativeAttachments = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("chatUseNativeAttachments", true);
+
+    if (!autoAttach) {
+      // Auto-attachment disabled - return prompt as-is
+      return prompt.prompt.trim();
+    }
+
+    if (useNativeAttachments) {
+      // Use VS Code's native attachment commands for clean UI
+      return await this.processNativeAttachments(prompt.prompt);
+    } else {
+      // Fall back to XML attachment (shows raw text but more reliable)
+      return await super.buildPromptText(prompt);
+    }
+  }
+
+  /**
+   * Helper method to open a document, execute an action, and close it
+   * Common flow for both file and selection attachments
+   *
+   * @param uri File URI to open
+   * @param action Async function to execute while document is focused
+   */
+  private async withFocusedDocument(
+    uri: vscode.Uri,
+    action: (editor: vscode.TextEditor) => Promise<void>
+  ): Promise<void> {
+    // Open the document
+    const doc = await vscode.workspace.openTextDocument(uri);
+
+    // Open document and GAIN FOCUS (preserveFocus: false is critical)
+    const editor = await vscode.window.showTextDocument(doc, {
+      preview: true, // Preview mode - will be replaced by next preview
+      preserveFocus: false, // MUST be false - we need focus for attachment commands
+      viewColumn: vscode.ViewColumn.Beside,
+    });
+
+    // Small delay to ensure document is focused and rendered
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Execute the action (attach file or attach selection)
+    await action(editor);
+
+    // Close the editor to avoid cluttering workspace
+    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+  }
+
+  /**
+   * Process #file: references using VS Code's native attachment commands
+   * Attaches files/selections via commands and KEEPS #file: references in prompt text
+   *
+   * IMPORTANT: #file: references are kept in the prompt text because they provide
+   * critical context about WHERE in the prompt specific code is being discussed.
+   * This enables prompts like: "Look at this first: #file:A:1-10 then this: #file:B:20-30"
+   *
+   * @param prompt Original prompt text with #file: references
+   * @returns Original prompt text unchanged (files are attached via commands)
+   */
+  private async processNativeAttachments(prompt: string): Promise<string> {
+    try {
+      // Parse file references from prompt
+      const fileReferences = this.parseFileReferences(prompt);
+
+      if (fileReferences.length === 0) {
+        return prompt; // No attachments needed
+      }
+
+      console.log(
+        `📎 Processing ${fileReferences.length} file attachment(s) using native commands...`
+      );
+
+      // Process each file reference
+      for (const ref of fileReferences) {
+        const absolutePath = this.resolveWorkspacePath(ref.path);
+        const uri = vscode.Uri.file(absolutePath);
+
+        if (!ref.startLine || !ref.endLine) {
+          // Attach entire file
+          try {
+            await this.withFocusedDocument(uri, async () => {
+              // Attach the currently focused file (no URI parameter supported)
+              await vscode.commands.executeCommand(
+                "github.copilot.chat.attachFile"
+              );
+            });
+            console.log(`✅ Attached file: ${ref.path}`);
+          } catch (error) {
+            console.error(`❌ Failed to attach file ${ref.path}:`, error);
+          }
+        } else {
+          // Attach line range using selection
+          try {
+            await this.withFocusedDocument(uri, async (editor) => {
+              // Set selection (convert to 0-indexed)
+              // Non-null assertions safe here - we've already checked they exist
+              const selection = new vscode.Selection(
+                new vscode.Position(ref.startLine! - 1, 0),
+                new vscode.Position(ref.endLine! - 1, Number.MAX_SAFE_INTEGER)
+              );
+              editor.selection = selection;
+
+              // Attach the selection
+              await vscode.commands.executeCommand(
+                "github.copilot.chat.attachSelection"
+              );
+            });
+            console.log(
+              `✅ Attached selection: ${ref.path}:${ref.startLine}-${ref.endLine}`
+            );
+          } catch (error) {
+            console.error(
+              `❌ Failed to attach selection ${ref.path}:${ref.startLine}-${ref.endLine}:`,
+              error
+            );
+          }
+        }
+
+        // Small delay between attachments to avoid race conditions
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      // Keep #file: references in prompt text - they provide important context
+      // about WHERE in the prompt specific code is being discussed
+      return prompt;
+    } catch (error) {
+      console.error("Error processing native attachments:", error);
+      // On error, fall back to returning original prompt
+      return prompt;
+    }
+  }
+
+  /**
    * Build final prompt with XML structure for tool instruction
    * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
    * Prompts are stored in final-form (ready to send) in JSON files

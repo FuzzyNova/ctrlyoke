@@ -210,6 +210,12 @@
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
         },
+        "flightpath.chatUseNativeAttachments": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use VS Code's native attachment commands in Chat mode",
+          "markdownDescription": "When enabled (default), FlightPath uses VS Code's native `attachFile` and `attachSelection` commands for clean UI in Chat mode. When disabled, uses raw XML attachment (reliable but shows raw text in chat). **Note:** Native attachments have a known VS Code bug with multiple file ranges - disable if you encounter issues. This setting only affects Chat mode; CLI mode always uses XML attachment."
+        },
         "flightpath.chatWindowLocation": {
           "type": "string",
           "enum": [

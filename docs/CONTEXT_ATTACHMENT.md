@@ -4,8 +4,10 @@
 
 This document captures research findings on programmatically attaching files and selections to GitHub Copilot Chat in VS Code.
 
-**Status**: ✅ Implemented (2025-11-07)  
-**Conclusion**: Manual attachment XML construction - works with both CLI and Chat modes
+**Status**: ✅ Implemented (2025-11-12)  
+**Conclusion**: Dual strategy implementation
+- CLI mode: XML attachment (reliable, works perfectly)
+- Chat mode: Native attachments (clean UI, user-configurable with fallback to XML)
 
 ---
 
@@ -95,9 +97,23 @@ We want to support `#file:path:line-line` syntax in prompt files, where users sp
 2. Multiple `#selection` attachments have a bug (see `copilot_selection_bug.md`) - only the last one is included
 3. Copilot CLI doesn't support programmatic file attachments via commands
 
-### Solution: Manual Attachment XML Construction
+### Solution: Dual Strategy Based on Integration Mode
 
-**New Approach**: Instead of using VS Code commands, construct the attachment XML format that Copilot expects and prepend it to the prompt text.
+**Two Approaches Implemented**:
+
+1. **XML Attachment (CLI mode & Chat fallback)**: Construct the attachment XML format that Copilot expects and prepend it to the prompt text.
+   - ✅ Works with Copilot CLI
+   - ✅ Reliable - no VS Code bugs
+   - ✅ Supports multiple file ranges
+   - ❌ Shows raw XML text in Chat UI (clunky appearance)
+
+2. **Native Attachments (Chat mode with setting enabled)**: Use VS Code's `attachFile` and `attachSelection` commands.
+   - ✅ Clean UI in Chat window
+   - ✅ Native VS Code experience
+   - ⚠️ Subject to VS Code bugs (multiple selections)
+   - ❌ Not available in CLI mode
+
+**User Control**: The `flightpath.chatUseNativeAttachments` setting (default: true) allows users to choose their preferred method for Chat mode.
 
 **Copilot's Internal Attachment Format**:
 ```xml
@@ -193,7 +209,11 @@ ${content}
 
 ### Keep `#file:` References in Prompt Text
 
-**Decision**: **Keep the `#file:` syntax in the prompt text**
+**Decision**: **ALWAYS keep the `#file:` syntax in the prompt text**
+
+**⚠️ CRITICAL: NEVER REMOVE `#file:` REFERENCES FROM PROMPT TEXT**
+
+This applies to **BOTH** XML attachment mode and native attachment mode.
 
 **Rationale**:
 - ✅ Matches Copilot's native behavior (Copilot keeps `#file:` references in prompts)
@@ -201,8 +221,9 @@ ${content}
 - ✅ Makes prompts self-documenting and easier to understand
 - ✅ Helps LLM correlate prompt text with attached code sections
 - ✅ Useful for debugging and understanding prompt intent
+- ✅ **Enables sequential/ordered references**: Users can write prompts like "Look at this first: #file:A:1-10 then read this: #file:B:20-30"
 
-**Example**:
+**Example 1 - Simple Reference**:
 ```xml
 <attachment id="file:src/app.ts:45-67">
 Excerpt from src/app.ts, lines 45 to 67:
@@ -214,9 +235,17 @@ Excerpt from src/app.ts, lines 45 to 67:
 Fix the bug in #file:src/app.ts:45-67 where the event handler leaks memory [TOOL_INSTRUCTION]
 ```
 
+**Example 2 - Sequential References (CRITICAL USE CASE)**:
+```
+Look at this line first: #file:CopilotChatIntegration.ts:695-696 
+and then only after that, read this other line #file:CopilotChatIntegration.ts:697-697
+```
+
+Without the `#file:` references in the prompt text, the sequential instruction makes no sense - the LLM wouldn't know which attachment to look at first or second.
+
 **Why this matters**: The `#file:` reference in the prompt text tells the LLM "when I say 'the bug', I'm specifically referring to the code in src/app.ts lines 45-67". Without it, the LLM has to infer which attachment you're discussing.
 
-**Implementation**: Do NOT remove `#file:` syntax from prompt text - keep it as-is while also prepending the attachment XML.
+**Implementation**: Do NOT remove `#file:` syntax from prompt text - keep it as-is whether using XML attachments or native attachments.
 
 ---
 
@@ -265,9 +294,11 @@ This makes the attachment process **instantaneous and invisible to the user**.
 
 ## Code Implementation Location
 
-**New Method**: `CopilotIntegration.processPromptAttachments(prompt: string): Promise<string>`
+### Base Class - XML Attachment (CLI & Chat Fallback)
 
-**Location**: `src/flightpath/CopilotIntegration.ts`
+**Location**: `src/flightpath/base/CopilotIntegration.ts`
+
+**Key Method**: `processPromptAttachments(prompt: string): Promise<string>`
 
 **Responsibility**:
 1. Parse prompt for `#file:` references using regex
@@ -278,22 +309,70 @@ This makes the attachment process **instantaneous and invisible to the user**.
 6. Prepend attachments to prompt
 7. Return final prompt string ready to send
 
-**Signature**:
-```typescript
-/**
- * Process #file: references in prompt and build Copilot attachment XML
- * @param prompt Original prompt text with #file: references
- * @returns Final prompt with attachment XML prepended (keeps #file: syntax in prompt text)
- */
-private async processPromptAttachments(prompt: string): Promise<string>
-```
-
-**Called by**: `CopilotIntegration.sendPromptToCopilot()` before typing the prompt
-
-**Helper Methods**:
-- `buildAttachmentXml(filePath, startLine?, endLine?): Promise<string>` - Builds single attachment XML
+**Helper Methods** (all protected for subclass access):
 - `parseFileReferences(prompt): Array<FileReference>` - Extracts #file: references
 - `resolveWorkspacePath(relativePath): string` - Converts to absolute path
+
+### Chat Integration - Native Attachments
+
+**Location**: `src/flightpath/chat/CopilotChatIntegration.ts`
+
+**Override Method**: `buildPromptText(prompt: PromptItem): Promise<string>`
+
+**Key Method**: `processNativeAttachments(prompt: string): Promise<string>`
+
+**Responsibility**:
+1. Check `chatUseNativeAttachments` setting
+2. If enabled:
+   - Parse `#file:` references
+   - For each reference:
+     - Whole file: Use `github.copilot.chat.attachFile` command
+     - Line range: Open file, set selection, use `github.copilot.chat.attachSelection`
+   - **KEEP `#file:` syntax in prompt text** (provides sequential/positional context)
+   - Return original prompt unchanged
+3. If disabled:
+   - Fall back to XML attachment (calls `super.buildPromptText()`)
+
+**Workflow Sequence** (Native Attachments):
+```typescript
+1. Parse #file: references
+2. For each reference:
+   - Resolve absolute path
+   - If whole file:
+     await vscode.commands.executeCommand('github.copilot.chat.attachFile', uri)
+   - If line range:
+     - Open document
+     - Set editor selection
+     - await vscode.commands.executeCommand('github.copilot.chat.attachSelection')
+3. Keep #file: syntax in prompt (CRITICAL for context)
+4. Return original prompt text unchanged
+```
+
+---
+
+## User Settings
+
+### `flightpath.autoAttachFiles` (boolean, default: true)
+
+Enables/disables automatic file attachment for all modes. When disabled, prompts are sent as-is without processing `#file:` references.
+
+### `flightpath.chatUseNativeAttachments` (boolean, default: true)
+
+**Chat mode only** - Controls attachment method:
+
+- **Enabled (default)**: Uses VS Code's native `attachFile` and `attachSelection` commands
+  - ✅ Clean chat UI
+  - ✅ Native VS Code experience
+  - ⚠️ Subject to VS Code's multiple selection bug
+  - ✅ Keeps `#file:` references in prompt text (provides positional context)
+
+- **Disabled**: Uses XML attachment method (same as CLI mode)
+  - ✅ Reliable - no VS Code bugs
+  - ✅ Supports multiple file ranges
+  - ❌ Shows raw XML in chat (clunky appearance)
+  - ✅ Keeps `#file:` references in prompt text (provides positional context)
+
+**When to disable**: If you encounter issues with multiple file attachments or prefer the XML approach for consistency with CLI mode.
 
 ---
 

@@ -1,0 +1,3 @@
+{
+  "prompt": "Please analyze the following code sections and explain how file attachments work in FlightPath:\n\n1. Full file: #file:src/extension.ts\n2. Specific lines: #file:src/flightpath/chat/CopilotChatIntegration.ts:585-700\n3. Base class: #file:src/flightpath/base/CopilotIntegration.ts:95-180\n\nExplain the difference between XML-based attachments (used in CLI mode) and command-based attachments (used in Chat mode with native attachments enabled)."
+}

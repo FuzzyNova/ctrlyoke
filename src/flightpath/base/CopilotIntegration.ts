@@ -99,7 +99,7 @@ export abstract class CopilotIntegration {
    * @param prompt Original prompt text with #file: references
    * @returns Final prompt with attachment XML prepended (keeps #file: syntax in prompt text)
    */
-  private async processPromptAttachments(prompt: string): Promise<string> {
+  protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
       // Parse file references from prompt
       const fileReferences = this.parseFileReferences(prompt);
@@ -148,7 +148,7 @@ export abstract class CopilotIntegration {
    * - #file:path:startLine-endLine (line range)
    * - #file:"path with spaces":startLine-endLine (quoted path with line range)
    */
-  private parseFileReferences(
+  protected parseFileReferences(
     prompt: string
   ): Array<{ path: string; startLine?: number; endLine?: number }> {
     const fileReferences: Array<{
@@ -221,7 +221,7 @@ ${content}
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */
-  private resolveWorkspacePath(relativePath: string): string {
+  protected resolveWorkspacePath(relativePath: string): string {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace folder open");
