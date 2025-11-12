@@ -344,7 +344,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Preserves user's original clipboard content by caching and restoring it
    * @returns The current chat conversation text
    */
-  private async copyChatToClipboard(): Promise<string> {
+  private async getChatContent(): Promise<string> {
     try {
       // Cache user's original clipboard content
       const originalClipboard = await vscode.env.clipboard.readText();
@@ -390,7 +390,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
       try {
         // Copy current chat content
-        const currentContent = await this.copyChatToClipboard();
+        const currentContent = await this.getChatContent();
 
         // Check if content has changed
         if (currentContent === previousContent && currentContent.length > 0) {
@@ -444,7 +444,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
 
     // Get chat content BEFORE submitting (to verify it changes)
-    const chatBeforeSubmit = await this.copyChatToClipboard();
+    const chatBeforeSubmit = await this.getChatContent();
 
     while (attempt < maxAttempts) {
       attempt++;
@@ -457,7 +457,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Verify submit worked by checking if our prompt appears in chat
-        const chatAfterSubmit = await this.copyChatToClipboard();
+        const chatAfterSubmit = await this.getChatContent();
 
         // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
         const promptToVerify = promptText
