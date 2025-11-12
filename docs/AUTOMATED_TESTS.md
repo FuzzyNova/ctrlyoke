@@ -27,9 +27,72 @@
 
 ### Coverage Gaps (Priority Order)
 
-Given the strategic decision to deprecate `CopilotChatIntegration` and focus on `CopilotCommandLineIntegration`, the following gaps are prioritized:
+Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production integrations with different use cases:
+- **CLI Integration**: Default mode for multi-step workflows with deterministic completion
+- **Chat Integration**: Valuable for single prompts and works around Copilot's attachment bug
 
-## Priority 1: Critical CLI Integration Tests
+## Priority 1: Critical Integration Tests
+
+### CopilotChatIntegration
+**Status**: ❌ No test coverage (IMPORTANT FOR SINGLE PROMPTS & BUG WORKAROUND)
+
+**High Priority Tests:**
+
+1. **Copilot Availability Detection**
+   - ✓ Detects installed Copilot extensions
+   - ✓ Progressive activation strategy (passive first, then active)
+   - ✓ Correct status transitions (initializing → waiting → ready/unavailable)
+   - ✓ Background polling (5s intervals, 6 attempts max)
+
+2. **Language Model Tool Registration**
+   - ✓ Registers `flightpath_response_complete` tool after Copilot is ready
+   - ✓ Prevents duplicate registration
+   - ✓ Tool callback fires response complete event
+   - ✓ Duplicate call protection (toolCalledForCurrentPrompt flag)
+   - ✓ LLM loop prevention (cancels chat when duplicate detected)
+
+3. **Direct Automation (Zero-Interaction)**
+   - ✓ Opens chat with configured window location (panel/tab/window)
+   - ✓ Uses proven timing delays (1000ms focus, 300ms clear, 500ms type)
+   - ✓ Clears existing input via selectAll
+   - ✓ Types prompt text directly
+   - ✓ Submit with retry logic and exponential backoff
+   - ✓ Clipboard-based verification (prompt appears in chat)
+
+4. **Native File Attachments (Bug Workaround)**
+   - ✓ Processes `#file:path` references via `github.copilot.chat.attachFile` command
+   - ✓ Processes `#file:path:startLine-endLine` via `github.copilot.chat.attachSelection` command
+   - ✓ Opens documents with focus (preserveFocus: false)
+   - ✓ Closes preview editors after attachment
+   - ✓ Keeps `#file:` references in prompt text for context
+   - ✓ Falls back to XML attachments when native commands fail
+   - ✓ Respects `chatUseNativeAttachments` setting
+
+5. **Response Completion Detection**
+   - ✓ Tool instruction appended to prompts (wrapped in XML)
+   - ✓ Streaming detection via clipboard polling
+   - ✓ Requires 3 consecutive stable checks (1.5s)
+   - ✓ Preserves user's clipboard content (cache and restore)
+   - ✓ Timeout handling (40 attempts = 20s max)
+
+6. **Prompt Augmentation**
+   - ✓ Appends tool instruction in `<criticalInstruction>` XML tag
+   - ✓ XML hidden in chat UI but processed by Copilot
+   - ✓ Only includes tool instruction when needed (multi-prompt workflows)
+   - ✓ Single prompts can skip tool instruction
+
+7. **Configuration Integration**
+   - ✓ Reads `chatWindowLocation` setting (panel/newTab/newWindow)
+   - ✓ Reads `chatUseNativeAttachments` setting
+   - ✓ Reads `autoAttachFiles` setting
+   - ✓ Selects correct command based on chat location
+
+8. **Error Handling**
+   - ✓ Handles focus failures
+   - ✓ Handles type command failures
+   - ✓ Handles submit retry exhaustion
+   - ✓ Reports clear error messages to user
+   - ✓ Graceful degradation when commands unavailable
 
 ### CopilotCommandLineIntegration
 **Status**: ❌ No test coverage (PRIMARY INTEGRATION METHOD)
@@ -238,8 +301,9 @@ Total usage est: 1,234 tokens, $0.012`;
 ```
 src/test/
 ├── unit/                          # Fast, isolated tests
-│   ├── cli/
-│   │   └── CopilotCommandLineIntegration.test.ts
+│   ├── integrations/
+│   │   ├── CopilotCommandLineIntegration.test.ts
+│   │   └── CopilotChatIntegration.test.ts
 │   ├── core/
 │   │   ├── FlightPathManager.test.ts
 │   │   ├── EndConditionEvaluator.test.ts
@@ -283,6 +347,40 @@ mockSpawn.mockReturnValue({
     if (event === 'close') handler(0);
   })
 });
+```
+
+**For Chat Integration:**
+```typescript
+import * as vscode from 'vscode';
+
+// Mock VS Code commands for chat automation
+const mockExecuteCommand = jest.fn();
+vscode.commands.executeCommand = mockExecuteCommand;
+
+// Mock chat commands
+mockExecuteCommand.mockImplementation((command: string, ...args: any[]) => {
+  switch (command) {
+    case 'workbench.panel.chat.view.copilot.focus':
+      return Promise.resolve();
+    case 'type':
+      return Promise.resolve();
+    case 'workbench.action.chat.submit':
+      return Promise.resolve();
+    case 'github.copilot.chat.attachFile':
+      return Promise.resolve();
+    case 'github.copilot.chat.attachSelection':
+      return Promise.resolve();
+    default:
+      return Promise.resolve();
+  }
+});
+
+// Mock clipboard for submit verification
+const mockClipboard = {
+  readText: jest.fn(),
+  writeText: jest.fn()
+};
+vscode.env.clipboard = mockClipboard;
 ```
 
 **For VS Code API:**
@@ -347,10 +445,11 @@ Add to `package.json`:
 
 ## Implementation Priority
 
-**Phase 1 (Week 1):** CLI Integration Tests
+**Phase 1 (Week 1):** Integration Tests (Both CLI and Chat)
 - CopilotCommandLineIntegration core functionality
-- Output parsing and error handling
-- Mock infrastructure setup
+- CopilotChatIntegration automation and native attachments
+- Output parsing and response detection
+- Mock infrastructure setup for both integrations
 
 **Phase 2 (Week 2):** Core Architecture Tests
 - FlightPathManager orchestration
@@ -371,9 +470,10 @@ Add to `package.json`:
 
 **Target Coverage:**
 - CLI Integration: 80%+ coverage
+- Chat Integration: 80%+ coverage
 - Core Architecture: 75%+ coverage
 - Utilities: 90%+ coverage
-- Overall: 70%+ coverage
+- Overall: 75%+ coverage
 
 **Quality Gates:**
 - All tests pass before merge
@@ -381,21 +481,21 @@ Add to `package.json`:
 - Integration tests optional but encouraged
 - Documentation updated with test examples
 
-## Notes on Chat Integration Deprecation
+## Notes on Integration Testing Strategy
 
-Given the decision to deprecate `CopilotChatIntegration`, the following can be **deprioritized or skipped**:
+Both CLI and Chat integrations are production-ready with distinct advantages:
 
-- ❌ Chat automation timing tests
-- ❌ Language Model Tool callback tests
-- ❌ Clipboard-based streaming detection tests
-- ❌ Chat window location configuration tests
-- ❌ XML prompt wrapping tests for chat
-
-**Rationale:** Focus testing effort on the CLI integration which provides:
+**CLI Integration (Default for workflows):**
 - Simpler architecture (no UI timing dependencies)
 - Deterministic completion detection
-- Direct access to response text
+- Direct access to response text for end conditions
 - Better debugging and logging
 - Clearer error handling
 
-If chat integration is fully removed in the future, these tests would become obsolete anyway.
+**Chat Integration (Valuable for single prompts):**
+- Works around known Copilot attachment bug using native commands
+- Better UI experience for ad-hoc prompts
+- Preserves chat history and context
+- Useful when CLI is unavailable
+
+**Testing Priority:** Both integrations should have comprehensive test coverage since they serve different use cases and are both actively maintained.
