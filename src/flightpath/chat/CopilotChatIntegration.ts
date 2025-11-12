@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as crypto from "crypto";
 import {
   PromptItem,
   CopilotIntegrationMode,
@@ -36,6 +37,14 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   constructor(context: vscode.ExtensionContext) {
     super(context);
     this.initialize();
+  }
+
+  /**
+   * Generate a unique ID for tracking prompt submissions
+   * Used to verify submit succeeded even with duplicate prompts
+   */
+  private generatePromptId(): string {
+    return crypto.randomUUID();
   }
 
   /**
@@ -317,15 +326,16 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         return false;
       }
 
-      // Build prompt with Copilot Chat syntax
-      const chatPrompt = await this.buildCopilotChatPrompt(
+      // Build prompt with Copilot Chat syntax (includes prompt ID generation)
+      const { promptText, promptId } = await this.buildCopilotChatPrompt(
         prompt,
         needsCompletionDetection
       );
 
       // Execute direct automation
       const result = await this.sendPromptWithDirectAutomation(
-        chatPrompt,
+        promptText,
+        promptId,
         needsCompletionDetection
       );
 
@@ -429,19 +439,22 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   /**
    * Submit chat message with clipboard verification and retry logic
    *
-   * Verifies submit succeeded by checking if our prompt appears in the chat.
+   * Verifies submit succeeded by checking if the unique prompt ID appears in the chat.
    * Uses exponential backoff: 500ms, 1000ms, 2000ms, 3000ms, 5000ms
    *
-   * @param promptText The prompt text to verify in chat
+   * @param promptId The unique prompt ID to verify in chat
    * @param maxAttempts Maximum number of retry attempts (default: 5)
    * @returns True if submit succeeded and verified, false if all attempts failed
    */
   private async submitWithRetry(
-    promptText: string,
+    promptId: string,
     maxAttempts: number = 5
   ): Promise<boolean> {
     let attempt = 0;
     const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
+
+    // Build the ID tag we're looking for
+    const promptIdTag = `<flightPathPromptId id="${promptId}">`;
 
     // Get chat content BEFORE submitting (to verify it changes)
     const chatBeforeSubmit = await this.getChatContent();
@@ -456,20 +469,15 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         // Wait for UI to process and chat to update
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Verify submit worked by checking if our prompt appears in chat
+        // Verify submit worked by checking if our unique prompt ID appears in chat
         const chatAfterSubmit = await this.getChatContent();
 
-        // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
-        const promptToVerify = promptText
-          .replace(this.TOOL_INSTRUCTION, "")
-          .trim()
-          .substring(0, 100);
-
-        // Check if our prompt appears in the chat and wasn't there before
+        // Check if our prompt ID appears in the chat and wasn't there before
         if (
-          chatAfterSubmit.includes(promptToVerify) &&
-          !chatBeforeSubmit.includes(promptToVerify)
+          chatAfterSubmit.includes(promptIdTag) &&
+          !chatBeforeSubmit.includes(promptIdTag)
         ) {
+          console.log(`✅ Submit verified with prompt ID: ${promptId}`);
           return true;
         }
       } catch (error) {
@@ -483,6 +491,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       if (attempt < maxAttempts) {
         const delayIndex = Math.min(attempt - 1, delays.length - 1);
         const delay = delays[delayIndex];
+        console.log(
+          `⏳ Retrying submit in ${delay}ms (attempt ${attempt}/${maxAttempts})...`
+        );
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -500,11 +511,13 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Based on validated proof-of-concept in extension.ts:testCopilotAutomation()
    * Timing delays are proven and validated - do not reduce!
    *
-   * @param chatPrompt The full prompt text to send
+   * @param chatPrompt The full prompt text to send (already includes promptId and tool instruction)
+   * @param promptId The unique prompt ID for verification
    * @param needsCompletionDetection If true, reset tool flags for completion detection
    */
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
+    promptId: string,
     needsCompletionDetection: boolean = true
   ): Promise<boolean> {
     try {
@@ -512,6 +525,8 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       if (needsCompletionDetection) {
         this.toolCalledForCurrentPrompt = false;
       }
+
+      console.log(`📤 Sending prompt with ID: ${promptId}`);
 
       // Step 1: Open/Focus Copilot Chat using configured location
       const chatCommand = this.getChatWindowCommand();
@@ -540,7 +555,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
       await new Promise((resolve) => setTimeout(resolve, 300)); // PROVEN: 300ms required
 
-      // Step 3: Type the prompt directly into chat input
+      // Step 3: Type the complete prompt (already includes ID and tool instruction)
       try {
         await vscode.commands.executeCommand("type", { text: chatPrompt });
       } catch (typeError) {
@@ -550,8 +565,8 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
 
-      // Step 4: Submit with retry logic (handles race condition)
-      const submitSuccess = await this.submitWithRetry(chatPrompt, 10);
+      // Step 4: Submit with retry logic (uses promptId for verification)
+      const submitSuccess = await this.submitWithRetry(promptId, 10);
 
       if (!submitSuccess) {
         throw new Error(
@@ -729,29 +744,49 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
   /**
    * Build final prompt with XML structure for tool instruction
-   * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
-   * Prompts are stored in final-form (ready to send) in JSON files
+   * Order: [promptId] → [TOOL_INSTRUCTION] → [user prompt]
+   * User prompt comes last to maximize LLM attention on the actual task
    *
    * @param prompt The prompt item
-   * @param includeToolInstruction If true, append tool instruction for completion detection
+   * @param includeToolInstruction If true, include tool instruction for completion detection
+   * @param promptId Optional unique ID for tracking this specific prompt submission
+   * @returns Object with final prompt text and the prompt ID (generated if not provided)
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
-    includeToolInstruction: boolean = true
-  ): Promise<string> {
+    includeToolInstruction: boolean = true,
+    promptId?: string
+  ): Promise<{ promptText: string; promptId: string }> {
     // Use base class method to get prompt text with file attachments processed
-    const promptText = await this.buildPromptText(prompt);
+    const userPromptText = await this.buildPromptText(prompt);
 
-    // Only append tool instruction if needed (multi-prompt workflows)
+    // Generate prompt ID if not provided
+    const finalPromptId = promptId || this.generatePromptId();
+
+    // Build prompt ID tag
+    const promptIdTag = `<flightPathPromptId id="${finalPromptId}">
+FlightPath internal tracking ID - please ignore this identifier
+</flightPathPromptId>`;
+
+    // Build final prompt with optimal ordering
     if (includeToolInstruction) {
-      // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
-      // This gives us a clean chat history while maintaining automation functionality
-      return `${promptText}
+      // Order: [promptId] → [TOOL_INSTRUCTION] → [user prompt]
+      // User prompt comes LAST for maximum LLM attention
+      const finalPrompt = `${promptIdTag}
 
-${this.TOOL_INSTRUCTION}`;
+${this.TOOL_INSTRUCTION}
+
+${userPromptText}`;
+
+      return { promptText: finalPrompt, promptId: finalPromptId };
     }
 
-    return promptText.trim();
+    // No tool instruction - just promptId + user prompt
+    const finalPrompt = `${promptIdTag}
+
+${userPromptText}`;
+
+    return { promptText: finalPrompt, promptId: finalPromptId };
   }
 
   /**
@@ -847,7 +882,22 @@ ${this.TOOL_INSTRUCTION}`;
     const testMessage = "FlightPath automation test. Please acknowledge.";
 
     try {
-      const result = await this.sendPromptWithDirectAutomation(testMessage);
+      // Generate a prompt ID for the test
+      const testPromptId = this.generatePromptId();
+
+      // Build the test prompt with ID tag
+      const promptIdTag = `<flightPathPromptId id="${testPromptId}">
+FlightPath internal tracking ID - please ignore this identifier
+</flightPathPromptId>
+
+`;
+      const fullTestPrompt = promptIdTag + testMessage;
+
+      const result = await this.sendPromptWithDirectAutomation(
+        fullTestPrompt,
+        testPromptId,
+        false // No completion detection needed for test
+      );
 
       if (result) {
         vscode.window.showInformationMessage(
