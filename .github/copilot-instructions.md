@@ -81,107 +81,36 @@ schemas/                          # JSON schemas (source)
 
 <coreComponents>
 
+Core orchestration and execution logic. See `.github/instructions/` for detailed implementation notes.
+
 ## FlightPathManager
 
-Main orchestrator handling commands, lifecycle, and workflow execution. Coordinates PromptQueue and CopilotIntegration. Subscribes to status changes and response completion events.
+Orchestrates workflow execution. Coordinates PromptQueue and CopilotIntegration. Factory pattern selects CLI vs Chat mode.
 
 ## PromptQueue
 
-Manages sequential prompt execution with pause/resume/cancel. Tracks state and progress. Does not directly handle response detection (delegated to FlightPathManager).
+Sequential execution with pause/resume/cancel. State machine tracks progress. Response detection delegated to FlightPathManager.
 
 ## CopilotIntegration
 
-**Architecture**: Abstract base class with two implementations selected via factory pattern.
+Abstract base with two implementations:
 
-**Automatic File Attachment**:
+- **CLI** (default): Deterministic completion, structured output, no UI dependencies
+- **Chat** (fallback): UI automation with hybrid response detection (Language Model Tool + clipboard polling)
 
-- Processes `#file:path` and `#file:path:startLine-endLine` references in prompts
-- Reads file content and builds Copilot's internal attachment XML format
-- Prepends attachment XML to prompt before sending (keeps `#file:` syntax in prompt text for LLM context)
-- Supports both entire files and specific line ranges
-- Works with both CLI and Chat modes
-- Can be disabled via `flightpath.autoAttachFiles` setting (default: enabled)
-- See docs/CONTEXT_ATTACHMENT.md for implementation details
+Both support automatic file attachment for `#file:path` references.
 
-### CopilotCommandLineIntegration (Default)
+## PromptFileParser
 
-- **Deterministic completion**: Command returns when complete (no polling needed)
-- **Structured output**: Parses response text and statistics separately
-- **Model selection**: User-configurable AI model (claude-sonnet-4.5, gpt-5, etc.)
-- **Simple initialization**: Check `copilot --version` for availability
-- **Response text**: Directly available for end condition evaluation
-- **No UI dependencies**: Pure command-line execution
-
-### CopilotChatIntegration (Fallback)
-
-- Direct text insertion: Focus (1000ms) → Clear (300ms) → Type (500ms) → Submit
-- Background polling: 5s intervals, 30s max, detects Copilot availability on startup
-- States: initializing | waiting | ready | unavailable
-- Response detection: Language Model Tool (flightpath_response_complete)
-- Automatic prompt augmentation: Appends tool instruction in `<criticalInstruction>` XML tag (hidden in chat UI but processed correctly)
-- Submit verification: Clipboard-based retry with exponential backoff
-- Streaming detection: Polls chat stability (3 consecutive stable checks)
-
-### Response Completion Detection
-
-Uses hybrid approach combining Language Model Tool + clipboard polling:
-
-**Tool Callback (Intent Signal):**
-
-1. Tool registration: flightpath_response_complete registered after Copilot activates
-2. Prompt augmentation: Every prompt gets tool-calling instruction appended automatically
-3. Tool invocation: When called, fires responseCompleteEmitter event (ONLY FIRST CALL)
-4. Duplicate protection: toolCalledForCurrentPrompt flag ignores subsequent calls in same response
-
-**Clipboard Polling (Verification):**
-
-1. Tool callback triggers streaming detection (not immediate polling)
-2. Polls chat content every 500ms via clipboard
-3. Requires 3 consecutive stable checks (1.5s) to confirm completion
-4. Efficient: only polls after tool indicates "near completion"
-
-**LLM Loop Prevention:**
-
-- LLMs often call tools multiple times (output → tool → output → tool loop)
-- Two-layer defense: flag in CopilotIntegration + flag in FlightPathManager
-- **Active cancellation**: Calls `workbench.action.chat.cancel` when loop detected
-- Stops LLM from continuing to generate unwanted text in the loop
-- Saves tokens and prevents workflow disruption
-
-Implementation notes:
-
-- Tool registered only once (isToolRegistered flag prevents duplicates)
-- Instruction emphasizes "EXACTLY ONCE" and "FINAL action"
-- Single active workflow limitation (no chat session metadata in tool invocations)
-- See docs/COPILOT_RESPONSE_HANDLING.md for full research and design decisions
-
-### PromptFileParser
-
-- Schema validation with AJV using single unified schema (prompt-schema.json)
-- Both .prompt.json and .flightpath.json use the same schema
-- Supports both single prompt and multiple prompts format (via oneOf)
-- Validates final-form prompts (no runtime context injection)
-- Detailed validation error reporting
+JSON schema validation with AJV. Validates both `.prompt.json` and `.flightpath.json` formats using unified schema.
 
 ## PromptCompletionProvider
 
-IntelliSense provider for prompt files with context-aware completions:
-
-- **JSON files** (`.prompt.json`, `.flightpath.json`): Triggers on `#` inside "prompt" string values
-- **Markdown files** (`.prompt.md`): Triggers on `#` anywhere in the document
-- **File completions**: Shows all workspace files with fuzzy filtering
-- **Selection completions**: Captures current editor selection as `#file:path:startLine-endLine`
-- **Performance**: 5-second file cache, limited to 500 results
-- **Multiple selections**: Supports multiple visible editors with selections
+IntelliSense for `#file:` references in prompt files. Provides workspace files and current editor selections.
 
 ## EndConditionEvaluator
 
-- Path validation and process isolation
-- Supports Python, JavaScript, shell scripts (.py, .js, .ts, .sh, .bat, .ps1)
-- Configurable timeouts (default 30s)
-- Scripts cannot access file system directly
-- Template files stored in `src/templates/` and copied to `out/templates/` during build
-- `createSampleScript()` copies from bundled templates at runtime using `context.extensionPath`
+Executes validation scripts with timeout and process isolation. Template system for creating sample scripts.
 
 </coreComponents>
 
@@ -271,59 +200,24 @@ Status bar shows: Initializing, Waiting, Ready, Running, Paused, Setup Required
 
 ## Testing
 
-- Unit tests: Core logic with mocking
-- Integration tests: VS Code API interactions
-- Test files: extension.test.ts, flightpath.test.ts
-- Framework: Mocha with VS Code test utilities
+Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.instructions.md`.
 
 ## Security
 
-Script execution:
-
-- Path validation: Scripts must be in .flightpath/ directory
-- Process isolation: Separate child processes
-- Timeout protection: Default 30s
-- No network access or direct file modification
-
-File system:
-
-- Operations limited to workspace scope
-- JSON validated against strict schemas
+- Scripts: Workspace-only, process isolation, timeout protection
+- File system: Workspace-scoped operations
+- Validation: Strict JSON schema enforcement
 
 ## Development
 
-- F5 debugging with breakpoints
-- npm run watch for compilation
-- TypeScript strict mode
-- ESLint + Prettier for code quality
+- F5 debugging, `npm run watch` compilation
+- TypeScript strict mode, ESLint + Prettier
 
 ## Implementation Status
 
-Completed:
+**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar
 
-- Automatic file attachment for `#file:` references (CLI and Chat modes)
-- Copilot CLI integration with factory pattern architecture
-- CLI deterministic completion detection (no polling needed)
-- Output Channel integration for real-time CLI output visibility
-- User-configurable CLI settings (model, directories, tool permissions)
-- Zero-interaction Copilot Chat automation (fallback mode)
-- Language Model Tool for response detection (chat mode)
-- Clipboard-based submit verification and streaming detection (chat mode)
-- Background polling with progressive activation (chat mode)
-- User-configurable chat window location
-- Automatic prompt augmentation with tool instructions (chat mode)
-- JSON schema validation with IntelliSense
-- Command registration and lifecycle management
-- Status bar integration with real-time updates
-- File system monitoring and prompt discovery
-
-Planned:
-
-- End condition script execution with response text validation
-- WebView UI panel for workflow visualization
-- Session management for multi-turn CLI conversations
-- Custom tool permission configuration
-- Comprehensive test coverage
+**Planned**: End condition execution with response validation, WebView panel, multi-turn CLI sessions, comprehensive tests
 
 ## Extension Settings
 
