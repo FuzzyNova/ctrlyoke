@@ -1,0 +1,11 @@
+This is a detailed response from Copilot CLI.
+It can span multiple lines and include code blocks.
+
+Here's an example:
+```typescript
+function example() {
+  console.log("Hello World");
+}
+```
+
+Total usage est: 1,234 tokens, $0.012

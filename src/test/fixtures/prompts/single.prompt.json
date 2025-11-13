@@ -1,0 +1,9 @@
+{
+  "prompt": "Explain this code @workspace",
+  "model": "claude-sonnet-4.5",
+  "endCondition": {
+    "script": "check_explanation.py",
+    "returns": "true",
+    "timeout": 30000
+  }
+}
