@@ -465,10 +465,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
           .trim()
           .substring(0, 100);
 
-        // Check if our prompt appears in the chat and wasn't there before
+        // Check if chat grew AND prompt appears in chat
+        // Size check handles duplicate prompts (primary signal), prompt presence is safety validation
         if (
-          chatAfterSubmit.includes(promptToVerify) &&
-          !chatBeforeSubmit.includes(promptToVerify)
+          chatAfterSubmit.length > chatBeforeSubmit.length &&
+          chatAfterSubmit.includes(promptToVerify)
         ) {
           return true;
         }
@@ -729,11 +730,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
   /**
    * Build final prompt with XML structure for tool instruction
-   * User prompt is sent as-is (visible in chat), tool instruction is wrapped in XML (hidden by Copilot UI but processed correctly)
+   * Tool instruction is prepended before user prompt to maximize LLM attention on the actual task
    * Prompts are stored in final-form (ready to send) in JSON files
    *
    * @param prompt The prompt item
-   * @param includeToolInstruction If true, append tool instruction for completion detection
+   * @param includeToolInstruction If true, prepend tool instruction for completion detection
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
@@ -742,13 +743,14 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     // Use base class method to get prompt text with file attachments processed
     const promptText = await this.buildPromptText(prompt);
 
-    // Only append tool instruction if needed (multi-prompt workflows)
+    // Only prepend tool instruction if needed (multi-prompt workflows)
     if (includeToolInstruction) {
-      // Append TOOL_INSTRUCTION wrapped in XML - Copilot hides XML tags in chat UI but still processes them
-      // This gives us a clean chat history while maintaining automation functionality
-      return `${promptText}
+      // Prepend TOOL_INSTRUCTION wrapped in XML before user prompt
+      // User prompt comes LAST for maximum LLM attention on the actual task
+      // Copilot hides XML tags in chat UI but still processes them
+      return `${this.TOOL_INSTRUCTION}
 
-${this.TOOL_INSTRUCTION}`;
+${promptText}`;
     }
 
     return promptText.trim();
