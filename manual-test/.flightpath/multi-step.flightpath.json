@@ -1,0 +1,15 @@
+{
+  "prompts": [
+    {
+      "prompt": "Step 1: List all TypeScript files in the sample-code directory",
+      "model": "claude-haiku-4.5"
+    },
+    {
+      "prompt": "Step 2: Analyze the code patterns used in #file:sample-code/example.ts",
+      "model": "claude-haiku-4.5"
+    },
+    {
+      "prompt": "Step 3: Suggest improvements to the code structure"
+    }
+  ]
+}
