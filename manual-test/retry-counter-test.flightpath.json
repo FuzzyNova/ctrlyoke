@@ -1,0 +1,11 @@
+{
+  "prompt": "This is a test prompt for the FlightPath retry mechanism.\n\nPlease read the file #file:counter.txt and increment the number inside by 1.\n\nThe file should contain ONLY a single number after you are done editing. No other text, explanations, or formatting - just the number.\n\nIMPORTANT: Actually modify the file, don't just show me the code.",
+  "model": "claude-haiku-4.5",
+  "endCondition": {
+    "script": ".flightpath/scripts/check_counter.py",
+    "returns": "true",
+    "maxRetries": 5,
+    "timeout": 10000,
+    "retryPrompt": "The counter validation failed. Here's the current status:\n\n{scriptOutput}\n\nPlease perform the same action again: read #file:counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else.\n\nRetry attempt {retryCount} of {maxRetries}."
+  }
+}

@@ -120,10 +120,14 @@ Located in `.flightpath/scripts/`:
 |--------|---------|---------|
 | `always_true.py` | Always succeeds | `true` |
 | `always_false.py` | Always fails | `false` |
+| `always_fails.py` | Always fails (for retry exhaustion tests) | `false` |
 | `timeout_test.py` | Tests timeout handling | Sleeps 60s |
+| `timeout_script.py` | Tests timeout in retry mechanism | Sleeps 20s |
 | `check_has_add_function.py` | Validates "add" function in response | `true`/`false` |
 | `check_typescript.js` | Detects TypeScript syntax | `true`/`false` |
-| `check_documentation.js` | Validates JSDoc comments (NEW) | `complete`/`incomplete` |
+| `check_documentation.js` | Validates JSDoc comments | `complete`/`incomplete` |
+| `check_counter.py` | Validates counter.txt value (retry tests) | `true`/`false` |
+| `check_counter_value.py` | Validates counter with command-line target | `true`/`false` |
 
 ### Testing End Conditions
 
@@ -140,49 +144,179 @@ The retry mechanism automatically re-prompts Copilot when validation fails:
 - **Happy Path (Retry):** Script runs successfully (exit 0) but output doesn't match expected value
 - **Error Path (No Retry):** Script fails to execute, times out, or exits with non-zero code
 
-**Test Cases:**
+---
 
-1. **Basic Retry Flow**
-   - File: `test-retry.flightpath.json`
-   - Expected: Copilot gets feedback from test failures and fixes issues automatically
-   - Validates: Placeholder replacement, retry count tracking, recursive retry logic
+#### Test 1: Basic Counter Retry
+**File:** `retry-counter-test.flightpath.json`
 
-2. **Retry Prompt Placeholders**
-   Available placeholders in `retryPrompt`:
-   - `{scriptOutput}` - stdout from the script
-   - `{errorOutput}` - stderr from the script  
-   - `{expectedValue}` - what we're looking for
-   - `{actualValue}` - what we got
-   - `{retryCount}` - current attempt (1, 2, 3...)
-   - `{maxRetries}` - maximum attempts configured
+**Setup:**
+- Uses `counter.txt` (reset to 0 before testing)
+- Script checks if counter equals 3
+- Max retries: 5
 
-3. **Max Retries Behavior**
-   - Configure `maxRetries: 3` in end condition
-   - Script fails 4 times
-   - Expected: User prompted after 3rd retry with options:
-     - Stop Workflow
-     - Continue Anyway (ignore validation)
-     - Retry Once More (manual retry)
+**Test:**
+1. Reset counter: `echo 0 > counter.txt`
+2. Right-click `retry-counter-test.flightpath.json` → "Send to CLI"
+3. Copilot increments counter by 1 (now = 1)
+4. Script validates: expects 3, gets 1 → FAIL
+5. Retry prompt sent with script output
+6. Copilot increments again (now = 2)
+7. Still fails validation
+8. Copilot increments again (now = 3)
+9. Validation succeeds ✓
 
-4. **Script Design for Retries**
-   ✅ **DO:** Exit with code 0 even on validation failure
-   ```javascript
-   if (testsPassed) {
-       console.log('all_passed');
-       process.exit(0);
-   } else {
-       console.log('tests_failed');
-       console.log('Failed: test_login, test_logout'); // Details for retry
-       process.exit(0); // Still exit 0 - this is validation failure, not error
-   }
-   ```
-   
-   ❌ **DON'T:** Exit with non-zero code for validation failures
-   ```javascript
-   if (!testsPassed) {
-       process.exit(1); // This triggers error path, not retry!
-   }
-   ```
+**Expected:**
+- 3 total Copilot interactions (initial + 2 retries)
+- Counter.txt ends with value `3`
+- Workflow completes successfully
+
+**Validates:**
+- Basic retry mechanism works
+- Placeholder replacement (`{scriptOutput}`, `{retryCount}`, `{maxRetries}`)
+- Script output captured and included in retry prompt
+- Retry loop stops on success
+
+---
+
+#### Test 2: Max Retries Exhaustion
+**File:** `retry-max-exhaustion-test.flightpath.json`
+
+**Setup:**
+- Uses `always_fails.py` script (always returns false)
+- Max retries: 2
+
+**Test:**
+1. Right-click `retry-max-exhaustion-test.flightpath.json` → "Send to CLI"
+2. Initial response from Copilot
+3. Validation fails → Retry 1
+4. Validation fails → Retry 2
+5. Max retries reached → Show error dialog
+
+**Expected:**
+- 3 total Copilot interactions (initial + 2 retries)
+- Error message: "End condition validation failed after 2 retries"
+- Workflow stops (does not continue)
+
+**Validates:**
+- Max retries enforcement
+- Proper stopping behavior
+- User notification when retries exhausted
+
+---
+
+#### Test 3: Timeout Error Path (No Retry)
+**File:** `retry-timeout-error-test.flightpath.json`
+
+**Setup:**
+- Uses `timeout_script.py` (sleeps 20 seconds)
+- Timeout: 5000ms (5 seconds)
+- Max retries: 3
+
+**Test:**
+1. Right-click `retry-timeout-error-test.flightpath.json` → "Send to CLI"
+2. Copilot responds
+3. Script starts executing
+4. Timeout after 5 seconds
+5. Script killed
+
+**Expected:**
+- Error message: "Script execution timed out"
+- **NO retry attempts** (timeouts are execution errors, not validation failures)
+- Workflow stops immediately
+- Retry prompt never used
+
+**Validates:**
+- Error path vs happy path distinction
+- Timeouts don't trigger retries
+- Proper error handling
+
+---
+
+#### Test 4: Multi-Step Workflow with Retries
+**File:** `retry-multi-step-test.flightpath.json`
+
+**Setup:**
+- Uses `multi-step-counter.txt` (reset to 0 before testing)
+- 3 steps with different validation scripts
+- Each step has retries enabled
+
+**Test:**
+1. Reset counter: `echo 0 > multi-step-counter.txt`
+2. Right-click `retry-multi-step-test.flightpath.json` → "Send to CLI"
+3. Step 1: Set counter to 5 (retries until successful)
+4. Step 2: Multiply by 2 (expects 10, retries until successful)
+5. Step 3: Add 5 (expects 15, retries until successful)
+
+**Expected:**
+- Each step may require multiple attempts
+- Counter progression: 0 → 5 → 10 → 15
+- All steps complete successfully
+- Final value in `multi-step-counter.txt` is `15`
+
+**Validates:**
+- Retries work in multi-step workflows
+- Each step has independent retry counters
+- Sequential execution with validation
+
+---
+
+#### Retry Prompt Placeholders
+
+Available placeholders in `retryPrompt`:
+- `{scriptOutput}` - stdout from the script
+- `{errorOutput}` - stderr from the script  
+- `{expectedValue}` - what we're looking for
+- `{actualValue}` - what we got
+- `{retryCount}` - current attempt (1, 2, 3...)
+- `{maxRetries}` - maximum attempts configured
+
+**Example:**
+```json
+{
+  "retryPrompt": "Validation failed. Expected: {expectedValue}, Got: {actualValue}\n\n{scriptOutput}\n\nRetry {retryCount}/{maxRetries}"
+}
+```
+
+---
+
+#### Script Design for Retries
+
+✅ **DO:** Exit with code 0 even on validation failure
+```python
+import sys
+
+if tests_passed:
+    print('true')
+    sys.exit(0)
+else:
+    print('false')
+    print('Failed tests: login, logout')  # Details for retry
+    sys.exit(0)  # Still exit 0 - validation failure, not error
+```
+
+❌ **DON'T:** Exit with non-zero code for validation failures
+```python
+if not tests_passed:
+    sys.exit(1)  # This triggers error path, not retry!
+```
+
+---
+
+#### Resetting Test Files
+
+Before running tests, reset counter files:
+
+```powershell
+# PowerShell
+echo 0 > manual-test\counter.txt
+echo 0 > manual-test\multi-step-counter.txt
+```
+
+```bash
+# Bash
+echo 0 > manual-test/counter.txt
+echo 0 > manual-test/multi-step-counter.txt
+```
 
 ---
 

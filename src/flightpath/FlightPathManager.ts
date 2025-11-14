@@ -966,6 +966,11 @@ export class FlightPathManager {
                 : "Create a bash shell script",
             value: "shell" as const,
           },
+          {
+            label: "$(terminal-powershell) PowerShell",
+            description: "Create a PowerShell script (.ps1)",
+            value: "powershell" as const,
+          },
         ],
         {
           placeHolder: "Select the type of end condition script to create",

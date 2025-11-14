@@ -361,7 +361,7 @@ export class EndConditionEvaluator {
    * Create a sample end condition script by copying from templates
    */
   async createSampleScript(
-    scriptType: "python" | "javascript" | "shell",
+    scriptType: "python" | "javascript" | "shell" | "powershell",
     workingDirectory?: string
   ): Promise<string | null> {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -400,6 +400,11 @@ export class EndConditionEvaluator {
             ? "check_condition.bat"
             : "check_condition.sh";
         destinationFileName = templateFileName;
+        break;
+
+      case "powershell":
+        templateFileName = "check_condition.ps1";
+        destinationFileName = "check_condition.ps1";
         break;
 
       default:
