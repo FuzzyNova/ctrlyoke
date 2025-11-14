@@ -1194,7 +1194,7 @@ export class FlightPathManager {
     prompt: PromptItem,
     evaluationResult: import("./EndConditionEvaluator").EvaluationResult
   ): Promise<boolean> {
-    const maxRetries = prompt.endCondition?.maxRetries || 0;
+    const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
     const retryCount = this.promptQueue.getCurrentRetryCount();
 
     console.error(
@@ -1237,18 +1237,23 @@ export class FlightPathManager {
     prompt: PromptItem,
     evaluationResult: import("./EndConditionEvaluator").EvaluationResult
   ): string {
-    if (!prompt.endCondition?.retryPrompt) {
-      // Fallback retry prompt if none configured
+    // Get effective retry prompt (including defaults from settings)
+    const retryPromptTemplate =
+      this.promptQueue.getEffectiveRetryPrompt(prompt);
+    const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
+
+    if (!retryPromptTemplate) {
+      // Fallback retry prompt if none configured (should rarely happen due to smart defaults)
       return `The previous task validation failed. Expected: ${prompt.endCondition?.returns}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
     }
 
     // Use EndConditionEvaluator's buildRetryPrompt method
     return this.endConditionEvaluator.buildRetryPrompt(
-      prompt.endCondition.retryPrompt,
+      retryPromptTemplate,
       evaluationResult,
-      prompt.endCondition.returns,
+      prompt.endCondition!.returns,
       this.promptQueue.getCurrentRetryCount(),
-      prompt.endCondition.maxRetries || 0
+      maxRetries
     );
   }
 

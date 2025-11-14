@@ -1,6 +1,64 @@
 import * as vscode from "vscode";
 import { PromptItem, QueueState, PromptResult } from "../types/FlightPathTypes";
 
+/**
+ * Get effective maxRetries value with smart defaults
+ */
+function getEffectiveMaxRetries(
+  endCondition?: PromptItem["endCondition"]
+): number {
+  if (!endCondition) {
+    return 0;
+  }
+
+  const hasRetryPrompt = !!endCondition.retryPrompt;
+  const hasMaxRetries = endCondition.maxRetries !== undefined;
+
+  // Case 1: Both specified - use explicit maxRetries
+  if (hasMaxRetries) {
+    return endCondition.maxRetries!;
+  }
+
+  // Case 2: Only retryPrompt specified - use default from settings
+  if (hasRetryPrompt) {
+    const config = vscode.workspace.getConfiguration("flightpath");
+    return config.get<number>("defaultMaxRetries", 3);
+  }
+
+  // Case 3: Neither specified - no retries
+  return 0;
+}
+
+/**
+ * Get effective retry prompt with smart defaults
+ */
+function getEffectiveRetryPrompt(
+  endCondition?: PromptItem["endCondition"]
+): string | undefined {
+  if (!endCondition) {
+    return undefined;
+  }
+
+  const hasRetryPrompt = !!endCondition.retryPrompt;
+  const hasMaxRetries =
+    endCondition.maxRetries !== undefined && endCondition.maxRetries !== 0;
+
+  // Case 1: Explicit retryPrompt - use it
+  if (hasRetryPrompt) {
+    return endCondition.retryPrompt;
+  }
+
+  // Case 2: Only maxRetries specified - use default from settings
+  if (hasMaxRetries) {
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const defaultPrompt = config.get<string>("defaultRetryPrompt", "");
+    return defaultPrompt || undefined;
+  }
+
+  // Case 3: Neither specified - no retry prompt
+  return undefined;
+}
+
 export class PromptQueue {
   private state: QueueState;
   private onStateChanged: vscode.EventEmitter<QueueState> =
@@ -340,10 +398,12 @@ export class PromptQueue {
    * Check if current prompt can be retried
    */
   canRetry(prompt: PromptItem): boolean {
-    if (!prompt.endCondition?.retryPrompt) {
+    const retryPrompt = getEffectiveRetryPrompt(prompt.endCondition);
+    if (!retryPrompt) {
       return false;
     }
-    const maxRetries = prompt.endCondition.maxRetries || 0;
+
+    const maxRetries = getEffectiveMaxRetries(prompt.endCondition);
 
     // -1 means unlimited retries
     if (maxRetries === -1) {
@@ -354,6 +414,18 @@ export class PromptQueue {
   }
 
   /**
+   * Get effective maxRetries for current prompt (including defaults)
+   */
+  getEffectiveMaxRetries(prompt: PromptItem): number {
+    return getEffectiveMaxRetries(prompt.endCondition);
+  }
+
+  /**
+   * Get effective retry prompt for current prompt (including defaults)
+   */
+  getEffectiveRetryPrompt(prompt: PromptItem): string | undefined {
+    return getEffectiveRetryPrompt(prompt.endCondition);
+  } /**
    * Increment retry count for current prompt
    */
   incrementRetryCount(): void {

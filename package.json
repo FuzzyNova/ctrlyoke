@@ -298,6 +298,20 @@
           "default": "allowAll",
           "description": "Tool permission mode for Copilot CLI",
           "markdownDescription": "Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools."
+        },
+        "flightpath.defaultMaxRetries": {
+          "type": "number",
+          "default": 3,
+          "minimum": -1,
+          "maximum": 100,
+          "description": "Default number of retries when retryPrompt is specified but maxRetries is not",
+          "markdownDescription": "Default number of retries to use when a `retryPrompt` is specified in an end condition but `maxRetries` is not explicitly set. Use `-1` for unlimited retries, `0` to disable default retries, or `1-100` for a specific limit. **Default: 3**"
+        },
+        "flightpath.defaultRetryPrompt": {
+          "type": "string",
+          "default": "**Validation Failed** (Attempt {retryCount}/{maxRetries})\n\n**Expected:** `{expectedValue}`\n**Actual:** `{actualValue}`\n\n**Output:**\n```\n{scriptOutput}\n```\n\nPlease fix the issues above and try again.",
+          "description": "Default retry prompt template when maxRetries is specified but retryPrompt is not",
+          "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{scriptOutput}`, `{errorOutput}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, `{maxRetries}`. Leave empty to require explicit retry prompts."
         }
       }
     },
