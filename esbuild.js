@@ -90,6 +90,37 @@ const copySchemasPlugin = {
 	},
 };
 
+/**
+ * Plugin to copy webview files to output directory
+ * @type {import('esbuild').Plugin}
+ */
+const copyWebviewPlugin = {
+	name: 'copy-webview',
+
+	setup(build) {
+		build.onEnd(() => {
+			const srcWebview = path.join(__dirname, 'src', 'ui', 'webview');
+			const outWebview = path.join(__dirname, 'out', 'ui', 'webview');
+
+			// Create output webview directory if it doesn't exist
+			if (!fs.existsSync(outWebview)) {
+				fs.mkdirSync(outWebview, { recursive: true });
+			}
+
+			// Copy all webview files
+			if (fs.existsSync(srcWebview)) {
+				const files = fs.readdirSync(srcWebview);
+				files.forEach(file => {
+					const srcFile = path.join(srcWebview, file);
+					const outFile = path.join(outWebview, file);
+					fs.copyFileSync(srcFile, outFile);
+					console.log(`[copy] ${file} -> out/ui/webview/${file}`);
+				});
+			}
+		});
+	},
+};
+
 async function main() {
 	const ctx = await esbuild.context({
 		entryPoints: [
@@ -109,6 +140,7 @@ async function main() {
 			esbuildProblemMatcherPlugin,
 			copyTemplatesPlugin,
 			copySchemasPlugin,
+			copyWebviewPlugin,
 		],
 	});
 	if (watch) {

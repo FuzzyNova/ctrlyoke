@@ -116,6 +116,24 @@
         "title": "Send to Chat",
         "category": "FlightPath",
         "icon": "$(comment)"
+      },
+      {
+        "command": "flightpath.selectPromptFile",
+        "title": "Select Prompt File",
+        "category": "FlightPath",
+        "icon": "$(file)"
+      },
+      {
+        "command": "flightpath.run",
+        "title": "Run",
+        "category": "FlightPath",
+        "icon": "$(play)"
+      },
+      {
+        "command": "flightpath.showOutputPanel",
+        "title": "Show Output Panel",
+        "category": "FlightPath",
+        "icon": "$(output)"
       }
     ],
     "menus": {
@@ -195,6 +213,24 @@
           "command": "flightpath.sendToChat",
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "flightpath": [
+        {
+          "type": "webview",
+          "id": "flightpath.dashboard",
+          "name": "Dashboard"
         }
       ]
     },

@@ -12,6 +12,7 @@ import {
   QueueState,
   CopilotIntegrationMode,
 } from "../types/FlightPathTypes";
+import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
@@ -23,9 +24,14 @@ export class FlightPathManager {
   private statusBarItem: vscode.StatusBarItem;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
   private outputChannel: vscode.OutputChannel;
+  private dashboardProvider?: FlightPathDashboardProvider;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(
+    context: vscode.ExtensionContext,
+    dashboardProvider?: FlightPathDashboardProvider
+  ) {
     this.context = context;
+    this.dashboardProvider = dashboardProvider;
     this.promptFileParser = new PromptFileParser();
     this.promptQueue = new PromptQueue();
 
@@ -262,6 +268,14 @@ export class FlightPathManager {
       // Load prompts into queue
       this.promptQueue.loadPrompts(promptFile.prompts);
 
+      // Notify dashboard about file selection
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateFileSelected(
+          fileName,
+          promptFile.prompts.map((p) => ({ prompt: p.prompt }))
+        );
+      }
+
       // At this point, we know Copilot is ready!
       let confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
       confirmMessage +=
@@ -275,6 +289,14 @@ export class FlightPathManager {
       );
 
       if (action === "Take Off 🚀") {
+        // Notify dashboard about execution start
+        if (this.dashboardProvider) {
+          this.dashboardProvider.updateExecutionStarted(
+            fileName,
+            promptFile.prompts.length
+          );
+        }
+
         // Set workflow progress in Copilot integration
         integration.setWorkflowProgress(1, promptFile.prompts.length);
         await this.startWorkflowExecution(integration);
@@ -364,12 +386,21 @@ export class FlightPathManager {
     for (let i = 0; i < state.prompts.length; i++) {
       const prompt = state.prompts[i];
 
+      // Update dashboard progress
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+        this.dashboardProvider.updateStepStatus(i, { state: "running" });
+      }
+
       // Update progress
       activeIntegration.setWorkflowProgress(i + 1, state.prompts.length);
 
       console.log(
         `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
       );
+
+      // Record start time for this prompt
+      const startTime = Date.now();
 
       // Need completion detection if:
       // 1. Multi-prompt workflow (need to know when to advance to next prompt)
@@ -392,6 +423,14 @@ export class FlightPathManager {
         vscode.window.showErrorMessage(
           `FlightPath: Failed to execute prompt ${i + 1}`
         );
+
+        // Update dashboard with failure
+        if (this.dashboardProvider) {
+          this.dashboardProvider.updateStepStatus(i, {
+            state: "failed",
+            message: "Failed to send prompt",
+          });
+        }
         break;
       }
 
@@ -406,6 +445,21 @@ export class FlightPathManager {
         );
         responseText = await responsePromise;
         console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
+
+        // Calculate duration
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // Update dashboard with CLI output (if using CLI integration)
+        if (
+          this.dashboardProvider &&
+          this.isCliIntegration(activeIntegration)
+        ) {
+          this.dashboardProvider.updateCliOutput(i, {
+            prompt: prompt.prompt,
+            response: responseText,
+            elapsed: parseFloat(duration),
+          });
+        }
 
         // Evaluate end condition if present (now with response text available)
         if (prompt.endCondition) {
@@ -432,7 +486,34 @@ export class FlightPathManager {
             console.log(
               "❌ FlightPath: Workflow stopped due to end condition failure"
             );
+
+            // Update dashboard with failure
+            if (this.dashboardProvider) {
+              this.dashboardProvider.updateStepStatus(i, {
+                state: "failed",
+                message: "End condition failed",
+                duration: parseFloat(duration),
+                endConditionResult: evaluationResult,
+              });
+            }
             break;
+          }
+
+          // Update dashboard with success including end condition result
+          if (this.dashboardProvider) {
+            this.dashboardProvider.updateStepStatus(i, {
+              state: "completed",
+              duration: parseFloat(duration),
+              endConditionResult: evaluationResult,
+            });
+          }
+        } else {
+          // Update dashboard with success (no end condition)
+          if (this.dashboardProvider) {
+            this.dashboardProvider.updateStepStatus(i, {
+              state: "completed",
+              duration: parseFloat(duration),
+            });
           }
         }
       } else {
@@ -441,6 +522,17 @@ export class FlightPathManager {
         );
         // Note: This path only executes for single prompts WITHOUT end conditions
         // If a single prompt has an endCondition, needsCompletionDetection will be true
+
+        // Calculate duration
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // Update dashboard with completion
+        if (this.dashboardProvider) {
+          this.dashboardProvider.updateStepStatus(i, {
+            state: "completed",
+            duration: parseFloat(duration),
+          });
+        }
       }
 
       // Check if workflow was paused

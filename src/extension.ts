@@ -2,8 +2,10 @@ import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { CopilotIntegrationMode } from "./types/FlightPathTypes";
+import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 
 let flightPathManager: FlightPathManager;
+let dashboardProvider: FlightPathDashboardProvider;
 
 /**
  * Test File Attachment - Test github.copilot.chat.attachFile and attachSelection commands
@@ -215,8 +217,19 @@ export async function activate(context: vscode.ExtensionContext) {
   console.log("FlightPath: Extension activating...");
 
   try {
-    // Initialize FlightPath manager
-    flightPathManager = new FlightPathManager(context);
+    // Register dashboard provider
+    dashboardProvider = new FlightPathDashboardProvider(context);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        "flightpath.dashboard",
+        dashboardProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      )
+    );
+    console.log("FlightPath: Dashboard provider registered");
+
+    // Initialize FlightPath manager with dashboard provider
+    flightPathManager = new FlightPathManager(context, dashboardProvider);
     await flightPathManager.initialize();
 
     // Register completion provider for prompt JSON and Markdown files
@@ -510,6 +523,64 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Select Prompt File command (for dashboard)
+  const selectPromptFileCommand = vscode.commands.registerCommand(
+    "flightpath.selectPromptFile",
+    async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage("No workspace folder open");
+        return;
+      }
+
+      // Find all prompt files in the workspace
+      const promptFiles = await vscode.workspace.findFiles(
+        "**/*.{prompt.json,flightpath.json,prompt.md}",
+        "**/node_modules/**"
+      );
+
+      if (promptFiles.length === 0) {
+        vscode.window.showWarningMessage("No prompt files found in workspace");
+        return;
+      }
+
+      // Show quick pick
+      const items = promptFiles.map((uri) => ({
+        label: vscode.workspace.asRelativePath(uri),
+        uri: uri,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select a prompt file to execute",
+      });
+
+      if (selected) {
+        // Execute the selected file
+        await vscode.commands.executeCommand(
+          "flightpath.sendToCli",
+          selected.uri
+        );
+      }
+    }
+  );
+
+  // Run command (for dashboard) - executes currently loaded file
+  const runCommand = vscode.commands.registerCommand(
+    "flightpath.run",
+    async () => {
+      // Delegate to FlightPathManager's takeOff
+      await flightPathManager.takeOff();
+    }
+  );
+
+  // Show Output Panel command
+  const showOutputPanelCommand = vscode.commands.registerCommand(
+    "flightpath.showOutputPanel",
+    () => {
+      vscode.commands.executeCommand("workbench.action.output.show");
+    }
+  );
+
   // Add all commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -529,7 +600,10 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     createEndConditionScriptCommand,
     sendToCliCommand,
     sendToChatCommand,
-    showLanguageIdCommand
+    showLanguageIdCommand,
+    selectPromptFileCommand,
+    runCommand,
+    showOutputPanelCommand
   );
 
   console.log("FlightPath: Commands registered successfully");

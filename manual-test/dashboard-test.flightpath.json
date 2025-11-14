@@ -1,0 +1,13 @@
+{
+  "prompts": [
+    {
+      "prompt": "What is FlightPath and what does it do? Provide a brief summary."
+    },
+    {
+      "prompt": "List 3 key benefits of using FlightPath for VS Code automation."
+    },
+    {
+      "prompt": "Explain how the WebView Dashboard improves the FlightPath user experience."
+    }
+  ]
+}

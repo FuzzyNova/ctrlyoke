@@ -1,0 +1,266 @@
+:root {
+  --bg-primary: var(--vscode-editor-background);
+  --bg-secondary: var(--vscode-sideBar-background);
+  --fg-primary: var(--vscode-editor-foreground);
+  --fg-secondary: var(--vscode-descriptionForeground);
+  --border-color: var(--vscode-panel-border);
+  --status-success: var(--vscode-testing-iconPassed);
+  --status-error: var(--vscode-testing-iconFailed);
+  --status-pending: var(--vscode-descriptionForeground);
+  --status-running: var(--vscode-progressBar-background);
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-primary);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+#file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+#file-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#controls {
+  display: flex;
+  gap: 6px;
+}
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+#progress-container {
+  padding: 0 12px;
+}
+
+#progress-bar {
+  position: relative;
+  height: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+#progress-fill {
+  position: absolute;
+  height: 100%;
+  background: var(--status-running);
+  transition: width 0.3s ease;
+}
+
+#progress-text {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-weight: 600;
+  z-index: 1;
+}
+
+/* Responsive main content area */
+#main-content {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Wide layout: side-by-side (>= 800px) */
+@media (min-width: 800px) {
+  #main-content {
+    flex-wrap: nowrap;
+  }
+  
+  #prompts-section {
+    flex: 0 0 350px;
+    min-width: 300px;
+  }
+  
+  #output-section {
+    flex: 1;
+    min-width: 400px;
+  }
+}
+
+/* Narrow layout: stacked (< 800px) */
+@media (max-width: 799px) {
+  #main-content {
+    flex-direction: column;
+  }
+  
+  #prompts-section,
+  #output-section {
+    flex: 1;
+    width: 100%;
+  }
+}
+
+#prompts-section, #output-section {
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+}
+
+#prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-item {
+  padding: 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.prompt-icon {
+  font-size: 16px;
+}
+
+.prompt-detail {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--fg-secondary);
+  padding-left: 24px;
+}
+
+.prompt-status-msg {
+  margin-top: 6px;
+  font-size: 12px;
+  font-style: italic;
+  padding-left: 24px;
+}
+
+.status-completed .prompt-icon {
+  color: var(--status-success);
+}
+
+.status-failed .prompt-icon {
+  color: var(--status-error);
+}
+
+.status-running .prompt-icon {
+  color: var(--status-running);
+}
+
+.status-pending .prompt-icon {
+  color: var(--status-pending);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--fg-secondary);
+  font-style: italic;
+  padding: 20px;
+}
+
+#output-content {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+}
+
+.cli-output-item {
+  background: var(--bg-primary);
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.output-header {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--fg-secondary);
+}
+
+.output-prompt, .output-response {
+  padding: 8px;
+  margin: 8px 0;
+  border-left: 3px solid var(--border-color);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.output-prompt {
+  background: rgba(100, 100, 255, 0.1);
+  border-left-color: rgb(100, 100, 255);
+}
+
+.output-response {
+  background: rgba(100, 255, 100, 0.1);
+  border-left-color: rgb(100, 255, 100);
+}
+
+.output-stats {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  margin-top: 4px;
+}
