@@ -301,11 +301,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * FlightPathManager blocks workflow execution until status is 'ready'.
    *
    * @param prompt The prompt item to send
-   * @param needsCompletionDetection If true, attach tool instructions for completion detection (default: true)
+   * @param needsCompletionDetection If true, attach tool instructions for completion detection (default: determined by endCondition)
    */
   async sendPrompt(
     prompt: PromptItem,
-    needsCompletionDetection: boolean = true
+    needsCompletionDetection?: boolean
   ): Promise<boolean> {
     try {
       // Verify automation is still available
@@ -317,16 +317,24 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         return false;
       }
 
+      // Determine if completion detection is needed:
+      // - If explicitly provided, use that value
+      // - Otherwise, check if prompt has endCondition with script (requires completion detection)
+      const shouldDetectCompletion =
+        needsCompletionDetection !== undefined
+          ? needsCompletionDetection
+          : !!prompt.endCondition?.script;
+
       // Build prompt with Copilot Chat syntax
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
-        needsCompletionDetection
+        shouldDetectCompletion
       );
 
       // Execute direct automation
       const result = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        needsCompletionDetection
+        shouldDetectCompletion
       );
 
       return result;
@@ -460,17 +468,23 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         const chatAfterSubmit = await this.getChatContent();
 
         // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
+        // Normalize whitespace for comparison (replace multiple spaces/newlines with single space)
         const promptToVerify = promptText
           .replace(this.TOOL_INSTRUCTION, "")
           .trim()
-          .substring(0, 100);
+          .substring(0, 100)
+          .replace(/\s+/g, " "); // Normalize whitespace for comparison
+
+        // Normalize chat content for comparison
+        const normalizedChat = chatAfterSubmit.replace(/\s+/g, " ");
 
         // Check if chat grew AND prompt appears in chat
         // Size check handles duplicate prompts (primary signal), prompt presence is safety validation
         if (
           chatAfterSubmit.length > chatBeforeSubmit.length &&
-          chatAfterSubmit.includes(promptToVerify)
+          normalizedChat.includes(promptToVerify)
         ) {
+          console.log(`✅ Submit verification passed`);
           return true;
         }
       } catch (error) {
@@ -733,6 +747,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Tool instruction is prepended before user prompt to maximize LLM attention on the actual task
    * Prompts are stored in final-form (ready to send) in JSON files
    *
+   * Tool instructions are included when:
+   * - Multi-prompt workflows (need to know when to advance)
+   * - Single prompts with endCondition.script (need to know when to run validation)
+   * - Retry scenarios (need to know when retry is complete)
+   *
    * @param prompt The prompt item
    * @param includeToolInstruction If true, prepend tool instruction for completion detection
    */
@@ -743,7 +762,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     // Use base class method to get prompt text with file attachments processed
     const promptText = await this.buildPromptText(prompt);
 
-    // Only prepend tool instruction if needed (multi-prompt workflows)
+    // Prepend tool instruction if needed
     if (includeToolInstruction) {
       // Prepend TOOL_INSTRUCTION wrapped in XML before user prompt
       // User prompt comes LAST for maximum LLM attention on the actual task

@@ -371,13 +371,16 @@ export class FlightPathManager {
         `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
       );
 
-      // Only need completion detection for multi-prompt workflows
-      const needsCompletionDetection = state.prompts.length > 1;
+      // Need completion detection if:
+      // 1. Multi-prompt workflow (need to know when to advance to next prompt)
+      // 2. Single prompt with endCondition (need to know when to evaluate script)
+      const needsCompletionDetection =
+        state.prompts.length > 1 || !!prompt.endCondition?.script;
 
       // Set up response listener BEFORE sending prompt to avoid race condition (only if needed)
       const responsePromise = needsCompletionDetection
         ? this.waitForResponseComplete(prompt, activeIntegration)
-        : Promise.resolve(""); // Single prompt - no need to wait
+        : Promise.resolve(""); // No completion detection needed
 
       // Send prompt to Copilot
       const success = await activeIntegration.sendPrompt(
@@ -434,10 +437,10 @@ export class FlightPathManager {
         }
       } else {
         console.log(
-          `✅ FlightPath: Single prompt sent successfully - workflow complete`
+          `✅ FlightPath: Prompt sent successfully (no completion detection needed)`
         );
-        // Note: End conditions are not evaluated for single-prompt workflows
-        // since we don't wait for completion
+        // Note: This path only executes for single prompts WITHOUT end conditions
+        // If a single prompt has an endCondition, needsCompletionDetection will be true
       }
 
       // Check if workflow was paused
@@ -475,28 +478,15 @@ export class FlightPathManager {
    * Wait for Copilot to call the response complete tool
    * @param prompt The current prompt being executed
    * @param integration The integration instance to use
-   * @returns Promise that resolves with response text when response is complete or timeout occurs
+   * @returns Promise that resolves with response text when response is complete
    */
   private async waitForResponseComplete(
     prompt: PromptItem,
     integration: CopilotIntegration
   ): Promise<string> {
-    // Use endCondition timeout if specified, otherwise use 30 minutes as safety net
-    // This should be long enough for any reasonable Copilot response
-    const timeout = prompt.endCondition?.timeout || 1800000; // Default 30 minutes (1,800,000ms)
-
+    // No timeout - CLI completes deterministically, Chat should call the completion tool
+    // End condition timeout is separate and handled by EndConditionEvaluator
     return new Promise<string>((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
-        disposable.dispose();
-        console.warn(
-          `⚠️ FlightPath: Response completion timeout after ${timeout}ms (${Math.round(timeout / 60000)} minutes)`
-        );
-        vscode.window.showWarningMessage(
-          `FlightPath: Response timeout after ${Math.round(timeout / 60000)} minutes - Copilot did not call the completion tool. Proceeding to next prompt.`
-        );
-        resolve(""); // Resolve with empty string to continue workflow
-      }, timeout);
-
       // Subscribe to response complete event (with duplicate protection)
       let responseHandled = false; // Prevent duplicate event handling
       const disposable = integration.onResponseComplete(
@@ -510,7 +500,6 @@ export class FlightPathManager {
           }
           responseHandled = true;
 
-          clearTimeout(timeoutHandle);
           disposable.dispose();
           console.log("✅ FlightPath: Response complete signal received");
           console.log(
@@ -1144,10 +1133,13 @@ export class FlightPathManager {
       integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
 
       // Set up response listener for retry
-      const needsCompletionDetection = totalPrompts > 1;
-      const responsePromise = needsCompletionDetection
-        ? this.waitForResponseComplete(retryPromptItem, integration)
-        : Promise.resolve("");
+      // IMPORTANT: Always need completion detection for retries because we need to
+      // wait for response before re-evaluating the end condition script
+      const needsCompletionDetection = true;
+      const responsePromise = this.waitForResponseComplete(
+        retryPromptItem,
+        integration
+      );
 
       // Send retry prompt
       const success = await integration.sendPrompt(
