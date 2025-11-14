@@ -66,6 +66,9 @@
       case 'cliOutput':
         handleCliOutput(message.stepIndex, message.output);
         break;
+      case 'executionCompleted':
+        handleExecutionCompleted();
+        break;
     }
   });
 
@@ -82,6 +85,14 @@
       status: 'pending',
       details: {}
     }));
+    // Reset execution state and progress when new file is selected
+    state.executionState = 'idle';
+    state.currentStep = 0;
+    state.totalSteps = 0;
+    state.cliOutputs = {};
+    // Hide progress bar and output section
+    elements.progressContainer.style.display = 'none';
+    elements.outputSection.style.display = 'none';
     render();
   }
 
@@ -115,6 +126,11 @@
     if (stepIndex === state.currentStep - 1) {
       renderCliOutput(output);
     }
+  }
+
+  function handleExecutionCompleted() {
+    state.executionState = 'completed';
+    updateControls();
   }
 
   function render() {
@@ -185,8 +201,15 @@
   function updateControls() {
     const isRunning = state.executionState === 'running';
     const hasFile = state.fileName !== null;
+    const isCompleted = state.executionState === 'completed';
     
-    elements.runBtn.disabled = !hasFile || isRunning;
+    // Enable Run button if: has file AND (not running OR is completed)
+    elements.runBtn.disabled = !hasFile || (isRunning && !isCompleted);
+    // Change button text and class based on state
+    elements.runBtn.textContent = isCompleted ? '↻' : '▶';
+    elements.runBtn.title = isCompleted ? 'Re-run' : 'Run';
+    elements.runBtn.className = isCompleted ? 'btn-rerun' : 'btn-primary';
+    
     elements.pauseBtn.disabled = !isRunning;
     elements.stopBtn.disabled = !isRunning;
   }

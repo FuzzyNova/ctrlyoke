@@ -13,6 +13,7 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - Orchestrates PromptQueue and CopilotIntegration coordination
 - Subscribes to response completion events, triggers next queue item
 - Status bar updates based on queue state and Copilot availability
+- Manages prompt file loading vs execution separation (dashboard UX flow)
 
 **Critical patterns:**
 
@@ -22,10 +23,18 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - Response complete event triggers `advanceQueue()`
 - Loop detection: Cancels chat if response fires without advancement
 
+**Prompt file workflow:**
+
+- `loadPromptFile(filePath)` - Loads file into dashboard WITHOUT executing (validates, parses, notifies dashboard)
+- `executeLoadedPromptFile(mode?)` - Executes the currently loaded file (checks Copilot readiness, starts workflow)
+- `executePromptFile(filePath, mode?)` - Legacy method (loads then immediately executes for backwards compatibility)
+- Dashboard "Change" button → calls `loadPromptFile()` → user can review prompts before clicking "Run"
+- Dashboard "Run" button → calls `executeLoadedPromptFile()` → starts execution immediately (no confirmation dialog)
+- Context menu "Send to CLI/Chat" → calls `executePromptFile()` → loads and executes immediately
+
 **Mode override:**
 
-- `takeOffWithModeOverride(uri, mode)` bypasses user's default
-- Context menu "Send to CLI" / "Send to Chat" use this mechanism
+- Context menu "Send to CLI" / "Send to Chat" use mode override mechanism
 - Single-prompt files execute directly; multi-prompt use queue
   </flightPathManager>
 

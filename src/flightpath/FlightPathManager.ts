@@ -25,6 +25,7 @@ export class FlightPathManager {
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
   private outputChannel: vscode.OutputChannel;
   private dashboardProvider?: FlightPathDashboardProvider;
+  private currentPromptFile?: { filePath: string; promptFile: PromptFile };
 
   constructor(
     context: vscode.ExtensionContext,
@@ -150,88 +151,14 @@ export class FlightPathManager {
   }
 
   /**
-   * Execute a prompt file
+   * Load a prompt file into the dashboard without executing
    * @param filePath Path to the prompt file
-   * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */
-  async executePromptFile(
-    filePath: string,
-    modeOverride?: CopilotIntegrationMode
-  ): Promise<void> {
+  async loadPromptFile(filePath: string): Promise<void> {
     try {
-      console.log(`FlightPath: Executing prompt file: ${filePath}`);
+      console.log(`FlightPath: Loading prompt file: ${filePath}`);
 
-      // Create integration for this execution (either override or default)
-      const integration = this.createIntegrationForMode(modeOverride);
-
-      // Check Copilot readiness FIRST
-      const detailedStatus = integration.getDetailedStatus();
       const fileName = path.basename(filePath);
-
-      // Block execution if still initializing
-      if (detailedStatus.initializationStatus === CopilotStatus.Initializing) {
-        const action = await vscode.window.showWarningMessage(
-          `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
-          "Retry",
-          "Cancel"
-        );
-
-        if (action === "Retry") {
-          // Try again after a short delay
-          setTimeout(
-            () => this.executePromptFile(filePath, modeOverride),
-            1000
-          );
-        }
-        return;
-      }
-
-      // Block execution if waiting for Copilot
-      if (detailedStatus.initializationStatus === CopilotStatus.Waiting) {
-        const action = await vscode.window.showWarningMessage(
-          `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
-          "Retry",
-          "Cancel"
-        );
-
-        if (action === "Retry") {
-          // Try again after a short delay
-          setTimeout(
-            () => this.executePromptFile(filePath, modeOverride),
-            2000
-          );
-        }
-        return;
-      }
-
-      // Block execution if unavailable
-      if (detailedStatus.initializationStatus === CopilotStatus.Unavailable) {
-        const action = await vscode.window.showErrorMessage(
-          `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
-          "Retry Detection",
-          "View Requirements",
-          "Cancel"
-        );
-
-        if (action === "Retry Detection") {
-          await this.retryCopilotDetection();
-          // Try executing again after retry starts
-          setTimeout(
-            () => this.executePromptFile(filePath, modeOverride),
-            2000
-          );
-        } else if (action === "View Requirements") {
-          // Test automation only available for chat integration
-          if (this.isChatIntegration(integration)) {
-            await integration.testAutomation();
-          } else {
-            vscode.window.showInformationMessage(
-              "FlightPath: Using CLI integration. Test automation is not needed."
-            );
-          }
-        }
-        return;
-      }
 
       // Handle .prompt.md files differently (direct text, no parsing)
       let promptFile: PromptFile | null = null;
@@ -265,7 +192,10 @@ export class FlightPathManager {
         return;
       }
 
-      // Load prompts into queue
+      // Store the loaded file
+      this.currentPromptFile = { filePath, promptFile };
+
+      // Load prompts into queue (but don't start execution)
       this.promptQueue.loadPrompts(promptFile.prompts);
 
       // Notify dashboard about file selection
@@ -276,35 +206,131 @@ export class FlightPathManager {
         );
       }
 
-      // At this point, we know Copilot is ready!
-      let confirmMessage = `Execute ${promptFile.prompts.length} prompt(s) from ${fileName}?`;
-      confirmMessage +=
-        "\n\n✅ Copilot automation is ready - workflow will run automatically!";
-
-      const action = await vscode.window.showInformationMessage(
-        confirmMessage,
-        { modal: true },
-        "Take Off 🚀",
-        "Cancel"
+      console.log(
+        `FlightPath: Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
       );
+    } catch (error) {
+      console.error("FlightPath: Failed to load prompt file:", error);
+      vscode.window.showErrorMessage(
+        `FlightPath: Failed to load file: ${error}`
+      );
+    }
+  }
 
-      if (action === "Take Off 🚀") {
-        // Notify dashboard about execution start
-        if (this.dashboardProvider) {
-          this.dashboardProvider.updateExecutionStarted(
-            fileName,
-            promptFile.prompts.length
-          );
+  /**
+   * Execute the currently loaded prompt file
+   * @param modeOverride Optional integration mode (overrides user settings for this execution)
+   */
+  async executeLoadedPromptFile(
+    modeOverride?: CopilotIntegrationMode
+  ): Promise<void> {
+    if (!this.currentPromptFile) {
+      vscode.window.showWarningMessage(
+        "FlightPath: No prompt file loaded. Use 'Change' button to select a file first."
+      );
+      return;
+    }
+
+    const { filePath, promptFile } = this.currentPromptFile;
+    const fileName = path.basename(filePath);
+
+    try {
+      console.log(`FlightPath: Executing loaded prompt file: ${filePath}`);
+
+      // Create integration for this execution (either override or default)
+      const integration = this.createIntegrationForMode(modeOverride);
+
+      // Check Copilot readiness FIRST
+      const detailedStatus = integration.getDetailedStatus();
+
+      // Block execution if still initializing
+      if (detailedStatus.initializationStatus === CopilotStatus.Initializing) {
+        const action = await vscode.window.showWarningMessage(
+          `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
+          "Retry",
+          "Cancel"
+        );
+
+        if (action === "Retry") {
+          // Try again after a short delay
+          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 1000);
         }
-
-        // Set workflow progress in Copilot integration
-        integration.setWorkflowProgress(1, promptFile.prompts.length);
-        await this.startWorkflowExecution(integration);
+        return;
       }
+
+      // Block execution if waiting for Copilot
+      if (detailedStatus.initializationStatus === CopilotStatus.Waiting) {
+        const action = await vscode.window.showWarningMessage(
+          `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
+          "Retry",
+          "Cancel"
+        );
+
+        if (action === "Retry") {
+          // Try again after a short delay
+          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 2000);
+        }
+        return;
+      }
+
+      // Block execution if unavailable
+      if (detailedStatus.initializationStatus === CopilotStatus.Unavailable) {
+        const action = await vscode.window.showErrorMessage(
+          `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
+          "Retry Detection",
+          "View Requirements",
+          "Cancel"
+        );
+
+        if (action === "Retry Detection") {
+          await this.retryCopilotDetection();
+          // Try executing again after retry starts
+          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 2000);
+        } else if (action === "View Requirements") {
+          // Test automation only available for chat integration
+          if (this.isChatIntegration(integration)) {
+            await integration.testAutomation();
+          } else {
+            vscode.window.showInformationMessage(
+              "FlightPath: Using CLI integration. Test automation is not needed."
+            );
+          }
+        }
+        return;
+      }
+
+      // Notify dashboard about execution start
+      if (this.dashboardProvider && promptFile.prompts) {
+        this.dashboardProvider.updateExecutionStarted(
+          fileName,
+          promptFile.prompts.length
+        );
+      }
+
+      // Set workflow progress in Copilot integration
+      if (promptFile.prompts) {
+        integration.setWorkflowProgress(1, promptFile.prompts.length);
+      }
+      await this.startWorkflowExecution(integration);
     } catch (error) {
       console.error("FlightPath: Failed to execute prompt file:", error);
       vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
     }
+  }
+
+  /**
+   * Execute a prompt file (legacy method - loads and executes immediately)
+   * @param filePath Path to the prompt file
+   * @param modeOverride Optional integration mode (overrides user settings for this execution)
+   */
+  async executePromptFile(
+    filePath: string,
+    modeOverride?: CopilotIntegrationMode
+  ): Promise<void> {
+    // Load the file first
+    await this.loadPromptFile(filePath);
+    // Then execute it immediately (for backwards compatibility with context menu)
+    await this.executeLoadedPromptFile(modeOverride);
   }
 
   /**
@@ -543,6 +569,11 @@ export class FlightPathManager {
     }
 
     console.log("🎉 FlightPath: Workflow execution complete");
+
+    // Notify dashboard about execution completion
+    if (this.dashboardProvider) {
+      this.dashboardProvider.updateExecutionCompleted();
+    }
 
     // Log workflow completion to output channel
     if (shouldShowOutput && this.isCliIntegration(activeIntegration)) {

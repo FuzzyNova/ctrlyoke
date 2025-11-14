@@ -551,15 +551,12 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }));
 
       const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a prompt file to execute",
+        placeHolder: "Select a prompt file to load",
       });
 
       if (selected) {
-        // Execute the selected file
-        await vscode.commands.executeCommand(
-          "flightpath.sendToCli",
-          selected.uri
-        );
+        // Load the file into the dashboard (don't execute)
+        await flightPathManager.loadPromptFile(selected.uri.fsPath);
       }
     }
   );
@@ -568,8 +565,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
   const runCommand = vscode.commands.registerCommand(
     "flightpath.run",
     async () => {
-      // Delegate to FlightPathManager's takeOff
-      await flightPathManager.takeOff();
+      // Execute the currently loaded prompt file
+      await flightPathManager.executeLoadedPromptFile();
     }
   );
 

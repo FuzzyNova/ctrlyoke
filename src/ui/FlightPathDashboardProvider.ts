@@ -78,6 +78,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: "cliOutput", stepIndex, output });
   }
 
+  public updateExecutionCompleted(): void {
+    this.postMessage({ type: "executionCompleted" });
+  }
+
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
   }
