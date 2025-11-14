@@ -67,6 +67,16 @@
         "timeout": {
           "type": "number",
           "description": "Timeout in milliseconds"
+        },
+        "maxRetries": {
+          "type": "number",
+          "description": "Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use with caution), 0 for no retries (default), or 1-100 for a specific limit.",
+          "minimum": -1,
+          "maximum": 100
+        },
+        "retryPrompt": {
+          "type": "string",
+          "description": "Template for retry prompt with placeholders: {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}"
         }
       },
       "required": ["script", "returns"]

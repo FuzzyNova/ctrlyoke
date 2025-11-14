@@ -64,7 +64,39 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 
 ---
 
-### 5. Chat Mode Testing
+### 5. End Condition Retry Mechanism (NEW - Phase 1 Implementation)
+**File:** `test-retry.flightpath.json`
+
+**Test:**
+- Tests automatic retry with custom prompts when validation fails
+- Verifies: `maxRetries`, `retryPrompt`, placeholder replacement
+- Uses: `check_documentation.js` script
+
+**Expected:**
+1. Copilot creates `add` function with tests
+2. End condition validates tests pass (may fail initially)
+3. If validation fails AND retries available → sends retry prompt with script output
+4. Retry prompt includes: attempt number, test output, expected vs actual values
+5. Copilot fixes issues based on feedback
+6. Re-validates until success or max retries (3) reached
+
+**Retry Flow:**
+```
+Copilot Response → Validate → Failed? 
+  ↓ (has retries)
+Build retry prompt with {scriptOutput}, {retryCount}, etc.
+  ↓
+Send to Copilot → Wait → Validate → Loop until success/max retries
+```
+
+**Test Variations:**
+- **Happy Path:** Script succeeds but output doesn't match (triggers retry)
+- **Error Path:** Script fails to execute (shows error, no retry)
+- **Max Retries:** Exhaust all retries (user prompted to continue/stop)
+
+---
+
+### 6. Chat Mode Testing
 **Any prompt file**
 
 **Test:**
@@ -91,6 +123,7 @@ Located in `.flightpath/scripts/`:
 | `timeout_test.py` | Tests timeout handling | Sleeps 60s |
 | `check_has_add_function.py` | Validates "add" function in response | `true`/`false` |
 | `check_typescript.js` | Detects TypeScript syntax | `true`/`false` |
+| `check_documentation.js` | Validates JSDoc comments (NEW) | `complete`/`incomplete` |
 
 ### Testing End Conditions
 
@@ -98,6 +131,58 @@ Located in `.flightpath/scripts/`:
 2. **Failure Case:** Use `always_false.py` - workflow should stop
 3. **Timeout Case:** Use `timeout_test.py` with 10s timeout - should fail with timeout error
 4. **Real Validation:** Use `check_has_add_function.py` - validates actual response content
+
+### Testing Retry Mechanism (NEW)
+
+The retry mechanism automatically re-prompts Copilot when validation fails:
+
+**Key Concepts:**
+- **Happy Path (Retry):** Script runs successfully (exit 0) but output doesn't match expected value
+- **Error Path (No Retry):** Script fails to execute, times out, or exits with non-zero code
+
+**Test Cases:**
+
+1. **Basic Retry Flow**
+   - File: `test-retry.flightpath.json`
+   - Expected: Copilot gets feedback from test failures and fixes issues automatically
+   - Validates: Placeholder replacement, retry count tracking, recursive retry logic
+
+2. **Retry Prompt Placeholders**
+   Available placeholders in `retryPrompt`:
+   - `{scriptOutput}` - stdout from the script
+   - `{errorOutput}` - stderr from the script  
+   - `{expectedValue}` - what we're looking for
+   - `{actualValue}` - what we got
+   - `{retryCount}` - current attempt (1, 2, 3...)
+   - `{maxRetries}` - maximum attempts configured
+
+3. **Max Retries Behavior**
+   - Configure `maxRetries: 3` in end condition
+   - Script fails 4 times
+   - Expected: User prompted after 3rd retry with options:
+     - Stop Workflow
+     - Continue Anyway (ignore validation)
+     - Retry Once More (manual retry)
+
+4. **Script Design for Retries**
+   ✅ **DO:** Exit with code 0 even on validation failure
+   ```javascript
+   if (testsPassed) {
+       console.log('all_passed');
+       process.exit(0);
+   } else {
+       console.log('tests_failed');
+       console.log('Failed: test_login, test_logout'); // Details for retry
+       process.exit(0); // Still exit 0 - this is validation failure, not error
+   }
+   ```
+   
+   ❌ **DON'T:** Exit with non-zero code for validation failures
+   ```javascript
+   if (!testsPassed) {
+       process.exit(1); // This triggers error path, not retry!
+   }
+   ```
 
 ---
 

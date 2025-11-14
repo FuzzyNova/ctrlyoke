@@ -25,6 +25,8 @@ export class ValidationUtils {
           script: { type: "string" },
           returns: { type: "string" },
           timeout: { type: "number", nullable: true },
+          maxRetries: { type: "number", nullable: true },
+          retryPrompt: { type: "string", nullable: true },
         },
         required: ["script", "returns"],
         nullable: true,
@@ -100,6 +102,35 @@ export class ValidationUtils {
       (typeof condition.timeout !== "number" || condition.timeout <= 0)
     ) {
       errors.push("End condition timeout must be a positive number");
+    }
+
+    if (
+      condition.maxRetries !== undefined &&
+      (typeof condition.maxRetries !== "number" ||
+        condition.maxRetries < -1 ||
+        (condition.maxRetries > 100 && condition.maxRetries !== -1))
+    ) {
+      errors.push(
+        "End condition maxRetries must be -1 (unlimited) or between 0 and 100"
+      );
+    }
+
+    // Warn about high retry counts
+    if (
+      condition.maxRetries !== undefined &&
+      condition.maxRetries > 20 &&
+      condition.maxRetries !== -1
+    ) {
+      console.warn(
+        `FlightPath: High maxRetries value (${condition.maxRetries}). Consider using -1 for unlimited or a lower value.`
+      );
+    }
+
+    if (
+      condition.retryPrompt !== undefined &&
+      typeof condition.retryPrompt !== "string"
+    ) {
+      errors.push("End condition retryPrompt must be a string");
     }
 
     return { valid: errors.length === 0, errors };

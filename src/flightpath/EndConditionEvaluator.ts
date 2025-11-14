@@ -5,10 +5,13 @@ import { EndCondition } from "../types/FlightPathTypes";
 
 export interface EvaluationResult {
   success: boolean;
-  result: string;
+  stdout: string; // Separate stdout from script
+  stderr: string; // Separate stderr from script
+  result: string; // Keep for backward compatibility (same as stdout)
   error?: string;
   timeout?: boolean;
   duration: number;
+  exitCode?: number; // Capture exit code for better error handling
 }
 
 export class EndConditionEvaluator {
@@ -41,6 +44,8 @@ export class EndConditionEvaluator {
       if (!scriptPath) {
         return {
           success: false,
+          stdout: "",
+          stderr: "",
           result: "",
           error: `Script not found: ${condition.script}`,
           duration: Date.now() - startTime,
@@ -52,6 +57,8 @@ export class EndConditionEvaluator {
       if (!command) {
         return {
           success: false,
+          stdout: "",
+          stderr: "",
           result: "",
           error: `Unsupported script type: ${path.extname(scriptPath)}`,
           duration: Date.now() - startTime,
@@ -72,14 +79,19 @@ export class EndConditionEvaluator {
 
       return {
         success: success && result.success,
+        stdout: result.stdout || "",
+        stderr: result.stderr || "",
         result: result.result,
         error: result.error,
         timeout: result.timeout,
         duration: Date.now() - startTime,
+        exitCode: result.exitCode,
       };
     } catch (error) {
       return {
         success: false,
+        stdout: "",
+        stderr: "",
         result: "",
         error: error instanceof Error ? error.message : String(error),
         duration: Date.now() - startTime,
@@ -200,6 +212,9 @@ export class EndConditionEvaluator {
     result: string;
     error?: string;
     timeout?: boolean;
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
   }> {
     return new Promise((resolve) => {
       let stdout = "";
@@ -225,6 +240,8 @@ export class EndConditionEvaluator {
           resolve({
             success: false,
             result: stdout,
+            stdout: stdout,
+            stderr: stderr,
             error: "Script execution timed out",
             timeout: true,
           });
@@ -250,7 +267,10 @@ export class EndConditionEvaluator {
           resolve({
             success: code === 0,
             result: stdout.trim(),
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
             error: stderr.trim() || undefined,
+            exitCode: code ?? undefined,
           });
         }
       });
@@ -265,6 +285,8 @@ export class EndConditionEvaluator {
           resolve({
             success: false,
             result: "",
+            stdout: "",
+            stderr: "",
             error: `Failed to execute script: ${error.message}`,
           });
         }
@@ -314,6 +336,25 @@ export class EndConditionEvaluator {
 
     // String contains (for complex outputs)
     return actual.includes(expected);
+  }
+
+  /**
+   * Build retry prompt from template by replacing placeholders
+   */
+  buildRetryPrompt(
+    template: string,
+    evaluationResult: EvaluationResult,
+    expectedValue: string,
+    retryCount: number,
+    maxRetries: number
+  ): string {
+    return template
+      .replace(/{scriptOutput}/g, evaluationResult.stdout.trim())
+      .replace(/{errorOutput}/g, evaluationResult.stderr.trim())
+      .replace(/{expectedValue}/g, expectedValue)
+      .replace(/{actualValue}/g, evaluationResult.result.trim())
+      .replace(/{retryCount}/g, String(retryCount))
+      .replace(/{maxRetries}/g, String(maxRetries));
   }
 
   /**

@@ -25,6 +25,8 @@ export interface EndCondition {
   script: string;
   returns: string;
   timeout?: number;
+  maxRetries?: number; // Maximum number of retry attempts (default: 0)
+  retryPrompt?: string; // Template with placeholders for retry messages
 }
 
 export interface QueueState {
@@ -40,4 +42,6 @@ export interface PromptResult {
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
+  retryCount?: number; // Track retry attempts for this prompt
+  scriptOutput?: string; // Capture last script output for debugging
 }

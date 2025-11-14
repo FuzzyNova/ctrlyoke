@@ -1,0 +1,23 @@
+{
+  "prompts": [
+    {
+      "prompt": "Create a simple function called 'add' that takes two numbers and returns their sum. Include comprehensive tests.",
+      "endCondition": {
+        "script": "npm test",
+        "returns": "all_passed",
+        "maxRetries": 3,
+        "timeout": 60000,
+        "retryPrompt": "Tests are failing (attempt {retryCount}/{maxRetries}):\n\n{scriptOutput}\n\nExpected: {expectedValue}\nActual: {actualValue}\n\nPlease fix the failing tests and ensure all tests pass."
+      }
+    },
+    {
+      "prompt": "Add documentation to the 'add' function with JSDoc comments including parameter types and return type.",
+      "endCondition": {
+        "script": "check_documentation.js",
+        "returns": "complete",
+        "maxRetries": 2,
+        "retryPrompt": "Documentation check failed:\n\n{scriptOutput}\n\nPlease add proper JSDoc documentation with @param and @returns tags."
+      }
+    }
+  ]
+}

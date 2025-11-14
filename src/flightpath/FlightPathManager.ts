@@ -409,8 +409,28 @@ export class FlightPathManager {
           console.log(
             `🔍 FlightPath: Evaluating end condition for prompt ${i + 1}...`
           );
-          // TODO: Implement end condition evaluation with response text
-          // This will be handled by EndConditionEvaluator with response text passed as env var
+
+          // Evaluate the end condition
+          const evaluationResult =
+            await this.endConditionEvaluator.evaluateCondition(
+              prompt.endCondition,
+              this.currentWorkspaceFolder?.uri.fsPath
+            );
+
+          // Handle the evaluation result
+          const shouldContinue = await this.handleEndConditionResult(
+            prompt,
+            evaluationResult,
+            activeIntegration,
+            state.prompts.length
+          );
+
+          if (!shouldContinue) {
+            console.log(
+              "❌ FlightPath: Workflow stopped due to end condition failure"
+            );
+            break;
+          }
         }
       } else {
         console.log(
@@ -990,6 +1010,246 @@ export class FlightPathManager {
         `❌ Failed to create end condition script: ${error}`
       );
     }
+  }
+
+  /**
+   * Handle end condition evaluation result
+   * @returns true to continue workflow, false to stop
+   */
+  private async handleEndConditionResult(
+    prompt: PromptItem,
+    evaluationResult: import("./EndConditionEvaluator").EvaluationResult,
+    integration: CopilotIntegration,
+    totalPrompts: number
+  ): Promise<boolean> {
+    // Success case - continue to next prompt
+    if (evaluationResult.success) {
+      console.log("✅ FlightPath: End condition passed");
+      this.promptQueue.resetRetryCount();
+
+      // Update result with script output
+      const currentIndex = this.promptQueue.getState().currentIndex;
+      const currentResult = this.promptQueue.getState().results[currentIndex];
+      if (currentResult) {
+        currentResult.endConditionResult = true;
+        currentResult.scriptOutput = evaluationResult.stdout;
+      }
+
+      return true;
+    }
+
+    // Determine if this is an execution error or validation failure
+    const isExecutionError =
+      evaluationResult.timeout ||
+      (evaluationResult.error && !evaluationResult.exitCode) ||
+      (evaluationResult.exitCode !== undefined &&
+        evaluationResult.exitCode !== 0);
+
+    if (isExecutionError) {
+      // Error path - script failed to execute properly
+      return await this.handleExecutionError(prompt, evaluationResult);
+    } else {
+      // Happy path - validation failure (script ran but output doesn't match)
+      return await this.handleValidationFailure(
+        prompt,
+        evaluationResult,
+        integration,
+        totalPrompts
+      );
+    }
+  }
+
+  /**
+   * Handle execution errors (script failed, timed out, etc.)
+   * @returns true to continue, false to stop
+   */
+  private async handleExecutionError(
+    prompt: PromptItem,
+    evaluationResult: import("./EndConditionEvaluator").EvaluationResult
+  ): Promise<boolean> {
+    let errorMessage = "End condition script execution failed";
+
+    if (evaluationResult.timeout) {
+      errorMessage = `End condition script timed out after ${evaluationResult.duration}ms`;
+    } else if (evaluationResult.error) {
+      errorMessage = `End condition script error: ${evaluationResult.error}`;
+    }
+
+    console.error(`❌ FlightPath: ${errorMessage}`);
+
+    const action = await vscode.window.showErrorMessage(
+      `FlightPath: ${errorMessage}`,
+      "Stop Workflow",
+      "Skip Condition",
+      "Open Script"
+    );
+
+    if (action === "Skip Condition") {
+      console.log("⏭️ FlightPath: Skipping end condition and continuing");
+      return true;
+    } else if (action === "Open Script") {
+      // Try to open the script file
+      if (prompt.endCondition?.script) {
+        try {
+          const scriptUri = vscode.Uri.file(prompt.endCondition.script);
+          const doc = await vscode.workspace.openTextDocument(scriptUri);
+          await vscode.window.showTextDocument(doc);
+        } catch {
+          vscode.window.showErrorMessage("Failed to open script file");
+        }
+      }
+      return false;
+    }
+
+    // Default: stop workflow
+    return false;
+  }
+
+  /**
+   * Handle validation failure (script succeeded but output doesn't match expected)
+   * @returns true to continue, false to stop
+   */
+  private async handleValidationFailure(
+    prompt: PromptItem,
+    evaluationResult: import("./EndConditionEvaluator").EvaluationResult,
+    integration: CopilotIntegration,
+    totalPrompts: number
+  ): Promise<boolean> {
+    // Check if retry is possible
+    if (this.promptQueue.canRetry(prompt)) {
+      console.log(
+        `🔄 FlightPath: Validation failed, retrying (attempt ${this.promptQueue.getCurrentRetryCount() + 1}/${prompt.endCondition?.maxRetries})...`
+      );
+
+      // Increment retry counter
+      this.promptQueue.incrementRetryCount();
+
+      // Build retry prompt
+      const retryPrompt = this.buildRetryPrompt(prompt, evaluationResult);
+
+      // Send retry prompt to Copilot
+      const retryPromptItem: PromptItem = {
+        prompt: retryPrompt,
+        model: prompt.model,
+        endCondition: prompt.endCondition, // Keep same end condition
+      };
+
+      // Update workflow progress to show retry
+      const currentIndex = this.promptQueue.getState().currentIndex;
+      integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
+
+      // Set up response listener for retry
+      const needsCompletionDetection = totalPrompts > 1;
+      const responsePromise = needsCompletionDetection
+        ? this.waitForResponseComplete(retryPromptItem, integration)
+        : Promise.resolve("");
+
+      // Send retry prompt
+      const success = await integration.sendPrompt(
+        retryPromptItem,
+        needsCompletionDetection
+      );
+
+      if (!success) {
+        vscode.window.showErrorMessage(
+          "FlightPath: Failed to send retry prompt"
+        );
+        return false;
+      }
+
+      // Wait for response
+      if (needsCompletionDetection) {
+        console.log("⏳ FlightPath: Waiting for retry response...");
+        await responsePromise;
+        console.log("✅ FlightPath: Retry response complete");
+
+        // Re-evaluate end condition after retry
+        const retryEvaluation =
+          await this.endConditionEvaluator.evaluateCondition(
+            prompt.endCondition!,
+            this.currentWorkspaceFolder?.uri.fsPath
+          );
+
+        // Recursively handle the result (will retry again if needed or max out)
+        return await this.handleEndConditionResult(
+          prompt,
+          retryEvaluation,
+          integration,
+          totalPrompts
+        );
+      }
+
+      return true;
+    } else {
+      // Max retries exhausted or no retry configured
+      return await this.handleMaxRetriesExhausted(prompt, evaluationResult);
+    }
+  }
+
+  /**
+   * Handle max retries exhausted
+   * @returns true to continue, false to stop
+   */
+  private async handleMaxRetriesExhausted(
+    prompt: PromptItem,
+    evaluationResult: import("./EndConditionEvaluator").EvaluationResult
+  ): Promise<boolean> {
+    const maxRetries = prompt.endCondition?.maxRetries || 0;
+    const retryCount = this.promptQueue.getCurrentRetryCount();
+
+    console.error(
+      `❌ FlightPath: End condition failed after ${retryCount} retries (max: ${maxRetries})`
+    );
+
+    const message =
+      maxRetries > 0
+        ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
+        : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}`;
+
+    const action = await vscode.window.showErrorMessage(
+      `FlightPath: ${message}`,
+      "Stop Workflow",
+      "Continue Anyway",
+      "Retry Once More"
+    );
+
+    if (action === "Continue Anyway") {
+      console.log("⏭️ FlightPath: Continuing despite validation failure");
+      this.promptQueue.resetRetryCount();
+      return true;
+    } else if (action === "Retry Once More") {
+      // Allow one more retry even if max reached
+      console.log("🔄 FlightPath: Manual retry requested");
+      // Don't increment retry count, just return false to re-evaluate
+      // The calling code will handle this case
+      return false;
+    }
+
+    // Default: stop workflow
+    this.promptQueue.resetRetryCount();
+    return false;
+  }
+
+  /**
+   * Build retry prompt from template with placeholder replacement
+   */
+  private buildRetryPrompt(
+    prompt: PromptItem,
+    evaluationResult: import("./EndConditionEvaluator").EvaluationResult
+  ): string {
+    if (!prompt.endCondition?.retryPrompt) {
+      // Fallback retry prompt if none configured
+      return `The previous task validation failed. Expected: ${prompt.endCondition?.returns}, but got: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout}\n\nPlease fix the issues and try again.`;
+    }
+
+    // Use EndConditionEvaluator's buildRetryPrompt method
+    return this.endConditionEvaluator.buildRetryPrompt(
+      prompt.endCondition.retryPrompt,
+      evaluationResult,
+      prompt.endCondition.returns,
+      this.promptQueue.getCurrentRetryCount(),
+      prompt.endCondition.maxRetries || 0
+    );
   }
 
   /**
