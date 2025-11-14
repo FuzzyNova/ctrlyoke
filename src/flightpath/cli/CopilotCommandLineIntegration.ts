@@ -25,6 +25,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   private sessionId?: string;
   private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
   private outputChannel?: vscode.OutputChannel;
+  private lastResult?: CopilotCliResult;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -137,6 +138,9 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       // Execute CLI command
       const result = await this.executeCopilotCommand(promptText, options);
 
+      // Store the result for statistics retrieval
+      this.lastResult = result;
+
       if (result.success) {
         // Log response to output channel
         if (this.shouldShowOutput()) {
@@ -192,9 +196,14 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     // NOTE: Prompt is sent via stdin (no -p flag needed!)
     // This avoids shell escaping issues and command-line length limits
 
-    // Add tool permissions
+    // Add tool permissions (allows tools to run without confirmation)
     const toolPermissions = this.getToolPermissionArgs();
     args.push(...toolPermissions);
+
+    // Add path permissions to avoid interactive prompts for file access (if enabled)
+    if (this.shouldAllowAllPaths()) {
+      args.push("--allow-all-paths");
+    }
 
     // Add optional flags
     if (options.addDirs && options.addDirs.length > 0) {
@@ -353,6 +362,15 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
+   * Check if all paths should be allowed (no interactive prompts)
+   */
+  private shouldAllowAllPaths(): boolean {
+    return vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("copilotCliAllowAllPaths", true);
+  }
+
+  /**
    * Get integration status
    */
   getStatus(): { available: boolean; message: string; strategy: string } {
@@ -412,5 +430,29 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    */
   getCurrentSession(): string | undefined {
     return this.sessionId;
+  }
+
+  /**
+   * Get the last CLI result (includes response and statistics)
+   */
+  getLastResult(): CopilotCliResult | undefined {
+    return this.lastResult;
+  }
+
+  /**
+   * Parse token counts from statistics string
+   * Example statistics: "Usage estimate: 1234 prompt + 5678 completion = 6912 total tokens"
+   */
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    const match = statistics.match(/(\d+)\s+prompt\s+\+\s+(\d+)\s+completion/);
+    if (match) {
+      return {
+        prompt: parseInt(match[1], 10),
+        completion: parseInt(match[2], 10),
+      };
+    }
+    return undefined;
   }
 }

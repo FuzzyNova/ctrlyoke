@@ -75,6 +75,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   public updateCliOutput(stepIndex: number, output: any): void {
+    console.log(
+      `📊 DashboardProvider: Sending CLI output for step ${stepIndex}`,
+      output
+    );
     this.postMessage({ type: "cliOutput", stepIndex, output });
   }
 

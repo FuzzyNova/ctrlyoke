@@ -122,9 +122,14 @@
   }
 
   function handleCliOutput(stepIndex, output) {
+    console.log('📊 Dashboard: Received CLI output for step', stepIndex, output);
     state.cliOutputs[stepIndex] = output;
+    console.log('📊 Dashboard: currentStep =', state.currentStep, 'stepIndex =', stepIndex);
     if (stepIndex === state.currentStep - 1) {
+      console.log('✅ Dashboard: Rendering CLI output');
       renderCliOutput(output);
+    } else {
+      console.log('⚠️ Dashboard: Not rendering - stepIndex mismatch');
     }
   }
 

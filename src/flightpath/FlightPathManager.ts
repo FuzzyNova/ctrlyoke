@@ -383,6 +383,13 @@ export class FlightPathManager {
     const activeIntegration = integration || this.getDefaultIntegration();
     const state = this.promptQueue.getState();
 
+    // Show the FlightPath dashboard panel when execution starts
+    try {
+      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+    } catch (error) {
+      console.log("FlightPath: Could not focus dashboard panel:", error);
+    }
+
     // Log workflow start to output channel
     const shouldShowOutput = vscode.workspace
       .getConfiguration("flightpath")
@@ -406,7 +413,8 @@ export class FlightPathManager {
         "═══════════════════════════════════════════════════════════"
       );
       this.outputChannel.appendLine("");
-      this.outputChannel.show(true); // Show but preserve focus
+      // Don't automatically show output panel - user can view it manually if needed
+      // this.outputChannel.show(true); // Show but preserve focus
     }
 
     for (let i = 0; i < state.prompts.length; i++) {
@@ -480,10 +488,18 @@ export class FlightPathManager {
           this.dashboardProvider &&
           this.isCliIntegration(activeIntegration)
         ) {
+          // Get token statistics from CLI result
+          let tokens: { prompt: number; completion: number } | undefined;
+          const lastResult = activeIntegration.getLastResult();
+          if (lastResult?.statistics) {
+            tokens = activeIntegration.parseTokenCounts(lastResult.statistics);
+          }
+
           this.dashboardProvider.updateCliOutput(i, {
             prompt: prompt.prompt,
             response: responseText,
             elapsed: parseFloat(duration),
+            tokens,
           });
         }
 
@@ -551,6 +567,31 @@ export class FlightPathManager {
 
         // Calculate duration
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // For CLI integration, we can still get the output even without completion detection
+        // The CLI command has already completed when sendPrompt returns
+        if (
+          this.dashboardProvider &&
+          this.isCliIntegration(activeIntegration)
+        ) {
+          // Get the CLI result (response and statistics)
+          const lastResult = activeIntegration.getLastResult();
+          if (lastResult) {
+            // Parse token counts from statistics
+            let tokens: { prompt: number; completion: number } | undefined;
+            if (lastResult.statistics) {
+              tokens = activeIntegration.parseTokenCounts(lastResult.statistics);
+            }
+
+            // Update dashboard with CLI output
+            this.dashboardProvider.updateCliOutput(i, {
+              prompt: prompt.prompt,
+              response: lastResult.response,
+              elapsed: parseFloat(duration),
+              tokens,
+            });
+          }
+        }
 
         // Update dashboard with completion
         if (this.dashboardProvider) {
@@ -812,9 +853,14 @@ export class FlightPathManager {
       }
     }
 
-    // This would open the WebView panel
-    // For now, just show the take off command
-    await this.takeOff();
+    // Focus the FlightPath dashboard panel
+    try {
+      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+    } catch (error) {
+      console.error("Failed to focus FlightPath dashboard:", error);
+      // Fallback to takeOff if focus fails
+      await this.takeOff();
+    }
   }
 
   /**

@@ -335,6 +335,12 @@
           "description": "Tool permission mode for Copilot CLI",
           "markdownDescription": "Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools."
         },
+        "flightpath.copilotCliAllowAllPaths": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Copilot CLI to access any file path without confirmation",
+          "markdownDescription": "When enabled (default), uses `--allow-all-paths` to disable path verification and prevent interactive prompts. Disable for stricter security if you want to control file access per-session."
+        },
         "flightpath.defaultMaxRetries": {
           "type": "number",
           "default": 3,
