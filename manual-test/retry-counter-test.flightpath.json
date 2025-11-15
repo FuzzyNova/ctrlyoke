@@ -6,6 +6,6 @@
     "returns": "true",
     "maxRetries": 5,
     "timeout": 10000,
-    "retryPrompt": "The counter validation failed. Here's the current status:\n\n{scriptOutput}\n\nPlease perform the same action again: read #file:counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else.\n\nRetry attempt {retryCount} of {maxRetries}."
+    "retryPrompt": "The counter validation failed. read #file:counter.txt and increment the number by 1. Remember to save ONLY the number, nothing else.\n\nRetry attempt {retryCount} of {maxRetries}."
   }
 }

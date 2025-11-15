@@ -34,11 +34,12 @@ export interface QueueState {
   status: "idle" | "running" | "paused" | "completed" | "error";
   prompts: PromptItem[];
   results: PromptResult[];
+  stopped: boolean; // True if stop() was called, reset on new execution
 }
 
 export interface PromptResult {
   prompt: string;
-  status: "pending" | "sent" | "completed" | "failed";
+  status: "pending" | "sent" | "completed" | "failed" | "cancelled";
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;

@@ -8,7 +8,7 @@
     executionState: 'idle',
     currentStep: 0,
     totalSteps: 0,
-    cliOutputs: {}
+    cliOutputs: {} // Maps stepIndex -> array of outputs (including retries)
   };
 
   // DOM elements
@@ -92,10 +92,11 @@
     state.executionState = 'idle';
     state.currentStep = 0;
     state.totalSteps = 0;
-    state.cliOutputs = {};
-    // Hide progress bar and output section
+    state.cliOutputs = {}; // Reset outputs
+    // Hide progress bar
     elements.progressContainer.style.display = 'none';
-    elements.outputSection.style.display = 'none';
+    // Clear CLI output and show empty state
+    elements.outputContent.innerHTML = '<p class="empty-state">CLI output will appear here during execution</p>';
     render();
   }
 
@@ -126,34 +127,66 @@
 
   function handleCliOutput(stepIndex, output) {
     console.log('📊 Dashboard: Received CLI output for step', stepIndex, output);
-    state.cliOutputs[stepIndex] = output;
-    console.log('📊 Dashboard: currentStep =', state.currentStep, 'stepIndex =', stepIndex);
+    
+    // Initialize array for this step if needed
+    if (!state.cliOutputs[stepIndex]) {
+      state.cliOutputs[stepIndex] = [];
+    }
+    
+    // If this is a non-streaming (final) output, check if we should replace or append
+    if (!output.isStreaming) {
+      // If the last output for this step was streaming, replace it with the final version
+      const outputs = state.cliOutputs[stepIndex];
+      if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
+        outputs[outputs.length - 1] = output;
+      } else {
+        // This is a retry attempt - append it
+        outputs.push(output);
+      }
+    } else {
+      // Streaming output - either add new or update existing
+      const outputs = state.cliOutputs[stepIndex];
+      if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
+        outputs.push(output);
+      } else {
+        outputs[outputs.length - 1] = output;
+      }
+    }
+    
+    console.log('📊 Dashboard: currentStep =', state.currentStep, 'stepIndex =', stepIndex, 'outputCount =', state.cliOutputs[stepIndex].length);
     if (stepIndex === state.currentStep - 1) {
       console.log('✅ Dashboard: Rendering CLI output');
-      renderCliOutput(output);
+      renderCliOutputs(stepIndex);
     } else {
       console.log('⚠️ Dashboard: Not rendering - stepIndex mismatch');
     }
   }
 
   function handleCliStreamingChunk(stepIndex, chunk) {
-    // Initialize streaming buffer if needed
+    // Initialize array if needed
     if (!state.cliOutputs[stepIndex]) {
-      state.cliOutputs[stepIndex] = {
+      state.cliOutputs[stepIndex] = [];
+    }
+    
+    const outputs = state.cliOutputs[stepIndex];
+    
+    // Initialize streaming buffer if needed
+    if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
+      outputs.push({
         prompt: '',
         response: '',
         elapsed: 0,
         tokens: null,
         isStreaming: true
-      };
+      });
     }
 
-    // Append chunk to response
-    state.cliOutputs[stepIndex].response += chunk;
+    // Append chunk to the last (streaming) output's response
+    outputs[outputs.length - 1].response += chunk;
 
     // Render if this is the current step
     if (stepIndex === state.currentStep - 1) {
-      renderCliOutput(state.cliOutputs[stepIndex]);
+      renderCliOutputs(stepIndex);
     }
   }
 
@@ -203,33 +236,48 @@
     }).join('');
   }
 
-  function renderCliOutput(output) {
-    elements.outputSection.style.display = 'block';
+  function renderCliOutputs(stepIndex) {
+    const outputs = state.cliOutputs[stepIndex];
     
-    let html = `<div class="cli-output-item">`;
-    html += `<div class="output-header">[Prompt ${state.currentStep}]${output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : ''}</div>`;
-    
-    if (output.prompt) {
-      html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
+    if (!outputs || outputs.length === 0) {
+      // Show empty state
+      elements.outputContent.innerHTML = '<p class="empty-state">CLI output will appear here during execution</p>';
+      return;
     }
     
-    if (output.response) {
-      html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
-    }
-    
-    if (output.tokens) {
-      html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
-    }
-    
-    if (!output.isStreaming && output.elapsed !== undefined) {
-      html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
-    }
-    
-    html += `</div>`;
+    // Render all outputs for this step (initial attempt + retries)
+    let html = '';
+    outputs.forEach((output, attemptIndex) => {
+      const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
+      const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
+      
+      html += `<div class="cli-output-item">`;
+      html += `<div class="output-header">[Prompt ${state.currentStep}] ${attemptLabel}${streamingIndicator}</div>`;
+      
+      if (output.prompt) {
+        html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
+      }
+      
+      if (output.response) {
+        html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
+      }
+      
+      if (output.tokens) {
+        html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
+      }
+      
+      if (!output.isStreaming && output.elapsed !== undefined) {
+        html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
+      }
+      
+      html += `</div>`;
+    });
     
     elements.outputContent.innerHTML = html;
-    // Auto-scroll to bottom during streaming
-    if (output.isStreaming) {
+    
+    // Auto-scroll to bottom if last output is streaming
+    const lastOutput = outputs[outputs.length - 1];
+    if (lastOutput.isStreaming) {
       elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
     }
   }

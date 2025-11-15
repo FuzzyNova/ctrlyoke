@@ -627,6 +627,10 @@ export class FlightPathManager {
         }
       }
 
+      // Mark current prompt as completed in queue and move to next
+      // This updates queue state (currentIndex, retryCount) properly
+      await this.promptQueue.completeCurrentAndMoveNext();
+
       // Check if workflow was paused
       if (this.promptQueue.getState().status === "paused") {
         console.log("⏸️ FlightPath: Workflow paused");
@@ -1303,6 +1307,12 @@ export class FlightPathManager {
     integration: CopilotIntegration,
     totalPrompts: number
   ): Promise<boolean> {
+    // Check if workflow was stopped by user
+    if (this.promptQueue.getState().stopped) {
+      console.log("⚠️ FlightPath: Workflow stopped, aborting retry");
+      return false;
+    }
+
     // Check if retry is possible
     if (this.promptQueue.canRetry(prompt)) {
       console.log(
@@ -1325,6 +1335,9 @@ export class FlightPathManager {
       // Update workflow progress to show retry
       const currentIndex = this.promptQueue.getState().currentIndex;
       integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
+
+      // Record start time for retry
+      const retryStartTime = Date.now();
 
       // Set up response listener for retry
       // IMPORTANT: Always need completion detection for retries because we need to
@@ -1351,8 +1364,35 @@ export class FlightPathManager {
       // Wait for response
       if (needsCompletionDetection) {
         console.log("⏳ FlightPath: Waiting for retry response...");
-        await responsePromise;
+        const retryResponseText = await responsePromise;
         console.log("✅ FlightPath: Retry response complete");
+
+        // Calculate duration for retry
+        const retryDuration = ((Date.now() - retryStartTime) / 1000).toFixed(1);
+
+        // Update dashboard with CLI output for retry (if using CLI integration)
+        if (this.dashboardProvider && this.isCliIntegration(integration)) {
+          // Get token statistics from CLI result
+          let tokens: { prompt: number; completion: number } | undefined;
+          const lastResult = integration.getLastResult();
+          if (lastResult?.statistics) {
+            tokens = integration.parseTokenCounts(lastResult.statistics);
+          }
+
+          this.dashboardProvider.updateCliOutput(currentIndex, {
+            prompt: retryPrompt,
+            response: retryResponseText,
+            elapsed: parseFloat(retryDuration),
+            tokens,
+            isStreaming: false, // Mark as complete
+          });
+        }
+
+        // Check if workflow was stopped during retry
+        if (this.promptQueue.getState().stopped) {
+          console.log("⚠️ FlightPath: Workflow stopped during retry");
+          return false;
+        }
 
         // Re-evaluate end condition after retry
         const retryEvaluation =

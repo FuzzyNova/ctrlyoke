@@ -10,9 +10,11 @@
   --status-running: var(--vscode-progressBar-background);
 }
 
-body {
+html, body {
   margin: 0;
-  padding: 12px;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
   color: var(--fg-primary);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
@@ -22,6 +24,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100vh;
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 #header {
@@ -32,6 +37,7 @@ body {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
+  flex-shrink: 0;
 }
 
 #file-info {
@@ -103,6 +109,7 @@ button:disabled {
 
 #progress-container {
   padding: 0 12px;
+  flex-shrink: 0;
 }
 
 #progress-bar {
@@ -136,6 +143,9 @@ button:disabled {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Wide layout: side-by-side (>= 800px) */
@@ -165,14 +175,19 @@ button:disabled {
   #output-section {
     flex: 1;
     width: 100%;
+    min-height: 0;
   }
 }
 
 #prompts-section, #output-section {
+  display: flex;
+  flex-direction: column;
   padding: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 h3 {
@@ -181,12 +196,16 @@ h3 {
   font-weight: 600;
   text-transform: uppercase;
   color: var(--fg-secondary);
+  flex-shrink: 0;
 }
 
 #prompts-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .prompt-item {
@@ -247,18 +266,29 @@ h3 {
 #output-content {
   font-family: var(--vscode-editor-font-family);
   font-size: 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .cli-output-item {
   background: var(--bg-primary);
   padding: 12px;
   border-radius: 4px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+}
+
+.cli-output-item:last-child {
+  margin-bottom: 0;
 }
 
 .output-header {
   font-weight: 600;
   margin-bottom: 8px;
   color: var(--fg-secondary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .output-prompt, .output-response {

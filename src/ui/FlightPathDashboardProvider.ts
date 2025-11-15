@@ -165,7 +165,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         <div id="prompts-list"></div>
       </div>
 
-      <div id="output-section" style="display: none;">
+      <div id="output-section">
         <h3>CLI Output (Live)</h3>
         <div id="output-content"></div>
       </div>

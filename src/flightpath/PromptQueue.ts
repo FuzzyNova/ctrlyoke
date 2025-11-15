@@ -77,6 +77,7 @@ export class PromptQueue {
       status: "idle",
       prompts: [],
       results: [],
+      stopped: false,
     };
   }
 
@@ -93,6 +94,7 @@ export class PromptQueue {
         status: "pending",
         timestamp: new Date(),
       })),
+      stopped: false, // Reset stopped flag on new load
     };
 
     this.emitStateChange();
@@ -115,6 +117,7 @@ export class PromptQueue {
 
     this.state.status = "running";
     this.isPaused = false;
+    this.state.stopped = false; // Clear stopped flag when starting
     this.emitStateChange();
 
     console.log("FlightPath: Starting queue execution");
@@ -164,16 +167,17 @@ export class PromptQueue {
     this.isPaused = false;
     this.state.status = "idle";
     this.state.currentIndex = 0;
+    this.state.stopped = true; // Set stopped flag
 
     if (this.executionTimer) {
       clearTimeout(this.executionTimer);
       this.executionTimer = undefined;
     }
 
-    // Reset all pending results to pending
+    // Mark sent prompts as cancelled (not just pending)
     this.state.results.forEach((result) => {
       if (result.status === "sent") {
-        result.status = "pending";
+        result.status = "cancelled";
       }
     });
 
@@ -217,7 +221,9 @@ export class PromptQueue {
   }
 
   /**
-   * Mark current prompt as sent and move to next
+   * Mark current prompt as sent
+   * Note: Does NOT automatically move to next prompt. FlightPathManager handles
+   * end condition evaluation and decides when to move to next prompt (including retries).
    */
   async markCurrentAsSent(): Promise<void> {
     if (!this.hasNext()) {
@@ -230,19 +236,8 @@ export class PromptQueue {
 
     this.emitStateChange();
 
-    // If there's an end condition, wait for it
-    const currentPrompt = this.getCurrentPrompt();
-    if (currentPrompt?.endCondition) {
-      console.log(
-        `FlightPath: Waiting for end condition for prompt ${this.state.currentIndex + 1}`
-      );
-      // This would integrate with EndConditionEvaluator
-      // For now, simulate a delay
-      await this.waitForEndCondition(currentPrompt);
-    } else {
-      // No end condition, move to next immediately
-      await this.completeCurrentAndMoveNext();
-    }
+    // FlightPathManager now handles end condition evaluation and workflow progression
+    // Do NOT set up timers or automatically move to next prompt here
   }
 
   /**
