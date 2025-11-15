@@ -31,12 +31,17 @@ export abstract class CopilotIntegration {
   protected responseCompleteEmitter = new vscode.EventEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
+  // Event emitter for streaming response chunks
+  protected streamingChunkEmitter = new vscode.EventEmitter<string>();
+  public readonly onStreamingChunk = this.streamingChunkEmitter.event;
+
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
 
     // Register disposal of event emitters
     context.subscriptions.push(this.statusChangeEmitter);
     context.subscriptions.push(this.responseCompleteEmitter);
+    context.subscriptions.push(this.streamingChunkEmitter);
   }
 
   /**

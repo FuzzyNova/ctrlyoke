@@ -66,6 +66,9 @@
       case 'cliOutput':
         handleCliOutput(message.stepIndex, message.output);
         break;
+      case 'cliStreamingChunk':
+        handleCliStreamingChunk(message.stepIndex, message.chunk);
+        break;
       case 'executionCompleted':
         handleExecutionCompleted();
         break;
@@ -133,6 +136,27 @@
     }
   }
 
+  function handleCliStreamingChunk(stepIndex, chunk) {
+    // Initialize streaming buffer if needed
+    if (!state.cliOutputs[stepIndex]) {
+      state.cliOutputs[stepIndex] = {
+        prompt: '',
+        response: '',
+        elapsed: 0,
+        tokens: null,
+        isStreaming: true
+      };
+    }
+
+    // Append chunk to response
+    state.cliOutputs[stepIndex].response += chunk;
+
+    // Render if this is the current step
+    if (stepIndex === state.currentStep - 1) {
+      renderCliOutput(state.cliOutputs[stepIndex]);
+    }
+  }
+
   function handleExecutionCompleted() {
     state.executionState = 'completed';
     updateControls();
@@ -183,7 +207,7 @@
     elements.outputSection.style.display = 'block';
     
     let html = `<div class="cli-output-item">`;
-    html += `<div class="output-header">[Prompt ${state.currentStep}]</div>`;
+    html += `<div class="output-header">[Prompt ${state.currentStep}]${output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : ''}</div>`;
     
     if (output.prompt) {
       html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
@@ -197,10 +221,17 @@
       html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
     }
     
-    html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
+    if (!output.isStreaming && output.elapsed !== undefined) {
+      html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
+    }
+    
     html += `</div>`;
     
     elements.outputContent.innerHTML = html;
+    // Auto-scroll to bottom during streaming
+    if (output.isStreaming) {
+      elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
+    }
   }
 
   function updateControls() {

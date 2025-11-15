@@ -447,11 +447,32 @@ export class FlightPathManager {
         ? this.waitForResponseComplete(prompt, activeIntegration)
         : Promise.resolve(""); // No completion detection needed
 
+      // Set up streaming listener for real-time output (CLI only)
+      let streamingDisposable: vscode.Disposable | undefined;
+      if (this.dashboardProvider && this.isCliIntegration(activeIntegration)) {
+        // Initialize streaming output with prompt text
+        this.dashboardProvider.updateCliStreamingChunk(i, ""); // Initialize buffer
+        this.dashboardProvider.updateCliOutput(i, {
+          prompt: prompt.prompt,
+          response: "",
+          elapsed: 0,
+          tokens: undefined,
+          isStreaming: true,
+        });
+
+        streamingDisposable = activeIntegration.onStreamingChunk((chunk) => {
+          this.dashboardProvider?.updateCliStreamingChunk(i, chunk);
+        });
+      }
+
       // Send prompt to Copilot
       const success = await activeIntegration.sendPrompt(
         prompt,
         needsCompletionDetection
       );
+
+      // Clean up streaming listener
+      streamingDisposable?.dispose();
 
       if (!success) {
         vscode.window.showErrorMessage(
@@ -500,6 +521,7 @@ export class FlightPathManager {
             response: responseText,
             elapsed: parseFloat(duration),
             tokens,
+            isStreaming: false, // Mark as complete
           });
         }
 
@@ -580,7 +602,9 @@ export class FlightPathManager {
             // Parse token counts from statistics
             let tokens: { prompt: number; completion: number } | undefined;
             if (lastResult.statistics) {
-              tokens = activeIntegration.parseTokenCounts(lastResult.statistics);
+              tokens = activeIntegration.parseTokenCounts(
+                lastResult.statistics
+              );
             }
 
             // Update dashboard with CLI output
@@ -589,6 +613,7 @@ export class FlightPathManager {
               response: lastResult.response,
               elapsed: parseFloat(duration),
               tokens,
+              isStreaming: false, // Mark as complete
             });
           }
         }

@@ -82,6 +82,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: "cliOutput", stepIndex, output });
   }
 
+  public updateCliStreamingChunk(stepIndex: number, chunk: string): void {
+    this.postMessage({ type: "cliStreamingChunk", stepIndex, chunk });
+  }
+
   public updateExecutionCompleted(): void {
     this.postMessage({ type: "executionCompleted" });
   }

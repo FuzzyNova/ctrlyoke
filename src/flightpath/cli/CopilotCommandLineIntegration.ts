@@ -227,6 +227,10 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       {
         stdin: prompt,
         timeout: 300000, // 5 minutes
+        onStdout: (chunk) => {
+          // Emit streaming chunk for real-time display
+          this.streamingChunkEmitter.fire(chunk);
+        },
       }
     );
 
@@ -266,7 +270,11 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   private spawnProcess(
     command: string,
     args: string[],
-    options: { timeout?: number; stdin?: string } = {}
+    options: {
+      timeout?: number;
+      stdin?: string;
+      onStdout?: (chunk: string) => void;
+    } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     return new Promise((resolve, reject) => {
       let stdout = "";
@@ -291,7 +299,12 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       }
 
       child.stdout.on("data", (data) => {
-        stdout += data.toString();
+        const chunk = data.toString();
+        stdout += chunk;
+        // Call streaming callback if provided
+        if (options.onStdout) {
+          options.onStdout(chunk);
+        }
       });
 
       child.stderr.on("data", (data) => {
