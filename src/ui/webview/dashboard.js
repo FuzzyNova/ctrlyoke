@@ -1,11 +1,20 @@
 (function() {
   const vscode = acquireVsCodeApi();
 
+  // Import constants from compiled DashboardConstants.js (loaded via script tag in HTML)
+  // Single source of truth - these match src/types/DashboardConstants.ts
+  // Only importing cross-file shared constants (not UI-specific strings)
+  const {
+    MESSAGE_TYPES,
+    EXECUTION_STATES,
+    STEP_STATUS
+  } = window.FlightPathConstants;
+
   // State management
   let state = {
     fileName: null,
     prompts: [],
-    executionState: 'idle',
+    executionState: EXECUTION_STATES.IDLE,
     currentStep: 0,
     totalSteps: 0,
     cliOutputs: {} // Maps stepIndex -> array of outputs (including retries)
@@ -28,19 +37,19 @@
 
   // Event listeners
   elements.changeFileBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'selectFile' });
+    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
   });
 
   elements.runBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'run' });
+    vscode.postMessage({ type: MESSAGE_TYPES.RUN });
   });
 
   elements.pauseBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'pause' });
+    vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
   });
 
   elements.stopBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'stop' });
+    vscode.postMessage({ type: MESSAGE_TYPES.STOP });
   });
 
   // Message handler
@@ -48,28 +57,28 @@
     const message = event.data;
     
     switch (message.type) {
-      case 'init':
+      case MESSAGE_TYPES.INIT:
         handleInit(message.data);
         break;
-      case 'fileSelected':
+      case MESSAGE_TYPES.FILE_SELECTED:
         handleFileSelected(message.fileName, message.prompts);
         break;
-      case 'executionStarted':
+      case MESSAGE_TYPES.EXECUTION_STARTED:
         handleExecutionStarted(message.fileName, message.totalSteps);
         break;
-      case 'progressUpdate':
+      case MESSAGE_TYPES.PROGRESS_UPDATE:
         handleProgressUpdate(message.current, message.total);
         break;
-      case 'stepStatusChanged':
+      case MESSAGE_TYPES.STEP_STATUS_CHANGED:
         handleStepStatusChanged(message.stepIndex, message.status, message.details);
         break;
-      case 'cliOutput':
+      case MESSAGE_TYPES.CLI_OUTPUT:
         handleCliOutput(message.stepIndex, message.output);
         break;
-      case 'cliStreamingChunk':
+      case MESSAGE_TYPES.CLI_STREAMING_CHUNK:
         handleCliStreamingChunk(message.stepIndex, message.chunk);
         break;
-      case 'executionCompleted':
+      case MESSAGE_TYPES.EXECUTION_COMPLETED:
         handleExecutionCompleted();
         break;
     }
@@ -89,7 +98,7 @@
       details: {}
     }));
     // Reset execution state and progress when new file is selected
-    state.executionState = 'idle';
+    state.executionState = EXECUTION_STATES.IDLE;
     state.currentStep = 0;
     state.totalSteps = 0;
     state.cliOutputs = {}; // Reset outputs
@@ -101,7 +110,7 @@
   }
 
   function handleExecutionStarted(fileName, totalSteps) {
-    state.executionState = 'running';
+    state.executionState = EXECUTION_STATES.RUNNING;
     state.totalSteps = totalSteps;
     state.currentStep = 0;
     updateControls();
@@ -191,7 +200,7 @@
   }
 
   function handleExecutionCompleted() {
-    state.executionState = 'completed';
+    state.executionState = EXECUTION_STATES.COMPLETED;
     updateControls();
   }
 
@@ -251,7 +260,7 @@
       const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
       const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
       
-      html += `<div class="cli-output-item">`;
+      html += '<div class="cli-output-item">';
       html += `<div class="output-header">[Prompt ${state.currentStep}] ${attemptLabel}${streamingIndicator}</div>`;
       
       if (output.prompt) {
@@ -270,7 +279,7 @@
         html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
       }
       
-      html += `</div>`;
+      html += '</div>';
     });
     
     elements.outputContent.innerHTML = html;
@@ -283,9 +292,9 @@
   }
 
   function updateControls() {
-    const isRunning = state.executionState === 'running';
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
     const hasFile = state.fileName !== null;
-    const isCompleted = state.executionState === 'completed';
+    const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
     
     // Enable Run button if: has file AND (not running OR is completed)
     elements.runBtn.disabled = !hasFile || (isRunning && !isCompleted);
@@ -300,12 +309,12 @@
 
   function getStatusIcon(status) {
     const icons = {
-      pending: '⏸️',
-      running: '▶️',
-      completed: '✅',
-      failed: '❌'
+      [STEP_STATUS.PENDING]: '⏸️',
+      [STEP_STATUS.RUNNING]: '▶️',
+      [STEP_STATUS.COMPLETED]: '✅',
+      [STEP_STATUS.FAILED]: '❌'
     };
-    return icons[status] || '⏸️';
+    return icons[status] || icons[STEP_STATUS.PENDING];
   }
 
   function truncate(str, maxLen) {
@@ -319,5 +328,5 @@
   }
 
   // Signal ready
-  vscode.postMessage({ type: 'ready' });
+  vscode.postMessage({ type: MESSAGE_TYPES.READY });
 })();

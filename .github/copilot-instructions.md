@@ -242,6 +242,28 @@ When adding settings:
 
 **Project Status**: Pre-release - No backward compatibility required. Break things freely to improve architecture.
 
+**NO HARDCODED STRINGS RULE**: If a string literal is used in more than one **file**, it MUST be defined as a constant in a single source of truth. This prevents typos, ensures consistency, and makes refactoring trivial.
+
+**When to use constants:**
+
+- ✅ Values shared across multiple files (MESSAGE_TYPES, EXECUTION_STATES, STEP_STATUS)
+- ✅ Values requiring synchronization between components (extension ↔ webview communication)
+- ✅ Business logic values that control program flow (status states, error codes)
+
+**When inline strings are acceptable:**
+
+- ✅ CSS class names used only in a single file (tightly coupled to CSS)
+- ✅ UI labels/text used once in a single location
+- ✅ HTML attributes and structure
+
+**Single Source of Truth Locations:**
+
+- Message types between extension and webview → `src/types/DashboardConstants.ts`
+- Execution states and step statuses → `src/types/DashboardConstants.ts`
+- PromptFile/QueueState types → `src/types/FlightPathTypes.ts`
+
+**Single Source of Truth Principle**: Each shared constant must have exactly ONE definition. Import and reuse - never duplicate. When updating a constant value, you should only need to change it in ONE place.
+
 When adding features:
 
 1. Follow SOLID principles - single responsibility per component

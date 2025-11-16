@@ -122,6 +122,7 @@ const copyWebviewPlugin = {
 };
 
 async function main() {
+	// Build main extension
 	const ctx = await esbuild.context({
 		entryPoints: [
 			'src/extension.ts'
@@ -143,11 +144,29 @@ async function main() {
 			copyWebviewPlugin,
 		],
 	});
+
+	// Build constants for webview (separate bundle to avoid VS Code API dependency)
+	const constantsCtx = await esbuild.context({
+		entryPoints: [
+			'src/types/DashboardConstants.ts'
+		],
+		bundle: true,
+		format: 'iife', // Immediately Invoked Function Expression for browser
+		globalName: 'FlightPathConstants',
+		minify: production,
+		sourcemap: !production,
+		outfile: 'out/ui/webview/DashboardConstants.js',
+		logLevel: 'silent',
+	});
+
 	if (watch) {
 		await ctx.watch();
+		await constantsCtx.watch();
 	} else {
 		await ctx.rebuild();
+		await constantsCtx.rebuild();
 		await ctx.dispose();
+		await constantsCtx.dispose();
 	}
 }
 

@@ -1,3 +1,10 @@
+import {
+  EXECUTION_STATES,
+  STEP_STATUS,
+  ExecutionState,
+  StepStatus,
+} from "./DashboardConstants";
+
 /**
  * Copilot integration mode
  */
@@ -31,7 +38,7 @@ export interface EndCondition {
 
 export interface QueueState {
   currentIndex: number;
-  status: "idle" | "running" | "paused" | "completed" | "error";
+  status: ExecutionState; // Use type from DashboardConstants
   prompts: PromptItem[];
   results: PromptResult[];
   stopped: boolean; // True if stop() was called, reset on new execution
@@ -39,10 +46,13 @@ export interface QueueState {
 
 export interface PromptResult {
   prompt: string;
-  status: "pending" | "sent" | "completed" | "failed" | "cancelled";
+  status: StepStatus; // Use type from DashboardConstants
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
   retryCount?: number; // Track retry attempts for this prompt
   scriptOutput?: string; // Capture last script output for debugging
 }
+
+// Re-export constants for convenience
+export { EXECUTION_STATES, STEP_STATUS };

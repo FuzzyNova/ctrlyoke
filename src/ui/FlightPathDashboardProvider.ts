@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -33,25 +34,25 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private handleWebviewMessage(message: any): void {
     switch (message.type) {
-      case "ready":
+      case MESSAGE_TYPES.READY:
         this.sendInitialState();
         break;
-      case "selectFile":
+      case MESSAGE_TYPES.SELECT_FILE:
         vscode.commands.executeCommand("flightpath.selectPromptFile");
         break;
-      case "run":
+      case MESSAGE_TYPES.RUN:
         vscode.commands.executeCommand("flightpath.run");
         break;
-      case "pause":
+      case MESSAGE_TYPES.PAUSE:
         vscode.commands.executeCommand("flightpath.pause");
         break;
-      case "resume":
+      case MESSAGE_TYPES.RESUME:
         vscode.commands.executeCommand("flightpath.resume");
         break;
-      case "stop":
+      case MESSAGE_TYPES.STOP:
         vscode.commands.executeCommand("flightpath.stop");
         break;
-      case "showOutput":
+      case MESSAGE_TYPES.SHOW_OUTPUT:
         vscode.commands.executeCommand("flightpath.showOutputPanel");
         break;
     }
@@ -59,19 +60,28 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   // Public methods to send updates from FlightPathManager
   public updateFileSelected(fileName: string, prompts: any[]): void {
-    this.postMessage({ type: "fileSelected", fileName, prompts });
+    this.postMessage({ type: MESSAGE_TYPES.FILE_SELECTED, fileName, prompts });
   }
 
   public updateExecutionStarted(fileName: string, totalSteps: number): void {
-    this.postMessage({ type: "executionStarted", fileName, totalSteps });
+    this.postMessage({
+      type: MESSAGE_TYPES.EXECUTION_STARTED,
+      fileName,
+      totalSteps,
+    });
   }
 
   public updateProgress(current: number, total: number): void {
-    this.postMessage({ type: "progressUpdate", current, total });
+    this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, current, total });
   }
 
   public updateStepStatus(stepIndex: number, status: any, details?: any): void {
-    this.postMessage({ type: "stepStatusChanged", stepIndex, status, details });
+    this.postMessage({
+      type: MESSAGE_TYPES.STEP_STATUS_CHANGED,
+      stepIndex,
+      status,
+      details,
+    });
   }
 
   public updateCliOutput(stepIndex: number, output: any): void {
@@ -79,15 +89,19 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       `📊 DashboardProvider: Sending CLI output for step ${stepIndex}`,
       output
     );
-    this.postMessage({ type: "cliOutput", stepIndex, output });
+    this.postMessage({ type: MESSAGE_TYPES.CLI_OUTPUT, stepIndex, output });
   }
 
   public updateCliStreamingChunk(stepIndex: number, chunk: string): void {
-    this.postMessage({ type: "cliStreamingChunk", stepIndex, chunk });
+    this.postMessage({
+      type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
+      stepIndex,
+      chunk,
+    });
   }
 
   public updateExecutionCompleted(): void {
-    this.postMessage({ type: "executionCompleted" });
+    this.postMessage({ type: MESSAGE_TYPES.EXECUTION_COMPLETED });
   }
 
   private postMessage(message: any): void {
@@ -96,7 +110,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private sendInitialState(): void {
     // Get current state from FlightPathManager and send to webview
-    this.postMessage({ type: "init", data: this.getCurrentState() });
+    this.postMessage({
+      type: MESSAGE_TYPES.INIT,
+      data: this.getCurrentState(),
+    });
   }
 
   private getCurrentState(): any {
@@ -104,13 +121,22 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     return {
       fileName: null,
       prompts: [],
-      executionState: "idle",
+      executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
       totalSteps: 0,
     };
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
+    const constantsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview",
+        "DashboardConstants.js"
+      )
+    );
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this.context.extensionUri,
@@ -172,6 +198,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     </div>
   </div>
 
+  <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
+  <script src="${constantsUri}"></script>
+  <!-- Then load main dashboard code that depends on constants -->
   <script src="${scriptUri}"></script>
 </body>
 </html>`;

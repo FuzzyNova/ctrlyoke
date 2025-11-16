@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
-import { PromptItem, QueueState, PromptResult } from "../types/FlightPathTypes";
+import {
+  PromptItem,
+  QueueState,
+  PromptResult,
+  EXECUTION_STATES,
+  STEP_STATUS,
+} from "../types/FlightPathTypes";
 
 /**
  * Get effective maxRetries value with smart defaults
