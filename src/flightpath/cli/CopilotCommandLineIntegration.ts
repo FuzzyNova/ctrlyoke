@@ -26,6 +26,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
   private outputChannel?: vscode.OutputChannel;
   private lastResult?: CopilotCliResult;
+  private currentProcess?: ReturnType<typeof spawn>;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -287,6 +288,9 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         shell: true, // Required for copilot.ps1 on Windows
       });
 
+      // Store reference for cancellation
+      this.currentProcess = child;
+
       // Write to stdin if provided
       if (options.stdin !== undefined) {
         if (child.stdin) {
@@ -317,6 +321,10 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       });
 
       child.on("close", (code) => {
+        // Clear reference when process closes
+        if (this.currentProcess === child) {
+          this.currentProcess = undefined;
+        }
         resolve({
           stdout,
           stderr,
@@ -467,5 +475,23 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       };
     }
     return undefined;
+  }
+
+  /**
+   * Cancel the current CLI process (platform-agnostic)
+   * Kills the running copilot CLI process if one is active
+   */
+  async cancel(): Promise<void> {
+    if (this.currentProcess) {
+      this.log("⏹️ Cancelling CLI process...");
+
+      // Platform-agnostic kill - sends SIGTERM on Unix, terminates on Windows
+      this.currentProcess.kill();
+
+      // Clear the reference
+      this.currentProcess = undefined;
+
+      this.log("✅ CLI process cancelled");
+    }
   }
 }

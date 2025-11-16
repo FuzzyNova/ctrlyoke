@@ -302,9 +302,12 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 
   // Stop execution command
-  const stopCommand = vscode.commands.registerCommand("flightpath.stop", () => {
-    flightPathManager.stop();
-  });
+  const stopCommand = vscode.commands.registerCommand(
+    "flightpath.stop",
+    async () => {
+      await flightPathManager.stop();
+    }
+  );
 
   // Debug command to show current state
   const debugStateCommand = vscode.commands.registerCommand(

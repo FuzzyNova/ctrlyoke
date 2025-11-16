@@ -28,9 +28,18 @@ Validated in `extension.ts:testCopilotAutomation()`:
 - Two-layer defense: integration flag + manager flag
 </llmLoopPrevention>
 
+<cancellation>
+**cancel() method:**
+- Executes `workbench.action.chat.cancel` command
+- Stops Copilot from continuing to generate response
+- Called by FlightPathManager.stop() when user presses stop button
+- Also used in LLM loop prevention to stop duplicate tool calls
+</cancellation>
+
 <differenceFromCli>
 - Tool registered AFTER Copilot activation
 - Prepends `TOOL_INSTRUCTION` XML before user prompt
 - Fires empty response text (no direct content access)
 - Background polling for initialization (5s × 6 attempts)
+- Stop = cancel command vs stop = kill process
 </differenceFromCli>

@@ -786,8 +786,19 @@ export class FlightPathManager {
 
   /**
    * Stop current execution
+   * Cancels the active integration's current operation and stops the queue
    */
-  stop(): void {
+  async stop(): Promise<void> {
+    // Cancel the current integration's operation (CLI process or Chat response)
+    const integration = this.getDefaultIntegration();
+
+    if (this.isCliIntegration(integration)) {
+      await integration.cancel();
+    } else if (this.isChatIntegration(integration)) {
+      await integration.cancel();
+    }
+
+    // Stop the queue
     this.promptQueue.stop();
   }
 

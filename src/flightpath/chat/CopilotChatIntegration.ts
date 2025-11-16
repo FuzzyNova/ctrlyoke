@@ -899,4 +899,17 @@ ${promptText}`;
       currentStrategy: this.isAvailable ? "chat" : "unavailable",
     };
   }
+
+  /**
+   * Cancel the current chat response
+   * Executes workbench.action.chat.cancel to stop Copilot from responding
+   */
+  async cancel(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand("workbench.action.chat.cancel");
+      console.log("⏹️ Chat response cancelled");
+    } catch (error) {
+      console.warn("⚠️ Could not cancel chat:", error);
+    }
+  }
 }
