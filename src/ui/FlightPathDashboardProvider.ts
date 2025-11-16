@@ -214,7 +214,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       </div>
 
       <div id="output-section">
-        <h3>Output</h3>
+        <div class="section-header">
+          <h3>Output</h3>
+          <label class="autoscroll-toggle">
+            <input type="checkbox" id="autoscroll-checkbox" checked>
+            <span>Autoscroll</span>
+          </label>
+        </div>
         <div id="output-content"></div>
       </div>
     </div>

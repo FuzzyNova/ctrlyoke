@@ -33,7 +33,8 @@
     promptCounter: document.getElementById('prompt-counter'),
     promptsList: document.getElementById('prompts-list'),
     outputSection: document.getElementById('output-section'),
-    outputContent: document.getElementById('output-content')
+    outputContent: document.getElementById('output-content'),
+    autoscrollCheckbox: document.getElementById('autoscroll-checkbox')
   };
 
   // Event listeners
@@ -162,60 +163,49 @@
     }
     
     // Add status message with timestamp
+    const now = new Date();
     state.statusMessages[stepIndex].push({
       message,
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: now.toLocaleTimeString(),
+      timestampMs: now.getTime()
     });
     
-    // Render if this is the current or just-completed step
-    // During execution: stepIndex might equal currentStep
-    // After completion: stepIndex equals currentStep - 1
-    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
-      console.log('✅ Dashboard: Rendering output for step', stepIndex);
-      renderCliOutputs(stepIndex);
-    } else {
-      console.log('⚠️ Dashboard: Not rendering - stepIndex', stepIndex, 'currentStep', state.currentStep);
-    }
+    // Always render to show all accumulated messages
+    renderAllCliOutputs();
   }
 
   function handleCliOutput(stepIndex, output) {
-    console.log('📊 Dashboard: Received CLI output for step', stepIndex, output);
+    console.log('📊 Dashboard: Received CLI output for step', stepIndex, 'isStreaming:', output.isStreaming, 'outputCount before:', (state.cliOutputs[stepIndex] || []).length);
     
     // Initialize array for this step if needed
     if (!state.cliOutputs[stepIndex]) {
       state.cliOutputs[stepIndex] = [];
     }
     
-    // If this is a non-streaming (final) output, check if we should replace or append
-    if (!output.isStreaming) {
-      // If the last output for this step was streaming, replace it with the final version
-      const outputs = state.cliOutputs[stepIndex];
-      if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
-        outputs[outputs.length - 1] = output;
-      } else {
-        // This is a retry attempt - append it
-        outputs.push(output);
-      }
-    } else {
-      // Streaming output - either add new or update existing
-      const outputs = state.cliOutputs[stepIndex];
-      if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
-        outputs.push(output);
-      } else {
-        outputs[outputs.length - 1] = output;
-      }
+    // Add timestamp to output if not present
+    if (!output.timestampMs) {
+      output.timestampMs = new Date().getTime();
     }
     
-    console.log('📊 Dashboard: currentStep =', state.currentStep, 'stepIndex =', stepIndex, 'outputCount =', state.cliOutputs[stepIndex].length);
-    // Render if this is the current or just-completed step
-    // During execution: stepIndex might equal currentStep
-    // After completion: stepIndex equals currentStep - 1
-    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
-      console.log('✅ Dashboard: Rendering CLI output');
-      renderCliOutputs(stepIndex);
-    } else {
-      console.log('⚠️ Dashboard: Not rendering - stepIndex mismatch', 'stepIndex:', stepIndex, 'currentStep:', state.currentStep);
+    const outputs = state.cliOutputs[stepIndex];
+    
+    // Log current state
+    if (outputs.length > 0) {
+      console.log('📊 Dashboard: Last output isStreaming:', outputs[outputs.length - 1].isStreaming);
     }
+    
+    // If the last entry is a streaming placeholder and this is the final version, replace it
+    if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
+      console.log('📊 Dashboard: Replacing streaming entry with final output');
+      outputs[outputs.length - 1] = output;
+    } else {
+      console.log('📊 Dashboard: Appending new output (initial or retry)');
+      outputs.push(output);
+    }
+    
+    console.log('📊 Dashboard: outputCount after:', outputs.length);
+    // Always render to show all accumulated outputs
+    renderAllCliOutputs();
   }
 
   function handleCliStreamingChunk(stepIndex, chunk) {
@@ -233,19 +223,16 @@
         response: '',
         elapsed: 0,
         tokens: null,
-        isStreaming: true
+        isStreaming: true,
+        timestampMs: new Date().getTime()
       });
     }
 
     // Append chunk to the last (streaming) output's response
     outputs[outputs.length - 1].response += chunk;
 
-    // Render if this is the current or just-completed step
-    // During execution: stepIndex might equal currentStep
-    // After completion: stepIndex equals currentStep - 1
-    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
-      renderCliOutputs(stepIndex);
-    }
+    // Always render to show streaming updates
+    renderAllCliOutputs();
   }
 
   function handleExecutionCompleted() {
@@ -335,36 +322,65 @@
     }).join('');
   }
 
-  function renderCliOutputs(stepIndex) {
-    const outputs = state.cliOutputs[stepIndex];
-    const statusMessages = state.statusMessages[stepIndex] || [];
+  function renderAllCliOutputs() {
+    // Build a combined array of ALL messages from ALL steps with timestamps for chronological sorting
+    const allMessages = [];
     
-    if ((!outputs || outputs.length === 0) && statusMessages.length === 0) {
+    // Iterate through all steps and collect all messages
+    for (let stepIndex = 0; stepIndex < state.totalSteps; stepIndex++) {
+      const outputs = state.cliOutputs[stepIndex] || [];
+      const statusMessages = state.statusMessages[stepIndex] || [];
+      
+      // Add status messages with their timestamps
+      statusMessages.forEach((statusMsg, index) => {
+        allMessages.push({
+          type: 'status',
+          stepIndex,
+          timestamp: statusMsg.timestampMs || (stepIndex * 10000 + index),
+          data: statusMsg
+        });
+      });
+      
+      // Add CLI outputs with their timestamps
+      outputs.forEach((output, attemptIndex) => {
+        allMessages.push({
+          type: 'cli',
+          stepIndex,
+          timestamp: output.timestampMs || (stepIndex * 10000 + statusMessages.length + attemptIndex),
+          data: output,
+          attemptIndex
+        });
+      });
+    }
+    
+    if (allMessages.length === 0) {
       // Show empty state
       elements.outputContent.innerHTML = '<p class="empty-state">Output will appear here during execution</p>';
       return;
     }
     
-    // Render all outputs and status messages chronologically
-    // For simplicity, render status messages first, then outputs
+    // Sort by timestamp to get chronological order
+    allMessages.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Render all messages in chronological order
     let html = '';
     
-    // Render status messages
-    statusMessages.forEach((statusMsg) => {
-      html += '<div class="status-message">';
-      html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
-      html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
-      html += '</div>';
-    });
-    
-    // Render CLI outputs for this step (initial attempt + retries) - only if outputs exist
-    if (outputs && outputs.length > 0) {
-      outputs.forEach((output, attemptIndex) => {
+    allMessages.forEach(item => {
+      if (item.type === 'status') {
+        const statusMsg = item.data;
+        html += '<div class="status-message">';
+        html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
+        html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
+        html += '</div>';
+      } else if (item.type === 'cli') {
+        const output = item.data;
+        const attemptIndex = item.attemptIndex;
+        const stepIndex = item.stepIndex;
         const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
         const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
         
         html += '<div class="cli-output-item">';
-        html += `<div class="output-header">[Prompt ${state.currentStep}] ${attemptLabel}${streamingIndicator}</div>`;
+        html += `<div class="output-header">[Prompt ${stepIndex + 1}] ${attemptLabel}${streamingIndicator}</div>`;
         
         if (output.prompt) {
           html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
@@ -383,17 +399,14 @@
         }
         
         html += '</div>';
-      });
-    }
+      }
+    });
     
     elements.outputContent.innerHTML = html;
     
-    // Auto-scroll to bottom if last output is streaming
-    if (outputs && outputs.length > 0) {
-      const lastOutput = outputs[outputs.length - 1];
-      if (lastOutput && lastOutput.isStreaming) {
-        elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
-      }
+    // Auto-scroll to bottom if autoscroll is enabled and there's streaming or new content
+    if (elements.autoscrollCheckbox.checked) {
+      elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
     }
   }
 

@@ -26,6 +26,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
   // Language Model Tool for response completion detection
   private isToolRegistered: boolean = false;
   private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
+  private isCancelled: boolean = false; // Track if current operation was cancelled
 
   // Tool invocation instruction - single source of truth
   private readonly TOOL_INSTRUCTION = `
@@ -308,6 +309,9 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     needsCompletionDetection?: boolean
   ): Promise<boolean> {
     try {
+      // Reset cancellation flag for new prompt
+      this.isCancelled = false;
+
       // Verify automation is still available
       if (!this.isAvailable) {
         console.error("❌ Automation became unavailable");
@@ -393,6 +397,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     const requiredStableChecks = 3; // 3 consecutive stable checks = 1.5 seconds
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Check if operation was cancelled
+      if (this.isCancelled) {
+        console.log("⏹️ Streaming polling cancelled by user");
+        return false;
+      }
+
       // Small delay between checks
       await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -456,6 +466,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
     while (attempt < maxAttempts) {
       attempt++;
+
+      // Check if operation was cancelled
+      if (this.isCancelled) {
+        console.log("⏹️ Submit retry cancelled by user");
+        return false;
+      }
 
       try {
         // Execute submit command
@@ -906,6 +922,9 @@ ${promptText}`;
    */
   async cancel(): Promise<void> {
     try {
+      // Set cancellation flag to stop any ongoing retry/polling loops
+      this.isCancelled = true;
+
       await vscode.commands.executeCommand("workbench.action.chat.cancel");
       console.log("⏹️ Chat response cancelled");
     } catch (error) {
