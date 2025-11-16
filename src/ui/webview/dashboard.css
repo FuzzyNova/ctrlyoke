@@ -54,6 +54,47 @@ html, body {
   white-space: nowrap;
 }
 
+/* Execution state badge */
+#execution-state {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.execution-state-idle {
+  background: var(--vscode-statusBarItem-prominentBackground, rgba(128, 128, 128, 0.2));
+  color: var(--vscode-statusBarItem-prominentForeground, var(--fg-secondary));
+}
+
+.execution-state-running {
+  background: var(--vscode-progressBar-background, rgba(14, 99, 156, 0.8));
+  color: var(--vscode-button-foreground);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.execution-state-paused {
+  background: var(--vscode-editorWarning-foreground, rgba(252, 175, 62, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+.execution-state-completed {
+  background: var(--vscode-testing-iconPassed, rgba(115, 191, 105, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+.execution-state-error {
+  background: var(--vscode-testing-iconFailed, rgba(241, 96, 103, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 #controls {
   display: flex;
   gap: 6px;
@@ -231,6 +272,17 @@ h3 {
   font-size: 12px;
   color: var(--fg-secondary);
   padding-left: 24px;
+}
+
+.prompt-retry {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-editorWarning-foreground);
+  padding-left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .prompt-status-msg {

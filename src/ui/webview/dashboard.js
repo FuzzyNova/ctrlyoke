@@ -17,13 +17,15 @@
     executionState: EXECUTION_STATES.IDLE,
     currentStep: 0,
     totalSteps: 0,
-    cliOutputs: {} // Maps stepIndex -> array of outputs (including retries)
+    cliOutputs: {}, // Maps stepIndex -> array of outputs (including retries)
+    retryStates: {} // Maps stepIndex -> { currentRetry, maxRetries }
   };
 
   // DOM elements
   const elements = {
     fileName: document.getElementById('file-name'),
     changeFileBtn: document.getElementById('change-file'),
+    executionState: document.getElementById('execution-state'),
     runBtn: document.getElementById('btn-run'),
     pauseBtn: document.getElementById('btn-pause'),
     stopBtn: document.getElementById('btn-stop'),
@@ -66,11 +68,17 @@
       case MESSAGE_TYPES.EXECUTION_STARTED:
         handleExecutionStarted(message.fileName, message.totalSteps);
         break;
+      case MESSAGE_TYPES.EXECUTION_STATE_CHANGED:
+        handleExecutionStateChanged(message.state);
+        break;
       case MESSAGE_TYPES.PROGRESS_UPDATE:
         handleProgressUpdate(message.current, message.total);
         break;
       case MESSAGE_TYPES.STEP_STATUS_CHANGED:
         handleStepStatusChanged(message.stepIndex, message.status, message.details);
+        break;
+      case MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED:
+        handleRetryAttemptChanged(message.stepIndex, message.currentRetry, message.maxRetries);
         break;
       case MESSAGE_TYPES.CLI_OUTPUT:
         handleCliOutput(message.stepIndex, message.output);
@@ -102,6 +110,7 @@
     state.currentStep = 0;
     state.totalSteps = 0;
     state.cliOutputs = {}; // Reset outputs
+    state.retryStates = {}; // Reset retry states
     // Hide progress bar
     elements.progressContainer.style.display = 'none';
     // Clear CLI output and show empty state
@@ -115,6 +124,11 @@
     state.currentStep = 0;
     updateControls();
     elements.progressContainer.style.display = 'block';
+  }
+
+  function handleExecutionStateChanged(executionState) {
+    state.executionState = executionState;
+    render();
   }
 
   function handleProgressUpdate(current, total) {
@@ -132,6 +146,11 @@
       state.prompts[stepIndex].details = { ...status, ...details };
       renderPromptsList();
     }
+  }
+
+  function handleRetryAttemptChanged(stepIndex, currentRetry, maxRetries) {
+    state.retryStates[stepIndex] = { currentRetry, maxRetries };
+    renderPromptsList();
   }
 
   function handleCliOutput(stepIndex, output) {
@@ -206,8 +225,41 @@
 
   function render() {
     elements.fileName.textContent = state.fileName || 'No file selected';
+    renderExecutionState();
     renderPromptsList();
     updateControls();
+  }
+
+  function renderExecutionState() {
+    // Remove all state classes
+    elements.executionState.className = '';
+    
+    // Add new state class
+    const stateClass = `execution-state-${state.executionState}`;
+    elements.executionState.className = stateClass;
+    
+    // Update text based on state
+    let stateText = '';
+    switch (state.executionState) {
+      case EXECUTION_STATES.IDLE:
+        stateText = 'Ready';
+        break;
+      case EXECUTION_STATES.RUNNING:
+        stateText = 'Running';
+        break;
+      case EXECUTION_STATES.PAUSED:
+        stateText = 'Paused';
+        break;
+      case EXECUTION_STATES.COMPLETED:
+        stateText = 'Completed';
+        break;
+      case EXECUTION_STATES.ERROR:
+        stateText = 'Error';
+        break;
+      default:
+        stateText = state.executionState;
+    }
+    elements.executionState.textContent = stateText;
   }
 
   function renderPromptsList() {
@@ -221,6 +273,13 @@
       const statusClass = `prompt-item status-${prompt.status}`;
       
       let detailsHtml = '';
+      
+      // Show retry state if retrying
+      const retryState = state.retryStates[prompt.index];
+      if (retryState && retryState.currentRetry > 0) {
+        detailsHtml += `<div class="prompt-retry">🔄 Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
+      }
+      
       if (prompt.details.duration) {
         detailsHtml += `<div class="prompt-detail">Duration: ${prompt.details.duration}s</div>`;
       }

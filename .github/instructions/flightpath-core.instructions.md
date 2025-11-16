@@ -40,24 +40,40 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 
 <promptQueue>
 **Responsibilities:**
-- Sequential execution state machine (idle → running → paused/completed/error)
-- Progress tracking and result storage
-- Does NOT handle response detection (delegated to FlightPathManager)
+- State container for workflow execution (NOT event-driven execution)
+- Sequential state management (idle → running → paused/completed/error)
+- Progress tracking, retry counting, and result storage
+- State change events for UI updates
 
-**State management:**
+**Architecture decision: Direct execution, not event-driven**
 
-- `loadPrompts()` resets state, creates pending results array
-- `start()` begins execution, `pause()` stops advancement
-- `resume()` continues from `currentIndex`
-- `markCompleted()` and `markFailed()` update result status
-- `emitStateChange()` fires event for status bar updates
+- FlightPathManager executes prompts directly in a for loop (deterministic control flow)
+- PromptQueue is a state container that emits change events
+- This design supports complex retry logic where execution "stays" on a step during retries
+- Event-driven model would require complex state machines to handle retry pauses
 
-**Why queue doesn't detect responses:**
+**State management methods:**
 
-- Queue is integration-agnostic (doesn't know CLI vs Chat)
-- FlightPathManager subscribes to integration's `onResponseComplete`
-- Manager calls `queue.markCompleted()` and `advanceQueue()` when response fires
-- Clean separation: Queue manages state, Manager coordinates
+- `loadPrompts()` - Resets state, creates pending results array
+- `start()` - Sets status to "running" (doesn't execute, just state change)
+- `pause()` - Sets status to "paused", FlightPathManager checks this in loop
+- `resume()` - Sets status to "running", FlightPathManager continues loop
+- `stop()` - Sets status to "idle", marks sent prompts as cancelled
+- `markCompleted()` / `markErrored()` - Manual completion called by FlightPathManager
+- `emitStateChange()` - Fires event for status bar and dashboard updates
+
+**Retry tracking:**
+
+- `canRetry(prompt)` - Checks if retry is possible based on maxRetries
+- `incrementRetryCount()` / `resetRetryCount()` / `getCurrentRetryCount()`
+- `getEffectiveMaxRetries(prompt)` / `getEffectiveRetryPrompt(prompt)` - Smart defaults
+
+**Why NOT event-driven:**
+
+- Retry logic requires staying on same prompt index while retrying
+- For loop gives deterministic flow: stay at index `i` until success or max retries
+- Event-driven would need complex state to "pause" advancement during retries
+- Try-catch around loop is simpler than event-driven error propagation
   </promptQueue>
 
 <promptFileParser>

@@ -32,8 +32,10 @@ WebView-based dashboard UI for real-time workflow visualization, execution contr
 ```typescript
 updateFileSelected(fileName, prompts); // File selection with prompt list
 updateExecutionStarted(fileName, totalSteps); // Workflow start
-updateProgress(current, total); // Progress bar updates
+updateExecutionState(state); // Execution state changes (idle, running, paused, completed, error)
+updateProgress(current, total); // Progress bar updates (ONLY called on completion)
 updateStepStatus(stepIndex, status, details); // Individual prompt status
+updateRetryAttempt(stepIndex, currentRetry, maxRetries); // Retry attempt tracking
 updateCliOutput(stepIndex, output); // Complete CLI response
 updateCliStreamingChunk(stepIndex, chunk); // Real-time streaming chunks
 updateExecutionCompleted(); // Workflow completion
@@ -60,20 +62,23 @@ updateExecutionCompleted(); // Workflow completion
 state = {
   fileName: string | null,
   prompts: Array<{index, text, status, details}>,
-  executionState: 'idle' | 'running' | 'completed',
+  executionState: 'idle' | 'running' | 'paused' | 'completed' | 'error',
   currentStep: number,
   totalSteps: number,
-  cliOutputs: { [stepIndex]: output }
+  cliOutputs: { [stepIndex]: array of outputs (including retries) },
+  retryStates: { [stepIndex]: { currentRetry, maxRetries } }
 }
 ```
 
 **Message handlers:**
 
 - `init` → Hydrate initial state
-- `fileSelected` → Update file, prompts, reset execution state
+- `fileSelected` → Update file, prompts, reset execution state and retry states
 - `executionStarted` → Show progress bar, update state
-- `progressUpdate` → Update progress percentage
+- `executionStateChanged` → Update execution state badge in header
+- `progressUpdate` → Update progress percentage (only called on completion)
 - `stepStatusChanged` → Update prompt item status/details
+- `retryAttemptChanged` → Update retry state for step, re-render prompts
 - `cliOutput` → Store and render complete CLI response
 - `cliStreamingChunk` → Append chunk to response, render if current step
 - `executionCompleted` → Update state, enable re-run button
@@ -81,8 +86,9 @@ state = {
 **Rendering functions:**
 
 - `render()` → Top-level orchestrator
-- `renderPromptsList()` → Prompt items with status icons, details
-- `renderCliOutput(output)` → CLI prompt/response with syntax highlighting intent
+- `renderExecutionState()` → Updates execution state badge with appropriate styling
+- `renderPromptsList()` → Prompt items with status icons, retry info, details
+- `renderCliOutputs(stepIndex)` → CLI outputs with retry attempt labels
 - `updateControls()` → Enable/disable buttons based on state
 
 **Status icons:**
@@ -91,6 +97,19 @@ state = {
 - Running: ▶️
 - Completed: ✅
 - Failed: ❌
+
+**Execution state badge:**
+
+- Displayed in header between file info and controls
+- Color-coded: Idle (gray), Running (blue/pulsing), Paused (yellow), Completed (green), Error (red)
+- Text updates: "Ready", "Running", "Paused", "Completed", "Error"
+
+**Retry display:**
+
+- Shows "🔄 Retry N of M" under prompt when retrying
+- Orange/warning color to indicate retry status
+- Visible in prompt list during retry attempts
+- Cleared on success or when moving to next prompt
 
 **Controls logic:**
 

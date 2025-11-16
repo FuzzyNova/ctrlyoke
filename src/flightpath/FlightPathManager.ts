@@ -314,6 +314,10 @@ export class FlightPathManager {
       await this.startWorkflowExecution(integration);
     } catch (error) {
       console.error("FlightPath: Failed to execute prompt file:", error);
+
+      // Mark queue as errored
+      this.promptQueue.markErrored();
+
       vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
     }
   }
@@ -381,6 +385,10 @@ export class FlightPathManager {
     integration?: CopilotIntegration
   ): Promise<void> {
     const activeIntegration = integration || this.getDefaultIntegration();
+
+    // Set queue state to running (this will emit state change and update dashboard)
+    await this.promptQueue.start();
+
     const state = this.promptQueue.getState();
 
     // Show the FlightPath dashboard panel when execution starts
@@ -420,9 +428,8 @@ export class FlightPathManager {
     for (let i = 0; i < state.prompts.length; i++) {
       const prompt = state.prompts[i];
 
-      // Update dashboard progress
+      // Update dashboard step status to running
       if (this.dashboardProvider) {
-        this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
         this.dashboardProvider.updateStepStatus(i, { state: "running" });
       }
 
@@ -478,6 +485,9 @@ export class FlightPathManager {
         vscode.window.showErrorMessage(
           `FlightPath: Failed to execute prompt ${i + 1}`
         );
+
+        // Mark queue as errored
+        this.promptQueue.markErrored();
 
         // Update dashboard with failure
         if (this.dashboardProvider) {
@@ -551,6 +561,9 @@ export class FlightPathManager {
               "❌ FlightPath: Workflow stopped due to end condition failure"
             );
 
+            // Mark queue as errored
+            this.promptQueue.markErrored();
+
             // Update dashboard with failure
             if (this.dashboardProvider) {
               this.dashboardProvider.updateStepStatus(i, {
@@ -570,6 +583,10 @@ export class FlightPathManager {
               duration: parseFloat(duration),
               endConditionResult: evaluationResult,
             });
+            // Update progress AFTER completion
+            this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+            // Reset retry state on success
+            this.dashboardProvider.updateRetryAttempt(i, 0, 0);
           }
         } else {
           // Update dashboard with success (no end condition)
@@ -578,6 +595,8 @@ export class FlightPathManager {
               state: "completed",
               duration: parseFloat(duration),
             });
+            // Update progress AFTER completion
+            this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
           }
         }
       } else {
@@ -624,6 +643,8 @@ export class FlightPathManager {
             state: "completed",
             duration: parseFloat(duration),
           });
+          // Update progress AFTER completion
+          this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
         }
       }
 
@@ -639,6 +660,13 @@ export class FlightPathManager {
     }
 
     console.log("🎉 FlightPath: Workflow execution complete");
+
+    // Set queue state to completed (this will emit state change and update dashboard)
+    const finalState = this.promptQueue.getState();
+    if (finalState.status !== "paused" && finalState.status !== "error") {
+      // Only mark as completed if not already paused or errored
+      this.promptQueue.markCompleted();
+    }
 
     // Notify dashboard about execution completion
     if (this.dashboardProvider) {
@@ -994,51 +1022,9 @@ export class FlightPathManager {
     console.log(`FlightPath: Queue state changed to ${state.status}`);
     this.updateStatusBar();
 
-    // Handle prompt execution
-    if (state.status === "running" && state.prompts.length > 0) {
-      const currentPrompt = this.promptQueue.getCurrentPrompt();
-      if (currentPrompt) {
-        this.executeCurrentPrompt(currentPrompt);
-      }
-    }
-  }
-
-  /**
-   * Execute current prompt with Copilot
-   */
-  private async executeCurrentPrompt(prompt: PromptItem): Promise<void> {
-    try {
-      console.log(
-        "FlightPath: Executing prompt with Copilot (stub implementation)"
-      );
-
-      // This is where we would integrate with GitHub Copilot Chat API
-      // For now, show the prompt and simulate execution
-      const action = await vscode.window.showInformationMessage(
-        `FlightPath: Ready to send prompt to Copilot:\n\n"${prompt.prompt.substring(0, 100)}..."`,
-        "Send to Copilot",
-        "Skip",
-        "Stop"
-      );
-
-      if (action === "Send to Copilot") {
-        // Simulate sending to Copilot
-        await this.promptQueue.markCurrentAsSent();
-
-        // Simulate completion after a delay (in real implementation, this would be triggered by end condition)
-        setTimeout(async () => {
-          await this.promptQueue.completeCurrentAndMoveNext();
-        }, 2000);
-      } else if (action === "Skip") {
-        await this.promptQueue.completeCurrentAndMoveNext();
-      } else {
-        this.promptQueue.stop();
-      }
-    } catch (error) {
-      console.error("FlightPath: Failed to execute prompt:", error);
-      this.promptQueue.markCurrentAsFailed(
-        error instanceof Error ? error.message : String(error)
-      );
+    // Send execution state to dashboard
+    if (this.dashboardProvider) {
+      this.dashboardProvider.updateExecutionState(state.status);
     }
   }
 
@@ -1326,12 +1312,29 @@ export class FlightPathManager {
 
     // Check if retry is possible
     if (this.promptQueue.canRetry(prompt)) {
-      console.log(
-        `🔄 FlightPath: Validation failed, retrying (attempt ${this.promptQueue.getCurrentRetryCount() + 1}/${prompt.endCondition?.maxRetries})...`
-      );
-
       // Increment retry counter
       this.promptQueue.incrementRetryCount();
+
+      const currentRetry = this.promptQueue.getCurrentRetryCount();
+      const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
+      const currentIndex = this.promptQueue.getState().currentIndex;
+
+      console.log(
+        `🔄 FlightPath: Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+      );
+
+      // Update dashboard with retry state
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateRetryAttempt(
+          currentIndex,
+          currentRetry,
+          maxRetries
+        );
+        this.dashboardProvider.updateStepStatus(currentIndex, {
+          state: "running",
+          message: `Retrying (${currentRetry}/${maxRetries})`,
+        });
+      }
 
       // Build retry prompt
       const retryPrompt = this.buildRetryPrompt(prompt, evaluationResult);
@@ -1344,7 +1347,6 @@ export class FlightPathManager {
       };
 
       // Update workflow progress to show retry
-      const currentIndex = this.promptQueue.getState().currentIndex;
       integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
 
       // Record start time for retry

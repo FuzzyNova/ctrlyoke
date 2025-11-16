@@ -1,4 +1,4 @@
-FlightPath: Available Chat Commands (325 found)
+FlightPath: Available Chat Commands (355 found)
 
 chat.action.focus
 chat.configureToolSets
@@ -15,6 +15,7 @@ chat.internal.fix
 chat.internal.generateDocs
 chat.internal.generateTests
 chat.internal.review
+chat.models.action.clearSearchResults
 chat.openFileSnapshot
 chat.openFileUpdatedBySnapshot
 chat.sessions.gettingStarted
@@ -38,6 +39,9 @@ chatEditor.action.reviewChanges
 chatEditor.action.showAccessibleDiffView
 chatEditor.action.toggleDiff
 chatEditor.action.undoHunk
+copilot-agents-placeholder.focus
+copilot-agents-placeholder.open
+copilot-agents-placeholder.resetViewLocation
 copilot-chat.focus
 copilot-chat.open
 copilot-chat.resetViewLocation
@@ -70,7 +74,9 @@ github.copilot.chat.generate
 github.copilot.chat.generateAltText
 github.copilot.chat.generateDocs
 github.copilot.chat.generateTests
+github.copilot.chat.installAgent
 github.copilot.chat.manageBYOK
+github.copilot.chat.manageBYOKAPIKey
 github.copilot.chat.mcp.setup.check
 github.copilot.chat.mcp.setup.flow
 github.copilot.chat.mcp.setup.validatePackage
@@ -102,18 +108,27 @@ github.copilot.chat.review.stagedFileChange
 github.copilot.chat.review.unstagedChanges
 github.copilot.chat.review.unstagedFileChange
 github.copilot.chat.startCopilotDebugCommand
+github.copilot.chat.tools.memory.openFolder
+github.copilot.chat.triggerPermissiveSignIn
 github.copilot.claude.sessions.refresh
+github.copilot.cli.sessions.delete
+github.copilot.cli.sessions.newTerminalSession
+github.copilot.cli.sessions.refresh
+github.copilot.cli.sessions.resumeInTerminal
+github.copilot.cloud.sessions.openInBrowser
+github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest
+github.copilot.cloud.sessions.refresh
 github.copilot.collectDiagnostics
 github.copilot.completions.disable
 github.copilot.completions.enable
 github.copilot.completions.quotaExceeded
 github.copilot.completions.toggle
+github.copilot.copilotcli.sessions.refresh
 github.copilot.createFile
 github.copilot.createLaunchJsonFileWithContents
 github.copilot.createProject
 github.copilot.debug.collectDiagnostics
 github.copilot.debug.collectWorkspaceIndexDiagnostics
-github.copilot.debug.generateConfiguration
 github.copilot.debug.generateSTest
 github.copilot.debug.inlineEdit.clearCache
 github.copilot.debug.inlineEdit.learnMore
@@ -130,6 +145,7 @@ github.copilot.executeSearch
 github.copilot.generate
 github.copilot.git.generateCommitMessage
 github.copilot.git.resolveMergeConflicts
+github.copilot.inlineEdit.jumpToNextEdit
 github.copilot.interactiveSession.feedback
 github.copilot.mcp.viewContext7
 github.copilot.nextPanelSolution
@@ -156,29 +172,15 @@ github.copilot.tests.applyMutations
 github.copilot.tests.fixTestFailure
 github.copilot.tests.fixTestFailure.fromInline
 github.copilot.toggleStatusMenu
-notebook.cell.chat.accept
-notebook.cell.chat.acceptChanges
-notebook.cell.chat.arrowOutDown
-notebook.cell.chat.arrowOutUp
-notebook.cell.chat.close
-notebook.cell.chat.discard
 notebook.cell.chat.explainError
 notebook.cell.chat.fixError
-notebook.cell.chat.focus
-notebook.cell.chat.focusNextCell
-notebook.cell.chat.focusPreviousCell
-notebook.cell.chat.nextFromHistory
-notebook.cell.chat.previousFromHistory
-notebook.cell.chat.restore
 notebook.cell.chat.start
 notebook.cell.chat.startAtTop
-notebook.cell.chat.stop
 notebook.chat.selectAndInsertKernelVariable
 toggle.chat.commandCenter.enabled
 vscode.copilot.chat.showRequestHtmlItem
 workbench.action.chat.acceptTool
 workbench.action.chat.addDynamicVariable
-workbench.action.chat.addParticipant
 workbench.action.chat.addToChatAction
 workbench.action.chat.applyCompareEdits
 workbench.action.chat.applyInEditor
@@ -190,8 +192,10 @@ workbench.action.chat.attachFolder
 workbench.action.chat.attachSelection
 workbench.action.chat.cancel
 workbench.action.chat.changeModel
+workbench.action.chat.chatSessionPrimaryPicker
 workbench.action.chat.clearHistory
 workbench.action.chat.clearInputHistory
+workbench.action.chat.configure.customagents
 workbench.action.chat.configure.instructions
 workbench.action.chat.configure.prompts
 workbench.action.chat.configureCodeCompletions
@@ -199,6 +203,7 @@ workbench.action.chat.configureTools
 workbench.action.chat.copyAll
 workbench.action.chat.copyCodeBlock
 workbench.action.chat.copyItem
+workbench.action.chat.copyKatexMathSource
 workbench.action.chat.copyLink
 workbench.action.chat.createRemoteAgentJob
 workbench.action.chat.delegateToEditSession
@@ -221,7 +226,7 @@ workbench.action.chat.insertIntoNotebook
 workbench.action.chat.insertSearchResults
 workbench.action.chat.logChatIndex
 workbench.action.chat.logInputHistory
-workbench.action.chat.manage.mode
+workbench.action.chat.manage
 workbench.action.chat.manageLanguageModelAuthentication
 workbench.action.chat.manageLanguageModels
 workbench.action.chat.manageOverages
@@ -236,7 +241,6 @@ workbench.action.chat.nextCodeBlock
 workbench.action.chat.nextFileTree
 workbench.action.chat.nextUserPrompt
 workbench.action.chat.open
-workbench.action.chat.openChatEmptyStateSettings
 workbench.action.chat.openFeatureSettings
 workbench.action.chat.openInEditor
 workbench.action.chat.openInNewWindow
@@ -244,6 +248,8 @@ workbench.action.chat.openInSidebar
 workbench.action.chat.openModePicker
 workbench.action.chat.openModelPicker
 workbench.action.chat.openNewChatToTheSide
+workbench.action.chat.openNewSessionEditor.copilot-cloud-agent
+workbench.action.chat.openNewSessionEditor.copilotcli
 workbench.action.chat.openQuotaExceededDialog
 workbench.action.chat.openSessionInNewEditorGroup
 workbench.action.chat.openSessionInNewWindow
@@ -252,7 +258,7 @@ workbench.action.chat.openStorageFolder
 workbench.action.chat.openagent
 workbench.action.chat.openask
 workbench.action.chat.openedit
-workbench.action.chat.picker.configmode
+workbench.action.chat.picker.customagents
 workbench.action.chat.previousCodeBlock
 workbench.action.chat.previousFileTree
 workbench.action.chat.previousUserPrompt
@@ -270,7 +276,9 @@ workbench.action.chat.run-in-new-chat.prompt.current
 workbench.action.chat.run.prompt
 workbench.action.chat.run.prompt.current
 workbench.action.chat.runInTerminal
-workbench.action.chat.save-to-prompt
+workbench.action.chat.save-as-agent
+workbench.action.chat.save-as-instructions
+workbench.action.chat.save-as-prompt
 workbench.action.chat.sendToNewChat
 workbench.action.chat.showExtensionsUsingCopilot
 workbench.action.chat.skipTool
@@ -298,6 +306,7 @@ workbench.action.chat.upgradePlan
 workbench.action.chat.voiceChatInChatView
 workbench.action.chatEditor.newChat
 workbench.action.chatSessions.toggleDescriptionDisplay
+workbench.action.chatSessions.toggleNewSingleView
 workbench.action.output.show.GitHub.copilot-chat.GitHub Copilot Chat
 workbench.action.output.show.GitHub.copilot.GitHub Copilot
 workbench.action.output.show.extension-output-GitHub.copilot-#1-GitHub Copilot Log (Code References)
@@ -312,6 +321,7 @@ workbench.action.terminal.chat.rerunRequest
 workbench.action.terminal.chat.runCommand
 workbench.action.terminal.chat.runFirstCommand
 workbench.action.terminal.chat.start
+workbench.action.terminal.chat.viewHiddenChatTerminals
 workbench.action.terminal.chat.viewInChat
 workbench.chat.action.focusLastFocused
 workbench.edit.chat.cancel
@@ -321,6 +331,26 @@ workbench.panel.chat.view.copilot.focus
 workbench.panel.chat.view.copilot.removeView
 workbench.panel.chat.view.copilot.resetViewLocation
 workbench.panel.chat.view.copilot.toggleVisibility
+workbench.view.chat.sessions
+workbench.view.chat.sessions.copilot-cloud-agent.focus
+workbench.view.chat.sessions.copilot-cloud-agent.open
+workbench.view.chat.sessions.copilot-cloud-agent.removeView
+workbench.view.chat.sessions.copilot-cloud-agent.resetViewLocation
+workbench.view.chat.sessions.copilot-cloud-agent.toggleVisibility
+workbench.view.chat.sessions.copilotcli.focus
+workbench.view.chat.sessions.copilotcli.open
+workbench.view.chat.sessions.copilotcli.removeView
+workbench.view.chat.sessions.copilotcli.resetViewLocation
+workbench.view.chat.sessions.copilotcli.toggleVisibility
+workbench.view.chat.sessions.gettingStarted.focus
+workbench.view.chat.sessions.gettingStarted.open
+workbench.view.chat.sessions.gettingStarted.resetViewLocation
+workbench.view.chat.sessions.local.focus
+workbench.view.chat.sessions.local.open
+workbench.view.chat.sessions.local.removeView
+workbench.view.chat.sessions.local.resetViewLocation
+workbench.view.chat.sessions.local.toggleVisibility
+workbench.view.chat.sessions.resetViewContainerLocation
 workbench.view.extension.copilot-chat
 workbench.view.extension.copilot-chat.resetViewContainerLocation
 workbench.view.extension.github-copilot-completions-debugger-panel

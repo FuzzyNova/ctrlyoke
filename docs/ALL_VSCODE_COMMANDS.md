@@ -1,4 +1,4 @@
-FlightPath: All Available VS Code Commands (4143 found)
+FlightPath: All Available VS Code Commands (4218 found)
 
 CppReferencesView.focus
 CppReferencesView.open
@@ -133,7 +133,7 @@ callStackWidget.goToFile
 cancelLinkedEditingInput
 cancelRenameInput
 cancelSelection
-changeEditorIndentation7
+changeEditorIndentation2
 chat.action.focus
 chat.configureToolSets
 chat.enablePremiumOverages
@@ -149,6 +149,7 @@ chat.internal.fix
 chat.internal.generateDocs
 chat.internal.generateTests
 chat.internal.review
+chat.models.action.clearSearchResults
 chat.openFileSnapshot
 chat.openFileUpdatedBySnapshot
 chat.sessions.gettingStarted
@@ -192,6 +193,9 @@ cmake.projectStatus.open
 cmake.projectStatus.resetViewLocation
 codelens.showLensesInCurrentLine
 codereferencing.showOutputPane
+codex-placeholder.focus
+codex-placeholder.open
+codex-placeholder.resetViewLocation
 columnSelect
 comments.collapse
 comments.expand
@@ -212,6 +216,9 @@ connectSupabase.toggleVisibility
 context-inspector.focus
 context-inspector.open
 context-inspector.resetViewLocation
+copilot-agents-placeholder.focus
+copilot-agents-placeholder.open
+copilot-agents-placeholder.resetViewLocation
 copilot-chat.focus
 copilot-chat.open
 copilot-chat.resetViewLocation
@@ -501,8 +508,6 @@ editor.action.inlineSuggest.snooze
 editor.action.inlineSuggest.toggleAlwaysShowToolbar
 editor.action.inlineSuggest.toggleShowCollapsed
 editor.action.inlineSuggest.trigger
-editor.action.inlineSuggest.triggerInlineEdit
-editor.action.inlineSuggest.triggerInlineEditExplicit
 editor.action.insertColorWithStandaloneColorPicker
 editor.action.insertCursorAbove
 editor.action.insertCursorAtEndOfEachLineSelected
@@ -785,7 +790,13 @@ filesExplorer.findInWorkspace
 filesExplorer.openFilePreserveFocus
 filesExplorer.paste
 firstCompressedFolder
+flightpath.createEndConditionScript
 flightpath.createPromptFile
+flightpath.dashboard.focus
+flightpath.dashboard.open
+flightpath.dashboard.removeView
+flightpath.dashboard.resetViewLocation
+flightpath.dashboard.toggleVisibility
 flightpath.debugState
 flightpath.listAllCommands
 flightpath.listChatCommands
@@ -793,16 +804,22 @@ flightpath.openPanel
 flightpath.pause
 flightpath.resume
 flightpath.retryCopilotDetection
+flightpath.run
+flightpath.selectPromptFile
+flightpath.sendToChat
+flightpath.sendToCli
 flightpath.showCopilotStatus
+flightpath.showLanguageId
+flightpath.showOutputPanel
 flightpath.stop
 flightpath.takeOff
 flightpath.test.copilotAutomation
+flightpath.test.fileAttachment
 flightpath.testAutomation
 focusAndAcceptSuggestion
 focusNextRenameSuggestion
 focusPreviousRenameSuggestion
 focusSuggestion
-formatter/configure/dfl/1ed85e4a-9ee2-430f-b49e-31533c09e8de
 getContextKeyInfo
 git-base.api.getRemoteSources
 git._syncAll
@@ -858,6 +875,7 @@ git.copyCommitMessage
 git.copyContentToClipboard
 git.createTag
 git.createWorktree
+git.createWorktreeWithDefaults
 git.deleteBranch
 git.deleteRemoteBranch
 git.deleteRemoteTag
@@ -873,6 +891,9 @@ git.fetchRef
 git.graph.checkout
 git.graph.checkoutDetached
 git.graph.cherryPick
+git.graph.compareRef
+git.graph.compareWithMergeBase
+git.graph.compareWithRemote
 git.graph.deleteBranch
 git.graph.deleteTag
 git.ignore
@@ -913,6 +934,16 @@ git.removeRemote
 git.rename
 git.renameBranch
 git.reopenClosedRepositories
+git.repositories.checkout
+git.repositories.checkoutDetached
+git.repositories.compareRef
+git.repositories.createBranch
+git.repositories.createFrom
+git.repositories.createTag
+git.repositories.deleteBranch
+git.repositories.deleteTag
+git.repositories.merge
+git.repositories.rebase
 git.restoreCommitTemplate
 git.revealFileInOS.linux
 git.revealFileInOS.mac
@@ -990,7 +1021,9 @@ github.copilot.chat.generate
 github.copilot.chat.generateAltText
 github.copilot.chat.generateDocs
 github.copilot.chat.generateTests
+github.copilot.chat.installAgent
 github.copilot.chat.manageBYOK
+github.copilot.chat.manageBYOKAPIKey
 github.copilot.chat.mcp.setup.check
 github.copilot.chat.mcp.setup.flow
 github.copilot.chat.mcp.setup.validatePackage
@@ -1022,18 +1055,27 @@ github.copilot.chat.review.stagedFileChange
 github.copilot.chat.review.unstagedChanges
 github.copilot.chat.review.unstagedFileChange
 github.copilot.chat.startCopilotDebugCommand
+github.copilot.chat.tools.memory.openFolder
+github.copilot.chat.triggerPermissiveSignIn
 github.copilot.claude.sessions.refresh
+github.copilot.cli.sessions.delete
+github.copilot.cli.sessions.newTerminalSession
+github.copilot.cli.sessions.refresh
+github.copilot.cli.sessions.resumeInTerminal
+github.copilot.cloud.sessions.openInBrowser
+github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest
+github.copilot.cloud.sessions.refresh
 github.copilot.collectDiagnostics
 github.copilot.completions.disable
 github.copilot.completions.enable
 github.copilot.completions.quotaExceeded
 github.copilot.completions.toggle
+github.copilot.copilotcli.sessions.refresh
 github.copilot.createFile
 github.copilot.createLaunchJsonFileWithContents
 github.copilot.createProject
 github.copilot.debug.collectDiagnostics
 github.copilot.debug.collectWorkspaceIndexDiagnostics
-github.copilot.debug.generateConfiguration
 github.copilot.debug.generateSTest
 github.copilot.debug.inlineEdit.clearCache
 github.copilot.debug.inlineEdit.learnMore
@@ -1050,6 +1092,7 @@ github.copilot.executeSearch
 github.copilot.generate
 github.copilot.git.generateCommitMessage
 github.copilot.git.resolveMergeConflicts
+github.copilot.inlineEdit.jumpToNextEdit
 github.copilot.interactiveSession.feedback
 github.copilot.mcp.viewContext7
 github.copilot.nextPanelSolution
@@ -1095,6 +1138,7 @@ gitlens.ai.explainCommit:editor
 gitlens.ai.explainCommit:views
 gitlens.ai.explainStash
 gitlens.ai.explainStash:views
+gitlens.ai.explainUnpushed:views
 gitlens.ai.explainWip
 gitlens.ai.explainWip:editor
 gitlens.ai.explainWip:views
@@ -1238,6 +1282,8 @@ gitlens.gitCommands.worktree.delete
 gitlens.gitCommands.worktree.open
 gitlens.gk.switchOrganization
 gitlens.graph.refresh
+gitlens.graph.soloBranch:views
+gitlens.graph.soloTag:views
 gitlens.graph.split
 gitlens.graph.switchToEditorLayout
 gitlens.graph.switchToPanelLayout
@@ -1269,12 +1315,20 @@ gitlens.openComparisonOnRemote
 gitlens.openCurrentBranchOnRemote
 gitlens.openFileFromRemote
 gitlens.openFileHistory
+gitlens.openFileHistoryInGraph
+gitlens.openFileHistoryInGraph:editor
+gitlens.openFileHistoryInGraph:explorer
+gitlens.openFileHistoryInGraph:scm
+gitlens.openFileHistoryInGraph:views
 gitlens.openFileInRemote
 gitlens.openFileOnRemote
 gitlens.openFileOnRemoteFrom
 gitlens.openFileRevision
 gitlens.openFileRevisionFrom
 gitlens.openFolderHistory
+gitlens.openFolderHistoryInGraph
+gitlens.openFolderHistoryInGraph:explorer
+gitlens.openFolderHistoryInGraph:scm
 gitlens.openInRemote
 gitlens.openOnRemote
 gitlens.openOnlyChangedFiles
@@ -1311,6 +1365,8 @@ gitlens.plus.validate
 gitlens.pullRepositories
 gitlens.pushRepositories
 gitlens.quickOpenFileHistory
+gitlens.recomposeBranch
+gitlens.recomposeBranch:views
 gitlens.refreshHover
 gitlens.regenerateMarkdownDocument
 gitlens.reset
@@ -1374,7 +1430,6 @@ gitlens.showSettingsPage!repositories-view
 gitlens.showSettingsPage!search-compare-view
 gitlens.showSettingsPage!stashes-view
 gitlens.showSettingsPage!tags-view
-gitlens.showSettingsPage!views
 gitlens.showSettingsPage!worktrees-view
 gitlens.showStashesView
 gitlens.showTagsView
@@ -1894,17 +1949,15 @@ inlineChat.holdForSpeech
 inlineChat.moveToNextHunk
 inlineChat.moveToPreviousHunk
 inlineChat.regenerate
+inlineChat.resetMoveToPanelChatChoice
 inlineChat.showHint
 inlineChat.start
 inlineChat.startWithCurrentLine
 inlineChat.toggleDiff
 inlineChat.unstash
 inlineChat.viewInChat
-inlineChat2.cancelRequest
 inlineChat2.close
 inlineChat2.keep
-inlineChat2.reveal
-inlineChat2.undo
 insertBestCompletion
 insertNextSuggestion
 insertPrevSuggestion
@@ -2103,6 +2156,8 @@ moveFileToTrash
 multiDiffEditor.collapseAll
 multiDiffEditor.expandAll
 multiDiffEditor.goToFile
+multiDiffEditor.goToNextChange
+multiDiffEditor.goToPreviousChange
 nextCompressedFolder
 noop
 noteMultiCursor.deleteLeft
@@ -2120,23 +2175,10 @@ notebook.cell.cancelExecution
 notebook.cell.changeLanguage
 notebook.cell.changeToCode
 notebook.cell.changeToMarkdown
-notebook.cell.chat.accept
-notebook.cell.chat.acceptChanges
-notebook.cell.chat.arrowOutDown
-notebook.cell.chat.arrowOutUp
-notebook.cell.chat.close
-notebook.cell.chat.discard
 notebook.cell.chat.explainError
 notebook.cell.chat.fixError
-notebook.cell.chat.focus
-notebook.cell.chat.focusNextCell
-notebook.cell.chat.focusPreviousCell
-notebook.cell.chat.nextFromHistory
-notebook.cell.chat.previousFromHistory
-notebook.cell.chat.restore
 notebook.cell.chat.start
 notebook.cell.chat.startAtTop
-notebook.cell.chat.stop
 notebook.cell.clearOutputs
 notebook.cell.collapseAllCellInputs
 notebook.cell.collapseAllCellOutputs
@@ -2163,9 +2205,7 @@ notebook.cell.expandAllCellInputs
 notebook.cell.expandAllCellOutputs
 notebook.cell.expandCellInput
 notebook.cell.expandCellOutput
-notebook.cell.focusChatWidget
 notebook.cell.focusInOutput
-notebook.cell.focusNextChatWidget
 notebook.cell.focusOutOutput
 notebook.cell.insertCodeCellAbove
 notebook.cell.insertCodeCellAboveAndFocusContainer
@@ -2224,6 +2264,8 @@ notebook.diffEditor.hideUnchangedCells
 notebook.diffEditor.showUnchangedCells
 notebook.execute
 notebook.find
+notebook.findNext.fromWidget
+notebook.findPrevious.fromWidget
 notebook.focusBottom
 notebook.focusNextEditor
 notebook.focusPreviousEditor
@@ -2282,7 +2324,6 @@ npm.open
 npm.openScript
 npm.packageManager
 npm.refresh
-npm.removeView
 npm.resetViewLocation
 npm.runInstall
 npm.runScript
@@ -2290,7 +2331,6 @@ npm.runScriptFromFolder
 npm.runScriptFromHover
 npm.runSelectedScript
 npm.scriptRunner
-npm.toggleVisibility
 openEditors.closeAll
 openEditors.newUntitledFile
 openInIntegratedTerminal
@@ -2343,6 +2383,9 @@ platformio-ide.quickAccess.open
 platformio-ide.quickAccess.removeView
 platformio-ide.quickAccess.resetViewLocation
 platformio-ide.quickAccess.toggleVisibility
+prettier.createConfigFile
+prettier.forceFormatDocument
+prettier.openOutput
 previewSelectedCodeAction
 previousCompressedFolder
 problems.action.clearFilterText
@@ -2588,7 +2631,6 @@ targetsContainers.focus
 targetsContainers.open
 targetsContainers.resetViewLocation
 terminal.focus
-terminal.integrated.suggest.clearCachedGlobals
 terminal.removeView
 terminal.resetViewContainerLocation
 terminal.resetViewLocation
@@ -2605,6 +2647,8 @@ testing.configureProfile
 testing.continuousRunUsingForTest
 testing.coverage
 testing.coverage.close
+testing.coverage.goToNextMissedLine
+testing.coverage.goToPreviousMissedLine
 testing.coverage.uri
 testing.coverageAll
 testing.coverageAtCursor
@@ -2673,7 +2717,6 @@ timeline.open
 timeline.refresh
 timeline.removeView
 timeline.resetViewLocation
-timeline.toggleExcludeSource:git-history
 timeline.toggleExcludeSource:timeline.localHistory
 timeline.toggleFollowActiveEditor
 timeline.toggleVisibility
@@ -2831,7 +2874,6 @@ workbench.action.blur
 workbench.action.browseColorThemesInMarketplace
 workbench.action.chat.acceptTool
 workbench.action.chat.addDynamicVariable
-workbench.action.chat.addParticipant
 workbench.action.chat.addToChatAction
 workbench.action.chat.applyCompareEdits
 workbench.action.chat.applyInEditor
@@ -2843,8 +2885,10 @@ workbench.action.chat.attachFolder
 workbench.action.chat.attachSelection
 workbench.action.chat.cancel
 workbench.action.chat.changeModel
+workbench.action.chat.chatSessionPrimaryPicker
 workbench.action.chat.clearHistory
 workbench.action.chat.clearInputHistory
+workbench.action.chat.configure.customagents
 workbench.action.chat.configure.instructions
 workbench.action.chat.configure.prompts
 workbench.action.chat.configureCodeCompletions
@@ -2852,6 +2896,7 @@ workbench.action.chat.configureTools
 workbench.action.chat.copyAll
 workbench.action.chat.copyCodeBlock
 workbench.action.chat.copyItem
+workbench.action.chat.copyKatexMathSource
 workbench.action.chat.copyLink
 workbench.action.chat.createRemoteAgentJob
 workbench.action.chat.delegateToEditSession
@@ -2874,7 +2919,7 @@ workbench.action.chat.insertIntoNotebook
 workbench.action.chat.insertSearchResults
 workbench.action.chat.logChatIndex
 workbench.action.chat.logInputHistory
-workbench.action.chat.manage.mode
+workbench.action.chat.manage
 workbench.action.chat.manageLanguageModelAuthentication
 workbench.action.chat.manageLanguageModels
 workbench.action.chat.manageOverages
@@ -2889,7 +2934,6 @@ workbench.action.chat.nextCodeBlock
 workbench.action.chat.nextFileTree
 workbench.action.chat.nextUserPrompt
 workbench.action.chat.open
-workbench.action.chat.openChatEmptyStateSettings
 workbench.action.chat.openFeatureSettings
 workbench.action.chat.openInEditor
 workbench.action.chat.openInNewWindow
@@ -2897,6 +2941,8 @@ workbench.action.chat.openInSidebar
 workbench.action.chat.openModePicker
 workbench.action.chat.openModelPicker
 workbench.action.chat.openNewChatToTheSide
+workbench.action.chat.openNewSessionEditor.copilot-cloud-agent
+workbench.action.chat.openNewSessionEditor.copilotcli
 workbench.action.chat.openQuotaExceededDialog
 workbench.action.chat.openSessionInNewEditorGroup
 workbench.action.chat.openSessionInNewWindow
@@ -2905,7 +2951,7 @@ workbench.action.chat.openStorageFolder
 workbench.action.chat.openagent
 workbench.action.chat.openask
 workbench.action.chat.openedit
-workbench.action.chat.picker.configmode
+workbench.action.chat.picker.customagents
 workbench.action.chat.previousCodeBlock
 workbench.action.chat.previousFileTree
 workbench.action.chat.previousUserPrompt
@@ -2923,7 +2969,9 @@ workbench.action.chat.run-in-new-chat.prompt.current
 workbench.action.chat.run.prompt
 workbench.action.chat.run.prompt.current
 workbench.action.chat.runInTerminal
-workbench.action.chat.save-to-prompt
+workbench.action.chat.save-as-agent
+workbench.action.chat.save-as-instructions
+workbench.action.chat.save-as-prompt
 workbench.action.chat.sendToNewChat
 workbench.action.chat.showExtensionsUsingCopilot
 workbench.action.chat.skipTool
@@ -2951,6 +2999,7 @@ workbench.action.chat.upgradePlan
 workbench.action.chat.voiceChatInChatView
 workbench.action.chatEditor.newChat
 workbench.action.chatSessions.toggleDescriptionDisplay
+workbench.action.chatSessions.toggleNewSingleView
 workbench.action.clearCommandHistory
 workbench.action.clearEditorHistory
 workbench.action.clearEditorHistoryWithoutConfirm
@@ -3164,6 +3213,7 @@ workbench.action.localHistory.selectForCompare
 workbench.action.lockEditorGroup
 workbench.action.logStorage
 workbench.action.logWorkingCopies
+workbench.action.manageAccounts
 workbench.action.manageTrustedDomain
 workbench.action.maximizeAuxiliaryBar
 workbench.action.maximizeEditorHideSidebar
@@ -3294,9 +3344,11 @@ workbench.action.output.show.denoland.vscode-deno.Deno Language Server
 workbench.action.output.show.eamodio.gitlens.GitLens
 workbench.action.output.show.extension-output-GitHub.copilot-#1-GitHub Copilot Log (Code References)
 workbench.action.output.show.extension-output-bradlc.vscode-tailwindcss-#1-Tailwind CSS IntelliSense
+workbench.action.output.show.extension-output-esbenp.prettier-vscode-#1-Prettier
 workbench.action.output.show.extension-output-mcu-debug.debug-tracker-vscode-#1-Mcu-debug Tracker
 workbench.action.output.show.extension-output-ms-dotnettools.vscode-dotnet-runtime-#1-.NET Install Tool
 workbench.action.output.show.extension-output-streetsidesoftware.code-spell-checker-#1-Code Spell Checker Server
+workbench.action.output.show.extension-output-undefined_publisher.flightpath-#1-FlightPath
 workbench.action.output.show.exthost
 workbench.action.output.show.main
 workbench.action.output.show.ptyhost
@@ -3460,6 +3512,7 @@ workbench.action.terminal.chat.rerunRequest
 workbench.action.terminal.chat.runCommand
 workbench.action.terminal.chat.runFirstCommand
 workbench.action.terminal.chat.start
+workbench.action.terminal.chat.viewHiddenChatTerminals
 workbench.action.terminal.chat.viewInChat
 workbench.action.terminal.clear
 workbench.action.terminal.clearPreviousSessionHistory
@@ -3525,7 +3578,6 @@ workbench.action.terminal.relaunch
 workbench.action.terminal.rename
 workbench.action.terminal.renameActiveTab
 workbench.action.terminal.renameWithArg
-workbench.action.terminal.requestCompletions
 workbench.action.terminal.resetSuggestWidgetSize
 workbench.action.terminal.resizePaneDown
 workbench.action.terminal.resizePaneLeft
@@ -3577,6 +3629,7 @@ workbench.action.terminal.toggleFindRegex
 workbench.action.terminal.toggleFindWholeWord
 workbench.action.terminal.toggleStickyScroll
 workbench.action.terminal.toggleTerminal
+workbench.action.terminal.triggerSuggest
 workbench.action.terminal.unsplit
 workbench.action.terminal.writeDataToTerminal
 workbench.action.toggleActivityBarVisibility
@@ -3663,8 +3716,8 @@ workbench.banner.focusBanner
 workbench.banner.focusNextAction
 workbench.banner.focusPreviousAction
 workbench.chat.action.focusLastFocused
+workbench.command.new.agent
 workbench.command.new.instructions
-workbench.command.new.mode
 workbench.command.new.prompt
 workbench.command.new.untitled.prompt
 workbench.debug.action.copyAll
@@ -3839,6 +3892,7 @@ workbench.mcp.serverOptionsInConfirmation
 workbench.mcp.showConfiguration
 workbench.mcp.showInstalledServers
 workbench.mcp.showOutput
+workbench.mcp.skipAutostart
 workbench.mcp.startPromptForServer
 workbench.mcp.startServer
 workbench.mcp.stopServer
@@ -3913,30 +3967,24 @@ workbench.scm.action.graph.setListViewMode
 workbench.scm.action.graph.setTreeViewMode
 workbench.scm.action.graph.summarizeHistoryItem
 workbench.scm.action.graph.viewChanges
+workbench.scm.action.repositories.setSelectionMode.multiple
+workbench.scm.action.repositories.setSelectionMode.single
 workbench.scm.action.repositories.setSortKey.discoveryTime
 workbench.scm.action.repositories.setSortKey.name
 workbench.scm.action.repositories.setSortKey.path
 workbench.scm.action.setListViewMode
-workbench.scm.action.setListViewModeNavigation
 workbench.scm.action.setSortKey.name
 workbench.scm.action.setSortKey.path
 workbench.scm.action.setSortKey.status
 workbench.scm.action.setTreeViewMode
-workbench.scm.action.setTreeViewModeNavigation
-workbench.scm.action.toggleQuickDiffVisibility.git.quickDiffProvider
-workbench.scm.action.toggleQuickDiffVisibility.git.secondaryQuickDiffProvider
 workbench.scm.focus
 workbench.scm.history.focus
 workbench.scm.history.open
-workbench.scm.history.removeView
 workbench.scm.history.resetViewLocation
-workbench.scm.history.toggleVisibility
 workbench.scm.removeView
 workbench.scm.repositories.focus
 workbench.scm.repositories.open
-workbench.scm.repositories.removeView
 workbench.scm.repositories.resetViewLocation
-workbench.scm.repositories.toggleVisibility
 workbench.scm.resetViewLocation
 workbench.scm.toggleVisibility
 workbench.statusBar.clearFocus
@@ -3962,6 +4010,29 @@ workbench.userDataSync.actions.showSyncedData
 workbench.userDataSync.actions.syncNow
 workbench.userDataSync.actions.turnOff
 workbench.userDataSync.actions.turnOn
+workbench.view.agentSessions
+workbench.view.agentSessions.focus
+workbench.view.agentSessions.resetViewLocation
+workbench.view.chat.sessions
+workbench.view.chat.sessions.copilot-cloud-agent.focus
+workbench.view.chat.sessions.copilot-cloud-agent.open
+workbench.view.chat.sessions.copilot-cloud-agent.removeView
+workbench.view.chat.sessions.copilot-cloud-agent.resetViewLocation
+workbench.view.chat.sessions.copilot-cloud-agent.toggleVisibility
+workbench.view.chat.sessions.copilotcli.focus
+workbench.view.chat.sessions.copilotcli.open
+workbench.view.chat.sessions.copilotcli.removeView
+workbench.view.chat.sessions.copilotcli.resetViewLocation
+workbench.view.chat.sessions.copilotcli.toggleVisibility
+workbench.view.chat.sessions.gettingStarted.focus
+workbench.view.chat.sessions.gettingStarted.open
+workbench.view.chat.sessions.gettingStarted.resetViewLocation
+workbench.view.chat.sessions.local.focus
+workbench.view.chat.sessions.local.open
+workbench.view.chat.sessions.local.removeView
+workbench.view.chat.sessions.local.resetViewLocation
+workbench.view.chat.sessions.local.toggleVisibility
+workbench.view.chat.sessions.resetViewContainerLocation
 workbench.view.debug
 workbench.view.debug.resetViewContainerLocation
 workbench.view.editSessions.resetViewContainerLocation
@@ -3983,6 +4054,8 @@ workbench.view.extension.cspell-regexp-explorer
 workbench.view.extension.cspell-regexp-explorer.resetViewContainerLocation
 workbench.view.extension.cspellPanel
 workbench.view.extension.cspellPanel.resetViewContainerLocation
+workbench.view.extension.flightpath
+workbench.view.extension.flightpath.resetViewContainerLocation
 workbench.view.extension.github-copilot-completions-debugger-panel
 workbench.view.extension.github-copilot-completions-debugger-panel.resetViewContainerLocation
 workbench.view.extension.gitlens
@@ -4031,6 +4104,8 @@ workbench.view.testing.open
 workbench.view.testing.removeView
 workbench.view.testing.resetViewLocation
 workbench.view.testing.toggleVisibility
+workbench.viewContainer.agentSessions
+workbench.viewContainer.agentSessions.resetViewContainerLocation
 workbench.views.editSessions.data.focus
 workbench.views.editSessions.data.open
 workbench.views.editSessions.data.resetViewLocation

@@ -75,12 +75,29 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, current, total });
   }
 
+  public updateExecutionState(state: string): void {
+    this.postMessage({ type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED, state });
+  }
+
   public updateStepStatus(stepIndex: number, status: any, details?: any): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEP_STATUS_CHANGED,
       stepIndex,
       status,
       details,
+    });
+  }
+
+  public updateRetryAttempt(
+    stepIndex: number,
+    currentRetry: number,
+    maxRetries: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED,
+      stepIndex,
+      currentRetry,
+      maxRetries,
     });
   }
 
@@ -171,6 +188,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         <span id="file-name">No file selected</span>
         <button id="change-file" class="btn-secondary">Change</button>
       </div>
+      <div id="execution-state" class="execution-state-idle"></div>
       <div id="controls">
         <button id="btn-run" class="btn-primary" title="Run">▶</button>
         <button id="btn-pause" class="btn-secondary" title="Pause" disabled>⏸</button>
