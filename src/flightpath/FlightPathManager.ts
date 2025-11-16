@@ -431,6 +431,14 @@ export class FlightPathManager {
       // Update dashboard step status to running
       if (this.dashboardProvider) {
         this.dashboardProvider.updateStepStatus(i, { state: "running" });
+
+        // Send status message: Starting prompt
+        const promptPreview = prompt.prompt.split("\n")[0].substring(0, 60);
+        const ellipsis = prompt.prompt.length > 60 ? "..." : "";
+        this.dashboardProvider.updateStatusMessage(
+          i,
+          `Starting Prompt ${i + 1}: ${promptPreview}${ellipsis}`
+        );
       }
 
       // Update progress
@@ -541,12 +549,37 @@ export class FlightPathManager {
             `🔍 FlightPath: Evaluating end condition for prompt ${i + 1}...`
           );
 
+          // Send status message: Evaluating end condition
+          if (this.dashboardProvider) {
+            const scriptName =
+              prompt.endCondition.script.split(/[\\/]/).pop() ||
+              prompt.endCondition.script;
+            this.dashboardProvider.updateStatusMessage(
+              i,
+              `Evaluating end condition: Running ${scriptName}`
+            );
+          }
+
           // Evaluate the end condition
           const evaluationResult =
             await this.endConditionEvaluator.evaluateCondition(
               prompt.endCondition,
               this.currentWorkspaceFolder?.uri.fsPath
             );
+
+          // Send status message: End condition result
+          if (this.dashboardProvider) {
+            const resultStatus = evaluationResult.success
+              ? "Passed ✓"
+              : "Failed ✗";
+            const output = evaluationResult.stdout.trim().substring(0, 100);
+            const ellipsis =
+              evaluationResult.stdout.trim().length > 100 ? "..." : "";
+            this.dashboardProvider.updateStatusMessage(
+              i,
+              `End condition ${resultStatus} - Output: ${output}${ellipsis}`
+            );
+          }
 
           // Handle the evaluation result
           const shouldContinue = await this.handleEndConditionResult(
@@ -1332,12 +1365,21 @@ export class FlightPathManager {
         );
         this.dashboardProvider.updateStepStatus(currentIndex, {
           state: "running",
-          message: `Retrying (${currentRetry}/${maxRetries})`,
         });
       }
 
       // Build retry prompt
       const retryPrompt = this.buildRetryPrompt(prompt, evaluationResult);
+
+      // Send status message: Retrying prompt (after building retryPrompt)
+      if (this.dashboardProvider) {
+        const retryPromptPreview = retryPrompt.split("\n")[0].substring(0, 60);
+        const ellipsis = retryPrompt.length > 60 ? "..." : "";
+        this.dashboardProvider.updateStatusMessage(
+          currentIndex,
+          `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
+        );
+      }
 
       // Send retry prompt to Copilot
       const retryPromptItem: PromptItem = {

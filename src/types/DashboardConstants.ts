@@ -18,6 +18,7 @@ export const MESSAGE_TYPES = {
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
   CLI_OUTPUT: "cliOutput",
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
+  STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
 
   // Webview -> Extension

@@ -18,7 +18,8 @@
     currentStep: 0,
     totalSteps: 0,
     cliOutputs: {}, // Maps stepIndex -> array of outputs (including retries)
-    retryStates: {} // Maps stepIndex -> { currentRetry, maxRetries }
+    retryStates: {}, // Maps stepIndex -> { currentRetry, maxRetries }
+    statusMessages: {} // Maps stepIndex -> array of status messages
   };
 
   // DOM elements
@@ -29,9 +30,7 @@
     runBtn: document.getElementById('btn-run'),
     pauseBtn: document.getElementById('btn-pause'),
     stopBtn: document.getElementById('btn-stop'),
-    progressContainer: document.getElementById('progress-container'),
-    progressFill: document.getElementById('progress-fill'),
-    progressText: document.getElementById('progress-text'),
+    promptCounter: document.getElementById('prompt-counter'),
     promptsList: document.getElementById('prompts-list'),
     outputSection: document.getElementById('output-section'),
     outputContent: document.getElementById('output-content')
@@ -86,6 +85,9 @@
       case MESSAGE_TYPES.CLI_STREAMING_CHUNK:
         handleCliStreamingChunk(message.stepIndex, message.chunk);
         break;
+      case MESSAGE_TYPES.STATUS_MESSAGE:
+        handleStatusMessage(message.stepIndex, message.message);
+        break;
       case MESSAGE_TYPES.EXECUTION_COMPLETED:
         handleExecutionCompleted();
         break;
@@ -111,8 +113,9 @@
     state.totalSteps = 0;
     state.cliOutputs = {}; // Reset outputs
     state.retryStates = {}; // Reset retry states
-    // Hide progress bar
-    elements.progressContainer.style.display = 'none';
+    state.statusMessages = {}; // Reset status messages
+    // Reset prompt counter
+    elements.promptCounter.textContent = '';
     // Clear CLI output and show empty state
     elements.outputContent.innerHTML = '<p class="empty-state">CLI output will appear here during execution</p>';
     render();
@@ -123,7 +126,7 @@
     state.totalSteps = totalSteps;
     state.currentStep = 0;
     updateControls();
-    elements.progressContainer.style.display = 'block';
+    updatePromptCounter();
   }
 
   function handleExecutionStateChanged(executionState) {
@@ -134,10 +137,7 @@
   function handleProgressUpdate(current, total) {
     state.currentStep = current;
     state.totalSteps = total;
-    
-    const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
-    elements.progressFill.style.width = `${percentage}%`;
-    elements.progressText.textContent = `${current}/${total} (${percentage}%)`;
+    updatePromptCounter();
   }
 
   function handleStepStatusChanged(stepIndex, status, details) {
@@ -151,6 +151,31 @@
   function handleRetryAttemptChanged(stepIndex, currentRetry, maxRetries) {
     state.retryStates[stepIndex] = { currentRetry, maxRetries };
     renderPromptsList();
+  }
+
+  function handleStatusMessage(stepIndex, message) {
+    console.log('📝 Dashboard: Received status message for step', stepIndex, message);
+    
+    // Initialize array for this step if needed
+    if (!state.statusMessages[stepIndex]) {
+      state.statusMessages[stepIndex] = [];
+    }
+    
+    // Add status message with timestamp
+    state.statusMessages[stepIndex].push({
+      message,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    
+    // Render if this is the current or just-completed step
+    // During execution: stepIndex might equal currentStep
+    // After completion: stepIndex equals currentStep - 1
+    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
+      console.log('✅ Dashboard: Rendering output for step', stepIndex);
+      renderCliOutputs(stepIndex);
+    } else {
+      console.log('⚠️ Dashboard: Not rendering - stepIndex', stepIndex, 'currentStep', state.currentStep);
+    }
   }
 
   function handleCliOutput(stepIndex, output) {
@@ -182,11 +207,14 @@
     }
     
     console.log('📊 Dashboard: currentStep =', state.currentStep, 'stepIndex =', stepIndex, 'outputCount =', state.cliOutputs[stepIndex].length);
-    if (stepIndex === state.currentStep - 1) {
+    // Render if this is the current or just-completed step
+    // During execution: stepIndex might equal currentStep
+    // After completion: stepIndex equals currentStep - 1
+    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
       console.log('✅ Dashboard: Rendering CLI output');
       renderCliOutputs(stepIndex);
     } else {
-      console.log('⚠️ Dashboard: Not rendering - stepIndex mismatch');
+      console.log('⚠️ Dashboard: Not rendering - stepIndex mismatch', 'stepIndex:', stepIndex, 'currentStep:', state.currentStep);
     }
   }
 
@@ -212,8 +240,10 @@
     // Append chunk to the last (streaming) output's response
     outputs[outputs.length - 1].response += chunk;
 
-    // Render if this is the current step
-    if (stepIndex === state.currentStep - 1) {
+    // Render if this is the current or just-completed step
+    // During execution: stepIndex might equal currentStep
+    // After completion: stepIndex equals currentStep - 1
+    if (stepIndex === state.currentStep || stepIndex === state.currentStep - 1) {
       renderCliOutputs(stepIndex);
     }
   }
@@ -228,6 +258,7 @@
     renderExecutionState();
     renderPromptsList();
     updateControls();
+    updatePromptCounter();
   }
 
   function renderExecutionState() {
@@ -306,47 +337,63 @@
 
   function renderCliOutputs(stepIndex) {
     const outputs = state.cliOutputs[stepIndex];
+    const statusMessages = state.statusMessages[stepIndex] || [];
     
-    if (!outputs || outputs.length === 0) {
+    if ((!outputs || outputs.length === 0) && statusMessages.length === 0) {
       // Show empty state
-      elements.outputContent.innerHTML = '<p class="empty-state">CLI output will appear here during execution</p>';
+      elements.outputContent.innerHTML = '<p class="empty-state">Output will appear here during execution</p>';
       return;
     }
     
-    // Render all outputs for this step (initial attempt + retries)
+    // Render all outputs and status messages chronologically
+    // For simplicity, render status messages first, then outputs
     let html = '';
-    outputs.forEach((output, attemptIndex) => {
-      const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
-      const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
-      
-      html += '<div class="cli-output-item">';
-      html += `<div class="output-header">[Prompt ${state.currentStep}] ${attemptLabel}${streamingIndicator}</div>`;
-      
-      if (output.prompt) {
-        html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
-      }
-      
-      if (output.response) {
-        html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
-      }
-      
-      if (output.tokens) {
-        html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
-      }
-      
-      if (!output.isStreaming && output.elapsed !== undefined) {
-        html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
-      }
-      
+    
+    // Render status messages
+    statusMessages.forEach((statusMsg) => {
+      html += '<div class="status-message">';
+      html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
+      html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
       html += '</div>';
     });
+    
+    // Render CLI outputs for this step (initial attempt + retries) - only if outputs exist
+    if (outputs && outputs.length > 0) {
+      outputs.forEach((output, attemptIndex) => {
+        const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
+        const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
+        
+        html += '<div class="cli-output-item">';
+        html += `<div class="output-header">[Prompt ${state.currentStep}] ${attemptLabel}${streamingIndicator}</div>`;
+        
+        if (output.prompt) {
+          html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
+        }
+        
+        if (output.response) {
+          html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
+        }
+        
+        if (output.tokens) {
+          html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
+        }
+        
+        if (!output.isStreaming && output.elapsed !== undefined) {
+          html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
+        }
+        
+        html += '</div>';
+      });
+    }
     
     elements.outputContent.innerHTML = html;
     
     // Auto-scroll to bottom if last output is streaming
-    const lastOutput = outputs[outputs.length - 1];
-    if (lastOutput.isStreaming) {
-      elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
+    if (outputs && outputs.length > 0) {
+      const lastOutput = outputs[outputs.length - 1];
+      if (lastOutput && lastOutput.isStreaming) {
+        elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
+      }
     }
   }
 
@@ -378,6 +425,14 @@
 
   function truncate(str, maxLen) {
     return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+  }
+
+  function updatePromptCounter() {
+    if (state.totalSteps > 0) {
+      elements.promptCounter.textContent = `Completed ${state.currentStep} of ${state.totalSteps}`;
+    } else {
+      elements.promptCounter.textContent = '';
+    }
   }
 
   function escapeHtml(text) {

@@ -117,6 +117,14 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  public updateStatusMessage(stepIndex: number, message: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.STATUS_MESSAGE,
+      stepIndex,
+      message,
+    });
+  }
+
   public updateExecutionCompleted(): void {
     this.postMessage({ type: MESSAGE_TYPES.EXECUTION_COMPLETED });
   }
@@ -196,21 +204,17 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       </div>
     </div>
 
-    <div id="progress-container" style="display: none;">
-      <div id="progress-bar">
-        <div id="progress-fill"></div>
-        <span id="progress-text">0/0 (0%)</span>
-      </div>
-    </div>
-
     <div id="main-content">
       <div id="prompts-section">
-        <h3>Prompts</h3>
+        <div class="section-header">
+          <h3>Prompts</h3>
+          <span id="prompt-counter" class="prompt-counter"></span>
+        </div>
         <div id="prompts-list"></div>
       </div>
 
       <div id="output-section">
-        <h3>CLI Output (Live)</h3>
+        <h3>Output</h3>
         <div id="output-content"></div>
       </div>
     </div>
