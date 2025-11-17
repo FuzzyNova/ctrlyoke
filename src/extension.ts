@@ -230,6 +230,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize FlightPath manager with dashboard provider
     flightPathManager = new FlightPathManager(context, dashboardProvider);
+
+    // Set manager reference in dashboard (for getting current state)
+    dashboardProvider.setFlightPathManager(flightPathManager);
+
     await flightPathManager.initialize();
 
     // Register completion provider for prompt JSON and Markdown files

@@ -393,7 +393,8 @@ export class FlightPathManager {
     // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
 
-    const state = this.promptQueue.getState();
+    // Get fresh state (supports resume from pause)
+    let state = this.promptQueue.getState();
 
     // Show the FlightPath dashboard panel when execution starts
     try {
@@ -429,8 +430,18 @@ export class FlightPathManager {
       // this.outputChannel.show(true); // Show but preserve focus
     }
 
-    for (let i = 0; i < state.prompts.length; i++) {
+    // Start from currentIndex to support resume functionality
+    // When paused, currentIndex is already at the next prompt to execute
+    for (let i = state.currentIndex; i < state.prompts.length; i++) {
       const prompt = state.prompts[i];
+
+      // Check if paused before starting new prompt (handles pause between prompts)
+      if (this.promptQueue.getState().status === "paused") {
+        console.log(
+          "⏸️ FlightPath: Workflow paused before executing next prompt"
+        );
+        break;
+      }
 
       // Update dashboard step status to running
       if (this.dashboardProvider) {
@@ -854,10 +865,16 @@ export class FlightPathManager {
   }
 
   /**
-   * Resume execution
+   * Resume execution from paused state
    */
   async resume(): Promise<void> {
+    // First, update queue state to running
     await this.promptQueue.resume();
+
+    // Then restart the workflow execution from the paused position
+    // startWorkflowExecution now starts from currentIndex, so it will
+    // continue where we left off
+    await this.startWorkflowExecution();
   }
 
   /**
@@ -982,6 +999,22 @@ export class FlightPathManager {
    */
   getQueueState(): QueueState {
     return this.promptQueue.getState();
+  }
+
+  /**
+   * Get currently loaded prompt file info
+   */
+  getCurrentPromptFile(): { fileName: string; prompts: any[] } | null {
+    if (!this.currentPromptFile || !this.currentPromptFile.promptFile.prompts) {
+      return null;
+    }
+
+    return {
+      fileName: path.basename(this.currentPromptFile.filePath),
+      prompts: this.currentPromptFile.promptFile.prompts.map((p) => ({
+        prompt: p.prompt,
+      })),
+    };
   }
 
   /**

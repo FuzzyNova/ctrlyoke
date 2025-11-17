@@ -4,6 +4,7 @@ import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
+  private flightPathManager?: any; // Reference to manager (set after construction to avoid circular dependency)
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -133,6 +134,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.view?.webview.postMessage(message);
   }
 
+  /**
+   * Set FlightPathManager reference (called after construction to avoid circular dependency)
+   */
+  public setFlightPathManager(manager: any): void {
+    this.flightPathManager = manager;
+  }
+
   private sendInitialState(): void {
     // Get current state from FlightPathManager and send to webview
     this.postMessage({
@@ -142,7 +150,21 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   private getCurrentState(): any {
-    // TODO: Integrate with FlightPathManager to get actual state
+    // Get actual state from FlightPathManager if available
+    if (this.flightPathManager) {
+      const queueState = this.flightPathManager.getQueueState();
+      const currentFile = this.flightPathManager.getCurrentPromptFile();
+
+      return {
+        fileName: currentFile ? currentFile.fileName : null,
+        prompts: currentFile ? currentFile.prompts : [],
+        executionState: queueState.status,
+        currentStep: queueState.currentIndex,
+        totalSteps: queueState.prompts.length,
+      };
+    }
+
+    // Fallback if manager not set yet
     return {
       fileName: null,
       prompts: [],

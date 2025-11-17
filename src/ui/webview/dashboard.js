@@ -47,7 +47,12 @@
   });
 
   elements.pauseBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+    // Toggle between pause and resume based on current state
+    if (state.executionState === EXECUTION_STATES.PAUSED) {
+      vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+    } else {
+      vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+    }
   });
 
   elements.stopBtn.addEventListener('click', () => {
@@ -412,18 +417,32 @@
 
   function updateControls() {
     const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
     
-    // Enable Run button if: has file AND (not running OR is completed)
-    elements.runBtn.disabled = !hasFile || (isRunning && !isCompleted);
+    // Enable Run button if: has file AND (not running OR is completed OR is paused)
+    // When paused, Run button acts as "Restart from beginning"
+    elements.runBtn.disabled = !hasFile || (isRunning && !isCompleted && !isPaused);
     // Change button text and class based on state
-    elements.runBtn.textContent = isCompleted ? '↻' : '▶';
-    elements.runBtn.title = isCompleted ? 'Re-run' : 'Run';
-    elements.runBtn.className = isCompleted ? 'btn-rerun' : 'btn-primary';
+    // Show restart icon when paused or completed
+    elements.runBtn.textContent = (isCompleted || isPaused) ? '↻' : '▶';
+    elements.runBtn.title = (isCompleted || isPaused) ? 'Restart from beginning' : 'Run';
+    elements.runBtn.className = (isCompleted || isPaused) ? 'btn-rerun' : 'btn-primary';
     
-    elements.pauseBtn.disabled = !isRunning;
-    elements.stopBtn.disabled = !isRunning;
+    // Pause button becomes resume button when paused
+    if (isPaused) {
+      elements.pauseBtn.textContent = '▶';
+      elements.pauseBtn.title = 'Resume';
+      elements.pauseBtn.disabled = false;
+    } else {
+      elements.pauseBtn.textContent = '⏸';
+      elements.pauseBtn.title = 'Pause';
+      elements.pauseBtn.disabled = !isRunning;
+    }
+    
+    // Stop button enabled when running or paused
+    elements.stopBtn.disabled = !isRunning && !isPaused;
   }
 
   function getStatusIcon(status) {
