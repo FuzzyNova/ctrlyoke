@@ -136,8 +136,17 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         resumeSession: this.sessionId,
       };
 
+      // Reset cancellation flag before execution
+      this.resetCancellationFlag();
+
       // Execute CLI command
       const result = await this.executeCopilotCommand(promptText, options);
+
+      // Check if this was a cancellation (not a real error)
+      if (this.isCancelling) {
+        console.log("⏹️ Prompt execution cancelled by user");
+        return false;
+      }
 
       // Store the result for statistics retrieval
       this.lastResult = result;
@@ -481,7 +490,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    * Cancel the current CLI process (platform-agnostic)
    * Kills the running copilot CLI process if one is active
    */
-  async cancel(): Promise<void> {
+  protected async cancelImplementation(): Promise<void> {
     if (this.currentProcess) {
       this.log("⏹️ Cancelling CLI process...");
 

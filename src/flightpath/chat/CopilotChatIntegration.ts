@@ -26,7 +26,6 @@ export class CopilotChatIntegration extends CopilotIntegration {
   // Language Model Tool for response completion detection
   private isToolRegistered: boolean = false;
   private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
-  private isCancelled: boolean = false; // Track if current operation was cancelled
 
   // Tool invocation instruction - single source of truth
   private readonly TOOL_INSTRUCTION = `
@@ -310,7 +309,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   ): Promise<boolean> {
     try {
       // Reset cancellation flag for new prompt
-      this.isCancelled = false;
+      this.resetCancellationFlag();
 
       // Verify automation is still available
       if (!this.isAvailable) {
@@ -398,7 +397,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       // Check if operation was cancelled
-      if (this.isCancelled) {
+      if (this.isCancelling) {
         console.log("⏹️ Streaming polling cancelled by user");
         return false;
       }
@@ -468,7 +467,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
       attempt++;
 
       // Check if operation was cancelled
-      if (this.isCancelled) {
+      if (this.isCancelling) {
         console.log("⏹️ Submit retry cancelled by user");
         return false;
       }
@@ -920,11 +919,8 @@ ${promptText}`;
    * Cancel the current chat response
    * Executes workbench.action.chat.cancel to stop Copilot from responding
    */
-  async cancel(): Promise<void> {
+  protected async cancelImplementation(): Promise<void> {
     try {
-      // Set cancellation flag to stop any ongoing retry/polling loops
-      this.isCancelled = true;
-
       await vscode.commands.executeCommand("workbench.action.chat.cancel");
       console.log("⏹️ Chat response cancelled");
     } catch (error) {

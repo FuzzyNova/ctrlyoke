@@ -26,6 +26,7 @@ export class FlightPathManager {
   private outputChannel: vscode.OutputChannel;
   private dashboardProvider?: FlightPathDashboardProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
+  private activeIntegration?: CopilotIntegration; // Track currently executing integration
 
   constructor(
     context: vscode.ExtensionContext,
@@ -386,6 +387,9 @@ export class FlightPathManager {
   ): Promise<void> {
     const activeIntegration = integration || this.getDefaultIntegration();
 
+    // Track the active integration for stop() method
+    this.activeIntegration = activeIntegration;
+
     // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
 
@@ -490,6 +494,14 @@ export class FlightPathManager {
       streamingDisposable?.dispose();
 
       if (!success) {
+        // Check if this was a user-initiated stop (not a real error)
+        const queueState = this.promptQueue.getState();
+        if (queueState.stopped) {
+          console.log("⏹️ Execution stopped by user");
+          break; // Exit loop without error
+        }
+
+        // Real error - show message and mark as failed
         vscode.window.showErrorMessage(
           `FlightPath: Failed to execute prompt ${i + 1}`
         );
@@ -694,6 +706,9 @@ export class FlightPathManager {
 
     console.log("🎉 FlightPath: Workflow execution complete");
 
+    // Clear active integration reference
+    this.activeIntegration = undefined;
+
     // Set queue state to completed (this will emit state change and update dashboard)
     const finalState = this.promptQueue.getState();
     if (finalState.status !== "paused" && finalState.status !== "error") {
@@ -850,14 +865,12 @@ export class FlightPathManager {
    * Cancels the active integration's current operation and stops the queue
    */
   async stop(): Promise<void> {
-    // Cancel the current integration's operation (CLI process or Chat response)
-    const integration = this.getDefaultIntegration();
+    // Cancel the currently executing integration (respects mode override)
+    // If no execution is active, use default integration
+    const integration = this.activeIntegration || this.getDefaultIntegration();
 
-    if (this.isCliIntegration(integration)) {
-      await integration.cancel();
-    } else if (this.isChatIntegration(integration)) {
-      await integration.cancel();
-    }
+    // Cancel is now in base class, no need for type guards
+    await integration.cancel();
 
     // Stop the queue
     this.promptQueue.stop();

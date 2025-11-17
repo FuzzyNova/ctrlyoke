@@ -23,6 +23,7 @@ export abstract class CopilotIntegration {
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
   protected totalSteps: number = 0;
+  protected isCancelling: boolean = false;
 
   // Event emitters for status and response completion
   protected statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
@@ -279,6 +280,28 @@ ${content}
    * Must be implemented by subclasses
    */
   abstract isReady(): boolean;
+
+  /**
+   * Cancel the current operation
+   * Sets the shared cancellation flag and calls subclass-specific implementation
+   */
+  async cancel(): Promise<void> {
+    this.isCancelling = true;
+    await this.cancelImplementation();
+  }
+
+  /**
+   * Subclass-specific cancellation logic
+   * Must be implemented by subclasses to handle their specific cleanup
+   */
+  protected abstract cancelImplementation(): Promise<void>;
+
+  /**
+   * Reset cancellation flag (call before starting new operations)
+   */
+  protected resetCancellationFlag(): void {
+    this.isCancelling = false;
+  }
 
   /**
    * Get detailed status (optional - can be overridden by subclasses)
