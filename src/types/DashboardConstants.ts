@@ -24,6 +24,7 @@ export const MESSAGE_TYPES = {
   // Webview -> Extension
   READY: "ready",
   SELECT_FILE: "selectFile",
+  EDIT_FILE: "editFile",
   RUN: "run",
   PAUSE: "pause",
   RESUME: "resume",

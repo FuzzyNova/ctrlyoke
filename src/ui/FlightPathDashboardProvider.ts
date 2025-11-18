@@ -41,6 +41,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.SELECT_FILE:
         vscode.commands.executeCommand("flightpath.selectPromptFile");
         break;
+      case MESSAGE_TYPES.EDIT_FILE:
+        vscode.commands.executeCommand("flightpath.editCurrentPromptFile");
+        break;
       case MESSAGE_TYPES.RUN:
         vscode.commands.executeCommand("flightpath.run");
         break;
@@ -216,7 +219,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     <div id="header">
       <div id="file-info">
         <span id="file-name">No file selected</span>
-        <button id="change-file" class="btn-secondary">Change</button>
+        <div class="file-buttons">
+          <button id="select-file" class="btn-secondary btn-small" title="Select a different prompt file">Select</button>
+          <button id="edit-file" class="btn-secondary btn-small" title="Open current prompt file in editor" disabled>Edit</button>
+        </div>
       </div>
       <div id="execution-state" class="execution-state-idle"></div>
       <div id="controls">

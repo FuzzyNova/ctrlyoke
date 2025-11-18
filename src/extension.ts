@@ -568,6 +568,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Edit Current Prompt File command (for dashboard)
+  const editCurrentPromptFileCommand = vscode.commands.registerCommand(
+    "flightpath.editCurrentPromptFile",
+    async () => {
+      await flightPathManager.openCurrentPromptFile();
+    }
+  );
+
   // Run command (for dashboard) - executes currently loaded file
   const runCommand = vscode.commands.registerCommand(
     "flightpath.run",
@@ -606,6 +614,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     sendToChatCommand,
     showLanguageIdCommand,
     selectPromptFileCommand,
+    editCurrentPromptFileCommand,
     runCommand,
     showOutputPanelCommand
   );

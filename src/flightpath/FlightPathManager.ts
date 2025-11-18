@@ -1079,6 +1079,32 @@ export class FlightPathManager {
   }
 
   /**
+   * Open the currently loaded prompt file in the editor
+   */
+  async openCurrentPromptFile(): Promise<void> {
+    if (!this.currentPromptFile) {
+      vscode.window.showWarningMessage(
+        "FlightPath: No prompt file loaded. Use 'Select' button to choose a file first."
+      );
+      return;
+    }
+
+    try {
+      const uri = vscode.Uri.file(this.currentPromptFile.filePath);
+      const document = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(document);
+      console.log(
+        `FlightPath: Opened prompt file: ${this.currentPromptFile.filePath}`
+      );
+    } catch (error) {
+      console.error("FlightPath: Failed to open prompt file:", error);
+      vscode.window.showErrorMessage(
+        `FlightPath: Failed to open file: ${error}`
+      );
+    }
+  }
+
+  /**
    * Get Copilot integration status
    */
   getCopilotStatus(): {

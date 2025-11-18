@@ -92,6 +92,16 @@ html, body {
   white-space: nowrap;
 }
 
+.file-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-small {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
 /* Execution state badge */
 #execution-state {
   padding: 4px 12px;

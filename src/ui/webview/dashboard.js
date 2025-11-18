@@ -25,7 +25,8 @@
   // DOM elements
   const elements = {
     fileName: document.getElementById('file-name'),
-    changeFileBtn: document.getElementById('change-file'),
+    selectFileBtn: document.getElementById('select-file'),
+    editFileBtn: document.getElementById('edit-file'),
     executionState: document.getElementById('execution-state'),
     runBtn: document.getElementById('btn-run'),
     pauseBtn: document.getElementById('btn-pause'),
@@ -38,8 +39,12 @@
   };
 
   // Event listeners
-  elements.changeFileBtn.addEventListener('click', () => {
+  elements.selectFileBtn.addEventListener('click', () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
+  });
+
+  elements.editFileBtn.addEventListener('click', () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.EDIT_FILE });
   });
 
   elements.runBtn.addEventListener('click', () => {
@@ -420,6 +425,9 @@
     const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
+    
+    // Enable Edit button when a file is loaded
+    elements.editFileBtn.disabled = !hasFile;
     
     // Enable Run button if: has file AND (not running OR is completed OR is paused)
     // When paused, Run button acts as "Restart from beginning"
