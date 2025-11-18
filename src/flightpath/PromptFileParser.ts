@@ -72,6 +72,8 @@ export class PromptFileParser {
         prompts: [
           {
             prompt: parsed.prompt,
+            model: parsed.model,
+            newChatSession: parsed.newChatSession,
             endCondition: parsed.endCondition,
           },
         ],
@@ -81,8 +83,12 @@ export class PromptFileParser {
     // Handle multiple prompts format
     if (parsed.prompts && Array.isArray(parsed.prompts)) {
       return {
-        prompts: parsed.prompts.map((item: any) => ({
+        prompts: parsed.prompts.map((item: any, index: number) => ({
           prompt: item.prompt,
+          model: item.model,
+          // Default newChatSession to true for multi-prompt workflows (unless explicitly set to false)
+          newChatSession:
+            item.newChatSession !== undefined ? item.newChatSession : true,
           endCondition: item.endCondition,
         })),
       };

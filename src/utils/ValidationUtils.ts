@@ -19,6 +19,10 @@ export class ValidationUtils {
         ],
         nullable: true,
       },
+      newChatSession: {
+        type: "boolean",
+        nullable: true,
+      },
       endCondition: {
         type: "object",
         properties: {

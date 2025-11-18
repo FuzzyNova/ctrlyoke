@@ -25,6 +25,7 @@ export interface PromptItem {
     | "claude-sonnet-4"
     | "claude-haiku-4.5"
     | "gpt-5";
+  newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
   endCondition?: EndCondition;
 }
 

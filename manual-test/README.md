@@ -11,7 +11,29 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 
 ## Test Scenarios
 
-### 1. Simple Markdown Prompt (CLI Mode)
+### 1. New Chat Session Control (CLI/Chat Mode)
+**File:** `new-chat-session-test.flightpath.json`
+
+**Test:**
+- Right-click the file → "Send to CLI" or "Send to Chat"
+- Verifies: `newChatSession` flag controls whether prompts run in fresh or continuing sessions
+- Tests: Context retention between prompts
+
+**Scenario:**
+1. Prompt 1: "What is the capital of France?" (newChatSession: true - fresh session)
+2. Prompt 2: "What was my previous question?" (newChatSession: false - same session, should remember)
+3. Prompt 3: "What is 2 + 2?" (newChatSession: true - fresh session, forgets previous)
+4. Prompt 4: "What was my previous question?" (newChatSession: false - same session as #3)
+
+**Expected:**
+- **CLI Mode:** Session IDs extracted and used with `--resume` flag
+- **Chat Mode:** New chat windows opened for newChatSession: true, same window reused for false
+- Prompt 2 should remember "What is the capital of France?"
+- Prompt 4 should remember "What is 2 + 2?" (NOT the France question)
+
+---
+
+### 2. Simple Markdown Prompt (CLI Mode)
 **File:** `.flightpath/simple.prompt.md`
 
 **Test:**
@@ -22,8 +44,8 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 
 ---
 
-### 2. Prompt with File Attachment (CLI Mode)
-**File:** `.flightpath/with-file.prompt.json`
+### 3. Prompt with File Attachment (CLI Mode)
+**File:** `.flightpath/with-file.json`
 
 **Test:**
 - Right-click the file → "Send to CLI"
@@ -34,7 +56,7 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 
 ---
 
-### 3. Multi-Step Workflow (CLI Mode)
+### 4. Multi-Step Workflow (CLI Mode)
 **File:** `.flightpath/multi-step.flightpath.json`
 
 **Test:**

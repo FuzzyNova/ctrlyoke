@@ -56,6 +56,34 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   }
 
   /**
+   * Start a new chat session based on user's configured location preference
+   * Calls the appropriate VS Code command to open a fresh chat window
+   */
+  private async startNewChatSession(): Promise<void> {
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
+
+    const commandMap: Record<string, string> = {
+      chatPanel: "workbench.action.chat.newChatInSideBar",
+      newTab: "workbench.action.chat.newChat",
+      newWindow: "workbench.action.chat.newChatInNewWindow",
+    };
+
+    const command = commandMap[chatLocation] || commandMap["chatPanel"];
+
+    try {
+      await vscode.commands.executeCommand(command);
+      console.log(`✨ Started new chat session using: ${command}`);
+
+      // Small delay to ensure chat window is ready
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } catch (error) {
+      console.error("❌ Failed to start new chat session:", error);
+      // Don't throw - we'll still try to send the prompt to existing chat
+    }
+  }
+
+  /**
    * Initialize Copilot integration with background polling
    * Polls every 5 seconds for up to 30 seconds to detect Copilot availability
    * Note: Language Model Tool will be registered AFTER Copilot becomes ready
@@ -292,10 +320,11 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Send prompt to GitHub Copilot Chat with direct automation
    *
    * Uses PROVEN zero-interaction strategy:
-   * 1. Focus chat (1000ms delay)
-   * 2. Clear input (300ms delay)
-   * 3. Type prompt (500ms delay)
-   * 4. Submit automatically
+   * 1. Start new chat session if requested (default: true in multi-prompt workflows)
+   * 2. Focus chat (1000ms delay)
+   * 3. Clear input (300ms delay)
+   * 4. Type prompt (500ms delay)
+   * 5. Submit automatically
    *
    * Note: Assumes background polling has confirmed automation is available.
    * FlightPathManager blocks workflow execution until status is 'ready'.
@@ -318,6 +347,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
           "FlightPath: Automation became unavailable"
         );
         return false;
+      }
+
+      // Start new chat session if requested (unless this is a retry scenario)
+      // Note: Retries should always use the same chat session
+      if (prompt.newChatSession !== false) {
+        await this.startNewChatSession();
       }
 
       // Determine if completion detection is needed:

@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 import { spawn } from "child_process";
+import * as path from "path";
+import * as fs from "fs/promises";
+import * as os from "os";
 import {
   PromptItem,
   CopilotIntegrationMode,
@@ -27,6 +30,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   private outputChannel?: vscode.OutputChannel;
   private lastResult?: CopilotCliResult;
   private currentProcess?: ReturnType<typeof spawn>;
+  private logDirectory?: string;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -34,6 +38,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   ) {
     super(context);
     this.outputChannel = outputChannel;
+    this.initializeLogDirectory();
     this.initialize();
   }
 
@@ -54,6 +59,17 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     return vscode.workspace
       .getConfiguration("flightpath")
       .get<boolean>("showCliOutput", true);
+  }
+
+  /**
+   * Initialize log directory for session ID tracking
+   * Uses OS temp directory + FlightPath subdirectory for cross-platform compatibility
+   */
+  private initializeLogDirectory(): void {
+    // Create FlightPath-specific log directory in OS temp folder
+    // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
+    this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
+    this.log(`📁 Log directory set to: ${this.logDirectory}`);
   }
 
   /**
@@ -133,7 +149,11 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       const options: CopilotCliOptions = {
         addDirs: this.getWorkspaceDirs(),
         model: prompt.model || this.getConfiguredModel(),
-        resumeSession: this.sessionId,
+        // Only resume session if newChatSession is explicitly false AND we have a session ID
+        resumeSession:
+          prompt.newChatSession === false && this.sessionId
+            ? this.sessionId
+            : undefined,
       };
 
       // Reset cancellation flag before execution
@@ -150,6 +170,13 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
 
       // Store the result for statistics retrieval
       this.lastResult = result;
+
+      // Extract and store session ID from log files for resuming future conversations
+      const sessionId = await this.extractSessionIdFromLogs();
+      if (sessionId) {
+        this.sessionId = sessionId;
+        this.log(`💾 Session ID extracted: ${sessionId}`);
+      }
 
       if (result.success) {
         // Log response to output channel
@@ -215,6 +242,11 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       args.push("--allow-all-paths");
     }
 
+    // Add log directory for session ID tracking
+    if (this.logDirectory) {
+      args.push("--log-dir", this.logDirectory);
+    }
+
     // Add optional flags
     if (options.addDirs && options.addDirs.length > 0) {
       options.addDirs.forEach((dir) => {
@@ -226,6 +258,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       args.push("--model", options.model);
     }
 
+    // Use --resume with session ID if continuing session (newChatSession: false)
     if (options.resumeSession) {
       args.push("--resume", options.resumeSession);
     }
@@ -484,6 +517,58 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       };
     }
     return undefined;
+  }
+
+  /**
+   * Extract session ID from log file name in log directory
+   * Log files are named: session-{GUID}.log
+   * Example: session-53b8fdf5-3aed-4dac-8953-822830d748e0.log
+   * Returns the most recently created session log file's GUID
+   */
+  private async extractSessionIdFromLogs(): Promise<string | undefined> {
+    if (!this.logDirectory) {
+      return undefined;
+    }
+
+    try {
+      // Ensure log directory exists
+      await fs.mkdir(this.logDirectory, { recursive: true });
+
+      // Read all files in log directory
+      const files = await fs.readdir(this.logDirectory);
+
+      // Filter for session log files (session-{GUID}.log)
+      const sessionFiles = files.filter((file) =>
+        file.match(/^session-[a-f0-9\-]+\.log$/i)
+      );
+
+      if (sessionFiles.length === 0) {
+        return undefined;
+      }
+
+      // Get file stats to find most recent
+      const fileStats = await Promise.all(
+        sessionFiles.map(async (file) => {
+          const filePath = path.join(this.logDirectory!, file);
+          const stats = await fs.stat(filePath);
+          return { file, mtime: stats.mtime };
+        })
+      );
+
+      // Sort by modification time (most recent first)
+      fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+      // Extract GUID from filename: session-{GUID}.log
+      const match = fileStats[0].file.match(/^session-([a-f0-9\-]+)\.log$/i);
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      return undefined;
+    } catch (error) {
+      console.error("❌ Failed to extract session ID from logs:", error);
+      return undefined;
+    }
   }
 
   /**

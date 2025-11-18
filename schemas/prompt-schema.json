@@ -16,6 +16,11 @@
           "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
           "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
         },
+        "newChatSession": {
+          "type": "boolean",
+          "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",
+          "default": true
+        },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
         }
@@ -39,6 +44,11 @@
                 "type": "string",
                 "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
                 "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
+              },
+              "newChatSession": {
+                "type": "boolean",
+                "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",
+                "default": true
               },
               "endCondition": {
                 "$ref": "#/definitions/endCondition"

@@ -1,0 +1,20 @@
+{
+  "prompts": [
+    {
+      "prompt": "What is the capital of France? Just give me the one-word answer.",
+      "newChatSession": true
+    },
+    {
+      "prompt": "What was my previous question?",
+      "newChatSession": false
+    },
+    {
+      "prompt": "What is 2 + 2? Just give me the number.",
+      "newChatSession": true
+    },
+    {
+      "prompt": "What was my previous question?",
+      "newChatSession": false
+    }
+  ]
+}

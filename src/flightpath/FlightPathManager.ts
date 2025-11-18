@@ -1519,6 +1519,7 @@ export class FlightPathManager {
         prompt: retryPrompt,
         model: prompt.model,
         endCondition: prompt.endCondition, // Keep same end condition
+        newChatSession: false, // IMPORTANT: Retries must use same chat session
       };
 
       // Update workflow progress to show retry
