@@ -28,6 +28,11 @@ export class FlightPathManager {
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
 
+  // Pause/resume state: Track pending response when paused
+  private pendingResponseResolver: ((text: string) => void) | null = null;
+  private pendingResponseText: string | null = null;
+  private isWaitingForResponse: boolean = false; // Track if we're waiting for response to sent prompt
+
   constructor(
     context: vscode.ExtensionContext,
     dashboardProvider?: FlightPathDashboardProvider
@@ -390,6 +395,11 @@ export class FlightPathManager {
     // Track the active integration for stop() method
     this.activeIntegration = activeIntegration;
 
+    // Clear any pending response state from previous execution
+    this.pendingResponseResolver = null;
+    this.pendingResponseText = null;
+    this.isWaitingForResponse = false;
+
     // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
 
@@ -532,6 +542,9 @@ export class FlightPathManager {
 
       // Mark as sent in queue
       await this.promptQueue.markCurrentAsSent();
+
+      // Mark that we're waiting for a response
+      this.isWaitingForResponse = true;
 
       // Wait for Copilot to finish responding (only for multi-prompt workflows)
       let responseText = "";
@@ -799,6 +812,22 @@ export class FlightPathManager {
             );
           }
 
+          // Check if workflow is paused - if so, hold the response until resume
+          const currentState = this.promptQueue.getState();
+          if (currentState.status === "paused") {
+            console.log(
+              "⏸️ FlightPath: Response complete but workflow is paused - holding response until resume"
+            );
+            // Store the resolver and response text, but don't call it yet
+            // Resume will call this resolver to continue the workflow
+            this.pendingResponseResolver = resolve;
+            this.pendingResponseText = responseText;
+            this.isWaitingForResponse = false; // No longer waiting - response received
+            return; // Don't resolve yet - wait for resume
+          }
+
+          // Clear waiting flag - response received
+          this.isWaitingForResponse = false;
           resolve(responseText);
         }
       );
@@ -871,9 +900,36 @@ export class FlightPathManager {
     // First, update queue state to running
     await this.promptQueue.resume();
 
-    // Then restart the workflow execution from the paused position
-    // startWorkflowExecution now starts from currentIndex, so it will
-    // continue where we left off
+    // Case 1: Tool callback already fired while paused
+    if (this.pendingResponseResolver && this.pendingResponseText !== null) {
+      console.log(
+        "▶️ FlightPath: Resuming with pending response (Copilot finished while paused)"
+      );
+      // Resolve the pending promise to continue the workflow
+      const resolver = this.pendingResponseResolver;
+      const responseText = this.pendingResponseText;
+
+      // Clear pending state before resolving to avoid re-entrance
+      this.pendingResponseResolver = null;
+      this.pendingResponseText = null;
+
+      // Resolve the promise - this will continue the workflow loop
+      resolver(responseText);
+      return;
+    }
+
+    // Case 2: Still waiting for response (prompt sent but tool callback not fired yet)
+    if (this.isWaitingForResponse) {
+      console.log(
+        "▶️ FlightPath: Resuming while Copilot is still responding - will continue when response completes"
+      );
+      // Do nothing - when the response completes, it will see queue state is "running"
+      // and will resolve normally, continuing the workflow
+      return;
+    }
+
+    // Case 3: Not waiting for response (paused between prompts or before sending)
+    console.log("▶️ FlightPath: Resuming workflow from paused position");
     await this.startWorkflowExecution();
   }
 
@@ -888,6 +944,11 @@ export class FlightPathManager {
 
     // Cancel is now in base class, no need for type guards
     await integration.cancel();
+
+    // Clear any pending response (prevents workflow from continuing after stop)
+    this.pendingResponseResolver = null;
+    this.pendingResponseText = null;
+    this.isWaitingForResponse = false;
 
     // Stop the queue
     this.promptQueue.stop();

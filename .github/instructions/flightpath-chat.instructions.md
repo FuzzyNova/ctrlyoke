@@ -36,6 +36,35 @@ Validated in `extension.ts:testCopilotAutomation()`:
 - Also used in LLM loop prevention to stop duplicate tool calls
 </cancellation>
 
+<pauseResumeFlow>
+**State tracking:**
+- `isWaitingForResponse`: Tracks if prompt sent but tool callback not yet fired
+- `pendingResponseResolver/Text`: Stores response when tool fires while paused
+
+**Pause behavior (does NOT cancel current response):**
+
+- Press pause: Queue state = "paused", Copilot keeps responding
+- Tool callback fires: Check if paused
+- If paused: Wait for streaming, set `isWaitingForResponse = false`, store resolver + response, DON'T resolve
+- Promise remains pending = workflow stays at current prompt
+
+**Resume behavior (three cases):**
+
+1. **Tool callback already fired while paused:**
+   - `pendingResponseResolver` exists → Resolve immediately to continue workflow
+2. **Still waiting for response (tool callback not fired yet):**
+   - `isWaitingForResponse = true` → Do nothing, let response complete naturally
+   - When tool fires, sees queue is "running" → resolves normally → continues workflow
+3. **Not waiting (paused between prompts):**
+   - Call `startWorkflowExecution()` to send next prompt
+
+**Stop behavior (cancels AND clears all state):**
+
+- Execute cancel() to stop Copilot
+- Clear `pendingResponseResolver`, `pendingResponseText`, `isWaitingForResponse`
+- Stop queue
+  </pauseResumeFlow>
+
 <differenceFromCli>
 - Tool registered AFTER Copilot activation
 - Prepends `TOOL_INSTRUCTION` XML before user prompt
