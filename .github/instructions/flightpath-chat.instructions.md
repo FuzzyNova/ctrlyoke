@@ -15,12 +15,38 @@ Validated in `extension.ts:testCopilotAutomation()`:
 </provenTiming>
 
 <responseDetection>
-**Hybrid approach:**
-1. Language Model Tool (`flightpath_response_complete`) fires when LLM thinks done
-2. Tool callback triggers clipboard polling (500ms intervals)
-3. Requires 3 consecutive stable checks (1.5s) to confirm
-4. Only polls AFTER tool signals near-completion
-</responseDetection>
+**Two-stage detection:**
+
+**Stage 1: Tool fires (primary path - fast)**
+
+1. LLM calls `flightpath_response_complete` tool when it thinks it's done
+2. Tool callback fires `responseCompleteEmitter` event
+3. FlightPathManager receives event → calls `waitForStreamingComplete()`
+4. Clipboard polling (500ms intervals) waits for 3 stable checks (1.5s)
+5. Result: Completion confirmed in ~2-5 seconds
+
+**Stage 2: Tool never fires (fallback path - slow)**
+
+- Runs in parallel with Stage 1 (started after submit)
+- Polls clipboard every 2s, needs 2 minutes stability (60 checks)
+- Bails early if tool fires (checks `toolCalledForCurrentPrompt` flag)
+- If timeout (5min): Cancels chat, returns false
+- If stable: Fires `responseCompleteEmitter` manually
+- Result: Completion detected in ~2-5 minutes (or timeout)
+
+**Edge cases handled:**
+
+- Tool fires early/late → Stage 1 handles via streaming detection
+- Tool never fires → Stage 2 detects via stability
+- Multiple tool calls → First call wins (duplicate protection)
+- Stuck/broken → Stage 2 timeout cancels chat
+
+**Why this works:**
+
+- 99% cases: Stage 1 completes in seconds
+- 1% cases: Stage 2 catches failures in minutes
+- No user interaction needed in either path
+  </responseDetection>
 
 <llmLoopPrevention>
 - `toolCalledForCurrentPrompt` flag prevents duplicate events

@@ -25,12 +25,12 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   // Language Model Tool for response completion detection
   private isToolRegistered: boolean = false;
-  private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls in same response
+  private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls + signal fallback to exit
 
   // Tool invocation instruction - single source of truth
   private readonly TOOL_INSTRUCTION = `
 <criticalInstruction>
-When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+When you finish this response, call #flightpath_response_complete to signal completion.
 </criticalInstruction>`;
 
   constructor(context: vscode.ExtensionContext) {
@@ -96,6 +96,10 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
    * Register the Language Model Tool for detecting response completion
    * This tool is called by Copilot when it finishes responding to a prompt
    * Should only be called AFTER Copilot extensions are active and ready
+   *
+   * Note: This is the PRIMARY detection method. A fallback polling mechanism
+   * runs in parallel (started in sendPromptWithDirectAutomation) to handle
+   * cases where the LLM forgets to call this tool.
    */
   private registerResponseTool(): void {
     // Prevent duplicate registration
@@ -127,11 +131,12 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
           }
 
           // Mark tool as called for this prompt
-          this.toolCalledForCurrentPrompt = true;
+          this.toolCalledForCurrentPrompt = true; // Prevents duplicates + signals fallback
 
           // Fire the response complete event for internal handling
           // Note: Chat mode cannot access response text directly, so we fire with empty string
           this.responseCompleteEmitter.fire("");
+          console.log("✅ Tool fired - completion detection active");
 
           // Return acknowledgment to Copilot
           return new vscode.LanguageModelToolResult([
@@ -479,6 +484,101 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
   }
 
   /**
+   * Fallback completion detection for when LLM forgets to call the tool
+   *
+   * Polls chat content and waits for it to stop growing.
+   * This handles cases where Copilot completes but never fires the completion tool.
+   *
+   * @param timeoutMinutes How long to poll before giving up (default: 5 minutes)
+   * @returns True if completion detected, false if timeout
+   */
+  async waitForCompletionWithFallback(
+    timeoutMinutes: number = 5
+  ): Promise<boolean> {
+    const pollIntervalMs = 2000; // Poll every 2 seconds
+    const stableChecksRequired = 60; // 60 checks * 2s = 2 minutes of stability
+    const maxAttempts = (timeoutMinutes * 60 * 1000) / pollIntervalMs;
+
+    let previousContent = "";
+    let unchangedCount = 0;
+    let attempt = 0;
+
+    console.log(
+      `🔄 Fallback polling started (${timeoutMinutes}min timeout, ${stableChecksRequired * 2}s stability required)`
+    );
+
+    while (attempt < maxAttempts) {
+      attempt++;
+
+      // Check if tool already fired - bail early
+      if (this.toolCalledForCurrentPrompt) {
+        console.log(
+          "✅ Fallback polling stopped early - tool fired successfully"
+        );
+        return true;
+      }
+
+      // Check if operation was cancelled
+      if (this.isCancelling) {
+        console.log("⏹️ Fallback polling cancelled by user");
+        return false;
+      }
+
+      // Wait before checking
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+
+      try {
+        const currentContent = await this.getChatContent();
+
+        // Check if content has changed
+        if (currentContent === previousContent && currentContent.length > 0) {
+          unchangedCount++;
+
+          // Log progress every 30 seconds
+          if (unchangedCount % 15 === 0) {
+            const elapsedSeconds = unchangedCount * 2;
+            console.log(
+              `⏳ Content stable for ${elapsedSeconds}s (need ${stableChecksRequired * 2}s)`
+            );
+          }
+
+          // If content has been stable long enough, assume completion
+          if (unchangedCount >= stableChecksRequired) {
+            console.log(
+              `✅ Fallback detected completion after ${unchangedCount * 2}s of stability`
+            );
+            // Fire the response complete event manually since tool didn't fire
+            this.responseCompleteEmitter.fire("");
+            return true;
+          }
+        } else if (currentContent !== previousContent) {
+          // Content changed - reset counter
+          unchangedCount = 0;
+          previousContent = currentContent;
+        }
+      } catch (error) {
+        console.warn("⚠️ Error during fallback polling:", error);
+        // Continue polling on error
+      }
+    }
+
+    // Timeout reached - Copilot might be stuck or still responding
+    console.warn(
+      `⚠️ Fallback polling timeout after ${timeoutMinutes} minutes - cancelling chat`
+    );
+
+    // Cancel the chat to stop any stuck/ongoing response
+    try {
+      await vscode.commands.executeCommand("workbench.action.chat.cancel");
+      console.log("⏹️ Chat cancelled due to timeout");
+    } catch (cancelError) {
+      console.warn("⚠️ Could not cancel chat after timeout:", cancelError);
+    }
+
+    return false;
+  }
+
+  /**
    * Submit chat message with clipboard verification and retry logic
    *
    * Verifies submit succeeded by checking if our prompt appears in the chat.
@@ -575,7 +675,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
     try {
       // Only reset tool call flag if we're using completion detection
       if (needsCompletionDetection) {
-        this.toolCalledForCurrentPrompt = false;
+        this.toolCalledForCurrentPrompt = false; // Reset for new prompt
       }
 
       // Step 1: Open/Focus Copilot Chat using configured location
@@ -622,6 +722,17 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
         throw new Error(
           "Failed to submit message after multiple retries - Copilot is still responding"
         );
+      }
+
+      // Step 5: Start fallback polling (in case LLM never calls the tool)
+      // This runs in parallel with tool-based detection
+      if (needsCompletionDetection) {
+        // Fire and forget - this will run in background
+        // If tool fires first, the event listener in FlightPathManager will handle it
+        // If tool never fires, this will fire the event after detecting stability
+        this.waitForCompletionWithFallback(5).catch((error) => {
+          console.error("❌ Fallback polling error:", error);
+        });
       }
 
       // Update workflow progress
