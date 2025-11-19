@@ -195,7 +195,7 @@ Check: Copilot extensions installed?
   │          ▼
   │      Check: All commands available?
   │      • type
-  │      • workbench.action.chat.submit  
+  │      • workbench.action.chat.submit
   │      • workbench.panel.chat.view.copilot.focus
   │      • editor.action.selectAll
   │          │
@@ -310,35 +310,41 @@ Workflow Progress:
 ## Key Design Decisions
 
 ### 1. Single Proven Strategy (No Fallbacks)
+
 - **Why**: One validated approach is better than multiple untested fallbacks
 - **Benefit**: Clear error messages when automation unavailable
 - **Trade-off**: No silent degradation - user must have Copilot Chat working
 
 ### 2. Background Polling for Availability
+
 - **Why**: Extensions activate lazily in VS Code
 - **Benefit**: Handles slow activation gracefully, transparent state for users
 - **Trade-off**: 30-second initialization period on first load
 
 ### 3. Command-Based Automation
+
 - **Why**: Proven approach from POC validation
 - **Benefit**: Zero-interaction capability
 - **Trade-off**: Dependent on VS Code internal commands (requires VS Code 1.85.0+)
 
 ### 4. Proven Timing Delays
+
 - **Why**: UI stability and reliability (validated in POC)
 - **Benefit**: Consistent automation success
 - **Trade-off**: Slight delay in execution (1.8s per prompt)
 
 ### 5. Separation of Concerns
+
 - **Why**: SOLID principles and maintainability
 - **Benefit**: Easy to test, extend, and modify
 - **Trade-off**: More files and abstractions
 
 ### 6. Native Copilot Syntax
+
 - **Why**: Preserve all Copilot Chat features
 - **Benefit**: Full compatibility with agents, tools, and commands
 - **Trade-off**: Dependent on Copilot Chat syntax stability
 
 ---
 
-*Architecture designed for: simplicity, reliability, and transparent user experience*
+_Architecture designed for: simplicity, reliability, and transparent user experience_

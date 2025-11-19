@@ -18,6 +18,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ## ✨ Features
 
 ### Core Functionality
+
 - **🤖 Zero-Interaction Automation**: True "set-and-forget" Copilot Chat integration
 - **📝 Structured Prompt Sequences**: Define multi-step workflows using JSON files
 - **🎯 Final-Form Prompts**: Store prompts with context variables (@workspace, #file, slash commands) ready to send
@@ -26,6 +27,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **📊 Status Bar Integration**: Real-time workflow status and progress tracking
 
 ### Copilot Chat Automation
+
 - **Direct Text Insertion**: Zero interaction - validated and proven approach
 - **Response Detection**: Language Model Tool API detects completion automatically
 - **Submit Verification**: Clipboard-based verification ensures prompts are sent
@@ -35,6 +37,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **Background Polling**: Detects Copilot availability on startup (5s intervals, 30s max)
 
 ### File Format Support
+
 - **`.prompt.json`**: Single prompt files for simple tasks
 - **`.flightpath.json`**: Multi-prompt workflows for complex automation
 - **`.prompt.md`**: Markdown-based single prompts (no JSON needed)
@@ -43,6 +46,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **Example Files**: Ready-to-use templates in `.flightpath/examples/`
 
 ### Safety & Control
+
 - **Script Validation**: Path validation and security checks for end condition scripts
 - **Timeout Management**: Configurable timeouts for script execution
 - **Error Handling**: Comprehensive error reporting and recovery
@@ -55,6 +59,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **GitHub Copilot**: Recommended but not required (manual fallback available)
 
 ### Optional Dependencies
+
 - **Python**: For Python-based end condition scripts
 - **Git**: For workspace context and file operations
 
@@ -63,16 +68,19 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ### Quick Start (5 Minutes)
 
 1. **Check Automation Status**
+
    ```
    Command Palette → FlightPath: Show Copilot Integration Status
    ```
 
 2. **Test Automation (Recommended)**
+
    ```
    Command Palette → FlightPath: Test Automation
    ```
 
 3. **Run Demo Workflow**
+
    ```
    Command Palette → FlightPath: Take Off
    Select: .flightpath/examples/zero-interaction-demo.flightpath.json
@@ -88,11 +96,13 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ### Create Your First Workflow
 
 **Simple Markdown Prompt** (`.prompt.md`):
+
 ```markdown
 Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
 ```
 
 **Simple JSON Analysis** (`.prompt.json`):
+
 ```json
 {
   "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements",
@@ -101,6 +111,7 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 ```
 
 **Multi-Step Workflow** (`.flightpath.json`):
+
 ```json
 {
   "prompts": [
@@ -120,9 +131,11 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 ```
 
 **Optional Fields**:
+
 - `model` - Override AI model per prompt (`claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`)
 
 **Using Context Variables**:
+
 - `@workspace` - Include workspace-wide context
 - `#file:path/to/file.ext` - Reference specific files
 - `#file:path/to/file.ext:45-120` - Reference specific line ranges
@@ -132,11 +145,13 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 ### Execute Workflows
 
 **Via Command Palette**:
+
 - **Command Palette**: `FlightPath: Take Off`
 - **Select File**: Choose your `.prompt.json`, `.flightpath.json`, or `.prompt.md`
 - **Click "Take Off"**: Workflow executes automatically!
 
 **Via Context Menu** (Right-click on any prompt file):
+
 - **FlightPath: Send to CLI** - Execute using Copilot CLI (default, deterministic completion)
 - **FlightPath: Send to Chat** - Execute using Copilot Chat (streaming with tool-based detection)
 
@@ -150,16 +165,16 @@ The context menu allows you to override your default integration mode for a spec
 
 ## � Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `FlightPath: Take Off` | Execute a prompt workflow |
+| Command                                       | Description                  |
+| --------------------------------------------- | ---------------------------- |
+| `FlightPath: Take Off`                        | Execute a prompt workflow    |
 | `FlightPath: Show Copilot Integration Status` | View automation capabilities |
-| `FlightPath: Test Automation` | Test Copilot Chat automation |
-| `FlightPath: Create Prompt File` | Create new workflow file |
-| `FlightPath: Pause Execution` | Pause running workflow |
-| `FlightPath: Resume Execution` | Resume paused workflow |
-| `FlightPath: Stop Execution` | Stop and reset workflow |
-| `FlightPath: Show Debug State` | View internal state |
+| `FlightPath: Test Automation`                 | Test Copilot Chat automation |
+| `FlightPath: Create Prompt File`              | Create new workflow file     |
+| `FlightPath: Pause Execution`                 | Pause running workflow       |
+| `FlightPath: Resume Execution`                | Resume paused workflow       |
+| `FlightPath: Stop Execution`                  | Stop and reset workflow      |
+| `FlightPath: Show Debug State`                | View internal state          |
 
 ## 🔧 Configuration
 
@@ -181,6 +196,7 @@ To change where FlightPath opens Copilot Chat:
 3. Select your preferred location from the dropdown
 
 Alternatively, edit your `settings.json`:
+
 ```json
 {
   "flightpath.chatWindowLocation": "chatPanel"
@@ -192,6 +208,7 @@ Alternatively, edit your `settings.json`:
 FlightPath uses a proven single-strategy approach for reliable automation:
 
 ### Direct Text Insertion with Verification
+
 - **Status**: Proven and validated through extensive testing
 - **Experience**: Zero interaction required
 - **Process**:
@@ -204,7 +221,9 @@ FlightPath uses a proven single-strategy approach for reliable automation:
   7. **Streaming Check**: Monitors chat stability before next prompt (3 consecutive stable checks)
 
 ### What If It Fails?
+
 If Copilot Chat isn't available or automation fails, FlightPath shows a clear error message with:
+
 - **Requirements**: What's needed for automation to work
 - **Troubleshooting Steps**: How to resolve common issues
 - **Manual Retry**: Option to restart detection
@@ -221,6 +240,7 @@ No silent fallbacks - you always know the system state!
 ## 🛠️ Current Features
 
 ### ✅ Implemented
+
 - Zero-interaction Copilot Chat automation
 - Language Model Tool API for response detection
 - Clipboard-based submit verification with retry logic
@@ -234,6 +254,7 @@ No silent fallbacks - you always know the system state!
 - File system utilities and prompt file discovery
 
 ### � Planned Features
+
 - End condition script execution and validation
 - WebView UI panel for visual workflow management
 - Advanced context awareness features

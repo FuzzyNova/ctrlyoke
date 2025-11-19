@@ -7,6 +7,7 @@ End conditions in FlightPath are **optional validation checks** that determine w
 **Key Feature: Automatic Retry with Custom Prompts** 🔄
 
 When a validation check fails (script runs successfully but indicates task incomplete), FlightPath can automatically retry with a configurable prompt that includes:
+
 - Script output and error details
 - Expected vs actual values
 - Retry attempt progress
@@ -30,9 +31,10 @@ This enables **self-correcting workflows** where Copilot automatically fixes iss
 ```
 
 **How it works:**
+
 1. Copilot implements authentication → Tests run → "5 tests failed"
 2. ❌ Doesn't match "all_passed" → **Retry with test output**
-3. Copilot fixes issues → Tests run → "2 tests failed"  
+3. Copilot fixes issues → Tests run → "2 tests failed"
 4. ❌ Still doesn't match → **Retry again with updated output**
 5. Copilot fixes remaining issues → Tests run → "all_passed"
 6. ✅ **Success!** Move to next prompt
@@ -42,12 +44,14 @@ This enables **self-correcting workflows** where Copilot automatically fixes iss
 ⚠️ **IMPORTANT: End conditions are NOT currently implemented in the workflow execution flow.**
 
 ### What Exists
+
 - ✅ **EndConditionEvaluator class** - Fully implemented with script execution capabilities
 - ✅ **Schema validation** - End conditions are validated when loading prompt files
 - ✅ **Template system** - Sample scripts can be generated via command palette
 - ✅ **Type definitions** - `EndCondition` interface defined in `FlightPathTypes.ts`
 
 ### What Doesn't Exist Yet
+
 - ❌ **Integration with workflow** - `evaluateCondition()` is never called during execution
 - ❌ **Retry logic** - No mechanism to retry failed prompts
 - ❌ **Failure handling** - No strategy for when conditions fail
@@ -71,26 +75,26 @@ This enables **self-correcting workflows** where Copilot automatically fixes iss
 
 ### Properties
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `script` | string | Yes | Path to executable script (relative or absolute) |
-| `returns` | string | Yes | Expected output value from script |
-| `timeout` | number | No | Max execution time in milliseconds (default: 30000) |
-| `maxRetries` | number | No | Maximum number of retry attempts (default: 0) |
-| `retryPrompt` | string | No | Template for retry prompt with placeholder support |
+| Property      | Type   | Required | Description                                         |
+| ------------- | ------ | -------- | --------------------------------------------------- |
+| `script`      | string | Yes      | Path to executable script (relative or absolute)    |
+| `returns`     | string | Yes      | Expected output value from script                   |
+| `timeout`     | number | No       | Max execution time in milliseconds (default: 30000) |
+| `maxRetries`  | number | No       | Maximum number of retry attempts (default: 0)       |
+| `retryPrompt` | string | No       | Template for retry prompt with placeholder support  |
 
 ### Retry Prompt Template Placeholders
 
 When `retryPrompt` is configured, you can use these placeholders for dynamic content:
 
-| Placeholder | Description | Example Value |
-|------------|-------------|---------------|
-| `{scriptOutput}` | Standard output (stdout) from the script | `"3 tests failed: test_login, test_logout, test_session"` |
-| `{errorOutput}` | Error output (stderr) from the script | `"SyntaxError: Unexpected token"` |
-| `{expectedValue}` | The expected value from `returns` field | `"true"` |
-| `{actualValue}` | The actual value returned by the script | `"false"` |
-| `{retryCount}` | Current retry attempt number (1-indexed) | `"2"` |
-| `{maxRetries}` | Maximum retries configured | `"3"` |
+| Placeholder       | Description                              | Example Value                                             |
+| ----------------- | ---------------------------------------- | --------------------------------------------------------- |
+| `{scriptOutput}`  | Standard output (stdout) from the script | `"3 tests failed: test_login, test_logout, test_session"` |
+| `{errorOutput}`   | Error output (stderr) from the script    | `"SyntaxError: Unexpected token"`                         |
+| `{expectedValue}` | The expected value from `returns` field  | `"true"`                                                  |
+| `{actualValue}`   | The actual value returned by the script  | `"false"`                                                 |
+| `{retryCount}`    | Current retry attempt number (1-indexed) | `"2"`                                                     |
+| `{maxRetries}`    | Maximum retries configured               | `"3"`                                                     |
 
 ### Supported Script Types
 
@@ -180,12 +184,12 @@ When a validation fails and `retryPrompt` is configured, FlightPath builds the r
 function buildRetryPrompt(
   template: string,
   context: {
-    scriptOutput: string;    // stdout from script
-    errorOutput: string;     // stderr from script
-    expectedValue: string;   // from condition.returns
-    actualValue: string;     // from evaluation result
-    retryCount: number;      // current retry attempt (1-indexed)
-    maxRetries: number;      // from condition.maxRetries
+    scriptOutput: string; // stdout from script
+    errorOutput: string; // stderr from script
+    expectedValue: string; // from condition.returns
+    actualValue: string; // from evaluation result
+    retryCount: number; // current retry attempt (1-indexed)
+    maxRetries: number; // from condition.maxRetries
   }
 ): string {
   return template
@@ -240,10 +244,12 @@ The `checkResult()` method supports flexible matching:
 **Focus**: Script executes successfully but indicates validation failure
 
 **Key Distinction**:
+
 - ✅ **Happy Path**: Script runs, exits cleanly, but output doesn't match expected value
 - ❌ **Error Path**: Script fails to execute, times out, or throws errors (different handling)
 
 **Retry Decision Tree**:
+
 ```
 Validation Failed?
   ├─ Yes → Check if error occurred during execution
@@ -284,7 +290,7 @@ private async waitForEndCondition(prompt: PromptItem): Promise<void> {
     // This would integrate with EndConditionEvaluator
     // For now, simulate waiting with a timeout
     const timeout = prompt.endCondition.timeout || 30000;
-    
+
     this.executionTimer = setTimeout(async () => {
         console.log(`FlightPath: End condition timeout reached...`);
         // In a real implementation, we would check the actual condition here
@@ -300,6 +306,7 @@ private async waitForEndCondition(prompt: PromptItem): Promise<void> {
 ### Scenario 1: Validation Failure (Happy Path) ⭐
 
 **What Happens:**
+
 ```
 Script executes successfully
 Script returns: "false"
@@ -324,10 +331,10 @@ When `retryPrompt` is configured and retries are available:
 // User notification with options
 vscode.window.showErrorMessage(
   `End condition failed after ${maxRetries} retries. Script output: ${actualValue}`,
-  'Stop Workflow',
-  'Continue Anyway',
-  'Retry Once More'
-)
+  "Stop Workflow",
+  "Continue Anyway",
+  "Retry Once More"
+);
 ```
 
 **Example Configuration:**
@@ -346,6 +353,7 @@ vscode.window.showErrorMessage(
 ```
 
 **Execution Flow:**
+
 1. Copilot implements authentication
 2. Script runs: `npm test` → outputs "5 tests failed"
 3. Doesn't match "all_passed" → **Retry 1**
@@ -358,12 +366,14 @@ vscode.window.showErrorMessage(
 ### Scenario 2: Script Execution Error (Error Path)
 
 **What Happens:**
+
 ```
 Script fails to execute (file not found, syntax error, etc.)
 → Execution ERROR (not validation failure)
 ```
 
 **Current Design:**
+
 ```typescript
 {
     success: false,
@@ -386,12 +396,14 @@ This is **NOT** the retry path. Execution errors are handled differently:
   - Abort entire workflow
 
 **Key Difference:**
+
 - **Validation failure** (happy path) → Use retry mechanism
 - **Execution error** (error path) → Stop and notify user
 
 ### Scenario 3: Script Timeout (Error Path)
 
 **What Happens:**
+
 ```
 Script runs longer than timeout duration
 → Process killed
@@ -399,6 +411,7 @@ Script runs longer than timeout duration
 ```
 
 **Current Design:**
+
 ```typescript
 {
     success: false,
@@ -426,6 +439,7 @@ If a script times out, retrying won't help unless the underlying issue is fixed.
 ### Scenario 4: Unexpected Output (Happy Path Variant)
 
 **What Happens:**
+
 ```
 Script executes successfully
 Script returns: "partial-success"
@@ -474,8 +488,8 @@ export interface EndCondition {
   script: string;
   returns: string;
   timeout?: number;
-  maxRetries?: number;      // NEW: default 0 (no retries)
-  retryPrompt?: string;     // NEW: template with placeholders
+  maxRetries?: number; // NEW: default 0 (no retries)
+  retryPrompt?: string; // NEW: template with placeholders
 }
 
 export interface PromptResult {
@@ -484,8 +498,8 @@ export interface PromptResult {
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
-  retryCount?: number;      // NEW: track retry attempts
-  scriptOutput?: string;    // NEW: capture last output for debugging
+  retryCount?: number; // NEW: track retry attempts
+  scriptOutput?: string; // NEW: capture last output for debugging
 }
 ```
 
@@ -602,7 +616,7 @@ private async handleValidationRetry(
   evaluationResult: EvaluationResult
 ): Promise<void> {
   this.promptQueue.incrementRetryCount();
-  
+
   const retryPrompt = this.evaluator.buildRetryPrompt(
     prompt.endCondition!.retryPrompt!,
     evaluationResult,
@@ -612,10 +626,10 @@ private async handleValidationRetry(
   );
 
   console.log(`FlightPath: Retry ${this.promptQueue.getCurrentRetryCount()} - Sending retry prompt`);
-  
+
   // Send retry prompt to Copilot (same mode as original)
   await this.copilotIntegration.sendPrompt(retryPrompt);
-  
+
   // Wait for response completion (will re-evaluate condition)
   // Response completion handler will call handleResponseComplete() again
 }
@@ -646,10 +660,10 @@ private async handleMaxRetriesExhausted(
 
 // NEW method: Handle execution errors (not retryable)
 private handleExecutionError(result: EvaluationResult): void {
-  const message = result.timeout 
+  const message = result.timeout
     ? 'Script execution timed out'
     : `Script execution failed: ${result.error}`;
-    
+
   vscode.window.showErrorMessage(
     message,
     'Stop Workflow',
@@ -716,9 +730,9 @@ private handleExecutionError(result: EvaluationResult): void {
     "returns": "passed",
     "maxRetries": 3,
     "retryStrategy": {
-      "exponentialBackoff": true,    // Wait 1s, 2s, 4s between retries
-      "includeHistory": true,         // Include previous retry attempts in prompt
-      "adaptivePrompt": true          // Let AI adjust based on retry count
+      "exponentialBackoff": true, // Wait 1s, 2s, 4s between retries
+      "includeHistory": true, // Include previous retry attempts in prompt
+      "adaptivePrompt": true // Let AI adjust based on retry count
     }
   }
 }
@@ -743,7 +757,7 @@ private handleExecutionError(result: EvaluationResult): void {
         "retryPrompt": "Coverage at {actualValue}%, need {expectedValue}%"
       }
     ],
-    "retryStrategy": "sequential"  // or "parallel"
+    "retryStrategy": "sequential" // or "parallel"
   }
 }
 ```
@@ -778,6 +792,7 @@ private handleExecutionError(result: EvaluationResult): void {
 ```
 
 **Script (`check_tests.sh`):**
+
 ```bash
 #!/bin/bash
 npm test 2>&1
@@ -791,6 +806,7 @@ fi
 ```
 
 **Execution Flow:**
+
 1. Copilot implements `calculateTotal()` with tests
 2. Run tests → "tests_failed" (validation fails)
 3. **Retry 1**: Send retry prompt with test output
@@ -821,6 +837,7 @@ fi
 ```
 
 **Script (`package.json`):**
+
 ```json
 {
   "scripts": {
@@ -830,6 +847,7 @@ fi
 ```
 
 **Why This Works:**
+
 - TypeScript compilation errors go to stdout
 - Script outputs "success" or "failed" for easy matching
 - Retry prompt includes full compiler output with line numbers and error messages
@@ -854,13 +872,14 @@ fi
 ```
 
 **Script (`check_coverage.py`):**
+
 ```python
 #!/usr/bin/env python3
 import subprocess
 import json
 
 # Run documentation coverage tool
-result = subprocess.run(['npx', 'documentation-coverage'], 
+result = subprocess.run(['npx', 'documentation-coverage'],
                        capture_output=True, text=True)
 
 # Parse output
@@ -896,19 +915,21 @@ exit(0)  # Always exit cleanly for retry
 ```
 
 **Script (`check_readme.js`):**
+
 ```javascript
 #!/usr/bin/env node
-const fs = require('fs');
+const fs = require("fs");
 
-if (fs.existsSync('README.md')) {
-    const content = fs.readFileSync('README.md', 'utf8');
-    if (content.length > 500) {  // At least 500 characters
-        console.log('exists');
-        process.exit(0);
-    }
+if (fs.existsSync("README.md")) {
+  const content = fs.readFileSync("README.md", "utf8");
+  if (content.length > 500) {
+    // At least 500 characters
+    console.log("exists");
+    process.exit(0);
+  }
 }
 
-console.log('missing');
+console.log("missing");
 process.exit(0);
 ```
 
@@ -932,6 +953,7 @@ process.exit(0);
 ```
 
 **Script (`validate_security.sh`):**
+
 ```bash
 #!/bin/bash
 
@@ -966,6 +988,7 @@ fi
 ### 1. Script Design for Retry Support
 
 ✅ **DO:**
+
 - **Exit cleanly (code 0)** even on validation failure - reserve non-zero for errors
 - Output simple, parseable values to stdout (e.g., "true", "false", "85")
 - Output detailed error messages to stdout for `{scriptOutput}` placeholder
@@ -975,6 +998,7 @@ fi
 - Include actionable information in output
 
 **Example (Good):**
+
 ```python
 #!/usr/bin/env python3
 import sys
@@ -993,6 +1017,7 @@ else:
 ```
 
 ❌ **DON'T:**
+
 - Use non-zero exit codes for validation failures (reserve for errors)
 - Output verbose logs to stdout (use stderr instead)
 - Assume specific directory structure without validation
@@ -1001,6 +1026,7 @@ else:
 - Mix validation output with progress messages
 
 **Example (Bad):**
+
 ```python
 #!/usr/bin/env python3
 import sys
@@ -1008,7 +1034,7 @@ import sys
 if not run_tests():
     print("Running tests...")
     print("Test 1... FAILED")
-    print("Test 2... PASSED") 
+    print("Test 2... PASSED")
     print("Overall: FAILED")
     sys.exit(1)  # BAD: Non-zero exit treated as error, not retry
 ```
@@ -1016,6 +1042,7 @@ if not run_tests():
 ### 2. Retry Prompt Design
 
 ✅ **DO:**
+
 - **Include context**: Tell Copilot what failed and why
 - **Use placeholders**: Leverage `{scriptOutput}` for dynamic details
 - **Be specific**: "Fix the login test failure" > "Fix the tests"
@@ -1024,6 +1051,7 @@ if not run_tests():
 - **Guide the fix**: Suggest what to focus on
 
 **Example (Good):**
+
 ```json
 {
   "retryPrompt": "The tests are still failing (attempt {retryCount}/{maxRetries}).\n\n**Test Results:**\n{scriptOutput}\n\n**Expected:** {expectedValue}\n**Actual:** {actualValue}\n\nPlease fix the failing tests and ensure all edge cases are covered."
@@ -1031,6 +1059,7 @@ if not run_tests():
 ```
 
 ❌ **DON'T:**
+
 - Be vague: "It didn't work, try again"
 - Omit useful information: Not including `{scriptOutput}`
 - Be too brief: "Failed" (no context)
@@ -1038,6 +1067,7 @@ if not run_tests():
 - Blame: "You made a mistake" (be constructive)
 
 **Example (Bad):**
+
 ```json
 {
   "retryPrompt": "Failed. Try again."
@@ -1047,6 +1077,7 @@ if not run_tests():
 ### 3. Retry Configuration
 
 ✅ **DO:**
+
 - **Start with 2-3 retries**: Good balance for most tasks
 - **Use retries for fixable issues**: Compilation errors, test failures, style issues
 - **Increase timeout for slow operations**: Especially when retrying
@@ -1054,12 +1085,14 @@ if not run_tests():
 - **Consider task complexity**: Complex tasks may need more retries
 
 **Recommended Retry Counts:**
+
 - **Simple fixes** (formatting, simple bugs): 1-2 retries
 - **Test failures** (unit tests, integration): 2-3 retries
 - **Complex refactoring**: 3-5 retries
 - **Code generation with validation**: 2-4 retries
 
 ❌ **DON'T:**
+
 - Set excessive retries (>5) - indicates wrong approach
 - Use retries for non-deterministic issues (timeouts, network errors)
 - Retry without providing new information in retryPrompt
@@ -1081,18 +1114,19 @@ Since scripts may run multiple times, configure timeouts appropriately:
 
 Available placeholders and when to use them:
 
-| Placeholder | Best Used For | Example |
-|------------|---------------|---------|
-| `{scriptOutput}` | Detailed error messages, test results, compiler output | "Compiler errors:\n{scriptOutput}" |
-| `{errorOutput}` | Debug info, warnings (rarely needed in retry prompts) | "Warnings:\n{errorOutput}" |
-| `{expectedValue}` | Remind Copilot of the goal | "Need: {expectedValue}" |
-| `{actualValue}` | Show what was achieved | "Got: {actualValue}" |
-| `{retryCount}` | Indicate progress/urgency | "Attempt {retryCount}/{maxRetries}" |
-| `{maxRetries}` | Set expectations | "Last chance ({retryCount}/{maxRetries})" |
+| Placeholder       | Best Used For                                          | Example                                   |
+| ----------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `{scriptOutput}`  | Detailed error messages, test results, compiler output | "Compiler errors:\n{scriptOutput}"        |
+| `{errorOutput}`   | Debug info, warnings (rarely needed in retry prompts)  | "Warnings:\n{errorOutput}"                |
+| `{expectedValue}` | Remind Copilot of the goal                             | "Need: {expectedValue}"                   |
+| `{actualValue}`   | Show what was achieved                                 | "Got: {actualValue}"                      |
+| `{retryCount}`    | Indicate progress/urgency                              | "Attempt {retryCount}/{maxRetries}"       |
+| `{maxRetries}`    | Set expectations                                       | "Last chance ({retryCount}/{maxRetries})" |
 
 ### 6. Security & Safety
 
 ✅ **DO:**
+
 - Review script content before using in workflows
 - Use workspace-relative paths
 - Validate script output before using in prompts
@@ -1100,6 +1134,7 @@ Available placeholders and when to use them:
 - Keep scripts in version control
 
 ❌ **DON'T:**
+
 - Run scripts from untrusted sources
 - Use scripts that modify system settings
 - Include secrets in script output
@@ -1127,6 +1162,7 @@ Available placeholders and when to use them:
 ### Limitations
 
 ⚠️ **Scripts have full access to:**
+
 - Workspace file system
 - Environment variables
 - System commands
@@ -1137,21 +1173,25 @@ Available placeholders and when to use them:
 ## Future Enhancements
 
 ### 1. Visual End Condition Builder
+
 - GUI for creating end conditions
 - Template library
 - Script generator
 
 ### 2. End Condition Testing
+
 - Command to test scripts independently
 - See output without running workflow
 - Debug failed conditions
 
 ### 3. Condition Monitoring
+
 - Real-time script output streaming
 - Progress indicators for long-running scripts
 - Script execution history
 
 ### 4. Marketplace Integration
+
 - Share end condition scripts
 - Community templates
 - Rated and reviewed scripts
@@ -1165,55 +1205,73 @@ Available placeholders and when to use them:
 ## Troubleshooting
 
 ### Problem: "Script not found"
+
 **Solution:** Check script path is relative to workspace root or .flightpath/ directory
 
 ### Problem: "Unsupported script type"
+
 **Solution:** Use supported extensions: .py, .js, .ts, .sh, .bat, .cmd, .ps1
 
 ### Problem: "Script execution timed out"
-**Solution:** 
+
+**Solution:**
+
 - Increase timeout value in endCondition
 - Optimize script performance
 - Consider if retries are causing cumulative timeout issues
 
 ### Problem: "End condition always passes/fails"
-**Solution:** 
+
+**Solution:**
+
 - Verify script outputs expected value to stdout
 - Use exit code 0 (don't exit with 1 for validation failures)
 - Check comparison logic matches your output format
 
 ### Problem: "Retries not triggering"
+
 **Solution:**
+
 - Verify `maxRetries > 0` is set
 - Verify `retryPrompt` is configured
 - Check that script exits with code 0 (validation failure, not execution error)
 - Review logs to see if error path is being triggered instead
 
 ### Problem: "Retry prompt doesn't include script output"
+
 **Solution:**
+
 - Verify placeholder syntax: `{scriptOutput}` (case-sensitive, curly braces)
 - Check that script outputs to stdout (not stderr)
 - Ensure script output is captured before exit
 
 ### Problem: "Permission denied"
-**Solution:** 
+
+**Solution:**
+
 - Make script executable: `chmod +x script.sh` (Unix/Linux/Mac)
 - Windows: Ensure script extension is associated with an interpreter
 
 ### Problem: "Infinite retry loop"
+
 **Solution:**
+
 - Check `maxRetries` is set to a reasonable value (not infinite)
 - Verify script can actually distinguish success from failure
 - Review retry prompt - is it giving Copilot actionable information?
 
 ### Problem: "Script runs but output not captured"
+
 **Solution:**
+
 - Use `print()` in Python, `console.log()` in JavaScript, `echo` in bash
 - Flush output buffers if needed
 - Don't redirect stdout within the script
 
 ### Problem: "Placeholders not replaced in retry prompt"
+
 **Solution:**
+
 - Check placeholder spelling: `{scriptOutput}` not `{script_output}` or `{output}`
 - Verify template string is properly formatted in JSON (escape newlines with `\n`)
 - Review available placeholders list

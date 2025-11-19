@@ -45,12 +45,14 @@ FlightPath now features **proven zero-interaction Copilot Chat automation**, ena
 FlightPath uses **one proven strategy** validated in a proof-of-concept:
 
 **Direct Text Insertion (Zero-Interaction)**
+
 - Focus Copilot Chat panel (1000ms delay)
-- Clear existing input (300ms delay)  
+- Clear existing input (300ms delay)
 - Type prompt text (500ms delay)
 - Submit automatically
 
 **No Fallback Strategies**: If automation is unavailable, FlightPath shows a clear error message with:
+
 - Requirements list (what's needed for automation)
 - Troubleshooting steps (how to fix common issues)
 - Manual retry option (restart detection)
@@ -58,12 +60,12 @@ FlightPath uses **one proven strategy** validated in a proof-of-concept:
 ```typescript
 // Background polling determines availability upfront
 // Workflows are blocked until status is 'ready'
-if (status === 'ready') {
-    // Zero-interaction automation with PROVEN timing
-    executeDirectAutomation();
+if (status === "ready") {
+  // Zero-interaction automation with PROVEN timing
+  executeDirectAutomation();
 } else {
-    // Clear error - no silent fallbacks
-    showErrorWithTroubleshooting();
+  // Clear error - no silent fallbacks
+  showErrorWithTroubleshooting();
 }
 ```
 
@@ -91,9 +93,11 @@ if (status === 'ready') {
 ### Testing Automation
 
 1. **Show Copilot Status**
+
    ```
    Command Palette → "FlightPath: Show Copilot Integration Status"
    ```
+
    Displays current automation strategy and capabilities.
 
 2. **Test Automation**
@@ -109,9 +113,11 @@ if (status === 'ready') {
    - `.flightpath.json` for multi-prompt workflows
 
 2. **Execute Workflow**
+
    ```
    Command Palette → "FlightPath: Take Off"
    ```
+
    Select your workflow file and click "Take Off".
 
 3. **Zero-Interaction Execution**
@@ -124,6 +130,7 @@ if (status === 'ready') {
 ### Example Workflow Files
 
 #### Simple Single Prompt (`.prompt.json`)
+
 ```json
 {
   "prompt": "Explain the SOLID principles in the CopilotIntegration class",
@@ -134,6 +141,7 @@ if (status === 'ready') {
 ```
 
 #### Multi-Prompt Workflow (`.flightpath.json`)
+
 ```json
 {
   "prompts": [
@@ -160,6 +168,7 @@ if (status === 'ready') {
 **Status**: ✅ PROVEN - Validated in POC at `extension.ts:testCopilotAutomation()`
 
 **How it works**:
+
 1. Focus Copilot Chat panel (wait 1000ms for UI to settle)
 2. Clear existing input (wait 300ms for selection to complete)
 3. Type prompt directly using `type` command (wait 500ms for text processing)
@@ -168,11 +177,12 @@ if (status === 'ready') {
 **User Experience**: Zero interaction required - true automation
 
 **Requirements**:
+
 - GitHub Copilot Chat extension (installed and active)
 - VS Code commands: `type`, `workbench.action.chat.submit`, `workbench.panel.chat.view.copilot.focus`, `editor.action.selectAll`
 - VS Code 1.85.0 or higher (for command availability)
   await vscode.commands.executeCommand(
-    "workbench.action.chat.openInEditor"
+  "workbench.action.chat.openInEditor"
   );
 
 ### Background Polling (Lazy Loading Solution)
@@ -182,6 +192,7 @@ if (status === 'ready') {
 **Solution**: Background polling with status updates instead of just-in-time activation
 
 **How it works**:
+
 1. **During FlightPath Initialization** (background polling starts)
    - Start polling immediately on extension activation
    - First check is passive (just check if active)
@@ -199,6 +210,7 @@ if (status === 'ready') {
    - Automatic retry offers if still waiting
 
 **Debug Logging**:
+
 ```
 � FlightPath: Starting background polling for Copilot availability...
 � FlightPath: Polling attempt 1/6
@@ -208,6 +220,7 @@ if (status === 'ready') {
 ```
 
 **Benefits**:
+
 - Transparent state - users always know what's happening
 - No false negatives during initialization period
 - Handles slow activation gracefully
@@ -216,6 +229,7 @@ if (status === 'ready') {
 - Manual retry available if needed
 
 **Workflow Execution Behavior**:
+
 - If `initializing`: Show "Please wait and try again"
 - If `waiting`: Show "Waiting for Copilot... (attempt X/6)"
 - If `unavailable`: Show setup requirements with retry option
@@ -239,6 +253,7 @@ if (status === 'ready') {
 ### Example Generated Prompt
 
 **Input Prompt**:
+
 ```json
 {
   "prompt": "Fix the error handling in this function",
@@ -250,6 +265,7 @@ if (status === 'ready') {
 ```
 
 **Generated Copilot Chat Prompt**:
+
 ```
 /fix #file:src/extension.ts #selection Fix the error handling in this function
 ```
@@ -261,27 +277,27 @@ if (status === 'ready') {
 ```typescript
 class CopilotIntegration {
   // Send prompt with direct automation
-  async sendPrompt(prompt: PromptItem): Promise<boolean>
-  
+  async sendPrompt(prompt: PromptItem): Promise<boolean>;
+
   // Get integration status
-  getStatus(): { available: boolean; message: string; strategy: string }
-  
+  getStatus(): { available: boolean; message: string; strategy: string };
+
   // Get capabilities
   getCapabilities(): {
     hasDirectAutomation: boolean;
     supportsZeroInteraction: boolean;
     currentStrategy: string;
-  }
-  
+  };
+
   // Set workflow progress
-  setWorkflowProgress(currentStep: number, totalSteps: number): void
-  
+  setWorkflowProgress(currentStep: number, totalSteps: number): void;
+
   // Test automation
-  async testAutomation(): Promise<boolean>
-  
+  async testAutomation(): Promise<boolean>;
+
   // Check if automation is available
-  isIntegrationAvailable(): boolean
-  isZeroInteractionSupported(): boolean
+  isIntegrationAvailable(): boolean;
+  isZeroInteractionSupported(): boolean;
 }
 ```
 
@@ -290,13 +306,13 @@ class CopilotIntegration {
 ```typescript
 class FlightPathManager {
   // Get Copilot status
-  getCopilotStatus(): { available: boolean; message: string; strategy: string }
-  
+  getCopilotStatus(): { available: boolean; message: string; strategy: string };
+
   // Test automation
-  async testCopilotAutomation(): Promise<boolean>
-  
+  async testCopilotAutomation(): Promise<boolean>;
+
   // Get capabilities
-  getCopilotCapabilities(): CopilotCapabilities
+  getCopilotCapabilities(): CopilotCapabilities;
 }
 ```
 
@@ -307,23 +323,29 @@ class FlightPathManager {
 **Note**: FlightPath now automatically activates Copilot extensions on first use. If automation still fails, try these steps:
 
 1. **Check Copilot Chat is installed**
+
    ```
    Extensions → Search for "GitHub Copilot Chat"
    ```
+
    - Must be installed (activation happens automatically)
    - Verify you're signed in to GitHub Copilot
 
 2. **Check automation status**
+
    ```
    Command Palette → "FlightPath: Show Copilot Integration Status"
    ```
+
    - Shows current automation strategy
    - Displays which commands are available
 
 3. **Test automation**
+
    ```
    Command Palette → "FlightPath: Test Automation"
    ```
+
    - Sends test message to verify automation works
    - Check Debug Console for detailed logs
 
@@ -339,14 +361,17 @@ class FlightPathManager {
 ### Common Issues
 
 **"Extension not installed or not active"**
+
 - **Cause**: Copilot Chat extension not installed or failed to activate
 - **Solution**: Install GitHub Copilot Chat extension and reload VS Code
 
 **"Required commands not found"**
+
 - **Cause**: VS Code version too old or commands disabled
 - **Solution**: Update to VS Code 1.85.0 or higher
 
 **"First run does nothing, second run works"**
+
 - **Cause**: This issue is now fixed! Extension activation now happens automatically
 - **Previous behavior**: Required manual Copilot interaction before automation worked
 - **Current behavior**: Works reliably on first execution
@@ -370,6 +395,7 @@ class FlightPathManager {
 ### Timing Delays
 
 The automation uses proven timing delays based on successful testing:
+
 - **1000ms** after focusing chat panel (allows UI to settle)
 - **300ms** after selecting text (allows selection to complete)
 - **500ms** after typing (allows text to be processed)
@@ -387,6 +413,7 @@ The automation uses proven timing delays based on successful testing:
 ### Clipboard-Based Verification & Streaming Detection
 
 **Key Features:**
+
 - **Submit Verification** - Verifies submit succeeded by checking if prompt appears in chat
   - Copy chat before submit → baseline
   - Submit → Copy chat after → current state
@@ -400,6 +427,7 @@ The automation uses proven timing delays based on successful testing:
   - 40 attempt maximum (20s timeout)
 
 **Benefits:**
+
 - ✅ **Reliable verification** - Know for certain prompts were sent and responses finished
 - ✅ **Handles race conditions** - Automatically detects and retries failed submits
 - ✅ **No polling timeout guesses** - Detects actual completion state
@@ -409,6 +437,7 @@ The automation uses proven timing delays based on successful testing:
 ### Background Polling for Copilot Availability
 
 **Key Features:**
+
 - Background polling system (5s intervals, 30s max)
 - Real-time status bar updates showing initialization progress
 - Workflow blocking until Copilot is confirmed ready
@@ -417,6 +446,7 @@ The automation uses proven timing delays based on successful testing:
 - Progressive activation strategy (passive → active)
 
 **Benefits:**
+
 - ✅ Users always know system state (no confusion about availability)
 - ✅ No "automation unavailable" errors when it's actually available
 - ✅ Handles slow Copilot activation gracefully
@@ -448,6 +478,7 @@ When contributing to the Copilot integration:
 ## Credits
 
 Implementation based on:
+
 - Validated proof-of-concept in `extension.ts:testCopilotAutomation()`
 - VS Code Extension API documentation
 - GitHub Copilot Chat command exploration

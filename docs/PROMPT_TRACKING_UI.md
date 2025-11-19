@@ -50,6 +50,7 @@ Create a bottom panel UI (alongside Terminal, Output, etc.) that provides:
 ```
 
 **Pros**:
+
 - Native VS Code TreeView with full theming support
 - Familiar UI pattern (like Test Explorer, GitLens)
 - Excellent for hierarchical workflow visualization
@@ -58,16 +59,18 @@ Create a bottom panel UI (alongside Terminal, Output, etc.) that provides:
 - Collapsible sections for clean organization
 
 **Cons**:
+
 - Limited space for detailed output/logs
 - Must open separate Output panel to see CLI responses (initially)
 - Tree structure might be overkill for single-prompt files
 
 **Implementation Details**:
+
 ```typescript
 // Register tree view
-const treeView = vscode.window.createTreeView('flightpath.tracker', {
+const treeView = vscode.window.createTreeView("flightpath.tracker", {
   treeDataProvider: new FlightPathTreeDataProvider(),
-  showCollapseAll: true
+  showCollapseAll: true,
 });
 
 // Tree item types:
@@ -78,22 +81,27 @@ const treeView = vscode.window.createTreeView('flightpath.tracker', {
 ```
 
 **Package.json contribution**:
+
 ```json
 {
   "contributes": {
     "viewsContainers": {
-      "panel": [{
-        "id": "flightpath",
-        "title": "FlightPath",
-        "icon": "resources/compass.svg"
-      }]
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "resources/compass.svg"
+        }
+      ]
     },
     "views": {
-      "flightpath": [{
-        "id": "flightpath.tracker",
-        "name": "Execution Tracker",
-        "type": "tree"
-      }]
+      "flightpath": [
+        {
+          "id": "flightpath.tracker",
+          "name": "Execution Tracker",
+          "type": "tree"
+        }
+      ]
     }
   }
 }
@@ -147,6 +155,7 @@ const treeView = vscode.window.createTreeView('flightpath.tracker', {
 ```
 
 **Pros**:
+
 - Fully customizable layout and styling
 - Rich visual progress indicators (progress bars, status icons)
 - Integrated CLI output viewer (no need to switch to Output panel!)
@@ -155,17 +164,19 @@ const treeView = vscode.window.createTreeView('flightpath.tracker', {
 - Beautiful, branded UI experience
 
 **Cons**:
+
 - More complex to implement and maintain
 - Must handle all theming manually
 - Requires HTML/CSS/JS alongside TypeScript
 - Webview performance overhead for very large outputs
 
 **Implementation Details**:
+
 ```typescript
 // Register webview view
 context.subscriptions.push(
   vscode.window.registerWebviewViewProvider(
-    'flightpath.dashboard',
+    "flightpath.dashboard",
     new FlightPathDashboardProvider(context),
     { webviewOptions: { retainContextWhenHidden: true } }
   )
@@ -179,22 +190,27 @@ context.subscriptions.push(
 ```
 
 **Package.json contribution**:
+
 ```json
 {
   "contributes": {
     "viewsContainers": {
-      "panel": [{
-        "id": "flightpath",
-        "title": "FlightPath",
-        "icon": "resources/compass.svg"
-      }]
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "resources/compass.svg"
+        }
+      ]
     },
     "views": {
-      "flightpath": [{
-        "type": "webview",
-        "id": "flightpath.dashboard",
-        "name": "Dashboard"
-      }]
+      "flightpath": [
+        {
+          "type": "webview",
+          "id": "flightpath.dashboard",
+          "name": "Dashboard"
+        }
+      ]
     }
   }
 }
@@ -231,6 +247,7 @@ context.subscriptions.push(
 ```
 
 **Pros**:
+
 - Best of both worlds: native tree navigation + rich details view
 - Tree for quick overview and selection
 - WebView for detailed output and formatted responses
@@ -238,40 +255,45 @@ context.subscriptions.push(
 - Flexible split layout
 
 **Cons**:
+
 - More complex implementation (two separate views)
 - Requires coordination between tree selection and webview updates
 - Takes more horizontal space in bottom panel
 - Two separate contribution points to maintain
 
 **Implementation Details**:
+
 ```typescript
 // Register both views
-const treeView = vscode.window.createTreeView('flightpath.tracker', {
-  treeDataProvider: new FlightPathTreeDataProvider()
+const treeView = vscode.window.createTreeView("flightpath.tracker", {
+  treeDataProvider: new FlightPathTreeDataProvider(),
 });
 
 const detailsView = vscode.window.registerWebviewViewProvider(
-  'flightpath.details',
+  "flightpath.details",
   new FlightPathDetailsProvider(context)
 );
 
 // Listen to tree selection changes
-treeView.onDidChangeSelection(selection => {
+treeView.onDidChangeSelection((selection) => {
   // Update details webview with selected item
   detailsViewProvider.showDetails(selection);
 });
 ```
 
 **Package.json contribution**:
+
 ```json
 {
   "contributes": {
     "viewsContainers": {
-      "panel": [{
-        "id": "flightpath",
-        "title": "FlightPath",
-        "icon": "resources/compass.svg"
-      }]
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "resources/compass.svg"
+        }
+      ]
     },
     "views": {
       "flightpath": [
@@ -343,6 +365,7 @@ treeView.onDidChangeSelection(selection => {
 ```
 
 **Pros**:
+
 - Simplest implementation - enhanced version of existing Output Channel
 - Already familiar to users (Output, Terminal paradigm)
 - Text-based so easy to copy/paste
@@ -350,21 +373,23 @@ treeView.onDidChangeSelection(selection => {
 - Can leverage existing OutputChannel with custom decorations
 
 **Cons**:
+
 - Limited interactivity (no clickable elements in output text)
 - Cannot show progress bars or rich UI components
 - Toolbar actions limited to VS Code's output channel capabilities
 - Less visual polish than webview options
 
 **Implementation Details**:
+
 ```typescript
 // Enhanced output channel with structured logging
 class FlightPathOutputChannel {
   private channel: vscode.OutputChannel;
-  
+
   constructor() {
     this.channel = vscode.window.createOutputChannel("FlightPath");
   }
-  
+
   showWorkflowHeader(fileName: string, promptCount: number) {
     this.channel.appendLine("═".repeat(60));
     this.channel.appendLine(`🚀 Executing: ${fileName}`);
@@ -373,14 +398,16 @@ class FlightPathOutputChannel {
     this.channel.appendLine("═".repeat(60));
     this.channel.appendLine("");
   }
-  
+
   showProgress(current: number, total: number) {
     const percentage = Math.round((current / total) * 100);
     const progressBar = "━".repeat(30);
-    this.channel.appendLine(`${progressBar} Progress: ${current}/${total} (${percentage}%)`);
+    this.channel.appendLine(
+      `${progressBar} Progress: ${current}/${total} (${percentage}%)`
+    );
     this.channel.appendLine("");
   }
-  
+
   // More structured output methods...
 }
 ```
@@ -407,11 +434,13 @@ class FlightPathOutputChannel {
 ### Progress Indicators
 
 **Text-based** (for Output Channel):
+
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/5 (40%)
 ```
 
 **Visual** (for WebView):
+
 ```html
 <div class="progress-bar">
   <div class="progress-fill" style="width: 40%">2/5</div>
@@ -421,12 +450,24 @@ class FlightPathOutputChannel {
 ### Color Coding (Themeable)
 
 ```css
-.status-success { color: var(--vscode-testing-iconPassed); }
-.status-error { color: var(--vscode-testing-iconFailed); }
-.status-pending { color: var(--vscode-descriptionForeground); }
-.status-running { color: var(--vscode-progressBar-background); }
-.prompt-text { background: var(--vscode-editor-background); }
-.response-text { background: var(--vscode-textCodeBlock-background); }
+.status-success {
+  color: var(--vscode-testing-iconPassed);
+}
+.status-error {
+  color: var(--vscode-testing-iconFailed);
+}
+.status-pending {
+  color: var(--vscode-descriptionForeground);
+}
+.status-running {
+  color: var(--vscode-progressBar-background);
+}
+.prompt-text {
+  background: var(--vscode-editor-background);
+}
+.response-text {
+  background: var(--vscode-textCodeBlock-background);
+}
 ```
 
 ---
@@ -491,6 +532,7 @@ class FlightPathOutputChannel {
 **Why**: Simplest to implement, reuses existing Output Channel infrastructure
 
 **Implementation**:
+
 1. Create structured output methods in `FlightPathManager`
 2. Add toolbar buttons via commands (Select File, Run, Pause, Stop)
 3. Format output with unicode symbols and ANSI colors
@@ -504,6 +546,7 @@ class FlightPathOutputChannel {
 **Why**: Native UI with better organization and interactivity
 
 **Implementation**:
+
 1. Create `FlightPathTreeDataProvider`
 2. Define tree item hierarchy (Files → Executions → Prompts → Results)
 3. Add inline action buttons (Run, Pause, etc.)
@@ -518,6 +561,7 @@ class FlightPathOutputChannel {
 **Why**: Rich output display for CLI responses
 
 **Implementation**:
+
 1. Create `FlightPathDetailsProvider` webview
 2. Design HTML/CSS layout with VS Code theme variables
 3. Implement bidirectional messaging (extension ↔ webview)
@@ -532,6 +576,7 @@ class FlightPathOutputChannel {
 **Why**: Complete tracking, analytics, and management experience
 
 **Implementation**:
+
 1. Replace tree with full webview dashboard
 2. Add file browser, execution history, analytics charts
 3. Implement inline Monaco editor for CLI output (syntax highlighting)
@@ -545,17 +590,17 @@ class FlightPathOutputChannel {
 
 ## 📊 Comparison Matrix
 
-| Feature | Design A (TreeView) | Design B (WebView) | Design C (Hybrid) | Design D (Output) |
-|---------|--------------------|--------------------|-------------------|-------------------|
-| **Implementation Time** | Medium | High | Very High | Low |
-| **Maintenance Complexity** | Low | Medium | High | Very Low |
-| **Visual Polish** | Good | Excellent | Excellent | Basic |
-| **Interactivity** | Good | Excellent | Excellent | Limited |
-| **CLI Output Display** | Limited | Excellent | Excellent | Good |
-| **Performance** | Excellent | Good | Good | Excellent |
-| **Themeable** | Automatic | Manual | Manual | Automatic |
-| **Familiar to Users** | Yes | No | Partial | Yes |
-| **Future Extensibility** | Medium | High | High | Low |
+| Feature                    | Design A (TreeView) | Design B (WebView) | Design C (Hybrid) | Design D (Output) |
+| -------------------------- | ------------------- | ------------------ | ----------------- | ----------------- |
+| **Implementation Time**    | Medium              | High               | Very High         | Low               |
+| **Maintenance Complexity** | Low                 | Medium             | High              | Very Low          |
+| **Visual Polish**          | Good                | Excellent          | Excellent         | Basic             |
+| **Interactivity**          | Good                | Excellent          | Excellent         | Limited           |
+| **CLI Output Display**     | Limited             | Excellent          | Excellent         | Good              |
+| **Performance**            | Excellent           | Good               | Good              | Excellent         |
+| **Themeable**              | Automatic           | Manual             | Manual            | Automatic         |
+| **Familiar to Users**      | Yes                 | No                 | Partial           | Yes               |
+| **Future Extensibility**   | Medium              | High               | High              | Low               |
 
 ---
 
@@ -564,6 +609,7 @@ class FlightPathOutputChannel {
 **Start with Design A (TreeView) + Enhanced Output Channel**
 
 **Rationale**:
+
 1. TreeView provides excellent navigation and status overview
 2. Enhanced Output Channel already exists for CLI output
 3. Low implementation complexity with high value
@@ -571,6 +617,7 @@ class FlightPathOutputChannel {
 5. Maintains VS Code conventions and familiarity
 
 **Migration Path**:
+
 - **Phase 1**: Enhanced Output Channel (immediate value)
 - **Phase 2**: Add TreeView for better organization
 - **Phase 3**: Add WebView details panel when we need richer output display

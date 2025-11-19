@@ -20,8 +20,9 @@ This issue is specific to `#selection` references and `#file:path:line-line` ref
 ## Expected Behavior
 
 All file references with line ranges should be attached to the context, similar to how multiple full file references work:
+
 - `#file:src/utils.ts:45-52` should be attached
-- `#file:src/helpers.ts:120-125` should be attached  
+- `#file:src/helpers.ts:120-125` should be attached
 - `#file:src/services.ts:89-94` should be attached
 
 ## Actual Behavior
@@ -33,9 +34,11 @@ All file references with line ranges should be attached to the context, similar 
 ## Additional Context
 
 **Works correctly:**
+
 - Multiple full file references: `#file:config.json #file:main.ts` - both files are attached
 
 **Fails:**
+
 - Multiple file references with line ranges: only the last one is attached
 - The `#selection` reference appears to have the same behavior when used multiple times
 
@@ -53,6 +56,7 @@ This significantly limits the ability to provide targeted context across multipl
 ## Impact
 
 Users cannot reference multiple specific code sections from different files in a single message, requiring workarounds such as:
+
 - Sending multiple separate messages
 - Manually copying code into the message
 - Using less precise full file references
@@ -61,6 +65,7 @@ Users cannot reference multiple specific code sections from different files in a
 ## Reproducibility
 
 This issue occurs consistently (100% reproducible) across different file types and projects. The behavior has been verified through:
+
 - Examination of AI responses that only reference the last attached file
 - Debug log inspection showing only one line-range attachment
 - Testing with 2, 3, and 4+ file references with line ranges

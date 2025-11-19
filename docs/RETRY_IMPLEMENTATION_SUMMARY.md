@@ -15,17 +15,19 @@ Successfully implemented the complete end condition retry mechanism for FlightPa
 ### 1. Type Definitions (`FlightPathTypes.ts`)
 
 #### Enhanced `EndCondition` Interface
+
 ```typescript
 export interface EndCondition {
   script: string;
   returns: string;
   timeout?: number;
-  maxRetries?: number;      // NEW: Maximum retry attempts (default: 0)
-  retryPrompt?: string;     // NEW: Template with placeholders
+  maxRetries?: number; // NEW: Maximum retry attempts (default: 0)
+  retryPrompt?: string; // NEW: Template with placeholders
 }
 ```
 
 #### Enhanced `PromptResult` Interface
+
 ```typescript
 export interface PromptResult {
   prompt: string;
@@ -33,29 +35,32 @@ export interface PromptResult {
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
-  retryCount?: number;      // NEW: Track retry attempts
-  scriptOutput?: string;    // NEW: Capture script output for debugging
+  retryCount?: number; // NEW: Track retry attempts
+  scriptOutput?: string; // NEW: Capture script output for debugging
 }
 ```
 
 ### 2. EndConditionEvaluator Updates
 
 #### Enhanced `EvaluationResult` Interface
+
 ```typescript
 export interface EvaluationResult {
   success: boolean;
-  stdout: string;           // NEW: Separate stdout
-  stderr: string;           // NEW: Separate stderr
-  result: string;           // Kept for backward compatibility
+  stdout: string; // NEW: Separate stdout
+  stderr: string; // NEW: Separate stderr
+  result: string; // Kept for backward compatibility
   error?: string;
   timeout?: boolean;
   duration: number;
-  exitCode?: number;        // NEW: Capture exit code
+  exitCode?: number; // NEW: Capture exit code
 }
 ```
 
 #### New Method: `buildRetryPrompt()`
+
 Replaces placeholders in retry prompt templates:
+
 - `{scriptOutput}` - stdout from script
 - `{errorOutput}` - stderr from script
 - `{expectedValue}` - expected validation value
@@ -66,11 +71,13 @@ Replaces placeholders in retry prompt templates:
 ### 3. PromptQueue Retry Tracking
 
 #### New State Variable
+
 ```typescript
 private currentRetryCount: number = 0;
 ```
 
 #### New Methods
+
 - `canRetry(prompt)` - Check if retry is allowed
 - `incrementRetryCount()` - Increment retry counter
 - `resetRetryCount()` - Reset counter on success or moving to next prompt
@@ -79,25 +86,32 @@ private currentRetryCount: number = 0;
 ### 4. FlightPathManager Retry Logic
 
 #### Core Method: `handleEndConditionResult()`
+
 Orchestrates the complete retry flow:
+
 1. Check if validation succeeded → continue
 2. Determine if execution error or validation failure
 3. Route to appropriate handler
 
 #### Error Path Handler: `handleExecutionError()`
+
 Handles cases where script fails to execute:
+
 - Script timeout
 - Script not found
 - Script execution error
 - Non-zero exit code
 
 User options:
+
 - Stop Workflow
 - Skip Condition
 - Open Script
 
 #### Happy Path Handler: `handleValidationFailure()`
+
 Handles validation failures (script succeeded but output doesn't match):
+
 1. Check if retry is available (`canRetry()`)
 2. If yes → build retry prompt and send to Copilot
 3. Wait for response
@@ -105,13 +119,17 @@ Handles validation failures (script succeeded but output doesn't match):
 5. Recursively handle result (continues until success or max retries)
 
 #### Max Retries Handler: `handleMaxRetriesExhausted()`
+
 When all retries are exhausted, user is prompted with options:
+
 - Stop Workflow
 - Continue Anyway (ignore validation)
 - Retry Once More (manual override)
 
 #### Template Builder: `buildRetryPrompt()`
+
 Builds retry prompts by:
+
 1. Using configured `retryPrompt` template
 2. Calling `EndConditionEvaluator.buildRetryPrompt()`
 3. Replacing all placeholders with actual values
@@ -120,6 +138,7 @@ Builds retry prompts by:
 ### 5. JSON Schema Updates
 
 Added new fields to `prompt-schema.json`:
+
 ```json
 "maxRetries": {
   "type": "number",
@@ -138,11 +157,13 @@ Added new fields to `prompt-schema.json`:
 ### 1. Happy Path vs Error Path Separation
 
 **Happy Path (Retry Eligible):**
+
 - Script executes successfully (exit code 0)
 - Output doesn't match expected value
 - → Triggers retry mechanism
 
 **Error Path (Not Retry Eligible):**
+
 - Script fails to execute
 - Script times out
 - Non-zero exit code
@@ -157,12 +178,12 @@ Scripts should **always exit with code 0**, even when validation fails:
 ```javascript
 // ✅ CORRECT
 if (testsPassed) {
-    console.log('true');
-    process.exit(0);
+  console.log("true");
+  process.exit(0);
 } else {
-    console.log('false');
-    console.log('Details: tests failed'); // For retry prompt
-    process.exit(0); // Still exit 0
+  console.log("false");
+  console.log("Details: tests failed"); // For retry prompt
+  process.exit(0); // Still exit 0
 }
 ```
 
@@ -190,7 +211,8 @@ User configures retry prompts as templates with placeholders:
 }
 ```
 
-**Rationale:** 
+**Rationale:**
+
 - User has full control over retry messaging
 - Flexible - can include as much/little context as needed
 - Predictable - no AI generation of retry prompts (deterministic)
@@ -199,11 +221,13 @@ User configures retry prompts as templates with placeholders:
 ## Workflow Integration
 
 ### Before Implementation
+
 ```
 Send Prompt → Wait for Response → Move to Next Prompt
 ```
 
 ### After Implementation
+
 ```
 Send Prompt → Wait for Response → Evaluate End Condition
                                           ↓
@@ -224,24 +248,32 @@ Send Prompt → Wait for Response → Evaluate End Condition
 ## Test Artifacts Created
 
 ### 1. Basic Retry Example
+
 **File:** `manual-test/test-retry.flightpath.json`
+
 - 2 prompts with retry configuration
 - Tests basic retry flow
 - Demonstrates placeholder usage
 
 ### 2. Comprehensive Example
+
 **File:** `manual-test/comprehensive-retry-example.flightpath.json`
+
 - Progressive refinement workflow
 - Multiple retry configurations
 - Rich retry prompts with formatting
 
 ### 3. Validation Scripts
+
 **Files:**
+
 - `manual-test/check_documentation.js` - Validates JSDoc comments
 - `manual-test/validate_email_tests.js` - Comprehensive test runner
 
 ### 4. Documentation Updates
+
 **File:** `manual-test/README.md`
+
 - Added "Testing Retry Mechanism" section
 - Documented all placeholders
 - Provided script design guidelines
@@ -250,6 +282,7 @@ Send Prompt → Wait for Response → Evaluate End Condition
 ## Example Usage
 
 ### Simple Test Retry
+
 ```json
 {
   "prompt": "Create tests for the add function",
@@ -263,7 +296,8 @@ Send Prompt → Wait for Response → Evaluate End Condition
 ```
 
 ### Detailed Retry with All Placeholders
-```json
+
+````json
 {
   "prompt": "Implement authentication",
   "endCondition": {
@@ -274,11 +308,12 @@ Send Prompt → Wait for Response → Evaluate End Condition
     "retryPrompt": "**Security Validation Failed** (Attempt {retryCount}/{maxRetries})\n\n**Expected:** `{expectedValue}`\n**Got:** `{actualValue}`\n\n**Issues Found:**\n```\n{scriptOutput}\n```\n\n**Errors:**\n```\n{errorOutput}\n```\n\nPlease fix the security issues above."
   }
 }
-```
+````
 
 ## Files Modified
 
 ### Core Implementation
+
 1. ✅ `src/types/FlightPathTypes.ts` - Type definitions
 2. ✅ `src/flightpath/EndConditionEvaluator.ts` - Evaluation and template logic
 3. ✅ `src/flightpath/PromptQueue.ts` - Retry counter tracking
@@ -286,6 +321,7 @@ Send Prompt → Wait for Response → Evaluate End Condition
 5. ✅ `schemas/prompt-schema.json` - Schema updates
 
 ### Test & Documentation
+
 6. ✅ `manual-test/test-retry.flightpath.json` - Basic example
 7. ✅ `manual-test/comprehensive-retry-example.flightpath.json` - Advanced example
 8. ✅ `manual-test/check_documentation.js` - Validation script
@@ -295,18 +331,21 @@ Send Prompt → Wait for Response → Evaluate End Condition
 ## Testing Checklist
 
 ### Unit Testing Needed
+
 - [ ] Template placeholder replacement
 - [ ] Retry count tracking and reset
 - [ ] Happy path vs error path detection
 - [ ] Max retries boundary conditions
 
 ### Integration Testing Needed
+
 - [ ] Full retry flow with mock Copilot
 - [ ] Recursive retry handling
 - [ ] Max retries user interaction
 - [ ] Script output capture and inclusion
 
 ### Manual Testing Scenarios
+
 - [ ] Basic retry with test failures
 - [ ] Retry with compilation errors
 - [ ] Max retries exhausted
@@ -342,12 +381,14 @@ Send Prompt → Wait for Response → Evaluate End Condition
 ## Next Steps (Future Enhancements)
 
 ### Phase 2: Enhanced Features
+
 - [ ] Exponential backoff between retries
 - [ ] Multiple end conditions per prompt
 - [ ] Conditional retry strategies based on failure type
 - [ ] Retry history tracking and analytics
 
 ### Phase 3: Advanced Features
+
 - [ ] AI-powered retry prompt generation
 - [ ] Visual retry progress indicators
 - [ ] Script output parsing and structured error extraction
@@ -363,7 +404,7 @@ The end condition retry mechanism is **fully implemented** and **ready for testi
 ✅ FlightPathManager orchestrates complete retry flow  
 ✅ JSON schema updated with new fields  
 ✅ Test examples created  
-✅ Documentation updated  
+✅ Documentation updated
 
 The implementation follows all design guidelines from `END_CONDITION_HANDLING.md` and `END_CONDITION_RETRY_DESIGN.md`, focusing on the happy path (validation failures) while properly handling error cases.
 

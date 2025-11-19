@@ -822,7 +822,7 @@ focusPreviousRenameSuggestion
 focusSuggestion
 getContextKeyInfo
 git-base.api.getRemoteSources
-git._syncAll
+git.\_syncAll
 git.acceptMerge
 git.addRemote
 git.api.getRemoteSources
@@ -2060,7 +2060,7 @@ list.triggerTypeNavigation
 loadedScripts.collapse
 markdown.extension.checkTaskList
 markdown.extension.closePreview
-markdown.extension.editing._wrapBy
+markdown.extension.editing.\_wrapBy
 markdown.extension.editing.paste
 markdown.extension.editing.toggleBold
 markdown.extension.editing.toggleCodeBlock
@@ -3938,7 +3938,7 @@ workbench.profiles.actions.exportProfile
 workbench.profiles.actions.help
 workbench.profiles.actions.manageProfiles
 workbench.profiles.actions.newWindowWithProfile
-workbench.profiles.actions.profileEntry.__default__profile__
+workbench.profiles.actions.profileEntry.**default**profile\_\_
 workbench.profiles.actions.resetWorkspaces
 workbench.profiles.actions.switchProfile
 workbench.remote.action.closeUnusedPorts

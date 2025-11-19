@@ -2,11 +2,12 @@
 
 **Status**: Planning Phase  
 **Date**: November 5, 2025  
-**Author**: Nathan  
+**Author**: Nathan
 
 ## Executive Summary
 
 Integrate GitHub Copilot CLI as an alternative to the chat window automation, providing:
+
 - **Deterministic completion detection** (no polling, streaming detection, or tool callbacks needed)
 - **Clean output parsing** (structured response format with usage statistics)
 - **Simpler architecture** (child process execution vs. complex UI automation)
@@ -52,6 +53,7 @@ Integrate GitHub Copilot CLI as an alternative to the chat window automation, pr
 ## CLI Advantages
 
 ### Deterministic Execution
+
 ```bash
 $ copilot -p "Fix bug in main.js" --allow-all-tools
 [Response text here]
@@ -67,6 +69,7 @@ Total code changes:    0 lines added, 0 lines removed
 - **No UI timing issues** - Pure command execution
 
 ### Advanced Features
+
 - `--add-dir <directory>` - Control file access permissions
 - `--allow-all-tools` / `--allow-tool` / `--deny-tool` - Fine-grained tool control
 - `--model <model>` - Choose AI model (claude-sonnet-4.5, gpt-5, etc.)
@@ -85,26 +88,30 @@ abstract class CopilotIntegration {
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
   protected totalSteps: number = 0;
-  
+
   // Shared event emitters
   protected statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
   public readonly onDidChangeStatus = this.statusChangeEmitter.event;
-  
+
   protected responseCompleteEmitter = new vscode.EventEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
-  
+
   // Abstract methods (implemented by subclasses)
   abstract initialize(): Promise<void>;
   abstract sendPrompt(prompt: PromptItem): Promise<boolean>;
-  abstract getStatus(): { available: boolean; message: string; strategy: string };
+  abstract getStatus(): {
+    available: boolean;
+    message: string;
+    strategy: string;
+  };
   abstract isIntegrationAvailable(): boolean;
-  
+
   // Shared utility methods
   protected async buildPromptText(prompt: PromptItem): Promise<string> {
     // Common prompt building logic (without tool instruction XML)
     return prompt.prompt.trim();
   }
-  
+
   setWorkflowProgress(currentStep: number, totalSteps: number): void {
     this.workflowStep = currentStep;
     this.totalSteps = totalSteps;
@@ -114,20 +121,23 @@ abstract class CopilotIntegration {
 // CLI-based implementation (NEW)
 class CopilotCommandLineIntegration extends CopilotIntegration {
   private sessionId?: string; // For multi-turn conversations
-  
+
   async initialize(): Promise<void> {
     // Check if copilot CLI is available
     // Much simpler than chat polling!
   }
-  
+
   async sendPrompt(prompt: PromptItem): Promise<boolean> {
     // Execute: copilot -p "<prompt>" --allow-all-tools
     // Parse output
     // Fire responseCompleteEmitter with response text
     // Return true/false based on exit code
   }
-  
-  async sendPromptWithContext(prompt: PromptItem, sessionId?: string): Promise<boolean> {
+
+  async sendPromptWithContext(
+    prompt: PromptItem,
+    sessionId?: string
+  ): Promise<boolean> {
     // Use --resume to continue conversation
   }
 }
@@ -137,22 +147,28 @@ class CopilotChatIntegration extends CopilotIntegration {
   // All existing chat automation code
   private isToolRegistered: boolean = false;
   private toolCalledForCurrentPrompt: boolean = false;
-  
+
   private readonly TOOL_INSTRUCTION = `...`; // XML wrapper for tool call
-  
+
   async initialize(): Promise<void> {
     // Existing background polling logic
     await this.startBackgroundPolling();
   }
-  
+
   async sendPrompt(prompt: PromptItem): Promise<boolean> {
     // Existing direct automation logic
     // Focus → Clear → Type → Submit → Verify → Wait for tool + streaming
   }
-  
-  private registerResponseTool(): void { /* ... */ }
-  private async waitForCopilotToFinishStreaming(): Promise<boolean> { /* ... */ }
-  private async submitWithRetry(): Promise<boolean> { /* ... */ }
+
+  private registerResponseTool(): void {
+    /* ... */
+  }
+  private async waitForCopilotToFinishStreaming(): Promise<boolean> {
+    /* ... */
+  }
+  private async submitWithRetry(): Promise<boolean> {
+    /* ... */
+  }
   // ... all other existing chat-specific methods
 }
 ```
@@ -163,16 +179,21 @@ class CopilotChatIntegration extends CopilotIntegration {
 // In FlightPathManager.ts
 class FlightPathManager {
   private copilotIntegration: CopilotIntegration;
-  
+
   constructor(context: vscode.ExtensionContext) {
     // Factory method based on user setting
     this.copilotIntegration = this.createCopilotIntegration(context);
   }
-  
-  private createCopilotIntegration(context: vscode.ExtensionContext): CopilotIntegration {
+
+  private createCopilotIntegration(
+    context: vscode.ExtensionContext
+  ): CopilotIntegration {
     const config = vscode.workspace.getConfiguration("flightpath");
-    const integrationMode = config.get<string>("copilotIntegrationMode", "chat");
-    
+    const integrationMode = config.get<string>(
+      "copilotIntegrationMode",
+      "chat"
+    );
+
     switch (integrationMode) {
       case "cli":
         return new CopilotCommandLineIntegration(context);
@@ -189,17 +210,20 @@ class FlightPathManager {
 ### Phase 1: Architecture Refactoring (Breaking Changes OK - Pre-release)
 
 #### Step 1.1: Create Base Class
+
 - [ ] Create `src/flightpath/base/CopilotIntegrationBase.ts`
 - [ ] Define abstract class with shared functionality
 - [ ] Move common code from current CopilotIntegration.ts
 - [ ] Define abstract methods that subclasses must implement
 
 **Key Decisions**:
+
 - Abstract methods: `initialize()`, `sendPrompt()`, `getStatus()`, `isIntegrationAvailable()`
 - Shared methods: `buildPromptText()`, `setWorkflowProgress()`, event emitters
 - Response complete event: Fire with **response text** (CLI provides this directly!)
 
 #### Step 1.2: Refactor Chat Integration
+
 - [ ] Create `src/flightpath/chat/CopilotChatIntegration.ts`
 - [ ] Extend `CopilotIntegrationBase`
 - [ ] Move all existing chat automation code
@@ -207,12 +231,14 @@ class FlightPathManager {
 - [ ] Update imports in dependent files
 
 **Migration Strategy**:
+
 ```typescript
 // OLD: import { CopilotIntegration } from "./CopilotIntegration";
 // NEW: import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 ```
 
 #### Step 1.3: Create CLI Integration
+
 - [ ] Create `src/flightpath/cli/CopilotCommandLineIntegration.ts`
 - [ ] Extend `CopilotIntegrationBase`
 - [ ] Implement simple CLI execution via `child_process.spawn()`
@@ -220,6 +246,7 @@ class FlightPathManager {
 - [ ] Fire `responseCompleteEmitter` with parsed response text
 
 #### Step 1.4: Add Factory Pattern
+
 - [ ] Update `FlightPathManager.ts` to use factory method
 - [ ] Add new setting: `flightpath.copilotIntegrationMode`
 - [ ] Support dynamic switching (requires reload)
@@ -227,60 +254,68 @@ class FlightPathManager {
 ### Phase 2: CLI Implementation Details
 
 #### Step 2.1: Core CLI Execution
+
 ```typescript
 class CopilotCommandLineIntegration extends CopilotIntegrationBase {
   private async executeCopilotCommand(
     prompt: string,
     options: CopilotCliOptions = {}
   ): Promise<CopilotCliResult> {
-    const args = ['-p', prompt, '--allow-all-tools'];
-    
+    const args = ["-p", prompt, "--allow-all-tools"];
+
     // Add optional flags
     if (options.addDirs) {
-      options.addDirs.forEach(dir => args.push('--add-dir', dir));
+      options.addDirs.forEach((dir) => args.push("--add-dir", dir));
     }
     if (options.model) {
-      args.push('--model', options.model);
+      args.push("--model", options.model);
     }
     if (options.resumeSession) {
-      args.push('--resume', options.resumeSession);
+      args.push("--resume", options.resumeSession);
     }
-    
+
     // Execute command
-    const { stdout, stderr, exitCode } = await this.spawnProcess('copilot', args);
-    
+    const { stdout, stderr, exitCode } = await this.spawnProcess(
+      "copilot",
+      args
+    );
+
     // Parse output
     const { response, statistics } = this.parseCliOutput(stdout);
-    
+
     return {
       success: exitCode === 0,
       response,
       statistics,
-      error: stderr
+      error: stderr,
     };
   }
-  
-  private parseCliOutput(output: string): { response: string; statistics: string } {
+
+  private parseCliOutput(output: string): {
+    response: string;
+    statistics: string;
+  } {
     // Split on statistics section (starts with "Total usage est:")
     const parts = output.split(/\n\n(?=Total usage est:)/);
-    
+
     return {
-      response: parts[0]?.trim() || '',
-      statistics: parts[1]?.trim() || ''
+      response: parts[0]?.trim() || "",
+      statistics: parts[1]?.trim() || "",
     };
   }
 }
 ```
 
 #### Step 2.2: Availability Detection
+
 ```typescript
 async initialize(): Promise<void> {
   console.log("🔍 Checking Copilot CLI availability...");
-  
+
   try {
     // Simple check: run `copilot --version`
     const { exitCode } = await this.spawnProcess('copilot', ['--version']);
-    
+
     if (exitCode === 0) {
       console.log("✅ Copilot CLI available");
       this.isAvailable = true;
@@ -299,28 +334,29 @@ async initialize(): Promise<void> {
 ```
 
 #### Step 2.3: Prompt Execution with Response Extraction
+
 ```typescript
 async sendPrompt(prompt: PromptItem): Promise<boolean> {
   try {
     console.log("🚀 Sending prompt via Copilot CLI...");
-    
+
     // Build prompt text (no XML tool instruction needed!)
     const promptText = await this.buildPromptText(prompt);
-    
+
     // Execute CLI command
     const result = await this.executeCopilotCommand(promptText, {
       addDirs: this.getWorkspaceDirs(),
       model: this.getConfiguredModel(),
       resumeSession: this.sessionId
     });
-    
+
     if (result.success) {
       console.log("✅ Copilot CLI completed successfully");
       console.log(`📊 Response: ${result.response.substring(0, 200)}...`);
-      
+
       // Fire response complete event WITH THE ACTUAL RESPONSE TEXT!
       this.responseCompleteEmitter.fire(result.response);
-      
+
       return true;
     } else {
       console.error("❌ Copilot CLI failed:", result.error);
@@ -334,6 +370,7 @@ async sendPrompt(prompt: PromptItem): Promise<boolean> {
 ```
 
 #### Step 2.4: Session Management (Multi-turn Conversations)
+
 ```typescript
 private sessionId?: string;
 
@@ -356,6 +393,7 @@ async getCurrentSession(): Promise<string | undefined> {
 ### Phase 3: Configuration & Settings
 
 #### Step 3.1: Add Settings to package.json
+
 ```json
 {
   "flightpath.copilotIntegrationMode": {
@@ -371,7 +409,12 @@ async getCurrentSession(): Promise<string | undefined> {
   },
   "flightpath.copilotCliModel": {
     "type": "string",
-    "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
+    "enum": [
+      "claude-sonnet-4.5",
+      "claude-sonnet-4",
+      "claude-haiku-4.5",
+      "gpt-5"
+    ],
     "default": "claude-sonnet-4.5",
     "description": "AI model to use with Copilot CLI"
   },
@@ -395,6 +438,7 @@ async getCurrentSession(): Promise<string | undefined> {
 ```
 
 #### Step 3.2: Configuration Helper Class
+
 ```typescript
 // src/flightpath/cli/CopilotCliConfig.ts
 export class CopilotCliConfig {
@@ -403,27 +447,28 @@ export class CopilotCliConfig {
       .getConfiguration("flightpath")
       .get<string>("copilotCliModel", "claude-sonnet-4.5");
   }
-  
+
   static getAllowedDirs(): string[] {
     const configured = vscode.workspace
       .getConfiguration("flightpath")
       .get<string[]>("copilotCliAllowedDirs", []);
-    
+
     // Always include workspace folders
-    const workspaceDirs = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [];
-    
+    const workspaceDirs =
+      vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) || [];
+
     return [...workspaceDirs, ...configured];
   }
-  
+
   static getToolPermissionArgs(): string[] {
     const mode = vscode.workspace
       .getConfiguration("flightpath")
       .get<string>("copilotCliToolPermissions", "allowAll");
-    
+
     if (mode === "allowAll") {
       return ["--allow-all-tools"];
     }
-    
+
     // TODO: Add custom tool permission configuration
     return ["--allow-all-tools"];
   }
@@ -433,6 +478,7 @@ export class CopilotCliConfig {
 ### Phase 4: Response Handling Updates
 
 #### Step 4.1: Update FlightPathManager
+
 Since CLI provides response text directly, we can enhance end condition evaluation:
 
 ```typescript
@@ -443,7 +489,7 @@ private async waitForCopilotResponse(timeout: number = 300000): Promise<string> 
       disposable.dispose();
       reject(new Error(`Response timeout after ${timeout}ms`));
     }, timeout);
-    
+
     const disposable = this.copilotIntegration.onResponseComplete(
       (responseText: string) => {
         clearTimeout(timeoutHandle);
@@ -461,18 +507,19 @@ private async evaluateEndCondition(
   responseText: string
 ): Promise<boolean> {
   if (!prompt.endCondition) return true;
-  
+
   // Pass response text to end condition script as environment variable
   const result = await this.endConditionEvaluator.evaluate(
     prompt.endCondition,
     { COPILOT_RESPONSE: responseText }
   );
-  
+
   return result;
 }
 ```
 
 #### Step 4.2: Update Event Signature
+
 ```typescript
 // Base class event signature change
 protected responseCompleteEmitter = new vscode.EventEmitter<string>();
@@ -487,6 +534,7 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ### Phase 5: Testing & Validation
 
 #### Step 5.1: Unit Tests
+
 - [ ] Test CLI command building with various options
 - [ ] Test output parsing (response vs. statistics)
 - [ ] Test error handling (exit codes, stderr)
@@ -494,12 +542,14 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 - [ ] Test configuration loading
 
 #### Step 5.2: Integration Tests
+
 - [ ] Test CLI availability detection
 - [ ] Test full prompt execution flow
 - [ ] Test switching between chat and CLI modes
 - [ ] Test with real Copilot CLI commands
 
 #### Step 5.3: Manual Testing Checklist
+
 - [ ] Single prompt execution (CLI mode)
 - [ ] Multi-prompt workflow (CLI mode)
 - [ ] End condition evaluation with CLI responses
@@ -511,12 +561,14 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ### Phase 6: Documentation Updates
 
 #### Step 6.1: User Documentation
+
 - [ ] Update README.md with CLI mode instructions
 - [ ] Add CLI installation guide
 - [ ] Document settings configuration
 - [ ] Add troubleshooting section
 
 #### Step 6.2: Developer Documentation
+
 - [ ] Update ARCHITECTURE.md with new class hierarchy
 - [ ] Document base class design and extension points
 - [ ] Add CLI integration implementation details
@@ -525,6 +577,7 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ## Benefits Summary
 
 ### For Users
+
 ✅ **More Reliable**: No UI timing issues or race conditions  
 ✅ **Faster Setup**: CLI check is instant vs. 30s polling  
 ✅ **Better Debugging**: CLI logs and output are structured  
@@ -533,30 +586,36 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ✅ **No UI Dependencies**: Works in headless environments (future: CI/CD pipelines)
 
 ### For Developers
+
 ✅ **Simpler Code**: CLI integration ~200 lines vs. Chat ~1000 lines  
 ✅ **No Tool Registration**: No Language Model Tool complexity  
 ✅ **No Streaming Detection**: Command returns when complete  
 ✅ **No Submit Retry**: No clipboard verification needed  
 ✅ **Clean Architecture**: Base class enables future integrations  
-✅ **CLI-First Future**: Opens path for standalone CLI-only FlightPath variant  
+✅ **CLI-First Future**: Opens path for standalone CLI-only FlightPath variant
 
 ## Risks & Mitigation
 
 ### Risk 1: CLI Not Installed
+
 **Mitigation**: Graceful fallback to chat mode with clear error message and installation instructions
 
 ### Risk 2: CLI API Changes
+
 **Mitigation**: Version detection and compatibility checks; maintain chat mode as stable fallback
 
 ### Risk 3: CLI Performance
+
 **Mitigation**: Benchmark against chat mode; use `--stream on` if available in future
 
 ### Risk 4: Breaking Changes During Refactor
+
 **Mitigation**: Pre-release status means we can break things; thorough testing before 1.0
 
 ## Open Questions & Decisions Needed
 
 ### Architecture Questions
+
 1. **Base class name**: `CopilotIntegrationBase` vs. `CopilotIntegration` (keep current name)?
    - **✅ DECISION**: Keep `CopilotIntegration` as base, rename current to `CopilotChatIntegration`
 
@@ -576,6 +635,7 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
    - Long-term vision: CLI-first architecture, potentially CLI-only FlightPath variant
 
 ### Implementation Questions
+
 1. **Process management**: Should we use `child_process.spawn()` or `child_process.exec()`?
    - **Recommendation**: Use `spawn()` for better stream handling and large outputs
 
@@ -591,12 +651,14 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ## Success Criteria
 
 ### MVP (Minimum Viable Product)
+
 - [ ] CLI mode works for single prompts
 - [ ] Chat mode still works (no regression)
 - [ ] User can switch between modes via settings
 - [ ] Clear error messages when CLI not available
 
 ### Full Feature Set
+
 - [ ] Session support for multi-turn conversations
 - [ ] Response text available for end condition scripts
 - [ ] Model selection per workflow
@@ -604,6 +666,7 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 - [ ] Comprehensive error handling and user feedback
 
 ### Quality Metrics
+
 - [ ] CLI integration code < 300 lines (vs. 1000+ for chat)
 - [ ] No background polling needed
 - [ ] Zero clipboard operations
@@ -636,24 +699,28 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ### Why CLI-First Makes Sense
 
 **1. Control & Flexibility**
+
 - Model selection per workflow (not possible with chat)
 - Fine-grained tool permissions
 - Directory access control
 - Session management for complex workflows
 
 **2. Reliability**
+
 - Deterministic completion (no timing/polling heuristics)
 - Structured output format
 - Clear error codes and messages
 - No UI state dependencies
 
 **3. Extensibility**
+
 - Headless operation (CI/CD pipelines, automated workflows)
 - CLI-only FlightPath variant (lightweight, no VS Code dependency)
 - Integration with other CLI tools
 - Scriptable workflows
 
 **4. Developer Experience**
+
 - Simpler codebase (5x less complexity)
 - Easier to debug and maintain
 - Clear separation of concerns
@@ -662,6 +729,7 @@ protected responseCompleteEmitter = new vscode.EventEmitter<string>();
 ### Future Possibilities with CLI-First
 
 **Standalone CLI FlightPath**
+
 ```bash
 # Hypothetical future CLI-only FlightPath
 flightpath run workflow.flightpath.json
@@ -670,6 +738,7 @@ flightpath session resume last
 ```
 
 **CI/CD Integration**
+
 ```yaml
 # GitHub Actions workflow
 - name: Run FlightPath Analysis
@@ -677,6 +746,7 @@ flightpath session resume last
 ```
 
 **IDE-Agnostic**
+
 - Core logic works anywhere Copilot CLI is installed
 - VS Code extension becomes one interface among many
 - Potential JetBrains, Vim, Emacs integrations
@@ -692,6 +762,7 @@ flightpath session resume last
 ## Appendix: CLI Command Reference
 
 ### Basic Usage
+
 ```bash
 # Execute prompt
 copilot -p "Fix bug in main.js" --allow-all-tools
@@ -707,6 +778,7 @@ copilot --resume --allow-all-tools
 ```
 
 ### Tool Permissions
+
 ```bash
 # Allow all tools
 copilot --allow-all-tools
@@ -719,6 +791,7 @@ copilot --allow-all-tools --deny-tool 'shell(rm:*)'
 ```
 
 ### Output Format
+
 ```
 [Response text here - multiple lines possible]
 [Empty line separator]

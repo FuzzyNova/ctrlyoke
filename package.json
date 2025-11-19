@@ -359,7 +359,10 @@
     },
     "jsonValidation": [
       {
-        "fileMatch": ["**/*.prompt.json", "**/*.flightpath.json"],
+        "fileMatch": [
+          "**/*.prompt.json",
+          "**/*.flightpath.json"
+        ],
         "url": "./schemas/prompt-schema.json"
       }
     ],
@@ -387,7 +390,9 @@
     "test:watch": "npm run compile && npm test -- --watch",
     "test:coverage": "nyc npm test",
     "lint": "eslint src --ext ts",
-    "format": "prettier --write ."
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

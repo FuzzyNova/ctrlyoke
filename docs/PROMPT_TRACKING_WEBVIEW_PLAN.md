@@ -23,7 +23,8 @@ Build a WebView-based tracking UI that provides:
 ## 📐 UI Layout
 
 **Wide Panel (>= 800px)** - Side-by-side layout:
-```
+
+````
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
 │ FlightPath                                              [CLI ▼] [▶][⏸][⏹]           │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
@@ -52,9 +53,10 @@ Build a WebView-based tracking UI that provides:
 │ │                              │ 📊 Tokens: 1,234 prompt / 2,456 completion       │ │
 │ └──────────────────────────────┴──────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────────────────┘
-```
+````
 
 **Narrow Panel (< 800px)** - Stacked layout:
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ FlightPath                                    [CLI ▼] [▶][⏸][⏹] │
@@ -107,17 +109,23 @@ Build a WebView-based tracking UI that provides:
 ### Message Protocol (Extension ↔ WebView)
 
 **Extension → WebView** (State updates):
+
 ```typescript
-type MessageToWebview = 
-  | { type: 'init', data: DashboardState }
-  | { type: 'fileSelected', fileName: string, prompts: PromptStep[] }
-  | { type: 'executionStarted', fileName: string, totalSteps: number }
-  | { type: 'progressUpdate', current: number, total: number }
-  | { type: 'stepStatusChanged', stepIndex: number, status: StepStatus, details?: StepDetails }
-  | { type: 'cliOutput', stepIndex: number, output: CliOutputData };
+type MessageToWebview =
+  | { type: "init"; data: DashboardState }
+  | { type: "fileSelected"; fileName: string; prompts: PromptStep[] }
+  | { type: "executionStarted"; fileName: string; totalSteps: number }
+  | { type: "progressUpdate"; current: number; total: number }
+  | {
+      type: "stepStatusChanged";
+      stepIndex: number;
+      status: StepStatus;
+      details?: StepDetails;
+    }
+  | { type: "cliOutput"; stepIndex: number; output: CliOutputData };
 
 interface StepStatus {
-  state: 'pending' | 'running' | 'completed' | 'failed';
+  state: "pending" | "running" | "completed" | "failed";
   message?: string;
   duration?: number;
   endConditionResult?: EndConditionResult;
@@ -132,15 +140,16 @@ interface CliOutputData {
 ```
 
 **WebView → Extension** (User actions):
+
 ```typescript
 type MessageToExtension =
-  | { type: 'selectFile' }
-  | { type: 'run' }
-  | { type: 'pause' }
-  | { type: 'resume' }
-  | { type: 'stop' }
-  | { type: 'showOutput', stepIndex: number }
-  | { type: 'ready' }; // Webview loaded
+  | { type: "selectFile" }
+  | { type: "run" }
+  | { type: "pause" }
+  | { type: "resume" }
+  | { type: "stop" }
+  | { type: "showOutput"; stepIndex: number }
+  | { type: "ready" }; // Webview loaded
 ```
 
 ---
@@ -155,18 +164,22 @@ Add view container and view registration:
 {
   "contributes": {
     "viewsContainers": {
-      "panel": [{
-        "id": "flightpath",
-        "title": "FlightPath",
-        "icon": "$(rocket)"
-      }]
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "$(rocket)"
+        }
+      ]
     },
     "views": {
-      "flightpath": [{
-        "type": "webview",
-        "id": "flightpath.dashboard",
-        "name": "Dashboard"
-      }]
+      "flightpath": [
+        {
+          "type": "webview",
+          "id": "flightpath.dashboard",
+          "name": "Dashboard"
+        }
+      ]
     }
   }
 }
@@ -177,8 +190,8 @@ Add view container and view registration:
 Create `src/ui/FlightPathDashboardProvider.ts`:
 
 ```typescript
-import * as vscode from 'vscode';
-import * as path from 'path';
+import * as vscode from "vscode";
+import * as path from "path";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -195,14 +208,14 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'out', 'ui', 'webview')
-      ]
+        vscode.Uri.joinPath(this.context.extensionUri, "out", "ui", "webview"),
+      ],
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
 
     // Handle messages from webview
-    webviewView.webview.onDidReceiveMessage(message => {
+    webviewView.webview.onDidReceiveMessage((message) => {
       this.handleWebviewMessage(message);
     });
 
@@ -212,49 +225,49 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private handleWebviewMessage(message: any): void {
     switch (message.type) {
-      case 'ready':
+      case "ready":
         this.sendInitialState();
         break;
-      case 'selectFile':
-        vscode.commands.executeCommand('flightpath.selectPromptFile');
+      case "selectFile":
+        vscode.commands.executeCommand("flightpath.selectPromptFile");
         break;
-      case 'run':
-        vscode.commands.executeCommand('flightpath.run');
+      case "run":
+        vscode.commands.executeCommand("flightpath.run");
         break;
-      case 'pause':
-        vscode.commands.executeCommand('flightpath.pause');
+      case "pause":
+        vscode.commands.executeCommand("flightpath.pause");
         break;
-      case 'resume':
-        vscode.commands.executeCommand('flightpath.resume');
+      case "resume":
+        vscode.commands.executeCommand("flightpath.resume");
         break;
-      case 'stop':
-        vscode.commands.executeCommand('flightpath.stop');
+      case "stop":
+        vscode.commands.executeCommand("flightpath.stop");
         break;
-      case 'showOutput':
-        vscode.commands.executeCommand('flightpath.showOutputPanel');
+      case "showOutput":
+        vscode.commands.executeCommand("flightpath.showOutputPanel");
         break;
     }
   }
 
   // Public methods to send updates from FlightPathManager
   public updateFileSelected(fileName: string, prompts: any[]): void {
-    this.postMessage({ type: 'fileSelected', fileName, prompts });
+    this.postMessage({ type: "fileSelected", fileName, prompts });
   }
 
   public updateExecutionStarted(fileName: string, totalSteps: number): void {
-    this.postMessage({ type: 'executionStarted', fileName, totalSteps });
+    this.postMessage({ type: "executionStarted", fileName, totalSteps });
   }
 
   public updateProgress(current: number, total: number): void {
-    this.postMessage({ type: 'progressUpdate', current, total });
+    this.postMessage({ type: "progressUpdate", current, total });
   }
 
   public updateStepStatus(stepIndex: number, status: any, details?: any): void {
-    this.postMessage({ type: 'stepStatusChanged', stepIndex, status, details });
+    this.postMessage({ type: "stepStatusChanged", stepIndex, status, details });
   }
 
   public updateCliOutput(stepIndex: number, output: any): void {
-    this.postMessage({ type: 'cliOutput', stepIndex, output });
+    this.postMessage({ type: "cliOutput", stepIndex, output });
   }
 
   private postMessage(message: any): void {
@@ -263,7 +276,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private sendInitialState(): void {
     // Get current state from FlightPathManager and send to webview
-    this.postMessage({ type: 'init', data: this.getCurrentState() });
+    this.postMessage({ type: "init", data: this.getCurrentState() });
   }
 
   private getCurrentState(): any {
@@ -271,18 +284,30 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     return {
       fileName: null,
       prompts: [],
-      executionState: 'idle',
+      executionState: "idle",
       currentStep: 0,
-      totalSteps: 0
+      totalSteps: 0,
     };
   }
 
   private getHtmlContent(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'out', 'ui', 'webview', 'dashboard.js')
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview",
+        "dashboard.js"
+      )
     );
     const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, 'out', 'ui', 'webview', 'dashboard.css')
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview",
+        "dashboard.css"
+      )
     );
 
     return `<!DOCTYPE html>
@@ -339,72 +364,76 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 Create `src/ui/webview/dashboard.js`:
 
 ```javascript
-(function() {
+(function () {
   const vscode = acquireVsCodeApi();
 
   // State management
   let state = {
     fileName: null,
     prompts: [],
-    executionState: 'idle',
+    executionState: "idle",
     currentStep: 0,
     totalSteps: 0,
-    cliOutputs: {}
+    cliOutputs: {},
   };
 
   // DOM elements
   const elements = {
-    fileName: document.getElementById('file-name'),
-    changeFileBtn: document.getElementById('change-file'),
-    runBtn: document.getElementById('btn-run'),
-    pauseBtn: document.getElementById('btn-pause'),
-    stopBtn: document.getElementById('btn-stop'),
-    progressContainer: document.getElementById('progress-container'),
-    progressFill: document.getElementById('progress-fill'),
-    progressText: document.getElementById('progress-text'),
-    promptsList: document.getElementById('prompts-list'),
-    outputSection: document.getElementById('output-section'),
-    outputContent: document.getElementById('output-content')
+    fileName: document.getElementById("file-name"),
+    changeFileBtn: document.getElementById("change-file"),
+    runBtn: document.getElementById("btn-run"),
+    pauseBtn: document.getElementById("btn-pause"),
+    stopBtn: document.getElementById("btn-stop"),
+    progressContainer: document.getElementById("progress-container"),
+    progressFill: document.getElementById("progress-fill"),
+    progressText: document.getElementById("progress-text"),
+    promptsList: document.getElementById("prompts-list"),
+    outputSection: document.getElementById("output-section"),
+    outputContent: document.getElementById("output-content"),
   };
 
   // Event listeners
-  elements.changeFileBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'selectFile' });
+  elements.changeFileBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: "selectFile" });
   });
 
-  elements.runBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'run' });
+  elements.runBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: "run" });
   });
 
-  elements.pauseBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'pause' });
+  elements.pauseBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: "pause" });
   });
 
-  elements.stopBtn.addEventListener('click', () => {
-    vscode.postMessage({ type: 'stop' });
+  elements.stopBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: "stop" });
   });
 
   // Message handler
-  window.addEventListener('message', event => {
+  window.addEventListener("message", (event) => {
     const message = event.data;
-    
+
     switch (message.type) {
-      case 'init':
+      case "init":
         handleInit(message.data);
         break;
-      case 'fileSelected':
+      case "fileSelected":
         handleFileSelected(message.fileName, message.prompts);
         break;
-      case 'executionStarted':
+      case "executionStarted":
         handleExecutionStarted(message.fileName, message.totalSteps);
         break;
-      case 'progressUpdate':
+      case "progressUpdate":
         handleProgressUpdate(message.current, message.total);
         break;
-      case 'stepStatusChanged':
-        handleStepStatusChanged(message.stepIndex, message.status, message.details);
+      case "stepStatusChanged":
+        handleStepStatusChanged(
+          message.stepIndex,
+          message.status,
+          message.details
+        );
         break;
-      case 'cliOutput':
+      case "cliOutput":
         handleCliOutput(message.stepIndex, message.output);
         break;
     }
@@ -420,24 +449,24 @@ Create `src/ui/webview/dashboard.js`:
     state.prompts = prompts.map((p, i) => ({
       index: i,
       text: p.prompt || p,
-      status: 'pending',
-      details: {}
+      status: "pending",
+      details: {},
     }));
     render();
   }
 
   function handleExecutionStarted(fileName, totalSteps) {
-    state.executionState = 'running';
+    state.executionState = "running";
     state.totalSteps = totalSteps;
     state.currentStep = 0;
     updateControls();
-    elements.progressContainer.style.display = 'block';
+    elements.progressContainer.style.display = "block";
   }
 
   function handleProgressUpdate(current, total) {
     state.currentStep = current;
     state.totalSteps = total;
-    
+
     const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
     elements.progressFill.style.width = `${percentage}%`;
     elements.progressText.textContent = `${current}/${total} (${percentage}%)`;
@@ -459,35 +488,37 @@ Create `src/ui/webview/dashboard.js`:
   }
 
   function render() {
-    elements.fileName.textContent = state.fileName || 'No file selected';
+    elements.fileName.textContent = state.fileName || "No file selected";
     renderPromptsList();
     updateControls();
   }
 
   function renderPromptsList() {
     if (state.prompts.length === 0) {
-      elements.promptsList.innerHTML = '<p class="empty-state">No prompts loaded</p>';
+      elements.promptsList.innerHTML =
+        '<p class="empty-state">No prompts loaded</p>';
       return;
     }
 
-    elements.promptsList.innerHTML = state.prompts.map(prompt => {
-      const icon = getStatusIcon(prompt.status);
-      const statusClass = `prompt-item status-${prompt.status}`;
-      
-      let detailsHtml = '';
-      if (prompt.details.duration) {
-        detailsHtml += `<div class="prompt-detail">Duration: ${prompt.details.duration}s</div>`;
-      }
-      if (prompt.details.endConditionResult) {
-        const result = prompt.details.endConditionResult;
-        const resultIcon = result.passed ? '✓' : '✗';
-        detailsHtml += `<div class="prompt-detail">End condition: ${resultIcon} ${result.message || ''}</div>`;
-      }
-      if (prompt.details.message) {
-        detailsHtml += `<div class="prompt-status-msg">${prompt.details.message}</div>`;
-      }
+    elements.promptsList.innerHTML = state.prompts
+      .map((prompt) => {
+        const icon = getStatusIcon(prompt.status);
+        const statusClass = `prompt-item status-${prompt.status}`;
 
-      return `
+        let detailsHtml = "";
+        if (prompt.details.duration) {
+          detailsHtml += `<div class="prompt-detail">Duration: ${prompt.details.duration}s</div>`;
+        }
+        if (prompt.details.endConditionResult) {
+          const result = prompt.details.endConditionResult;
+          const resultIcon = result.passed ? "✓" : "✗";
+          detailsHtml += `<div class="prompt-detail">End condition: ${resultIcon} ${result.message || ""}</div>`;
+        }
+        if (prompt.details.message) {
+          detailsHtml += `<div class="prompt-status-msg">${prompt.details.message}</div>`;
+        }
+
+        return `
         <div class="${statusClass}">
           <div class="prompt-header">
             <span class="prompt-icon">${icon}</span>
@@ -496,37 +527,38 @@ Create `src/ui/webview/dashboard.js`:
           ${detailsHtml}
         </div>
       `;
-    }).join('');
+      })
+      .join("");
   }
 
   function renderCliOutput(output) {
-    elements.outputSection.style.display = 'block';
-    
+    elements.outputSection.style.display = "block";
+
     let html = `<div class="cli-output-item">`;
     html += `<div class="output-header">[Prompt ${state.currentStep + 1}]</div>`;
-    
+
     if (output.prompt) {
       html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
     }
-    
+
     if (output.response) {
       html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
     }
-    
+
     if (output.tokens) {
       html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
     }
-    
+
     html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
     html += `</div>`;
-    
+
     elements.outputContent.innerHTML = html;
   }
 
   function updateControls() {
-    const isRunning = state.executionState === 'running';
+    const isRunning = state.executionState === "running";
     const hasFile = state.fileName !== null;
-    
+
     elements.runBtn.disabled = !hasFile || isRunning;
     elements.pauseBtn.disabled = !isRunning;
     elements.stopBtn.disabled = !isRunning;
@@ -534,26 +566,26 @@ Create `src/ui/webview/dashboard.js`:
 
   function getStatusIcon(status) {
     const icons = {
-      pending: '⏸️',
-      running: '▶️',
-      completed: '✅',
-      failed: '❌'
+      pending: "⏸️",
+      running: "▶️",
+      completed: "✅",
+      failed: "❌",
     };
-    return icons[status] || '⏸️';
+    return icons[status] || "⏸️";
   }
 
   function truncate(str, maxLen) {
-    return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+    return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
   }
 
   function escapeHtml(text) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }
 
   // Signal ready
-  vscode.postMessage({ type: 'ready' });
+  vscode.postMessage({ type: "ready" });
 })();
 ```
 
@@ -687,12 +719,12 @@ button:disabled {
   #main-content {
     flex-wrap: nowrap;
   }
-  
+
   #prompts-section {
     flex: 0 0 350px;
     min-width: 300px;
   }
-  
+
   #output-section {
     flex: 1;
     min-width: 400px;
@@ -704,7 +736,7 @@ button:disabled {
   #main-content {
     flex-direction: column;
   }
-  
+
   #prompts-section,
   #output-section {
     flex: 1;
@@ -712,7 +744,8 @@ button:disabled {
   }
 }
 
-#prompts-section, #output-section {
+#prompts-section,
+#output-section {
   padding: 12px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -805,7 +838,8 @@ h3 {
   color: var(--fg-secondary);
 }
 
-.output-prompt, .output-response {
+.output-prompt,
+.output-response {
   padding: 8px;
   margin: 8px 0;
   border-left: 3px solid var(--border-color);
@@ -835,7 +869,7 @@ h3 {
 Update `src/extension.ts`:
 
 ```typescript
-import { FlightPathDashboardProvider } from './ui/FlightPathDashboardProvider';
+import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 
 export function activate(context: vscode.ExtensionContext) {
   // ... existing code ...
@@ -844,7 +878,7 @@ export function activate(context: vscode.ExtensionContext) {
   const dashboardProvider = new FlightPathDashboardProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      'flightpath.dashboard',
+      "flightpath.dashboard",
       dashboardProvider,
       { webviewOptions: { retainContextWhenHidden: true } }
     )
@@ -854,7 +888,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Option 1: Store in context
   context.subscriptions.push({
     dispose: () => {},
-    dashboardProvider // Custom property
+    dashboardProvider, // Custom property
   } as any);
 
   // Option 2: Pass to FlightPathManager constructor
@@ -868,14 +902,17 @@ Update `esbuild.js` to copy webview assets:
 
 ```javascript
 // Add to esbuild.js
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 // After main build, copy webview files
-fs.mkdirSync('out/ui/webview', { recursive: true });
-fs.copyFileSync('src/ui/webview/dashboard.html', 'out/ui/webview/dashboard.html');
-fs.copyFileSync('src/ui/webview/dashboard.css', 'out/ui/webview/dashboard.css');
-fs.copyFileSync('src/ui/webview/dashboard.js', 'out/ui/webview/dashboard.js');
+fs.mkdirSync("out/ui/webview", { recursive: true });
+fs.copyFileSync(
+  "src/ui/webview/dashboard.html",
+  "out/ui/webview/dashboard.html"
+);
+fs.copyFileSync("src/ui/webview/dashboard.css", "out/ui/webview/dashboard.css");
+fs.copyFileSync("src/ui/webview/dashboard.js", "out/ui/webview/dashboard.js");
 ```
 
 ### Step 7: Integration with FlightPathManager
@@ -895,7 +932,7 @@ export class FlightPathManager {
 
   async executePromptFile(filePath: string) {
     const prompts = await this.parser.parse(filePath);
-    
+
     // Notify dashboard
     this.dashboardProvider?.updateFileSelected(
       path.basename(filePath),
@@ -909,27 +946,27 @@ export class FlightPathManager {
     // Execute each prompt
     for (let i = 0; i < prompts.length; i++) {
       this.dashboardProvider?.updateProgress(i + 1, prompts.length);
-      this.dashboardProvider?.updateStepStatus(i, { state: 'running' });
+      this.dashboardProvider?.updateStepStatus(i, { state: "running" });
 
       try {
         const result = await this.executePrompt(prompts[i]);
-        
+
         // Update with CLI output
         this.dashboardProvider?.updateCliOutput(i, {
           prompt: prompts[i].prompt,
           response: result.response,
           tokens: result.tokens,
-          elapsed: result.duration
+          elapsed: result.duration,
         });
 
         this.dashboardProvider?.updateStepStatus(i, {
-          state: 'completed',
-          duration: result.duration
+          state: "completed",
+          duration: result.duration,
         });
       } catch (error) {
         this.dashboardProvider?.updateStepStatus(i, {
-          state: 'failed',
-          message: error.message
+          state: "failed",
+          message: error.message,
         });
       }
     }
@@ -974,6 +1011,7 @@ Use VS Code CSS variables for automatic theme support:
 ## 🔧 Integration Points
 
 **FlightPathManager** must call these methods:
+
 - `updateFileSelected(fileName, prompts)` - When file is loaded
 - `updateExecutionStarted(fileName, totalSteps)` - When execution begins
 - `updateProgress(current, total)` - After each step
@@ -981,6 +1019,7 @@ Use VS Code CSS variables for automatic theme support:
 - `updateCliOutput(stepIndex, output)` - When CLI response received
 
 **Commands to implement**:
+
 - `flightpath.selectPromptFile` - Show quick pick for prompt files
 - `flightpath.run` - Start execution
 - `flightpath.pause` - Pause execution

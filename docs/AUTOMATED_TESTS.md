@@ -5,6 +5,7 @@
 ### Existing Tests
 
 #### 1. `extension.test.ts` - Placeholder Only
+
 - **Status**: ⚠️ Not testing actual functionality
 - **Coverage**: Basic sample test (array indexOf)
 - **Action Required**: Replace with real extension tests
@@ -12,28 +13,33 @@
 #### 2. `flightpath.test.ts` - Core Utilities (8 tests)
 
 **PromptQueue Tests (4 tests):**
+
 - ✅ Instantiation
 - ✅ Initial state (idle, empty prompts/results)
 - ✅ Loading prompts correctly
 - ✅ Progress tracking (current/total/percentage)
 
 **ValidationUtils Tests (3 tests):**
+
 - ✅ Valid prompt item validation
 - ✅ Invalid prompt item detection (missing fields)
 - ✅ Script path validation (path traversal prevention)
 
 **PromptFileParser Tests (1 test):**
+
 - ✅ Instantiation
 
 ### Coverage Gaps (Priority Order)
 
 Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production integrations with different use cases:
+
 - **CLI Integration**: Default mode for multi-step workflows with deterministic completion
 - **Chat Integration**: Valuable for single prompts and works around Copilot's attachment bug
 
 ## Priority 1: Critical Integration Tests
 
 ### CopilotChatIntegration
+
 **Status**: ❌ No test coverage (IMPORTANT FOR SINGLE PROMPTS & BUG WORKAROUND)
 
 **High Priority Tests:**
@@ -95,6 +101,7 @@ Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production
    - ✓ Graceful degradation when commands unavailable
 
 ### CopilotCommandLineIntegration
+
 **Status**: ❌ No test coverage (PRIMARY INTEGRATION METHOD)
 
 **High Priority Tests:**
@@ -138,6 +145,7 @@ Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production
 ### Testing Approach for CLI Integration
 
 **Mock Strategy:**
+
 ```typescript
 // Mock child_process.spawn to simulate CLI responses
 // Avoid actual CLI calls in unit tests
@@ -149,6 +157,7 @@ Total usage est: 1,234 tokens, $0.012`;
 ```
 
 **Integration Test Strategy:**
+
 ```typescript
 // Optional: Real CLI tests (if CLI is available)
 // Mark as integration tests that can be skipped
@@ -158,6 +167,7 @@ Total usage est: 1,234 tokens, $0.012`;
 ## Priority 2: Core Architecture Tests
 
 ### FlightPathManager
+
 **Status**: ❌ No test coverage (ORCHESTRATOR)
 
 **High Priority Tests:**
@@ -192,6 +202,7 @@ Total usage est: 1,234 tokens, $0.012`;
    - ✓ Reports errors to user via notifications
 
 ### EndConditionEvaluator
+
 **Status**: ❌ No test coverage (CRITICAL VALIDATION)
 
 **High Priority Tests:**
@@ -233,6 +244,7 @@ Total usage est: 1,234 tokens, $0.012`;
 ## Priority 3: Utility Tests
 
 ### FileSystemUtils
+
 **Status**: ❌ No test coverage
 
 **Tests Needed:**
@@ -260,6 +272,7 @@ Total usage est: 1,234 tokens, $0.012`;
    - ✓ Disposes watchers correctly
 
 ### PromptFileParser
+
 **Status**: ⚠️ Minimal coverage (1 test)
 
 **Additional Tests Needed:**
@@ -286,9 +299,11 @@ Total usage est: 1,234 tokens, $0.012`;
 ## Priority 4: UI/UX Tests (Lower Priority)
 
 ### StatusBarManager
+
 **Status**: ❌ No test coverage
 
 **Tests Needed:**
+
 - Status bar item creation
 - Status text updates based on state
 - Click command registration
@@ -332,26 +347,28 @@ src/test/
 ### 2. Mocking Strategy
 
 **For CLI Integration:**
+
 ```typescript
-import { spawn } from 'child_process';
+import { spawn } from "child_process";
 
 // Mock spawn to return simulated CLI output
-jest.mock('child_process');
+jest.mock("child_process");
 
 const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
 mockSpawn.mockReturnValue({
   stdout: createMockStream(mockOutput),
-  stderr: createMockStream(''),
+  stderr: createMockStream(""),
   stdin: createMockWritableStream(),
   on: jest.fn((event, handler) => {
-    if (event === 'close') handler(0);
-  })
+    if (event === "close") handler(0);
+  }),
 });
 ```
 
 **For Chat Integration:**
+
 ```typescript
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 // Mock VS Code commands for chat automation
 const mockExecuteCommand = jest.fn();
@@ -360,15 +377,15 @@ vscode.commands.executeCommand = mockExecuteCommand;
 // Mock chat commands
 mockExecuteCommand.mockImplementation((command: string, ...args: any[]) => {
   switch (command) {
-    case 'workbench.panel.chat.view.copilot.focus':
+    case "workbench.panel.chat.view.copilot.focus":
       return Promise.resolve();
-    case 'type':
+    case "type":
       return Promise.resolve();
-    case 'workbench.action.chat.submit':
+    case "workbench.action.chat.submit":
       return Promise.resolve();
-    case 'github.copilot.chat.attachFile':
+    case "github.copilot.chat.attachFile":
       return Promise.resolve();
-    case 'github.copilot.chat.attachSelection':
+    case "github.copilot.chat.attachSelection":
       return Promise.resolve();
     default:
       return Promise.resolve();
@@ -378,15 +395,16 @@ mockExecuteCommand.mockImplementation((command: string, ...args: any[]) => {
 // Mock clipboard for submit verification
 const mockClipboard = {
   readText: jest.fn(),
-  writeText: jest.fn()
+  writeText: jest.fn(),
 };
 vscode.env.clipboard = mockClipboard;
 ```
 
 **For VS Code API:**
+
 ```typescript
 // Use VS Code's built-in test utilities
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 // Real API calls in integration tests
 // Mock only external dependencies
@@ -395,6 +413,7 @@ import * as vscode from 'vscode';
 ### 3. Test Data Management
 
 **Fixtures for Prompt Files:**
+
 ```json
 // fixtures/prompts/single.prompt.json
 {
@@ -408,6 +427,7 @@ import * as vscode from 'vscode';
 ```
 
 **Fixtures for CLI Output:**
+
 ```
 // fixtures/cli-outputs/success.txt
 This is a detailed response from Copilot CLI.
@@ -419,6 +439,7 @@ Total usage est: 1,234 tokens, $0.012
 ### 4. Test Commands
 
 Add to `package.json`:
+
 ```json
 {
   "scripts": {
@@ -434,18 +455,20 @@ Add to `package.json`:
 ### 5. CI/CD Integration
 
 **GitHub Actions Workflow:**
+
 ```yaml
 - name: Run Unit Tests
   run: npm run test:unit
 
 - name: Run Integration Tests (if CLI available)
   run: npm run test:integration
-  continue-on-error: true  # Don't fail if CLI not installed in CI
+  continue-on-error: true # Don't fail if CLI not installed in CI
 ```
 
 ## Implementation Status
 
 **Phase 1 (COMPLETED):** Integration Tests
+
 - ✅ Extension activation and lifecycle (2 tests)
 - ✅ Command registration verification (CLI + Chat) (2 tests)
 - ✅ Configuration settings validation (3 tests)
@@ -454,6 +477,7 @@ Add to `package.json`:
 - ✅ Total: 19 passing automated tests
 
 **Automated Test Coverage:**
+
 - Extension loads and activates correctly
 - All commands properly registered
 - Configuration settings accessible
@@ -463,6 +487,7 @@ Add to `package.json`:
 - No workspace dependencies required
 
 **Manual Testing Only (Not Automated):**
+
 - Copilot CLI execution (requires `gh copilot` installed and authenticated)
 - Copilot Chat integration (requires Copilot extensions + GitHub authentication)
 - File attachment workflows (requires active Copilot session)
@@ -471,11 +496,13 @@ Add to `package.json`:
 **Rationale:** Copilot-dependent tests require manual installation, authentication, and active subscriptions. Automated tests focus on extension infrastructure that can run in isolated CI/CD environments.
 
 **Phase 2 (NEXT):** Core Architecture Tests
+
 - FlightPathManager orchestration
 - EndConditionEvaluator script execution
 - Integration between components
 
 **Phase 3 (FUTURE):** Utility and Polish
+
 - FileSystemUtils
 - PromptFileParser (additional coverage)
 - ValidationUtils (additional edge cases)
@@ -483,6 +510,7 @@ Add to `package.json`:
 ## Success Metrics
 
 **Current Coverage (Phase 1):**
+
 - ✅ Extension Lifecycle: 100% (activation, commands, config)
 - ✅ Core Utilities: 100% (PromptQueue, ValidationUtils)
 - ⚠️ CLI Integration: Manual testing only (requires external CLI)
@@ -491,12 +519,14 @@ Add to `package.json`:
 - 🔄 FileSystemUtils: 0% (Phase 3 - not started)
 
 **Test Results:**
+
 - 19 passing automated tests
 - 0 failing tests
 - 0 pending tests (removed workspace/Copilot-dependent tests)
 - All tests run in <100ms
 
 **Quality Gates:**
+
 - ✅ All automated tests pass before merge
 - ✅ Tests run in CI/CD without external dependencies
 - ✅ No workspace or authentication required
@@ -507,6 +537,7 @@ Add to `package.json`:
 Both CLI and Chat integrations are production-ready with distinct advantages:
 
 **CLI Integration (Default for workflows):**
+
 - Simpler architecture (no UI timing dependencies)
 - Deterministic completion detection
 - Direct access to response text for end conditions
@@ -514,6 +545,7 @@ Both CLI and Chat integrations are production-ready with distinct advantages:
 - Clearer error handling
 
 **Chat Integration (Valuable for single prompts):**
+
 - Works around known Copilot attachment bug using native commands
 - Better UI experience for ad-hoc prompts
 - Preserves chat history and context

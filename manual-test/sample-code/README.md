@@ -5,7 +5,9 @@ This directory contains sample code files that can be referenced in FlightPath p
 ## Files
 
 ### `example.ts`
+
 TypeScript file demonstrating:
+
 - Interfaces
 - Classes with private properties
 - Map data structure
@@ -13,12 +15,15 @@ TypeScript file demonstrating:
 - Array methods
 
 **Test scenarios:**
+
 - Reference entire file: `#file:sample-code/example.ts`
 - Reference specific method: `#file:sample-code/example.ts:23-26` (getUser method)
 - Reference interface: `#file:sample-code/example.ts:6-11` (User interface)
 
 ### `example.py`
+
 Python file demonstrating:
+
 - Dataclasses
 - Type hints
 - List comprehensions
@@ -26,6 +31,7 @@ Python file demonstrating:
 - Optional types
 
 **Test scenarios:**
+
 - Reference entire file: `#file:sample-code/example.py`
 - Reference class: `#file:sample-code/example.py:8-20` (Product dataclass)
 - Reference method: `#file:sample-code/example.py:43-45` (total_inventory_value)
@@ -33,6 +39,7 @@ Python file demonstrating:
 ## Usage in Prompts
 
 ### Simple file reference
+
 ```json
 {
   "prompt": "Explain what #file:sample-code/example.ts does"
@@ -40,6 +47,7 @@ Python file demonstrating:
 ```
 
 ### Specific line range
+
 ```json
 {
   "prompt": "Improve this code: #file:sample-code/example.ts:23-26"
@@ -47,6 +55,7 @@ Python file demonstrating:
 ```
 
 ### Multiple files
+
 ```json
 {
   "prompt": "Compare these implementations: #file:sample-code/example.ts and #file:sample-code/example.py"

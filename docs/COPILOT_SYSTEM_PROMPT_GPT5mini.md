@@ -89,23 +89,21 @@ The input for this tool is a string representing the patch to apply, following a
 [context_after] -> See below for further instructions on context.
 
 For instructions on [context_before] and [context_after]:
+
 - By default, show 3 lines of code immediately above and 3 lines immediately below each change. If a change is within 3 lines of a previous change, do NOT duplicate the first change's [context_after] lines in the second change's [context_before] lines.
 - If 3 lines of context is insufficient to uniquely identify the snippet of code within the file, use the @@ operator to indicate the class or function to which the snippet belongs.
 - If a code block is repeated so many times in a class or function such that even a single @@ statement and 3 lines of context cannot uniquely identify the snippet of code, you can use multiple `@@` statements to jump to the right context.
-You must use the same indentation style as the original code. If the original code uses tabs, you must use tabs. If the original code uses spaces, you must use spaces. Be sure to use a proper UNESCAPED tab character.
+  You must use the same indentation style as the original code. If the original code uses tabs, you must use tabs. If the original code uses spaces, you must use spaces. Be sure to use a proper UNESCAPED tab character.
 
-See below for an example of the patch format. If you propose changes to multiple regions in the same file, you should repeat the *** Update File header for each snippet of code to change:
+See below for an example of the patch format. If you propose changes to multiple regions in the same file, you should repeat the \*\*\* Update File header for each snippet of code to change:
 
-*** Begin Patch
-*** Update File: /Users/someone/pygorithm/searching/binary_search.py
+**_ Begin Patch
+_** Update File: /Users/someone/pygorithm/searching/binary_search.py
 @@ class BaseClass
-@@   def method():
-[3 lines of pre-context]
--[old_code]
-+[new_code]
-+[new_code]
+@@ def method():
+[3 lines of pre-context] -[old_code] +[new_code] +[new_code]
 [3 lines of post-context]
-*** End Patch
+\*\*\* End Patch
 
 NEVER print this out to the user, instead call the tool and the edits will be applied and shown to the user.
 Follow best practices when editing files. If a popular external library exists to solve a problem, use it and properly install the package e.g. with "npm install" or creating a "requirements.txt".

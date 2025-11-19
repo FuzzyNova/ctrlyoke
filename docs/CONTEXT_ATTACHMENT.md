@@ -6,6 +6,7 @@ This document captures research findings on programmatically attaching files and
 
 **Status**: ✅ Implemented (2025-11-12)  
 **Conclusion**: Dual strategy implementation
+
 - CLI mode: XML attachment (reliable, works perfectly)
 - Chat mode: Native attachments (clean UI, user-configurable with fallback to XML)
 
@@ -18,13 +19,15 @@ This document captures research findings on programmatically attaching files and
 **Purpose**: Attach entire files to Copilot Chat context
 
 **Parameters**:
+
 - Accepts one or more `vscode.Uri` objects
 - Can pass multiple files in a single call
 
 **Usage**:
+
 ```typescript
 await vscode.commands.executeCommand(
-  'github.copilot.chat.attachFile',
+  "github.copilot.chat.attachFile",
   Uri1,
   Uri2,
   Uri3
@@ -36,6 +39,7 @@ await vscode.commands.executeCommand(
 **Test Results**: ✅ Successfully attaches files to chat context
 
 **Limitations**:
+
 - Only attaches entire files, not specific line ranges
 - No way to specify line numbers or ranges as parameters
 
@@ -46,10 +50,12 @@ await vscode.commands.executeCommand(
 **Purpose**: Attach the current editor selection to Copilot Chat context
 
 **Parameters**:
+
 - ❌ **No parameters** - only uses current editor selection
 - Cannot pass Uri, Range, or Location objects
 
 **Usage**:
+
 ```typescript
 // Must have active editor with selection first
 const editor = vscode.window.activeTextEditor;
@@ -59,14 +65,13 @@ editor.selection = new vscode.Selection(
 );
 
 // Then attach the selection
-await vscode.commands.executeCommand(
-  'github.copilot.chat.attachSelection'
-);
+await vscode.commands.executeCommand("github.copilot.chat.attachSelection");
 ```
 
 **Test Results**: ✅ Successfully attaches selected lines to chat context
 
 **Limitations**:
+
 - Requires opening the file in an editor
 - Requires setting the editor selection manually
 - No way to pass file path + line range as parameters
@@ -78,11 +83,13 @@ await vscode.commands.executeCommand(
 
 **Purpose**: Alternative command for attaching selections
 
-**Parameters**: 
+**Parameters**:
+
 - Same as `github.copilot.chat.attachSelection`
 - ❌ **No parameters** - only uses current editor selection
 
-**Difference**: 
+**Difference**:
+
 - Likely just an alias or different command path
 - Behavior appears identical to `github.copilot.chat.attachSelection`
 
@@ -93,6 +100,7 @@ await vscode.commands.executeCommand(
 ### Problem
 
 We want to support `#file:path:line-line` syntax in prompt files, where users specify exact line ranges to attach. However:
+
 1. VS Code commands don't support passing line ranges directly to `attachSelection`
 2. Multiple `#selection` attachments have a bug (see `copilot_selection_bug.md`) - only the last one is included
 3. Copilot CLI doesn't support programmatic file attachments via commands
@@ -116,16 +124,19 @@ We want to support `#file:path:line-line` syntax in prompt files, where users sp
 **User Control**: The `flightpath.chatUseNativeAttachments` setting (default: true) allows users to choose their preferred method for Chat mode.
 
 **Copilot's Internal Attachment Format**:
-```xml
+
+````xml
 <attachment id="file:path:startLine-endLine">
 Excerpt from path, lines startLine to endLine:
 ```language
 [file content]
-```
+````
+
 </attachment>
 ```
 
 **Benefits**:
+
 - ✅ Works around VS Code's multiple selection bug
 - ✅ Compatible with Copilot CLI (no command dependency)
 - ✅ No need to open files or manipulate editor state
@@ -133,6 +144,7 @@ Excerpt from path, lines startLine to endLine:
 - ✅ Can attach multiple line ranges reliably
 
 **Implementation**:
+
 ```typescript
 async function buildAttachmentXml(
   filePath: string,
@@ -141,10 +153,10 @@ async function buildAttachmentXml(
 ): Promise<string> {
   const uri = vscode.Uri.file(filePath);
   const doc = await vscode.workspace.openTextDocument(uri);
-  
+
   // Determine language for syntax highlighting
   const language = doc.languageId;
-  
+
   // If no line range, attach entire file
   if (!startLine || !endLine) {
     const content = doc.getText();
@@ -155,13 +167,13 @@ ${content}
 \`\`\`
 </attachment>`;
   }
-  
+
   // Extract line range (convert to 0-indexed)
   const start = new vscode.Position(startLine - 1, 0);
   const end = new vscode.Position(endLine - 1, Number.MAX_SAFE_INTEGER);
   const range = new vscode.Range(start, end);
   const content = doc.getText(range);
-  
+
   return `<attachment id="file:${filePath}:${startLine}-${endLine}">
 Excerpt from ${filePath}, lines ${startLine} to ${endLine}:
 \`\`\`${language}
@@ -175,11 +187,11 @@ ${content}
 
 1. **Parse prompt for `#file:` references**
    - Use regex: `/#file:([^:\s]+)(?::(\d+)-(\d+))?/g`
-   
 2. **Build attachment XML for each reference**:
+
    ```typescript
    const attachments: string[] = [];
-   
+
    for (const match of fileReferences) {
      const [, filePath, startLine, endLine] = match;
      const xml = await buildAttachmentXml(
@@ -192,8 +204,9 @@ ${content}
    ```
 
 3. **Construct final prompt**:
+
    ```typescript
-   const attachmentsSection = attachments.join('\n\n');
+   const attachmentsSection = attachments.join("\n\n");
    const finalPrompt = `${attachmentsSection}\n\n${originalPromptText}\n\n${TOOL_INSTRUCTION}`;
    ```
 
@@ -216,6 +229,7 @@ ${content}
 This applies to **BOTH** XML attachment mode and native attachment mode.
 
 **Rationale**:
+
 - ✅ Matches Copilot's native behavior (Copilot keeps `#file:` references in prompts)
 - ✅ Provides LLM with contextual references about WHERE in the prompt you're discussing specific code
 - ✅ Makes prompts self-documenting and easier to understand
@@ -224,22 +238,27 @@ This applies to **BOTH** XML attachment mode and native attachment mode.
 - ✅ **Enables sequential/ordered references**: Users can write prompts like "Look at this first: #file:A:1-10 then read this: #file:B:20-30"
 
 **Example 1 - Simple Reference**:
-```xml
+
+````xml
 <attachment id="file:src/app.ts:45-67">
 Excerpt from src/app.ts, lines 45 to 67:
 ```typescript
 [code here]
-```
+````
+
 </attachment>
 
 Fix the bug in #file:src/app.ts:45-67 where the event handler leaks memory [TOOL_INSTRUCTION]
+
 ```
 
 **Example 2 - Sequential References (CRITICAL USE CASE)**:
 ```
-Look at this line first: #file:CopilotChatIntegration.ts:695-696 
+
+Look at this line first: #file:CopilotChatIntegration.ts:695-696
 and then only after that, read this other line #file:CopilotChatIntegration.ts:697-697
-```
+
+````
 
 Without the `#file:` references in the prompt text, the sequential instruction makes no sense - the LLM wouldn't know which attachment to look at first or second.
 
@@ -267,22 +286,23 @@ async function processAllAttachments(
   fileReferences: Array<{ path: string; startLine?: number; endLine?: number }>
 ): Promise<string[]> {
   // Process all files in parallel
-  const attachmentPromises = fileReferences.map(ref => 
+  const attachmentPromises = fileReferences.map(ref =>
     buildAttachmentXml(ref.path, ref.startLine, ref.endLine)
       .catch(err => {
         console.error(`Failed to attach ${ref.path}:`, err);
         return null; // Skip failed attachments
       })
   );
-  
+
   const attachments = await Promise.all(attachmentPromises);
   return attachments.filter(a => a !== null) as string[];
 }
-```
+````
 
 ### No Editor Manipulation Required
 
 **Benefit**: Unlike the command-based approach, this method doesn't require:
+
 - Opening files in editor tabs
 - Setting selections
 - Managing editor focus
@@ -301,6 +321,7 @@ This makes the attachment process **instantaneous and invisible to the user**.
 **Key Method**: `processPromptAttachments(prompt: string): Promise<string>`
 
 **Responsibility**:
+
 1. Parse prompt for `#file:` references using regex
 2. Resolve relative paths to absolute workspace paths
 3. Read file content for each reference
@@ -310,6 +331,7 @@ This makes the attachment process **instantaneous and invisible to the user**.
 7. Return final prompt string ready to send
 
 **Helper Methods** (all protected for subclass access):
+
 - `parseFileReferences(prompt): Array<FileReference>` - Extracts #file: references
 - `resolveWorkspacePath(relativePath): string` - Converts to absolute path
 
@@ -322,6 +344,7 @@ This makes the attachment process **instantaneous and invisible to the user**.
 **Key Method**: `processNativeAttachments(prompt: string): Promise<string>`
 
 **Responsibility**:
+
 1. Check `chatUseNativeAttachments` setting
 2. If enabled:
    - Parse `#file:` references
@@ -334,6 +357,7 @@ This makes the attachment process **instantaneous and invisible to the user**.
    - Fall back to XML attachment (calls `super.buildPromptText()`)
 
 **Workflow Sequence** (Native Attachments):
+
 ```typescript
 1. Parse #file: references
 2. For each reference:
@@ -381,6 +405,7 @@ Enables/disables automatic file attachment for all modes. When disabled, prompts
 **Test Command**: `FlightPath Test: Test File Attachment Commands`
 
 **Test Results**:
+
 - ✅ `github.copilot.chat.attachFile` works with Uri objects
 - ✅ `github.copilot.chat.attachSelection` works with current selection
 - ✅ Multiple files can be attached in one call
@@ -388,6 +413,7 @@ Enables/disables automatic file attachment for all modes. When disabled, prompts
 - ✅ Line ranges show as selections in attached context
 
 **Edge Cases to Handle**:
+
 - File doesn't exist → Show error, skip attachment
 - Invalid line range → Clamp to file bounds
 - File already open → Reuse editor, update selection
@@ -399,7 +425,8 @@ Enables/disables automatic file attachment for all modes. When disabled, prompts
 
 ### ❌ Using VS Code Attachment Commands
 
-**Why not**: 
+**Why not**:
+
 - `attachSelection` has a bug - only last selection is included when using multiple
 - Requires opening files and manipulating editor state
 - Not compatible with Copilot CLI
@@ -420,6 +447,7 @@ Enables/disables automatic file attachment for all modes. When disabled, prompts
 ### ✅ Manual Attachment XML Construction (CHOSEN)
 
 **Why yes**:
+
 - Works around VS Code bugs
 - No editor manipulation required
 - Compatible with both VS Code extension and CLI
@@ -438,7 +466,7 @@ If future VS Code API versions allow passing Uri + Range to `attachSelection`:
 ```typescript
 // Hypothetical future API
 await vscode.commands.executeCommand(
-  'github.copilot.chat.attachSelection',
+  "github.copilot.chat.attachSelection",
   uri,
   new vscode.Range(startLine, 0, endLine, 0)
 );
@@ -463,17 +491,20 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 ## Summary
 
 **What Works**:
+
 - ✅ Manual attachment XML construction
 - ✅ Multiple file attachments (no VS Code bug)
 - ✅ Both whole files and line ranges
 - ✅ Compatible with CLI and VS Code extension
 
 **What Doesn't Work**:
+
 - ❌ VS Code `attachSelection` command (bug with multiple selections)
 - ❌ Passing line ranges as parameters to attach commands
 - ❌ Programmatic selection attachment without opening files
 
 **Chosen Implementation Path**:
+
 - Parse `#file:` references from prompt text
 - Read file content directly via VS Code workspace API
 - Build Copilot's internal attachment XML format
@@ -482,6 +513,7 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 - No editor manipulation required
 
 **Key Advantages**:
+
 - 🚀 **Fast**: No editor operations, no delays
 - 🐛 **Bug-free**: Avoids VS Code's multiple selection bug
 - 🎯 **Reliable**: Direct control over attachment format
@@ -489,6 +521,7 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 - 👻 **Invisible**: No visible UI changes during attachment
 
 **Next Steps**:
+
 1. ✅ Implemented `processPromptAttachments()` method in `CopilotIntegration.ts`
 2. ✅ Added `parseFileReferences()` regex parser
 3. ✅ Added `buildAttachmentXml()` XML builder

@@ -2,7 +2,7 @@
 
 **Issue**: Current shell escaping implementation has risks with long/complex prompts  
 **Solution**: Use stdin instead of `-p` flag for prompt input  
-**Status**: Ready to implement  
+**Status**: Ready to implement
 
 ## Problem Analysis
 
@@ -30,6 +30,7 @@ echo "Complex prompt with 'quotes', `backticks`, <xml attr=\"value\"/>" | copilo
 ```
 
 **Benefits**:
+
 - ✅ No escaping needed - copilot reads raw text
 - ✅ No length limits - can send multi-megabyte prompts
 - ✅ Works identically on all platforms
@@ -187,6 +188,7 @@ if (options.addDirs && options.addDirs.length > 0) {
 ## Benefits Summary
 
 ### Before (Command-line Argument)
+
 ```typescript
 // Complex escaping logic
 args.push("-p");
@@ -197,6 +199,7 @@ args.push(this.escapeShellArg(prompt)); // Fragile!
 ```
 
 ### After (Stdin)
+
 ```typescript
 // No escaping!
 await this.spawnProcessWithStdin("copilot", args, prompt);
@@ -207,17 +210,18 @@ await this.spawnProcessWithStdin("copilot", args, prompt);
 
 ### Code Comparison
 
-| Aspect | Command-line | Stdin |
-|--------|-------------|-------|
-| Escaping logic | 15 lines | 0 lines |
-| Length limit | ~8KB | Unlimited |
-| Platform issues | Yes | No |
-| Debugging | Hard | Easy |
-| Code complexity | High | Low |
+| Aspect          | Command-line | Stdin     |
+| --------------- | ------------ | --------- |
+| Escaping logic  | 15 lines     | 0 lines   |
+| Length limit    | ~8KB         | Unlimited |
+| Platform issues | Yes          | No        |
+| Debugging       | Hard         | Easy      |
+| Code complexity | High         | Low       |
 
 ## Testing Plan
 
 ### Unit Tests
+
 - [ ] Test with simple prompts (< 100 chars)
 - [ ] Test with long prompts (> 10KB)
 - [ ] Test with special characters: quotes, backticks, XML, markdown
@@ -227,6 +231,7 @@ await this.spawnProcessWithStdin("copilot", args, prompt);
 - [ ] Test stdin write errors (simulate closed stdin)
 
 ### Integration Tests
+
 - [ ] Execute real copilot command with stdin
 - [ ] Verify output parsing still works
 - [ ] Test with workspace context (@workspace)
@@ -234,6 +239,7 @@ await this.spawnProcessWithStdin("copilot", args, prompt);
 - [ ] Test multi-step workflows with long prompts
 
 ### Manual Testing
+
 - [ ] Run FlightPath workflow with complex XML prompts
 - [ ] Monitor Output panel for stdin logging
 - [ ] Test on Windows (PowerShell)
@@ -243,12 +249,15 @@ await this.spawnProcessWithStdin("copilot", args, prompt);
 ## Migration Notes
 
 ### Breaking Changes
+
 **NONE** - This is an internal implementation detail. External API unchanged.
 
 ### Backwards Compatibility
+
 Fully compatible - stdin is supported by all copilot CLI versions.
 
 ### Rollback Plan
+
 If issues arise, can revert to command-line arguments (keep git history).
 
 ## Additional Enhancements
@@ -259,14 +268,14 @@ If issues arise, can revert to command-line arguments (keep git history).
 private async savePromptToFile(prompt: string): Promise<string> {
   const tempDir = path.join(this.context.globalStorageUri.fsPath, "prompts");
   await fs.promises.mkdir(tempDir, { recursive: true });
-  
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `prompt-${timestamp}.txt`;
   const filepath = path.join(tempDir, filename);
-  
+
   await fs.promises.writeFile(filepath, prompt, "utf8");
   console.log(`💾 Prompt saved to: ${filepath}`);
-  
+
   return filepath;
 }
 ```
@@ -288,6 +297,7 @@ Enable with setting: `flightpath.savePromptFiles: true`
 ## Timeline
 
 **Estimated**: 2-3 hours
+
 - Implementation: 1 hour
 - Testing: 1-2 hours
 - Documentation: 30 minutes
@@ -295,14 +305,17 @@ Enable with setting: `flightpath.savePromptFiles: true`
 ## Risks & Mitigation
 
 ### Risk 1: Stdin Not Available
+
 **Likelihood**: Very low (stdin always available in spawn())  
 **Mitigation**: Error handling + fallback error message
 
 ### Risk 2: Performance Impact
+
 **Likelihood**: None (stdin is faster than command-line parsing)  
 **Mitigation**: N/A
 
 ### Risk 3: Platform Differences
+
 **Likelihood**: Very low (stdin works identically everywhere)  
 **Mitigation**: Multi-platform testing
 

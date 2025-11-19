@@ -1,0 +1,92 @@
+# Development Guide
+
+## Linting & Formatting
+
+This project uses **ESLint** for linting and **Prettier** for code formatting.
+
+### Available Commands
+
+#### Linting
+
+```bash
+# Run ESLint to check for code issues
+npm run lint
+
+# Run ESLint and auto-fix issues where possible
+npm run lint:fix
+```
+
+#### Formatting
+
+```bash
+# Format all files with Prettier
+npm run format
+
+# Check if files are formatted correctly (without changing them)
+npm run format:check
+```
+
+### Editor Setup
+
+For the best development experience, install these VS Code extensions:
+
+- **ESLint** (`dbaeumer.vscode-eslint`) - Shows linting errors in real-time
+- **Prettier** (`esbenp.prettier-vscode`) - Format on save support
+
+### Configuration Files
+
+- `.prettierrc.json` - Prettier configuration
+- `.prettierignore` - Files to exclude from formatting
+- `eslint.config.mjs` - ESLint configuration (ESM format)
+
+### Pre-commit Workflow
+
+Before committing code, run:
+
+```bash
+npm run lint:fix   # Fix linting issues
+npm run format     # Format code
+npm run compile    # Ensure TypeScript compiles
+npm test           # Run tests
+```
+
+### Prettier Settings
+
+- **Semi-colons**: Required (`;`)
+- **Quotes**: Double quotes (`"`)
+- **Line width**: 80 characters
+- **Indentation**: 2 spaces
+- **Trailing commas**: ES5 compatible
+- **Line endings**: LF (Unix-style)
+
+### ESLint Rules
+
+Key rules enforced:
+
+- TypeScript naming conventions for imports
+- Curly braces required for all control structures
+- Strict equality (`===`) required
+- No throwing literals (throw proper Error objects)
+- Semi-colons required
+
+### VS Code Settings
+
+Add to your `.vscode/settings.json` for auto-format on save:
+
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    }
+  }
+}
+```
+
+This will:
+
+- Format files with Prettier on save
+- Auto-fix ESLint issues on save

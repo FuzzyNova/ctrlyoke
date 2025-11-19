@@ -7,12 +7,14 @@ This document describes the implementation of background polling for Copilot ava
 ## Problem Solved
 
 **Previous Behavior:**
+
 - FlightPath did a single passive check for Copilot on startup
-- When user tried to execute a workflow, they'd see "automation unavailable" 
+- When user tried to execute a workflow, they'd see "automation unavailable"
 - Only when sending the prompt did FlightPath try to activate Copilot
 - This caused confusing UX where first execution appeared to fail
 
 **New Behavior:**
+
 - FlightPath starts background polling immediately on activation
 - Status bar shows real-time initialization progress
 - Workflows are blocked until Copilot is confirmed ready or unavailable
@@ -23,12 +25,14 @@ This document describes the implementation of background polling for Copilot ava
 ### Polling Strategy
 
 **Timing:**
+
 - Poll interval: 5 seconds
 - Maximum duration: 30 seconds (6 attempts total)
 - First check: Passive (just check if extensions are active)
 - Second check onwards: Active (attempt to activate extensions)
 
 **States:**
+
 1. `initializing` - First 5 seconds, checking extensions
 2. `waiting` - Extensions found but not active yet, attempting activation
 3. `ready` - Copilot automation confirmed available
@@ -39,6 +43,7 @@ This document describes the implementation of background polling for Copilot ava
 #### CopilotIntegration.ts
 
 **New Properties:**
+
 ```typescript
 private initializationStatus: CopilotStatus = 'initializing';
 private pollingAttempts: number = 0;
@@ -50,6 +55,7 @@ public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 ```
 
 **New Methods:**
+
 - `startBackgroundPolling()` - Initiates polling sequence
 - `pollCopilotAvailability()` - Recursive polling logic
 - `retryDetection()` - Manually restart polling
@@ -58,6 +64,7 @@ public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 - `getDetailedStatus()` - Comprehensive status information
 
 **Key Changes:**
+
 - `initialize()` now calls `startBackgroundPolling()` instead of single check
 - Status changes emit events for subscribers
 - Progressive strategy: passive → active activation
@@ -66,6 +73,7 @@ public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
 **Status Bar Updates:**
 Shows different states based on Copilot initialization:
+
 - `$(loading~spin) FlightPath - Initializing...`
 - `$(clock) FlightPath - Waiting for Copilot (X/6)`
 - `$(rocket) FlightPath - Ready`
@@ -73,21 +81,24 @@ Shows different states based on Copilot initialization:
 
 **Workflow Blocking:**
 `executePromptFile()` now checks readiness before showing dialog:
+
 - `initializing` → "Please wait and try again"
 - `waiting` → "Waiting for Copilot... (attempt X/6)"
 - `unavailable` → "Setup required" with retry option
 - `ready` → Proceed with enthusiastic confirmation
 
 **Event Subscription:**
+
 ```typescript
 this.copilotIntegration.onDidChangeStatus((status) => {
-    this.updateStatusBar();
+  this.updateStatusBar();
 });
 ```
 
 #### extension.ts
 
 **New Command:**
+
 ```typescript
 flightpath.retryCopilotDetection - Manually restart polling
 ```
@@ -118,19 +129,23 @@ Still not found? → Status Bar: "⚠️ Setup Required"
 #### When User Tries to Run Workflow
 
 **If initializing:**
+
 - Show warning: "FlightPath is still initializing..."
 - Offer "Retry" button (waits 1s and checks again)
 
 **If waiting:**
+
 - Show warning: "Waiting for Copilot... (attempt X/6)"
 - Offer "Retry" button (waits 2s and checks again)
 
 **If unavailable:**
+
 - Show error: "Copilot automation is unavailable"
 - Offer "Retry Detection" (restarts polling)
 - Offer "View Requirements" (shows troubleshooting)
 
 **If ready:**
+
 - Show enthusiastic message: "✅ Copilot automation is ready!"
 - Proceed immediately with workflow execution
 
@@ -207,6 +222,7 @@ flightpath.retryCopilotDetection
 ### Backward Compatibility
 
 All existing APIs remain functional:
+
 - `isIntegrationAvailable()` - Still works
 - `getStatus()` - Still works
 - `testAutomation()` - Still works

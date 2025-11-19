@@ -13,11 +13,13 @@ When Copilot completes a task, an end condition script can validate the result. 
 ### 1. Happy Path vs Error Path
 
 **Happy Path (Retry-eligible):**
+
 - ✅ Script executes successfully (exit code 0)
 - ❌ Output doesn't match expected value
 - → **Trigger retry mechanism**
 
 **Error Path (Not retry-eligible):**
+
 - ❌ Script fails to execute (file not found, syntax error)
 - ❌ Script times out
 - → **Show error, don't retry**
@@ -28,11 +30,12 @@ Simple curly-brace syntax for dynamic content:
 
 ```typescript
 {
-  retryPrompt: "Compilation failed:\n\n{scriptOutput}\n\nExpected: {expectedValue}"
+  retryPrompt: "Compilation failed:\n\n{scriptOutput}\n\nExpected: {expectedValue}";
 }
 ```
 
 **Available Placeholders:**
+
 - `{scriptOutput}` - stdout from the script
 - `{errorOutput}` - stderr from the script
 - `{expectedValue}` - what we're looking for
@@ -41,6 +44,7 @@ Simple curly-brace syntax for dynamic content:
 - `{maxRetries}` - maximum attempts configured
 
 **Why This Approach:**
+
 - Simple and predictable (no `eval()`)
 - Clear what's available
 - Easy to document and use
@@ -55,8 +59,8 @@ interface EndCondition {
   script: string;
   returns: string;
   timeout?: number;
-  maxRetries?: number;      // NEW: Default 0 (no retries)
-  retryPrompt?: string;     // NEW: Template with placeholders
+  maxRetries?: number; // NEW: Default 0 (no retries)
+  retryPrompt?: string; // NEW: Template with placeholders
 }
 ```
 
@@ -65,13 +69,13 @@ interface EndCondition {
 ```typescript
 interface EvaluationResult {
   success: boolean;
-  stdout: string;           // CHANGED: Separate stdout
-  stderr: string;           // CHANGED: Separate stderr
-  result: string;           // Keep for compatibility
+  stdout: string; // CHANGED: Separate stdout
+  stderr: string; // CHANGED: Separate stderr
+  result: string; // Keep for compatibility
   error?: string;
   timeout?: boolean;
   duration: number;
-  exitCode?: number;        // NEW: Capture exit code
+  exitCode?: number; // NEW: Capture exit code
 }
 ```
 
@@ -84,8 +88,8 @@ interface PromptResult {
   timestamp: Date;
   endConditionResult?: boolean;
   error?: string;
-  retryCount?: number;      // NEW: Track attempts
-  scriptOutput?: string;    // NEW: Debugging info
+  retryCount?: number; // NEW: Track attempts
+  scriptOutput?: string; // NEW: Debugging info
 }
 ```
 
@@ -164,6 +168,7 @@ else:
 ## Example Use Cases
 
 ### 1. Test-Driven Development
+
 ```json
 {
   "endCondition": {
@@ -176,6 +181,7 @@ else:
 ```
 
 ### 2. Compilation Validation
+
 ```json
 {
   "endCondition": {
@@ -188,6 +194,7 @@ else:
 ```
 
 ### 3. Code Quality Gates
+
 ```json
 {
   "endCondition": {
@@ -227,16 +234,19 @@ else:
 ## Testing Strategy
 
 ### Unit Tests
+
 - Template placeholder replacement
 - Retry count tracking
 - Happy path vs error path distinction
 
 ### Integration Tests
+
 - Full retry flow with mock Copilot
 - Max retries exhausted behavior
 - Script output capture and inclusion
 
 ### Manual Tests
+
 - Real test failure scenarios
 - Compilation error scenarios
 - Timeout vs validation failure distinction

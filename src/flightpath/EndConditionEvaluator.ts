@@ -41,28 +41,29 @@ export class EndConditionEvaluator {
         condition.script,
         workingDirectory
       );
-      if (!scriptPath) {
-        return {
-          success: false,
-          stdout: "",
-          stderr: "",
-          result: "",
-          error: `Script not found: ${condition.script}`,
-          duration: Date.now() - startTime,
-        };
-      }
 
-      // Determine script type and command
-      const command = this.getScriptCommand(scriptPath);
-      if (!command) {
-        return {
-          success: false,
-          stdout: "",
-          stderr: "",
-          result: "",
-          error: `Unsupported script type: ${path.extname(scriptPath)}`,
-          duration: Date.now() - startTime,
-        };
+      let command: { executable: string; args: string[] } | null;
+
+      if (scriptPath) {
+        // File found - determine script type and command
+        command = this.getScriptCommand(scriptPath);
+        if (!command) {
+          return {
+            success: false,
+            stdout: "",
+            stderr: "",
+            result: "",
+            error: `Unsupported script type: ${path.extname(scriptPath)}`,
+            duration: Date.now() - startTime,
+          };
+        }
+      } else {
+        // File not found - treat as direct shell command
+        console.log(
+          `FlightPath: Script file not found, treating as direct command: ${condition.script}`
+        );
+        // Execute as shell command directly
+        command = { executable: condition.script, args: [] };
       }
 
       // Execute script with timeout

@@ -7,6 +7,7 @@ This document outlines the architectural transition from **runtime context injec
 **Project Status**: Pre-release - No backward compatibility required. This is a clean break from current implementation.
 
 ### Current Architecture (Runtime Context Injection)
+
 ```
 JSON File (simple prompt) → Runtime Parser → Add Context → Send to Copilot
                                 ↓
@@ -19,6 +20,7 @@ JSON File (simple prompt) → Runtime Parser → Add Context → Send to Copilot
 ```
 
 ### Target Architecture (Design-Time Context Resolution)
+
 ```
 Prompt Editor UI → User adds context → Generates JSON (final form) → Send directly to Copilot
                         ↓                                                    ↓
@@ -36,6 +38,7 @@ Prompt Editor UI → User adds context → Generates JSON (final form) → Send 
 ## Current State Analysis
 
 ### Files Involved
+
 - `CopilotIntegration.ts` - Contains `buildCopilotChatPrompt()` method (lines 858-918)
 - `PromptFileParser.ts` - Parses and validates JSON files
 - `prompt-schema.json` - JSON Schema for prompt files
@@ -48,19 +51,15 @@ The `buildCopilotChatPrompt()` method currently handles:
 1. **Workspace Context (`@workspace`)**
    - Triggered by: `context.includeWorkspaceFiles` array
    - Adds `@workspace` keyword + resolves file patterns
-   
 2. **File References (`#file:path`)**
    - Triggered by: `context.includeCurrentFile` boolean
    - Resolves active editor file path
-   
 3. **Selection Context (`#selection`)**
    - Triggered by: `context.includeSelection` boolean
    - Adds `#selection` keyword
-   
 4. **Slash Command Detection**
    - Analyzes prompt text for keywords (fix, explain, create, test)
    - Prepends appropriate slash command (/fix, /explain, /new, /tests)
-   
 5. **Final Assembly**
    - Format: `[slash command] [context variables] [prompt text] [TOOL_INSTRUCTION]`
 
@@ -107,6 +106,7 @@ The `buildCopilotChatPrompt()` method currently handles:
 #### Example: Current vs. New Format
 
 **Current Format (Runtime Resolution):**
+
 ```json
 {
   "prompt": "Analyze the performance issues",
@@ -119,6 +119,7 @@ The `buildCopilotChatPrompt()` method currently handles:
 ```
 
 **New Format (Final Form):**
+
 ```json
 {
   "prompt": "/fix @workspace #file:src/app.ts #file:src/utils.ts #file:src/performanceMonitor.ts:45-120 Analyze the performance issues and suggest optimizations"
@@ -276,18 +277,21 @@ The `buildCopilotChatPrompt()` method currently handles:
 **Impact**: User experience transformation
 
 #### Milestone 1: Basic Editor (Week 2)
+
 - [ ] Create WebView-based editor panel
 - [ ] Implement basic text editor with syntax highlighting
 - [ ] Add file picker for `#file:` insertion
 - [ ] Add slash command dropdown
 
 #### Milestone 2: Context Tools (Week 3)
+
 - [ ] Implement selection capture (convert to `#file:path:line-line`)
 - [ ] Add @workspace toggle
 - [ ] Build live preview panel
 - [ ] Add validation and error indicators
 
 #### Milestone 3: JSON Export (Week 4)
+
 - [ ] Implement save as `.prompt.json`
 - [ ] Implement save as `.flightpath.json` (multi-prompt workflow)
 - [ ] Add prompt library browser (list existing prompts)
@@ -393,16 +397,19 @@ Follow Copilot Chat conventions:
 ## Success Metrics
 
 ### Phase 1 (Core Simplification)
+
 - ✅ All existing functionality works with simplified code
 - ✅ No regression in prompt execution
 - ✅ Documentation updated and clear
 
 ### Phase 2 (Prompt Editor)
+
 - ✅ Users can create final-form prompts in UI
 - ✅ Context insertion is intuitive and accurate
 - ✅ JSON export produces valid, ready-to-use files
 
 ### Phase 3 (Enhanced Metadata)
+
 - ✅ Prompt library is discoverable and organized
 - ✅ Users share and import prompts successfully
 - ✅ Analytics provide insight into prompt effectiveness

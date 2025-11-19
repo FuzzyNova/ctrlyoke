@@ -3,6 +3,7 @@
 ## ✅ IMPLEMENTATION COMPLETE
 
 All features from this plan have been successfully implemented:
+
 - ✅ Context menu commands for `.prompt.json`, `.flightpath.json`, and `.prompt.md` files
 - ✅ Send to CLI and Send to Chat commands in Explorer view (right-click file)
 - ✅ Send to CLI and Send to Chat commands in Editor tab (right-click tab)
@@ -11,6 +12,7 @@ All features from this plan have been successfully implemented:
 - ✅ Documentation updated (README.md, QUICK_START.md, copilot-instructions.md)
 
 **Key Implementation Details:**
+
 - Markdown files (`.prompt.md`) are read as plain text and treated as single prompts
 - No JSON parsing required for `.prompt.md` files
 - All three file formats work with both context menu commands
@@ -22,6 +24,7 @@ All features from this plan have been successfully implemented:
 ## Objective
 
 Add context menu items to FlightPath prompt files (`.flightpath.json`, `.prompt.json`, `.prompt.md`) in VS Code Explorer with two commands:
+
 - **FlightPath: Send to CLI** - Execute using Copilot CLI
 - **FlightPath: Send to Chat** - Execute using Copilot Chat
 
@@ -88,6 +91,7 @@ Add menu contributions:
 ```
 
 **Key Points:**
+
 - Regex pattern matches all three file types: `.prompt.json`, `.flightpath.json`, `.prompt.md`
 - `resourceScheme == file` ensures local files only
 - `group: "flightpath@1"` and `@2` creates grouped section in context menu
@@ -109,7 +113,7 @@ context.subscriptions.push(
         );
         return;
       }
-      
+
       try {
         await flightPathManager.executePromptFile(uri.fsPath, "cli");
         vscode.window.showInformationMessage(
@@ -134,7 +138,7 @@ context.subscriptions.push(
         );
         return;
       }
-      
+
       try {
         await flightPathManager.executePromptFile(uri.fsPath, "chat");
         vscode.window.showInformationMessage(
@@ -161,15 +165,15 @@ context.subscriptions.push(
  * @param modeOverride Optional integration mode (overrides user settings for this execution)
  */
 async executePromptFile(
-  filePath: string, 
+  filePath: string,
   modeOverride?: "cli" | "chat"
 ): Promise<void> {
   try {
     console.log(`FlightPath: Executing prompt file: ${filePath}`);
-    
+
     // Create integration for this execution (either override or default)
     const integration = this.createIntegrationForMode(modeOverride);
-    
+
     // Check Copilot readiness FIRST
     const detailedStatus = integration.getDetailedStatus();
     const fileName = path.basename(filePath);
@@ -274,7 +278,7 @@ async executePromptFile(
 private createIntegrationForMode(modeOverride?: "cli" | "chat"): CopilotIntegration {
   if (modeOverride) {
     console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
-    
+
     switch (modeOverride) {
       case "cli":
         return new CopilotCommandLineIntegration(this.context, this.outputChannel);
@@ -282,7 +286,7 @@ private createIntegrationForMode(modeOverride?: "cli" | "chat"): CopilotIntegrat
         return new CopilotChatIntegration(this.context);
     }
   }
-  
+
   // Use default integration from instance (respects user settings)
   return this.copilotIntegration;
 }
@@ -438,35 +442,41 @@ private async waitForResponseComplete(
 ## Testing Checklist
 
 ### File Extension Matching (Explorer View)
+
 - [ ] Right-click `.flightpath.json` in explorer → Both commands appear
-- [ ] Right-click `.prompt.json` in explorer → Both commands appear  
+- [ ] Right-click `.prompt.json` in explorer → Both commands appear
 - [ ] Right-click `.prompt.md` in explorer → Both commands appear
 - [ ] Right-click regular `.json` in explorer → Commands do NOT appear
 
 ### File Extension Matching (Editor Tab)
+
 - [ ] Right-click `.flightpath.json` tab → Both commands appear
-- [ ] Right-click `.prompt.json` tab → Both commands appear  
+- [ ] Right-click `.prompt.json` tab → Both commands appear
 - [ ] Right-click `.prompt.md` tab → Both commands appear
 - [ ] Right-click regular `.json` tab → Commands do NOT appear
 
 ### Command Execution
+
 - [ ] "Send to CLI" executes workflow using CLI integration
 - [ ] "Send to Chat" executes workflow using Chat integration
 - [ ] Original user settings unchanged after execution
 - [ ] Workflow completes successfully with override mode
 
 ### Error Handling
+
 - [ ] Invalid prompt file shows error message
 - [ ] Missing file handled gracefully
 - [ ] Integration initialization failure shows appropriate message
 
 ### Context Stability
+
 - [ ] Commands appear with Settings view open
 - [ ] Commands appear with other panels focused
 
 ## Architecture Notes
 
 ### DRY Principles Applied
+
 - All prompt parsing, validation, and execution logic remains in `executePromptFile()`
 - Command handlers are thin (3-4 lines each)
 - Integration creation reuses existing factory pattern
@@ -474,6 +484,7 @@ private async waitForResponseComplete(
 - Backward compatible (optional parameter)
 
 ### Key Design Decisions
+
 - **Optional parameter**: `modeOverride?: "cli" | "chat"` extends existing method
 - **Pass integration explicitly**: Avoids race conditions from instance swapping
 - **Minimal API changes**: Only adds optional parameters to existing methods

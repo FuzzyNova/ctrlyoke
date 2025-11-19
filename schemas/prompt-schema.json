@@ -13,7 +13,12 @@
         },
         "model": {
           "type": "string",
-          "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
+          "enum": [
+            "claude-sonnet-4.5",
+            "claude-sonnet-4",
+            "claude-haiku-4.5",
+            "gpt-5"
+          ],
           "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
         },
         "newChatSession": {
@@ -42,7 +47,12 @@
               },
               "model": {
                 "type": "string",
-                "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"],
+                "enum": [
+                  "claude-sonnet-4.5",
+                  "claude-sonnet-4",
+                  "claude-haiku-4.5",
+                  "gpt-5"
+                ],
                 "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
               },
               "newChatSession": {
@@ -68,11 +78,11 @@
       "properties": {
         "script": {
           "type": "string",
-          "description": "Path to script file to execute"
+          "description": "Path to script file to execute, or direct shell command (e.g., 'npm test', 'python script.py'). File paths are resolved relative to workspace root or .flightpath directory."
         },
         "returns": {
           "type": "string",
-          "description": "Expected return value from script"
+          "description": "Expected output from script (stdout). Matching rules: (1) Exact match (case-insensitive), (2) Boolean: 'true' matches true/1/yes/pass/passed, 'false' matches false/0/no/fail/failed, (3) Numeric: compared as >= (e.g., '90' matches if script outputs 90 or higher), (4) Substring: matches if output contains this string"
         },
         "timeout": {
           "type": "number",

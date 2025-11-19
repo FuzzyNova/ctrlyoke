@@ -9,12 +9,14 @@
 ## Test Files Available
 
 ### Prompts (`.flightpath/` directory)
+
 - `simple.prompt.md` - Basic markdown prompt
 - `with-file.prompt.json` - Prompt with file attachment
 - `multi-step.flightpath.json` - Three-step workflow
 - `with-end-condition.prompt.json` - Prompt with end condition validation
 
 ### End Condition Scripts (`.flightpath/scripts/`)
+
 - `always_true.py` - Always succeeds
 - `always_false.py` - Always fails
 - `timeout_test.py` - Tests timeout (60s sleep)
@@ -22,16 +24,19 @@
 - `check_typescript.js` - Detects TypeScript syntax
 
 ### Sample Code (`sample-code/`)
+
 - `example.ts` - TypeScript UserManager class
 - `example.py` - Python Inventory system
 
 ## Running Tests
 
 **Right-click any prompt file:**
+
 - **Send to CLI** - Uses Copilot CLI (default)
 - **Send to Chat** - Uses Chat window automation
 
 **Command Palette (`Ctrl+Shift+P`):**
+
 - FlightPath: Take Off
 - FlightPath: Create Prompt File
 - FlightPath: Create End Condition Script
@@ -54,6 +59,7 @@
 ## Adding New Tests
 
 Create files in `manual-test/.flightpath/`:
+
 - New prompts: `.prompt.md` or `.prompt.json`
 - New scripts: `.flightpath/scripts/yourscript.py`
 - New code: `sample-code/yourfile.ts`

@@ -9,6 +9,7 @@ FlightPath uses XML tags to structure prompts sent to GitHub Copilot (which is p
 **Discovery**: Copilot Chat UI hides XML tags from the chat view but still processes them correctly!
 
 This means:
+
 - ✅ FlightPath's `<criticalInstruction>` tag is completely hidden from users
 - ✅ Chat history stays clean and readable
 - ✅ Copilot still follows the automation instructions perfectly
@@ -44,6 +45,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 ```
 
 **Key Discovery**: Copilot Chat UI hides XML tags in the chat view but still processes them correctly!
+
 - User prompt is sent as plain text → Visible in chat history
 - Tool instruction wrapped in `<criticalInstruction>` XML tag → Hidden from chat UI but processed by Copilot
 - This gives us clean chat history while maintaining automation functionality
@@ -53,6 +55,7 @@ When you have FULLY FINISHED your response including ALL code, explanations, and
 ### Why User Prompts Aren't Wrapped in XML
 
 Originally, we wrapped user prompts in `<request>` tags, but discovered that Copilot hides ALL XML tags from the chat view. This meant:
+
 - ❌ User prompts wrapped in `<request>` disappeared from chat history (confusing!)
 - ✅ Tool instructions wrapped in `<criticalInstruction>` hide perfectly (clean chat!)
 
@@ -72,12 +75,14 @@ You are currently reading prompts wrapped in `<userRequest>` tags. When you see 
 Use the same tag names throughout. Don't mix `<instruction>` and `<instructions>` randomly.
 
 ✅ Good:
+
 ```xml
 <context>Background info</context>
 <task>Main task</task>
 ```
 
 ❌ Bad:
+
 ```xml
 <context>Background info</context>
 <task_description>Main task</task_description>
@@ -88,6 +93,7 @@ Use the same tag names throughout. Don't mix `<instruction>` and `<instructions>
 Tag names should clearly indicate their content.
 
 ✅ Good:
+
 ```xml
 <technicalStack>
 - TypeScript 5.x
@@ -96,6 +102,7 @@ Tag names should clearly indicate their content.
 ```
 
 ❌ Bad:
+
 ```xml
 <info>
 - TypeScript 5.x
@@ -108,6 +115,7 @@ Tag names should clearly indicate their content.
 Use hierarchical structure for related content.
 
 ✅ Good:
+
 ```xml
 <architecturePrinciples>
   <promptFormat>
@@ -124,11 +132,13 @@ Use hierarchical structure for related content.
 Self-explanatory but critical.
 
 ✅ Good:
+
 ```xml
 <task>Fix the bug</task>
 ```
 
 ❌ Bad:
+
 ```xml
 <task>Fix the bug
 ```
@@ -136,6 +146,7 @@ Self-explanatory but critical.
 ### 5. Combine with Other Techniques
 
 XML works great with:
+
 - **Examples**: Use `<examples>` with nested `<example>` tags
 - **Chain of Thought**: Use `<thinking>` and `<answer>` tags
 - **Requirements**: Use `<requirements>` with nested `<item>` tags

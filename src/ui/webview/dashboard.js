@@ -1,14 +1,11 @@
-(function() {
+(function () {
   const vscode = acquireVsCodeApi();
 
   // Import constants from compiled DashboardConstants.js (loaded via script tag in HTML)
   // Single source of truth - these match src/types/DashboardConstants.ts
   // Only importing cross-file shared constants (not UI-specific strings)
-  const {
-    MESSAGE_TYPES,
-    EXECUTION_STATES,
-    STEP_STATUS
-  } = window.FlightPathConstants;
+  const { MESSAGE_TYPES, EXECUTION_STATES, STEP_STATUS } =
+    window.FlightPathConstants;
 
   // State management
   let state = {
@@ -19,39 +16,39 @@
     totalSteps: 0,
     cliOutputs: {}, // Maps stepIndex -> array of outputs (including retries)
     retryStates: {}, // Maps stepIndex -> { currentRetry, maxRetries }
-    statusMessages: {} // Maps stepIndex -> array of status messages
+    statusMessages: {}, // Maps stepIndex -> array of status messages
   };
 
   // DOM elements
   const elements = {
-    fileName: document.getElementById('file-name'),
-    selectFileBtn: document.getElementById('select-file'),
-    editFileBtn: document.getElementById('edit-file'),
-    executionState: document.getElementById('execution-state'),
-    runBtn: document.getElementById('btn-run'),
-    pauseBtn: document.getElementById('btn-pause'),
-    stopBtn: document.getElementById('btn-stop'),
-    promptCounter: document.getElementById('prompt-counter'),
-    promptsList: document.getElementById('prompts-list'),
-    outputSection: document.getElementById('output-section'),
-    outputContent: document.getElementById('output-content'),
-    autoscrollCheckbox: document.getElementById('autoscroll-checkbox')
+    fileName: document.getElementById("file-name"),
+    selectFileBtn: document.getElementById("select-file"),
+    editFileBtn: document.getElementById("edit-file"),
+    executionState: document.getElementById("execution-state"),
+    runBtn: document.getElementById("btn-run"),
+    pauseBtn: document.getElementById("btn-pause"),
+    stopBtn: document.getElementById("btn-stop"),
+    promptCounter: document.getElementById("prompt-counter"),
+    promptsList: document.getElementById("prompts-list"),
+    outputSection: document.getElementById("output-section"),
+    outputContent: document.getElementById("output-content"),
+    autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
   };
 
   // Event listeners
-  elements.selectFileBtn.addEventListener('click', () => {
+  elements.selectFileBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
   });
 
-  elements.editFileBtn.addEventListener('click', () => {
+  elements.editFileBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.EDIT_FILE });
   });
 
-  elements.runBtn.addEventListener('click', () => {
+  elements.runBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.RUN });
   });
 
-  elements.pauseBtn.addEventListener('click', () => {
+  elements.pauseBtn.addEventListener("click", () => {
     // Toggle between pause and resume based on current state
     if (state.executionState === EXECUTION_STATES.PAUSED) {
       vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
@@ -60,14 +57,14 @@
     }
   });
 
-  elements.stopBtn.addEventListener('click', () => {
+  elements.stopBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.STOP });
   });
 
   // Message handler
-  window.addEventListener('message', event => {
+  window.addEventListener("message", (event) => {
     const message = event.data;
-    
+
     switch (message.type) {
       case MESSAGE_TYPES.INIT:
         handleInit(message.data);
@@ -85,10 +82,18 @@
         handleProgressUpdate(message.current, message.total);
         break;
       case MESSAGE_TYPES.STEP_STATUS_CHANGED:
-        handleStepStatusChanged(message.stepIndex, message.status, message.details);
+        handleStepStatusChanged(
+          message.stepIndex,
+          message.status,
+          message.details
+        );
         break;
       case MESSAGE_TYPES.RETRY_ATTEMPT_CHANGED:
-        handleRetryAttemptChanged(message.stepIndex, message.currentRetry, message.maxRetries);
+        handleRetryAttemptChanged(
+          message.stepIndex,
+          message.currentRetry,
+          message.maxRetries
+        );
         break;
       case MESSAGE_TYPES.CLI_OUTPUT:
         handleCliOutput(message.stepIndex, message.output);
@@ -115,8 +120,8 @@
     state.prompts = prompts.map((p, i) => ({
       index: i,
       text: p.prompt || p,
-      status: 'pending',
-      details: {}
+      status: "pending",
+      details: {},
     }));
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
@@ -126,9 +131,10 @@
     state.retryStates = {}; // Reset retry states
     state.statusMessages = {}; // Reset status messages
     // Reset prompt counter
-    elements.promptCounter.textContent = '';
+    elements.promptCounter.textContent = "";
     // Clear CLI output and show empty state
-    elements.outputContent.innerHTML = '<p class="empty-state">CLI output will appear here during execution</p>';
+    elements.outputContent.innerHTML =
+      '<p class="empty-state">CLI output will appear here during execution</p>';
     render();
   }
 
@@ -165,55 +171,69 @@
   }
 
   function handleStatusMessage(stepIndex, message) {
-    console.log('📝 Dashboard: Received status message for step', stepIndex, message);
-    
+    console.log(
+      "📝 Dashboard: Received status message for step",
+      stepIndex,
+      message
+    );
+
     // Initialize array for this step if needed
     if (!state.statusMessages[stepIndex]) {
       state.statusMessages[stepIndex] = [];
     }
-    
+
     // Add status message with timestamp
     const now = new Date();
     state.statusMessages[stepIndex].push({
       message,
       timestamp: now.toLocaleTimeString(),
-      timestampMs: now.getTime()
+      timestampMs: now.getTime(),
     });
-    
+
     // Always render to show all accumulated messages
     renderAllCliOutputs();
   }
 
   function handleCliOutput(stepIndex, output) {
-    console.log('📊 Dashboard: Received CLI output for step', stepIndex, 'isStreaming:', output.isStreaming, 'outputCount before:', (state.cliOutputs[stepIndex] || []).length);
-    
+    console.log(
+      "📊 Dashboard: Received CLI output for step",
+      stepIndex,
+      "isStreaming:",
+      output.isStreaming,
+      "outputCount before:",
+      (state.cliOutputs[stepIndex] || []).length
+    );
+
     // Initialize array for this step if needed
     if (!state.cliOutputs[stepIndex]) {
       state.cliOutputs[stepIndex] = [];
     }
-    
+
     // Add timestamp to output if not present
     if (!output.timestampMs) {
       output.timestampMs = new Date().getTime();
     }
-    
+
     const outputs = state.cliOutputs[stepIndex];
-    
+
     // Log current state
     if (outputs.length > 0) {
-      console.log('📊 Dashboard: Last output isStreaming:', outputs[outputs.length - 1].isStreaming);
+      console.log(
+        "📊 Dashboard: Last output isStreaming:",
+        outputs[outputs.length - 1].isStreaming
+      );
     }
-    
+
     // If the last entry is a streaming placeholder and this is the final version, replace it
     if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
-      console.log('📊 Dashboard: Replacing streaming entry with final output');
+      console.log("📊 Dashboard: Replacing streaming entry with final output");
       outputs[outputs.length - 1] = output;
     } else {
-      console.log('📊 Dashboard: Appending new output (initial or retry)');
+      console.log("📊 Dashboard: Appending new output (initial or retry)");
       outputs.push(output);
     }
-    
-    console.log('📊 Dashboard: outputCount after:', outputs.length);
+
+    console.log("📊 Dashboard: outputCount after:", outputs.length);
     // Always render to show all accumulated outputs
     renderAllCliOutputs();
   }
@@ -223,18 +243,18 @@
     if (!state.cliOutputs[stepIndex]) {
       state.cliOutputs[stepIndex] = [];
     }
-    
+
     const outputs = state.cliOutputs[stepIndex];
-    
+
     // Initialize streaming buffer if needed
     if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
       outputs.push({
-        prompt: '',
-        response: '',
+        prompt: "",
+        response: "",
         elapsed: 0,
         tokens: null,
         isStreaming: true,
-        timestampMs: new Date().getTime()
+        timestampMs: new Date().getTime(),
       });
     }
 
@@ -251,7 +271,7 @@
   }
 
   function render() {
-    elements.fileName.textContent = state.fileName || 'No file selected';
+    elements.fileName.textContent = state.fileName || "No file selected";
     renderExecutionState();
     renderPromptsList();
     updateControls();
@@ -260,29 +280,29 @@
 
   function renderExecutionState() {
     // Remove all state classes
-    elements.executionState.className = '';
-    
+    elements.executionState.className = "";
+
     // Add new state class
     const stateClass = `execution-state-${state.executionState}`;
     elements.executionState.className = stateClass;
-    
+
     // Update text based on state
-    let stateText = '';
+    let stateText = "";
     switch (state.executionState) {
       case EXECUTION_STATES.IDLE:
-        stateText = 'Ready';
+        stateText = "Ready";
         break;
       case EXECUTION_STATES.RUNNING:
-        stateText = 'Running';
+        stateText = "Running";
         break;
       case EXECUTION_STATES.PAUSED:
-        stateText = 'Paused';
+        stateText = "Paused";
         break;
       case EXECUTION_STATES.COMPLETED:
-        stateText = 'Completed';
+        stateText = "Completed";
         break;
       case EXECUTION_STATES.ERROR:
-        stateText = 'Error';
+        stateText = "Error";
         break;
       default:
         stateText = state.executionState;
@@ -292,35 +312,37 @@
 
   function renderPromptsList() {
     if (state.prompts.length === 0) {
-      elements.promptsList.innerHTML = '<p class="empty-state">No prompts loaded</p>';
+      elements.promptsList.innerHTML =
+        '<p class="empty-state">No prompts loaded</p>';
       return;
     }
 
-    elements.promptsList.innerHTML = state.prompts.map(prompt => {
-      const icon = getStatusIcon(prompt.status);
-      const statusClass = `prompt-item status-${prompt.status}`;
-      
-      let detailsHtml = '';
-      
-      // Show retry state if retrying
-      const retryState = state.retryStates[prompt.index];
-      if (retryState && retryState.currentRetry > 0) {
-        detailsHtml += `<div class="prompt-retry">🔄 Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
-      }
-      
-      if (prompt.details.duration) {
-        detailsHtml += `<div class="prompt-detail">Duration: ${prompt.details.duration}s</div>`;
-      }
-      if (prompt.details.endConditionResult) {
-        const result = prompt.details.endConditionResult;
-        const resultIcon = result.passed ? '✓' : '✗';
-        detailsHtml += `<div class="prompt-detail">End condition: ${resultIcon} ${result.message || ''}</div>`;
-      }
-      if (prompt.details.message) {
-        detailsHtml += `<div class="prompt-status-msg">${prompt.details.message}</div>`;
-      }
+    elements.promptsList.innerHTML = state.prompts
+      .map((prompt) => {
+        const icon = getStatusIcon(prompt.status);
+        const statusClass = `prompt-item status-${prompt.status}`;
 
-      return `
+        let detailsHtml = "";
+
+        // Show retry state if retrying
+        const retryState = state.retryStates[prompt.index];
+        if (retryState && retryState.currentRetry > 0) {
+          detailsHtml += `<div class="prompt-retry">🔄 Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
+        }
+
+        if (prompt.details.duration) {
+          detailsHtml += `<div class="prompt-detail">Duration: ${prompt.details.duration}s</div>`;
+        }
+        if (prompt.details.endConditionResult) {
+          const result = prompt.details.endConditionResult;
+          const resultIcon = result.passed ? "✓" : "✗";
+          detailsHtml += `<div class="prompt-detail">End condition: ${resultIcon} ${result.message || ""}</div>`;
+        }
+        if (prompt.details.message) {
+          detailsHtml += `<div class="prompt-status-msg">${prompt.details.message}</div>`;
+        }
+
+        return `
         <div class="${statusClass}">
           <div class="prompt-header">
             <span class="prompt-icon">${icon}</span>
@@ -329,91 +351,98 @@
           ${detailsHtml}
         </div>
       `;
-    }).join('');
+      })
+      .join("");
   }
 
   function renderAllCliOutputs() {
     // Build a combined array of ALL messages from ALL steps with timestamps for chronological sorting
     const allMessages = [];
-    
+
     // Iterate through all steps and collect all messages
     for (let stepIndex = 0; stepIndex < state.totalSteps; stepIndex++) {
       const outputs = state.cliOutputs[stepIndex] || [];
       const statusMessages = state.statusMessages[stepIndex] || [];
-      
+
       // Add status messages with their timestamps
       statusMessages.forEach((statusMsg, index) => {
         allMessages.push({
-          type: 'status',
+          type: "status",
           stepIndex,
-          timestamp: statusMsg.timestampMs || (stepIndex * 10000 + index),
-          data: statusMsg
+          timestamp: statusMsg.timestampMs || stepIndex * 10000 + index,
+          data: statusMsg,
         });
       });
-      
+
       // Add CLI outputs with their timestamps
       outputs.forEach((output, attemptIndex) => {
         allMessages.push({
-          type: 'cli',
+          type: "cli",
           stepIndex,
-          timestamp: output.timestampMs || (stepIndex * 10000 + statusMessages.length + attemptIndex),
+          timestamp:
+            output.timestampMs ||
+            stepIndex * 10000 + statusMessages.length + attemptIndex,
           data: output,
-          attemptIndex
+          attemptIndex,
         });
       });
     }
-    
+
     if (allMessages.length === 0) {
       // Show empty state
-      elements.outputContent.innerHTML = '<p class="empty-state">Output will appear here during execution</p>';
+      elements.outputContent.innerHTML =
+        '<p class="empty-state">Output will appear here during execution</p>';
       return;
     }
-    
+
     // Sort by timestamp to get chronological order
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
-    
+
     // Render all messages in chronological order
-    let html = '';
-    
-    allMessages.forEach(item => {
-      if (item.type === 'status') {
+    let html = "";
+
+    allMessages.forEach((item) => {
+      if (item.type === "status") {
         const statusMsg = item.data;
         html += '<div class="status-message">';
         html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
         html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
-        html += '</div>';
-      } else if (item.type === 'cli') {
+        html += "</div>";
+      } else if (item.type === "cli") {
         const output = item.data;
         const attemptIndex = item.attemptIndex;
         const stepIndex = item.stepIndex;
-        const attemptLabel = attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
-        const streamingIndicator = output.isStreaming ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>' : '';
-        
+        const attemptLabel =
+          attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
+        const streamingIndicator = output.isStreaming
+          ? ' <span style="color: #4ec9b0;">⬤ Streaming...</span>'
+          : "";
+
         html += '<div class="cli-output-item">';
         html += `<div class="output-header">[Prompt ${stepIndex + 1}] ${attemptLabel}${streamingIndicator}</div>`;
-        
+
         if (output.prompt) {
           html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
         }
-        
+
         if (output.response) {
           html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
         }
-        
+
         if (output.tokens) {
           html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
         }
-        
+
         if (!output.isStreaming && output.elapsed !== undefined) {
           html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
         }
-        
-        html += '</div>';
+
+        html += "</div>";
       }
     });
-    
+
     elements.outputContent.innerHTML = html;
-    
+
     // Auto-scroll to bottom if autoscroll is enabled and there's streaming or new content
     if (elements.autoscrollCheckbox.checked) {
       elements.outputContent.scrollTop = elements.outputContent.scrollHeight;
@@ -425,58 +454,61 @@
     const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
-    
+
     // Enable Edit button when a file is loaded
     elements.editFileBtn.disabled = !hasFile;
-    
+
     // Enable Run button if: has file AND (not running OR is completed OR is paused)
     // When paused, Run button acts as "Restart from beginning"
-    elements.runBtn.disabled = !hasFile || (isRunning && !isCompleted && !isPaused);
+    elements.runBtn.disabled =
+      !hasFile || (isRunning && !isCompleted && !isPaused);
     // Change button text and class based on state
     // Show restart icon when paused or completed
-    elements.runBtn.textContent = (isCompleted || isPaused) ? '↻' : '▶';
-    elements.runBtn.title = (isCompleted || isPaused) ? 'Restart from beginning' : 'Run';
-    elements.runBtn.className = (isCompleted || isPaused) ? 'btn-rerun' : 'btn-primary';
-    
+    elements.runBtn.textContent = isCompleted || isPaused ? "↻" : "▶";
+    elements.runBtn.title =
+      isCompleted || isPaused ? "Restart from beginning" : "Run";
+    elements.runBtn.className =
+      isCompleted || isPaused ? "btn-rerun" : "btn-primary";
+
     // Pause button becomes resume button when paused
     if (isPaused) {
-      elements.pauseBtn.textContent = '▶';
-      elements.pauseBtn.title = 'Resume';
+      elements.pauseBtn.textContent = "▶";
+      elements.pauseBtn.title = "Resume";
       elements.pauseBtn.disabled = false;
     } else {
-      elements.pauseBtn.textContent = '⏸';
-      elements.pauseBtn.title = 'Pause';
+      elements.pauseBtn.textContent = "⏸";
+      elements.pauseBtn.title = "Pause";
       elements.pauseBtn.disabled = !isRunning;
     }
-    
+
     // Stop button enabled when running or paused
     elements.stopBtn.disabled = !isRunning && !isPaused;
   }
 
   function getStatusIcon(status) {
     const icons = {
-      [STEP_STATUS.PENDING]: '⏸️',
-      [STEP_STATUS.RUNNING]: '▶️',
-      [STEP_STATUS.COMPLETED]: '✅',
-      [STEP_STATUS.FAILED]: '❌'
+      [STEP_STATUS.PENDING]: "⏸️",
+      [STEP_STATUS.RUNNING]: "▶️",
+      [STEP_STATUS.COMPLETED]: "✅",
+      [STEP_STATUS.FAILED]: "❌",
     };
     return icons[status] || icons[STEP_STATUS.PENDING];
   }
 
   function truncate(str, maxLen) {
-    return str.length > maxLen ? str.substring(0, maxLen) + '...' : str;
+    return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
   }
 
   function updatePromptCounter() {
     if (state.totalSteps > 0) {
       elements.promptCounter.textContent = `Completed ${state.currentStep} of ${state.totalSteps}`;
     } else {
-      elements.promptCounter.textContent = '';
+      elements.promptCounter.textContent = "";
     }
   }
 
   function escapeHtml(text) {
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
   }

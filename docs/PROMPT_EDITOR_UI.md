@@ -40,37 +40,44 @@ Create a dedicated prompt editor that provides:
 **Location**: Bottom panel alongside Problems, Output, Terminal, Debug Console
 
 **Implementation**:
+
 ```typescript
 // Register view container
 vscode.window.registerWebviewViewProvider(
-  'flightpath.promptEditor',
+  "flightpath.promptEditor",
   webviewProvider
 );
 ```
 
 **Package.json contribution**:
+
 ```json
 {
   "contributes": {
     "viewsContainers": {
-      "panel": [{
-        "id": "flightpath",
-        "title": "FlightPath",
-        "icon": "resources/flightpath-icon.svg"
-      }]
+      "panel": [
+        {
+          "id": "flightpath",
+          "title": "FlightPath",
+          "icon": "resources/flightpath-icon.svg"
+        }
+      ]
     },
     "views": {
-      "flightpath": [{
-        "type": "webview",
-        "id": "flightpath.promptEditor",
-        "name": "Prompt Editor"
-      }]
+      "flightpath": [
+        {
+          "type": "webview",
+          "id": "flightpath.promptEditor",
+          "name": "Prompt Editor"
+        }
+      ]
     }
   }
 }
 ```
 
 **Pros**:
+
 - Always accessible without opening new tabs
 - Persistent across workspace sessions
 - Users can resize and dock as needed
@@ -78,6 +85,7 @@ vscode.window.registerWebviewViewProvider(
 - Can stay open while editing other files
 
 **Cons**:
+
 - Limited vertical space in bottom panel
 - Webview doesn't get native VS Code editor features automatically
 - Must implement custom context-aware input
@@ -90,34 +98,39 @@ vscode.window.registerWebviewViewProvider(
 **Location**: Opens in editor area as dedicated editor for `.prompt.json` and `.flightpath.json` files
 
 **Implementation**:
+
 ```typescript
 vscode.window.registerCustomEditorProvider(
-  'flightpath.promptEditor',
+  "flightpath.promptEditor",
   customEditorProvider,
   {
-    webviewOptions: { retainContextWhenHidden: true }
+    webviewOptions: { retainContextWhenHidden: true },
   }
 );
 ```
 
 **Package.json contribution**:
+
 ```json
 {
   "contributes": {
-    "customEditors": [{
-      "viewType": "flightpath.promptEditor",
-      "displayName": "FlightPath Prompt Editor",
-      "selector": [
-        { "filenamePattern": "*.prompt.json" },
-        { "filenamePattern": "*.flightpath.json" }
-      ],
-      "priority": "default"
-    }]
+    "customEditors": [
+      {
+        "viewType": "flightpath.promptEditor",
+        "displayName": "FlightPath Prompt Editor",
+        "selector": [
+          { "filenamePattern": "*.prompt.json" },
+          { "filenamePattern": "*.flightpath.json" }
+        ],
+        "priority": "default"
+      }
+    ]
   }
 }
 ```
 
 **Pros**:
+
 - Full editor space (more room for complex prompts)
 - Direct association with prompt files
 - Can toggle between JSON source and UI editor
@@ -125,6 +138,7 @@ vscode.window.registerCustomEditorProvider(
 - Can leverage VS Code's text document infrastructure
 
 **Cons**:
+
 - Requires opening a file (not as quick for one-off prompts)
 - Custom editor webview still requires custom implementation
 - Users might prefer raw JSON editing
@@ -136,27 +150,32 @@ vscode.window.registerCustomEditorProvider(
 **Location**: Command palette opens a multi-step quick input with rich components
 
 **Implementation**:
+
 ```typescript
 vscode.window.showQuickPick(items, {
   canPickMany: false,
-  placeHolder: 'Select prompt options...'
+  placeHolder: "Select prompt options...",
 });
 
 // For text input
 vscode.window.showInputBox({
-  prompt: 'Enter your prompt',
-  placeHolder: '@workspace #file:src/extension.ts /explain ...',
-  validateInput: (value) => { /* validation */ }
+  prompt: "Enter your prompt",
+  placeHolder: "@workspace #file:src/extension.ts /explain ...",
+  validateInput: (value) => {
+    /* validation */
+  },
 });
 ```
 
 **Pros**:
+
 - Native VS Code UI (no webview needed)
 - Fast and lightweight
 - Keyboard-driven workflow
 - No custom HTML/CSS to maintain
 
 **Cons**:
+
 - Limited UI customization
 - Cannot easily show rich context previews
 - No spell checking integration
@@ -170,36 +189,42 @@ vscode.window.showInputBox({
 **Location**: Opens as a new untitled document with custom language support
 
 **Implementation**:
+
 ```typescript
 // Create untitled document with custom language
 const doc = await vscode.workspace.openTextDocument({
-  content: '',
-  language: 'flightpath-prompt'
+  content: "",
+  language: "flightpath-prompt",
 });
 
 await vscode.window.showTextDocument(doc);
 ```
 
 **With custom language contribution**:
+
 ```json
 {
   "contributes": {
-    "languages": [{
-      "id": "flightpath-prompt",
-      "aliases": ["FlightPath Prompt"],
-      "extensions": [".flightpath-prompt"]
-    }]
+    "languages": [
+      {
+        "id": "flightpath-prompt",
+        "aliases": ["FlightPath Prompt"],
+        "extensions": [".flightpath-prompt"]
+      }
+    ]
   }
 }
 ```
 
 **Pros**:
+
 - Full editor capabilities (syntax highlighting, etc.)
 - Can leverage native text editor features
 - Familiar editing experience
 - Large editing space
 
 **Cons**:
+
 - Requires custom language server for context-aware features
 - No native UI for metadata (model picker, etc.)
 - Needs separate save workflow to create .prompt.json file
@@ -221,36 +246,39 @@ VS Code's native `#` context picker in Copilot Chat is **not** a public API. We 
 
 ```typescript
 vscode.languages.registerCompletionItemProvider(
-  { language: 'flightpath-prompt' },
+  { language: "flightpath-prompt" },
   {
     provideCompletionItems(document, position, token, context) {
       const line = document.lineAt(position.line).text;
       const prefix = line.substring(0, position.character);
-      
+
       // Trigger on # character
-      if (prefix.endsWith('#')) {
+      if (prefix.endsWith("#")) {
         return getFileCompletions();
       }
-      
+
       // Trigger on @ character
-      if (prefix.endsWith('@')) {
+      if (prefix.endsWith("@")) {
         return getWorkspaceCompletions();
       }
-      
+
       return undefined;
-    }
+    },
   },
-  '#', '@' // Trigger characters
+  "#",
+  "@" // Trigger characters
 );
 ```
 
 **Pros**:
+
 - Native VS Code completion UI
 - Familiar UX for developers
 - Built-in filtering and search
 - Keyboard navigation
 
 **Cons**:
+
 - Requires custom language definition
 - Cannot easily show file tree structure
 - Limited preview capabilities
@@ -265,46 +293,48 @@ vscode.languages.registerCompletionItemProvider(
 <!-- In webview HTML -->
 <script src="monaco-editor/min/vs/loader.js"></script>
 <script>
-  require.config({ paths: { vs: 'monaco-editor/min/vs' } });
-  require(['vs/editor/editor.main'], function() {
-    const editor = monaco.editor.create(document.getElementById('container'), {
-      value: '',
-      language: 'markdown'
+  require.config({ paths: { vs: "monaco-editor/min/vs" } });
+  require(["vs/editor/editor.main"], function () {
+    const editor = monaco.editor.create(document.getElementById("container"), {
+      value: "",
+      language: "markdown",
     });
-    
+
     // Custom completion provider
-    monaco.languages.registerCompletionItemProvider('markdown', {
-      triggerCharacters: ['#', '@'],
+    monaco.languages.registerCompletionItemProvider("markdown", {
+      triggerCharacters: ["#", "@"],
       provideCompletionItems: async (model, position) => {
         const word = model.getWordUntilPosition(position);
-        
-        if (word.word.startsWith('#')) {
+
+        if (word.word.startsWith("#")) {
           // Get files from extension host
-          const files = await vscode.postMessage({ 
-            command: 'getFiles' 
+          const files = await vscode.postMessage({
+            command: "getFiles",
           });
-          
+
           return {
-            suggestions: files.map(f => ({
+            suggestions: files.map((f) => ({
               label: `#file:${f.path}`,
               kind: monaco.languages.CompletionItemKind.File,
-              insertText: `#file:${f.path}`
-            }))
+              insertText: `#file:${f.path}`,
+            })),
           };
         }
-      }
+      },
     });
   });
 </script>
 ```
 
 **Pros**:
+
 - Full control over editor behavior
 - Rich UI possibilities (file tree, previews)
 - Can implement exact Copilot Chat-like behavior
 - Syntax highlighting and other Monaco features
 
 **Cons**:
+
 - Requires bundling Monaco Editor (~5MB)
 - More complex webview implementation
 - Communication overhead between webview and extension host
@@ -319,34 +349,34 @@ vscode.languages.registerCompletionItemProvider(
 ```typescript
 // Step 1: Text input with special syntax
 const prompt = await vscode.window.showInputBox({
-  prompt: 'Enter prompt (type ## to add files)',
-  placeHolder: '@workspace /explain Fix error handling'
+  prompt: "Enter prompt (type ## to add files)",
+  placeHolder: "@workspace /explain Fix error handling",
 });
 
 // Step 2: Parse ## markers and show file picker
-const hasFileMarker = prompt?.includes('##');
+const hasFileMarker = prompt?.includes("##");
 if (hasFileMarker) {
-  const files = await vscode.window.showQuickPick(
-    getWorkspaceFiles(),
-    {
-      canPickMany: true,
-      placeHolder: 'Select files to include'
-    }
-  );
-  
+  const files = await vscode.window.showQuickPick(getWorkspaceFiles(), {
+    canPickMany: true,
+    placeHolder: "Select files to include",
+  });
+
   // Replace ## with #file:... syntax
-  const updatedPrompt = prompt.replace('##', 
-    files.map(f => `#file:${f.path}`).join(' ')
+  const updatedPrompt = prompt.replace(
+    "##",
+    files.map((f) => `#file:${f.path}`).join(" ")
   );
 }
 ```
 
 **Pros**:
+
 - No custom UI needed
 - Leverages native VS Code components
 - Simple implementation
 
 **Cons**:
+
 - Not as seamless as inline `#` trigger
 - Requires learning special marker syntax (`##`)
 - Multi-step workflow interrupts flow
@@ -372,30 +402,33 @@ The [Code Spell Checker extension](https://marketplace.visualstudio.com/items?it
 ```json
 {
   "contributes": {
-    "languages": [{
-      "id": "flightpath-prompt",
-      "aliases": ["FlightPath Prompt"],
-      "extensions": [".flightpath-prompt"]
-    }]
+    "languages": [
+      {
+        "id": "flightpath-prompt",
+        "aliases": ["FlightPath Prompt"],
+        "extensions": [".flightpath-prompt"]
+      }
+    ]
   }
 }
 ```
 
 Then users configure Code Spell Checker:
+
 ```json
 {
-  "cSpell.enabledLanguageIds": [
-    "flightpath-prompt"
-  ]
+  "cSpell.enabledLanguageIds": ["flightpath-prompt"]
 }
 ```
 
 **Pros**:
+
 - Automatic if user has Code Spell Checker installed
 - Zero implementation on our side
 - Native VS Code diagnostic experience
 
 **Cons**:
+
 - Requires user configuration
 - Only works if Code Spell Checker is installed
 - Limited to text-based editors (not webviews)
@@ -408,24 +441,26 @@ Then users configure Code Spell Checker:
 
 ```typescript
 // When opening prompt editor
-const config = vscode.workspace.getConfiguration('cSpell');
-const enabledLanguages = config.get<string[]>('enabledLanguageIds') || [];
+const config = vscode.workspace.getConfiguration("cSpell");
+const enabledLanguages = config.get<string[]>("enabledLanguageIds") || [];
 
-if (!enabledLanguages.includes('flightpath-prompt')) {
+if (!enabledLanguages.includes("flightpath-prompt")) {
   await config.update(
-    'enabledLanguageIds',
-    [...enabledLanguages, 'flightpath-prompt'],
+    "enabledLanguageIds",
+    [...enabledLanguages, "flightpath-prompt"],
     vscode.ConfigurationTarget.Global
   );
 }
 ```
 
 **Pros**:
+
 - Automatic setup for users
 - One-time configuration
 - User doesn't need to know about configuration
 
 **Cons**:
+
 - Modifies user settings without explicit consent
 - Still requires Code Spell Checker extension
 - Could conflict with user preferences
@@ -440,38 +475,40 @@ if (!enabledLanguages.includes('flightpath-prompt')) {
 async function setupSpellCheck(): Promise<void> {
   // Check if Code Spell Checker is installed
   const cspellExt = vscode.extensions.getExtension(
-    'streetsidesoftware.code-spell-checker'
+    "streetsidesoftware.code-spell-checker"
   );
-  
+
   if (!cspellExt) {
     const result = await vscode.window.showInformationMessage(
-      'Install Code Spell Checker for spell checking in FlightPath prompts?',
-      'Install', 'Not Now'
+      "Install Code Spell Checker for spell checking in FlightPath prompts?",
+      "Install",
+      "Not Now"
     );
-    
-    if (result === 'Install') {
+
+    if (result === "Install") {
       await vscode.commands.executeCommand(
-        'workbench.extensions.installExtension',
-        'streetsidesoftware.code-spell-checker'
+        "workbench.extensions.installExtension",
+        "streetsidesoftware.code-spell-checker"
       );
     }
     return;
   }
-  
+
   // Check if spell check is enabled for our language
-  const config = vscode.workspace.getConfiguration('cSpell');
-  const enabledLanguages = config.get<string[]>('enabledLanguageIds') || [];
-  
-  if (!enabledLanguages.includes('flightpath-prompt')) {
+  const config = vscode.workspace.getConfiguration("cSpell");
+  const enabledLanguages = config.get<string[]>("enabledLanguageIds") || [];
+
+  if (!enabledLanguages.includes("flightpath-prompt")) {
     const result = await vscode.window.showInformationMessage(
-      'Enable spell checking for FlightPath prompts?',
-      'Enable', 'Not Now'
+      "Enable spell checking for FlightPath prompts?",
+      "Enable",
+      "Not Now"
     );
-    
-    if (result === 'Enable') {
+
+    if (result === "Enable") {
       await config.update(
-        'enabledLanguageIds',
-        [...enabledLanguages, 'flightpath-prompt'],
+        "enabledLanguageIds",
+        [...enabledLanguages, "flightpath-prompt"],
         vscode.ConfigurationTarget.Global
       );
     }
@@ -480,11 +517,13 @@ async function setupSpellCheck(): Promise<void> {
 ```
 
 **Pros**:
+
 - Respects user choice
 - Provides guidance
 - Graceful degradation if not installed
 
 **Cons**:
+
 - Requires prompting user
 - Not automatic
 
@@ -497,16 +536,16 @@ async function setupSpellCheck(): Promise<void> {
 ```html
 <script>
   // Use browser's native spell check
-  const editor = document.getElementById('prompt-editor');
-  editor.setAttribute('spellcheck', 'true');
-  
+  const editor = document.getElementById("prompt-editor");
+  editor.setAttribute("spellcheck", "true");
+
   // Or integrate a JavaScript spell checker
-  import Typo from 'typo-js';
-  const dictionary = new Typo('en_US');
-  
-  editor.addEventListener('input', () => {
+  import Typo from "typo-js";
+  const dictionary = new Typo("en_US");
+
+  editor.addEventListener("input", () => {
     const words = editor.value.split(/\s+/);
-    words.forEach(word => {
+    words.forEach((word) => {
       if (!dictionary.check(word)) {
         // Highlight as misspelled
       }
@@ -516,11 +555,13 @@ async function setupSpellCheck(): Promise<void> {
 ```
 
 **Pros**:
+
 - Independent of Code Spell Checker extension
 - Works in any environment
 - Full control over spell check behavior
 
 **Cons**:
+
 - Requires bundling dictionary files
 - More implementation work
 - Not integrated with user's custom dictionaries
@@ -552,6 +593,7 @@ async function setupSpellCheck(): Promise<void> {
 ```
 
 **Features**:
+
 - Left sidebar for metadata/settings
 - Main text area for prompt
 - Action buttons at bottom
@@ -583,6 +625,7 @@ async function setupSpellCheck(): Promise<void> {
 ```
 
 **Features**:
+
 - Full editor space
 - Toolbar for quick access to settings
 - Markdown-style syntax for end conditions
@@ -626,6 +669,7 @@ async function setupSpellCheck(): Promise<void> {
 ```
 
 **Features**:
+
 - Form-based UI
 - Radio buttons and checkboxes
 - File browser integration
@@ -640,6 +684,7 @@ async function setupSpellCheck(): Promise<void> {
 **Options**:
 
 1. **Dropdown in UI**
+
    ```typescript
    <select id="model">
      <option value="claude-sonnet-4.5">Claude Sonnet 4.5</option>
@@ -649,25 +694,26 @@ async function setupSpellCheck(): Promise<void> {
    ```
 
 2. **Quick Pick Command**
+
    ```typescript
    const model = await vscode.window.showQuickPick([
-     { label: 'Claude Sonnet 4.5', value: 'claude-sonnet-4.5' },
-     { label: 'GPT-5', value: 'gpt-5' },
-     { label: 'Claude Haiku 4.5', value: 'claude-haiku-4.5' }
+     { label: "Claude Sonnet 4.5", value: "claude-sonnet-4.5" },
+     { label: "GPT-5", value: "gpt-5" },
+     { label: "Claude Haiku 4.5", value: "claude-haiku-4.5" },
    ]);
    ```
 
 3. **Command Palette Shortcut**
    ```typescript
-   vscode.commands.registerCommand(
-     'flightpath.setModel',
-     async () => { /* ... */ }
-   );
+   vscode.commands.registerCommand("flightpath.setModel", async () => {
+     /* ... */
+   });
    ```
 
 ### Agent/Mode Selector
 
 **Options**:
+
 - Chat (conversational)
 - Code (code generation)
 - Fix (error fixing)
@@ -675,6 +721,7 @@ async function setupSpellCheck(): Promise<void> {
 - Test (test generation)
 
 Could be:
+
 - Dropdown
 - Radio buttons
 - Segmented control
@@ -689,12 +736,12 @@ if (editor && !editor.selection.isEmpty) {
   const selection = editor.selection;
   const document = editor.document;
   const filePath = vscode.workspace.asRelativePath(document.uri);
-  
+
   const startLine = selection.start.line + 1; // 1-indexed
   const endLine = selection.end.line + 1;
-  
+
   const contextString = `#file:${filePath}:${startLine}-${endLine}`;
-  
+
   // Auto-insert into prompt editor
   insertText(contextString);
 }
@@ -704,17 +751,17 @@ if (editor && !editor.selection.isEmpty) {
 
 ## 📊 Comparison Matrix
 
-| Feature | Bottom Panel (A) | Custom Editor (B) | Command Palette (C) | New Document (D) |
-|---------|-----------------|-------------------|---------------------|------------------|
-| **Always Accessible** | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
-| **Large Editing Space** | ❌ Limited | ✅ Yes | ❌ No | ✅ Yes |
-| **Context-Aware Input** | 🔶 Custom | 🔶 Custom | ❌ Difficult | ✅ Completion API |
-| **Spell Check** | 🔶 Custom | 🔶 Custom | ❌ No | ✅ Native |
-| **Implementation Complexity** | 🔴 High | 🔴 High | 🟢 Low | 🟡 Medium |
-| **File Association** | ❌ No | ✅ Yes | ❌ No | ❌ No |
-| **Metadata UI** | ✅ Easy | ✅ Easy | 🟡 Multi-step | ❌ Limited |
-| **Preview/Run** | ✅ Easy | ✅ Easy | 🟡 Separate | 🟡 Separate |
-| **User Familiarity** | ✅ High | ✅ High | ✅ High | 🟡 Medium |
+| Feature                       | Bottom Panel (A) | Custom Editor (B) | Command Palette (C) | New Document (D)  |
+| ----------------------------- | ---------------- | ----------------- | ------------------- | ----------------- |
+| **Always Accessible**         | ✅ Yes           | ❌ No             | ✅ Yes              | ❌ No             |
+| **Large Editing Space**       | ❌ Limited       | ✅ Yes            | ❌ No               | ✅ Yes            |
+| **Context-Aware Input**       | 🔶 Custom        | 🔶 Custom         | ❌ Difficult        | ✅ Completion API |
+| **Spell Check**               | 🔶 Custom        | 🔶 Custom         | ❌ No               | ✅ Native         |
+| **Implementation Complexity** | 🔴 High          | 🔴 High           | 🟢 Low              | 🟡 Medium         |
+| **File Association**          | ❌ No            | ✅ Yes            | ❌ No               | ❌ No             |
+| **Metadata UI**               | ✅ Easy          | ✅ Easy           | 🟡 Multi-step       | ❌ Limited        |
+| **Preview/Run**               | ✅ Easy          | ✅ Easy           | 🟡 Separate         | 🟡 Separate       |
+| **User Familiarity**          | ✅ High          | ✅ High           | ✅ High             | 🟡 Medium         |
 
 **Legend**: ✅ Excellent | 🟡 Good | 🔶 Requires Work | ❌ Poor/Not Available | 🔴 High | 🟡 Medium | 🟢 Low
 
@@ -734,29 +781,32 @@ if (editor && !editor.selection.isEmpty) {
 
 ```typescript
 vscode.languages.registerCompletionItemProvider(
-  { pattern: '**/*.{prompt,flightpath}.json' },
+  { pattern: "**/*.{prompt,flightpath}.json" },
   {
     provideCompletionItems(document, position) {
       // Check if we're inside a "prompt" string
       const line = document.lineAt(position).text;
       if (isInsidePromptString(line, position)) {
-        if (line.substring(0, position.character).endsWith('#')) {
+        if (line.substring(0, position.character).endsWith("#")) {
           return getFileCompletions();
         }
       }
-    }
+    },
   },
-  '#', '@'
+  "#",
+  "@"
 );
 ```
 
 **Pros**:
+
 - No UI changes required
 - Leverages existing JSON infrastructure
 - Spell check works automatically (Code Spell Checker supports JSON strings)
 - Quick to implement
 
 **Cons**:
+
 - Still editing JSON (syntax overhead)
 - Limited UX compared to dedicated editor
 
@@ -776,19 +826,21 @@ Create a WebView in the bottom panel with:
 // Register webview view provider
 context.subscriptions.push(
   vscode.window.registerWebviewViewProvider(
-    'flightpath.promptEditor',
+    "flightpath.promptEditor",
     new PromptEditorViewProvider(context)
   )
 );
 ```
 
 **Pros**:
+
 - Best UX for creating prompts
 - Always accessible
 - Rich metadata controls
 - Can implement custom spell check
 
 **Cons**:
+
 - More implementation work
 - Requires Monaco Editor bundling
 
@@ -797,13 +849,14 @@ context.subscriptions.push(
 **Phase 3: Custom Editor (Future)**
 
 Add custom editor for `.prompt.json` files:
+
 - Opens in editor area
 - Toggle between "Form View" and "Source View"
 - Full integration with file system
 
 ```typescript
 vscode.window.registerCustomEditorProvider(
-  'flightpath.promptEditor',
+  "flightpath.promptEditor",
   customEditorProvider
 );
 ```
