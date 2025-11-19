@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}};"
+    />
+    <link rel="stylesheet" href="{{styleUri}}" />
+    <title>FlightPath Dashboard</title>
+  </head>
+  <body>
+    <div id="app">
+      <div id="header">
+        <div id="file-info">
+          <span id="file-name">No file selected</span>
+          <div class="file-buttons">
+            <button
+              id="select-file"
+              class="btn-secondary btn-small"
+              title="Select a different prompt file"
+            >
+              Select
+            </button>
+            <button
+              id="edit-file"
+              class="btn-secondary btn-small"
+              title="Open current prompt file in editor"
+              disabled
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+        <div id="execution-state" class="execution-state-idle">Idle</div>
+        <div id="controls">
+          <button id="btn-run" class="btn-primary" title="Run">▶</button>
+          <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
+            ⏸
+          </button>
+          <button id="btn-stop" class="btn-secondary" title="Stop" disabled>
+            ⏹
+          </button>
+        </div>
+      </div>
+
+      <div id="main-content">
+        <div id="prompts-section">
+          <div class="section-header">
+            <h3>Prompts</h3>
+            <span id="prompt-counter" class="prompt-counter"></span>
+          </div>
+          <div id="prompts-list">
+            <div class="empty-state">Select a prompt file to begin</div>
+          </div>
+        </div>
+
+        <div id="output-section">
+          <div class="section-header">
+            <h3>Output</h3>
+            <label class="autoscroll-toggle">
+              <input type="checkbox" id="autoscroll-checkbox" checked />
+              <span>Autoscroll</span>
+            </label>
+          </div>
+          <div id="output-content">
+            <div class="empty-state">No output yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
+    <script src="{{constantsUri}}"></script>
+    <!-- Then load main dashboard code that depends on constants -->
+    <script src="{{scriptUri}}"></script>
+  </body>
+</html>

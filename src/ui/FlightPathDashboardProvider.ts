@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
@@ -206,59 +207,35 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       )
     );
 
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="${styleUri}">
-  <title>FlightPath Dashboard</title>
-</head>
-<body>
-  <div id="app">
-    <div id="header">
-      <div id="file-info">
-        <span id="file-name">No file selected</span>
-        <div class="file-buttons">
-          <button id="select-file" class="btn-secondary btn-small" title="Select a different prompt file">Select</button>
-          <button id="edit-file" class="btn-secondary btn-small" title="Open current prompt file in editor" disabled>Edit</button>
-        </div>
-      </div>
-      <div id="execution-state" class="execution-state-idle"></div>
-      <div id="controls">
-        <button id="btn-run" class="btn-primary" title="Run">▶</button>
-        <button id="btn-pause" class="btn-secondary" title="Pause" disabled>⏸</button>
-        <button id="btn-stop" class="btn-secondary" title="Stop" disabled>⏹</button>
-      </div>
-    </div>
+    // Read HTML template and replace placeholders
+    const htmlPath = path.join(
+      this.context.extensionUri.fsPath,
+      "out",
+      "ui",
+      "webview",
+      "dashboard.html"
+    );
 
-    <div id="main-content">
-      <div id="prompts-section">
-        <div class="section-header">
-          <h3>Prompts</h3>
-          <span id="prompt-counter" class="prompt-counter"></span>
-        </div>
-        <div id="prompts-list"></div>
-      </div>
-
-      <div id="output-section">
-        <div class="section-header">
-          <h3>Output</h3>
-          <label class="autoscroll-toggle">
-            <input type="checkbox" id="autoscroll-checkbox" checked>
-            <span>Autoscroll</span>
-          </label>
-        </div>
-        <div id="output-content"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
-  <script src="${constantsUri}"></script>
-  <!-- Then load main dashboard code that depends on constants -->
-  <script src="${scriptUri}"></script>
-</body>
+    let html: string;
+    try {
+      html = fs.readFileSync(htmlPath, "utf8");
+    } catch (error) {
+      console.error("Failed to load dashboard.html template:", error);
+      // Fallback to minimal HTML
+      return `<!DOCTYPE html>
+<html>
+<head><title>FlightPath Dashboard</title></head>
+<body><p>Error loading dashboard template</p></body>
 </html>`;
+    }
+
+    // Replace template placeholders with actual URIs
+    html = html
+      .replace(/\{\{constantsUri\}\}/g, constantsUri.toString())
+      .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
+      .replace(/\{\{styleUri\}\}/g, styleUri.toString())
+      .replace(/\{\{cspSource\}\}/g, webview.cspSource);
+
+    return html;
   }
 }

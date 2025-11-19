@@ -215,9 +215,9 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 
 ## Implementation Status
 
-**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar
+**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar, WebView dashboard with HTML template
 
-**Planned**: End condition execution with response validation, WebView panel, multi-turn CLI sessions, comprehensive tests
+**Planned**: Comprehensive end-to-end workflow tests, enhanced error recovery, multi-turn CLI sessions
 
 ## Extension Settings
 
