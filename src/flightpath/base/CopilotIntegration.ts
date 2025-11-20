@@ -56,11 +56,17 @@ export abstract class CopilotIntegration {
    * Must be implemented by subclasses
    * @param prompt The prompt item to send
    * @param needsCompletionDetection If true, set up completion detection mechanisms (default: true)
+   * @param workflowContext Optional workflow context for dynamic queue instructions
    * @returns True if prompt was sent successfully
    */
   abstract sendPrompt(
     prompt: PromptItem,
-    needsCompletionDetection?: boolean
+    needsCompletionDetection?: boolean,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean>;
 
   /**
@@ -98,6 +104,102 @@ export abstract class CopilotIntegration {
     }
 
     return promptText;
+  }
+
+  /**
+   * Build prompt with dynamic queue instructions if needed
+   * @param prompt The prompt item
+   * @param promptIndex Current prompt index
+   * @param allPrompts All prompts in the workflow
+   * @param filePath Path to the .flightpath.json file
+   * @returns Prompt text with optional dynamic queue instructions
+   */
+  protected async buildPromptWithInstructions(
+    prompt: PromptItem,
+    promptIndex: number,
+    allPrompts: PromptItem[],
+    filePath?: string
+  ): Promise<string> {
+    // Build base prompt text (with attachments)
+    let promptText = await this.buildPromptText(prompt);
+
+    // Check if we should inject dynamic queue instructions
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const dynamicQueueEnabled = config.get<boolean>(
+      "enableDynamicQueue",
+      false
+    );
+
+    if (!dynamicQueueEnabled || !filePath) {
+      return promptText; // No instructions needed
+    }
+
+    // Check if this prompt should get extension instructions
+    const {
+      shouldInjectExtensionInstructions,
+    } = require("../../utils/PromptIdentity");
+    const dynamicExtensionOnLastPrompt = config.get<boolean>(
+      "dynamicExtensionOnLastPrompt",
+      true
+    );
+
+    const shouldInject = shouldInjectExtensionInstructions(
+      prompt,
+      promptIndex,
+      allPrompts,
+      dynamicExtensionOnLastPrompt
+    );
+
+    if (!shouldInject) {
+      return promptText; // No instructions for this prompt
+    }
+
+    // Get dynamic queue config for instruction template
+    const maxQueueSize = config.get<number>("maxQueueSize", 100);
+    const maxExecutionTime = config.get<number>("maxExecutionTime", 18000);
+    const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+
+    // Calculate current stats (approximations for instruction template)
+    const currentSize = allPrompts.length;
+    const currentIndex = promptIndex + 1; // 1-based for display
+    const totalPrompts = allPrompts.length;
+
+    // Convert file path to workspace-relative
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const relativeFilePath = workspaceFolder
+      ? vscode.workspace.asRelativePath(filePath, false)
+      : filePath;
+
+    // Build instruction template
+    const maxSizeDisplay = unlimitedMode
+      ? "unlimited"
+      : maxQueueSize.toString();
+    const maxTimeDisplay = unlimitedMode ? "unlimited" : `${maxExecutionTime}s`;
+
+    const instructions = `<criticalInstruction>
+You are executing prompt ${currentIndex} of ${totalPrompts} in a FlightPath workflow.
+
+DYNAMIC QUEUE EXTENSION:
+If you need additional steps to complete this task, you can extend the workflow:
+1. Read the current file: ${relativeFilePath}
+2. Insert new prompts AFTER the current prompt (index ${currentIndex}) in the "prompts" array
+   - Recommended: Insert immediately after current position for logical flow
+   - Alternative: Append to end of array if order doesn't matter
+3. Include "id" fields for clarity (e.g., "id": "step-4-refactor-auth")
+4. Optionally set "allowDynamicExtension": true on prompts that may need further extension
+5. Keep existing prompts intact - DO NOT modify or delete completed prompts
+6. Save the file - FlightPath will detect changes and continue
+
+Current queue: ${currentSize}/${maxSizeDisplay} prompts
+Max execution time: ${maxTimeDisplay}
+
+IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution time.
+</criticalInstruction>
+
+`;
+
+    // Prepend instructions to prompt
+    return instructions + promptText;
   }
 
   /**

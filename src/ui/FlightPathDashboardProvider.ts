@@ -134,6 +134,53 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.postMessage({ type: MESSAGE_TYPES.EXECUTION_COMPLETED });
   }
 
+  public notifyQueueExtended(
+    addedCount: number,
+    currentSize: number,
+    maxSize?: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.QUEUE_EXTENDED,
+      addedCount,
+      currentSize,
+      maxSize,
+    });
+  }
+
+  public notifyQueueSizeLimitReached(
+    currentSize: number,
+    maxSize: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED,
+      currentSize,
+      maxSize,
+    });
+  }
+
+  public notifyExecutionTimeLimitReached(
+    elapsedSeconds: number,
+    maxSeconds: number,
+    completedCount: number,
+    totalCount: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.EXECUTION_TIME_LIMIT_REACHED,
+      elapsedSeconds,
+      maxSeconds,
+      completedCount,
+      totalCount,
+    });
+  }
+
+  public notifyDynamicQueueEnabled(enabled: boolean): void {
+    this.postMessage({
+      type: enabled
+        ? MESSAGE_TYPES.DYNAMIC_QUEUE_ENABLED
+        : MESSAGE_TYPES.DYNAMIC_QUEUE_DISABLED,
+    });
+  }
+
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
   }

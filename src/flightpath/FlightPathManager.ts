@@ -116,6 +116,25 @@ export class FlightPathManager {
   }
 
   /**
+   * Get dynamic queue configuration from settings
+   */
+  private getDynamicQueueConfig(): import("../types/FlightPathTypes").DynamicQueueConfig {
+    const config = vscode.workspace.getConfiguration("flightpath");
+
+    return {
+      enabled: config.get<boolean>("enableDynamicQueue", false),
+      dynamicExtensionOnLastPrompt: config.get<boolean>(
+        "dynamicExtensionOnLastPrompt",
+        true
+      ),
+      maxQueueSize: config.get<number>("maxQueueSize", 100),
+      maxExecutionTime: config.get<number>("maxExecutionTime", 18000),
+      unlimitedMode: config.get<boolean>("unlimitedMode", false),
+      notifyOnExtension: config.get<boolean>("notifyOnQueueExtension", true),
+    };
+  }
+
+  /**
    * Create integration instance based on mode override or user settings
    * @param modeOverride Optional mode to override user settings
    * @returns Integration instance (either override or default)
@@ -403,6 +422,9 @@ export class FlightPathManager {
     // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
 
+    // Start execution time tracking
+    this.promptQueue.startExecutionTimer();
+
     // Get fresh state (supports resume from pause)
     let state = this.promptQueue.getState();
 
@@ -445,12 +467,36 @@ export class FlightPathManager {
     for (let i = state.currentIndex; i < state.prompts.length; i++) {
       const prompt = state.prompts[i];
 
+      // Get dynamic queue config once per loop iteration
+      const dynamicConfig = this.getDynamicQueueConfig();
+
       // Check if paused before starting new prompt (handles pause between prompts)
       if (this.promptQueue.getState().status === "paused") {
         console.log(
           "⏸️ FlightPath: Workflow paused before executing next prompt"
         );
         break;
+      }
+
+      // Check execution time limit (if not unlimited)
+      if (dynamicConfig.enabled && !dynamicConfig.unlimitedMode) {
+        const elapsedMs = this.promptQueue.getActiveExecutionTime();
+        const elapsedSec = Math.floor(elapsedMs / 1000);
+        const maxTimeSec = dynamicConfig.maxExecutionTime;
+
+        if (elapsedSec >= maxTimeSec) {
+          const completedCount = this.promptQueue.getCompletedCount();
+          const totalCount = state.prompts.length;
+          const remainingCount = totalCount - i;
+
+          const message = `FlightPath: Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalCount} prompts. ${remainingCount} prompts remaining in queue.`;
+
+          vscode.window.showWarningMessage(message);
+          console.log(`⏱️ ${message}`);
+
+          this.promptQueue.markErrored();
+          break;
+        }
       }
 
       // Update dashboard step status to running
@@ -505,10 +551,15 @@ export class FlightPathManager {
         });
       }
 
-      // Send prompt to Copilot
+      // Send prompt to Copilot with workflow context for dynamic queue instructions
       const success = await activeIntegration.sendPrompt(
         prompt,
-        needsCompletionDetection
+        needsCompletionDetection,
+        {
+          promptIndex: i,
+          allPrompts: state.prompts,
+          filePath: this.currentPromptFile?.filePath,
+        }
       );
 
       // Clean up streaming listener
@@ -720,6 +771,48 @@ export class FlightPathManager {
       // Mark current prompt as completed in queue and move to next
       // This updates queue state (currentIndex, retryCount) properly
       await this.promptQueue.completeCurrentAndMoveNext();
+
+      // Dynamic queue reload: Check if we should reload the prompt file after completion
+      // (dynamicConfig already declared at top of loop)
+      if (dynamicConfig.enabled && this.currentPromptFile?.filePath) {
+        const maxSize = dynamicConfig.unlimitedMode
+          ? 0
+          : dynamicConfig.maxQueueSize;
+        const addedCount = await this.promptQueue.reloadAndMergeQueue(
+          this.currentPromptFile.filePath,
+          this.promptFileParser,
+          maxSize
+        );
+
+        if (addedCount > 0) {
+          // Update state reference after reload
+          state = this.promptQueue.getState();
+
+          // Show notification if enabled
+          if (dynamicConfig.notifyOnExtension) {
+            const currentSize = state.prompts.length;
+            const message = dynamicConfig.unlimitedMode
+              ? `FlightPath: Queue extended (+${addedCount} prompts, total: ${currentSize})`
+              : `FlightPath: Queue extended (+${addedCount} prompts, ${currentSize}/${dynamicConfig.maxQueueSize})`;
+
+            vscode.window.showInformationMessage(message);
+          }
+
+          // Notify dashboard about queue extension
+          if (this.dashboardProvider) {
+            this.dashboardProvider.notifyQueueExtended(
+              addedCount,
+              state.prompts.length,
+              dynamicConfig.unlimitedMode
+                ? undefined
+                : dynamicConfig.maxQueueSize
+            );
+
+            // Update dashboard with new total
+            this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+          }
+        }
+      }
 
       // Check if workflow was paused
       if (this.promptQueue.getState().status === "paused") {
@@ -1537,10 +1630,16 @@ export class FlightPathManager {
         integration
       );
 
-      // Send retry prompt
+      // Send retry prompt with workflow context
+      const state = this.promptQueue.getState();
       const success = await integration.sendPrompt(
         retryPromptItem,
-        needsCompletionDetection
+        needsCompletionDetection,
+        {
+          promptIndex: currentIndex,
+          allPrompts: state.prompts,
+          filePath: this.currentPromptFile?.filePath,
+        }
       );
 
       if (!success) {

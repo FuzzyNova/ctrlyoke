@@ -20,6 +20,11 @@ export const MESSAGE_TYPES = {
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
+  QUEUE_EXTENDED: "queueExtended",
+  QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
+  EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
+  DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",
+  DYNAMIC_QUEUE_DISABLED: "dynamicQueueDisabled",
 
   // Webview -> Extension
   READY: "ready",

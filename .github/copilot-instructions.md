@@ -292,3 +292,68 @@ FlightPath bridges manual AI assistance and full automation through:
 - Fine-grained control over AI interaction sequences
 - Seamless VS Code integration with context awareness
 - Secure script execution with clear boundaries
+- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.flightpath.json` files during execution
+
+## Dynamic Queue Architecture
+
+**Purpose**: Transform FlightPath from static workflow executor to adaptive autonomous agent framework.
+
+**Status**: Fully implemented (opt-in via `flightpath.enableDynamicQueue` setting, default: `false`)
+
+### Core Components
+
+1. **PromptIdentity.ts**: Hybrid identity system for tracking completed prompts
+   - Explicit IDs (optional `id` field in prompts)
+   - Content hashing (SHA-256 of normalized prompt text)
+   - Duplicate detection during queue reload
+
+2. **PromptQueue.reloadAndMergeQueue()**: Reloads prompt file and merges new prompts
+   - Validates JSON with PromptFileParser
+   - Filters out completed prompts using identity system
+   - Enforces queue size limits (unless unlimited mode)
+   - Appends new prompts to current queue
+
+3. **FlightPathManager**: Triggers reload after each prompt completion
+   - Checks `enableDynamicQueue` setting
+   - Passes maxQueueSize from config (or 0 for unlimited)
+   - Shows notifications on extension
+   - Updates dashboard with new totals
+
+4. **CopilotIntegration.buildPromptWithInstructions()**: Selective instruction injection
+   - Checks `allowDynamicExtension` flag per prompt
+   - Defaults to last-prompt-only if no explicit flags
+   - Wraps instructions in `<criticalInstruction>` XML tags
+   - Includes file path, queue stats, time limits
+
+### Instruction Injection Logic
+
+```typescript
+shouldInject =
+  prompt.allowDynamicExtension === true OR
+  (isLastPrompt AND noExplicitFlags AND dynamicExtensionOnLastPrompt)
+```
+
+### Safety Guardrails
+
+- **maxQueueSize**: Default 100, range 1-1000, prevents infinite loops
+- **maxExecutionTime**: Default 5 hours (18000s), range 5min-24hrs, prevents runaway execution
+- **unlimitedMode**: Ignores both limits when `true` (may be gated in paid tier)
+- **Pause-aware timing**: Excludes paused duration from execution time
+- **Invalid JSON recovery**: Logs error and continues with current queue
+
+### Settings
+
+All in `package.json`:
+
+- `enableDynamicQueue` (boolean, default: false)
+- `dynamicExtensionOnLastPrompt` (boolean, default: true)
+- `maxQueueSize` (number, default: 100, range: 1-1000)
+- `maxExecutionTime` (number, default: 18000, range: 300-86400)
+- `unlimitedMode` (boolean, default: false)
+- `notifyOnQueueExtension` (boolean, default: true)
+
+### Documentation
+
+- **User guide**: `docs/DYNAMIC_QUEUE_USAGE.md`
+- **Implementation plan**: `docs/DYNAMIC_QUEUE_IMPLEMENTATION.md`
+- **Examples**: `manual-test/dynamic-queue-*.flightpath.json`

@@ -8,6 +8,10 @@ export class ValidationUtils {
   private static promptItemSchema: JSONSchemaType<PromptItem> = {
     type: "object",
     properties: {
+      id: {
+        type: "string",
+        nullable: true,
+      },
       prompt: { type: "string" },
       model: {
         type: "string",
@@ -20,6 +24,10 @@ export class ValidationUtils {
         nullable: true,
       },
       newChatSession: {
+        type: "boolean",
+        nullable: true,
+      },
+      allowDynamicExtension: {
         type: "boolean",
         nullable: true,
       },

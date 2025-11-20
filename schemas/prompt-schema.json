@@ -7,6 +7,12 @@
     {
       "title": "Single Prompt",
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Optional unique identifier for this prompt. Used for tracking completion across queue reloads. If omitted, a content hash is used automatically.",
+          "pattern": "^[a-zA-Z0-9-_]+$",
+          "maxLength": 50
+        },
         "prompt": {
           "type": "string",
           "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
@@ -26,6 +32,10 @@
           "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",
           "default": true
         },
+        "allowDynamicExtension": {
+          "type": "boolean",
+          "description": "If true, inject instructions for extending the queue. If false, never inject. If omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
+        },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
         }
@@ -41,6 +51,12 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string",
+                "description": "Optional unique identifier for this prompt. Used for tracking completion across queue reloads. If omitted, a content hash is used automatically.",
+                "pattern": "^[a-zA-Z0-9-_]+$",
+                "maxLength": 50
+              },
               "prompt": {
                 "type": "string",
                 "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
@@ -59,6 +75,10 @@
                 "type": "boolean",
                 "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",
                 "default": true
+              },
+              "allowDynamicExtension": {
+                "type": "boolean",
+                "description": "If true, inject instructions for extending the queue. If false, never inject. If omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
               },
               "endCondition": {
                 "$ref": "#/definitions/endCondition"

@@ -19,6 +19,7 @@ export interface PromptFile {
 }
 
 export interface PromptItem {
+  id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
   model?:
     | "claude-sonnet-4.5"
@@ -26,6 +27,7 @@ export interface PromptItem {
     | "claude-haiku-4.5"
     | "gpt-5";
   newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
+  allowDynamicExtension?: boolean; // If true, inject queue extension instructions
   endCondition?: EndCondition;
 }
 
@@ -43,6 +45,25 @@ export interface QueueState {
   prompts: PromptItem[];
   results: PromptResult[];
   stopped: boolean; // True if stop() was called, reset on new execution
+  completedIds: Set<string>; // Track completed prompt IDs and hashes
+  totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
+  queueExtensions: number; // How many times queue was extended
+  lastReloadTime?: number; // Timestamp of last reload
+  startTime?: number; // When execution started (for time tracking)
+  pausedTime?: number; // When queue was paused (for pause duration calculation)
+  totalPausedDuration: number; // Total time spent paused (milliseconds)
+}
+
+/**
+ * Dynamic queue configuration
+ */
+export interface DynamicQueueConfig {
+  enabled: boolean;
+  dynamicExtensionOnLastPrompt: boolean;
+  maxQueueSize: number; // 1-1000 (default: 100)
+  maxExecutionTime: number; // In seconds (300-86400, default: 18000)
+  unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxExecutionTime
+  notifyOnExtension: boolean;
 }
 
 export interface PromptResult {

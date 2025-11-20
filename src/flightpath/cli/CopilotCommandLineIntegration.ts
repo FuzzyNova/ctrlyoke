@@ -107,10 +107,16 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   /**
    * Send prompt to Copilot via CLI
    * @param needsCompletionDetection Ignored for CLI mode (completion is deterministic)
+   * @param workflowContext Optional workflow context for dynamic queue instructions
    */
   async sendPrompt(
     prompt: PromptItem,
-    needsCompletionDetection: boolean = true
+    needsCompletionDetection: boolean = true,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
     if (!this.isAvailable) {
       console.error(
@@ -123,8 +129,15 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     }
 
     try {
-      // Build prompt text (no XML tool instruction needed for CLI!)
-      const promptText = await this.buildPromptText(prompt);
+      // Build prompt text with dynamic queue instructions if applicable
+      const promptText = workflowContext
+        ? await this.buildPromptWithInstructions(
+            prompt,
+            workflowContext.promptIndex,
+            workflowContext.allPrompts,
+            workflowContext.filePath
+          )
+        : await this.buildPromptText(prompt);
 
       // Log the prompt being sent
       if (this.shouldShowOutput()) {

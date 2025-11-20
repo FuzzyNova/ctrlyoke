@@ -83,6 +83,10 @@ export class PromptQueue {
       prompts: [],
       results: [],
       stopped: false,
+      completedIds: new Set<string>(),
+      totalExecutionTime: 0,
+      queueExtensions: 0,
+      totalPausedDuration: 0,
     };
   }
 
@@ -100,6 +104,10 @@ export class PromptQueue {
         timestamp: new Date(),
       })),
       stopped: false, // Reset stopped flag on new load
+      completedIds: new Set<string>(),
+      totalExecutionTime: 0,
+      queueExtensions: 0,
+      totalPausedDuration: 0,
     };
 
     this.emitStateChange();
@@ -140,6 +148,7 @@ export class PromptQueue {
 
     this.isPaused = true;
     this.state.status = "paused";
+    this.state.pausedTime = Date.now(); // Record when paused
 
     this.emitStateChange();
     console.log("FlightPath: Queue execution paused");
@@ -153,6 +162,13 @@ export class PromptQueue {
   async resume(): Promise<void> {
     if (this.state.status !== "paused") {
       return;
+    }
+
+    // Calculate paused duration and add to total
+    if (this.state.pausedTime) {
+      const pauseDuration = Date.now() - this.state.pausedTime;
+      this.state.totalPausedDuration += pauseDuration;
+      this.state.pausedTime = undefined;
     }
 
     this.isPaused = false;
@@ -246,9 +262,14 @@ export class PromptQueue {
       return;
     }
 
+    const currentPrompt = this.state.prompts[this.state.currentIndex];
     const currentResult = this.state.results[this.state.currentIndex];
+
     currentResult.status = "completed";
     currentResult.timestamp = new Date();
+
+    // Mark prompt as completed in the tracking set
+    this.markPromptCompleted(currentPrompt);
 
     // Reset retry count when successfully moving to next prompt
     this.resetRetryCount();
@@ -382,6 +403,145 @@ export class PromptQueue {
   markErrored(): void {
     this.state.status = "error";
     this.emitStateChange();
+  }
+
+  /**
+   * Start execution time tracking
+   */
+  startExecutionTimer(): void {
+    this.state.startTime = Date.now();
+    this.state.totalPausedDuration = 0;
+  }
+
+  /**
+   * Get active execution time (excluding paused duration)
+   */
+  getActiveExecutionTime(): number {
+    if (!this.state.startTime) {
+      return 0;
+    }
+
+    const elapsed = Date.now() - this.state.startTime;
+    return elapsed - this.state.totalPausedDuration;
+  }
+
+  /**
+   * Mark a prompt as completed (add to completedIds set)
+   */
+  markPromptCompleted(prompt: PromptItem): void {
+    // Add both explicit ID and content hash to completed set
+    if (prompt.id) {
+      this.state.completedIds.add(prompt.id);
+    }
+
+    // Always add content hash as fallback
+    const { hashPromptContent } = require("../utils/PromptIdentity");
+    const hash = hashPromptContent(prompt.prompt);
+    this.state.completedIds.add(hash);
+  }
+
+  /**
+   * Reload prompt file and merge new prompts into queue
+   * @param filePath Path to the .flightpath.json file
+   * @param parser PromptFileParser instance for reloading
+   * @param maxQueueSize Maximum allowed queue size (0 = unlimited)
+   * @returns Number of new prompts added, or -1 if reload failed
+   */
+  async reloadAndMergeQueue(
+    filePath: string,
+    parser: any, // PromptFileParser instance
+    maxQueueSize: number = 0
+  ): Promise<number> {
+    const {
+      generatePromptIdentity,
+      isPromptCompleted,
+    } = require("../utils/PromptIdentity");
+    const { LoggingUtils } = require("../utils/LoggingUtils");
+
+    // 1. Reload file with validation
+    let reloadedFile;
+    try {
+      reloadedFile = await parser.parsePromptFile(filePath);
+      if (!reloadedFile || !reloadedFile.prompts) {
+        throw new Error("Invalid prompt file structure");
+      }
+    } catch (error) {
+      // Invalid JSON - log error and continue with current queue
+      LoggingUtils.logError(
+        "Failed to reload queue - invalid JSON",
+        error as Error
+      );
+      vscode.window.showErrorMessage(
+        "FlightPath: Queue file has invalid JSON. Continuing with current queue."
+      );
+      return -1;
+    }
+
+    const reloadedPrompts = reloadedFile.prompts;
+
+    // 2. Identify new prompts (not in completedIds)
+    const newPrompts: PromptItem[] = [];
+
+    for (const prompt of reloadedPrompts) {
+      if (!isPromptCompleted(prompt, this.state.completedIds)) {
+        newPrompts.push(prompt);
+      }
+    }
+
+    if (newPrompts.length === 0) {
+      LoggingUtils.log("Queue reload: No new prompts found");
+      return 0;
+    }
+
+    // 3. Check queue size limit (if not unlimited)
+    const newQueueSize = this.state.prompts.length + newPrompts.length;
+    if (maxQueueSize > 0 && newQueueSize > maxQueueSize) {
+      LoggingUtils.logWarning(
+        `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
+      );
+      vscode.window.showWarningMessage(
+        `FlightPath: Queue limit reached (${this.state.prompts.length}/${maxQueueSize} prompts). Cannot add more prompts. Consider increasing maxQueueSize in settings.`
+      );
+      return -1;
+    }
+
+    // 4. Append new prompts to current queue
+    this.state.prompts.push(...newPrompts);
+
+    // Add new results for the new prompts
+    const newResults: PromptResult[] = newPrompts.map((prompt) => ({
+      prompt: prompt.prompt,
+      status: "pending",
+      timestamp: new Date(),
+    }));
+    this.state.results.push(...newResults);
+
+    // 5. Update reload tracking
+    this.state.queueExtensions++;
+    this.state.lastReloadTime = Date.now();
+
+    this.emitStateChange();
+
+    LoggingUtils.log(
+      `Queue extended: +${newPrompts.length} prompts added (total: ${this.state.prompts.length})`
+    );
+
+    return newPrompts.length;
+  }
+
+  /**
+   * Get queue extension statistics
+   */
+  getQueueExtensionStats(): {
+    queueExtensions: number;
+    currentSize: number;
+    lastReloadTime?: number;
+  } {
+    return {
+      queueExtensions: this.state.queueExtensions,
+      currentSize: this.state.prompts.length,
+      lastReloadTime: this.state.lastReloadTime,
+    };
   }
 
   /**

@@ -1,0 +1,16 @@
+{
+  "prompts": [
+    {
+      "id": "task-1",
+      "prompt": "List all TypeScript files in the src directory and count them."
+    },
+    {
+      "id": "task-2",
+      "prompt": "Check if there are any TODO comments in the codebase."
+    },
+    {
+      "id": "task-3",
+      "prompt": "Summarize your findings. If you found TODOs or other issues worth addressing, you can add more tasks to continue the work."
+    }
+  ]
+}

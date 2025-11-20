@@ -1,0 +1,18 @@
+{
+  "prompts": [
+    {
+      "id": "initial-analysis",
+      "prompt": "Analyze the FlightPath extension architecture and suggest improvements."
+    },
+    {
+      "id": "plan-refactoring",
+      "prompt": "Based on your analysis, create a detailed plan for improving the code. If the plan requires multiple steps, add specific implementation tasks to this file (manual-test/dynamic-queue-multi-stage.flightpath.json).",
+      "allowDynamicExtension": true
+    },
+    {
+      "id": "final-review",
+      "prompt": "Review all changes and create a summary document.",
+      "allowDynamicExtension": false
+    }
+  ]
+}

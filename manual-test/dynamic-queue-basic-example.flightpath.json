@@ -1,0 +1,13 @@
+{
+  "prompts": [
+    {
+      "id": "analyze-codebase",
+      "prompt": "Examine the FlightPath workspace and identify the main components and their responsibilities."
+    },
+    {
+      "id": "find-bugs",
+      "prompt": "Review the code for potential bugs or issues. If you find any, add additional prompts to this file (manual-test/dynamic-queue-basic-example.flightpath.json) to fix each issue.",
+      "allowDynamicExtension": true
+    }
+  ]
+}

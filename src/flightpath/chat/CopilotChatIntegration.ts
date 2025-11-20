@@ -339,7 +339,12 @@ When you finish this response, call #flightpath_response_complete to signal comp
    */
   async sendPrompt(
     prompt: PromptItem,
-    needsCompletionDetection?: boolean
+    needsCompletionDetection?: boolean,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
     try {
       // Reset cancellation flag for new prompt
@@ -368,10 +373,11 @@ When you finish this response, call #flightpath_response_complete to signal comp
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
 
-      // Build prompt with Copilot Chat syntax
+      // Build prompt with Copilot Chat syntax (and dynamic queue instructions if applicable)
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
-        shouldDetectCompletion
+        shouldDetectCompletion,
+        workflowContext
       );
 
       // Execute direct automation
@@ -918,10 +924,22 @@ When you finish this response, call #flightpath_response_complete to signal comp
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
-    includeToolInstruction: boolean = true
+    includeToolInstruction: boolean = true,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<string> {
-    // Use base class method to get prompt text with file attachments processed
-    const promptText = await this.buildPromptText(prompt);
+    // Build prompt text with dynamic queue instructions if applicable
+    const promptText = workflowContext
+      ? await this.buildPromptWithInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          workflowContext.filePath
+        )
+      : await this.buildPromptText(prompt);
 
     // Prepend tool instruction if needed
     if (includeToolInstruction) {
