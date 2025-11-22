@@ -6,6 +6,12 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "../types/FlightPathTypes";
+import { LoggingUtils } from "../utils/LoggingUtils";
+import {
+  generatePromptIdentity,
+  isPromptCompleted,
+  hashPromptContent,
+} from "../utils/PromptIdentity";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -435,7 +441,6 @@ export class PromptQueue {
     }
 
     // Always add content hash as fallback
-    const { hashPromptContent } = require("../utils/PromptIdentity");
     const hash = hashPromptContent(prompt.prompt);
     this.state.completedIds.add(hash);
   }
@@ -452,12 +457,6 @@ export class PromptQueue {
     parser: any, // PromptFileParser instance
     maxQueueSize: number = 0
   ): Promise<number> {
-    const {
-      generatePromptIdentity,
-      isPromptCompleted,
-    } = require("../utils/PromptIdentity");
-    const { LoggingUtils } = require("../utils/LoggingUtils");
-
     // 1. Reload file with validation
     let reloadedFile;
     try {
@@ -467,7 +466,7 @@ export class PromptQueue {
       }
     } catch (error) {
       // Invalid JSON - log error and continue with current queue
-      LoggingUtils.logError(
+      LoggingUtils.error(
         "Failed to reload queue - invalid JSON",
         error as Error
       );
@@ -479,24 +478,48 @@ export class PromptQueue {
 
     const reloadedPrompts = reloadedFile.prompts;
 
-    // 2. Identify new prompts (not in completedIds)
+    // 2. Identify new prompts (not in completedIds AND not already in current queue)
     const newPrompts: PromptItem[] = [];
+    const currentPromptHashes = new Set<string>();
 
-    for (const prompt of reloadedPrompts) {
-      if (!isPromptCompleted(prompt, this.state.completedIds)) {
-        newPrompts.push(prompt);
+    // Build set of hashes for prompts currently in queue
+    for (const existingPrompt of this.state.prompts) {
+      const hash = hashPromptContent(existingPrompt.prompt);
+      currentPromptHashes.add(hash);
+      if (existingPrompt.id) {
+        currentPromptHashes.add(existingPrompt.id);
       }
     }
 
+    // Find truly new prompts (not completed, not already in queue)
+    for (const prompt of reloadedPrompts) {
+      // Skip if already completed
+      if (isPromptCompleted(prompt, this.state.completedIds)) {
+        continue;
+      }
+
+      // Skip if already in current queue (check by ID and hash)
+      const hash = hashPromptContent(prompt.prompt);
+      if (
+        currentPromptHashes.has(hash) ||
+        (prompt.id && currentPromptHashes.has(prompt.id))
+      ) {
+        continue;
+      }
+
+      // This is a truly new prompt
+      newPrompts.push(prompt);
+    }
+
     if (newPrompts.length === 0) {
-      LoggingUtils.log("Queue reload: No new prompts found");
+      LoggingUtils.info("Queue reload: No new prompts found");
       return 0;
     }
 
     // 3. Check queue size limit (if not unlimited)
     const newQueueSize = this.state.prompts.length + newPrompts.length;
     if (maxQueueSize > 0 && newQueueSize > maxQueueSize) {
-      LoggingUtils.logWarning(
+      LoggingUtils.warn(
         `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
       );
       vscode.window.showWarningMessage(
@@ -522,7 +545,7 @@ export class PromptQueue {
 
     this.emitStateChange();
 
-    LoggingUtils.log(
+    LoggingUtils.info(
       `Queue extended: +${newPrompts.length} prompts added (total: ${this.state.prompts.length})`
     );
 

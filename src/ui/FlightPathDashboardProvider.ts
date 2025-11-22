@@ -147,6 +147,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  public updatePromptsExtended(prompts: any[]): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.PROMPTS_EXTENDED,
+      prompts: prompts.map((p) => ({ prompt: p.prompt })),
+    });
+  }
+
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number

@@ -808,6 +808,9 @@ export class FlightPathManager {
                 : dynamicConfig.maxQueueSize
             );
 
+            // Send updated prompt list to dashboard
+            this.dashboardProvider.updatePromptsExtended(state.prompts);
+
             // Update dashboard with new total
             this.dashboardProvider.updateProgress(i + 1, state.prompts.length);
           }

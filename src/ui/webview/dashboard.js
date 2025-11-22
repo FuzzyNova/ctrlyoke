@@ -107,6 +107,9 @@
       case MESSAGE_TYPES.EXECUTION_COMPLETED:
         handleExecutionCompleted();
         break;
+      case MESSAGE_TYPES.PROMPTS_EXTENDED:
+        handlePromptsExtended(message.prompts);
+        break;
     }
   });
 
@@ -268,6 +271,26 @@
   function handleExecutionCompleted() {
     state.executionState = EXECUTION_STATES.COMPLETED;
     updateControls();
+  }
+
+  function handlePromptsExtended(prompts) {
+    // Merge new prompts with existing ones, preserving status of existing prompts
+    const existingCount = state.prompts.length;
+
+    // Add new prompts (starting from existingCount index)
+    const newPrompts = prompts.slice(existingCount).map((p, i) => ({
+      index: existingCount + i,
+      text: p.prompt || p,
+      status: "pending",
+      details: {},
+    }));
+
+    state.prompts.push(...newPrompts);
+    state.totalSteps = state.prompts.length;
+
+    // Re-render the prompts list to show all prompts
+    renderPromptsList();
+    updatePromptCounter();
   }
 
   function render() {

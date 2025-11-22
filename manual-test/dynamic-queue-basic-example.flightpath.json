@@ -1,12 +1,12 @@
 {
   "prompts": [
     {
-      "id": "analyze-codebase",
-      "prompt": "Examine the FlightPath workspace and identify the main components and their responsibilities."
+      "id": "hello",
+      "prompt": "We are about to test the dynamic prompt queue for FlightPath, for now, just say hello!"
     },
     {
-      "id": "find-bugs",
-      "prompt": "Review the code for potential bugs or issues. If you find any, add additional prompts to this file (manual-test/dynamic-queue-basic-example.flightpath.json) to fix each issue.",
+      "id": "extend-queue",
+      "prompt": "Look in the sample-code directory. For each file in sample-code add an additional prompt to this file (manual-test/dynamic-queue-basic-example.flightpath.json) that instruct copilot to summarize just that single file.",
       "allowDynamicExtension": true
     }
   ]
