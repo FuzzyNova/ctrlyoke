@@ -76,6 +76,12 @@
         "icon": "$(beaker)"
       },
       {
+        "command": "flightpath.test.chatAgentSelection",
+        "title": "Test Chat Agent Selection",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "flightpath.showCopilotStatus",
         "title": "Show Copilot Integration Status",
         "category": "FlightPath",

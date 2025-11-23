@@ -1,35 +1,59 @@
 # Agent & Model Selection Commands for Chat Mode
 
 **Discovery Date**: November 23, 2025  
-**Status**: Research findings for Chat mode agent support
+**Status**: Research complete - Model selection ✅ working, Agent selection ❌ not available
+
+---
+
+## Summary of Findings
+
+### ✅ Model Selection: WORKING
+
+`workbench.action.chat.changeModel` is fully functional and allows programmatic model switching in Chat mode.
+
+### ❌ Agent Selection: NOT AVAILABLE
+
+After extensive testing, **no VS Code command exists for programmatically selecting custom agents in Chat mode**. All agent-related commands are UI-only or non-functional for automation.
+
+**Recommendation**: Use CLI mode (`--agent` flag) for agent support in FlightPath workflows.
 
 ---
 
 ## Key Chat Commands Discovered
 
-From the 356 available chat commands in VS Code, the following are relevant for programmatic agent and model selection in Chat mode:
+From the 356 available chat commands in VS Code, the following were tested for programmatic agent and model selection in Chat mode:
 
-### Agent Selection Commands
+### Agent Selection Commands - ❌ TESTED, NOT USABLE
 
-1. **`workbench.action.chat.assignSelectedAgent`**
-   - **Purpose**: Programmatically assign/select an agent in the chat view
-   - **Potential use**: Could allow FlightPath to select specific agents before sending prompts in Chat mode
-   - **Status**: Needs parameter investigation
+1. **`workbench.action.chat.openagent`** ❌ **NOT USABLE**
+   - **Purpose**: Switches to agent mode (toggles agent mode on)
+   - **Tested parameters**: String (agent name), No parameters
+   - **Result**: Only toggles agent mode on/off, does NOT accept agent name or select specific agents
+   - **Conclusion**: Cannot be used for agent selection
 
-2. **`workbench.action.chat.picker.customagents`**
-   - **Purpose**: Open custom agent picker UI
-   - **Potential use**: Programmatic agent selection via picker
-   - **Status**: Needs parameter investigation
+2. **`workbench.action.chat.assignSelectedAgent`** ❌ **NOT USABLE**
+   - **Purpose**: Likely for cloud agents or agent sidebar selection
+   - **Tested parameters**: String (agent name), Object with various properties
+   - **Result**: Command executes but does nothing visible - no agent selection occurs
+   - **Conclusion**: Likely internal command for cloud agents or UI state, not usable for automation
 
-3. **`workbench.action.chat.configure.customagents`**
-   - **Purpose**: Configure custom agents
-   - **Potential use**: Agent management/configuration
-   - **Status**: UI command (may not be useful for automation)
+3. **`workbench.action.chat.picker.customagents`** ⚠️ **UI ONLY**
+   - **Purpose**: Opens the agent picker UI for editing agents
+   - **Tested parameters**: No parameters
+   - **Result**: Opens agent management/editing UI
+   - **Conclusion**: UI command only, not useful for automation (but good for user configuration)
 
-4. **`workbench.action.chat.toggleAgentMode`**
-   - **Purpose**: Toggle agent mode on/off
-   - **Potential use**: Enable/disable agent mode programmatically
-   - **Status**: Needs investigation
+4. **`workbench.action.chat.toggleAgentMode`** ❌ **NOT USABLE**
+   - **Purpose**: Unknown (possibly deprecated or internal)
+   - **Tested parameters**: No parameters
+   - **Result**: Command executes but does nothing visible
+   - **Conclusion**: Non-functional or internal command
+
+5. **`workbench.action.chat.configure.customagents`** ⚠️ **UI ONLY**
+   - **Purpose**: Opens agent picker with ability to create new agents
+   - **Tested parameters**: Not tested (command is exposed in UI)
+   - **Result**: Opens agent configuration UI
+   - **Conclusion**: UI command only, not useful for automation (but good for agent management)
 
 ### Model Selection Commands
 
@@ -56,58 +80,68 @@ From the 356 available chat commands in VS Code, the following are relevant for 
 
 ---
 
-## Implications for FlightPath Chat Mode
+## Implications for FlightPath
 
-### Current Chat Integration Architecture
+### Current Limitations
 
-FlightPath's Chat mode (`CopilotChatIntegration`) currently:
+**Chat Mode Agent Selection**: ❌ Not possible programmatically
 
-1. Opens chat panel/tab/window
-2. Sets prompt text via `workbench.action.chat.submit` or text insertion
-3. Relies on UI automation and polling for response detection
+- No VS Code command supports programmatic custom agent selection
+- Users must manually select agents in the Chat UI
+- Agent selection state is not exposed to extensions
 
-### Potential Enhancements with Agent Commands
+**Chat Mode Model Selection**: ✅ Fully supported
 
-If `workbench.action.chat.assignSelectedAgent` accepts parameters (agent name), FlightPath could:
+- `workbench.action.chat.changeModel` works perfectly
+- Can switch models before each prompt
+- Enables per-prompt model configuration in Chat mode
+
+### Recommendation: CLI-Only Agent Support
+
+Given the testing results, FlightPath should:
+
+1. **Implement agent support in CLI mode only** - The `--agent` flag works reliably
+2. **Implement model selection in both CLI and Chat modes** - Both work well
+3. **Document the limitation** - Users who need agent support must use CLI mode
+4. **Monitor VS Code updates** - Agent selection API may be added in future releases
+
+### Future Possibilities
+
+If VS Code adds agent selection APIs in the future, FlightPath can easily add Chat mode support. The architecture is ready - we just need a working command.
+
+**Ideal future command** (if added by VS Code):
 
 ```typescript
-// BEFORE sending prompt in Chat mode:
 await vscode.commands.executeCommand(
-  "workbench.action.chat.assignSelectedAgent",
-  "flightpath-orchestrator" // Agent name parameter?
-);
-
-// THEN send prompt as usual
-await vscode.commands.executeCommand(
-  "workbench.action.chat.submit",
-  promptText
-);
-```
-
-For model selection (CONFIRMED WORKING):
-
-```typescript
-// Select model programmatically BEFORE sending prompt
-await vscode.commands.executeCommand("workbench.action.chat.changeModel", {
-  vendor: "copilot",
-  family: "claude-sonnet-4.5",
-  id: "claude-sonnet-4.5",
-});
-
-// Then send prompt as usual
-await vscode.commands.executeCommand(
-  "workbench.action.chat.submit",
-  promptText
+  "workbench.action.chat.selectAgent", // Hypothetical future command
+  "agent-name"
 );
 ```
 
 ---
 
-## Model Selection - CONFIRMED FINDINGS ✅
+## Testing Summary
+
+**Test Date**: November 23, 2025  
+**Test Method**: Created test agents (`test-agent-alpha`, `test-agent-beta`) in `manual-test/.github/agents/`  
+**Test Command**: `flightpath.test.chatAgentSelection`
+
+**Commands Tested**:
+
+- ❌ `workbench.action.chat.openagent` - Only toggles agent mode
+- ❌ `workbench.action.chat.assignSelectedAgent` - No visible effect
+- ⚠️ `workbench.action.chat.picker.customagents` - UI only (opens editor)
+- ❌ `workbench.action.chat.toggleAgentMode` - No visible effect
+
+**Conclusion**: No programmatic agent selection available in Chat mode.
+
+---
+
+## Model Selection - CONFIRMED WORKING ✅
 
 **Testing Date**: November 23, 2025  
 **Command**: `workbench.action.chat.changeModel`  
-**Status**: ✅ Fully working and ready for implementation
+**Status**: ✅ Fully working and ready for implementation in FlightPath Chat mode
 
 ### Working Parameter Format
 
@@ -230,119 +264,115 @@ async function investigateAgentCommand() {
 
 ---
 
-## Updated Implementation Strategy
+## Investigation Needed
 
-### Option A: CLI-Only (Current Plan)
+### Command Parameter Discovery
 
-**Pros**:
+To determine if these commands are usable for automation, we need to:
 
-- Simple, deterministic API (`--agent` flag)
-- Well-documented in `copilot --help`
-- No UI dependencies
-- Already works in FlightPath's prompt mode
+1. **Inspect Command Signatures**: Use VS Code extension API to query command metadata
+2. **Test Parameter Formats**: Try various parameter formats (string, object, etc.)
+3. **Monitor Behavior**: Use debug logs to observe command execution
+4. **Check Source Code**: Review VS Code GitHub repo for command definitions
 
-**Cons**:
-
-- Only works in CLI mode (not Chat mode)
-- Requires users to use CLI integration
-
-### Option B: Dual Support (CLI + Chat)
-
-**Pros**:
-
-- Works in both integration modes
-- Users can choose their preferred mode
-- Future-proof as Chat mode evolves
-
-**Cons**:
-
-- More complex implementation
-- Chat mode requires command parameter discovery
-- May have UI timing issues
-- Less reliable than CLI
-
-### Option C: CLI-First with Chat Fallback
-
-**Pros**:
-
-- Leverages reliable CLI support
-- Adds Chat support if/when parameters are confirmed
-- Incremental development path
-
-**Cons**:
-
-- Users in Chat mode may not get agent support immediately
-
----
-
-## Recommendation
-
-**Implement Option C: CLI-First with Chat Investigation**
-
-### Phase 1: CLI Agent Support (Immediate)
-
-- Implement `--agent` flag support as documented in main plan
-- Full agent support for CLI mode users
-- No blockers, can ship immediately
-
-### Phase 2: Chat Command Investigation (Parallel)
-
-- Create test command to investigate `workbench.action.chat.assignSelectedAgent`
-- Document parameter formats that work
-- Create proof-of-concept integration
-
-### Phase 3: Chat Agent Support (Conditional)
-
-- **IF** commands accept programmatic parameters:
-  - Implement agent/model selection in `CopilotChatIntegration`
-  - Add pre-prompt command execution
-  - Update documentation
-- **IF NOT** (commands are UI-only):
-  - Document limitation
-  - Recommend CLI mode for agent workflows
-  - Consider feature request to VS Code team
-
----
-
-## Chat Mode Agent Selection Research Tasks
-
-### Immediate Tasks
-
-1. **Create test command**: `flightpath.test.chatAgentSelection`
-2. **Test agent command**: Try different parameter formats
-3. **Monitor VS Code logs**: Check for command execution details
-4. **Review VS Code source**: Search GitHub for command definitions
-5. **Document findings**: Update this document with results
-
-### Long-term Tasks
-
-1. **Feature request**: If commands are UI-only, request programmatic API
-2. **Community discussion**: Ask in VS Code/Copilot community about agent automation
-3. **Alternative approaches**: Investigate other automation methods (Language Model API?)
-
----
-
-## Language Model API Alternative
-
-VS Code's Language Model API might provide an alternative approach:
+### Test Implementation
 
 ```typescript
-// From VS Code API documentation
-const models = await vscode.lm.selectChatModels({
-  vendor: "copilot",
-  family: "gpt-4o", // or 'claude-3.5-sonnet'
-});
+// Test in FlightPath extension
+async function investigateAgentCommand() {
+  try {
+    // Attempt 1: String parameter
+    await vscode.commands.executeCommand(
+      "workbench.action.chat.assignSelectedAgent",
+      "flightpath-orchestrator"
+    );
 
-const [model] = models;
-const response = await model.sendRequest(craftedPrompt, {}, token);
+    // Attempt 2: Object parameter
+    await vscode.commands.executeCommand(
+      "workbench.action.chat.assignSelectedAgent",
+      { agentId: "flightpath-orchestrator" }
+    );
+
+    // Attempt 3: No parameters (may open picker)
+    await vscode.commands.executeCommand(
+      "workbench.action.chat.assignSelectedAgent"
+    );
+  } catch (error) {
+    console.log("Command failed:", error);
+  }
+}
 ```
 
-**Considerations**:
+---
 
-- This bypasses the Chat UI entirely
-- Requires implementing our own response handling
-- May not have access to agent personas (just base models)
-- Could be used for hybrid approach (CLI-like reliability in Chat mode)
+## Implementation Strategy - UPDATED BASED ON TESTING
+
+### ✅ What We Can Implement Now
+
+1. **CLI Mode: Full Agent + Model Support**
+   - Agent selection via `--agent` flag (confirmed working in CLI)
+   - Model selection via `--model` flag (confirmed working in CLI)
+   - **Status**: Ready to implement immediately
+
+2. **Chat Mode: Model Selection Only**
+   - Model selection via `workbench.action.chat.changeModel` (confirmed working)
+   - **Status**: Ready to implement immediately
+   - **Limitation**: No agent selection available
+
+### ❌ What We Cannot Implement (Yet)
+
+1. **Chat Mode: Agent Selection**
+   - No working VS Code command found
+   - Users must manually select agents in Chat UI
+   - **Status**: Not possible until VS Code adds API support
+
+### Recommended Implementation Plan
+
+**Phase 1: Immediate Implementation**
+
+- ✅ Add `agent` field support in `.flightpath.json` schema
+- ✅ Implement `--agent` flag in CLI mode
+- ✅ Implement `workbench.action.chat.changeModel` in Chat mode for model selection
+- ✅ Document that agent selection only works in CLI mode
+
+**Phase 2: Future Enhancement (when VS Code adds support)**
+
+- ⏳ Monitor VS Code release notes for agent selection API
+- ⏳ Add Chat mode agent selection when available
+- ⏳ Update documentation
+
+### User Experience
+
+**CLI Mode** (Recommended for agent workflows):
+
+```json
+{
+  "prompts": [
+    {
+      "prompt": "Analyze this code",
+      "agent": "code-analyzer",
+      "model": "claude-sonnet-4.5"
+    }
+  ]
+}
+```
+
+✅ Both agent and model work
+
+**Chat Mode** (Model only):
+
+```json
+{
+  "prompts": [
+    {
+      "prompt": "Analyze this code",
+      "model": "claude-sonnet-4.5"
+    }
+  ]
+}
+```
+
+✅ Model works, ⚠️ agent field ignored (user must select manually)
 
 ---
 
@@ -380,12 +410,13 @@ The following models were discovered via `vscode.lm.selectChatModels({ vendor: "
 
 ## Next Steps
 
-1. ✅ **Document chat commands** (this file)
-2. ✅ **Test model selection command** (confirmed working!)
-3. ⏳ **Implement model selection in CopilotChatIntegration**
-4. ⏳ **Test chat agent commands** (parameter investigation)
-5. ⏳ **Implement CLI agent support** (main plan Phase 1)
-6. ⏳ **Update implementation plan** based on findings
+1. ✅ **Document chat commands** - Complete
+2. ✅ **Test model selection command** - Confirmed working
+3. ✅ **Test chat agent commands** - Confirmed NOT working
+4. ⏳ **Implement model selection in CopilotChatIntegration** - Ready to implement
+5. ⏳ **Implement CLI agent support** - Ready to implement (main plan Phase 1)
+6. ⏳ **Document agent limitation in Chat mode** - Update user documentation
+7. ⏳ **Consider feature request to VS Code team** - Request agent selection API
 
 ---
 

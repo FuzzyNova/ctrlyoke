@@ -223,6 +223,98 @@ async function testChatModelSelection(): Promise<void> {
 }
 
 /**
+ * Test Chat Agent Selection Command
+ * Investigates workbench.action.chat.openagent to determine if we can programmatically select agents
+ */
+async function testChatAgentSelection(): Promise<void> {
+  console.log("🧪 Testing Chat Agent Selection Command...");
+
+  try {
+    // Step 1: Open Copilot Chat
+    console.log("\n📋 Step 1: Opening Copilot Chat...");
+    await vscode.commands.executeCommand(
+      "workbench.panel.chat.view.copilot.focus"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Test different commands and parameter formats for agent selection
+    const testCases = [
+      {
+        name: "workbench.action.chat.openagent - String (test-agent-alpha)",
+        command: "workbench.action.chat.openagent",
+        params: ["test-agent-alpha"],
+      },
+      {
+        name: "workbench.action.chat.openagent - String (test-agent-beta)",
+        command: "workbench.action.chat.openagent",
+        params: ["test-agent-beta"],
+      },
+      {
+        name: "workbench.action.chat.openagent - No params",
+        command: "workbench.action.chat.openagent",
+        params: [],
+      },
+      {
+        name: "workbench.action.chat.picker.customagents - No params",
+        command: "workbench.action.chat.picker.customagents",
+        params: [],
+      },
+      {
+        name: "workbench.action.chat.assignSelectedAgent - String (test-agent-alpha)",
+        command: "workbench.action.chat.assignSelectedAgent",
+        params: ["test-agent-alpha"],
+      },
+      {
+        name: "workbench.action.chat.toggleAgentMode - No params",
+        command: "workbench.action.chat.toggleAgentMode",
+        params: [],
+      },
+    ];
+
+    for (const testCase of testCases) {
+      console.log(`\n🔍 Testing: ${testCase.name}`);
+      console.log(`   Command: ${testCase.command}`);
+      console.log(`   Parameters: ${JSON.stringify(testCase.params)}`);
+
+      try {
+        await vscode.commands.executeCommand(
+          testCase.command,
+          ...testCase.params
+        );
+        console.log(`   ✅ Command executed successfully (no error thrown)`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.log(`   ❌ Command failed:`, error);
+      }
+    }
+
+    vscode.window
+      .showInformationMessage(
+        "🧪 Chat agent selection test complete! Check the console for detailed results.\n\n" +
+          "Manual verification needed: Check if the agent was actually selected in the Chat UI.",
+        "View Console"
+      )
+      .then((action) => {
+        if (action === "View Console") {
+          vscode.commands.executeCommand(
+            "workbench.action.output.toggleOutput"
+          );
+        }
+      });
+
+    console.log("\n✅ All test cases completed - check results above");
+    console.log(
+      "⚠️ IMPORTANT: Manually verify if agent selection occurred in Chat UI"
+    );
+  } catch (error) {
+    console.error("❌ Chat agent selection test failed:", error);
+    vscode.window.showErrorMessage(
+      `Chat agent selection test failed: ${error}`
+    );
+  }
+}
+
+/**
  * Test Copilot Chat automation feasibility - Testing Editor Chat approach
  */
 async function testCopilotAutomation(): Promise<boolean> {
@@ -475,6 +567,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     "flightpath.test.chatModelSelection",
     async () => {
       await testChatModelSelection();
+    }
+  );
+
+  // Test Chat Agent Selection command - investigate workbench.action.chat.assignSelectedAgent
+  const testChatAgentSelectionCommand = vscode.commands.registerCommand(
+    "flightpath.test.chatAgentSelection",
+    async () => {
+      await testChatAgentSelection();
     }
   );
 
@@ -753,6 +853,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     testCopilotCommand,
     testFileAttachmentCommand,
     testChatModelSelectionCommand,
+    testChatAgentSelectionCommand,
     showCopilotStatusCommand,
     testAutomationCommand,
     retryCopilotDetectionCommand,
