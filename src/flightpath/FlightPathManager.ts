@@ -573,6 +573,17 @@ export class FlightPathManager {
           break; // Exit loop without error
         }
 
+        // Check if this was a user cancellation in chat UI (treat as stop, not error)
+        if (this.isChatIntegration(activeIntegration)) {
+          if (activeIntegration.wasLastFailureUserCancellation()) {
+            console.log(
+              "⏹️ User cancelled in Copilot Chat - stopping workflow"
+            );
+            await this.stop(); // Properly stop the workflow
+            break; // Exit loop without error
+          }
+        }
+
         // Real error - show message and mark as failed
         vscode.window.showErrorMessage(
           `FlightPath: Failed to execute prompt ${i + 1}`
@@ -890,23 +901,6 @@ export class FlightPathManager {
           responseHandled = true;
 
           disposable.dispose();
-          console.log("✅ FlightPath: Response complete signal received");
-          console.log(
-            `📊 Response text length: ${responseText.length} characters`
-          );
-
-          // IMPORTANT: For chat integration, tool callback fires BEFORE Copilot finishes streaming
-          // Wait for streaming to actually finish before proceeding
-          // CLI integration doesn't need this as the command returns when complete
-          if (this.isChatIntegration(integration)) {
-            console.log(
-              "⏳ FlightPath: Waiting for Copilot chat to finish streaming..."
-            );
-            await integration.waitForStreamingComplete();
-            console.log(
-              "✅ FlightPath: Copilot finished streaming, ready for next prompt"
-            );
-          }
 
           // Check if workflow is paused - if so, hold the response until resume
           const currentState = this.promptQueue.getState();

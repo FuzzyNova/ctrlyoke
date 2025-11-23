@@ -1,4 +1,7 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import {
   PromptItem,
   CopilotIntegrationMode,
@@ -12,8 +15,13 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
  * - Direct text insertion (validated in POC at extension.ts:testCopilotAutomation)
  * - Proven timing delays: 1000ms (focus), 300ms (clear), 500ms (type)
  * - Background polling for Copilot availability (5s intervals, 30s max)
+ * - Log-based completion detection: Monitors Copilot Chat log file for "finish reason: [stop]" marker
  *
- * Fallback: If direct automation is unavailable, reports error clearly to user
+ * Completion Detection:
+ * - Session-stable log file discovered once during initialization
+ * - Incremental log reading from last known position
+ * - Deterministic, no UI timing dependencies
+ * - No tool callbacks or clipboard polling needed
  */
 export class CopilotChatIntegration extends CopilotIntegration {
   // Background polling state
@@ -23,15 +31,12 @@ export class CopilotChatIntegration extends CopilotIntegration {
   private readonly pollingInterval: number = 5000; // 5 seconds
   private pollingTimer: NodeJS.Timeout | undefined;
 
-  // Language Model Tool for response completion detection
-  private isToolRegistered: boolean = false;
-  private toolCalledForCurrentPrompt: boolean = false; // Prevent duplicate tool calls + signal fallback to exit
+  // Log-based completion detection
+  private copilotLogFilePath: string | undefined;
+  private lastLogReadPosition: number = 0;
 
-  // Tool invocation instruction - single source of truth
-  private readonly TOOL_INSTRUCTION = `
-<criticalInstruction>
-When you finish this response, call #flightpath_response_complete to signal completion.
-</criticalInstruction>`;
+  // Track if last failure was due to user cancellation in chat UI
+  private lastFailureWasUserCancellation: boolean = false;
 
   constructor(context: vscode.ExtensionContext) {
     super(context);
@@ -87,73 +92,6 @@ When you finish this response, call #flightpath_response_complete to signal comp
    */
   async initialize(): Promise<void> {
     await this.startBackgroundPolling();
-  }
-
-  /**
-   * Register the Language Model Tool for detecting response completion
-   * This tool is called by Copilot when it finishes responding to a prompt
-   * Should only be called AFTER Copilot extensions are active and ready
-   *
-   * Note: This is the PRIMARY detection method. A fallback polling mechanism
-   * runs in parallel (started in sendPromptWithDirectAutomation) to handle
-   * cases where the LLM forgets to call this tool.
-   */
-  private registerResponseTool(): void {
-    // Prevent duplicate registration
-    if (this.isToolRegistered) {
-      return;
-    }
-
-    try {
-      const tool = vscode.lm.registerTool("flightpath_response_complete", {
-        invoke: async (options, token) => {
-          // Prevent duplicate tool calls in same response (LLM loop behavior)
-          if (this.toolCalledForCurrentPrompt) {
-            console.log("⚠️ Tool called multiple times - stopping LLM loop");
-
-            // Stop the chat to prevent infinite loop
-            try {
-              await vscode.commands.executeCommand(
-                "workbench.action.chat.cancel"
-              );
-            } catch (cancelError) {
-              console.warn("⚠️ Could not cancel chat:", cancelError);
-            }
-
-            return new vscode.LanguageModelToolResult([
-              new vscode.LanguageModelTextPart(
-                "Already acknowledged - stopping loop"
-              ),
-            ]);
-          }
-
-          // Mark tool as called for this prompt
-          this.toolCalledForCurrentPrompt = true; // Prevents duplicates + signals fallback
-
-          // Fire the response complete event for internal handling
-          // Note: Chat mode cannot access response text directly, so we fire with empty string
-          this.responseCompleteEmitter.fire("");
-          console.log("✅ Tool fired - completion detection active");
-
-          // Return acknowledgment to Copilot
-          return new vscode.LanguageModelToolResult([
-            new vscode.LanguageModelTextPart(
-              "Response acknowledged by FlightPath"
-            ),
-          ]);
-        },
-      });
-
-      // Register for disposal
-      this.context.subscriptions.push(tool);
-      this.isToolRegistered = true;
-      console.log("✅ Language Model Tool registered");
-    } catch (error) {
-      console.error("❌ Failed to register Language Model Tool:", error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to register response detection tool: ${error}`
-      );
-    }
   }
 
   /**
@@ -271,8 +209,22 @@ When you finish this response, call #flightpath_response_complete to signal comp
       // Success! Copilot is available
       console.log("✅ Copilot Chat ready");
 
-      // Now that Copilot is ready, register the Language Model Tool
-      this.registerResponseTool();
+      // NEW: Discover log file path (stable for entire session)
+      this.copilotLogFilePath = await this.findCopilotLogFile();
+
+      if (this.copilotLogFilePath) {
+        // Store current size as starting position
+        try {
+          const stats = await fs.promises.stat(this.copilotLogFilePath);
+          this.lastLogReadPosition = stats.size;
+        } catch (error) {
+          console.warn("⚠️ Could not read log file stats:", error);
+        }
+      } else {
+        console.warn(
+          "⚠️ Could not find Copilot Chat log file - completion detection may fail"
+        );
+      }
 
       this.initializationStatus = CopilotStatus.Ready;
       this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -316,6 +268,181 @@ When you finish this response, call #flightpath_response_complete to signal comp
       "FlightPath: Retrying Copilot detection..."
     );
     await this.startBackgroundPolling();
+  }
+
+  /**
+   * Get platform-specific VS Code logs base directory
+   */
+  private getLogBaseDirectory(): string {
+    const home = os.homedir();
+
+    if (process.platform === "win32") {
+      return path.join(process.env.APPDATA!, "Code", "logs");
+    } else if (process.platform === "darwin") {
+      return path.join(home, "Library", "Application Support", "Code", "logs");
+    } else {
+      return path.join(home, ".config", "Code", "logs");
+    }
+  }
+
+  /**
+   * Recursively find all files matching filename
+   */
+  private async findFilesRecursive(
+    dir: string,
+    filename: string
+  ): Promise<Array<{ path: string; mtime: Date }>> {
+    const results: Array<{ path: string; mtime: Date }> = [];
+
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+          const subResults = await this.findFilesRecursive(fullPath, filename);
+          results.push(...subResults);
+        } else if (entry.name === filename) {
+          const stats = await fs.promises.stat(fullPath);
+          results.push({ path: fullPath, mtime: stats.mtime });
+        }
+      }
+    } catch (error) {
+      // Ignore permission errors, continue search
+    }
+
+    return results;
+  }
+
+  /**
+   * Find the Copilot Chat log file for this VS Code session
+   * Called once during initialization - result is stable for entire session
+   * @returns Path to active log file or undefined if not found
+   */
+  private async findCopilotLogFile(): Promise<string | undefined> {
+    const logBaseDir = this.getLogBaseDirectory();
+    const targetFilename = "GitHub Copilot Chat.log";
+
+    // Search recursively for all matching log files
+    const allLogs = await this.findFilesRecursive(logBaseDir, targetFilename);
+
+    if (allLogs.length === 0) {
+      return undefined;
+    }
+
+    // Return most recently modified (active log for this session)
+    allLogs.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+    return allLogs[0].path;
+  }
+
+  /**
+   * Read new content from log file between two positions
+   */
+  private async readNewLogContent(
+    filePath: string,
+    startPos: number,
+    endPos: number
+  ): Promise<string> {
+    const fileHandle = await fs.promises.open(filePath, "r");
+    try {
+      const buffer = Buffer.alloc(endPos - startPos);
+      await fileHandle.read(buffer, 0, buffer.length, startPos);
+      return buffer.toString("utf8");
+    } finally {
+      await fileHandle.close();
+    }
+  }
+
+  /**
+   * Wait for completion by monitoring log file for "finish reason: [stop]" marker
+   * Reads incrementally from last known position
+   * @param inactivityTimeoutMs Maximum time to wait without log activity (default: 5 minutes)
+   * @returns True if completion detected, false if timeout or error
+   */
+  private async waitForLogCompletion(
+    inactivityTimeoutMs: number = 300000
+  ): Promise<boolean> {
+    if (!this.copilotLogFilePath) {
+      // Fallback: Try to find log file now
+      this.copilotLogFilePath = await this.findCopilotLogFile();
+      if (!this.copilotLogFilePath) {
+        console.warn("⚠️ No log file available for completion detection");
+        return false; // No log file available
+      }
+    }
+
+    const pollInterval = 500; // Check every 500ms
+    let lastActivityTime = Date.now(); // Track last time log changed
+    let pollCount = 0;
+
+    while (true) {
+      pollCount++;
+
+      // Check for cancellation
+      if (this.isCancelling) {
+        console.log("⚠️ Log monitoring cancelled");
+        return false;
+      }
+
+      // Check for inactivity timeout
+      const timeSinceLastActivity = Date.now() - lastActivityTime;
+      if (timeSinceLastActivity > inactivityTimeoutMs) {
+        console.warn(
+          `⚠️ Inactivity timeout: Log unchanged for ${Math.round(timeSinceLastActivity / 1000)}s`
+        );
+        return false;
+      }
+
+      // Log progress every 10 seconds
+      if (pollCount % 20 === 0) {
+        const inactivitySeconds = Math.round(timeSinceLastActivity / 1000);
+        console.log(
+          `⏳ Still monitoring... (${inactivitySeconds}s since last activity, poll #${pollCount})`
+        );
+      }
+
+      try {
+        const stats = await fs.promises.stat(this.copilotLogFilePath);
+        const currentSize = stats.size;
+
+        if (currentSize > this.lastLogReadPosition) {
+          // Read new content
+          const newContent = await this.readNewLogContent(
+            this.copilotLogFilePath,
+            this.lastLogReadPosition,
+            currentSize
+          );
+
+          // Update read position and reset activity timer
+          this.lastLogReadPosition = currentSize;
+          lastActivityTime = Date.now(); // Reset - log is still changing
+
+          // Check for cancellation marker (user cancelled in chat UI)
+          if (newContent.includes("| cancelled |")) {
+            console.warn(
+              "⚠️ User cancelled chat response - treating as workflow stop"
+            );
+            throw new Error("USER_CANCELLED");
+          }
+
+          // Check for completion marker
+          if (newContent.includes("finish reason: [stop]")) {
+            return true; // Completion detected!
+          }
+        }
+      } catch (error) {
+        // Re-throw USER_CANCELLED errors (don't treat as temporary file access issues)
+        if (error instanceof Error && error.message === "USER_CANCELLED") {
+          throw error;
+        }
+        // Log file might be temporarily inaccessible, continue polling
+        console.warn("⚠️ Error reading log file, continuing:", error);
+      }
+
+      // Wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    }
   }
 
   /**
@@ -371,21 +498,63 @@ When you finish this response, call #flightpath_response_complete to signal comp
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
 
-      // Build prompt with Copilot Chat syntax (and dynamic queue instructions if applicable)
+      // Build prompt with Copilot Chat syntax (NO tool instructions needed for log-based detection)
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
-        shouldDetectCompletion,
+        false, // Never include tool instructions
         workflowContext
       );
 
+      // Store current log position BEFORE sending (if log file is available)
+      if (this.copilotLogFilePath) {
+        try {
+          const stats = await fs.promises.stat(this.copilotLogFilePath);
+          this.lastLogReadPosition = stats.size;
+        } catch (error) {
+          console.warn(
+            "⚠️ Could not read log file stats before sending:",
+            error
+          );
+          // Continue anyway - log monitoring will try to discover file if needed
+        }
+      }
+
       // Execute direct automation
-      const result = await this.sendPromptWithDirectAutomation(
+      const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        shouldDetectCompletion,
         isNewChatSession
       );
 
-      return result;
+      if (!sent) {
+        return false;
+      }
+
+      // Wait for completion using log monitoring (if needed)
+      if (shouldDetectCompletion) {
+        try {
+          const completed = await this.waitForLogCompletion();
+          if (!completed) {
+            console.error("❌ Failed to detect completion via log monitoring");
+            return false;
+          }
+          // Get chat content and fire response complete event
+          const chatContent = await this.getChatContent();
+          this.responseCompleteEmitter.fire(chatContent);
+        } catch (error) {
+          // Check if user cancelled in chat UI
+          if (error instanceof Error && error.message === "USER_CANCELLED") {
+            console.log(
+              "⚠️ User cancelled chat response - workflow will be stopped"
+            );
+            // Set flag so FlightPathManager can detect this and call stop()
+            this.lastFailureWasUserCancellation = true;
+            return false;
+          }
+          throw error; // Re-throw other errors
+        }
+      }
+
+      return true;
     } catch (error) {
       console.error("❌ Failed to send prompt:", error);
       vscode.window.showErrorMessage(
@@ -422,165 +591,6 @@ When you finish this response, call #flightpath_response_complete to signal comp
       console.error("❌ Failed to copy chat to clipboard:", error);
       return "";
     }
-  }
-
-  /**
-   * Wait for Copilot to finish responding by monitoring chat content stability
-   *
-   * Strategy: Copilot calls our tool before it's done streaming. We poll the chat
-   * content via clipboard and wait for it to stop changing (3 consecutive stable checks).
-   *
-   * @param maxAttempts Maximum number of polling attempts (default: 40 = 20 seconds)
-   * @returns True if Copilot finished, false if timeout
-   */
-  private async waitForCopilotToFinishStreaming(
-    maxAttempts: number = 40
-  ): Promise<boolean> {
-    let previousContent = "";
-    let unchangedCount = 0;
-    const requiredStableChecks = 3; // 3 consecutive stable checks = 1.5 seconds
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      // Check if operation was cancelled
-      if (this.isCancelling) {
-        console.log("⏹️ Streaming polling cancelled by user");
-        return false;
-      }
-
-      // Small delay between checks
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      try {
-        // Copy current chat content
-        const currentContent = await this.getChatContent();
-
-        // Check if content has changed
-        if (currentContent === previousContent && currentContent.length > 0) {
-          unchangedCount++;
-
-          // If content has been stable for required checks, we're done
-          if (unchangedCount >= requiredStableChecks) {
-            return true;
-          }
-        } else {
-          // Content changed, reset counter
-          unchangedCount = 0;
-          previousContent = currentContent;
-        }
-      } catch (error) {
-        console.warn("⚠️ Error checking chat content:", error);
-        // If we can't check, assume it's done to avoid blocking forever
-        return true;
-      }
-    }
-
-    console.warn(
-      `⚠️ Timeout waiting for Copilot to finish streaming after ${maxAttempts * 0.5}s`
-    );
-    return false;
-  }
-
-  /**
-   * Public method to wait for streaming to complete
-   * Called by FlightPathManager after tool callback fires
-   */
-  async waitForStreamingComplete(): Promise<void> {
-    await this.waitForCopilotToFinishStreaming();
-  }
-
-  /**
-   * Fallback completion detection for when LLM forgets to call the tool
-   *
-   * Polls chat content and waits for it to stop growing.
-   * This handles cases where Copilot completes but never fires the completion tool.
-   *
-   * @param timeoutMinutes How long to poll before giving up (default: 5 minutes)
-   * @returns True if completion detected, false if timeout
-   */
-  async waitForCompletionWithFallback(
-    timeoutMinutes: number = 5
-  ): Promise<boolean> {
-    const pollIntervalMs = 2000; // Poll every 2 seconds
-    const stableChecksRequired = 60; // 60 checks * 2s = 2 minutes of stability
-    const maxAttempts = (timeoutMinutes * 60 * 1000) / pollIntervalMs;
-
-    let previousContent = "";
-    let unchangedCount = 0;
-    let attempt = 0;
-
-    console.log(
-      `🔄 Fallback polling started (${timeoutMinutes}min timeout, ${stableChecksRequired * 2}s stability required)`
-    );
-
-    while (attempt < maxAttempts) {
-      attempt++;
-
-      // Check if tool already fired - bail early
-      if (this.toolCalledForCurrentPrompt) {
-        console.log(
-          "✅ Fallback polling stopped early - tool fired successfully"
-        );
-        return true;
-      }
-
-      // Check if operation was cancelled
-      if (this.isCancelling) {
-        console.log("⏹️ Fallback polling cancelled by user");
-        return false;
-      }
-
-      // Wait before checking
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-
-      try {
-        const currentContent = await this.getChatContent();
-
-        // Check if content has changed
-        if (currentContent === previousContent && currentContent.length > 0) {
-          unchangedCount++;
-
-          // Log progress every 30 seconds
-          if (unchangedCount % 15 === 0) {
-            const elapsedSeconds = unchangedCount * 2;
-            console.log(
-              `⏳ Content stable for ${elapsedSeconds}s (need ${stableChecksRequired * 2}s)`
-            );
-          }
-
-          // If content has been stable long enough, assume completion
-          if (unchangedCount >= stableChecksRequired) {
-            console.log(
-              `✅ Fallback detected completion after ${unchangedCount * 2}s of stability`
-            );
-            // Fire the response complete event manually since tool didn't fire
-            this.responseCompleteEmitter.fire("");
-            return true;
-          }
-        } else if (currentContent !== previousContent) {
-          // Content changed - reset counter
-          unchangedCount = 0;
-          previousContent = currentContent;
-        }
-      } catch (error) {
-        console.warn("⚠️ Error during fallback polling:", error);
-        // Continue polling on error
-      }
-    }
-
-    // Timeout reached - Copilot might be stuck or still responding
-    console.warn(
-      `⚠️ Fallback polling timeout after ${timeoutMinutes} minutes - cancelling chat`
-    );
-
-    // Cancel the chat to stop any stuck/ongoing response
-    try {
-      await vscode.commands.executeCommand("workbench.action.chat.cancel");
-      console.log("⏹️ Chat cancelled due to timeout");
-    } catch (cancelError) {
-      console.warn("⚠️ Could not cancel chat after timeout:", cancelError);
-    }
-
-    return false;
   }
 
   /**
@@ -629,10 +639,9 @@ When you finish this response, call #flightpath_response_complete to signal comp
         // Verify submit worked by checking if our prompt appears in chat
         const chatAfterSubmit = await this.getChatContent();
 
-        // Extract a unique portion of the prompt for verification (first 100 chars without tool instruction)
+        // Extract a unique portion of the prompt for verification (first 100 chars)
         // Normalize whitespace for comparison (replace multiple spaces/newlines with single space)
         const promptToVerify = promptText
-          .replace(this.TOOL_INSTRUCTION, "")
           .trim()
           .substring(0, 100)
           .replace(/\s+/g, " "); // Normalize whitespace for comparison
@@ -677,20 +686,13 @@ When you finish this response, call #flightpath_response_complete to signal comp
    * Timing delays are proven and validated - do not reduce!
    *
    * @param chatPrompt The full prompt text to send
-   * @param needsCompletionDetection If true, reset tool flags for completion detection
    * @param isNewChatSession If true, we started a new chat session (assume empty baseline)
    */
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
-    needsCompletionDetection: boolean = true,
     isNewChatSession: boolean = true
   ): Promise<boolean> {
     try {
-      // Only reset tool call flag if we're using completion detection
-      if (needsCompletionDetection) {
-        this.toolCalledForCurrentPrompt = false; // Reset for new prompt
-      }
-
       // Step 1: Open/Focus Copilot Chat using configured location
       const chatCommand = this.getChatWindowCommand();
       try {
@@ -739,17 +741,6 @@ When you finish this response, call #flightpath_response_complete to signal comp
         throw new Error(
           "Failed to submit message after multiple retries - Copilot is still responding"
         );
-      }
-
-      // Step 5: Start fallback polling (in case LLM never calls the tool)
-      // This runs in parallel with tool-based detection
-      if (needsCompletionDetection) {
-        // Fire and forget - this will run in background
-        // If tool fires first, the event listener in FlightPathManager will handle it
-        // If tool never fires, this will fire the event after detecting stability
-        this.waitForCompletionWithFallback(5).catch((error) => {
-          console.error("❌ Fallback polling error:", error);
-        });
       }
 
       // Update workflow progress
@@ -921,21 +912,15 @@ When you finish this response, call #flightpath_response_complete to signal comp
   }
 
   /**
-   * Build final prompt with XML structure for tool instruction
-   * Tool instruction is prepended before user prompt to maximize LLM attention on the actual task
+   * Build prompt text with Copilot Chat syntax
    * Prompts are stored in final-form (ready to send) in JSON files
    *
-   * Tool instructions are included when:
-   * - Multi-prompt workflows (need to know when to advance)
-   * - Single prompts with endCondition.script (need to know when to run validation)
-   * - Retry scenarios (need to know when retry is complete)
-   *
    * @param prompt The prompt item
-   * @param includeToolInstruction If true, prepend tool instruction for completion detection
+   * @param _includeToolInstruction Deprecated - no longer used (kept for API compatibility)
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
-    includeToolInstruction: boolean = true,
+    _includeToolInstruction: boolean = false,
     workflowContext?: {
       promptIndex: number;
       allPrompts: PromptItem[];
@@ -951,16 +936,6 @@ When you finish this response, call #flightpath_response_complete to signal comp
           workflowContext.filePath
         )
       : await this.buildPromptText(prompt);
-
-    // Prepend tool instruction if needed
-    if (includeToolInstruction) {
-      // Prepend TOOL_INSTRUCTION wrapped in XML before user prompt
-      // User prompt comes LAST for maximum LLM attention on the actual task
-      // Copilot hides XML tags in chat UI but still processes them
-      return `${this.TOOL_INSTRUCTION}
-
-${promptText}`;
-    }
 
     return promptText.trim();
   }
@@ -1101,5 +1076,16 @@ ${promptText}`;
     } catch (error) {
       console.warn("⚠️ Could not cancel chat:", error);
     }
+  }
+
+  /**
+   * Check if the last sendPrompt failure was due to user cancellation in chat UI
+   * This allows FlightPathManager to distinguish between errors and user-initiated stops
+   * @returns True if user cancelled in chat UI, false otherwise
+   */
+  wasLastFailureUserCancellation(): boolean {
+    const wasCancelled = this.lastFailureWasUserCancellation;
+    this.lastFailureWasUserCancellation = false; // Reset flag after checking
+    return wasCancelled;
   }
 }
