@@ -568,6 +568,20 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // DEBUG: Investigate chat log access (temporary diagnostic command)
+  const investigateChatLogsCommand = vscode.commands.registerCommand(
+    "flightpath.investigateChatLogs",
+    async () => {
+      const { runAllInvestigations } = await import(
+        "./test/chat-log-investigation"
+      );
+      await runAllInvestigations(context);
+      vscode.window.showInformationMessage(
+        "Chat log investigation complete! Check the console for results."
+      );
+    }
+  );
+
   // Edit Current Prompt File command (for dashboard)
   const editCurrentPromptFileCommand = vscode.commands.registerCommand(
     "flightpath.editCurrentPromptFile",
@@ -614,6 +628,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     sendToChatCommand,
     showLanguageIdCommand,
     selectPromptFileCommand,
+    investigateChatLogsCommand,
     editCurrentPromptFileCommand,
     runCommand,
     showOutputPanelCommand

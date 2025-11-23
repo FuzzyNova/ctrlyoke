@@ -74,9 +74,6 @@ When you finish this response, call #flightpath_response_complete to signal comp
     try {
       await vscode.commands.executeCommand(command);
       console.log(`✨ Started new chat session using: ${command}`);
-
-      // Small delay to ensure chat window is ready
-      await new Promise((resolve) => setTimeout(resolve, 300));
     } catch (error) {
       console.error("❌ Failed to start new chat session:", error);
       // Don't throw - we'll still try to send the prompt to existing chat
@@ -361,7 +358,8 @@ When you finish this response, call #flightpath_response_complete to signal comp
 
       // Start new chat session if requested (unless this is a retry scenario)
       // Note: Retries should always use the same chat session
-      if (prompt.newChatSession !== false) {
+      const isNewChatSession = prompt.newChatSession !== false;
+      if (isNewChatSession) {
         await this.startNewChatSession();
       }
 
@@ -383,7 +381,8 @@ When you finish this response, call #flightpath_response_complete to signal comp
       // Execute direct automation
       const result = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        shouldDetectCompletion
+        shouldDetectCompletion,
+        isNewChatSession
       );
 
       return result;
@@ -592,17 +591,24 @@ When you finish this response, call #flightpath_response_complete to signal comp
    *
    * @param promptText The prompt text to verify in chat
    * @param maxAttempts Maximum number of retry attempts (default: 5)
+   * @param isNewChatSession If true, assume empty chat baseline (new chat command always works)
    * @returns True if submit succeeded and verified, false if all attempts failed
    */
   private async submitWithRetry(
     promptText: string,
-    maxAttempts: number = 5
+    maxAttempts: number = 5,
+    isNewChatSession: boolean = true
   ): Promise<boolean> {
     let attempt = 0;
     const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
 
     // Get chat content BEFORE submitting (to verify it changes)
-    const chatBeforeSubmit = await this.getChatContent();
+    // If this is a new chat session, assume empty (the new chat command always works)
+    // If reusing existing chat, get actual content
+    let chatBeforeSubmit = "";
+    if (!isNewChatSession) {
+      chatBeforeSubmit = await this.getChatContent();
+    }
 
     while (attempt < maxAttempts) {
       attempt++;
@@ -636,11 +642,10 @@ When you finish this response, call #flightpath_response_complete to signal comp
 
         // Check if chat grew AND prompt appears in chat
         // Size check handles duplicate prompts (primary signal), prompt presence is safety validation
-        if (
-          chatAfterSubmit.length > chatBeforeSubmit.length &&
-          normalizedChat.includes(promptToVerify)
-        ) {
-          console.log(`✅ Submit verification passed`);
+        const chatGrew = chatAfterSubmit.length > chatBeforeSubmit.length;
+        const promptFound = normalizedChat.includes(promptToVerify);
+
+        if (chatGrew && promptFound) {
           return true;
         }
       } catch (error) {
@@ -673,10 +678,12 @@ When you finish this response, call #flightpath_response_complete to signal comp
    *
    * @param chatPrompt The full prompt text to send
    * @param needsCompletionDetection If true, reset tool flags for completion detection
+   * @param isNewChatSession If true, we started a new chat session (assume empty baseline)
    */
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
-    needsCompletionDetection: boolean = true
+    needsCompletionDetection: boolean = true,
+    isNewChatSession: boolean = true
   ): Promise<boolean> {
     try {
       // Only reset tool call flag if we're using completion detection
@@ -722,7 +729,11 @@ When you finish this response, call #flightpath_response_complete to signal comp
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
 
       // Step 4: Submit with retry logic (handles race condition)
-      const submitSuccess = await this.submitWithRetry(chatPrompt, 10);
+      const submitSuccess = await this.submitWithRetry(
+        chatPrompt,
+        10,
+        isNewChatSession
+      );
 
       if (!submitSuccess) {
         throw new Error(

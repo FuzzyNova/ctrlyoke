@@ -9,5 +9,18 @@
       "prompt": "Look in the sample-code directory. For each file in sample-code add an additional prompt to this file (manual-test/dynamic-queue-basic-example.flightpath.json) that instruct copilot to summarize just that single file.",
       "allowDynamicExtension": true
     }
+    ,
+    {
+      "id": "summarize-example-py",
+      "prompt": "Summarize the contents of the single file: sample-code/example.py. Provide a short, focused summary that describes what the file does, its key functions/classes, and any notable behavior or usage notes. Do NOT include summaries of other files."
+    },
+    {
+      "id": "summarize-example-ts",
+      "prompt": "Summarize the contents of the single file: sample-code/example.ts. Provide a short, focused summary that describes what the file does, its key functions/classes, and any notable behavior or usage notes. Do NOT include summaries of other files."
+    },
+    {
+      "id": "summarize-sample-readme",
+      "prompt": "Summarize the contents of the single file: sample-code/README.md. Provide a short, focused summary that describes what the file contains and any example usage or important notes. Do NOT include summaries of other files."
+    }
   ]
 }

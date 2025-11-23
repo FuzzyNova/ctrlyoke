@@ -100,6 +100,12 @@
         "icon": "$(symbol-keyword)"
       },
       {
+        "command": "flightpath.investigateChatLogs",
+        "title": "Investigate Chat Log Access",
+        "category": "FlightPath Test",
+        "icon": "$(search)"
+      },
+      {
         "command": "flightpath.createEndConditionScript",
         "title": "Create End Condition Script",
         "category": "FlightPath",
