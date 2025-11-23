@@ -70,6 +70,12 @@
         "icon": "$(link)"
       },
       {
+        "command": "flightpath.test.chatModelSelection",
+        "title": "Test Chat Model Selection",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "flightpath.showCopilotStatus",
         "title": "Show Copilot Integration Status",
         "category": "FlightPath",

@@ -1,4 +1,4 @@
-FlightPath: Available Chat Commands (355 found)
+FlightPath: Available Chat Commands (356 found)
 
 chat.action.focus
 chat.configureToolSets
@@ -177,6 +177,7 @@ notebook.cell.chat.fixError
 notebook.cell.chat.start
 notebook.cell.chat.startAtTop
 notebook.chat.selectAndInsertKernelVariable
+python.copilotSetupTests
 toggle.chat.commandCenter.enabled
 vscode.copilot.chat.showRequestHtmlItem
 workbench.action.chat.acceptTool

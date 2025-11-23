@@ -97,6 +97,132 @@ async function testFileAttachment(): Promise<void> {
 }
 
 /**
+ * Test Chat Model Selection - Investigate workbench.action.chat.changeModel
+ */
+async function testChatModelSelection(): Promise<void> {
+  console.log("🧪 Testing Chat Model Selection Command...");
+
+  try {
+    // Step 1: Query available language models
+    console.log("📋 Step 1: Querying available language models...");
+    try {
+      const models = await vscode.lm.selectChatModels({
+        vendor: "copilot",
+      });
+      console.log(`✅ Found ${models.length} available models:`);
+      models.forEach((model) => {
+        console.log(
+          `   - ID: ${model.id}, Family: ${model.family}, Vendor: ${model.vendor}`
+        );
+      });
+    } catch (error) {
+      console.log("⚠️ Could not query models via API:", error);
+    }
+
+    // Step 2: Open Copilot Chat
+    console.log("\n📋 Step 2: Opening Copilot Chat...");
+    await vscode.commands.executeCommand(
+      "workbench.panel.chat.view.copilot.focus"
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Test different model IDs based on actual available models
+    // Format: { vendor: "copilot", family: "model-family", id: "model-id" }
+    // ID is just the model name, not "copilot/model-name"
+    const testCases = [
+      {
+        name: "GPT-4o",
+        params: [{ vendor: "copilot", family: "gpt-4o", id: "gpt-4o" }],
+      },
+      {
+        name: "GPT-4.1",
+        params: [{ vendor: "copilot", family: "gpt-4.1", id: "gpt-4.1" }],
+      },
+      {
+        name: "GPT-5",
+        params: [{ vendor: "copilot", family: "gpt-5", id: "gpt-5" }],
+      },
+      {
+        name: "Claude Sonnet 4",
+        params: [
+          {
+            vendor: "copilot",
+            family: "claude-sonnet-4",
+            id: "claude-sonnet-4",
+          },
+        ],
+      },
+      {
+        name: "Claude Sonnet 4.5",
+        params: [
+          {
+            vendor: "copilot",
+            family: "claude-sonnet-4.5",
+            id: "claude-sonnet-4.5",
+          },
+        ],
+      },
+      {
+        name: "Claude Haiku 4.5",
+        params: [
+          {
+            vendor: "copilot",
+            family: "claude-haiku-4.5",
+            id: "claude-haiku-4.5",
+          },
+        ],
+      },
+      {
+        name: "Gemini 2.5 Pro",
+        params: [
+          {
+            vendor: "copilot",
+            family: "gemini-2.5-pro",
+            id: "gemini-2.5-pro",
+          },
+        ],
+      },
+    ];
+
+    for (const testCase of testCases) {
+      console.log(`\n🔍 Testing: ${testCase.name}`);
+      console.log(`   Parameters: ${JSON.stringify(testCase.params)}`);
+
+      try {
+        await vscode.commands.executeCommand(
+          "workbench.action.chat.changeModel",
+          ...testCase.params
+        );
+        console.log(`   ✅ Command executed successfully`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        console.log(`   ❌ Command failed:`, error);
+      }
+    }
+
+    vscode.window
+      .showInformationMessage(
+        "🧪 Chat model selection test complete! Check the console for detailed results.",
+        "View Console"
+      )
+      .then((action) => {
+        if (action === "View Console") {
+          vscode.commands.executeCommand(
+            "workbench.action.output.toggleOutput"
+          );
+        }
+      });
+
+    console.log("\n✅ All test cases completed - check results above");
+  } catch (error) {
+    console.error("❌ Chat model selection test failed:", error);
+    vscode.window.showErrorMessage(
+      `Chat model selection test failed: ${error}`
+    );
+  }
+}
+
+/**
  * Test Copilot Chat automation feasibility - Testing Editor Chat approach
  */
 async function testCopilotAutomation(): Promise<boolean> {
@@ -341,6 +467,14 @@ function registerCommands(context: vscode.ExtensionContext) {
     "flightpath.test.fileAttachment",
     async () => {
       await testFileAttachment();
+    }
+  );
+
+  // Test Chat Model Selection command - investigate workbench.action.chat.changeModel
+  const testChatModelSelectionCommand = vscode.commands.registerCommand(
+    "flightpath.test.chatModelSelection",
+    async () => {
+      await testChatModelSelection();
     }
   );
 
@@ -618,6 +752,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     debugStateCommand,
     testCopilotCommand,
     testFileAttachmentCommand,
+    testChatModelSelectionCommand,
     showCopilotStatusCommand,
     testAutomationCommand,
     retryCopilotDetectionCommand,
