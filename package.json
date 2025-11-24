@@ -282,6 +282,12 @@
           "description": "Use VS Code's native attachment commands in Chat mode",
           "markdownDescription": "When enabled (default), FlightPath uses VS Code's native `attachFile` and `attachSelection` commands for clean UI in Chat mode. When disabled, uses raw XML attachment (reliable but shows raw text in chat). **Note:** Native attachments have a known VS Code bug with multiple file ranges - disable if you encounter issues. This setting only affects Chat mode; CLI mode always uses XML attachment."
         },
+        "flightpath.forceAgentModeForChat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Force chat to switch to default agent mode before sending prompts",
+          "markdownDescription": "When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices. Enable only if you frequently use Ask/Plan modes and want FlightPath to auto-switch away from them."
+        },
         "flightpath.chatWindowLocation": {
           "type": "string",
           "enum": [

@@ -67,6 +67,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
   /**
    * Start a new chat session based on user's configured location preference
    * Calls the appropriate VS Code command to open a fresh chat window
+   *
+   * Note: New chat sessions inherit the mode/agent from the previous chat session.
+   * Use 'flightpath.forceAgentModeForChat' setting to automatically switch to agent mode.
    */
   private async startNewChatSession(): Promise<void> {
     const config = vscode.workspace.getConfiguration("flightpath");
@@ -86,6 +89,31 @@ export class CopilotChatIntegration extends CopilotIntegration {
     } catch (error) {
       console.error("❌ Failed to start new chat session:", error);
       // Don't throw - we'll still try to send the prompt to existing chat
+    }
+  }
+
+  /**
+   * Ensure chat is in agent mode for file editing workflows
+   *
+   * IMPORTANT: Ask and Plan modes return text-only responses without file edits,
+   * causing immediate "finish reason: [stop]" in logs. Agent mode is required
+   * for prompts that expect Copilot to edit files.
+   *
+   * WARNING: This switches to the DEFAULT agent mode and overrides custom agent
+   * selections. Only called when user enables 'flightpath.forceAgentModeForChat'.
+   *
+   * Note: VS Code doesn't provide an API to query current mode, so we always
+   * execute openagent command. If already in agent mode, this is a no-op.
+   */
+  private async ensureAgentMode(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand("workbench.action.chat.openagent");
+      console.log("🤖 Ensured chat is in agent mode");
+      // Small delay to allow mode switch
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    } catch (error) {
+      console.warn("⚠️ Could not switch to agent mode:", error);
+      // Don't throw - user may have manually selected agent mode
     }
   }
 
@@ -266,10 +294,16 @@ export class CopilotChatIntegration extends CopilotIntegration {
       this.copilotLogFilePath = await this.findCopilotLogFile();
 
       if (this.copilotLogFilePath) {
+        console.log(
+          `📄 Discovered Copilot Chat log file: ${this.copilotLogFilePath}`
+        );
         // Store current size as starting position
         try {
           const stats = await fs.promises.stat(this.copilotLogFilePath);
           this.lastLogReadPosition = stats.size;
+          console.log(
+            `📊 Initial log position: ${this.lastLogReadPosition} bytes`
+          );
         } catch (error) {
           console.warn("⚠️ Could not read log file stats:", error);
         }
@@ -541,6 +575,17 @@ export class CopilotChatIntegration extends CopilotIntegration {
       const isNewChatSession = prompt.newChatSession !== false;
       if (isNewChatSession) {
         await this.startNewChatSession();
+      }
+
+      // Ensure we're in agent mode if user has enabled force agent mode setting
+      // This prevents issues with Ask/Plan modes but overrides custom agents
+      const config = vscode.workspace.getConfiguration("flightpath");
+      const forceAgentMode = config.get<boolean>(
+        "forceAgentModeForChat",
+        false
+      );
+      if (forceAgentMode) {
+        await this.ensureAgentMode();
       }
 
       // Switch model if specified in prompt
