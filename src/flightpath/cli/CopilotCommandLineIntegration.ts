@@ -209,7 +209,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       if (options.agent) {
         args.push("--agent", options.agent);
         this.log(`🤖 Using agent: ${options.agent}`);
-        
+
         // When using --agent, we need -p flag with prompt text
         // Wrap prompt in quotes to handle special characters
         // Use JSON.stringify to properly escape quotes and special chars
@@ -217,7 +217,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       }
       if (options.resumeSession) {
         args.push("--resume", options.resumeSession);
-      }      // Store full command for debugging (NOW available before execution)
+      } // Store full command for debugging (NOW available before execution)
       this.lastCliCommand = `copilot ${args.join(" ")}`;
 
       // Fire event with prompt and command ready (before execution starts)
