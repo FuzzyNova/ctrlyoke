@@ -23,6 +23,7 @@ export interface PromptItem {
   id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
   model?: SupportedModel; // Supports all Chat models (22 total). CLI validates and falls back if unsupported.
+  agent?: string; // Custom agent name for CLI mode (e.g., 'flightpath-orchestrator'). Ignored in Chat mode.
   newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
   allowDynamicExtension?: boolean; // If true, inject queue extension instructions
   endCondition?: EndCondition;

@@ -1,5 +1,9 @@
 # Chat Mode Limitations and Requirements
 
+## Overview
+
+FlightPath's Chat mode automation has several important limitations due to the lack of VS Code APIs for chat session management and the log-based completion detection approach.
+
 ## Chat Mode Selection (Ask/Agent/Plan/Custom Agents)
 
 ### The Issue
@@ -13,6 +17,25 @@ GitHub Copilot Chat supports multiple modes:
 - **Custom Agents**: User-created agents with specialized capabilities
 
 **Problem**: Ask and Plan modes return immediate text responses without file edits, causing FlightPath's log-based completion detection to see `finish reason: [stop]` instantly, even though Copilot is still generating the response.
+
+### Agent Selection Limitation
+
+**Critical Limitation**: FlightPath **cannot programmatically select custom agents** for Chat mode workflows.
+
+**Why this matters:**
+
+- VS Code provides no API to select a specific agent programmatically
+- The `workbench.action.chat.openagent` command only opens the **default Agent mode**, not custom agents
+- Custom agents must be manually selected from the dropdown before running workflows
+- This limitation prevents FlightPath from implementing the agent assignment feature described in `AGENT_SUPPORT_IMPLEMENTATION.md` for Chat mode
+
+**Impact:**
+
+- ✅ CLI mode: Full agent support via `--agent <name>` flag (planned feature)
+- ❌ Chat mode: No programmatic agent selection possible
+- ⚠️ Workaround: Users must manually select desired custom agent before starting FlightPath workflow
+
+**Recommendation**: Use CLI mode for workflows requiring custom agent selection.
 
 ### FlightPath's Solution
 
@@ -102,6 +125,78 @@ npx @github/copilot-cli --agent ask "What is TypeScript?"
 
 **Why not use toggleAgentMode?**: We can't query current state, so toggle could turn agent mode OFF instead of ON.
 
+---
+
+## Parallel Execution Limitation
+
+### Single Session Assumption
+
+**Critical Limitation**: FlightPath's Chat mode **assumes only one chat session is active at a time**.
+
+**Why this matters:**
+
+- Chat completion detection relies on parsing Copilot's log file (`copilot-language-server.log`)
+- The log file does **not include session IDs** in the `finish reason: [stop]` markers
+- FlightPath simply looks for the **next** `[stop]` marker after sending a prompt
+- If multiple chat sessions are running concurrently, FlightPath may detect completion from the **wrong session**
+
+**Problem Scenarios:**
+
+1. **User manually interacts with Copilot Chat** while FlightPath workflow is running:
+   - User's manual prompt completes first
+   - FlightPath detects this as workflow completion
+   - Actual workflow prompt may still be processing
+   - **Result**: Premature completion, workflow fails
+
+2. **Multiple FlightPath workflows** running simultaneously:
+   - Both workflows send prompts to chat
+   - Both poll for `[stop]` markers
+   - Each may detect the other's completion
+   - **Result**: Race conditions, unpredictable failures
+
+3. **Multiple VS Code windows** with FlightPath active:
+   - All windows share the same global log file
+   - All workflows poll the same log
+   - **Result**: Cross-contamination of completion detection
+
+**Current Behavior:**
+
+```typescript
+// CopilotChatIntegration polls log file
+private async pollForLogCompletion(): Promise<void> {
+  // Simply looks for NEXT occurrence of "[stop]"
+  // No session ID tracking - assumes single active session
+  const stopMarker = /finish reason: \[stop\]/;
+  // ...
+}
+```
+
+**No Session ID in Logs:**
+
+```
+# Actual log format (no session identifier)
+[Trace - 10:30:45 AM] Sending request 'getCompletions - (123)'.
+[Trace - 10:30:48 AM] finish reason: [stop]
+
+# What we'd need (but don't have)
+[Trace - 10:30:48 AM] finish reason: [stop] session: abc123
+```
+
+**Workarounds:**
+
+1. **Don't use Copilot Chat manually** while FlightPath workflow is running
+2. **Run only one FlightPath workflow** at a time in Chat mode
+3. **Use CLI mode instead** - CLI properly isolates sessions via `--resume-session` flag
+
+**Why CLI mode doesn't have this issue:**
+
+- CLI creates isolated session files (`.copilot-session-<uuid>.json`)
+- Each session has unique log entries
+- FlightPath tracks the specific session ID
+- No cross-contamination possible
+
+**Recommendation**: For automated workflows, prefer **CLI mode** which properly supports concurrent execution and session isolation.
+
 ### Completion Detection Behavior by Mode
 
 | Mode  | File Edits | Log Marker           | FlightPath Behavior     |
@@ -122,8 +217,37 @@ Until then, agent mode enforcement is the safest approach.
 
 ---
 
+## Summary of Chat Mode Limitations
+
+| Limitation                           | Impact                                             | Workaround                                         |
+| ------------------------------------ | -------------------------------------------------- | -------------------------------------------------- |
+| **No API for mode detection**        | Can't verify ask/plan/agent mode                   | Force agent mode via setting                       |
+| **No API for agent selection**       | Can't select custom agents programmatically        | Manually select agent before workflow              |
+| **No session ID in logs**            | Can't distinguish between concurrent sessions      | Run one workflow at a time                         |
+| **Shared global log file**           | Multiple VS Code windows interfere with each other | Use CLI mode or single window                      |
+| **Single `[stop]` marker detection** | Any chat completion triggers detection             | Don't interact with Chat manually during workflows |
+
+**General Recommendation**: Use **CLI mode** for production workflows. Chat mode is best for:
+
+- Manual testing and debugging
+- Single-step workflows
+- Interactive exploration
+- Scenarios where you want to see the chat UI
+
+Use **CLI mode** for:
+
+- Automated workflows in production
+- Concurrent execution
+- Custom agent selection (planned feature)
+- Reliable completion detection
+- Multi-step workflows with session continuity
+
+---
+
 ## Related Documentation
 
 - `AGENT_CHAT_COMMANDS.md` - Agent and model selection testing
+- `AGENT_SUPPORT_IMPLEMENTATION.md` - Agent support (CLI mode only)
 - `CHAT_LOG_BASED_COMPLETION.md` - Log-based completion detection
 - `COPILOT_CHAT_INTEGRATION.md` - Chat automation architecture
+- `COPILOT_CLI_IMPLEMENTATION.md` - CLI mode architecture

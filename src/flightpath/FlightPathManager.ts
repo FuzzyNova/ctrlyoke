@@ -101,6 +101,15 @@ export class FlightPathManager {
   }
 
   /**
+   * Check if CLI command should be shown in dashboard output
+   */
+  private shouldShowCliCommand(): boolean {
+    return vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("showCliCommand", false);
+  }
+
+  /**
    * Get the default Copilot integration based on user settings
    */
   private getDefaultIntegration(): CopilotIntegration {
@@ -535,8 +544,9 @@ export class FlightPathManager {
 
       // Set up streaming listener for real-time output (CLI only)
       let streamingDisposable: vscode.Disposable | undefined;
+      let promptReadyDisposable: vscode.Disposable | undefined;
       if (this.dashboardProvider && this.isCliIntegration(activeIntegration)) {
-        // Initialize streaming output with prompt text
+        // Initialize streaming output with basic prompt text
         this.dashboardProvider.updateCliStreamingChunk(i, ""); // Initialize buffer
         this.dashboardProvider.updateCliOutput(i, {
           prompt: prompt.prompt,
@@ -544,6 +554,21 @@ export class FlightPathManager {
           elapsed: 0,
           tokens: undefined,
           isStreaming: true,
+          cliCommand: undefined,
+        });
+
+        // Listen for prompt ready event (fires when full prompt and command are built)
+        promptReadyDisposable = activeIntegration.onPromptReady((data) => {
+          this.dashboardProvider?.updateCliOutput(i, {
+            prompt: data.fullPrompt,
+            response: "",
+            elapsed: 0,
+            tokens: undefined,
+            isStreaming: true,
+            cliCommand: this.shouldShowCliCommand()
+              ? data.cliCommand
+              : undefined,
+          });
         });
 
         streamingDisposable = activeIntegration.onStreamingChunk((chunk) => {
@@ -552,6 +577,7 @@ export class FlightPathManager {
       }
 
       // Send prompt to Copilot with workflow context for dynamic queue instructions
+      // This builds the full prompt and command before execution starts
       const success = await activeIntegration.sendPrompt(
         prompt,
         needsCompletionDetection,
@@ -562,8 +588,9 @@ export class FlightPathManager {
         }
       );
 
-      // Clean up streaming listener
+      // Clean up event listeners
       streamingDisposable?.dispose();
+      promptReadyDisposable?.dispose();
 
       if (!success) {
         // Check if this was a user-initiated stop (not a real error)
@@ -632,12 +659,22 @@ export class FlightPathManager {
             tokens = activeIntegration.parseTokenCounts(lastResult.statistics);
           }
 
+          // Get CLI command if debugging is enabled
+          const cliCommand = this.shouldShowCliCommand()
+            ? activeIntegration.getLastCliCommand()
+            : undefined;
+
+          // Get full prompt text (with all context and instructions)
+          const fullPrompt =
+            activeIntegration.getLastFullPrompt() || prompt.prompt;
+
           this.dashboardProvider.updateCliOutput(i, {
-            prompt: prompt.prompt,
+            prompt: fullPrompt,
             response: responseText,
             elapsed: parseFloat(duration),
             tokens,
             isStreaming: false, // Mark as complete
+            cliCommand,
           });
         }
 
@@ -757,13 +794,23 @@ export class FlightPathManager {
               );
             }
 
+            // Get CLI command if debugging is enabled
+            const cliCommand = this.shouldShowCliCommand()
+              ? activeIntegration.getLastCliCommand()
+              : undefined;
+
+            // Get full prompt text (with all context and instructions)
+            const fullPrompt =
+              activeIntegration.getLastFullPrompt() || prompt.prompt;
+
             // Update dashboard with CLI output
             this.dashboardProvider.updateCliOutput(i, {
-              prompt: prompt.prompt,
+              prompt: fullPrompt,
               response: lastResult.response,
               elapsed: parseFloat(duration),
               tokens,
               isStreaming: false, // Mark as complete
+              cliCommand,
             });
           }
         }
@@ -1664,12 +1711,21 @@ export class FlightPathManager {
             tokens = integration.parseTokenCounts(lastResult.statistics);
           }
 
+          // Get CLI command if debugging is enabled
+          const cliCommand = this.shouldShowCliCommand()
+            ? integration.getLastCliCommand()
+            : undefined;
+
+          // Get full prompt text (with all context and instructions)
+          const fullPrompt = integration.getLastFullPrompt() || retryPrompt;
+
           this.dashboardProvider.updateCliOutput(currentIndex, {
-            prompt: retryPrompt,
+            prompt: fullPrompt,
             response: retryResponseText,
             elapsed: parseFloat(retryDuration),
             tokens,
             isStreaming: false, // Mark as complete
+            cliCommand,
           });
         }
 

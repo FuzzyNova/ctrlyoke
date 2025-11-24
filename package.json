@@ -310,6 +310,12 @@
           "description": "Show Copilot CLI output in the Output panel",
           "markdownDescription": "Show Copilot CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
         },
+        "flightpath.showCliCommand": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the full CLI command with all arguments and flags in the dashboard output",
+          "markdownDescription": "When enabled, displays the complete `copilot` command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
+        },
         "flightpath.copilotIntegrationMode": {
           "type": "string",
           "enum": [

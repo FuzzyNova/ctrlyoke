@@ -63,6 +63,11 @@
           ],
           "description": "AI model to use for this prompt. Supports all Chat models (22 total). CLI mode only supports: claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5 - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting. See src/types/ModelConstants.ts for source of truth."
         },
+        "agent": {
+          "type": "string",
+          "description": "Custom agent to use for this prompt (CLI mode only). Specify the agent name as defined in .github/agents/*.agent.md or ~/.copilot/agents/*.agent.md (e.g., 'flightpath-orchestrator', 'testing-specialist'). Chat mode cannot programmatically select agents - users must manually select from dropdown. See docs/CHAT_MODE_LIMITATIONS.md for details.",
+          "pattern": "^[a-zA-Z0-9-_]+$"
+        },
         "newChatSession": {
           "type": "boolean",
           "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",

@@ -23,6 +23,10 @@ export class ValidationUtils {
         ],
         nullable: true,
       },
+      agent: {
+        type: "string",
+        nullable: true,
+      },
       newChatSession: {
         type: "boolean",
         nullable: true,

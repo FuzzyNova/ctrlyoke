@@ -73,6 +73,7 @@ export class PromptFileParser {
           {
             prompt: parsed.prompt,
             model: parsed.model,
+            agent: parsed.agent,
             newChatSession: parsed.newChatSession,
             endCondition: parsed.endCondition,
           },
@@ -86,6 +87,7 @@ export class PromptFileParser {
         prompts: parsed.prompts.map((item: any, index: number) => ({
           prompt: item.prompt,
           model: item.model,
+          agent: item.agent,
           // Default newChatSession to true for multi-prompt workflows (unless explicitly set to false)
           newChatSession:
             item.newChatSession !== undefined ? item.newChatSession : true,

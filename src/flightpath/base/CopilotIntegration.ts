@@ -36,6 +36,13 @@ export abstract class CopilotIntegration {
   protected streamingChunkEmitter = new vscode.EventEmitter<string>();
   public readonly onStreamingChunk = this.streamingChunkEmitter.event;
 
+  // Event emitter for prompt ready (fires when prompt is built but before execution)
+  protected promptReadyEmitter = new vscode.EventEmitter<{
+    fullPrompt: string;
+    cliCommand?: string;
+  }>();
+  public readonly onPromptReady = this.promptReadyEmitter.event;
+
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
 
@@ -43,6 +50,7 @@ export abstract class CopilotIntegration {
     context.subscriptions.push(this.statusChangeEmitter);
     context.subscriptions.push(this.responseCompleteEmitter);
     context.subscriptions.push(this.streamingChunkEmitter);
+    context.subscriptions.push(this.promptReadyEmitter);
   }
 
   /**

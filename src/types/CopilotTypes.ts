@@ -22,6 +22,7 @@ export interface CopilotIntegration {
 export interface CopilotCliOptions {
   addDirs?: string[];
   model?: string;
+  agent?: string; // Custom agent name (CLI mode only)
   resumeSession?: string;
   allowedTools?: string[];
   deniedTools?: string[];

@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    {
+      "prompt": "Analyze the agent definition in #file:.github/agents/test-agent-alpha.agent.md and confirm you are Test Agent Alpha",
+      "agent": "test-agent-alpha",
+      "model": "claude-haiku-4.5"
+    },
+    {
+      "prompt": "Analyze the agent definition in #file:.github/agents/test-agent-beta.agent.md and confirm you are Test Agent Beta",
+      "agent": "test-agent-beta",
+      "model": "claude-haiku-4.5"
+    }
+  ]
+}

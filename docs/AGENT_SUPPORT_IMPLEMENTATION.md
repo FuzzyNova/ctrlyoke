@@ -1,15 +1,17 @@
 # Agent Support Implementation Plan
 
 **Status**: Planning Phase  
-**Target**: Enable FlightPath to leverage GitHub Copilot's custom agent system  
+**Target**: Enable FlightPath CLI mode to leverage GitHub Copilot's custom agent system  
 **Author**: Nathan + Claude (Prompt Planner mode)  
-**Date**: November 23, 2025
+**Date**: November 24, 2025
 
 ---
 
 ## Executive Summary
 
-This document outlines the plan to integrate GitHub Copilot's custom agent system into FlightPath, enabling users to specify which specialized agents should handle each step of their automated workflows. Additionally, FlightPath will ship with a built-in "FlightPath Orchestrator" agent that can plan features and create/edit `.flightpath.json` files autonomously.
+This document outlines the plan to integrate GitHub Copilot's custom agent system into FlightPath's **CLI mode only**. Due to VS Code API limitations (see `CHAT_MODE_LIMITATIONS.md`), agent selection is not available for Chat mode. Users can specify which specialized agents should handle each step of their automated workflows via the `agent` field in `.flightpath.json` files. Additionally, FlightPath will ship with a built-in "FlightPath Orchestrator" agent that can plan features and create/edit `.flightpath.json` files autonomously.
+
+**Chat Mode Limitation**: Chat mode cannot programmatically select custom agents. The `workbench.action.chat.openagent` command only opens the default Agent mode, not custom agents. Users must manually select their desired agent from the dropdown before running Chat mode workflows.
 
 ---
 
@@ -40,18 +42,23 @@ tools:
 Custom instructions and expertise for this agent...
 ```
 
-**How Agents Differ from FlightPath's Copilot Instructions:**
+### CLI Mode vs Chat Mode
 
-| Feature             | Copilot Instructions              | Custom Agents                           |
-| ------------------- | --------------------------------- | --------------------------------------- |
-| **File Location**   | `.github/copilot-instructions.md` | `.github/agents/*.agent.md`             |
-| **Scope**           | Always included (global context)  | Selectively invoked per task            |
-| **Purpose**         | Project-wide conventions/patterns | Specialized task-specific personas      |
-| **Tool Control**    | No restrictions                   | Can limit tool access                   |
-| **Model Selection** | Not specified                     | Can specify preferred model             |
-| **Invocation**      | Automatic                         | Explicit via `--agent` or `@agent-name` |
+**CLI Mode (FlightPath Default)**:
 
-**Key Insight**: Copilot instructions provide baseline knowledge; agents provide specialized execution strategies.
+- ✅ Full programmatic agent selection via `--agent <name>` flag
+- ✅ FlightPath can pass agent name directly to Copilot CLI
+- ✅ Supports custom agents defined in `.github/agents/` or `~/.copilot/agents/`
+- ✅ Agent selection works reliably for automated workflows
+
+**Chat Mode (Limited Support)**:
+
+- ❌ **Cannot programmatically select custom agents** (VS Code API limitation)
+- ❌ `workbench.action.chat.openagent` only opens default Agent mode
+- ⚠️ Users must manually select custom agents from dropdown before running workflows
+- ⚠️ FlightPath cannot assign agents per-prompt in Chat mode
+
+**Recommendation**: Use **CLI mode** for workflows requiring custom agent selection. See `CHAT_MODE_LIMITATIONS.md` for detailed explanation of Chat mode restrictions.
 
 ---
 
@@ -63,48 +70,52 @@ Custom instructions and expertise for this agent...
 --agent <agent>    Specify a custom agent to use, only in prompt mode
 ```
 
-**Important Notes:**
+**Why CLI Mode is Perfect for Agent Support:**
 
-- Only works in **prompt mode** (non-interactive) - PERFECT for FlightPath!
-- FlightPath already uses prompt mode (`-p` flag sends prompts via stdin)
-- Agents can also be invoked with `/agent` slash command in interactive mode
+- CLI `--agent` flag works in **prompt mode** (non-interactive) - exactly what FlightPath uses!
+- FlightPath already sends prompts via stdin to Copilot CLI
 - CLI auto-discovers agents from:
-  - `.github/agents/` (repository-level)
+  - `.github/agents/` (repository-level, version-controlled)
   - `~/.copilot/agents/` (user-level global agents)
+- No VS Code API dependencies - pure command-line integration
 
 ### How FlightPath Uses CLI Currently
 
 ```typescript
-// Current implementation (simplified)
+// Current implementation (simplified from CopilotCommandLineIntegration.ts)
 const args = [
   "--allow-all-tools",
   "--allow-all-paths",
   "--model",
-  "claude-sonnet-4.5",
+  selectedModel,
   "--log-dir",
   logDirectory,
 ];
 
-// Prompt sent via stdin (not -p flag)
+// Prompt sent via stdin
 spawn("copilot", args, { stdin: promptText });
 ```
 
-**Adding Agent Support:**
+**Adding Agent Support (Simple One-Line Addition):**
 
 ```typescript
-// NEW: Add agent flag if specified
+// NEW: Add agent flag if specified in prompt
 if (options.agent) {
   args.push("--agent", options.agent);
 }
 ```
 
+That's it! The CLI handles everything else (agent discovery, loading, execution).
+
 ---
 
 ## Implementation Plan
 
-### Phase 1: Basic Agent Support (MVP)
+### Phase 1: Basic Agent Support (MVP) - CLI Mode Only
 
-**Goal**: Allow users to specify custom agents in their `.flightpath.json` workflows.
+**Goal**: Allow users to specify custom agents in their `.flightpath.json` workflows (CLI mode execution).
+
+**Scope**: This feature is **CLI mode only**. Chat mode cannot programmatically select custom agents due to VS Code API limitations.
 
 #### 1.1 Update Type Definitions
 
@@ -149,7 +160,7 @@ export interface CopilotCliOptions {
 const options: CopilotCliOptions = {
   addDirs: this.getWorkspaceDirs(),
   model: prompt.model || this.getConfiguredModel(),
-  agent: prompt.agent, // NEW: Pass agent to CLI
+  agent: prompt.agent, // NEW: Pass agent to CLI (undefined if not specified)
   resumeSession:
     prompt.newChatSession === false && this.sessionId
       ? this.sessionId
@@ -183,76 +194,134 @@ private async executeCopilotCommand(
 
 **File**: `schemas/prompt-schema.json`
 
-Add agent property to prompt definition:
+Add `agent` property to the `promptItem` definition:
 
 ```json
 {
-  "properties": {
-    "prompt": { "type": "string" },
-    "model": {
-      "type": "string",
-      "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5"]
-    },
-    "agent": {
-      "type": "string",
-      "description": "Custom agent to use for this prompt (e.g., 'flightpath-orchestrator', 'testing-specialist')"
-    },
-    "endCondition": { ... },
-    "newChatSession": { "type": "boolean" },
-    "retryPrompt": { "type": "string" },
-    "maxRetries": { "type": "integer" },
-    "allowDynamicExtension": { "type": "boolean" }
-  }
-}
-```
-
-#### 1.5 Add Configuration Setting (Optional)
-
-**File**: `package.json`
-
-```json
-{
-  "configuration": {
-    "properties": {
-      "flightpath.defaultAgent": {
-        "type": "string",
-        "default": "",
-        "description": "Default custom agent to use for all prompts (can be overridden per-prompt)",
-        "markdownDescription": "Specify a default custom agent name (e.g., `flightpath-orchestrator`) to use for all prompts unless explicitly overridden in the `.flightpath.json` file."
-      }
+  "definitions": {
+    "promptItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Optional unique identifier for this prompt..."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "The final-form prompt text to send to GitHub Copilot..."
+        },
+        "model": {
+          "type": "string",
+          "enum": ["claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5", "gpt-5", ...],
+          "description": "AI model to use for this prompt..."
+        },
+        "agent": {
+          "type": "string",
+          "description": "Custom agent to use for this prompt (CLI mode only). Specify the agent name as defined in .github/agents/*.agent.md or ~/.copilot/agents/*.agent.md (e.g., 'flightpath-orchestrator', 'testing-specialist'). Chat mode cannot programmatically select agents - users must manually select from dropdown.",
+          "pattern": "^[a-zA-Z0-9-_]+$"
+        },
+        "newChatSession": {
+          "type": "boolean",
+          "description": "Whether to start a new chat session..."
+        },
+        "allowDynamicExtension": {
+          "type": "boolean",
+          "description": "If true, inject instructions for extending the queue..."
+        },
+        "endCondition": {
+          "$ref": "#/definitions/endCondition"
+        }
+      },
+      "required": ["prompt"]
     }
   }
 }
 ```
 
-```typescript
-// In CopilotCommandLineIntegration.ts
-private getDefaultAgent(): string | undefined {
-  return vscode.workspace
-    .getConfiguration("flightpath")
-    .get<string>("defaultAgent") || undefined;
-}
+**Key Points**:
 
-// Use in sendPrompt():
-const options: CopilotCliOptions = {
-  agent: prompt.agent || this.getDefaultAgent(),
-  // ...
-};
-```
+- Add `agent` property after `model` property
+- Use regex pattern to validate agent names (alphanumeric, hyphens, underscores only)
+- Include clear description mentioning CLI-only support
+- Make it optional (not in `required` array)
+- No default value - if not specified, `--agent` flag is not passed to CLI
 
-#### 1.6 Error Handling
+#### 1.5 Error Handling
 
-Add graceful error handling for missing agents:
+Add graceful error handling for missing agents in `CopilotCommandLineIntegration.ts`:
 
 ```typescript
-// If CLI returns error about unknown agent, show helpful message
-if (stderr.includes("agent") && stderr.includes("not found")) {
-  vscode.window.showErrorMessage(
-    `FlightPath: Agent "${options.agent}" not found. ` +
-      `Make sure the agent is defined in .github/agents/ or ~/.copilot/agents/`
-  );
+// In executeCopilotCommand() method, when processing CLI stderr
+private async executeCopilotCommand(
+  prompt: string,
+  options: CopilotCliOptions = {}
+): Promise<CopilotCliResult> {
+  // ... existing spawn logic ...
+
+  // Error handling
+  if (exitCode !== 0) {
+    // Check for agent-specific errors
+    if (options.agent && stderr.toLowerCase().includes("agent")) {
+      if (stderr.toLowerCase().includes("not found") || stderr.toLowerCase().includes("unknown")) {
+        const message = `Agent "${options.agent}" not found. Make sure the agent is defined in:\n` +
+                       `• .github/agents/${options.agent}.agent.md (project-level)\n` +
+                       `• ~/.copilot/agents/${options.agent}.agent.md (user-level)`;
+        vscode.window.showErrorMessage(`FlightPath: ${message}`);
+        this.log(`❌ Agent error: ${message}`, "error");
+      } else if (stderr.toLowerCase().includes("syntax") || stderr.toLowerCase().includes("invalid")) {
+        const message = `Agent "${options.agent}" has syntax errors. Check the agent file's YAML frontmatter.`;
+        vscode.window.showErrorMessage(`FlightPath: ${message}`);
+        this.log(`❌ Agent syntax error: ${message}`, "error");
+      } else {
+        this.log(`❌ Agent-related error: ${stderr}`, "error");
+      }
+    }
+
+    throw new Error(`Copilot CLI failed: ${stderr}`);
+  }
+
+  // ... rest of method ...
 }
 ```
+
+**Helpful Error Messages**:
+
+- Agent not found → Suggest correct file paths
+- Syntax error → Point to YAML frontmatter validation
+- Generic agent error → Show full stderr for debugging
+
+**Logging**:
+
+- Log agent selection with 🤖 emoji when successful
+- Log detailed errors when agent fails to load
+
+---
+
+### Chat Mode Behavior (No Implementation Required)
+
+**Important**: The `agent` field in `.flightpath.json` files is **ignored in Chat mode** due to VS Code API limitations.
+
+**Why Chat Mode Cannot Support Agent Selection**:
+
+1. VS Code provides no API to programmatically select custom agents
+2. `workbench.action.chat.openagent` only switches to the **default Agent mode**, not custom agents
+3. Custom agents appear below a separator in the dropdown and cannot be targeted by commands
+4. See `CHAT_MODE_LIMITATIONS.md` for detailed technical explanation
+
+**User Workaround for Chat Mode**:
+
+- Manually select the desired custom agent from the dropdown before running the workflow
+- FlightPath will respect the manually-selected agent for all prompts
+- Cannot switch agents between prompts in Chat mode workflows
+
+**Recommendation**: Use **CLI mode** (default) for workflows requiring agent selection or agent switching between prompts.
+
+**Implementation Impact**:
+
+- No changes needed to `CopilotChatIntegration.ts`
+- Schema allows `agent` field universally (for consistency)
+- Documentation should clearly state CLI-only support
+- Consider showing a warning if user has `copilotIntegrationMode: "chat"` and uses `agent` field
 
 ---
 
@@ -521,12 +590,14 @@ vscode.commands.registerCommand('flightpath.listAgents', async () => {
 
 #### 3.1 Update README
 
-Add section on agent support:
+Add section on agent support with CLI-only clarification:
 
 ````markdown
-## Custom Agent Support
+## Custom Agent Support (CLI Mode Only)
 
-FlightPath supports GitHub Copilot's custom agent system, allowing you to assign specialized agents to specific workflow steps.
+FlightPath's **CLI mode** supports GitHub Copilot's custom agent system, allowing you to assign specialized agents to specific workflow steps.
+
+**Important**: Agent selection is only available in CLI mode (the default). Chat mode cannot programmatically select agents due to VS Code API limitations. See `docs/CHAT_MODE_LIMITATIONS.md` for details.
 
 ### Using Agents in Workflows
 
@@ -535,15 +606,32 @@ FlightPath supports GitHub Copilot's custom agent system, allowing you to assign
   "prompts": [
     {
       "prompt": "Create comprehensive test suite",
-      "agent": "testing-specialist"
+      "agent": "testing-specialist",
+      "model": "claude-haiku-4.5"
     },
     {
       "prompt": "Document the new API endpoints",
-      "agent": "documentation-expert"
+      "agent": "documentation-expert",
+      "model": "claude-sonnet-4.5"
     }
   ]
 }
 ```
+
+**Requirements**:
+
+- Set `flightpath.copilotIntegrationMode` to `"cli"` (default)
+- Define agents in `.github/agents/*.agent.md` or `~/.copilot/agents/*.agent.md`
+- Use valid agent names (alphanumeric, hyphens, underscores only)
+
+### Agent Discovery
+
+FlightPath automatically uses the Copilot CLI's agent discovery:
+
+- **Project-level agents**: `.github/agents/my-agent.agent.md` (version-controlled, shared with team)
+- **User-level agents**: `~/.copilot/agents/my-agent.agent.md` (global, personal agents)
+
+The CLI will search both locations and load the specified agent automatically.
 ````
 
 ### FlightPath Orchestrator Agent
@@ -554,15 +642,33 @@ FlightPath ships with a built-in "FlightPath Orchestrator" agent that can:
 - Create and edit `.flightpath.json` files
 - Leverage your custom agents for specialized tasks
 
-**Usage**:
+**Usage with Copilot CLI** (recommended for workflow generation):
 
 ```bash
-# In Copilot CLI
-copilot --agent flightpath-orchestrator
+# Use orchestrator to plan a feature workflow
+copilot --agent flightpath-orchestrator -p "Plan workflow for adding OAuth2 authentication"
 
-# Or in VS Code Copilot Chat
-@flightpath-orchestrator Plan user authentication feature
+# Orchestrator creates .flightpath/add-oauth2.flightpath.json
+# Then execute the generated workflow:
+# FlightPath: Take Off → select add-oauth2.flightpath.json
 ```
+
+**Usage in VS Code Copilot Chat** (interactive planning):
+
+```
+@flightpath-orchestrator Plan user authentication feature with email verification
+```
+
+**Note**: The orchestrator agent itself can be used in both CLI and Chat modes for interactive planning conversations. However, the `.flightpath.json` workflows it generates will use agent assignments that only work in CLI mode execution.
+
+### Chat Mode Limitation
+
+The `agent` field in `.flightpath.json` files is **ignored when executing workflows in Chat mode**. If you need agent selection:
+
+1. Use CLI mode (default): `flightpath.copilotIntegrationMode: "cli"`
+2. OR manually select the desired agent in Chat before running the workflow (cannot switch agents mid-workflow)
+
+For automated workflows with multiple agents, **CLI mode is required**.
 
 ### Creating Custom Agents
 
@@ -613,16 +719,19 @@ See [GitHub's Custom Agent Documentation](https://docs.github.com/en/copilot/con
 
 ## Benefits & Use Cases
 
-### Key Benefits
+### Key Benefits (CLI Mode)
 
-1. **Specialized Expertise**: Leverage domain-specific agents for each task
+1. **Specialized Expertise**: Leverage domain-specific agents for each task in automated workflows
 2. **Consistent Quality**: Agents encode team conventions and best practices
-3. **Reduced Context Switching**: Different agents for different concerns
+3. **Reduced Context Switching**: Different agents for different concerns within a single workflow
 4. **Meta-Automation**: Orchestrator agent creates workflows autonomously
-5. **Team Collaboration**: Share agent profiles across team members
+5. **Team Collaboration**: Share agent profiles across team members via `.github/agents/`
 6. **Extensibility**: Easy to add new agents as team needs evolve
+7. **Deterministic Execution**: CLI mode ensures reliable agent selection for each workflow step
 
 ### Use Cases
+
+**Note**: All use cases below require **CLI mode execution** (`flightpath.copilotIntegrationMode: "cli"`).
 
 #### Use Case 1: Full-Stack Feature Development
 
@@ -630,25 +739,44 @@ See [GitHub's Custom Agent Documentation](https://docs.github.com/en/copilot/con
 {
   "prompts": [
     {
-      "prompt": "Design database schema for user profiles",
-      "agent": "database-architect"
+      "prompt": "Design database schema for user profiles with proper indexing and constraints",
+      "agent": "database-architect",
+      "model": "claude-sonnet-4.5",
+      "endCondition": {
+        "script": "validate_schema.js",
+        "returns": "true"
+      }
     },
     {
-      "prompt": "Implement backend API endpoints",
+      "prompt": "Implement backend API endpoints using the database schema from previous step",
       "agent": "backend-specialist",
-      "newChatSession": false
+      "newChatSession": false,
+      "endCondition": {
+        "script": "npm test -- api",
+        "returns": "0"
+      }
     },
     {
-      "prompt": "Create React components for profile UI",
-      "agent": "frontend-developer"
+      "prompt": "Create React components for profile UI with TypeScript types",
+      "agent": "frontend-developer",
+      "endCondition": {
+        "script": "npm run typecheck && npm test -- ui",
+        "returns": "0"
+      }
     },
     {
-      "prompt": "Write integration tests",
-      "agent": "testing-specialist"
+      "prompt": "Write comprehensive integration tests for the full feature",
+      "agent": "testing-specialist",
+      "endCondition": {
+        "script": "npm run test:integration",
+        "returns": "0"
+      }
     }
   ]
 }
 ```
+
+**Why CLI mode**: Each prompt needs a different agent with specialized expertise. Chat mode cannot switch agents programmatically.
 
 #### Use Case 2: Documentation Sprint
 
@@ -656,20 +784,35 @@ See [GitHub's Custom Agent Documentation](https://docs.github.com/en/copilot/con
 {
   "prompts": [
     {
-      "prompt": "Generate API reference documentation from code",
-      "agent": "documentation-expert"
+      "prompt": "Generate comprehensive API reference documentation from TypeScript source code",
+      "agent": "documentation-expert",
+      "model": "claude-sonnet-4.5",
+      "endCondition": {
+        "script": "check_api_docs_complete.js",
+        "returns": "true"
+      }
     },
     {
-      "prompt": "Create user guides for new features",
-      "agent": "technical-writer"
+      "prompt": "Create step-by-step user guides for new features with screenshots",
+      "agent": "technical-writer",
+      "endCondition": {
+        "script": "validate_user_guides.py",
+        "returns": "true"
+      }
     },
     {
-      "prompt": "Update README with installation instructions",
-      "agent": "documentation-expert"
+      "prompt": "Update README with installation instructions, troubleshooting, and examples",
+      "agent": "documentation-expert",
+      "endCondition": {
+        "script": "test -f README.md && grep -q 'Installation' README.md",
+        "returns": "0"
+      }
     }
   ]
 }
 ```
+
+**Why CLI mode**: Different documentation tasks benefit from specialized agents (API docs vs user guides vs README).
 
 #### Use Case 3: Meta-Planning
 
@@ -735,81 +878,184 @@ This prevents agents from accidentally modifying code when they should only anal
 
 ### Error Handling Matrix
 
-| Scenario                        | Behavior                                       |
-| ------------------------------- | ---------------------------------------------- |
-| Agent not found                 | CLI error + FlightPath shows helpful message   |
-| Agent syntax error              | CLI error + FlightPath suggests validation     |
-| Model conflict                  | Prompt-level model takes precedence            |
-| No agent specified              | Uses default agent (if configured) or no agent |
-| Agent requires unavailable tool | CLI error about tool access                    |
+| Scenario                          | CLI Mode Behavior                                       | Chat Mode Behavior                        |
+| --------------------------------- | ------------------------------------------------------- | ----------------------------------------- |
+| Agent not found                   | CLI error + FlightPath shows helpful message with paths | ⚠️ Ignored (uses manually selected agent) |
+| Agent syntax error                | CLI error + FlightPath suggests validation              | ⚠️ Ignored (uses manually selected agent) |
+| Model + agent both specified      | Both applied (prompt-level model takes precedence)      | Only model is applied, agent ignored      |
+| No agent specified                | Uses default agent (if configured) or no agent          | Uses manually selected agent              |
+| Agent requires unavailable tool   | CLI error about tool access permissions                 | N/A (agent field ignored)                 |
+| Agent field in Chat mode workflow | N/A                                                     | ⚠️ Silently ignored (should show warning) |
+
+**Recommendation**: Implement a validation warning in `FlightPathManager` when user has `copilotIntegrationMode: "chat"` and workflow contains `agent` fields.
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests
+### Unit Tests (CLI Mode Only)
 
 ```typescript
 describe("CopilotCommandLineIntegration - Agent Support", () => {
-  it("should pass agent flag to CLI when specified", async () => {
+  it("should pass agent flag to CLI when specified in prompt", async () => {
     const prompt: PromptItem = {
       prompt: "Test prompt",
       agent: "testing-specialist",
     };
 
-    // Verify --agent flag is included in spawn args
+    // Verify --agent testing-specialist is included in spawn args
+    // Verify log shows: 🤖 Using agent: testing-specialist
   });
 
-  it("should use default agent when prompt agent is undefined", async () => {
-    // Configure flightpath.defaultAgent = 'default-agent'
-    // Verify flag is included
+  it("should not pass agent flag when agent is undefined", async () => {
+    const prompt: PromptItem = { prompt: "Test" };
+
+    // Verify --agent flag is NOT included in args
   });
 
-  it("should not pass agent flag when agent is undefined and no default", async () => {
-    // Verify --agent flag is NOT included
+  it("should show helpful error message when agent not found", async () => {
+    const prompt: PromptItem = {
+      prompt: "Test",
+      agent: "nonexistent-agent",
+    };
+
+    // Mock CLI stderr: "agent 'nonexistent-agent' not found"
+    // Verify error message includes both .github/agents/ and ~/.copilot/agents/ paths
+  });
+
+  it("should handle undefined agent gracefully", async () => {
+    const prompt: PromptItem = { prompt: "Test" };
+
+    // Verify --agent flag is NOT included in args when agent is undefined
   });
 });
 ```
 
-### Integration Tests
+### Integration Tests (CLI Mode)
+
+**Test Suite**: `agent-support.test.ts`
 
 1. **Agent Execution Test**:
    - Create test agent in `.github/agents/test-agent.agent.md`
+   - Define agent with specific instructions and tool restrictions
    - Create workflow using that agent
-   - Verify CLI receives correct agent flag
-   - Verify agent's instructions are followed
+   - Execute via CLI mode
+   - Verify CLI receives correct `--agent test-agent` flag
+   - Verify agent's instructions are reflected in Copilot's output
 
-2. **Orchestrator Test**:
-   - Ask orchestrator to plan a simple feature
-   - Verify it creates valid `.flightpath.json`
-   - Verify workflow can execute successfully
+2. **FlightPath Orchestrator Test**:
+   - Invoke: `copilot --agent flightpath-orchestrator -p "Plan simple feature"`
+   - Verify orchestrator creates valid `.flightpath.json` file
+   - Verify generated workflow is executable
+   - Verify workflow includes proper end conditions and retry logic
 
 3. **Error Handling Test**:
-   - Specify non-existent agent
-   - Verify error message is helpful
+   - Specify non-existent agent in workflow
+   - Execute and verify:
+     - CLI exits with error
+     - FlightPath shows error message with helpful paths
+     - Error is logged to output panel
+
+4. **Agent + Model Override Test**:
+   - Create agent with `model: claude-haiku-4.5` in frontmatter
+   - Use agent in prompt with `model: "claude-sonnet-4.5"`
+   - Verify CLI receives both `--agent` and `--model` flags
+   - Verify prompt-level model takes precedence
+
+### Chat Mode Tests
+
+**Test Suite**: `chat-mode-agent-limitation.test.ts`
+
+1. **Agent Field Ignored Test**:
+   - Create workflow with `agent` fields
+   - Set `copilotIntegrationMode: "chat"`
+   - Execute workflow
+   - Verify `agent` field is silently ignored
+   - Verify workflow uses manually-selected agent (if any)
+
+2. **Warning for Chat + Agent Test** (future enhancement):
+   - Create workflow with `agent` fields
+   - Set `copilotIntegrationMode: "chat"`
+   - Verify FlightPath shows warning:
+     - "This workflow uses agent assignments, which only work in CLI mode"
+     - Suggest switching to CLI mode or removing agent fields
 
 ### Manual Testing Checklist
 
-- [ ] Create custom agent in `.github/agents/`
-- [ ] Reference agent in `.flightpath.json`
-- [ ] Execute workflow and verify agent is used
-- [ ] Check CLI logs show agent flag
-- [ ] Test FlightPath Orchestrator via Copilot CLI
-- [ ] Verify orchestrator creates valid workflows
-- [ ] Test default agent configuration
-- [ ] Test agent + model override behavior
+**CLI Mode Tests**:
+
+- [ ] Create custom agent in `.github/agents/my-test-agent.agent.md`
+- [ ] Reference agent in `.flightpath.json` workflow
+- [ ] Execute workflow with CLI mode (verify `flightpath.copilotIntegrationMode: "cli"`)
+- [ ] Check output panel shows: `🤖 Using agent: my-test-agent`
+- [ ] Verify CLI logs include `--agent my-test-agent` flag
+- [ ] Test FlightPath Orchestrator via `copilot --agent flightpath-orchestrator -p "Plan feature"`
+- [ ] Verify orchestrator creates valid `.flightpath.json` file
+- [ ] Test workflow without agent field (verify `--agent` flag not passed)
+- [ ] Test agent + model override behavior (both flags passed to CLI)
+- [ ] Test error handling for non-existent agent (helpful error message)
+- [ ] Test multi-agent workflow (different agent for each step)
+
+**Chat Mode Tests**:
+
+- [ ] Create workflow with `agent` fields
+- [ ] Set `flightpath.copilotIntegrationMode: "chat"`
+- [ ] Execute workflow
+- [ ] Verify agent fields are ignored (workflow uses manually-selected agent)
+- [ ] Verify no errors occur (graceful degradation)
+- [ ] (Future) Verify warning is shown about agent fields being ignored in Chat mode
+
+**Agent Discovery Tests**:
+
+- [ ] Place agent in `.github/agents/` (project-level)
+- [ ] Verify CLI discovers and uses it
+- [ ] Place agent in `~/.copilot/agents/` (user-level)
+- [ ] Verify CLI discovers and uses it
+- [ ] Test name collision (project-level should take precedence)
+
+**Edge Cases**:
+
+- [ ] Agent with invalid YAML frontmatter (syntax error handling)
+- [ ] Agent with restricted tools (verify CLI respects restrictions)
+- [ ] Empty agent name (should skip agent flag)
+- [ ] Agent name with special characters (should be validated by schema)
 
 ---
 
 ## Future Enhancements
 
-### Phase 4: Additional Bundled Agents (Future)
+### Phase 4: Default Agent Configuration & Additional Bundled Agents
+
+**When to add**: After Phase 2 (FlightPath Orchestrator) is shipped and users have multiple FlightPath agents to choose from.
+
+**Configuration Setting** (`package.json`):
+
+```json
+{
+  "contributes": {
+    "configuration": {
+      "properties": {
+        "flightpath.defaultAgent": {
+          "type": "string",
+          "default": "",
+          "description": "Default custom agent to use for all CLI mode prompts (can be overridden per-prompt)",
+          "markdownDescription": "Specify a default custom agent name (e.g., `flightpath-orchestrator`) to use for all CLI mode prompts unless explicitly overridden in the `.flightpath.json` file. **Note**: This setting only applies to CLI mode. Chat mode requires manual agent selection."
+        }
+      }
+    }
+  }
+}
+```
+
+**Additional Bundled Agents**:
 
 **flightpath-implementor.agent.md**: Focused on executing implementation tasks with FlightPath awareness
 
 **flightpath-tester.agent.md**: Specialized in creating end condition validation scripts
 
 **flightpath-debugger.agent.md**: Expert in troubleshooting workflow failures and suggesting fixes
+
+**Why defer this**: In Phase 1, users only specify agents explicitly when needed. Once we ship bundled agents (Phase 2+), a default agent setting becomes useful for users who want all prompts to use a specific agent unless overridden.
 
 ### Phase 5: Agent Marketplace (Future Vision)
 
@@ -840,23 +1086,32 @@ Allow workflows to query available agents and assign dynamically:
 
 ## Implementation Timeline
 
-**Week 1**: Phase 1 (Basic Agent Support)
+**Week 1**: Phase 1 (Basic Agent Support - CLI Mode Only)
 
-- Day 1-2: Type definitions, CLI integration
-- Day 3-4: JSON schema, configuration settings
-- Day 5: Testing and documentation
+- Day 1: Type definitions (`FlightPathTypes.ts`, `CopilotTypes.ts`)
+- Day 2: CLI integration (`CopilotCommandLineIntegration.ts` - add `--agent` flag support)
+- Day 3: JSON schema update (`prompt-schema.json` - add `agent` field with validation)
+- Day 4: Configuration setting (`package.json` - add `flightpath.defaultAgent`)
+- Day 5: Error handling, logging, and unit tests
 
-**Week 2**: Phase 2 (FlightPath Orchestrator)
+**Week 2**: Phase 2 (FlightPath Orchestrator Agent)
 
-- Day 1-3: Agent profile creation and refinement
-- Day 4: Installation mechanism
-- Day 5: Testing and examples
+- Day 1-2: Agent profile creation (`flightpath-orchestrator.agent.md` with comprehensive instructions)
+- Day 3: Installation mechanism (bundle with extension, copy to `.github/agents/` on activation)
+- Day 4: Agent discovery command (`flightpath.listAgents`)
+- Day 5: Testing orchestrator with real workflow generation
 
 **Week 3**: Phase 3 (Documentation & Polish)
 
-- Day 1-2: Comprehensive documentation
-- Day 3-4: Example workflows
-- Day 5: User guide and video tutorial
+- Day 1: Update README with agent support documentation (CLI-only emphasis)
+- Day 2: Create example workflows (`manual-test/agent-workflow-example.flightpath.json`)
+- Day 3: Update `CHAT_MODE_LIMITATIONS.md` with agent selection limitation
+- Day 4: Integration tests and manual testing checklist
+- Day 5: User guide, troubleshooting tips, video tutorial (optional)
+
+**Total Estimated Time**: 3 weeks (15 working days)
+
+**Note**: Removed Chat mode implementation from scope. Future enhancement could add a validation warning when `agent` fields are used with Chat mode.
 
 ---
 
@@ -872,14 +1127,26 @@ Allow workflows to query available agents and assign dynamically:
 
 ## Conclusion
 
-Adding agent support to FlightPath transforms it from a workflow executor to an intelligent automation orchestrator. The FlightPath Orchestrator agent creates a powerful meta-automation capability where users can ask an AI to plan complex features as automated workflows that leverage specialized AI agents for each step.
+Adding agent support to FlightPath's **CLI mode** transforms it from a workflow executor to an intelligent automation orchestrator. The FlightPath Orchestrator agent creates a powerful meta-automation capability where users can ask an AI to plan complex features as automated workflows that leverage specialized AI agents for each step.
 
 This positions FlightPath as a next-generation development tool that bridges human intent, AI planning, and autonomous execution in a seamless, composable system.
 
+**CLI Mode Advantage**: By implementing agent support exclusively in CLI mode, FlightPath provides reliable, deterministic agent selection without the limitations and workarounds required in Chat mode. Users get a production-ready automation system with full control over which specialized agents handle each workflow step.
+
+**Chat Mode Trade-off**: While Chat mode cannot programmatically select agents, users can still manually select a custom agent and run workflows interactively. This is ideal for exploratory work and debugging, while CLI mode handles production automation.
+
 **Next Steps**:
 
-1. Review and approve this plan
-2. Begin Phase 1 implementation
-3. Create FlightPath Orchestrator agent profile
-4. Test with real-world workflows
-5. Gather user feedback and iterate
+1. ✅ Review and approve this plan
+2. ⏳ Begin Phase 1 implementation (CLI integration)
+3. ⏳ Create FlightPath Orchestrator agent profile
+4. ⏳ Update JSON schema and type definitions
+5. ⏳ Test with real-world workflows
+6. ⏳ Document limitations and best practices
+7. ⏳ Gather user feedback and iterate
+
+**See Also**:
+
+- `CHAT_MODE_LIMITATIONS.md` - Detailed explanation of why agent selection doesn't work in Chat mode
+- `COPILOT_CLI_IMPLEMENTATION.md` - CLI integration architecture
+- GitHub's [Custom Agent Documentation](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-custom-agents)

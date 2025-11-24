@@ -448,6 +448,10 @@
           html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
         }
 
+        if (output.cliCommand) {
+          html += `<div class="output-cli-command">$ ${escapeHtml(output.cliCommand)}</div>`;
+        }
+
         if (output.response) {
           html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
         }

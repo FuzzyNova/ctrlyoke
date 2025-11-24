@@ -33,6 +33,8 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
   private outputChannel?: vscode.OutputChannel;
   private lastResult?: CopilotCliResult;
+  private lastCliCommand?: string; // Full command with args for debugging
+  private lastFullPrompt?: string; // Full prompt text sent to CLI (with all context)
   private currentProcess?: ReturnType<typeof spawn>;
   private logDirectory?: string;
 
@@ -63,6 +65,15 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     return vscode.workspace
       .getConfiguration("flightpath")
       .get<boolean>("showCliOutput", true);
+  }
+
+  /**
+   * Check if CLI command should be shown in dashboard output
+   */
+  private shouldShowCliCommand(): boolean {
+    return vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("showCliCommand", false);
   }
 
   /**
@@ -143,6 +154,9 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
           )
         : await this.buildPromptText(prompt);
 
+      // Store the full prompt for dashboard display
+      this.lastFullPrompt = promptText;
+
       // Log the prompt being sent
       if (this.shouldShowOutput()) {
         this.outputChannel?.appendLine("");
@@ -166,6 +180,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       const options: CopilotCliOptions = {
         addDirs: this.getWorkspaceDirs(),
         model: this.validateAndGetModel(prompt.model),
+        agent: prompt.agent, // Pass agent to CLI (undefined if not specified)
         // Only resume session if newChatSession is explicitly false AND we have a session ID
         resumeSession:
           prompt.newChatSession === false && this.sessionId
@@ -173,11 +188,54 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
             : undefined,
       };
 
+      // Build CLI command args BEFORE execution so it's available for dashboard
+      const args: string[] = [];
+      const toolPermissions = this.getToolPermissionArgs();
+      args.push(...toolPermissions);
+      if (this.shouldAllowAllPaths()) {
+        args.push("--allow-all-paths");
+      }
+      if (this.logDirectory) {
+        args.push("--log-dir", this.logDirectory);
+      }
+      if (options.addDirs && options.addDirs.length > 0) {
+        options.addDirs.forEach((dir) => {
+          args.push("--add-dir", dir);
+        });
+      }
+      if (options.model) {
+        args.push("--model", options.model);
+      }
+      if (options.agent) {
+        args.push("--agent", options.agent);
+        this.log(`🤖 Using agent: ${options.agent}`);
+        
+        // When using --agent, we need -p flag with prompt text
+        // Wrap prompt in quotes to handle special characters
+        // Use JSON.stringify to properly escape quotes and special chars
+        args.push("-p", JSON.stringify(promptText));
+      }
+      if (options.resumeSession) {
+        args.push("--resume", options.resumeSession);
+      }      // Store full command for debugging (NOW available before execution)
+      this.lastCliCommand = `copilot ${args.join(" ")}`;
+
+      // Fire event with prompt and command ready (before execution starts)
+      this.promptReadyEmitter.fire({
+        fullPrompt: promptText,
+        cliCommand: this.lastCliCommand,
+      });
+
       // Reset cancellation flag before execution
       this.resetCancellationFlag();
 
-      // Execute CLI command
-      const result = await this.executeCopilotCommand(promptText, options);
+      // Execute CLI command (args already built above)
+      // When using agent, we pass prompt as arg (quoted via JSON.stringify)
+      // Otherwise, use stdin to avoid escaping issues
+      const result = await this.executeCopilotCommand(
+        options.agent ? null : promptText,
+        args
+      );
 
       // Check if this was a cancellation (not a real error)
       if (this.isCancelling) {
@@ -239,53 +297,21 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
-   * Execute copilot CLI command with options
+   * Execute copilot CLI command with args
+   * @param prompt The prompt text to send via stdin (or null if using -p flag)
+   * @param args Pre-built command-line arguments
    */
   private async executeCopilotCommand(
-    prompt: string,
-    options: CopilotCliOptions = {}
+    prompt: string | null,
+    args: string[]
   ): Promise<CopilotCliResult> {
-    const args: string[] = [];
-
-    // NOTE: Prompt is sent via stdin (no -p flag needed!)
-    // This avoids shell escaping issues and command-line length limits
-
-    // Add tool permissions (allows tools to run without confirmation)
-    const toolPermissions = this.getToolPermissionArgs();
-    args.push(...toolPermissions);
-
-    // Add path permissions to avoid interactive prompts for file access (if enabled)
-    if (this.shouldAllowAllPaths()) {
-      args.push("--allow-all-paths");
-    }
-
-    // Add log directory for session ID tracking
-    if (this.logDirectory) {
-      args.push("--log-dir", this.logDirectory);
-    }
-
-    // Add optional flags
-    if (options.addDirs && options.addDirs.length > 0) {
-      options.addDirs.forEach((dir) => {
-        args.push("--add-dir", dir);
-      });
-    }
-
-    if (options.model) {
-      args.push("--model", options.model);
-    }
-
-    // Use --resume with session ID if continuing session (newChatSession: false)
-    if (options.resumeSession) {
-      args.push("--resume", options.resumeSession);
-    }
-
     // Execute command with stdin for prompt (5 minute timeout)
+    // When using --agent with -p flag, prompt is in args (JSON.stringify wrapped)
     const { stdout, stderr, exitCode } = await this.spawnProcess(
       "copilot",
       args,
       {
-        stdin: prompt,
+        stdin: prompt || undefined,
         timeout: 300000, // 5 minutes
         onStdout: (chunk) => {
           // Emit streaming chunk for real-time display
@@ -293,6 +319,46 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         },
       }
     );
+
+    // Handle agent-specific errors with helpful messages
+    const agentArg = args.find((arg, i) => args[i - 1] === "--agent");
+    if (exitCode !== 0 && agentArg) {
+      let enhancedError = stderr || "Unknown error";
+
+      // Check for common agent error patterns
+      if (
+        stderr.toLowerCase().includes("agent") &&
+        (stderr.toLowerCase().includes("not found") ||
+          stderr.toLowerCase().includes("could not find") ||
+          stderr.toLowerCase().includes("does not exist"))
+      ) {
+        enhancedError =
+          `Agent '${agentArg}' not found. Please ensure it exists in:\n` +
+          `  - .github/agents/${agentArg}.agent.md (project-level)\n` +
+          `  - ~/.copilot/agents/${agentArg}.agent.md (user-level)\n\n` +
+          `Original error: ${stderr}`;
+      } else if (
+        stderr.toLowerCase().includes("yaml") ||
+        stderr.toLowerCase().includes("frontmatter") ||
+        stderr.toLowerCase().includes("syntax error")
+      ) {
+        enhancedError =
+          `Agent '${agentArg}' has invalid YAML frontmatter. ` +
+          `Please check the agent file for syntax errors.\n\n` +
+          `Original error: ${stderr}`;
+      }
+
+      // Parse output
+      const { response, statistics } = this.parseCliOutput(stdout);
+
+      return {
+        success: false,
+        response,
+        statistics,
+        error: enhancedError,
+        exitCode,
+      };
+    }
 
     // Parse output
     const { response, statistics } = this.parseCliOutput(stdout);
@@ -340,11 +406,11 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       let stdout = "";
       let stderr = "";
 
-      // On Windows, copilot is a PowerShell script, so we need shell: true
-      // We carefully construct args to avoid injection issues
+      // Always use shell:true for cross-platform copilot script execution
+      // When prompt is in args, it's wrapped with JSON.stringify for proper escaping
       const child = spawn(command, args, {
         cwd: this.getWorkspaceRoot(),
-        shell: true, // Required for copilot.ps1 on Windows
+        shell: true, // Required to find copilot in PATH
       });
 
       // Store reference for cancellation
@@ -544,6 +610,20 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
    */
   getLastResult(): CopilotCliResult | undefined {
     return this.lastResult;
+  }
+
+  /**
+   * Get the last CLI command executed (for debugging)
+   */
+  getLastCliCommand(): string | undefined {
+    return this.lastCliCommand;
+  }
+
+  /**
+   * Get the full prompt text sent to CLI (includes all context and instructions)
+   */
+  getLastFullPrompt(): string | undefined {
+    return this.lastFullPrompt;
   }
 
   /**
