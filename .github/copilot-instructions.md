@@ -172,7 +172,14 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 
 **Optional Fields:**
 
-- `model` - Override the AI model for a specific prompt. Valid values: `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`. If omitted, uses the default configured in settings (`flightpath.copilotCliModel`).
+- `model` - Override the AI model for a specific prompt.
+  - **All models**: See `src/types/ModelConstants.ts` for complete list (22 Chat models total)
+  - **CLI-supported** (4 models): `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`
+  - **Chat-supported** (22 models): All CLI models plus `gpt-5-mini`, `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5-codex`, `gpt-4.1`, `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-4-0125-preview`, `gpt-3.5-turbo`, `gemini-2.5-pro`, `gemini-3-pro-preview`, `grok-code-fast-1`, `copilot-fast`, `oswe-vscode-secondary`, `auto`
+  - **Behavior**:
+    - CLI mode: Validates against CLI_SUPPORTED_MODELS, warns and falls back to default if unsupported
+    - Chat mode: Switches model using `workbench.action.chat.changeModel` before sending prompt
+  - **Default**: If omitted, uses `flightpath.copilotCliModel` setting (CLI) or current chat model (Chat)
 
 **File naming conventions:**
 
@@ -226,6 +233,9 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
 - flightpath.copilotIntegrationMode (enum: "cli" | "chat", default: "cli")
 - flightpath.copilotCliModel (enum: "claude-sonnet-4.5" | "claude-sonnet-4" | "claude-haiku-4.5" | "gpt-5", default: "claude-sonnet-4.5")
+  - **Purpose**: Default model for CLI mode only
+  - **Note**: Prompts can override with any supported model (Chat superset includes 22 models)
+  - **Fallback behavior**: If prompt specifies unsupported CLI model, falls back to this default with warning
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
 - flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
 - flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel

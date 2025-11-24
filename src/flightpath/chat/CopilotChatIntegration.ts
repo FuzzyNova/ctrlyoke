@@ -7,6 +7,10 @@ import {
   CopilotIntegrationMode,
 } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import {
+  CHAT_SUPPORTED_MODELS,
+  ChatSupportedModel,
+} from "../../types/ModelConstants";
 
 /**
  * GitHub Copilot Chat Integration with Direct Automation
@@ -82,6 +86,55 @@ export class CopilotChatIntegration extends CopilotIntegration {
     } catch (error) {
       console.error("❌ Failed to start new chat session:", error);
       // Don't throw - we'll still try to send the prompt to existing chat
+    }
+  }
+
+  /**
+   * Switch chat model if specified in prompt
+   * Uses workbench.action.chat.changeModel command (verified working Nov 23, 2025)
+   *
+   * @param model - Model ID to switch to (optional)
+   */
+  private async switchModelIfNeeded(model?: string): Promise<void> {
+    if (!model) {
+      return; // Use current/default chat model
+    }
+
+    // Validate model is supported by Chat
+    if (!CHAT_SUPPORTED_MODELS.includes(model as ChatSupportedModel)) {
+      const message = `Model "${model}" not recognized. Using current chat model.`;
+      console.warn(`⚠️ ${message}`);
+      vscode.window.showWarningMessage(`FlightPath: ${message}`);
+      return;
+    }
+
+    try {
+      // Query available models to get correct family for this ID
+      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      const modelInfo = models.find((m) => m.id === model);
+
+      if (!modelInfo) {
+        throw new Error(`Model "${model}" not found in available models`);
+      }
+
+      // Execute model change command with correct family from Language Model API
+      // Note: family may differ from id (e.g., "oswe-vscode-secondary" has family "gpt-5-mini")
+      await vscode.commands.executeCommand(
+        "workbench.action.chat.changeModel",
+        modelInfo
+      );
+
+      // Wait for model switch to complete (300ms proven reliable in testing)
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      console.log(
+        `✅ Switched chat model to: ${model} (family: ${modelInfo.family})`
+      );
+    } catch (error) {
+      console.error(`❌ Failed to switch model to "${model}":`, error);
+      vscode.window.showWarningMessage(
+        `FlightPath: Could not switch to model "${model}". Using current model.`
+      );
     }
   }
 
@@ -489,6 +542,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
       if (isNewChatSession) {
         await this.startNewChatSession();
       }
+
+      // Switch model if specified in prompt
+      await this.switchModelIfNeeded(prompt.model);
 
       // Determine if completion detection is needed:
       // - If explicitly provided, use that value

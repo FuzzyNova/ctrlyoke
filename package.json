@@ -327,8 +327,8 @@
             "gpt-5"
           ],
           "default": "claude-sonnet-4.5",
-          "description": "AI model to use with Copilot CLI",
-          "markdownDescription": "Select the AI model for Copilot CLI. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
+          "description": "Default AI model for Copilot CLI mode (when prompt doesn't specify model)",
+          "markdownDescription": "Default AI model for Copilot CLI. Prompts can override with any supported model (22 total in Chat mode), but CLI mode only supports these 4 models - others will fallback to this default with warning. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
         },
         "flightpath.copilotCliAllowedDirs": {
           "type": "array",

@@ -6,6 +6,25 @@
   "oneOf": [
     {
       "title": "Single Prompt",
+      "$ref": "#/definitions/promptItem"
+    },
+    {
+      "title": "Multiple Prompts",
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/promptItem"
+          }
+        }
+      },
+      "required": ["prompts"],
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "promptItem": {
+      "type": "object",
       "properties": {
         "id": {
           "type": "string",
@@ -23,9 +42,26 @@
             "claude-sonnet-4.5",
             "claude-sonnet-4",
             "claude-haiku-4.5",
-            "gpt-5"
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5.1",
+            "gpt-5.1-codex",
+            "gpt-5.1-codex-mini",
+            "gpt-5-codex",
+            "gpt-4.1",
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4",
+            "gpt-4-0125-preview",
+            "gpt-3.5-turbo",
+            "gemini-2.5-pro",
+            "gemini-3-pro-preview",
+            "grok-code-fast-1",
+            "copilot-fast",
+            "oswe-vscode-secondary",
+            "auto"
           ],
-          "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
+          "description": "AI model to use for this prompt. Supports all Chat models (22 total). CLI mode only supports: claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5 - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting. See src/types/ModelConstants.ts for source of truth."
         },
         "newChatSession": {
           "type": "boolean",
@@ -40,59 +76,8 @@
           "$ref": "#/definitions/endCondition"
         }
       },
-      "required": ["prompt"],
-      "additionalProperties": false
+      "required": ["prompt"]
     },
-    {
-      "title": "Multiple Prompts",
-      "properties": {
-        "prompts": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "description": "Optional unique identifier for this prompt. Used for tracking completion across queue reloads. If omitted, a content hash is used automatically.",
-                "pattern": "^[a-zA-Z0-9-_]+$",
-                "maxLength": 50
-              },
-              "prompt": {
-                "type": "string",
-                "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
-              },
-              "model": {
-                "type": "string",
-                "enum": [
-                  "claude-sonnet-4.5",
-                  "claude-sonnet-4",
-                  "claude-haiku-4.5",
-                  "gpt-5"
-                ],
-                "description": "AI model to use for this prompt. Optional - defaults to the model configured in settings (flightpath.copilotCliModel)."
-              },
-              "newChatSession": {
-                "type": "boolean",
-                "description": "Whether to start a new chat session for this prompt. Defaults to true in multi-prompt workflows. Retries always use the same session regardless of this setting.",
-                "default": true
-              },
-              "allowDynamicExtension": {
-                "type": "boolean",
-                "description": "If true, inject instructions for extending the queue. If false, never inject. If omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
-              },
-              "endCondition": {
-                "$ref": "#/definitions/endCondition"
-              }
-            },
-            "required": ["prompt"]
-          }
-        }
-      },
-      "required": ["prompts"],
-      "additionalProperties": false
-    }
-  ],
-  "definitions": {
     "endCondition": {
       "type": "object",
       "properties": {

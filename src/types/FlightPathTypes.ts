@@ -4,6 +4,7 @@ import {
   ExecutionState,
   StepStatus,
 } from "./DashboardConstants";
+import { SupportedModel } from "./ModelConstants";
 
 /**
  * Copilot integration mode
@@ -21,11 +22,7 @@ export interface PromptFile {
 export interface PromptItem {
   id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
-  model?:
-    | "claude-sonnet-4.5"
-    | "claude-sonnet-4"
-    | "claude-haiku-4.5"
-    | "gpt-5";
+  model?: SupportedModel; // Supports all Chat models (22 total). CLI validates and falls back if unsupported.
   newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
   allowDynamicExtension?: boolean; // If true, inject queue extension instructions
   endCondition?: EndCondition;

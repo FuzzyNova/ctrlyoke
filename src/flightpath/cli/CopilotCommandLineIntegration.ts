@@ -9,6 +9,10 @@ import {
 } from "../../types/FlightPathTypes";
 import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import {
+  CLI_SUPPORTED_MODELS,
+  CliSupportedModel,
+} from "../../types/ModelConstants";
 
 /**
  * Copilot CLI Integration
@@ -161,7 +165,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       // Get CLI options from configuration (or per-prompt override)
       const options: CopilotCliOptions = {
         addDirs: this.getWorkspaceDirs(),
-        model: prompt.model || this.getConfiguredModel(),
+        model: this.validateAndGetModel(prompt.model),
         // Only resume session if newChatSession is explicitly false AND we have a session ID
         resumeSession:
           prompt.newChatSession === false && this.sessionId
@@ -419,6 +423,33 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     return vscode.workspace
       .getConfiguration("flightpath")
       .get<string>("copilotCliModel", "claude-sonnet-4.5");
+  }
+
+  /**
+   * Validate model is supported by CLI, fallback to default if not
+   * Shows user-friendly warning when unsupported model requested
+   */
+  private validateAndGetModel(requestedModel?: string): string {
+    const defaultModel = this.getConfiguredModel();
+
+    if (!requestedModel) {
+      return defaultModel;
+    }
+
+    // Check if model is supported by CLI
+    if (CLI_SUPPORTED_MODELS.includes(requestedModel as CliSupportedModel)) {
+      return requestedModel;
+    }
+
+    // Model not supported - warn user and fallback
+    const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
+    this.log(`⚠️ ${message}`);
+
+    vscode.window.showWarningMessage(
+      `FlightPath: ${message}\n\nCLI-supported models: ${CLI_SUPPORTED_MODELS.join(", ")}`
+    );
+
+    return defaultModel;
   }
 
   /**
