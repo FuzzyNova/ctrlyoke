@@ -333,6 +333,19 @@ export class FlightPathManager {
         return;
       }
 
+      // Check if queue needs to be restarted (completed, paused, or error state)
+      const queueState = this.promptQueue.getState();
+      if (
+        queueState.status === "completed" ||
+        queueState.status === "paused" ||
+        queueState.status === "error"
+      ) {
+        console.log(
+          `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
+        );
+        this.promptQueue.restart();
+      }
+
       // Notify dashboard about execution start
       if (this.dashboardProvider && promptFile.prompts) {
         this.dashboardProvider.updateExecutionStarted(

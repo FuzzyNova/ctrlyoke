@@ -205,6 +205,35 @@ export class PromptQueue {
   }
 
   /**
+   * Restart queue from the beginning
+   * Resets index, results, and tracking state while keeping prompts loaded
+   */
+  restart(): void {
+    this.isPaused = false;
+    this.state.currentIndex = 0;
+    this.state.status = "idle";
+    this.state.stopped = false;
+    this.currentRetryCount = 0;
+
+    // Reset all results to pending
+    this.state.results = this.state.prompts.map((prompt) => ({
+      prompt: prompt.prompt,
+      status: "pending",
+      timestamp: new Date(),
+    }));
+
+    // Reset tracking state
+    this.state.completedIds = new Set<string>();
+    this.state.totalExecutionTime = 0;
+    this.state.queueExtensions = 0;
+    this.state.totalPausedDuration = 0;
+    this.state.pausedTime = undefined;
+
+    this.emitStateChange();
+    console.log("FlightPath: Queue restarted from beginning");
+  }
+
+  /**
    * Clear queue and results
    */
   clear(): void {

@@ -145,8 +145,25 @@
     state.executionState = EXECUTION_STATES.RUNNING;
     state.totalSteps = totalSteps;
     state.currentStep = 0;
+
+    // Reset all prompts to pending state (for restart scenario)
+    state.prompts.forEach((prompt) => {
+      prompt.status = "pending";
+      prompt.details = {};
+    });
+
+    // Clear outputs and retry states (for restart scenario)
+    state.cliOutputs = {};
+    state.retryStates = {};
+    state.statusMessages = {};
+
+    // Clear CLI output and show empty state
+    elements.outputContent.innerHTML =
+      '<p class="empty-state">CLI output will appear here during execution</p>';
+
     updateControls();
     updatePromptCounter();
+    renderPromptsList();
   }
 
   function handleExecutionStateChanged(executionState) {
