@@ -1,5 +1,17 @@
 import * as vscode from "vscode";
-import { QueueState } from "../types/FlightPathTypes";
+import { QueueState, EXECUTION_STATES } from "../types/FlightPathTypes";
+import { CopilotStatus } from "../flightpath/base/CopilotIntegration";
+
+/**
+ * Detailed status from Copilot integration
+ */
+export interface CopilotDetailedStatus {
+  initializationStatus: CopilotStatus;
+  isReady: boolean;
+  message: string;
+  pollingAttempts?: number;
+  maxPollingAttempts?: number;
+}
 
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
@@ -17,9 +29,12 @@ export class StatusBarManager {
   }
 
   /**
-   * Update status bar based on queue state
+   * Update status bar based on queue state and optional Copilot status
    */
-  updateStatusBar(state?: QueueState): void {
+  updateStatusBar(
+    state?: QueueState,
+    copilotStatus?: CopilotDetailedStatus
+  ): void {
     let text = "$(compass) FlightPath";
     let tooltip = "FlightPath - Click to open";
     let backgroundColor: vscode.ThemeColor | undefined;
@@ -28,7 +43,7 @@ export class StatusBarManager {
       const progress = this.calculateProgress(state);
 
       switch (state.status) {
-        case "running":
+        case EXECUTION_STATES.RUNNING:
           text = `$(compass-dot) FlightPath ${progress.current}/${progress.total}`;
           tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
           backgroundColor = new vscode.ThemeColor(
@@ -36,7 +51,7 @@ export class StatusBarManager {
           );
           break;
 
-        case "paused":
+        case EXECUTION_STATES.PAUSED:
           text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
           tooltip = "FlightPath - Paused (click to resume)";
           backgroundColor = new vscode.ThemeColor(
@@ -44,7 +59,7 @@ export class StatusBarManager {
           );
           break;
 
-        case "completed":
+        case EXECUTION_STATES.COMPLETED:
           text = `$(check) FlightPath Complete`;
           tooltip = "FlightPath - Workflow completed successfully";
           backgroundColor = new vscode.ThemeColor(
@@ -57,7 +72,7 @@ export class StatusBarManager {
           }, 5000);
           break;
 
-        case "error":
+        case EXECUTION_STATES.ERROR:
           text = `$(error) FlightPath Error`;
           tooltip = "FlightPath - Execution failed (click for details)";
           backgroundColor = new vscode.ThemeColor(
@@ -65,17 +80,65 @@ export class StatusBarManager {
           );
           break;
 
-        case "idle":
+        case EXECUTION_STATES.IDLE:
         default:
-          // Use default values set above
+          // When idle, show Copilot initialization status if provided
+          if (copilotStatus) {
+            const copilotDisplay = this.getCopilotStatusDisplay(copilotStatus);
+            text = copilotDisplay.text;
+            tooltip = copilotDisplay.tooltip;
+          }
           break;
       }
+    } else if (copilotStatus) {
+      // No queue state but have copilot status - show copilot status
+      const copilotDisplay = this.getCopilotStatusDisplay(copilotStatus);
+      text = copilotDisplay.text;
+      tooltip = copilotDisplay.tooltip;
     }
 
     this.statusBarItem.text = text;
     this.statusBarItem.tooltip = tooltip;
     this.statusBarItem.backgroundColor = backgroundColor;
     this.statusBarItem.show();
+  }
+
+  /**
+   * Get display text and tooltip for Copilot initialization status
+   */
+  private getCopilotStatusDisplay(copilotStatus: CopilotDetailedStatus): {
+    text: string;
+    tooltip: string;
+  } {
+    switch (copilotStatus.initializationStatus) {
+      case CopilotStatus.Initializing:
+        return {
+          text: "$(compass) FlightPath - Initializing...",
+          tooltip: "FlightPath - Checking Copilot availability...",
+        };
+      case CopilotStatus.Waiting:
+        return {
+          text: `$(compass) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`,
+          tooltip: "FlightPath - Waiting for GitHub Copilot to activate...",
+        };
+      case CopilotStatus.Ready:
+        return {
+          text: "$(compass-active) FlightPath - Ready",
+          tooltip:
+            "FlightPath - Ready to execute workflows with Copilot automation",
+        };
+      case CopilotStatus.Unavailable:
+        return {
+          text: "$(warning) FlightPath - Setup Required",
+          tooltip:
+            "FlightPath - Copilot automation unavailable. Click to retry detection.",
+        };
+      default:
+        return {
+          text: "$(compass) FlightPath",
+          tooltip: "FlightPath - Click to open",
+        };
+    }
   }
 
   /**

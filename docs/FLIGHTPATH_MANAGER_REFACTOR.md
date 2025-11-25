@@ -95,35 +95,69 @@ Extracted:
 
 ---
 
-### Priority 4: StatusBarManager (NOT STARTED)
+### Priority 4: ✅ StatusBarManager Integration (COMPLETED)
 
 **Location:** `src/ui/StatusBarManager.ts`  
-**Estimated Lines:** ~80 lines  
-**Status:** ⏳ Pending
+**Lines Extracted:** ~45 lines (updateStatusBar logic moved to delegation)  
+**Status:** ✅ Completed
 
-Extract:
+**Changes:**
 
-- Status bar creation and disposal
-- `updateStatusBar()` logic
-- Status bar command handling
+- StatusBarManager already existed but wasn't being used by FlightPathManager
+- Updated StatusBarManager to use `EXECUTION_STATES` constants instead of hardcoded strings
+- Added `CopilotDetailedStatus` interface for Copilot initialization status display
+- Added `getCopilotStatusDisplay()` method for Copilot status text/tooltip generation
+- FlightPathManager now delegates to StatusBarManager via `updateStatusBar()` method
+- Removed duplicate status bar creation/management from FlightPathManager
 
-**Why:** This is a UI concern and belongs in `src/ui/` with other UI code. Independent from execution logic.
+**Architecture decisions:**
+
+- StatusBarManager handles all display logic (icons, text, tooltips, backgrounds)
+- FlightPathManager provides state data (QueueState, CopilotDetailedStatus)
+- Single source of truth for status bar presentation
+
+**Hardcoded String Fixes:**
+
+- Fixed hardcoded `"running"`, `"paused"`, `"completed"`, `"error"`, `"idle"` status strings in:
+  - `FlightPathManager.ts` - Now uses `EXECUTION_STATES.*` constants
+  - `WorkflowExecutor.ts` - Now uses `EXECUTION_STATES.*` constants
+  - `PromptQueue.ts` - Now uses `EXECUTION_STATES.*` and `STEP_STATUS.*` constants
+  - `StatusBarManager.ts` - Now uses `EXECUTION_STATES.*` constants
+
+**Result:** FlightPathManager reduced from 842 to ~796 lines. Status bar logic properly separated.
 
 ---
 
-### Priority 5: ConfigurationUtils (NOT STARTED)
+### Priority 5: ✅ ConfigurationUtils (COMPLETED)
 
 **Location:** `src/utils/ConfigurationUtils.ts`  
-**Estimated Lines:** ~50 lines  
-**Status:** ⏳ Pending
+**Lines Created:** ~120 lines (comprehensive configuration utility)  
+**Status:** ✅ Completed
 
-Extract:
+**Extracted/Centralized:**
 
-- `getDynamicQueueConfig()`
-- `shouldShowCliCommand()`
-- Other settings reading can migrate here over time
+- `shouldShowCliCommand()` - Check CLI command display setting
+- `shouldShowCliOutput()` - Check CLI output display setting
+- `getIntegrationMode()` - Get default integration mode (CLI/Chat)
+- `getDynamicQueueConfig()` - Get dynamic queue configuration
+- `getPromptsDirectory()` - Get prompts directory path
+- `getScriptTimeout()` - Get script timeout setting
+- `getDefaultMaxRetries()` - Get default retry count
+- `getDefaultRetryPrompt()` - Get default retry prompt template
+- `shouldAutoAttachFiles()` - Check auto-attach files setting
+- `getCliModel()` - Get default CLI model
+- `getCliAllowedDirs()` - Get CLI allowed directories
+- `getCliToolPermissions()` - Get CLI tool permissions mode
+- `getChatWindowLocation()` - Get chat window location preference
 
-**Why:** Consolidates VS Code settings access into a reusable utility.
+**Architecture decisions:**
+
+- Object-based API (`ConfigurationUtils.methodName()`) for easy discoverability
+- All methods read from single `"flightpath"` config namespace
+- Default values centralized in one place
+- Enables future migration of other files' config reads
+
+**Result:** FlightPathManager configuration methods now thin wrappers that delegate to ConfigurationUtils.
 
 ---
 
@@ -136,17 +170,17 @@ src/flightpath/
 ├── cli/
 ├── EndConditionEvaluator.ts    (existing - script execution)
 ├── EndConditionHandler.ts      ✅ NEW (retry/validation logic) - 324 lines
-├── FlightPathManager.ts        ✅ REDUCED - 842 lines
+├── FlightPathManager.ts        ✅ REDUCED - 780 lines (from 1,854!)
 ├── PromptFileParser.ts         ✅ UPDATED (+ parseMarkdownPromptFile) - 208 lines
-├── PromptQueue.ts
+├── PromptQueue.ts              ✅ UPDATED (uses EXECUTION_STATES/STEP_STATUS)
 └── WorkflowExecutor.ts         ✅ NEW (execution loop) - 626 lines
 
 src/ui/
 ├── FlightPathDashboardProvider.ts
-└── StatusBarManager.ts         ⏳ PLANNED
+└── StatusBarManager.ts         ✅ UPDATED (uses EXECUTION_STATES, supports CopilotStatus)
 
 src/utils/
-├── ConfigurationUtils.ts       ⏳ PLANNED
+├── ConfigurationUtils.ts       ✅ NEW (centralized settings access) - 120 lines
 ├── FileSystemUtils.ts
 ├── LoggingUtils.ts
 ├── PromptIdentity.ts
@@ -188,19 +222,23 @@ class FlightPathManager {
 
 ## Progress Tracking
 
-| Priority | Component                                  | Status      | Lines Saved |
-| -------- | ------------------------------------------ | ----------- | ----------- |
-| 1        | EndConditionHandler                        | ✅ Complete | ~350        |
-| 2        | WorkflowExecutor                           | ✅ Complete | ~584        |
-| 3        | parseMarkdownPromptFile → PromptFileParser | ✅ Complete | ~30         |
-| 4        | StatusBarManager                           | ⏳ Pending  | ~80 (est)   |
-| 5        | ConfigurationUtils                         | ⏳ Pending  | ~50 (est)   |
+| Priority | Component                                  | Status      | Lines Saved/Created |
+| -------- | ------------------------------------------ | ----------- | ------------------- |
+| 1        | EndConditionHandler                        | ✅ Complete | ~350 saved          |
+| 2        | WorkflowExecutor                           | ✅ Complete | ~584 saved          |
+| 3        | parseMarkdownPromptFile → PromptFileParser | ✅ Complete | ~30 saved           |
+| 4        | StatusBarManager Integration               | ✅ Complete | ~45 saved           |
+| 5        | ConfigurationUtils                         | ✅ Complete | 120 created         |
 
 **Original FlightPathManager size:** 1,854 lines  
-**Current FlightPathManager size:** 842 lines  
-**Total reduction:** 1,012 lines (55% smaller!)
+**Current FlightPathManager size:** 780 lines  
+**Total reduction:** 1,074 lines (58% smaller!)
 
-**Remaining to extract:** ~130 lines (StatusBar + Config utilities)
+**Additional improvements:**
+
+- Fixed all hardcoded status strings across 4 files
+- Centralized configuration access in ConfigurationUtils
+- StatusBarManager properly integrated and updated with constants
 
 ---
 
@@ -210,3 +248,4 @@ class FlightPathManager {
 - All extractions follow existing project patterns (base/, cli/, chat/ structure)
 - Each extracted class has a single responsibility and is independently testable
 - All 33 tests pass after refactoring
+- **NO HARDCODED STRINGS**: All status values now use constants from `DashboardConstants.ts`

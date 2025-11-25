@@ -13,8 +13,11 @@ import {
   PromptItem,
   QueueState,
   CopilotIntegrationMode,
+  EXECUTION_STATES,
 } from "../types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
+import { StatusBarManager } from "../ui/StatusBarManager";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
@@ -25,7 +28,7 @@ export class FlightPathManager {
   private endConditionHandler: EndConditionHandler;
   private workflowExecutor: WorkflowExecutor;
   private context: vscode.ExtensionContext;
-  private statusBarItem: vscode.StatusBarItem;
+  private statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
   private outputChannel: vscode.OutputChannel;
   private dashboardProvider?: FlightPathDashboardProvider;
@@ -65,14 +68,9 @@ export class FlightPathManager {
       this.endConditionEvaluator
     );
 
-    // Create status bar item
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
-      100
-    );
-    this.statusBarItem.command = "flightpath.openPanel";
+    // Create status bar manager
+    this.statusBarManager = new StatusBarManager(context);
     this.updateStatusBar();
-    context.subscriptions.push(this.statusBarItem);
 
     // Listen to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
@@ -114,20 +112,14 @@ export class FlightPathManager {
    * Check if CLI command should be shown in dashboard output
    */
   private shouldShowCliCommand(): boolean {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("showCliCommand", false);
+    return ConfigurationUtils.shouldShowCliCommand();
   }
 
   /**
    * Get the default Copilot integration based on user settings
    */
   private getDefaultIntegration(): CopilotIntegration {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const integrationMode = config.get<string>(
-      "copilotIntegrationMode",
-      CopilotIntegrationMode.CLI
-    );
+    const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     return integrationMode === CopilotIntegrationMode.Chat
       ? this.chatIntegration
@@ -138,19 +130,7 @@ export class FlightPathManager {
    * Get dynamic queue configuration from settings
    */
   private getDynamicQueueConfig(): import("../types/FlightPathTypes").DynamicQueueConfig {
-    const config = vscode.workspace.getConfiguration("flightpath");
-
-    return {
-      enabled: config.get<boolean>("enableDynamicQueue", false),
-      dynamicExtensionOnLastPrompt: config.get<boolean>(
-        "dynamicExtensionOnLastPrompt",
-        true
-      ),
-      maxQueueSize: config.get<number>("maxQueueSize", 100),
-      maxExecutionTime: config.get<number>("maxExecutionTime", 18000),
-      unlimitedMode: config.get<boolean>("unlimitedMode", false),
-      notifyOnExtension: config.get<boolean>("notifyOnQueueExtension", true),
-    };
+    return ConfigurationUtils.getDynamicQueueConfig();
   }
 
   /**
@@ -336,9 +316,9 @@ export class FlightPathManager {
       // Check if queue needs to be restarted (completed, paused, or error state)
       const queueState = this.promptQueue.getState();
       if (
-        queueState.status === "completed" ||
-        queueState.status === "paused" ||
-        queueState.status === "error"
+        queueState.status === EXECUTION_STATES.COMPLETED ||
+        queueState.status === EXECUTION_STATES.PAUSED ||
+        queueState.status === EXECUTION_STATES.ERROR
       ) {
         console.log(
           `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
@@ -405,9 +385,7 @@ export class FlightPathManager {
       dashboardProvider: this.dashboardProvider,
       outputChannel: this.outputChannel,
       shouldShowCliCommand: this.shouldShowCliCommand(),
-      showCliOutput: vscode.workspace
-        .getConfiguration("flightpath")
-        .get<boolean>("showCliOutput", true),
+      showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
       dynamicQueueConfig: this.getDynamicQueueConfig(),
     };
 
@@ -560,9 +538,7 @@ export class FlightPathManager {
       }
 
       // Create prompts directory if it doesn't exist
-      const promptsDir = vscode.workspace
-        .getConfiguration("flightpath")
-        .get<string>("promptsDirectory", ".flightpath");
+      const promptsDir = ConfigurationUtils.getPromptsDirectory();
       const promptsDirPath = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
         promptsDir
@@ -769,55 +745,12 @@ export class FlightPathManager {
 
   /**
    * Update status bar item
+   * Delegates to StatusBarManager for display logic
    */
   private updateStatusBar(): void {
     const state = this.promptQueue.getState();
-    const progress = this.promptQueue.getProgress();
     const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
-
-    let text = "$(compass) FlightPath";
-    let tooltip = "FlightPath - Click to open";
-
-    // Priority 1: Show workflow execution status if running
-    if (state.status === "running") {
-      text = `$(compass-dot) FlightPath ${progress.current}/${progress.total}`;
-      tooltip = `FlightPath - Running (${progress.percentage}% complete)`;
-    } else if (state.status === "paused") {
-      text = `$(debug-pause) FlightPath ${progress.current}/${progress.total}`;
-      tooltip = "FlightPath - Paused (click to resume)";
-    } else if (state.status === "completed") {
-      text = `$(check) FlightPath Complete`;
-      tooltip = "FlightPath - Workflow completed successfully";
-    } else if (state.status === "error") {
-      text = `$(error) FlightPath Error`;
-      tooltip = "FlightPath - Execution failed (click to retry)";
-    } else {
-      // Priority 2: Show Copilot initialization status when idle
-      switch (copilotStatus.initializationStatus) {
-        case CopilotStatus.Initializing:
-          text = "$(compass) FlightPath - Initializing...";
-          tooltip = "FlightPath - Checking Copilot availability...";
-          break;
-        case CopilotStatus.Waiting:
-          text = `$(compass) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`;
-          tooltip = "FlightPath - Waiting for GitHub Copilot to activate...";
-          break;
-        case CopilotStatus.Ready:
-          text = "$(compass-active) FlightPath - Ready";
-          tooltip =
-            "FlightPath - Ready to execute workflows with Copilot automation";
-          break;
-        case CopilotStatus.Unavailable:
-          text = "$(warning) FlightPath - Setup Required";
-          tooltip =
-            "FlightPath - Copilot automation unavailable. Click to retry detection.";
-          break;
-      }
-    }
-
-    this.statusBarItem.text = text;
-    this.statusBarItem.tooltip = tooltip;
-    this.statusBarItem.show();
+    this.statusBarManager.updateStatusBar(state, copilotStatus);
   }
 
   /**
@@ -944,7 +877,7 @@ export class FlightPathManager {
    * Dispose resources
    */
   dispose(): void {
-    this.statusBarItem.dispose();
+    this.statusBarManager.dispose();
     this.endConditionEvaluator.dispose();
     console.log("FlightPath: Manager disposed");
   }

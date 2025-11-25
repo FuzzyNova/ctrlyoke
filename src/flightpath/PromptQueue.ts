@@ -85,7 +85,7 @@ export class PromptQueue {
   constructor() {
     this.state = {
       currentIndex: 0,
-      status: "idle",
+      status: EXECUTION_STATES.IDLE,
       prompts: [],
       results: [],
       stopped: false,
@@ -102,11 +102,11 @@ export class PromptQueue {
   loadPrompts(prompts: PromptItem[]): void {
     this.state = {
       currentIndex: 0,
-      status: "idle",
+      status: EXECUTION_STATES.IDLE,
       prompts: [...prompts],
       results: prompts.map((prompt) => ({
         prompt: prompt.prompt,
-        status: "pending",
+        status: STEP_STATUS.PENDING,
         timestamp: new Date(),
       })),
       stopped: false, // Reset stopped flag on new load
@@ -126,7 +126,7 @@ export class PromptQueue {
    * is handled by FlightPathManager's startWorkflowExecution method.
    */
   async start(): Promise<void> {
-    if (this.state.status === "running") {
+    if (this.state.status === EXECUTION_STATES.RUNNING) {
       console.log("FlightPath: Queue is already running");
       return;
     }
@@ -136,7 +136,7 @@ export class PromptQueue {
       return;
     }
 
-    this.state.status = "running";
+    this.state.status = EXECUTION_STATES.RUNNING;
     this.isPaused = false;
     this.state.stopped = false; // Clear stopped flag when starting
     this.emitStateChange();
@@ -148,12 +148,12 @@ export class PromptQueue {
    * Pause queue execution
    */
   pause(): void {
-    if (this.state.status !== "running") {
+    if (this.state.status !== EXECUTION_STATES.RUNNING) {
       return;
     }
 
     this.isPaused = true;
-    this.state.status = "paused";
+    this.state.status = EXECUTION_STATES.PAUSED;
     this.state.pausedTime = Date.now(); // Record when paused
 
     this.emitStateChange();
@@ -166,7 +166,7 @@ export class PromptQueue {
    * and continues execution from where it was paused.
    */
   async resume(): Promise<void> {
-    if (this.state.status !== "paused") {
+    if (this.state.status !== EXECUTION_STATES.PAUSED) {
       return;
     }
 
@@ -178,7 +178,7 @@ export class PromptQueue {
     }
 
     this.isPaused = false;
-    this.state.status = "running";
+    this.state.status = EXECUTION_STATES.RUNNING;
     this.emitStateChange();
 
     console.log("FlightPath: Queue state set to running (resumed)");
@@ -189,14 +189,14 @@ export class PromptQueue {
    */
   stop(): void {
     this.isPaused = false;
-    this.state.status = "idle";
+    this.state.status = EXECUTION_STATES.IDLE;
     this.state.currentIndex = 0;
     this.state.stopped = true; // Set stopped flag
 
     // Mark sent prompts as cancelled (not just pending)
     this.state.results.forEach((result) => {
-      if (result.status === "sent") {
-        result.status = "cancelled";
+      if (result.status === STEP_STATUS.SENT) {
+        result.status = STEP_STATUS.CANCELLED;
       }
     });
 
@@ -211,14 +211,14 @@ export class PromptQueue {
   restart(): void {
     this.isPaused = false;
     this.state.currentIndex = 0;
-    this.state.status = "idle";
+    this.state.status = EXECUTION_STATES.IDLE;
     this.state.stopped = false;
     this.currentRetryCount = 0;
 
     // Reset all results to pending
     this.state.results = this.state.prompts.map((prompt) => ({
       prompt: prompt.prompt,
-      status: "pending",
+      status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
 
@@ -279,7 +279,7 @@ export class PromptQueue {
     }
 
     const currentResult = this.state.results[this.state.currentIndex];
-    currentResult.status = "sent";
+    currentResult.status = STEP_STATUS.SENT;
     currentResult.timestamp = new Date();
 
     this.emitStateChange();
@@ -300,7 +300,7 @@ export class PromptQueue {
     const currentPrompt = this.state.prompts[this.state.currentIndex];
     const currentResult = this.state.results[this.state.currentIndex];
 
-    currentResult.status = "completed";
+    currentResult.status = STEP_STATUS.COMPLETED;
     currentResult.timestamp = new Date();
 
     // Mark prompt as completed in the tracking set
@@ -322,11 +322,11 @@ export class PromptQueue {
     }
 
     const currentResult = this.state.results[this.state.currentIndex];
-    currentResult.status = "failed";
+    currentResult.status = STEP_STATUS.FAILED;
     currentResult.error = error;
     currentResult.timestamp = new Date();
 
-    this.state.status = "error";
+    this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
 
     console.error(
@@ -353,16 +353,18 @@ export class PromptQueue {
    * Get completed prompts count
    */
   getCompletedCount(): number {
-    return this.state.results.filter((result) => result.status === "completed")
-      .length;
+    return this.state.results.filter(
+      (result) => result.status === STEP_STATUS.COMPLETED
+    ).length;
   }
 
   /**
    * Get failed prompts count
    */
   getFailedCount(): number {
-    return this.state.results.filter((result) => result.status === "failed")
-      .length;
+    return this.state.results.filter(
+      (result) => result.status === STEP_STATUS.FAILED
+    ).length;
   }
 
   /**
@@ -428,7 +430,7 @@ export class PromptQueue {
    * Mark workflow as completed (for manual completion by FlightPathManager)
    */
   markCompleted(): void {
-    this.state.status = "completed";
+    this.state.status = EXECUTION_STATES.COMPLETED;
     this.emitStateChange();
   }
 
@@ -436,7 +438,7 @@ export class PromptQueue {
    * Mark workflow as errored (for manual error handling by FlightPathManager)
    */
   markErrored(): void {
-    this.state.status = "error";
+    this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
   }
 

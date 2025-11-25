@@ -45,20 +45,26 @@ Core data structures. TypeScript strict mode enforced.
   </copilotTypes>
 
 <typeSafetyPatterns>
-**Discriminated unions:**
+**Status constants (use instead of hardcoded strings):**
 ```typescript
-if (state.status === "running") {
-  // TypeScript knows we're in running state
-  // Can safely access running-specific properties
+import { EXECUTION_STATES, STEP_STATUS } from "../types/FlightPathTypes";
+
+// Execution states for QueueState.status
+if (state.status === EXECUTION_STATES.RUNNING) {
+// TypeScript knows we're in running state
 }
-```
+
+// Step status for PromptResult.status
+result.status = STEP_STATUS.COMPLETED;
+
+````
 
 **Optional chaining:**
 
 ```typescript
 const model = prompt.model || this.getConfiguredModel();
 // Prompt can override model, or use default
-```
+````
 
 **Type guards:**
 

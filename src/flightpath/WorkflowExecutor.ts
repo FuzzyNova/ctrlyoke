@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { PromptItem, DynamicQueueConfig } from "../types/FlightPathTypes";
+import {
+  PromptItem,
+  DynamicQueueConfig,
+  EXECUTION_STATES,
+} from "../types/FlightPathTypes";
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
 import { CopilotIntegration } from "./base/CopilotIntegration";
@@ -129,7 +133,7 @@ export class WorkflowExecutor {
       const dynamicConfig = context.dynamicQueueConfig;
 
       // Check if paused before starting new prompt
-      if (this.promptQueue.getState().status === "paused") {
+      if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
         console.log(
           "⏸️ FlightPath: Workflow paused before executing next prompt"
         );
@@ -456,7 +460,7 @@ export class WorkflowExecutor {
       }
 
       // Check if workflow was paused
-      if (this.promptQueue.getState().status === "paused") {
+      if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
         console.log("⏸️ FlightPath: Workflow paused");
         break;
       }
@@ -466,7 +470,10 @@ export class WorkflowExecutor {
 
     // Set queue state to completed
     const finalState = this.promptQueue.getState();
-    if (finalState.status !== "paused" && finalState.status !== "error") {
+    if (
+      finalState.status !== EXECUTION_STATES.PAUSED &&
+      finalState.status !== EXECUTION_STATES.ERROR
+    ) {
       this.promptQueue.markCompleted();
     }
 
@@ -605,7 +612,7 @@ export class WorkflowExecutor {
 
           // Check if workflow is paused - hold response until resume
           const currentState = this.promptQueue.getState();
-          if (currentState.status === "paused") {
+          if (currentState.status === EXECUTION_STATES.PAUSED) {
             console.log(
               "⏸️ FlightPath: Response complete but workflow is paused - holding until resume"
             );
