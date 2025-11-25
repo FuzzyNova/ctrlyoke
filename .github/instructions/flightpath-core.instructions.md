@@ -97,6 +97,77 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - Never edit schema in `out/` directory (source is `/schemas/`)
   </promptFileParser>
 
+<endConditionHandler>
+**Responsibilities:**
+- Orchestrates end condition evaluation results and retry decisions
+- Handles execution errors (script failures, timeouts)
+- Handles validation failures (output doesn't match expected)
+- Manages retry attempts with dashboard updates
+- Provides user interaction for error recovery
+
+**Architecture:**
+
+- Extracted from FlightPathManager for single responsibility
+- Uses callback pattern for sending retry prompts (avoids tight coupling)
+- Delegates script execution to EndConditionEvaluator
+- Delegates retry state tracking to PromptQueue
+
+**Key methods:**
+
+- `handleEndConditionResult()` - Entry point, routes to success/error/validation
+- `handleExecutionError()` - Handles script failures with user prompts
+- `handleValidationFailure()` - Orchestrates retry logic
+- `handleMaxRetriesExhausted()` - Final failure with user options
+- `buildRetryPrompt()` - Template placeholder replacement
+
+**RetryContext pattern:**
+
+- Bundles integration, totalPrompts, workspaceFolderPath, currentPromptFilePath
+- Reduces parameter count in recursive calls
+- Simplifies testing by allowing mock context injection
+
+**Callback pattern for retry prompts:**
+
+- `SendRetryPromptCallback` type defined in EndConditionHandler
+- WorkflowExecutor creates callback via `createSendRetryPromptCallback()`
+- Callback handles: sending prompt, waiting for response, updating dashboard
+- Returns response text on success, null on failure
+  </endConditionHandler>
+
+<workflowExecutor>
+**Responsibilities:**
+- Execute prompts sequentially with pause/resume support
+- Wait for Copilot responses with duplicate event protection
+- Manage pause/resume state for response handling
+- Coordinate with EndConditionHandler for validation
+- Update dashboard with execution progress
+- Handle dynamic queue reload after prompt completion
+- CLI streaming output setup
+
+**Architecture:**
+
+- Extracted from FlightPathManager for single responsibility
+- Uses `WorkflowContext` interface to receive all dependencies
+- Exposes pause/resume state methods for FlightPathManager coordination
+- Owns the response waiting and streaming logic
+
+**Key methods:**
+
+- `execute()` - Main execution loop, delegates from FlightPathManager
+- `waitForResponseComplete()` - Response promise with pause awareness
+- `evaluateEndCondition()` - End condition evaluation with retry callback
+- `createSendRetryPromptCallback()` - Retry prompt callback factory
+- `hasPendingResponse()` / `isAwaitingResponse()` - State inspection for pause/resume
+- `resumePendingResponse()` / `clearPendingState()` - State management
+
+**WorkflowContext pattern:**
+
+- Bundles: workspaceFolderPath, currentPromptFilePath, dashboardProvider
+- Also: outputChannel, shouldShowCliCommand, showCliOutput, dynamicQueueConfig
+- FlightPathManager builds context before each execution
+- Reduces parameter count and improves testability
+  </workflowExecutor>
+
 <endConditionEvaluator>
 **Responsibilities:**
 - Executes validation scripts (.py, .js, .ts, .sh, .bat, .ps1)
@@ -137,5 +208,7 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - `./base/CopilotIntegration.ts` - Integration contract
 - `./cli/CopilotCommandLineIntegration.ts` - CLI implementation
 - `./chat/CopilotChatIntegration.ts` - Chat implementation
+- `./WorkflowExecutor.ts` - Workflow execution loop
+- `./EndConditionHandler.ts` - Retry and validation failure handling
 - `../types/FlightPathTypes.ts` - Core type definitions
 </relatedFiles>

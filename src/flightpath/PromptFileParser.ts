@@ -37,10 +37,15 @@ export class PromptFileParser {
 
   /**
    * Parse and validate a prompt file
-   * Supports both .prompt.json and .flightpath.json files with the same schema
+   * Supports .prompt.json, .flightpath.json, and .prompt.md files
    */
   async parsePromptFile(filePath: string): Promise<PromptFile | null> {
     try {
+      // Handle markdown prompt files differently
+      if (filePath.endsWith(".prompt.md")) {
+        return this.parseMarkdownPromptFile(filePath);
+      }
+
       const content = await fs.readFile(filePath, "utf8");
       const parsed = JSON.parse(content);
 
@@ -57,6 +62,43 @@ export class PromptFileParser {
       console.error(`FlightPath: Failed to parse file ${filePath}:`, error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Parse a .prompt.md file as a single prompt
+   * @param filePath Path to the .prompt.md file
+   * @returns PromptFile with single prompt item
+   */
+  async parseMarkdownPromptFile(filePath: string): Promise<PromptFile | null> {
+    try {
+      const content = await fs.readFile(filePath, "utf8");
+
+      // Trim whitespace but preserve the prompt text as-is
+      const promptText = content.trim();
+
+      if (!promptText) {
+        throw new Error("Prompt file is empty");
+      }
+
+      return {
+        prompts: [
+          {
+            prompt: promptText,
+            // No end condition for markdown files (they're single prompts)
+            endCondition: undefined,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(
+        `FlightPath: Failed to read markdown prompt file ${filePath}:`,
+        error
+      );
+      vscode.window.showErrorMessage(
+        `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
       );
       return null;
     }
@@ -152,7 +194,9 @@ export class PromptFileParser {
    */
   private isPromptFile(filename: string): boolean {
     return (
-      filename.endsWith(".prompt.json") || filename.endsWith(".flightpath.json")
+      filename.endsWith(".prompt.json") ||
+      filename.endsWith(".flightpath.json") ||
+      filename.endsWith(".prompt.md")
     );
   }
 
