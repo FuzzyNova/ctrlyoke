@@ -6,8 +6,8 @@
       "model": "claude-haiku-4.5"
     },
     {
-      "prompt": "Analyze the agent definition in #file:.github/agents/test-agent-beta.agent.md and confirm you are Test Agent Beta",
-      "agent": "test-agent-beta",
+      "prompt": "Analyze the agent definition in #file:.github/agents/test-agent-beta-manual.agent.md and confirm you are Test Agent Beta",
+      "agent": "test-agent-beta-manual",
       "model": "claude-haiku-4.5"
     }
   ]

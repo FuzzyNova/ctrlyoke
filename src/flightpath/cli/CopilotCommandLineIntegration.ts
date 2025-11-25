@@ -207,8 +207,15 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         args.push("--model", options.model);
       }
       if (options.agent) {
-        args.push("--agent", options.agent);
-        this.log(`🤖 Using agent: ${options.agent}`);
+        // Copilot CLI expects agent name with .agent suffix (e.g., "my-agent.agent")
+        // File on disk: my-agent.agent.md
+        // CLI expects: my-agent.agent
+        const agentName = options.agent.endsWith(".agent")
+          ? options.agent
+          : `${options.agent}.agent`;
+
+        args.push("--agent", agentName);
+        this.log(`🤖 Using agent: ${agentName}`);
 
         // When using --agent, we need -p flag with prompt text
         // Wrap prompt in quotes to handle special characters

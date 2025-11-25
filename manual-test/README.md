@@ -156,6 +156,48 @@ Send to Copilot → Wait → Validate → Loop until success/max retries
 
 ---
 
+### 7. Agent Support Testing (CLI Mode Only)
+
+**File:** `agent-test.flightpath.json`
+
+**Test:**
+
+- Right-click the file → "Send to CLI"
+- Verifies: Custom agent selection and switching between prompts
+- Tests: Agent discovery from `.github/agents/` directory
+
+**Important Discovery - Agent Naming:**
+
+- **File on disk:** `my-agent.agent.md`
+- **CLI expects:** `--agent my-agent.agent` (with `.agent` suffix, NOT `.md`)
+- **FlightPath JSON:** `"agent": "my-agent"` (FlightPath auto-appends `.agent`)
+
+**Agent Discovery Locations:**
+
+The Copilot CLI discovers agents from:
+
+1. **Workspace root:** `.github/agents/*.agent.md` (at Git repository root)
+2. **User-level:** `~/.copilot/agents/*.agent.md` (global agents)
+
+⚠️ **Limitation:** Agents in subdirectories like `manual-test/.github/agents/` are NOT discovered. The CLI uses the Git repository root to find `.github/agents/`, not the current working directory.
+
+**Workaround for manual-test:** Copy agents to workspace root `.github/agents/` for testing:
+
+```powershell
+Copy-Item manual-test\.github\agents\*.agent.md .github\agents\
+```
+
+**Expected:**
+
+- Prompt 1: Uses `test-agent-alpha` agent
+- Prompt 2: Switches to `test-agent-beta-manual` agent
+- Each agent responds according to its instructions
+- CLI output shows `🤖 Using agent: {name}.agent`
+
+**Chat Mode Limitation:** The `agent` field is ignored in Chat mode (VS Code API limitation). Users must manually select agents from the dropdown. See `docs/CHAT_MODE_LIMITATIONS.md`.
+
+---
+
 ## End Condition Scripts
 
 Located in `.flightpath/scripts/`:

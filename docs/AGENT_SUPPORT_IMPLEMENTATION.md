@@ -50,6 +50,7 @@ Custom instructions and expertise for this agent...
 - ✅ FlightPath can pass agent name directly to Copilot CLI
 - ✅ Supports custom agents defined in `.github/agents/` or `~/.copilot/agents/`
 - ✅ Agent selection works reliably for automated workflows
+- ⚠️ **Agent naming**: File is `my-agent.agent.md`, use name `my-agent` in JSON (`.agent` suffix auto-added)
 
 **Chat Mode (Limited Support)**:
 
@@ -151,6 +152,12 @@ export interface CopilotCliOptions {
 
 **File**: `src/flightpath/cli/CopilotCommandLineIntegration.ts`
 
+**Important Discovery**: The Copilot CLI expects agent names with `.agent` suffix:
+
+- **Agent file on disk**: `my-agent.agent.md`
+- **CLI expects**: `--agent my-agent.agent`
+- **User specifies in JSON**: `"agent": "my-agent"` (FlightPath appends `.agent` automatically)
+
 **Changes needed:**
 
 1. Extract agent from prompt (if specified):
@@ -182,11 +189,23 @@ private async executeCopilotCommand(
 
   // NEW: Add agent flag if specified
   if (options.agent) {
-    args.push('--agent', options.agent);
-    this.log(`🤖 Using agent: ${options.agent}`);
+    // Copilot CLI expects agent name with .agent suffix (e.g., "my-agent.agent")
+    // File on disk: my-agent.agent.md
+    // CLI expects: my-agent.agent
+    // User specifies: my-agent (we append .agent)
+    const agentName = options.agent.endsWith('.agent')
+      ? options.agent
+      : `${options.agent}.agent`;
+
+    args.push('--agent', agentName);
+    this.log(`🤖 Using agent: ${agentName}`);
+
+    // When using --agent, we must use -p flag (not stdin)
+    args.push('-p', JSON.stringify(prompt));
   }
 
   // ... rest of implementation ...
+}
 }
 ```
 

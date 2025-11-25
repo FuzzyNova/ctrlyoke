@@ -65,7 +65,7 @@
         },
         "agent": {
           "type": "string",
-          "description": "Custom agent to use for this prompt (CLI mode only). Specify the agent name as defined in .github/agents/*.agent.md or ~/.copilot/agents/*.agent.md (e.g., 'flightpath-orchestrator', 'testing-specialist'). Chat mode cannot programmatically select agents - users must manually select from dropdown. See docs/CHAT_MODE_LIMITATIONS.md for details.",
+          "description": "Custom agent to use for this prompt (CLI mode only). Specify ONLY the agent name without file extensions (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The '.agent' suffix is automatically added. Agents are discovered from .github/agents/ or ~/.copilot/agents/. Chat mode cannot programmatically select agents - users must manually select from dropdown. See docs/CHAT_MODE_LIMITATIONS.md for details.",
           "pattern": "^[a-zA-Z0-9-_]+$"
         },
         "newChatSession": {
