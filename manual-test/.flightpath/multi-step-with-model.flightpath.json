@@ -1,7 +1,7 @@
 {
   "prompts": [
     {
-      "prompt": "Step 1: List all TypeScript files in the sample-code directory",
+      "prompt": "Step 1: What does this script do #file:.flightpath/scripts/check_counter_value.py",
       "model": "gpt-5-mini"
     },
     {

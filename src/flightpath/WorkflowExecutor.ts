@@ -177,16 +177,13 @@ export class WorkflowExecutor {
       // Record start time for this prompt
       const startTime = Date.now();
 
-      // Need completion detection if:
-      // 1. Multi-prompt workflow (need to know when to advance to next prompt)
-      // 2. Single prompt with endCondition (need to know when to evaluate script)
-      const needsCompletionDetection =
-        state.prompts.length > 1 || !!prompt.endCondition?.script;
+      // Always wait for response completion before marking workflow as done.
+      // Previously, single-prompt workflows without endCondition would skip completion detection,
+      // causing the queue to be marked complete before Copilot finished responding.
+      const needsCompletionDetection = true;
 
-      // Set up response listener BEFORE sending prompt to avoid race condition (only if needed)
-      const responsePromise = needsCompletionDetection
-        ? this.waitForResponseComplete(prompt, integration)
-        : Promise.resolve(""); // No completion detection needed
+      // Set up response listener BEFORE sending prompt to avoid race condition
+      const responsePromise = this.waitForResponseComplete(prompt, integration);
 
       // Set up streaming listener for real-time output (for integrations that support CLI output)
       let streamingDisposable: vscode.Disposable | undefined;
@@ -278,123 +275,72 @@ export class WorkflowExecutor {
       // Mark that we're waiting for a response
       this.isWaitingForResponse = true;
 
-      // Wait for Copilot to finish responding (only for multi-prompt workflows)
-      let responseText = "";
-      if (needsCompletionDetection) {
-        console.log(
-          `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
-        );
-        responseText = await responsePromise;
-        console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
+      // Wait for Copilot to finish responding before proceeding
+      console.log(
+        `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
+      );
+      const responseText = await responsePromise;
+      console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
 
-        // Calculate duration
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      // Calculate duration
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // Update dashboard with CLI output (if integration provides it)
-        if (context.dashboardProvider) {
-          // Get token statistics from CLI result (returns undefined for non-CLI)
-          let tokens: { prompt: number; completion: number } | undefined;
-          const lastResult = integration.getLastResult();
-          if (lastResult?.statistics) {
-            tokens = integration.parseTokenCounts(lastResult.statistics);
-          }
-
-          // Get CLI command if debugging is enabled (returns undefined for non-CLI)
-          const cliCommand = context.shouldShowCliCommand
-            ? integration.getLastCliCommand()
-            : undefined;
-
-          // Get full prompt text (with all context and instructions)
-          const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
-
-          context.dashboardProvider.updateCliOutput(i, {
-            prompt: fullPrompt,
-            response: responseText,
-            elapsed: parseFloat(duration),
-            tokens,
-            isStreaming: false,
-            cliCommand,
-          });
+      // Update dashboard with CLI output (if integration provides it)
+      if (context.dashboardProvider) {
+        // Get token statistics from CLI result (returns undefined for non-CLI)
+        let tokens: { prompt: number; completion: number } | undefined;
+        const lastResult = integration.getLastResult();
+        if (lastResult?.statistics) {
+          tokens = integration.parseTokenCounts(lastResult.statistics);
         }
 
-        // Evaluate end condition if present
-        if (prompt.endCondition) {
-          const shouldContinue = await this.evaluateEndCondition(
-            prompt,
-            integration,
-            context,
-            i,
-            parseFloat(duration)
+        // Get CLI command if debugging is enabled (returns undefined for non-CLI)
+        const cliCommand = context.shouldShowCliCommand
+          ? integration.getLastCliCommand()
+          : undefined;
+
+        // Get full prompt text (with all context and instructions)
+        const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
+
+        context.dashboardProvider.updateCliOutput(i, {
+          prompt: fullPrompt,
+          response: responseText,
+          elapsed: parseFloat(duration),
+          tokens,
+          isStreaming: false,
+          cliCommand,
+        });
+      }
+
+      // Evaluate end condition if present
+      if (prompt.endCondition) {
+        const shouldContinue = await this.evaluateEndCondition(
+          prompt,
+          integration,
+          context,
+          i,
+          parseFloat(duration)
+        );
+
+        if (!shouldContinue) {
+          console.log(
+            "❌ FlightPath: Workflow stopped due to end condition failure"
           );
+          this.promptQueue.markErrored();
+          break;
+        }
 
-          if (!shouldContinue) {
-            console.log(
-              "❌ FlightPath: Workflow stopped due to end condition failure"
-            );
-            this.promptQueue.markErrored();
-            break;
-          }
-
-          // Update dashboard with success including end condition result
-          if (context.dashboardProvider) {
-            context.dashboardProvider.updateStepStatus(i, {
-              state: STEP_STATUS.COMPLETED,
-              duration: parseFloat(duration),
-            });
-            context.dashboardProvider.updateProgress(
-              i + 1,
-              state.prompts.length
-            );
-            context.dashboardProvider.updateRetryAttempt(i, 0, 0);
-          }
-        } else {
-          // Update dashboard with success (no end condition)
-          if (context.dashboardProvider) {
-            context.dashboardProvider.updateStepStatus(i, {
-              state: STEP_STATUS.COMPLETED,
-              duration: parseFloat(duration),
-            });
-            context.dashboardProvider.updateProgress(
-              i + 1,
-              state.prompts.length
-            );
-          }
+        // Update dashboard with success including end condition result
+        if (context.dashboardProvider) {
+          context.dashboardProvider.updateStepStatus(i, {
+            state: STEP_STATUS.COMPLETED,
+            duration: parseFloat(duration),
+          });
+          context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+          context.dashboardProvider.updateRetryAttempt(i, 0, 0);
         }
       } else {
-        console.log(
-          `✅ FlightPath: Prompt sent successfully (no completion detection needed)`
-        );
-
-        // Calculate duration
-        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-
-        // For integrations that track results, we can still get the output
-        if (context.dashboardProvider) {
-          const lastResult = integration.getLastResult();
-          if (lastResult) {
-            let tokens: { prompt: number; completion: number } | undefined;
-            if (lastResult.statistics) {
-              tokens = integration.parseTokenCounts(lastResult.statistics);
-            }
-
-            const cliCommand = context.shouldShowCliCommand
-              ? integration.getLastCliCommand()
-              : undefined;
-
-            const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
-
-            context.dashboardProvider.updateCliOutput(i, {
-              prompt: fullPrompt,
-              response: lastResult.response,
-              elapsed: parseFloat(duration),
-              tokens,
-              isStreaming: false,
-              cliCommand,
-            });
-          }
-        }
-
-        // Update dashboard with completion
+        // Update dashboard with success (no end condition)
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
             state: STEP_STATUS.COMPLETED,
