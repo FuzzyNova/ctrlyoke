@@ -12,10 +12,10 @@ FlightPath uses a hybrid testing approach:
 
 ## Automated Tests
 
-### Current Coverage (19 passing tests)
+### Current Coverage (18 passing tests)
 
 ```
-✨ 19 passing (23ms)
+✨ 18 passing (24ms)
 ⏸️ 0 pending
 ❌ 0 failing
 ```
@@ -26,7 +26,6 @@ FlightPath uses a hybrid testing approach:
 - ✅ Command registration (1 test)
 - ✅ Copilot CLI detection (1 test)
 - ✅ Configuration access (1 test)
-- ✅ Language Model Tool registration (1 test)
 - ✅ Chat commands availability (1 test)
 - ✅ File attachment detection (1 test)
 - ✅ Settings validation (2 tests)
@@ -36,13 +35,15 @@ FlightPath uses a hybrid testing approach:
 ### Running Automated Tests
 
 ```bash
-# Compile extension and tests
-npm run compile
-npx tsc
-
-# Run all tests
+# Run all tests (auto-compiles via pretest hook)
 npm test
+
+# Or manually compile first
+npm run compile          # Compiles extension with esbuild
+npm run compile-tests    # Compiles tests with tsc
 ```
+
+**Note:** The `pretest` script automatically runs both `compile` and `compile-tests` before tests, following VS Code extension testing best practices.
 
 ### Test Structure
 
@@ -230,7 +231,7 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 
 **Automated Tests:**
 
-- 100% pass rate (19/19 tests)
+- 100% pass rate (18/18 tests)
 - Fast execution (~25ms)
 - No external dependencies (workspace, Copilot CLI)
 

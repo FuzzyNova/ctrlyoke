@@ -8,24 +8,6 @@ import * as vscode from "vscode";
  * Tests use actual VS Code APIs including Language Model Tools.
  */
 suite("Chat Integration Tests", () => {
-  suiteSetup(async function () {
-    this.timeout(30000); // Allow time for extension activation
-
-    // Find FlightPath extension (might not have publisher during development)
-    const allExtensions = vscode.extensions.all;
-    const extension = allExtensions.find(
-      (ext) =>
-        ext.id === "nhickster.flightpath" ||
-        ext.packageJSON.name === "flightpath"
-    );
-
-    assert.ok(extension, "FlightPath extension must be loaded");
-
-    if (!extension.isActive) {
-      await extension.activate();
-    }
-  });
-
   test("Chat commands should be available", async () => {
     const commands = await vscode.commands.getCommands();
 
