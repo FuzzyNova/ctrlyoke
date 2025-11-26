@@ -17,6 +17,8 @@ This means:
 
 This is a **perfect** solution for embedding automation directives without cluttering the UI!
 
+**Note**: The `<criticalInstruction>` tag is now only used for Dynamic Queue Extension instructions (allowing Copilot to extend workflows by modifying the prompt file). Completion detection is handled via log file monitoring, not tool callbacks.
+
 ## Why XML?
 
 Based on Anthropic's official recommendations and extensive testing, XML tags provide:
@@ -38,19 +40,31 @@ Every prompt sent to Copilot follows this structure:
 
 ```
 [User's prompt text with context variables like @workspace, #file:path, slash commands, etc.]
+```
+
+For prompts with Dynamic Queue Extension enabled:
+
+```
+[User's prompt text]
 
 <criticalInstruction>
-When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
+You are executing prompt X of Y in a FlightPath workflow.
+
+DYNAMIC QUEUE EXTENSION:
+If you need additional steps to complete this task, you can extend the workflow...
+[Instructions for extending the workflow by modifying the prompt file]
 </criticalInstruction>
 ```
 
 **Key Discovery**: Copilot Chat UI hides XML tags in the chat view but still processes them correctly!
 
 - User prompt is sent as plain text → Visible in chat history
-- Tool instruction wrapped in `<criticalInstruction>` XML tag → Hidden from chat UI but processed by Copilot
+- Dynamic queue instructions wrapped in `<criticalInstruction>` XML tag → Hidden from chat UI but processed by Copilot
 - This gives us clean chat history while maintaining automation functionality
 
-**Implementation**: See `CopilotIntegration.ts` → `buildCopilotChatPrompt()` method
+**Completion Detection**: FlightPath now uses **log file monitoring** instead of tool callbacks. The extension monitors `GitHub Copilot Chat.log` for `finish reason: [stop]` markers to detect when Copilot has finished responding.
+
+**Implementation**: See `CopilotChatIntegration.ts` → `waitForLogCompletion()` method
 
 ### Why User Prompts Aren't Wrapped in XML
 
@@ -184,14 +198,10 @@ XML works great with:
 
 ```
 /fix #file:src/extension.ts Fix the activation error
-
-<criticalInstruction>
-When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
-</criticalInstruction>
 ```
 
 **What user sees in chat**: `/fix #file:src/extension.ts Fix the activation error`
-**What Copilot processes**: The full prompt including the hidden `<criticalInstruction>` tag
+**How completion is detected**: Log file monitoring detects `finish reason: [stop]` marker
 
 ### Complex Prompt with User-Defined XML Structure
 
@@ -218,13 +228,9 @@ The current implementation catches errors but doesn't provide detailed user feed
 - Keep response detection mechanism unchanged
 - Follow SOLID principles
 </constraints>
-
-<criticalInstruction>
-When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
-</criticalInstruction>
 ```
 
-**What user sees in chat**: All the XML tags (task, context, requirements, constraints) are visible! Only the `<criticalInstruction>` is hidden.
+**What user sees in chat**: All the XML tags (task, context, requirements, constraints) are visible! Only FlightPath's internal `<criticalInstruction>` tags are hidden.
 
 **Why?** Copilot only hides XML tags it recognizes as automation directives. User-defined tags in the prompt text are displayed normally.
 
@@ -242,10 +248,6 @@ Please structure your response as:
   <weaknesses>...</weaknesses>
   <recommendations>...</recommendations>
 </analysis>
-
-<criticalInstruction>
-When you have FULLY FINISHED your response including ALL code, explanations, and file modifications, call the #flightpath_response_complete tool EXACTLY ONCE as your FINAL action. This is essential for workflow automation. Do NOT add any text after calling the tool.
-</criticalInstruction>
 ```
 
 ## When NOT to Use XML

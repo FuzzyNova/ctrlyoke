@@ -1,5 +1,7 @@
 # Copilot Response Handling - Research & Options
 
+> **⚠️ HISTORICAL DOCUMENT**: This document describes the research and exploration phase for response detection approaches. The final implementation uses **log-based completion detection** (see `CHAT_LOG_BASED_COMPLETION.md`). The `flightpath_response_complete` tool approach described here was implemented but later replaced with log monitoring for better reliability.
+
 ## Problem Statement
 
 FlightPath needs to detect when GitHub Copilot has finished responding to a prompt and extract the response text to evaluate end conditions. We're automating the Copilot Chat UI itself (not the Language Model API) to preserve access to all Copilot's tools, file editing capabilities, and chat participants.

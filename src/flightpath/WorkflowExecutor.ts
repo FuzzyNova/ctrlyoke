@@ -7,7 +7,6 @@ import {
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
 import { CopilotIntegration } from "./base/CopilotIntegration";
-import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
 import {
   EndConditionHandler,
   SendRetryPromptCallback,
@@ -64,15 +63,6 @@ export class WorkflowExecutor {
   ) {}
 
   /**
-   * Type guard to check if integration is CLI-based
-   */
-  private isCliIntegration(
-    integration: CopilotIntegration
-  ): integration is CopilotCommandLineIntegration {
-    return integration instanceof CopilotCommandLineIntegration;
-  }
-
-  /**
    * Execute the workflow with the given integration and context.
    * This is the main execution loop that processes prompts sequentially.
    *
@@ -102,8 +92,8 @@ export class WorkflowExecutor {
       console.log("FlightPath: Could not focus dashboard panel:", error);
     }
 
-    // Log workflow start to output channel
-    if (context.showCliOutput && this.isCliIntegration(integration)) {
+    // Log workflow start to output channel (only for CLI integration when output is enabled)
+    if (context.showCliOutput && integration.isCli()) {
       context.outputChannel.clear();
       context.outputChannel.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -195,10 +185,10 @@ export class WorkflowExecutor {
         ? this.waitForResponseComplete(prompt, integration)
         : Promise.resolve(""); // No completion detection needed
 
-      // Set up streaming listener for real-time output (CLI only)
+      // Set up streaming listener for real-time output (for integrations that support CLI output)
       let streamingDisposable: vscode.Disposable | undefined;
       let promptReadyDisposable: vscode.Disposable | undefined;
-      if (context.dashboardProvider && this.isCliIntegration(integration)) {
+      if (context.dashboardProvider) {
         // Initialize streaming output with basic prompt text
         context.dashboardProvider.updateCliStreamingChunk(i, ""); // Initialize buffer
         context.dashboardProvider.updateCliOutput(i, {
@@ -253,17 +243,11 @@ export class WorkflowExecutor {
         }
 
         // Check if this was a user cancellation in chat UI
-        if (!this.isCliIntegration(integration)) {
-          // For chat integration, check if it was user cancellation
-          const chatIntegration =
-            integration as import("./chat/CopilotChatIntegration").CopilotChatIntegration;
-          if (chatIntegration.wasLastFailureUserCancellation()) {
-            console.log(
-              "⏹️ User cancelled in Copilot Chat - stopping workflow"
-            );
-            this.promptQueue.stop();
-            break;
-          }
+        // wasLastFailureUserCancellation() returns false by default (CLI)
+        if (integration.wasLastFailureUserCancellation()) {
+          console.log("⏹️ User cancelled in Copilot Chat - stopping workflow");
+          this.promptQueue.stop();
+          break;
         }
 
         // Real error - show message and mark as failed
@@ -302,16 +286,16 @@ export class WorkflowExecutor {
         // Calculate duration
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // Update dashboard with CLI output (if using CLI integration)
-        if (context.dashboardProvider && this.isCliIntegration(integration)) {
-          // Get token statistics from CLI result
+        // Update dashboard with CLI output (if integration provides it)
+        if (context.dashboardProvider) {
+          // Get token statistics from CLI result (returns undefined for non-CLI)
           let tokens: { prompt: number; completion: number } | undefined;
           const lastResult = integration.getLastResult();
           if (lastResult?.statistics) {
             tokens = integration.parseTokenCounts(lastResult.statistics);
           }
 
-          // Get CLI command if debugging is enabled
+          // Get CLI command if debugging is enabled (returns undefined for non-CLI)
           const cliCommand = context.shouldShowCliCommand
             ? integration.getLastCliCommand()
             : undefined;
@@ -380,8 +364,8 @@ export class WorkflowExecutor {
         // Calculate duration
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // For CLI integration, we can still get the output
-        if (context.dashboardProvider && this.isCliIntegration(integration)) {
+        // For integrations that track results, we can still get the output
+        if (context.dashboardProvider) {
           const lastResult = integration.getLastResult();
           if (lastResult) {
             let tokens: { prompt: number; completion: number } | undefined;
@@ -482,8 +466,8 @@ export class WorkflowExecutor {
       context.dashboardProvider.updateExecutionCompleted();
     }
 
-    // Log workflow completion to output channel
-    if (context.showCliOutput && this.isCliIntegration(integration)) {
+    // Log workflow completion to output channel (only for CLI integration when output is enabled)
+    if (context.showCliOutput && integration.isCli()) {
       context.outputChannel.appendLine("");
       context.outputChannel.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -671,8 +655,8 @@ export class WorkflowExecutor {
 
       const retryDuration = ((Date.now() - retryStartTime) / 1000).toFixed(1);
 
-      // Update dashboard with CLI output for retry
-      if (context.dashboardProvider && this.isCliIntegration(integration)) {
+      // Update dashboard with CLI output for retry (if integration supports it)
+      if (context.dashboardProvider) {
         let tokens: { prompt: number; completion: number } | undefined;
         const lastResult = integration.getLastResult();
         if (lastResult?.statistics) {

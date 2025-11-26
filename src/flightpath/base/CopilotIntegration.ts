@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
+import { CopilotCliResult } from "../../types/CopilotTypes";
 
 /**
  * Copilot initialization status
@@ -447,5 +448,98 @@ ${content}
       isReady: this.isReady(),
       message,
     };
+  }
+
+  // ============================================================
+  // EXECUTION OUTPUT METHODS (CLI provides real values, Chat returns undefined)
+  // ============================================================
+
+  /**
+   * Get the last execution result (CLI-specific, returns undefined for Chat)
+   * Includes response text, statistics, and exit code
+   */
+  getLastResult(): CopilotCliResult | undefined {
+    return undefined;
+  }
+
+  /**
+   * Get the last CLI command executed (for debugging)
+   * Returns undefined for non-CLI integrations
+   */
+  getLastCliCommand(): string | undefined {
+    return undefined;
+  }
+
+  /**
+   * Get the full prompt text sent (includes all context and instructions)
+   * Returns undefined if not tracked
+   */
+  getLastFullPrompt(): string | undefined {
+    return undefined;
+  }
+
+  /**
+   * Parse token counts from statistics string
+   * Returns undefined for non-CLI integrations or unparseable stats
+   */
+  parseTokenCounts(
+    _statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    return undefined;
+  }
+
+  // ============================================================
+  // DIAGNOSTIC METHODS (Chat provides full implementations, CLI provides defaults)
+  // ============================================================
+
+  /**
+   * Test automation capability (diagnostic tool)
+   * CLI: Returns isReady() since CLI doesn't need automation testing
+   * Chat: Sends test message to verify automation works
+   */
+  async testAutomation(): Promise<boolean> {
+    return this.isReady();
+  }
+
+  /**
+   * Retry integration detection/initialization
+   * CLI: Re-runs initialize()
+   * Chat: Restarts polling for Copilot availability
+   */
+  async retryDetection(): Promise<void> {
+    await this.initialize();
+  }
+
+  /**
+   * Get capability information for this integration
+   */
+  getCapabilities(): {
+    hasDirectAutomation: boolean;
+    supportsZeroInteraction: boolean;
+    currentStrategy: string;
+  } {
+    const status = this.getStatus();
+    return {
+      hasDirectAutomation: this.isAvailable,
+      supportsZeroInteraction: this.isAvailable,
+      currentStrategy: status.strategy,
+    };
+  }
+
+  /**
+   * Check if the last sendPrompt failure was due to user cancellation
+   * Returns false by default (only Chat tracks this)
+   */
+  wasLastFailureUserCancellation(): boolean {
+    return false;
+  }
+
+  /**
+   * Check if this is a CLI-based integration
+   * Returns false by default. CLI integrations override to return true.
+   * Use this for CLI-specific features like output logging, token display, etc.
+   */
+  isCli(): boolean {
+    return false;
   }
 }

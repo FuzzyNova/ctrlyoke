@@ -50,12 +50,12 @@ Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production
    - ✓ Correct status transitions (initializing → waiting → ready/unavailable)
    - ✓ Background polling (5s intervals, 6 attempts max)
 
-2. **Language Model Tool Registration**
-   - ✓ Registers `flightpath_response_complete` tool after Copilot is ready
-   - ✓ Prevents duplicate registration
-   - ✓ Tool callback fires response complete event
-   - ✓ Duplicate call protection (toolCalledForCurrentPrompt flag)
-   - ✓ LLM loop prevention (cancels chat when duplicate detected)
+2. **Log-Based Completion Detection**
+   - ✓ Discovers Copilot Chat log file path during initialization
+   - ✓ Monitors log file for `finish reason: [stop]` markers
+   - ✓ Handles inactivity timeout (default: 5 minutes)
+   - ✓ Session-stable log path (discovered once, reused for session)
+   - ✓ Incremental log reading from last known position
 
 3. **Direct Automation (Zero-Interaction)**
    - ✓ Opens chat with configured window location (panel/tab/window)
@@ -74,18 +74,17 @@ Both `CopilotCommandLineIntegration` and `CopilotChatIntegration` are production
    - ✓ Falls back to XML attachments when native commands fail
    - ✓ Respects `chatUseNativeAttachments` setting
 
-5. **Response Completion Detection**
-   - ✓ Tool instruction appended to prompts (wrapped in XML)
-   - ✓ Streaming detection via clipboard polling
-   - ✓ Requires 3 consecutive stable checks (1.5s)
-   - ✓ Preserves user's clipboard content (cache and restore)
-   - ✓ Timeout handling (40 attempts = 20s max)
+5. **Response Completion Detection (Log-Based)**
+   - ✓ Discovers log file path during initialization
+   - ✓ Monitors log for `finish reason: [stop]` markers
+   - ✓ Incremental reading from last known position
+   - ✓ Inactivity timeout handling (default: 5 minutes)
+   - ✓ Handles user cancellation gracefully
 
-6. **Prompt Augmentation**
-   - ✓ Appends tool instruction in `<criticalInstruction>` XML tag
+6. **Dynamic Queue Extension**
+   - ✓ Appends queue extension instructions in `<criticalInstruction>` XML tag
    - ✓ XML hidden in chat UI but processed by Copilot
-   - ✓ Only includes tool instruction when needed (multi-prompt workflows)
-   - ✓ Single prompts can skip tool instruction
+   - ✓ Only includes instructions when `allowDynamicExtension` is true or on last prompt
 
 7. **Configuration Integration**
    - ✓ Reads `chatWindowLocation` setting (panel/newTab/newWindow)

@@ -546,7 +546,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
    * FlightPathManager blocks workflow execution until status is 'ready'.
    *
    * @param prompt The prompt item to send
-   * @param needsCompletionDetection If true, attach tool instructions for completion detection (default: determined by endCondition)
+   * @param needsCompletionDetection If true, wait for log-based completion detection (default: determined by endCondition)
    */
   async sendPrompt(
     prompt: PromptItem,
@@ -599,10 +599,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
 
-      // Build prompt with Copilot Chat syntax (NO tool instructions needed for log-based detection)
+      // Build prompt with Copilot Chat syntax
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
-        false, // Never include tool instructions
         workflowContext
       );
 
@@ -638,9 +637,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
             console.error("❌ Failed to detect completion via log monitoring");
             return false;
           }
-          // Get chat content and fire response complete event
-          const chatContent = await this.getChatContent();
-          this.responseCompleteEmitter.fire(chatContent);
+          // Get chat content (extract only response after our prompt) and fire event
+          const responseText = await this.getChatContent(chatPrompt);
+          this.responseCompleteEmitter.fire(responseText);
         } catch (error) {
           // Check if user cancelled in chat UI
           if (error instanceof Error && error.message === "USER_CANCELLED") {
@@ -666,11 +665,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
   }
 
   /**
-   * Copy chat content to clipboard and return it
+   * Copy chat content to clipboard and extract only the latest response
    * Preserves user's original clipboard content by caching and restoring it
-   * @returns The current chat conversation text
+   *
+   * @param lastPromptText The prompt text we just sent (used as delimiter to find new response)
+   * @returns The latest response text (everything after the last occurrence of our prompt)
    */
-  private async getChatContent(): Promise<string> {
+  private async getChatContent(lastPromptText?: string): Promise<string> {
     try {
       // Cache user's original clipboard content
       const originalClipboard = await vscode.env.clipboard.readText();
@@ -686,6 +687,30 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Restore user's original clipboard content
       await vscode.env.clipboard.writeText(originalClipboard);
+
+      // If we have the prompt text, extract only the response after it
+      if (lastPromptText) {
+        // Find the last occurrence of our prompt in the chat
+        // Use a significant portion of the prompt for reliable matching
+        const searchText = lastPromptText.trim().substring(0, 200);
+        const lastPromptIndex = chatContent.lastIndexOf(searchText);
+
+        if (lastPromptIndex !== -1) {
+          // Find where the prompt ends (search for end of that line/section)
+          // The response typically starts after a newline following the prompt
+          const afterPromptStart = lastPromptIndex + searchText.length;
+          const responseText = chatContent.substring(afterPromptStart).trim();
+
+          console.log(
+            `📋 Extracted response: ${responseText.length} chars (from ${chatContent.length} total)`
+          );
+          return responseText;
+        } else {
+          console.warn(
+            "⚠️ Could not find prompt in chat content, returning full content"
+          );
+        }
+      }
 
       return chatContent;
     } catch (error) {
@@ -1017,11 +1042,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
    * Prompts are stored in final-form (ready to send) in JSON files
    *
    * @param prompt The prompt item
-   * @param _includeToolInstruction Deprecated - no longer used (kept for API compatibility)
    */
   private async buildCopilotChatPrompt(
     prompt: PromptItem,
-    _includeToolInstruction: boolean = false,
     workflowContext?: {
       promptIndex: number;
       allPrompts: PromptItem[];

@@ -91,24 +91,6 @@ export class FlightPathManager {
   }
 
   /**
-   * Type guard to check if integration is chat-based
-   */
-  private isChatIntegration(
-    integration: CopilotIntegration
-  ): integration is CopilotChatIntegration {
-    return integration instanceof CopilotChatIntegration;
-  }
-
-  /**
-   * Type guard to check if integration is CLI-based
-   */
-  private isCliIntegration(
-    integration: CopilotIntegration
-  ): integration is CopilotCommandLineIntegration {
-    return integration instanceof CopilotCommandLineIntegration;
-  }
-
-  /**
    * Check if CLI command should be shown in dashboard output
    */
   private shouldShowCliCommand(): boolean {
@@ -301,14 +283,8 @@ export class FlightPathManager {
           // Try executing again after retry starts
           setTimeout(() => this.executeLoadedPromptFile(modeOverride), 2000);
         } else if (action === "View Requirements") {
-          // Test automation only available for chat integration
-          if (this.isChatIntegration(integration)) {
-            await integration.testAutomation();
-          } else {
-            vscode.window.showInformationMessage(
-              "FlightPath: Using CLI integration. Test automation is not needed."
-            );
-          }
+          // Test automation now available on all integrations via base class
+          await integration.testAutomation();
         }
         return;
       }
@@ -665,48 +641,28 @@ export class FlightPathManager {
   }
 
   /**
-   * Test Copilot automation (chat integration only)
+   * Test Copilot automation
+   * For CLI: Returns isReady() since automation testing is not needed
+   * For Chat: Sends test message to verify automation works
    */
   async testCopilotAutomation(): Promise<boolean> {
-    const defaultIntegration = this.getDefaultIntegration();
-    if (this.isChatIntegration(defaultIntegration)) {
-      return await defaultIntegration.testAutomation();
-    } else {
-      vscode.window.showInformationMessage(
-        "FlightPath: Test automation is only available for chat integration. CLI integration is ready when initialized."
-      );
-      return defaultIntegration.isReady();
-    }
+    return await this.getDefaultIntegration().testAutomation();
   }
 
   /**
-   * Retry Copilot detection (restart polling - chat integration only)
+   * Retry Copilot detection/initialization
+   * For CLI: Re-runs initialize()
+   * For Chat: Restarts polling for Copilot availability
    */
   async retryCopilotDetection(): Promise<void> {
-    const defaultIntegration = this.getDefaultIntegration();
-    if (this.isChatIntegration(defaultIntegration)) {
-      await defaultIntegration.retryDetection();
-    } else {
-      // For CLI integration, just re-initialize
-      await defaultIntegration.initialize();
-    }
+    await this.getDefaultIntegration().retryDetection();
   }
 
   /**
-   * Get Copilot integration capabilities (chat integration only)
+   * Get Copilot integration capabilities
    */
   getCopilotCapabilities() {
-    const defaultIntegration = this.getDefaultIntegration();
-    if (this.isChatIntegration(defaultIntegration)) {
-      return defaultIntegration.getCapabilities();
-    } else {
-      // Return basic capabilities for CLI integration
-      return {
-        hasDirectAutomation: true,
-        supportsZeroInteraction: true,
-        currentStrategy: CopilotIntegrationMode.CLI,
-      };
-    }
+    return this.getDefaultIntegration().getCapabilities();
   }
 
   /**

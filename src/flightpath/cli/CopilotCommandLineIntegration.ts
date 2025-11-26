@@ -651,6 +651,14 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
+   * Check if this is a CLI-based integration
+   * Returns true for CLI integration (supports output logging, token display, etc.)
+   */
+  isCli(): boolean {
+    return true;
+  }
+
+  /**
    * Extract session ID from log file name in log directory
    * Log files are named: session-{GUID}.log
    * Example: session-53b8fdf5-3aed-4dac-8953-822830d748e0.log

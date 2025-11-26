@@ -26,37 +26,6 @@ suite("Chat Integration Tests", () => {
     }
   });
 
-  test("Extension should register Language Model Tool", function () {
-    this.timeout(5000);
-
-    // Check if the tool is registered in package.json manifest
-    const allExtensions = vscode.extensions.all;
-    const extension = allExtensions.find(
-      (ext) =>
-        ext.id === "nhickster.flightpath" ||
-        ext.packageJSON.name === "flightpath"
-    );
-    assert.ok(extension, "Extension should be loaded");
-
-    const packageJSON = extension.packageJSON;
-    assert.ok(packageJSON.contributes);
-    assert.ok(packageJSON.contributes.languageModelTools);
-
-    const tools = packageJSON.contributes.languageModelTools;
-    const responseCompleteTool = tools.find(
-      (t: any) => t.name === "flightpath_response_complete"
-    );
-
-    assert.ok(
-      responseCompleteTool,
-      "Response complete tool should be declared"
-    );
-    assert.strictEqual(
-      responseCompleteTool.toolReferenceName,
-      "flightpath_response_complete"
-    );
-  });
-
   test("Chat commands should be available", async () => {
     const commands = await vscode.commands.getCommands();
 
