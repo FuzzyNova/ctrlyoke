@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PromptItem } from "../types/FlightPathTypes";
+import { STEP_STATUS } from "../types/DashboardConstants";
 import {
   EndConditionEvaluator,
   EvaluationResult,
@@ -177,7 +178,7 @@ export class EndConditionHandler {
           maxRetries
         );
         this.dashboardProvider.updateStepStatus(currentIndex, {
-          state: "running",
+          state: STEP_STATUS.RUNNING,
         });
       }
 

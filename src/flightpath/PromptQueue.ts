@@ -565,7 +565,7 @@ export class PromptQueue {
     // Add new results for the new prompts
     const newResults: PromptResult[] = newPrompts.map((prompt) => ({
       prompt: prompt.prompt,
-      status: "pending",
+      status: STEP_STATUS.PENDING,
       timestamp: new Date(),
     }));
     this.state.results.push(...newResults);

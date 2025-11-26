@@ -4,6 +4,7 @@ import {
   DynamicQueueConfig,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
+import { STEP_STATUS } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
 import { CopilotIntegration } from "./base/CopilotIntegration";
@@ -153,7 +154,9 @@ export class WorkflowExecutor {
 
       // Update dashboard step status to running
       if (context.dashboardProvider) {
-        context.dashboardProvider.updateStepStatus(i, { state: "running" });
+        context.dashboardProvider.updateStepStatus(i, {
+          state: STEP_STATUS.RUNNING,
+        });
 
         // Send status message: Starting prompt
         const promptPreview = prompt.prompt.split("\n")[0].substring(0, 60);
@@ -261,7 +264,7 @@ export class WorkflowExecutor {
         // Update dashboard with failure
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
-            state: "failed",
+            state: STEP_STATUS.FAILED,
             message: "Failed to send prompt",
           });
         }
@@ -334,7 +337,7 @@ export class WorkflowExecutor {
           // Update dashboard with success including end condition result
           if (context.dashboardProvider) {
             context.dashboardProvider.updateStepStatus(i, {
-              state: "completed",
+              state: STEP_STATUS.COMPLETED,
               duration: parseFloat(duration),
             });
             context.dashboardProvider.updateProgress(
@@ -347,7 +350,7 @@ export class WorkflowExecutor {
           // Update dashboard with success (no end condition)
           if (context.dashboardProvider) {
             context.dashboardProvider.updateStepStatus(i, {
-              state: "completed",
+              state: STEP_STATUS.COMPLETED,
               duration: parseFloat(duration),
             });
             context.dashboardProvider.updateProgress(
@@ -393,7 +396,7 @@ export class WorkflowExecutor {
         // Update dashboard with completion
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
-            state: "completed",
+            state: STEP_STATUS.COMPLETED,
             duration: parseFloat(duration),
           });
           context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
@@ -558,7 +561,7 @@ export class WorkflowExecutor {
       // Update dashboard with failure
       if (context.dashboardProvider) {
         context.dashboardProvider.updateStepStatus(currentIndex, {
-          state: "failed",
+          state: STEP_STATUS.FAILED,
           message: "End condition failed",
           duration,
           endConditionResult: evaluationResult,

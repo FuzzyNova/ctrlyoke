@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { PromptFileParser } from "../flightpath/PromptFileParser";
 import { PromptQueue } from "../flightpath/PromptQueue";
 import { ValidationUtils } from "../utils/ValidationUtils";
+import { EXECUTION_STATES } from "../types/DashboardConstants";
 
 suite("FlightPath Core Tests", () => {
   test("PromptFileParser should be instantiable", () => {
@@ -18,7 +19,7 @@ suite("FlightPath Core Tests", () => {
   test("PromptQueue should start with idle state", () => {
     const queue = new PromptQueue();
     const state = queue.getState();
-    assert.strictEqual(state.status, "idle");
+    assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     assert.strictEqual(state.currentIndex, 0);
     assert.strictEqual(state.prompts.length, 0);
     assert.strictEqual(state.results.length, 0);
@@ -71,7 +72,7 @@ suite("FlightPath Core Tests", () => {
 
     assert.strictEqual(state.prompts.length, 2);
     assert.strictEqual(state.results.length, 2);
-    assert.strictEqual(state.status, "idle");
+    assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
   });
 
   test("PromptQueue should track progress correctly", () => {

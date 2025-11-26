@@ -123,7 +123,7 @@
     state.prompts = prompts.map((p, i) => ({
       index: i,
       text: p.prompt || p,
-      status: "pending",
+      status: STEP_STATUS.PENDING,
       details: {},
     }));
     // Reset execution state and progress when new file is selected
@@ -148,7 +148,7 @@
 
     // Reset all prompts to pending state (for restart scenario)
     state.prompts.forEach((prompt) => {
-      prompt.status = "pending";
+      prompt.status = STEP_STATUS.PENDING;
       prompt.details = {};
     });
 
@@ -298,7 +298,7 @@
     const newPrompts = prompts.slice(existingCount).map((p, i) => ({
       index: existingCount + i,
       text: p.prompt || p,
-      status: "pending",
+      status: STEP_STATUS.PENDING,
       details: {},
     }));
 
