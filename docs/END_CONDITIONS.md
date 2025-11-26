@@ -24,9 +24,10 @@ End conditions are **optional validation checks** that determine whether a workf
 ```
 
 **How it works:**
+
 1. Copilot implements authentication → Tests run → "5 tests failed"
 2. ❌ Doesn't match "all_passed" → **Retry with test output**
-3. Copilot fixes issues → Tests run → "2 tests failed"  
+3. Copilot fixes issues → Tests run → "2 tests failed"
 4. ❌ Still doesn't match → **Retry again with updated output**
 5. Copilot fixes remaining issues → Tests run → "all_passed"
 6. ✅ **Success!** Move to next prompt
@@ -51,37 +52,37 @@ End conditions are **optional validation checks** that determine whether a workf
 
 ### Properties
 
-| Property | Type | Required | Default | Description |
-|----------|------|----------|---------|-------------|
-| `script` | string | Yes | - | Path to executable script (relative or absolute) |
-| `returns` | string | Yes | - | Expected output value from script |
-| `timeout` | number | No | 30000 | Max execution time in milliseconds |
-| `maxRetries` | number | No | 0 | Maximum retry attempts |
-| `retryPrompt` | string | No | - | Template for retry prompt |
+| Property      | Type   | Required | Default | Description                                      |
+| ------------- | ------ | -------- | ------- | ------------------------------------------------ |
+| `script`      | string | Yes      | -       | Path to executable script (relative or absolute) |
+| `returns`     | string | Yes      | -       | Expected output value from script                |
+| `timeout`     | number | No       | 30000   | Max execution time in milliseconds               |
+| `maxRetries`  | number | No       | 0       | Maximum retry attempts                           |
+| `retryPrompt` | string | No       | -       | Template for retry prompt                        |
 
 ### Retry Prompt Placeholders
 
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `{scriptOutput}` | stdout from the script | `"3 tests failed"` |
-| `{errorOutput}` | stderr from the script | `"SyntaxError: ..."` |
-| `{expectedValue}` | The expected value | `"true"` |
-| `{actualValue}` | The actual output | `"false"` |
-| `{retryCount}` | Current retry attempt (1-indexed) | `"2"` |
-| `{maxRetries}` | Maximum retries configured | `"3"` |
+| Placeholder       | Description                       | Example              |
+| ----------------- | --------------------------------- | -------------------- |
+| `{scriptOutput}`  | stdout from the script            | `"3 tests failed"`   |
+| `{errorOutput}`   | stderr from the script            | `"SyntaxError: ..."` |
+| `{expectedValue}` | The expected value                | `"true"`             |
+| `{actualValue}`   | The actual output                 | `"false"`            |
+| `{retryCount}`    | Current retry attempt (1-indexed) | `"2"`                |
+| `{maxRetries}`    | Maximum retries configured        | `"3"`                |
 
 ---
 
 ## Supported Script Types
 
-| Extension | Interpreter |
-|-----------|-------------|
-| `.py` | `python` |
-| `.js` | `node` |
-| `.ts` | `npx ts-node` |
-| `.sh` | `sh` (or `bash` on Windows) |
-| `.bat`, `.cmd` | `cmd /c` |
-| `.ps1` | `powershell -ExecutionPolicy Bypass` |
+| Extension      | Interpreter                          |
+| -------------- | ------------------------------------ |
+| `.py`          | `python`                             |
+| `.js`          | `node`                               |
+| `.ts`          | `npx ts-node`                        |
+| `.sh`          | `sh` (or `bash` on Windows)          |
+| `.bat`, `.cmd` | `cmd /c`                             |
+| `.ps1`         | `powershell -ExecutionPolicy Bypass` |
 
 ---
 
@@ -149,11 +150,13 @@ Wait for response
 ## Happy Path vs Error Path
 
 ### Happy Path (Retry-eligible)
+
 - ✅ Script executes successfully (exit code 0)
 - ❌ Output doesn't match expected value
 - → **Triggers automatic retry**
 
 ### Error Path (Not retry-eligible)
+
 - ❌ Script fails to execute (file not found, syntax error)
 - ❌ Script times out
 - ❌ Non-zero exit code
@@ -164,6 +167,7 @@ Wait for response
 ## Example Use Cases
 
 ### Test-Driven Development
+
 ```json
 {
   "prompt": "Implement the login function with tests",
@@ -177,6 +181,7 @@ Wait for response
 ```
 
 ### Compilation Validation
+
 ```json
 {
   "prompt": "Add TypeScript types to the module",
@@ -190,6 +195,7 @@ Wait for response
 ```
 
 ### Code Coverage Gate
+
 ```json
 {
   "prompt": "Increase test coverage to 80%",
@@ -237,10 +243,10 @@ This creates a template in your workspace that you can customize.
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Script not found | Path is incorrect | Use relative path from workspace root |
-| Timeout | Script takes too long | Increase `timeout` value |
-| No retries happening | `maxRetries` is 0 | Set `maxRetries` to desired value |
-| Wrong interpreter | Extension not recognized | Check supported script types |
-| Retry not triggering | Non-zero exit code | Ensure script exits with code 0 |
+| Issue                | Cause                    | Solution                              |
+| -------------------- | ------------------------ | ------------------------------------- |
+| Script not found     | Path is incorrect        | Use relative path from workspace root |
+| Timeout              | Script takes too long    | Increase `timeout` value              |
+| No retries happening | `maxRetries` is 0        | Set `maxRetries` to desired value     |
+| Wrong interpreter    | Extension not recognized | Check supported script types          |
+| Retry not triggering | Non-zero exit code       | Ensure script exits with code 0       |

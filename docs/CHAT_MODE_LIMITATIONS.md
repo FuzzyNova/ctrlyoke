@@ -106,6 +106,59 @@ npx @github/copilot-cli --agent ask "What is TypeScript?"
 - FlightPath will auto-switch to default agent mode
 - Prevents accidental failures from wrong mode selection
 
+---
+
+## Model Selection in Chat Mode
+
+### ✅ Model Selection Works
+
+Unlike agent selection, **model selection works programmatically** in Chat mode via `workbench.action.chat.changeModel`.
+
+**Command Format** (tested November 23, 2025):
+
+```typescript
+await vscode.commands.executeCommand("workbench.action.chat.changeModel", {
+  vendor: "copilot",
+  family: "claude-sonnet-4.5", // Model family name
+  id: "claude-sonnet-4.5", // Same as family (NOT "copilot/model-name")
+});
+```
+
+**Key Discovery**: The `id` field is just the model name, NOT `copilot/model-name`:
+
+- ✅ Correct: `id: "claude-sonnet-4.5"`
+- ❌ Wrong: `id: "copilot/claude-sonnet-4.5"`
+
+### Available Models
+
+Common models (availability varies by subscription):
+
+| Model ID            | Family            | Notes                  |
+| ------------------- | ----------------- | ---------------------- |
+| `claude-sonnet-4.5` | claude-sonnet-4.5 | Latest Claude Sonnet   |
+| `claude-sonnet-4`   | claude-sonnet-4   | Previous Claude Sonnet |
+| `claude-haiku-4.5`  | claude-haiku-4.5  | Fast Claude model      |
+| `gpt-5`             | gpt-5             | Latest GPT model       |
+| `gpt-5-mini`        | gpt-5-mini        | Lightweight GPT-5      |
+| `gpt-4o`            | gpt-4o            | GPT-4 Optimized        |
+| `gemini-2.5-pro`    | gemini-2.5-pro    | Google Gemini          |
+| `auto`              | gpt-5             | Auto-select            |
+
+Query models programmatically:
+
+```typescript
+const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+```
+
+### Agent vs Model Summary
+
+| Feature             | CLI Mode          | Chat Mode                |
+| ------------------- | ----------------- | ------------------------ |
+| **Agent Selection** | ✅ `--agent` flag | ❌ Manual only           |
+| **Model Selection** | ✅ `--model` flag | ✅ `changeModel` command |
+
+---
+
 ### Technical Details
 
 **Command used**: `workbench.action.chat.openagent` (only when setting enabled)
@@ -246,8 +299,6 @@ Use **CLI mode** for:
 
 ## Related Documentation
 
-- `AGENT_CHAT_COMMANDS.md` - Agent and model selection testing
-- `AGENT_SUPPORT_IMPLEMENTATION.md` - Agent support (CLI mode only)
-- `CHAT_LOG_BASED_COMPLETION.md` - Log-based completion detection
-- `COPILOT_CHAT_INTEGRATION.md` - Chat automation architecture
-- `COPILOT_CLI_IMPLEMENTATION.md` - CLI mode architecture
+- `AGENT_SUPPORT_IMPLEMENTATION.md` - Agent support implementation (CLI mode)
+- `ARCHITECTURE.md` - System architecture overview
+- `DYNAMIC_QUEUE_USAGE.md` - Dynamic queue user guide

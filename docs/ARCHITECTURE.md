@@ -347,4 +347,36 @@ Workflow Progress:
 
 ---
 
+## Chat Mode Completion Detection
+
+Chat mode uses **log file monitoring** to detect when Copilot finishes responding.
+
+### Log File Location
+
+```
+Windows: %APPDATA%\Code\logs\{timestamp}\window{N}\exthost\GitHub.copilot-chat\GitHub Copilot Chat.log
+macOS:   ~/Library/Application Support/Code/logs/{timestamp}/window{N}/exthost/GitHub.copilot-chat/GitHub Copilot Chat.log
+Linux:   ~/.config/Code/logs/{timestamp}/window{N}/exthost/GitHub.copilot-chat/GitHub Copilot Chat.log
+```
+
+### Detection Markers
+
+| Marker                  | Meaning                      |
+| ----------------------- | ---------------------------- |
+| `finish reason: [stop]` | Copilot response complete ✅ |
+| `\| cancelled \|`       | User cancelled in chat UI    |
+
+### Detection Algorithm
+
+1. Store log file size before sending prompt
+2. Monitor log for new content (poll interval)
+3. Check new lines for completion/cancellation markers
+4. Timeout after 5 minutes of inactivity
+
+**Key Assumption**: One chat workflow per VS Code window (log file doesn't include session IDs).
+
+See `CHAT_MODE_LIMITATIONS.md` for implications of this limitation.
+
+---
+
 _Architecture designed for: simplicity, reliability, and transparent user experience_

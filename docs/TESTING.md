@@ -3,6 +3,7 @@
 ## Overview
 
 FlightPath uses a hybrid testing approach:
+
 - **Automated Tests**: Integration tests via VS Code's test harness (CI/CD friendly)
 - **Manual Tests**: End-to-end testing requiring Copilot CLI/Chat (human verification)
 - **Dashboard Tests**: WebView UI component testing
@@ -20,6 +21,7 @@ FlightPath uses a hybrid testing approach:
 ```
 
 **Test Breakdown:**
+
 - ✅ Extension activation and lifecycle (2 tests)
 - ✅ Command registration (1 test)
 - ✅ Copilot CLI detection (1 test)
@@ -60,6 +62,7 @@ src/test/
 ### Testing Philosophy
 
 We use **real integration tests** instead of mocks because:
+
 - Tests run in real VS Code with extension loaded
 - Catches actual integration issues (no false positives)
 - Matches VS Code extension testing best practices
@@ -78,12 +81,14 @@ We use **real integration tests** instead of mocks because:
 ### Test Files Available
 
 **Prompts (`.flightpath/` directory):**
+
 - `simple.prompt.md` - Basic markdown prompt
 - `with-file.prompt.json` - Prompt with file attachment
 - `multi-step.flightpath.json` - Three-step workflow
 - `with-end-condition.prompt.json` - Prompt with end condition validation
 
 **End Condition Scripts (`.flightpath/scripts/`):**
+
 - `always_true.py` - Always succeeds
 - `always_false.py` - Always fails
 - `timeout_test.py` - Tests timeout (60s sleep)
@@ -93,10 +98,12 @@ We use **real integration tests** instead of mocks because:
 ### Running Tests
 
 **Right-click any prompt file:**
+
 - **Send to CLI** - Uses Copilot CLI (default)
 - **Send to Chat** - Uses Chat window automation
 
 **Command Palette (`Ctrl+Shift+P`):**
+
 - FlightPath: Take Off
 - FlightPath: Create Prompt File
 - FlightPath: Create End Condition Script
@@ -125,16 +132,19 @@ The FlightPath Dashboard is a WebView-based UI that displays real-time workflow 
 ### Opening the Dashboard
 
 **Method A: Command Palette**
+
 ```
 Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 ```
 
 **Method B: Status Bar**
+
 - Click the FlightPath status bar item (bottom-left)
 
 ### Testing Checklist
 
 #### Initial State
+
 - ✅ "No file selected" in header
 - ✅ "Select" and "Edit" buttons (Edit disabled)
 - ✅ "Idle" execution state badge
@@ -143,6 +153,7 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 - ✅ Empty output section with "No output yet"
 
 #### File Selection
+
 1. Click **Select** button
 2. Choose a `.flightpath.json` file
 3. Verify:
@@ -152,6 +163,7 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
    - ✅ Each prompt shows "⏸️" (pending) icon
 
 #### Workflow Execution
+
 1. Click **Run (▶)** button
 2. Verify:
    - ✅ Execution state changes to "Running"
@@ -161,16 +173,19 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
    - ✅ Progress counter updates (e.g., "Completed 1 of 3")
 
 #### Pause/Resume
+
 1. Click **Pause (⏸)** button
 2. Verify execution state changes to "Paused"
 3. Click **Resume (▶)** button
 4. Verify workflow continues
 
 #### Stop
+
 1. Click **Stop (⏹)** button
 2. Verify workflow stops completely
 
 #### Responsive Layout
+
 - **Wide (>= 800px):** Prompts and Output side-by-side
 - **Narrow (< 800px):** Prompts and Output stacked vertically
 
@@ -183,11 +198,11 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 
 ### Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| Dashboard not visible | Check View → FlightPath panel is open |
-| Template not loading | Run `npm run compile`, check `out/ui/webview/` |
-| No CLI output | Verify `flightpath.showCliOutput` is enabled |
+| Issue                 | Solution                                          |
+| --------------------- | ------------------------------------------------- |
+| Dashboard not visible | Check View → FlightPath panel is open             |
+| Template not loading  | Run `npm run compile`, check `out/ui/webview/`    |
+| No CLI output         | Verify `flightpath.showCliOutput` is enabled      |
 | Messages not updating | Check MESSAGE_TYPES constants match between files |
 
 ---
@@ -195,11 +210,13 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 ## Test Coverage Goals
 
 ### Currently Tested (Phase 1)
+
 - ✅ Extension infrastructure (activation, commands, config)
 - ✅ Core utilities (PromptQueue, ValidationUtils, PromptFileParser)
 - ✅ CLI and Chat integration detection
 
 ### Future Testing (Phase 2+)
+
 - [ ] CLI output parsing tests (mock child_process.spawn)
 - [ ] PromptFileParser with various JSON formats
 - [ ] EndConditionEvaluator script execution
@@ -212,11 +229,13 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 ## Success Criteria
 
 **Automated Tests:**
+
 - 100% pass rate (19/19 tests)
 - Fast execution (~25ms)
 - No external dependencies (workspace, Copilot CLI)
 
 **Manual Tests:**
+
 - Extension loads without errors
 - Workflows execute successfully
 - Dashboard updates in real-time
