@@ -7,7 +7,44 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private flightPathManager?: any; // Reference to manager (set after construction to avoid circular dependency)
 
+  // Webview path segments
+  private static readonly WEBVIEW_PATH_SEGMENTS = ["out", "ui", "webview"];
+
+  // Command mapping for message handling
+  private readonly messageCommandMap = new Map<string, string>([
+    [MESSAGE_TYPES.READY, "flightpath.ready"],
+    [MESSAGE_TYPES.SELECT_FILE, "flightpath.selectPromptFile"],
+    [MESSAGE_TYPES.EDIT_FILE, "flightpath.editCurrentPromptFile"],
+    [MESSAGE_TYPES.RUN, "flightpath.run"],
+    [MESSAGE_TYPES.PAUSE, "flightpath.pause"],
+    [MESSAGE_TYPES.RESUME, "flightpath.resume"],
+    [MESSAGE_TYPES.STOP, "flightpath.stop"],
+    [MESSAGE_TYPES.SHOW_OUTPUT, "flightpath.showOutputPanel"],
+  ]);
+
   constructor(private readonly context: vscode.ExtensionContext) {}
+
+  /**
+   * Get the webview directory path
+   */
+  private getWebviewPath(...segments: string[]): vscode.Uri {
+    return vscode.Uri.joinPath(
+      this.context.extensionUri,
+      ...FlightPathDashboardProvider.WEBVIEW_PATH_SEGMENTS,
+      ...segments
+    );
+  }
+
+  /**
+   * Get the webview directory filesystem path
+   */
+  private getWebviewFsPath(...segments: string[]): string {
+    return path.join(
+      this.context.extensionUri.fsPath,
+      ...FlightPathDashboardProvider.WEBVIEW_PATH_SEGMENTS,
+      ...segments
+    );
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -18,9 +55,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, "out", "ui", "webview"),
-      ],
+      localResourceRoots: [this.getWebviewPath()],
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
@@ -35,31 +70,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   private handleWebviewMessage(message: any): void {
-    switch (message.type) {
-      case MESSAGE_TYPES.READY:
+    const commandId = this.messageCommandMap.get(message.type);
+    if (commandId) {
+      if (message.type === MESSAGE_TYPES.READY) {
         this.sendInitialState();
-        break;
-      case MESSAGE_TYPES.SELECT_FILE:
-        vscode.commands.executeCommand("flightpath.selectPromptFile");
-        break;
-      case MESSAGE_TYPES.EDIT_FILE:
-        vscode.commands.executeCommand("flightpath.editCurrentPromptFile");
-        break;
-      case MESSAGE_TYPES.RUN:
-        vscode.commands.executeCommand("flightpath.run");
-        break;
-      case MESSAGE_TYPES.PAUSE:
-        vscode.commands.executeCommand("flightpath.pause");
-        break;
-      case MESSAGE_TYPES.RESUME:
-        vscode.commands.executeCommand("flightpath.resume");
-        break;
-      case MESSAGE_TYPES.STOP:
-        vscode.commands.executeCommand("flightpath.stop");
-        break;
-      case MESSAGE_TYPES.SHOW_OUTPUT:
-        vscode.commands.executeCommand("flightpath.showOutputPanel");
-        break;
+      } else {
+        vscode.commands.executeCommand(commandId);
+      }
     }
   }
 
@@ -234,41 +251,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private getHtmlContent(webview: vscode.Webview): string {
     const constantsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview",
-        "DashboardConstants.js"
-      )
+      this.getWebviewPath("DashboardConstants.js")
     );
-    const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview",
-        "dashboard.js"
-      )
-    );
-    const styleUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview",
-        "dashboard.css"
-      )
-    );
+    const scriptUri = webview.asWebviewUri(this.getWebviewPath("dashboard.js"));
+    const styleUri = webview.asWebviewUri(this.getWebviewPath("dashboard.css"));
 
     // Read HTML template and replace placeholders
-    const htmlPath = path.join(
-      this.context.extensionUri.fsPath,
-      "out",
-      "ui",
-      "webview",
-      "dashboard.html"
-    );
+    const htmlPath = this.getWebviewFsPath("dashboard.html");
 
     let html: string;
     try {
