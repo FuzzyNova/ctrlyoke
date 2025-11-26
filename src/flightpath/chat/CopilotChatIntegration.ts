@@ -405,22 +405,86 @@ export class CopilotChatIntegration extends CopilotIntegration {
   /**
    * Find the Copilot Chat log file for this VS Code session
    * Called once during initialization - result is stable for entire session
+   *
+   * Uses a two-tier strategy:
+   * 1. PRIMARY: Derive from this.context.logUri (session-specific, handles multiple windows)
+   *    Path structure: .../logs/{timestamp}/{windowN}/exthost/{extension}/
+   *    We navigate to the same window's GitHub.copilot-chat directory
+   *
+   * 2. FALLBACK: Search for most recently modified log file (legacy behavior)
+   *    This handles cases where the path structure changes or logUri is unavailable
+   *
    * @returns Path to active log file or undefined if not found
    */
   private async findCopilotLogFile(): Promise<string | undefined> {
-    const logBaseDir = this.getLogBaseDirectory();
     const targetFilename = "GitHub Copilot Chat.log";
 
-    // Search recursively for all matching log files
+    // PRIMARY STRATEGY: Derive path from this extension's logUri
+    // This ensures we get the log file for THIS VS Code window, not another
+    const derivedPath = await this.deriveCopilotLogFromExtensionLogUri();
+    if (derivedPath) {
+      console.log(`📄 Found Copilot log via logUri derivation: ${derivedPath}`);
+      return derivedPath;
+    }
+
+    // FALLBACK STRATEGY: Search recursively for most recently modified log
+    // This is less reliable with multiple windows but works as a fallback
+    console.log(
+      "⚠️ Could not derive log path from logUri, falling back to recursive search"
+    );
+    const logBaseDir = this.getLogBaseDirectory();
     const allLogs = await this.findFilesRecursive(logBaseDir, targetFilename);
 
     if (allLogs.length === 0) {
       return undefined;
     }
 
-    // Return most recently modified (active log for this session)
+    // Return most recently modified (best guess for active session)
     allLogs.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
     return allLogs[0].path;
+  }
+
+  /**
+   * Derive Copilot Chat log path from this extension's logUri
+   *
+   * Path structure: .../logs/{timestamp}/{windowN}/exthost/{extension}/
+   * Example: C:\Users\...\Code\logs\20251124T110331\window26\exthost\FlightPath\
+   *
+   * We navigate up to exthost/, then into GitHub.copilot-chat/
+   *
+   * @returns Path to Copilot log file if it exists, undefined otherwise
+   */
+  private async deriveCopilotLogFromExtensionLogUri(): Promise<
+    string | undefined
+  > {
+    try {
+      // Get this extension's log directory (session and window specific)
+      const extensionLogUri = this.context.logUri;
+      const extensionLogPath = extensionLogUri.fsPath;
+
+      // Navigate from .../exthost/FlightPath/ to .../exthost/GitHub.copilot-chat/
+      const exthostDir = path.dirname(extensionLogPath);
+      const copilotLogDir = path.join(exthostDir, "GitHub.copilot-chat");
+      const copilotLogPath = path.join(
+        copilotLogDir,
+        "GitHub Copilot Chat.log"
+      );
+
+      // Verify the file exists
+      try {
+        await fs.promises.access(copilotLogPath, fs.constants.R_OK);
+        return copilotLogPath;
+      } catch {
+        // File doesn't exist yet - Copilot Chat may not have been used in this session
+        console.log(
+          `📄 Copilot log not found at derived path: ${copilotLogPath}`
+        );
+        return undefined;
+      }
+    } catch (error) {
+      console.error("Error deriving Copilot log path from logUri:", error);
+      return undefined;
+    }
   }
 
   /**

@@ -23,8 +23,20 @@ Validated in `extension.ts:testCopilotAutomation()`:
 4. Looks for `finish reason: [stop]` marker indicating response completion
 5. Incremental reading from last known position for efficiency
 
+**Log file discovery (two-tier strategy):**
+
+1. PRIMARY: Derive from `context.logUri` (handles multiple VS Code windows)
+   - Path structure: `.../logs/{timestamp}/{windowN}/exthost/{extension}/`
+   - Navigates from our extension's log dir to `GitHub.copilot-chat/` in same window
+   - Guarantees correct log file even with multiple VS Code instances
+
+2. FALLBACK: Search for most recently modified log file (legacy behavior)
+   - Used when derived path doesn't exist (e.g., Copilot Chat not yet used)
+   - Less reliable with multiple windows but works as fallback
+
 **Key benefits:**
 
+- Window-specific: Uses `context.logUri` to find correct log for THIS window
 - Deterministic: File-based, no UI timing dependencies
 - No context pollution: No tool instructions needed in prompts
 - Session-stable: Log path discovered once, reused for entire session
