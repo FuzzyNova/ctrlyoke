@@ -136,6 +136,32 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
 }
 ```
 
+### File Path Reference Format
+
+The `prompt` field can also be a path to an external file containing the prompt:
+
+```json
+{
+  "prompt": "./prompts/analyze-code.prompt.md",
+  "model": "claude-sonnet-4.5"
+}
+```
+
+**File path resolution order:**
+
+1. Absolute paths (used as-is)
+2. Relative to the prompt file's directory
+3. Relative to workspace root
+4. Relative to `.flightpath` directory
+
+**Supported file extensions:** `.prompt.md`, `.md`, `.txt`
+
+This is useful for:
+
+- Reusing prompts across multiple workflows
+- Keeping complex prompts in separate, well-organized files
+- Editing prompts with full editor support (syntax highlighting, etc.)
+
 ### Multiple Prompts Format
 
 ```json

@@ -82,6 +82,34 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 
 ---
 
+### NEW: File Path Reference Testing
+
+**Files:**
+
+- `file-reference-test.flightpath.json` - Single prompt from external file
+- `multi-step-file-reference.flightpath.json` - Multi-step with file reference
+- `sample-prompts/reusable-code-review.prompt.md` - Reusable prompt content
+
+**Test:**
+
+- Right-click `file-reference-test.flightpath.json` → "Send to CLI"
+- Verifies: `prompt` field can be a file path instead of literal text
+- Tests: Path resolution (relative to prompt file, workspace root, .flightpath)
+
+**Expected:**
+
+- Parser loads `./sample-prompts/reusable-code-review.prompt.md`
+- Content from that file becomes the prompt text
+- Copilot responds to the code review prompt
+
+**Multi-Step Test:**
+
+- Right-click `multi-step-file-reference.flightpath.json` → "Send to CLI"
+- Verifies: File references work in multi-prompt workflows
+- Step 1 uses external prompt file, Step 2 uses inline prompt
+
+---
+
 ### 4. End Condition Validation (Phase 2 Testing)
 
 **File:** `.flightpath/with-end-condition.prompt.json`

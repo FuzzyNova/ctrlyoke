@@ -1,1 +1,1 @@
-Explain the purpose of this test workspace and how FlightPath can automate GitHub Copilot interactions.
+what does this script do #file:.flightpath/scripts/check_has_add_function.py?

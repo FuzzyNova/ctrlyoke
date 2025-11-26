@@ -1,0 +1,10 @@
+{
+  "prompts": [
+    {
+      "prompt": "./sample-prompts/reusable-code-review.prompt.md"
+    },
+    {
+      "prompt": "./.flightpath/simple.prompt.md"
+    }
+  ]
+}

@@ -34,7 +34,7 @@
         },
         "prompt": {
           "type": "string",
-          "description": "The final-form prompt text to send to GitHub Copilot. Include all context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text."
+          "description": "The prompt to send to GitHub Copilot. Can be either: (1) Final-form prompt text with context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix, /explain, etc.) directly in the text, OR (2) A file path to a .prompt.md, .md, or .txt file containing the prompt. File paths are resolved relative to the prompt file's directory, then workspace root, then .flightpath directory. Absolute paths are also supported."
         },
         "model": {
           "type": "string",

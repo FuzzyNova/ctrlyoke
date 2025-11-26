@@ -4,6 +4,17 @@ import * as path from "path";
 import Ajv from "ajv";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 
+/**
+ * Extensions that indicate a prompt value might be a file path
+ * We try to resolve these as files first, falling back to literal text if not found
+ */
+const PROMPT_FILE_EXTENSIONS = [
+  ".prompt.md",
+  ".md",
+  ".txt",
+  ".prompt",
+] as const;
+
 export class PromptFileParser {
   private ajv = new Ajv();
   private promptSchema: any;
@@ -57,7 +68,7 @@ export class PromptFileParser {
         throw new Error(`Validation failed: ${errors}`);
       }
 
-      return this.normalizePromptFile(parsed);
+      return await this.normalizePromptFile(parsed, filePath);
     } catch (error) {
       console.error(`FlightPath: Failed to parse file ${filePath}:`, error);
       vscode.window.showErrorMessage(
@@ -105,15 +116,209 @@ export class PromptFileParser {
   }
 
   /**
-   * Normalize prompt file to consistent format
+   * Check if a prompt value looks like it could be a file path
+   * This is a heuristic check - we verify file existence separately
+   *
+   * IMPORTANT: This should ONLY match pure file paths, not prompts that happen to
+   * contain file references like #file:path/to/file.ts or "help me with ./file.md"
    */
-  private normalizePromptFile(parsed: any): PromptFile {
+  private looksLikeFilePath(promptValue: string): boolean {
+    const trimmed = promptValue.trim();
+
+    // Skip if it starts with #file: - that's a file attachment, not a prompt file reference
+    if (trimmed.startsWith("#file:")) {
+      return false;
+    }
+
+    // A prompt file reference must be ONLY a path - no other text before or after
+    // Check if it starts with a valid path indicator
+    const startsWithRelative =
+      trimmed.startsWith("./") || trimmed.startsWith("../");
+    const startsWithDriveLetter = /^[a-zA-Z]:[/\\]/.test(trimmed);
+    const startsWithUnixAbsolute = trimmed.startsWith("/");
+
+    const isPathLike =
+      startsWithRelative || startsWithDriveLetter || startsWithUnixAbsolute;
+
+    // If it doesn't start like a path, it's not a file reference
+    if (!isPathLike) {
+      return false;
+    }
+
+    // Check for known file extensions at the END of the string
+    const hasKnownExtension = PROMPT_FILE_EXTENSIONS.some((ext) =>
+      trimmed.toLowerCase().endsWith(ext)
+    );
+    if (hasKnownExtension) {
+      return true;
+    }
+
+    // For other extensions, also require ending with an extension pattern
+    const endsWithExtension = /\.\w+$/.test(trimmed);
+
+    return endsWithExtension;
+  }
+
+  /**
+   * Resolve a prompt value that might be a file path
+   * Returns the file content if path resolves to a file, otherwise returns original value
+   *
+   * @param promptValue The prompt string (might be literal text or file path)
+   * @param promptFilePath Path to the prompt file containing this value (for relative resolution)
+   * @returns The resolved prompt content
+   */
+  private async resolvePromptContent(
+    promptValue: string,
+    promptFilePath: string
+  ): Promise<string> {
+    // Quick check - if it doesn't look like a file path, return as-is
+    if (!this.looksLikeFilePath(promptValue)) {
+      return promptValue;
+    }
+
+    const trimmedPath = promptValue.trim();
+
+    // Try to resolve the file path
+    const resolvedPath = await this.resolvePromptFilePath(
+      trimmedPath,
+      promptFilePath
+    );
+
+    if (!resolvedPath) {
+      // File not found - warn user if it looks like an intentional prompt file reference
+      const looksIntentional = PROMPT_FILE_EXTENSIONS.some((ext) =>
+        trimmedPath.toLowerCase().endsWith(ext)
+      );
+
+      if (looksIntentional) {
+        console.warn(
+          `FlightPath: Prompt file reference not found, using as literal text: "${trimmedPath}"`
+        );
+        vscode.window.showWarningMessage(
+          `FlightPath: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
+        );
+      }
+
+      return promptValue;
+    }
+
+    // Read the file content
+    try {
+      const content = await fs.readFile(resolvedPath, "utf8");
+      const trimmedContent = content.trim();
+
+      if (!trimmedContent) {
+        console.warn(
+          `FlightPath: Referenced prompt file is empty: ${trimmedPath}`
+        );
+        return promptValue; // Return original if file is empty
+      }
+
+      console.log(
+        `FlightPath: Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`
+      );
+      return trimmedContent;
+    } catch (error) {
+      console.error(
+        `FlightPath: Failed to read prompt file ${resolvedPath}:`,
+        error
+      );
+      return promptValue; // Return original on read error
+    }
+  }
+
+  /**
+   * Resolve a file path relative to the prompt file or workspace
+   * Resolution order:
+   * 1. Absolute paths
+   * 2. Relative to prompt file's directory
+   * 3. Relative to workspace root
+   * 4. Relative to .flightpath directory
+   *
+   * @param filePath The file path to resolve
+   * @param promptFilePath Path to the prompt file (for relative resolution)
+   * @returns Resolved absolute path if file exists, null otherwise
+   */
+  private async resolvePromptFilePath(
+    filePath: string,
+    promptFilePath: string
+  ): Promise<string | null> {
+    // Try absolute path first
+    if (path.isAbsolute(filePath)) {
+      if (await this.fileExists(filePath)) {
+        return filePath;
+      }
+      return null;
+    }
+
+    // Try relative to prompt file's directory
+    const promptDir = path.dirname(promptFilePath);
+    const relativeToPrompt = path.resolve(promptDir, filePath);
+    if (await this.fileExists(relativeToPrompt)) {
+      return relativeToPrompt;
+    }
+
+    // Try relative to workspace root
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder) {
+      const relativeToWorkspace = path.resolve(
+        workspaceFolder.uri.fsPath,
+        filePath
+      );
+      if (await this.fileExists(relativeToWorkspace)) {
+        return relativeToWorkspace;
+      }
+
+      // Try in .flightpath directory
+      const flightpathDir = vscode.workspace
+        .getConfiguration("flightpath")
+        .get<string>("promptsDirectory", ".flightpath");
+      const relativeToFlightpath = path.resolve(
+        workspaceFolder.uri.fsPath,
+        flightpathDir,
+        filePath
+      );
+      if (await this.fileExists(relativeToFlightpath)) {
+        return relativeToFlightpath;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if a file exists
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Normalize prompt file to consistent format
+   * Resolves any prompt values that are file paths to their content
+   *
+   * @param parsed The parsed JSON content
+   * @param promptFilePath Path to the prompt file (for relative path resolution)
+   */
+  private async normalizePromptFile(
+    parsed: any,
+    promptFilePath: string
+  ): Promise<PromptFile> {
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
+      const resolvedPrompt = await this.resolvePromptContent(
+        parsed.prompt,
+        promptFilePath
+      );
       return {
         prompts: [
           {
-            prompt: parsed.prompt,
+            prompt: resolvedPrompt,
             model: parsed.model,
             agent: parsed.agent,
             newChatSession: parsed.newChatSession,
@@ -125,16 +330,25 @@ export class PromptFileParser {
 
     // Handle multiple prompts format
     if (parsed.prompts && Array.isArray(parsed.prompts)) {
+      const resolvedPrompts = await Promise.all(
+        parsed.prompts.map(async (item: any) => {
+          const resolvedPrompt = await this.resolvePromptContent(
+            item.prompt,
+            promptFilePath
+          );
+          return {
+            prompt: resolvedPrompt,
+            model: item.model,
+            agent: item.agent,
+            // Default newChatSession to true for multi-prompt workflows (unless explicitly set to false)
+            newChatSession:
+              item.newChatSession !== undefined ? item.newChatSession : true,
+            endCondition: item.endCondition,
+          };
+        })
+      );
       return {
-        prompts: parsed.prompts.map((item: any, index: number) => ({
-          prompt: item.prompt,
-          model: item.model,
-          agent: item.agent,
-          // Default newChatSession to true for multi-prompt workflows (unless explicitly set to false)
-          newChatSession:
-            item.newChatSession !== undefined ? item.newChatSession : true,
-          endCondition: item.endCondition,
-        })),
+        prompts: resolvedPrompts,
       };
     }
 
