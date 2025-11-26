@@ -15,6 +15,18 @@ Subclasses implement: `initialize()`, `sendPrompt()`, `getStatus()`, `isIntegrat
 - `responseCompleteEmitter`: Response text (CLI) or empty string (Chat)
 </events>
 
+<failureTracking>
+When `sendPrompt()` returns false, integrations MUST set `this.lastFailureReason` with a specific error message before returning.
+
+Examples:
+
+- "Copilot stopped responding (inactivity timeout after 300s)"
+- "Copilot CLI error: ..."
+- "Failed to send message to Copilot Chat"
+
+`getLastFailureReason()` returns the reason and resets it to null. Falls back to "Failed to send prompt" if no specific reason was set.
+</failureTracking>
+
 <fileAttachments>
 Parses `#file:path` and `#file:path:line-line`, builds Copilot XML format:
 

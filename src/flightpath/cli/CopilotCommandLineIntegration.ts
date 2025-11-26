@@ -289,6 +289,7 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
         return true;
       } else {
         console.error("❌ Copilot CLI failed:", result.error);
+        this.lastFailureReason = `Copilot CLI error: ${result.error}`;
         vscode.window.showErrorMessage(
           `FlightPath: Copilot CLI error: ${result.error}`
         );
@@ -296,6 +297,10 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       }
     } catch (error) {
       console.error("❌ CLI execution error:", error);
+      this.lastFailureReason =
+        error instanceof Error
+          ? error.message
+          : "Failed to execute Copilot CLI";
       vscode.window.showErrorMessage(
         `FlightPath: Failed to execute Copilot CLI: ${error}`
       );

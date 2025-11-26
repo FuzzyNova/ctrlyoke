@@ -533,15 +533,18 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Check for cancellation
       if (this.isCancelling) {
         console.log("⚠️ Log monitoring cancelled");
+        this.lastFailureReason = "Workflow was cancelled";
         return false;
       }
 
       // Check for inactivity timeout
       const timeSinceLastActivity = Date.now() - lastActivityTime;
       if (timeSinceLastActivity > inactivityTimeoutMs) {
+        const timeoutSeconds = Math.round(timeSinceLastActivity / 1000);
         console.warn(
-          `⚠️ Inactivity timeout: Log unchanged for ${Math.round(timeSinceLastActivity / 1000)}s`
+          `⚠️ Inactivity timeout: Log unchanged for ${timeoutSeconds}s`
         );
+        this.lastFailureReason = `Copilot stopped responding (inactivity timeout after ${timeoutSeconds}s)`;
         return false;
       }
 
@@ -721,6 +724,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
       return true;
     } catch (error) {
       console.error("❌ Failed to send prompt:", error);
+      // Set failure reason if not already set by a more specific handler
+      if (!this.lastFailureReason) {
+        this.lastFailureReason =
+          error instanceof Error
+            ? error.message
+            : "Failed to send prompt to Copilot";
+      }
       vscode.window.showErrorMessage(
         `FlightPath: Failed to send prompt: ${error}`
       );
@@ -939,6 +949,12 @@ export class CopilotChatIntegration extends CopilotIntegration {
       return true;
     } catch (error) {
       console.error("❌ Direct automation failed:", error);
+
+      // Set specific failure reason
+      this.lastFailureReason =
+        error instanceof Error
+          ? error.message
+          : "Failed to send message to Copilot Chat";
 
       vscode.window
         .showErrorMessage(

@@ -25,6 +25,7 @@ export abstract class CopilotIntegration {
   protected workflowStep: number = 0;
   protected totalSteps: number = 0;
   protected isCancelling: boolean = false;
+  protected lastFailureReason: string | null = null;
 
   // Event emitters for status and response completion
   protected statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
@@ -532,6 +533,17 @@ ${content}
    */
   wasLastFailureUserCancellation(): boolean {
     return false;
+  }
+
+  /**
+   * Get the reason for the last sendPrompt failure
+   * Returns the failure reason and resets it to null
+   * Returns "Failed to send prompt" as default if no specific reason was set
+   */
+  getLastFailureReason(): string {
+    const reason = this.lastFailureReason || "Failed to send prompt";
+    this.lastFailureReason = null; // Reset after reading
+    return reason;
   }
 
   /**

@@ -253,19 +253,20 @@ export class WorkflowExecutor {
           break;
         }
 
-        // Real error - show message and mark as failed
+        // Real error - get the specific failure reason and show message
+        const failureReason = integration.getLastFailureReason();
         vscode.window.showErrorMessage(
-          `FlightPath: Failed to execute prompt ${i + 1}`
+          `FlightPath: Failed to execute prompt ${i + 1}: ${failureReason}`
         );
 
         // Mark queue as errored
         this.promptQueue.markErrored();
 
-        // Update dashboard with failure
+        // Update dashboard with the specific failure reason
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
             state: STEP_STATUS.FAILED,
-            message: "Failed to send prompt",
+            message: failureReason,
           });
         }
         break;
