@@ -243,8 +243,12 @@ No silent fallbacks - you always know the system state!
 
 ### ✅ Implemented
 
+- **CLI Mode** (Default): Deterministic Copilot automation via CLI with model selection
+- **Chat Mode**: UI-based automation with Language Model Tool API response detection
+- **Dynamic Queue**: Copilot can extend workflows autonomously with safety guardrails
+- **End Conditions**: Script-based validation with automatic retry and template placeholders
+- **WebView Dashboard**: Real-time workflow visualization with live CLI output streaming
 - Zero-interaction Copilot Chat automation
-- Language Model Tool API for response detection
 - Clipboard-based submit verification with retry logic
 - Streaming completion detection (monitors chat stability)
 - Background polling for Copilot availability detection
@@ -253,15 +257,12 @@ No silent fallbacks - you always know the system state!
 - Configurable chat window location (panel/tab/window)
 - JSON schema validation with IntelliSense
 - Command registration and lifecycle management
-- File system utilities and prompt file discovery
+- 215+ automated tests
 
-### � Planned Features
+### 🔮 Planned Features
 
-- End condition script execution and validation
-- WebView UI panel for visual workflow management
-- Advanced context awareness features
+- Custom tool permissions for CLI mode
 - Workflow templates and snippets
-- Comprehensive test coverage
 - Integration with VS Code notebooks
 
 ---

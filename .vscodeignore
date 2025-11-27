@@ -3,6 +3,7 @@
 out/**
 !out/extension.js
 !out/templates/**
+!out/schemas/**
 node_modules/**
 src/**
 .gitignore
@@ -14,3 +15,12 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+
+# Development files
+docs/**
+manual-test/**
+logs/**
+prompts/**
+.github/**
+DEVELOPMENT.md
+images/README.md

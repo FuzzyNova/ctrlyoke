@@ -3,6 +3,17 @@
   "displayName": "FlightPath",
   "description": "Automate GitHub Copilot with structured prompt workflows",
   "version": "0.1.0",
+  "publisher": "nhickster",
+  "license": "MIT",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nhickster/flightpath"
+  },
+  "homepage": "https://github.com/nhickster/flightpath#readme",
+  "bugs": {
+    "url": "https://github.com/nhickster/flightpath/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
