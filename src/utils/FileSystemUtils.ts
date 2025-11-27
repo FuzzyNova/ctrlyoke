@@ -280,18 +280,6 @@ export class FileSystemUtils {
   }
 
   /**
-   * Resolve path relative to workspace
-   */
-  resolveWorkspacePath(relativePath: string): string | null {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-      return null;
-    }
-
-    return path.resolve(workspaceFolder.uri.fsPath, relativePath);
-  }
-
-  /**
    * Get directory contents with metadata
    */
   async getDirectoryContents(dirPath: string): Promise<{
