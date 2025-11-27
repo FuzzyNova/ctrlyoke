@@ -1,4 +1,4 @@
-FlightPath: Available Chat Commands (356 found)
+FlightPath: Available Chat Commands (353 found)
 
 chat.action.focus
 chat.configureToolSets
@@ -45,16 +45,18 @@ copilot-agents-placeholder.resetViewLocation
 copilot-chat.focus
 copilot-chat.open
 copilot-chat.resetViewLocation
+flightpath.test.chatAgentSelection
+flightpath.test.chatModelSelection
 flightpath.test.copilotAutomation
-github-copilot-completions-debugger-view.focus
-github-copilot-completions-debugger-view.open
-github-copilot-completions-debugger-view.resetViewLocation
 github.copilot.acceptCursorPanelSolution
 github.copilot.buildLocalWorkspaceIndex
 github.copilot.buildRemoteWorkspaceIndex
 github.copilot.chat.attachFile
 github.copilot.chat.attachSelection
 github.copilot.chat.clearTemporalContext
+github.copilot.chat.completions.disable
+github.copilot.chat.completions.enable
+github.copilot.chat.completions.toggle
 github.copilot.chat.debug.exportAllPromptLogsAsJson
 github.copilot.chat.debug.exportLogItem
 github.copilot.chat.debug.exportPromptArchive
@@ -82,6 +84,8 @@ github.copilot.chat.mcp.setup.flow
 github.copilot.chat.mcp.setup.validatePackage
 github.copilot.chat.notebook.disableFollowCellExecution
 github.copilot.chat.notebook.enableFollowCellExecution
+github.copilot.chat.openModelPicker
+github.copilot.chat.openSuggestionsPanel
 github.copilot.chat.openUserPreferences
 github.copilot.chat.replay
 github.copilot.chat.replay.disableWorkspaceEditTracing
@@ -107,7 +111,9 @@ github.copilot.chat.review.stagedChanges
 github.copilot.chat.review.stagedFileChange
 github.copilot.chat.review.unstagedChanges
 github.copilot.chat.review.unstagedFileChange
+github.copilot.chat.sendCompletionFeedback
 github.copilot.chat.startCopilotDebugCommand
+github.copilot.chat.toggleStatusMenu
 github.copilot.chat.tools.memory.openFolder
 github.copilot.chat.triggerPermissiveSignIn
 github.copilot.claude.sessions.refresh
@@ -118,10 +124,8 @@ github.copilot.cli.sessions.resumeInTerminal
 github.copilot.cloud.sessions.openInBrowser
 github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest
 github.copilot.cloud.sessions.refresh
-github.copilot.collectDiagnostics
 github.copilot.completions.disable
 github.copilot.completions.enable
-github.copilot.completions.quotaExceeded
 github.copilot.completions.toggle
 github.copilot.copilotcli.sessions.refresh
 github.copilot.createFile
@@ -160,9 +164,6 @@ github.copilot.report
 github.copilot.search.feedback
 github.copilot.search.markHelpful
 github.copilot.search.markUnhelpful
-github.copilot.sendCompletionFeedback
-github.copilot.sendFeedback
-github.copilot.signIn
 github.copilot.startDebugging
 github.copilot.survey.signalUsage
 github.copilot.terminal.explainTerminalLastCommand
@@ -177,7 +178,6 @@ notebook.cell.chat.fixError
 notebook.cell.chat.start
 notebook.cell.chat.startAtTop
 notebook.chat.selectAndInsertKernelVariable
-python.copilotSetupTests
 toggle.chat.commandCenter.enabled
 vscode.copilot.chat.showRequestHtmlItem
 workbench.action.chat.acceptTool
@@ -309,8 +309,7 @@ workbench.action.chatEditor.newChat
 workbench.action.chatSessions.toggleDescriptionDisplay
 workbench.action.chatSessions.toggleNewSingleView
 workbench.action.output.show.GitHub.copilot-chat.GitHub Copilot Chat
-workbench.action.output.show.GitHub.copilot.GitHub Copilot
-workbench.action.output.show.extension-output-GitHub.copilot-#1-GitHub Copilot Log (Code References)
+workbench.action.output.show.extension-output-GitHub.copilot-chat-#1-GitHub Copilot Log (Code References)
 workbench.action.quickchat.close
 workbench.action.quickchat.openInChatView
 workbench.action.quickchat.toggle
@@ -354,5 +353,3 @@ workbench.view.chat.sessions.local.toggleVisibility
 workbench.view.chat.sessions.resetViewContainerLocation
 workbench.view.extension.copilot-chat
 workbench.view.extension.copilot-chat.resetViewContainerLocation
-workbench.view.extension.github-copilot-completions-debugger-panel
-workbench.view.extension.github-copilot-completions-debugger-panel.resetViewContainerLocation

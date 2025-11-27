@@ -1,4 +1,4 @@
-FlightPath: All Available VS Code Commands (4218 found)
+FlightPath: All Available VS Code Commands (4253 found)
 
 CppReferencesView.focus
 CppReferencesView.open
@@ -6,6 +6,37 @@ CppReferencesView.resetViewLocation
 CppSshTargetsView.focus
 CppSshTargetsView.open
 CppSshTargetsView.resetViewLocation
+GetVsCodeSessionId
+PowerShell.ClosePanel
+PowerShell.Debug.Start
+PowerShell.DebugPesterTestsFromFile
+PowerShell.DisableISEMode
+PowerShell.EnableISEMode
+PowerShell.ExpandAlias
+PowerShell.GenerateBugReport
+PowerShell.InsertCommand
+PowerShell.InvokeRegisteredEditorCommand
+PowerShell.OpenExamplesFolder
+PowerShell.OpenInISE
+PowerShell.OpenLogFolder
+PowerShell.PickPSHostProcess
+PowerShell.PickRunspace
+PowerShell.PositionPanelBottom
+PowerShell.PositionPanelLeft
+PowerShell.RefreshCommandsExplorer
+PowerShell.RestartSession
+PowerShell.RunPesterTests
+PowerShell.RunPesterTestsFromFile
+PowerShell.RunSelection
+PowerShell.ShowAdditionalCommands
+PowerShell.ShowCodeActionDocumentation
+PowerShell.ShowHelp
+PowerShell.ShowLogs
+PowerShell.ShowSessionConsole
+PowerShell.ShowSessionMenu
+PowerShell.SpecifyScriptArgs
+PowerShell.ToggleISEMode
+PowerShell.WaitForPsesActivationAndReturnProcessId
 PowerShellCommands.focus
 PowerShellCommands.open
 PowerShellCommands.resetViewLocation
@@ -192,7 +223,7 @@ cmake.projectStatus.focus
 cmake.projectStatus.open
 cmake.projectStatus.resetViewLocation
 codelens.showLensesInCurrentLine
-codereferencing.showOutputPane
+codereferencing.showOutputPane2
 codex-placeholder.focus
 codex-placeholder.open
 codex-placeholder.resetViewLocation
@@ -798,6 +829,8 @@ flightpath.dashboard.removeView
 flightpath.dashboard.resetViewLocation
 flightpath.dashboard.toggleVisibility
 flightpath.debugState
+flightpath.editCurrentPromptFile
+flightpath.investigateChatLogs
 flightpath.listAllCommands
 flightpath.listChatCommands
 flightpath.openPanel
@@ -813,6 +846,8 @@ flightpath.showLanguageId
 flightpath.showOutputPanel
 flightpath.stop
 flightpath.takeOff
+flightpath.test.chatAgentSelection
+flightpath.test.chatModelSelection
 flightpath.test.copilotAutomation
 flightpath.test.fileAttachment
 flightpath.testAutomation
@@ -820,6 +855,7 @@ focusAndAcceptSuggestion
 focusNextRenameSuggestion
 focusPreviousRenameSuggestion
 focusSuggestion
+formatter/configure/dfl/bd48cd93-fa56-4e1f-8a4f-278977716729
 getContextKeyInfo
 git-base.api.getRemoteSources
 git.\_syncAll
@@ -993,15 +1029,15 @@ git.viewChanges
 git.viewCommit
 git.viewStagedChanges
 git.viewUntrackedChanges
-github-copilot-completions-debugger-view.focus
-github-copilot-completions-debugger-view.open
-github-copilot-completions-debugger-view.resetViewLocation
 github.copilot.acceptCursorPanelSolution
 github.copilot.buildLocalWorkspaceIndex
 github.copilot.buildRemoteWorkspaceIndex
 github.copilot.chat.attachFile
 github.copilot.chat.attachSelection
 github.copilot.chat.clearTemporalContext
+github.copilot.chat.completions.disable
+github.copilot.chat.completions.enable
+github.copilot.chat.completions.toggle
 github.copilot.chat.debug.exportAllPromptLogsAsJson
 github.copilot.chat.debug.exportLogItem
 github.copilot.chat.debug.exportPromptArchive
@@ -1029,6 +1065,8 @@ github.copilot.chat.mcp.setup.flow
 github.copilot.chat.mcp.setup.validatePackage
 github.copilot.chat.notebook.disableFollowCellExecution
 github.copilot.chat.notebook.enableFollowCellExecution
+github.copilot.chat.openModelPicker
+github.copilot.chat.openSuggestionsPanel
 github.copilot.chat.openUserPreferences
 github.copilot.chat.replay
 github.copilot.chat.replay.disableWorkspaceEditTracing
@@ -1054,7 +1092,9 @@ github.copilot.chat.review.stagedChanges
 github.copilot.chat.review.stagedFileChange
 github.copilot.chat.review.unstagedChanges
 github.copilot.chat.review.unstagedFileChange
+github.copilot.chat.sendCompletionFeedback
 github.copilot.chat.startCopilotDebugCommand
+github.copilot.chat.toggleStatusMenu
 github.copilot.chat.tools.memory.openFolder
 github.copilot.chat.triggerPermissiveSignIn
 github.copilot.claude.sessions.refresh
@@ -1065,10 +1105,8 @@ github.copilot.cli.sessions.resumeInTerminal
 github.copilot.cloud.sessions.openInBrowser
 github.copilot.cloud.sessions.proxy.closeChatSessionPullRequest
 github.copilot.cloud.sessions.refresh
-github.copilot.collectDiagnostics
 github.copilot.completions.disable
 github.copilot.completions.enable
-github.copilot.completions.quotaExceeded
 github.copilot.completions.toggle
 github.copilot.copilotcli.sessions.refresh
 github.copilot.createFile
@@ -1107,9 +1145,6 @@ github.copilot.report
 github.copilot.search.feedback
 github.copilot.search.markHelpful
 github.copilot.search.markUnhelpful
-github.copilot.sendCompletionFeedback
-github.copilot.sendFeedback
-github.copilot.signIn
 github.copilot.startDebugging
 github.copilot.survey.signalUsage
 github.copilot.terminal.explainTerminalLastCommand
@@ -2631,6 +2666,7 @@ targetsContainers.focus
 targetsContainers.open
 targetsContainers.resetViewLocation
 terminal.focus
+terminal.integrated.suggest.clearCachedGlobals
 terminal.removeView
 terminal.resetViewContainerLocation
 terminal.resetViewLocation
@@ -3338,11 +3374,11 @@ workbench.action.output.activeOutputLogLevelDefault
 workbench.action.output.addCompoundLog
 workbench.action.output.remove
 workbench.action.output.show.GitHub.copilot-chat.GitHub Copilot Chat
-workbench.action.output.show.GitHub.copilot.GitHub Copilot
 workbench.action.output.show.dbaeumer.vscode-eslint.ESLint
 workbench.action.output.show.denoland.vscode-deno.Deno Language Server
 workbench.action.output.show.eamodio.gitlens.GitLens
-workbench.action.output.show.extension-output-GitHub.copilot-#1-GitHub Copilot Log (Code References)
+workbench.action.output.show.eamodio.gitlens.GitLens (Git)
+workbench.action.output.show.extension-output-GitHub.copilot-chat-#1-GitHub Copilot Log (Code References)
 workbench.action.output.show.extension-output-bradlc.vscode-tailwindcss-#1-Tailwind CSS IntelliSense
 workbench.action.output.show.extension-output-esbenp.prettier-vscode-#1-Prettier
 workbench.action.output.show.extension-output-mcu-debug.debug-tracker-vscode-#1-Mcu-debug Tracker
@@ -3351,6 +3387,7 @@ workbench.action.output.show.extension-output-streetsidesoftware.code-spell-chec
 workbench.action.output.show.extension-output-undefined_publisher.flightpath-#1-FlightPath
 workbench.action.output.show.exthost
 workbench.action.output.show.main
+workbench.action.output.show.ms-vscode.powershell.PowerShell
 workbench.action.output.show.ptyhost
 workbench.action.output.show.remoteTunnelService
 workbench.action.output.show.rendererLog
@@ -4056,8 +4093,6 @@ workbench.view.extension.cspellPanel
 workbench.view.extension.cspellPanel.resetViewContainerLocation
 workbench.view.extension.flightpath
 workbench.view.extension.flightpath.resetViewContainerLocation
-workbench.view.extension.github-copilot-completions-debugger-panel
-workbench.view.extension.github-copilot-completions-debugger-panel.resetViewContainerLocation
 workbench.view.extension.gitlens
 workbench.view.extension.gitlens.resetViewContainerLocation
 workbench.view.extension.gitlensInspect
