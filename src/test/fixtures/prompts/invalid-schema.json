@@ -1,0 +1,4 @@
+{
+  "invalidField": "this file is valid JSON but invalid schema",
+  "missingPrompt": true
+}

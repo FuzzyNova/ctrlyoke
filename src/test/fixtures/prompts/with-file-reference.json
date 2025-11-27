@@ -1,0 +1,4 @@
+{
+  "prompt": "./external-prompt.prompt.md",
+  "model": "claude-sonnet-4.5"
+}
