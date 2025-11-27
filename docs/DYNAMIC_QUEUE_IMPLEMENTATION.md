@@ -4,6 +4,12 @@
 
 Enable Copilot to extend FlightPath workflows autonomously by editing `.flightpath.json` files during execution. This transforms FlightPath from a static workflow executor into an adaptive autonomous agent framework.
 
+> **Implementation Note**: This document contains the original design plan. The actual implementation took a simpler approach:
+>
+> - The `QueuedPrompt` interface and `generatePromptIdentity()` function were removed
+> - `PromptQueue` uses `PromptItem` directly with inline hash computation
+> - The core functions (`hashPromptContent`, `isPromptCompleted`, `shouldInjectExtensionInstructions`) are implemented in `src/utils/PromptIdentity.ts`
+
 ## Business Context
 
 **Monetization Strategy**: This feature is designed to be opt-in and may be gated in a future paid tier:

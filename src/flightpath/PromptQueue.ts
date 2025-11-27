@@ -7,11 +7,7 @@ import {
   STEP_STATUS,
 } from "../types/FlightPathTypes";
 import { LoggingUtils } from "../utils/LoggingUtils";
-import {
-  generatePromptIdentity,
-  isPromptCompleted,
-  hashPromptContent,
-} from "../utils/PromptIdentity";
+import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
 
 /**
  * Get effective maxRetries value with smart defaults

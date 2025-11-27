@@ -2,15 +2,6 @@ import * as crypto from "crypto";
 import { PromptItem } from "../types/FlightPathTypes";
 
 /**
- * Represents the identity of a prompt for tracking across queue reloads
- */
-export interface PromptIdentity {
-  explicitId?: string; // User or Copilot-provided ID
-  contentHash: string; // SHA-256 hash of prompt text
-  originalPosition: number; // Position in original file
-}
-
-/**
  * Generates a SHA-256 hash of prompt content
  * Normalizes whitespace to make hashing more robust
  */
@@ -21,24 +12,10 @@ export function hashPromptContent(promptText: string): string {
 }
 
 /**
- * Generates a complete identity for a prompt
- */
-export function generatePromptIdentity(
-  prompt: PromptItem,
-  position: number
-): PromptIdentity {
-  return {
-    explicitId: prompt.id,
-    contentHash: hashPromptContent(prompt.prompt),
-    originalPosition: position,
-  };
-}
-
-/**
  * Checks if a prompt has been completed based on ID or content hash
  */
 export function isPromptCompleted(
-  prompt: PromptItem | QueuedPrompt,
+  prompt: PromptItem,
   completedIds: Set<string>
 ): boolean {
   // Check explicit ID first
@@ -73,13 +50,4 @@ export function shouldInjectExtensionInstructions(
   );
 
   return isLastPrompt && !anyExplicitFlag && dynamicExtensionOnLastPrompt;
-}
-
-/**
- * Extended prompt item with identity tracking for queue management
- */
-export interface QueuedPrompt extends PromptItem {
-  identity: PromptIdentity;
-  isDynamicallyAdded?: boolean; // True if added after initial load
-  addedAtExtension?: number; // Which extension cycle added this (0 = initial, 1+ = dynamic)
 }

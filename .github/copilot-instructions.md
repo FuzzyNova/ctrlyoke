@@ -338,10 +338,10 @@ FlightPath bridges manual AI assistance and full automation through:
 
 ### Core Components
 
-1. **PromptIdentity.ts**: Hybrid identity system for tracking completed prompts
-   - Explicit IDs (optional `id` field in prompts)
-   - Content hashing (SHA-256 of normalized prompt text)
-   - Duplicate detection during queue reload
+1. **PromptIdentity.ts**: Identity utilities for tracking completed prompts
+   - `hashPromptContent()`: SHA-256 hash of normalized prompt text
+   - `isPromptCompleted()`: Checks ID or content hash against completed set
+   - `shouldInjectExtensionInstructions()`: Determines if prompt gets extension instructions
 
 2. **PromptQueue.reloadAndMergeQueue()**: Reloads prompt file and merges new prompts
    - Validates JSON with PromptFileParser
