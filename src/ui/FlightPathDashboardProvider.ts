@@ -70,6 +70,12 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   private handleWebviewMessage(message: any): void {
+    // Handle export specially since it needs message data
+    if (message.type === MESSAGE_TYPES.EXPORT_OUTPUT) {
+      this.handleExportOutput(message.content, message.fileName);
+      return;
+    }
+
     const commandId = this.messageCommandMap.get(message.type);
     if (commandId) {
       if (message.type === MESSAGE_TYPES.READY) {
@@ -207,6 +213,88 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
+  }
+
+  /**
+   * Handle export output request from webview
+   * Shows save dialog and writes markdown content to file
+   */
+  private async handleExportOutput(
+    content: string,
+    sourceFileName: string | null
+  ): Promise<void> {
+    // Generate default filename with timestamp
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, "-"); // HH-MM-SS
+    const defaultFileName = `${dateStr}-${timeStr}-flightpath-output.md`;
+
+    // Determine default directory (.flightpath/output in workspace)
+    let defaultUri: vscode.Uri | undefined;
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const outputDir = vscode.Uri.joinPath(
+        workspaceFolders[0].uri,
+        ".flightpath",
+        "output"
+      );
+
+      // Pre-create the output directory to help VS Code honor our defaultUri
+      try {
+        await vscode.workspace.fs.createDirectory(outputDir);
+      } catch {
+        // Directory may already exist, that's fine
+      }
+
+      defaultUri = vscode.Uri.joinPath(outputDir, defaultFileName);
+    }
+
+    // Show save dialog
+    // Note: VS Code may remember the last save location and override defaultUri
+    const saveUri = await vscode.window.showSaveDialog({
+      defaultUri,
+      filters: {
+        Markdown: ["md"],
+        "All Files": ["*"],
+      },
+      saveLabel: "Export Output",
+      title: "Export FlightPath Output",
+    });
+
+    if (!saveUri) {
+      return; // User cancelled
+    }
+
+    try {
+      // Ensure parent directory exists
+      const parentDir = vscode.Uri.joinPath(saveUri, "..");
+      try {
+        await vscode.workspace.fs.stat(parentDir);
+      } catch {
+        // Directory doesn't exist, create it
+        await vscode.workspace.fs.createDirectory(parentDir);
+      }
+
+      // Write content to file
+      const contentBytes = new TextEncoder().encode(content);
+      await vscode.workspace.fs.writeFile(saveUri, contentBytes);
+
+      // Show success notification with option to open file
+      const openAction = "Open File";
+      const result = await vscode.window.showInformationMessage(
+        `Output exported to ${path.basename(saveUri.fsPath)}`,
+        openAction
+      );
+
+      if (result === openAction) {
+        const doc = await vscode.workspace.openTextDocument(saveUri);
+        await vscode.window.showTextDocument(doc);
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to export output: ${errorMsg}`);
+    }
   }
 
   /**

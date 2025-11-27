@@ -91,6 +91,14 @@ body {
   color: var(--fg-primary);
 }
 
+/* Output controls container */
+.output-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 #file-info {
   display: flex;
   align-items: center;

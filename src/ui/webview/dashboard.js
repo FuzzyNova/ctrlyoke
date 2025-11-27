@@ -28,6 +28,7 @@
     runBtn: document.getElementById("btn-run"),
     pauseBtn: document.getElementById("btn-pause"),
     stopBtn: document.getElementById("btn-stop"),
+    exportBtn: document.getElementById("btn-export"),
     promptCounter: document.getElementById("prompt-counter"),
     promptsList: document.getElementById("prompts-list"),
     outputSection: document.getElementById("output-section"),
@@ -59,6 +60,15 @@
 
   elements.stopBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.STOP });
+  });
+
+  elements.exportBtn.addEventListener("click", () => {
+    const markdownContent = generateMarkdownOutput();
+    vscode.postMessage({
+      type: MESSAGE_TYPES.EXPORT_OUTPUT,
+      content: markdownContent,
+      fileName: state.fileName,
+    });
   });
 
   // Message handler
@@ -555,6 +565,130 @@
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * Generate markdown-formatted output for export
+   */
+  function generateMarkdownOutput() {
+    const lines = [];
+    const timestamp = new Date().toISOString();
+
+    // Header
+    lines.push("# FlightPath Execution Output");
+    lines.push("");
+    lines.push(`**File:** ${state.fileName || "Unknown"}`);
+    lines.push(`**Exported:** ${timestamp}`);
+    lines.push(`**Status:** ${state.executionState}`);
+    lines.push(
+      `**Progress:** ${state.currentStep} of ${state.totalSteps} completed`
+    );
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+
+    // Build chronological message list (same logic as renderAllCliOutputs)
+    const allMessages = [];
+
+    for (let stepIndex = 0; stepIndex < state.totalSteps; stepIndex++) {
+      const outputs = state.cliOutputs[stepIndex] || [];
+      const statusMessages = state.statusMessages[stepIndex] || [];
+
+      statusMessages.forEach((statusMsg, index) => {
+        allMessages.push({
+          type: "status",
+          stepIndex,
+          timestamp: statusMsg.timestampMs || stepIndex * 10000 + index,
+          data: statusMsg,
+        });
+      });
+
+      outputs.forEach((output, attemptIndex) => {
+        allMessages.push({
+          type: "cli",
+          stepIndex,
+          timestamp:
+            output.timestampMs ||
+            stepIndex * 10000 + statusMessages.length + attemptIndex,
+          data: output,
+          attemptIndex,
+        });
+      });
+    }
+
+    // Sort by timestamp
+    allMessages.sort((a, b) => a.timestamp - b.timestamp);
+
+    if (allMessages.length === 0) {
+      lines.push("*No output captured*");
+      return lines.join("\n");
+    }
+
+    // Render each message
+    allMessages.forEach((item) => {
+      if (item.type === "status") {
+        const statusMsg = item.data;
+        lines.push(`> **[${statusMsg.timestamp}]** ${statusMsg.message}`);
+        lines.push("");
+      } else if (item.type === "cli") {
+        const output = item.data;
+        const attemptIndex = item.attemptIndex;
+        const stepIndex = item.stepIndex;
+        const attemptLabel =
+          attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
+
+        lines.push(`## Prompt ${stepIndex + 1} - ${attemptLabel}`);
+        lines.push("");
+
+        if (output.prompt) {
+          lines.push("### Prompt");
+          lines.push("");
+          lines.push("```");
+          lines.push(output.prompt);
+          lines.push("```");
+          lines.push("");
+        }
+
+        if (output.cliCommand) {
+          lines.push("### CLI Command");
+          lines.push("");
+          lines.push("```bash");
+          lines.push(`$ ${output.cliCommand}`);
+          lines.push("```");
+          lines.push("");
+        }
+
+        if (output.response) {
+          lines.push("### Response");
+          lines.push("");
+          lines.push("```");
+          lines.push(output.response);
+          lines.push("```");
+          lines.push("");
+        }
+
+        // Stats section
+        const stats = [];
+        if (output.tokens) {
+          stats.push(
+            `📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion`
+          );
+        }
+        if (output.elapsed !== undefined) {
+          stats.push(`⏱️ ${output.elapsed}s`);
+        }
+
+        if (stats.length > 0) {
+          lines.push(`*${stats.join(" | ")}*`);
+          lines.push("");
+        }
+
+        lines.push("---");
+        lines.push("");
+      }
+    });
+
+    return lines.join("\n");
   }
 
   // Signal ready

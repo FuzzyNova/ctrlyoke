@@ -59,10 +59,19 @@
         <div id="output-section">
           <div class="section-header">
             <h3>Output</h3>
-            <label class="autoscroll-toggle">
-              <input type="checkbox" id="autoscroll-checkbox" checked />
-              <span>Autoscroll</span>
-            </label>
+            <div class="output-controls">
+              <label class="autoscroll-toggle">
+                <input type="checkbox" id="autoscroll-checkbox" checked />
+                <span>Autoscroll</span>
+              </label>
+              <button
+                id="btn-export"
+                class="btn-secondary btn-small"
+                title="Export output to markdown file"
+              >
+                Export
+              </button>
+            </div>
           </div>
           <div id="output-content">
             <div class="empty-state">No output yet</div>

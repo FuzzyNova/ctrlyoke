@@ -36,6 +36,7 @@ export const MESSAGE_TYPES = {
   RESUME: "resume",
   STOP: "stop",
   SHOW_OUTPUT: "showOutput",
+  EXPORT_OUTPUT: "exportOutput",
 } as const;
 
 // ============================================================================
