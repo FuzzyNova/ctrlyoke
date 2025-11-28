@@ -309,37 +309,56 @@ Workflow Progress:
 
 ## Key Design Decisions
 
-### 1. Single Proven Strategy (No Fallbacks)
+### 1. CLI-First Architecture
+
+FlightPath supports three integration modes, with CLI as the default:
+
+| Mode        | Setting Value  | Implementation                  | Use Case                  |
+| ----------- | -------------- | ------------------------------- | ------------------------- |
+| Copilot CLI | `"cli"`        | `CopilotCommandLineIntegration` | Default, best reliability |
+| Claude CLI  | `"claude-cli"` | `ClaudeCommandLineIntegration`  | Claude model preference   |
+| Chat        | `"chat"`       | `CopilotChatIntegration`        | Legacy fallback           |
+
+**Why CLI-first:**
+
+- Deterministic completion detection (process exit = done)
+- No UI timing dependencies
+- Structured output parsing
+- Better error handling
+
+See [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) and [CLAUDE_CLI_DESIGN.md](./CLAUDE_CLI_DESIGN.md) for detailed CLI references.
+
+### 2. Single Proven Strategy (No Fallbacks)
 
 - **Why**: One validated approach is better than multiple untested fallbacks
 - **Benefit**: Clear error messages when automation unavailable
 - **Trade-off**: No silent degradation - user must have Copilot Chat working
 
-### 2. Background Polling for Availability
+### 3. Background Polling for Availability
 
 - **Why**: Extensions activate lazily in VS Code
 - **Benefit**: Handles slow activation gracefully, transparent state for users
 - **Trade-off**: 30-second initialization period on first load
 
-### 3. Command-Based Automation
+### 4. Command-Based Automation
 
 - **Why**: Proven approach from POC validation
 - **Benefit**: Zero-interaction capability
 - **Trade-off**: Dependent on VS Code internal commands (requires VS Code 1.85.0+)
 
-### 4. Proven Timing Delays
+### 5. Proven Timing Delays
 
 - **Why**: UI stability and reliability (validated in POC)
 - **Benefit**: Consistent automation success
 - **Trade-off**: Slight delay in execution (1.8s per prompt)
 
-### 5. Separation of Concerns
+### 6. Separation of Concerns
 
 - **Why**: SOLID principles and maintainability
 - **Benefit**: Easy to test, extend, and modify
 - **Trade-off**: More files and abstractions
 
-### 6. Native Copilot Syntax
+### 7. Native Copilot Syntax
 
 - **Why**: Preserve all Copilot Chat features
 - **Benefit**: Full compatibility with agents, tools, and commands

@@ -848,3 +848,12 @@ So that **I can see availability at a glance**.
 _For implementation: Use the `create-story` workflow to generate individual story implementation plans from this epic breakdown._
 
 _This document will be updated after UX Design and Architecture workflows to incorporate interaction details and technical decisions._
+
+---
+
+## Related Documentation
+
+- [CLAUDE_CLI_DESIGN.md](../CLAUDE_CLI_DESIGN.md) - Complete Claude CLI integration reference
+- [COPILOT_CLI_DESIGN.md](../COPILOT_CLI_DESIGN.md) - Parallel Copilot CLI reference
+- [prd.md](./prd.md) - Product Requirements Document for this feature
+- [ARCHITECTURE.md](../ARCHITECTURE.md) - Overall FlightPath architecture

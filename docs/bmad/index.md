@@ -32,7 +32,8 @@
 
 ### API & Integration
 
-- [CLI Integration Design](../COPILOT_CLI_DESIGN.md) - Copilot CLI flags, implementation status
+- [Copilot CLI Design](../COPILOT_CLI_DESIGN.md) - Copilot CLI flags, implementation status
+- [Claude CLI Design](../CLAUDE_CLI_DESIGN.md) - Claude Code CLI integration reference
 - [Dynamic Queue Usage](../DYNAMIC_QUEUE_USAGE.md) - Autonomous workflow extension
 - [End Conditions](../END_CONDITIONS.md) - Script-based validation system
 
@@ -58,7 +59,8 @@ The following documentation existed prior to this scan:
 | File                                                                  | Description                             |
 | --------------------------------------------------------------------- | --------------------------------------- |
 | [ARCHITECTURE.md](../ARCHITECTURE.md)                                 | ASCII diagrams of system architecture   |
-| [COPILOT_CLI_DESIGN.md](../COPILOT_CLI_DESIGN.md)                     | CLI integration reference (467 lines)   |
+| [COPILOT_CLI_DESIGN.md](../COPILOT_CLI_DESIGN.md)                     | Copilot CLI integration reference       |
+| [CLAUDE_CLI_DESIGN.md](../CLAUDE_CLI_DESIGN.md)                       | Claude Code CLI integration reference   |
 | [DYNAMIC_QUEUE_USAGE.md](../DYNAMIC_QUEUE_USAGE.md)                   | Dynamic queue user guide (356 lines)    |
 | [DYNAMIC_QUEUE_IMPLEMENTATION.md](../DYNAMIC_QUEUE_IMPLEMENTATION.md) | Implementation details                  |
 | [END_CONDITIONS.md](../END_CONDITIONS.md)                             | End condition documentation (253 lines) |

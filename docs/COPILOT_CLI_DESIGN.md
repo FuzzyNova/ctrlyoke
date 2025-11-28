@@ -460,6 +460,7 @@ This section provides a clear checklist for implementing the remaining planned e
 
 ## Related Documentation
 
+- [CLAUDE_CLI_DESIGN.md](./CLAUDE_CLI_DESIGN.md) - Claude Code CLI reference (parallel document)
 - [AGENT_SUPPORT_IMPLEMENTATION.md](./AGENT_SUPPORT_IMPLEMENTATION.md) - Agent discovery and usage
 - [CHAT_MODE_LIMITATIONS.md](./CHAT_MODE_LIMITATIONS.md) - Why CLI is preferred over Chat
 - [END_CONDITIONS.md](./END_CONDITIONS.md) - Validation script execution
