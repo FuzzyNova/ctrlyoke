@@ -1,0 +1,50 @@
+# Workflow Status Template
+
+# This tracks progress through BMM methodology Analysis, Planning, and Solutioning phases.
+# Implementation phase is tracked separately in sprint-status.yaml
+
+# STATUS DEFINITIONS:
+# ==================
+# Initial Status (before completion):
+#   - required: Must be completed to progress
+#   - optional: Can be completed but not required
+#   - recommended: Strongly suggested but not required
+#   - conditional: Required only if certain conditions met (e.g., if_has_ui)
+#
+# Completion Status:
+#   - {file-path}: File created/found (e.g., "docs/product-brief.md")
+#   - skipped: Optional/conditional workflow that was skipped
+
+generated: "2025-11-28"
+project: "FlightPath"
+project_type: "brownfield"
+selected_track: "bmad-method"
+field_type: "brownfield"
+workflow_path: "method-brownfield.yaml"
+
+# Discovery options selected during init
+discovery_options:
+  brainstorm_requested: false
+  research_requested: false
+  product_brief_requested: false
+
+workflow_status:
+  # Prerequisite - Documentation (COMPLETED)
+  document-project: docs/bmad/index.md
+
+  # Phase 0 - Discovery (Optional, user declined)
+  brainstorm-project: skipped
+  research: skipped
+  product-brief: skipped
+
+  # Phase 1 - Planning (PRD COMPLETED)
+  prd: docs/bmad/prd.md
+  validate-prd: optional
+  create-design: skipped # No UI changes for this feature
+
+  # Phase 2 - Solutioning (pending)
+  create-architecture: recommended
+  create-epics-and-stories: required
+  test-design: recommended
+  validate-architecture: optional
+  implementation-readiness: required
