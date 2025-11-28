@@ -141,13 +141,15 @@ So that **I can configure my preferred Claude model and permissions**.
 **When** I add Claude CLI settings under `contributes.configuration.properties`  
 **Then** the following settings are available:
 
-| Setting                               | Type  | Default     | Description                         |
-| ------------------------------------- | ----- | ----------- | ----------------------------------- |
-| `flightpath.claudeCliModel`           | enum  | `"sonnet"`  | Default model (sonnet, opus, haiku) |
-| `flightpath.claudeCliToolPermissions` | enum  | `"skipAll"` | Permission mode (skipAll, custom)   |
-| `flightpath.claudeCliAllowedTools`    | array | `[]`        | Allowed tool patterns               |
-| `flightpath.claudeCliDisallowedTools` | array | `[]`        | Disallowed tool patterns            |
-| `flightpath.claudeCliOutputFormat`    | enum  | `"json"`    | Output format (json, text)          |
+| Setting                               | Type  | Default     | Description                                             |
+| ------------------------------------- | ----- | ----------- | ------------------------------------------------------- |
+| `flightpath.claudeCliModel`           | enum  | `"sonnet"`  | Default model (sonnet, opus, haiku)                     |
+| `flightpath.claudeCliToolPermissions` | enum  | `"skipAll"` | Permission mode (skipAll, custom)                       |
+| `flightpath.cliAllowedTools`          | array | `[]`        | Shared tool patterns (Copilot format, auto-converted)   |
+| `flightpath.cliDeniedTools`           | array | `[]`        | Shared denied patterns (Copilot format, auto-converted) |
+| `flightpath.claudeCliOutputFormat`    | enum  | `"json"`    | Output format (json, text)                              |
+
+**Note:** Tool settings are shared between Copilot and Claude CLI. Patterns use Copilot CLI format and are auto-converted for Claude (`shell` → `Bash`, `write` → `Write`).
 
 **And** `flightpath.copilotIntegrationMode` enum is updated to include:
 

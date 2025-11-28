@@ -17,8 +17,8 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 | `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models |
 | `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included        |
 | `--allow-all-tools`     | `flightpath.copilotCliToolPermissions`       | Full support - "allowAll" and "custom" modes          |
-| `--allow-tool`          | `flightpath.copilotCliAllowedTools`          | Full support - pattern-based tool permissions         |
-| `--deny-tool`           | `flightpath.copilotCliDeniedTools`           | Full support - deny patterns (takes precedence)       |
+| `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions         |
+| `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)       |
 | `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                          |
 | `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp           |
 | `--log-level <level>`   | `flightpath.copilotCliLogLevel`              | Full support - debug/all for troubleshooting          |
@@ -109,9 +109,10 @@ write                 # Match file creation/modification tools
 **Current behavior:**
 
 - **allowAll** mode: Uses `--allow-all-tools` (default)
-- **custom** mode: Uses `copilotCliAllowedTools` and `copilotCliDeniedTools` arrays
+- **custom** mode: Uses `cliAllowedTools` and `cliDeniedTools` arrays
 - Full pattern syntax support (`shell(git:*)`, `write`, `github(search_repositories)`)
 - Deny patterns take precedence over allow patterns
+- Settings are shared with Claude CLI (auto-converted: `shell` → `Bash`, `write` → `Write`)
 
 ### Session Management
 
@@ -219,10 +220,12 @@ write                 # Match file creation/modification tools
 ```json
 {
   "flightpath.copilotCliToolPermissions": "allowAll" | "custom",
-  "flightpath.copilotCliAllowedTools": ["shell(git:*)", "write", "github"],
-  "flightpath.copilotCliDeniedTools": ["shell(git push)", "shell(rm:*)"]
+  "flightpath.cliAllowedTools": ["shell(git:*)", "write", "github"],
+  "flightpath.cliDeniedTools": ["shell(git push)", "shell(rm:*)"]
 }
 ```
+
+**Note:** These settings are shared between Copilot CLI and Claude CLI. For Claude, tool names are automatically converted (`shell` → `Bash`, `write` → `Write`).
 
 **Common Use Cases:**
 
@@ -230,20 +233,20 @@ write                 # Match file creation/modification tools
 // Allow git but prevent pushes (in VS Code settings.json)
 {
   "flightpath.copilotCliToolPermissions": "custom",
-  "flightpath.copilotCliAllowedTools": ["shell(git:*)"],
-  "flightpath.copilotCliDeniedTools": ["shell(git push)", "shell(git push:*)"]
+  "flightpath.cliAllowedTools": ["shell(git:*)"],
+  "flightpath.cliDeniedTools": ["shell(git push)", "shell(git push:*)"]
 }
 
 // Read-only mode (no file writing, no shell)
 {
   "flightpath.copilotCliToolPermissions": "custom",
-  "flightpath.copilotCliDeniedTools": ["write", "shell"]
+  "flightpath.cliDeniedTools": ["write", "shell"]
 }
 
 // Only allow specific MCP tools
 {
   "flightpath.copilotCliToolPermissions": "custom",
-  "flightpath.copilotCliAllowedTools": ["github(search_repositories)", "github(get_file_contents)"]
+  "flightpath.cliAllowedTools": ["github(search_repositories)", "github(get_file_contents)"]
 }
 ```
 

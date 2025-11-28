@@ -15,6 +15,39 @@ import {
 } from "../../types/ModelConstants";
 
 /**
+ * Claude CLI tool names that need to be converted to Copilot format
+ * Maps Claude tool names (case-insensitive) to Copilot permission patterns
+ *
+ * Copilot uses permission KINDS (categories), not individual tool names:
+ * - shell(command:*?) - Controls powershell, write_powershell, read_powershell, stop_powershell
+ * - write - Controls create and edit tools
+ * - <mcp-server>(tool?) - Controls MCP server tools
+ *
+ * Note: Copilot's "view" tool (read files) doesn't require permission - it's always allowed.
+ * Similarly, Glob/Grep/LS equivalents don't exist as restricted operations.
+ */
+const CLAUDE_TO_COPILOT_TOOL_MAP: Record<string, string | null> = {
+  // Shell commands - Bash maps to shell category
+  bash: "shell",
+
+  // File modification tools - these map to "write" permission category
+  write: "write",
+  edit: "write",
+  multiedit: "write",
+
+  // Read-only tools - no Copilot permission needed (always allowed)
+  // These are filtered out because Copilot doesn't restrict read operations
+  read: null,
+  glob: null,
+  grep: null,
+  ls: null,
+
+  // Claude-specific tools with no Copilot equivalent
+  webfetch: null,
+  todowrite: null,
+};
+
+/**
  * Copilot CLI Integration
  *
  * Implements Copilot integration using the GitHub Copilot CLI.
@@ -453,6 +486,42 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Convert a tool pattern from Claude format to Copilot format
+   * Returns the converted pattern, or null if the tool should be filtered out
+   *
+   * Examples:
+   * - "Bash(git:*)" → "shell(git:*)"
+   * - "bash" → "shell"
+   * - "Write" → "write"
+   * - "Edit" → "write" (closest equivalent)
+   * - "Read" → null (no Copilot equivalent, filter out)
+   * - "github(search)" → "github(search)" (MCP tools pass through)
+   */
+  private convertToolPatternToCopilotFormat(pattern: string): string | null {
+    // Match pattern: toolName or toolName(args)
+    const match = pattern.match(/^(\w+)(\(.+\))?$/);
+    if (!match) {
+      return pattern; // Return as-is if pattern doesn't match expected format (e.g., MCP tools)
+    }
+
+    const [, toolName, args] = match;
+    const lowerToolName = toolName.toLowerCase();
+
+    // Check if this is a Claude tool that needs conversion
+    if (lowerToolName in CLAUDE_TO_COPILOT_TOOL_MAP) {
+      const copilotTool = CLAUDE_TO_COPILOT_TOOL_MAP[lowerToolName];
+      if (copilotTool === null) {
+        // Tool has no Copilot equivalent, filter it out
+        return null;
+      }
+      return args ? copilotTool + args : copilotTool;
+    }
+
+    // Not a Claude tool, pass through as-is (could be shell, write, or MCP tool)
+    return pattern;
+  }
+
+  /**
    * Get tool permission arguments based on configuration
    * Supports "allowAll" mode (--allow-all-tools) or "custom" mode with specific allow/deny patterns
    *
@@ -460,6 +529,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * - shell(command:*?) - Match shell commands (e.g., shell(git:*), shell(npm test))
    * - write - Match file creation/modification tools
    * - <mcp-server>(tool?) - Match MCP server tools (e.g., github, github(search_repositories))
+   *
+   * Claude tools are automatically converted or filtered:
+   * - Bash → shell, Write/Edit/MultiEdit → write
+   * - Read/Glob/Grep/LS/WebFetch → filtered out (no Copilot equivalent)
    */
   private getToolPermissionArgs(): string[] {
     const config = vscode.workspace.getConfiguration("flightpath");
@@ -471,19 +544,44 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
     // Custom mode - use specific allow/deny patterns
     const args: string[] = [];
+    const filteredTools: string[] = [];
 
-    const allowedTools = config.get<string[]>("copilotCliAllowedTools", []);
-    const deniedTools = config.get<string[]>("copilotCliDeniedTools", []);
+    const allowedTools = config.get<string[]>("cliAllowedTools", []);
+    const deniedTools = config.get<string[]>("cliDeniedTools", []);
 
-    // Add allowed tool patterns
+    // Track which tools we've already added to avoid duplicates
+    // (e.g., both "Edit" and "Write" map to "write")
+    const addedAllowTools = new Set<string>();
+    const addedDenyTools = new Set<string>();
+
+    // Add allowed tool patterns (with conversion)
     allowedTools.forEach((tool) => {
-      args.push("--allow-tool", tool);
+      const converted = this.convertToolPatternToCopilotFormat(tool);
+      if (converted === null) {
+        filteredTools.push(tool);
+      } else if (!addedAllowTools.has(converted)) {
+        args.push("--allow-tool", converted);
+        addedAllowTools.add(converted);
+      }
     });
 
-    // Add denied tool patterns (these take precedence over allows)
+    // Add denied tool patterns (with conversion)
     deniedTools.forEach((tool) => {
-      args.push("--deny-tool", tool);
+      const converted = this.convertToolPatternToCopilotFormat(tool);
+      if (converted === null) {
+        filteredTools.push(tool);
+      } else if (!addedDenyTools.has(converted)) {
+        args.push("--deny-tool", converted);
+        addedDenyTools.add(converted);
+      }
     });
+
+    // Log filtered tools for visibility
+    if (filteredTools.length > 0) {
+      this.log(
+        `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
+      );
+    }
 
     // If no patterns specified in custom mode, log a warning
     if (args.length === 0) {

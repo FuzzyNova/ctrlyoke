@@ -163,13 +163,15 @@ export const CLAUDE_CLI_MODELS = [
 
 ### Configuration Settings (New)
 
-| Setting                               | Type     | Default     | Description                       |
-| ------------------------------------- | -------- | ----------- | --------------------------------- |
-| `flightpath.claudeCliModel`           | enum     | `"sonnet"`  | Default model for Claude Code CLI |
-| `flightpath.claudeCliToolPermissions` | enum     | `"skipAll"` | Permission mode                   |
-| `flightpath.claudeCliAllowedTools`    | string[] | `[]`        | Allowed tool patterns             |
-| `flightpath.claudeCliDisallowedTools` | string[] | `[]`        | Disallowed tool patterns          |
-| `flightpath.claudeCliOutputFormat`    | enum     | `"json"`    | Output format preference          |
+| Setting                               | Type     | Default     | Description                                             |
+| ------------------------------------- | -------- | ----------- | ------------------------------------------------------- |
+| `flightpath.claudeCliModel`           | enum     | `"sonnet"`  | Default model for Claude Code CLI                       |
+| `flightpath.claudeCliToolPermissions` | enum     | `"skipAll"` | Permission mode                                         |
+| `flightpath.cliAllowedTools`          | string[] | `[]`        | Shared tool patterns (Copilot format, auto-converted)   |
+| `flightpath.cliDeniedTools`           | string[] | `[]`        | Shared denied patterns (Copilot format, auto-converted) |
+| `flightpath.claudeCliOutputFormat`    | enum     | `"json"`    | Output format preference                                |
+
+**Note:** Tool permission settings (`cliAllowedTools`, `cliDeniedTools`) are shared between Copilot and Claude CLI. They use Copilot CLI format and are automatically converted for Claude (`shell` → `Bash`, `write` → `Write`).
 
 ### Integration Mode Extension
 

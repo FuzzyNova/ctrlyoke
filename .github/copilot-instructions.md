@@ -269,10 +269,15 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
 - flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
   - **allowAll**: Uses `--allow-all-tools` flag (default, grants full access)
-  - **custom**: Uses `copilotCliAllowedTools` and `copilotCliDeniedTools` patterns
-- flightpath.copilotCliAllowedTools (array of strings, default: []) - Tool patterns to allow in custom mode
+  - **custom**: Uses `cliAllowedTools` and `cliDeniedTools` patterns
+- flightpath.cliAllowedTools (array of strings, default: []) - Shared tool patterns to allow in custom mode
+  - Uses Copilot CLI format, automatically converted for Claude CLI
+  - **Copilot tools**: `shell(command:*)`, `write`, `<mcp-server>(tool)`
+  - **Claude tools** (use lowercase, auto-converted): `bash`, `read`, `write`, `edit`, `multiedit`, `glob`, `grep`, `ls`, `webfetch`
+  - **Mappings**: `shell` → `Bash`, `write` → `Write`
   - Examples: `shell(git:*)`, `write`, `github`, `github(search_repositories)`
-- flightpath.copilotCliDeniedTools (array of strings, default: []) - Tool patterns to deny (takes precedence)
+- flightpath.cliDeniedTools (array of strings, default: []) - Shared tool patterns to deny (takes precedence)
+  - Uses Copilot CLI format, automatically converted for Claude CLI
   - Examples: `shell(git push)`, `shell(rm:*)`, `write`
 - flightpath.copilotCliAllowAllPaths (boolean, default: true) - Allow CLI access to any file path
 - flightpath.copilotCliLogDir (string, default: "") - Custom directory for Copilot CLI logs
@@ -291,9 +296,7 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **haiku**: Fastest, best for simple tasks
 - flightpath.claudeCliToolPermissions (enum: "skipAll" | "custom", default: "skipAll")
   - **skipAll**: Uses `--dangerously-skip-permissions` (default, non-interactive)
-  - **custom**: Uses specific allow/disallow patterns
-- flightpath.claudeCliAllowedTools (array of strings, default: []) - Tool patterns to allow
-- flightpath.claudeCliDisallowedTools (array of strings, default: []) - Tool patterns to disallow
+  - **custom**: Uses shared `cliAllowedTools` and `cliDeniedTools` (auto-converted to Claude format)
 - flightpath.claudeCliOutputFormat (enum: "json" | "text", default: "json")
 
 **CLI Integration**: See `docs/COPILOT_CLI_DESIGN.md` for complete CLI flag reference, tool permission patterns, and planned enhancements.

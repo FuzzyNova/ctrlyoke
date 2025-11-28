@@ -414,23 +414,23 @@
           "description": "Copilot CLI log level for debugging",
           "markdownDescription": "Copilot CLI log level for debugging. Use **debug** or **all** for troubleshooting."
         },
-        "flightpath.copilotCliAllowedTools": {
+        "flightpath.cliAllowedTools": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Tool patterns to allow when using custom tool permissions",
-          "markdownDescription": "Tool patterns to allow when `copilotCliToolPermissions` is set to **custom**. Examples: `shell(git:*)`, `write`, `github`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+          "description": "Tool patterns to allow when using custom tool permissions (shared by Copilot and Claude CLI)",
+          "markdownDescription": "Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
-        "flightpath.copilotCliDeniedTools": {
+        "flightpath.cliDeniedTools": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "Tool patterns to deny (takes precedence over allows)",
-          "markdownDescription": "Tool patterns to deny (takes precedence over allows). Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+          "description": "Tool patterns to deny (takes precedence over allows, shared by Copilot and Claude CLI)",
+          "markdownDescription": "Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI. Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
         "flightpath.claudeCliModel": {
           "type": "string",
@@ -461,24 +461,6 @@
           "default": "skipAll",
           "description": "Permission mode for Claude Code CLI",
           "markdownDescription": "Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses specific allow/disallow patterns."
-        },
-        "flightpath.claudeCliAllowedTools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Tool patterns to allow when using custom permissions",
-          "markdownDescription": "Tool patterns to allow when `claudeCliToolPermissions` is set to **custom**. Examples: `Bash`, `Write`, `Read`. See Claude Code CLI docs for pattern syntax."
-        },
-        "flightpath.claudeCliDisallowedTools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Tool patterns to disallow (takes precedence over allows)",
-          "markdownDescription": "Tool patterns to disallow (takes precedence over allows). Examples: `Bash(rm)`, `Bash(sudo:*)`. See Claude Code CLI docs for pattern syntax."
         },
         "flightpath.claudeCliOutputFormat": {
           "type": "string",

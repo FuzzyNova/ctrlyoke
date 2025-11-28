@@ -14,6 +14,51 @@ import {
 } from "../../types/ModelConstants";
 
 /**
+ * Tool name mappings from Copilot CLI format to Claude CLI format
+ * Used to convert shared cliAllowedTools/cliDeniedTools settings
+ *
+ * Copilot CLI uses permission KINDS (categories), not individual tool names:
+ * - shell(command:*?) - Controls powershell, write_powershell, read_powershell, stop_powershell
+ * - write - Controls create and edit tools
+ * - <mcp-server>(tool?) - Controls MCP server tools
+ * Note: Copilot's "view" tool (read files) doesn't require permission.
+ *
+ * Claude CLI has granular tool permissions:
+ * - Bash(command:*?) - Shell commands (equivalent to Copilot's shell)
+ * - Read - Read files (no Copilot equivalent - always allowed in Copilot)
+ * - Write - Write/create files
+ * - Edit - Edit existing files
+ * - MultiEdit - Batch editing
+ * - Glob - File pattern matching (no Copilot equivalent - always allowed)
+ * - Grep - Text search (no Copilot equivalent - always allowed)
+ * - LS - List directories (no Copilot equivalent - always allowed)
+ * - WebFetch - Fetch web content (no Copilot equivalent)
+ * - TodoWrite - Todo management (no Copilot equivalent)
+ *
+ * When converting Copilot's "write" to Claude, it maps to "Write" only.
+ * Users should add "Edit" separately if they want to allow file modifications.
+ */
+const COPILOT_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
+  // Shell commands
+  shell: "Bash",
+
+  // File operations (Copilot "write" = create/modify files)
+  // Note: Claude separates Write (create) from Edit (modify)
+  write: "Write",
+
+  // Additional mappings if users specify Claude-like names in lowercase
+  bash: "Bash",
+  read: "Read",
+  edit: "Edit",
+  multiedit: "MultiEdit",
+  glob: "Glob",
+  grep: "Grep",
+  ls: "LS",
+  webfetch: "WebFetch",
+  todowrite: "TodoWrite",
+};
+
+/**
  * Claude CLI Response structure (JSON output format)
  */
 interface ClaudeCliJsonResponse {
@@ -548,7 +593,28 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Convert a Copilot CLI tool pattern to Claude CLI format
+   * Examples:
+   * - "shell(git:*)" → "Bash(git:*)"
+   * - "write" → "Write"
+   * - "github(search_repositories)" → "github(search_repositories)" (no mapping, keep as-is)
+   */
+  private convertToolPatternToClaudeFormat(copilotPattern: string): string {
+    // Match pattern: toolName or toolName(args)
+    const match = copilotPattern.match(/^(\w+)(\(.+\))?$/);
+    if (!match) {
+      return copilotPattern; // Return as-is if pattern doesn't match expected format
+    }
+
+    const [, toolName, args] = match;
+    const claudeToolName =
+      COPILOT_TO_CLAUDE_TOOL_MAP[toolName.toLowerCase()] || toolName;
+    return args ? claudeToolName + args : claudeToolName;
+  }
+
+  /**
    * Get tool permission arguments based on configuration
+   * Reads from shared cliAllowedTools/cliDeniedTools and converts to Claude format
    */
   private getToolPermissionArgs(): string[] {
     const config = vscode.workspace.getConfiguration("flightpath");
@@ -558,23 +624,22 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       return ["--dangerously-skip-permissions"];
     }
 
-    // Custom mode - use specific allow/disallow patterns
+    // Custom mode - read from shared settings and convert to Claude format
     const args: string[] = [];
 
-    const allowedTools = config.get<string[]>("claudeCliAllowedTools", []);
-    const disallowedTools = config.get<string[]>(
-      "claudeCliDisallowedTools",
-      []
-    );
+    const allowedTools = config.get<string[]>("cliAllowedTools", []);
+    const deniedTools = config.get<string[]>("cliDeniedTools", []);
 
-    // Add allowed tool patterns
+    // Add allowed tool patterns (converted to Claude format)
     allowedTools.forEach((tool) => {
-      args.push("--allowedTools", tool);
+      const claudeTool = this.convertToolPatternToClaudeFormat(tool);
+      args.push("--allowedTools", claudeTool);
     });
 
-    // Add disallowed tool patterns
-    disallowedTools.forEach((tool) => {
-      args.push("--disallowedTools", tool);
+    // Add disallowed tool patterns (converted to Claude format)
+    deniedTools.forEach((tool) => {
+      const claudeTool = this.convertToolPatternToClaudeFormat(tool);
+      args.push("--disallowedTools", claudeTool);
     });
 
     // If no patterns specified in custom mode, log a warning
