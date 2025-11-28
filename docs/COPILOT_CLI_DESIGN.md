@@ -1,0 +1,466 @@
+# Copilot CLI Integration Design
+
+This document details FlightPath's integration with the GitHub Copilot CLI, including all available options, current implementation status, and planned enhancements.
+
+## Overview
+
+FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mode for executing prompts. CLI mode provides deterministic completion detection, structured output, and better reliability compared to Chat window automation.
+
+**Key file:** `src/flightpath/cli/CopilotCommandLineIntegration.ts`
+
+## Current Implementation Status
+
+### ✅ Implemented Flags
+
+| CLI Flag                | FlightPath Setting/Schema                    | Implementation                                        |
+| ----------------------- | -------------------------------------------- | ----------------------------------------------------- |
+| `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models |
+| `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included        |
+| `--allow-all-tools`     | `flightpath.copilotCliToolPermissions`       | Full support - "allowAll" and "custom" modes          |
+| `--allow-tool`          | `flightpath.copilotCliAllowedTools`          | Full support - pattern-based tool permissions         |
+| `--deny-tool`           | `flightpath.copilotCliDeniedTools`           | Full support - deny patterns (takes precedence)       |
+| `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                          |
+| `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp           |
+| `--log-level <level>`   | `flightpath.copilotCliLogLevel`              | Full support - debug/all for troubleshooting          |
+| `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                          |
+| `-p, --prompt <text>`   | Prompt text                                  | Full support (stdin for non-agent, arg for agent)     |
+| `--agent <agent>`       | `prompt.agent`                               | Full support                                          |
+
+### ❌ Not Implemented Flags
+
+| CLI Flag                             | Priority | Notes                                                    |
+| ------------------------------------ | -------- | -------------------------------------------------------- |
+| `--continue`                         | Low      | Resume most recent session (we use explicit session IDs) |
+| `--additional-mcp-config <json>`     | Medium   | MCP server configuration                                 |
+| `--disable-builtin-mcps`             | Low      | Disable built-in MCP servers                             |
+| `--disable-mcp-server <server-name>` | Low      | Disable specific MCP server                              |
+| `--enable-all-github-mcp-tools`      | Low      | Enable all GitHub MCP tools                              |
+| `--disable-parallel-tools-execution` | Low      | Sequential tool execution                                |
+| `--disallow-temp-dir`                | Low      | Prevent temp directory access                            |
+| `--no-custom-instructions`           | Low      | Disable AGENTS.md loading                                |
+| `--stream <mode>`                    | Low      | We handle streaming via stdout callbacks                 |
+| `--banner`                           | None     | Not relevant for automation                              |
+| `--screen-reader`                    | None     | Not relevant for automation                              |
+| `--no-color`                         | None     | Output is parsed, color irrelevant                       |
+
+## CLI Flag Reference
+
+### Model Selection
+
+```bash
+--model <model>    # Choices: claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5
+```
+
+**Current behavior:**
+
+- Default: `claude-sonnet-4.5` (via `flightpath.copilotCliModel` setting)
+- Per-prompt override via `prompt.model` field
+- If prompt specifies unsupported model, falls back to default with warning
+
+### Directory Access
+
+```bash
+--add-dir <directory>           # Add allowed directory (can be used multiple times)
+--allow-all-paths               # Disable path verification entirely
+--disallow-temp-dir             # Prevent access to system temp directory
+```
+
+**Current behavior:**
+
+- Workspace folders are automatically added via `--add-dir`
+- Additional directories configurable via `flightpath.copilotCliAllowedDirs`
+- `--allow-all-paths` enabled by default via `flightpath.copilotCliAllowAllPaths`
+
+### Tool Permissions
+
+```bash
+--allow-all-tools               # Allow all tools without confirmation
+--allow-tool [tools...]         # Allow specific tools (pattern-based)
+--deny-tool [tools...]          # Deny specific tools (takes precedence)
+```
+
+**Permission Pattern Syntax:**
+
+```
+shell(command:*?)     # Match shell commands
+                      # shell(git:*)    - all git commands
+                      # shell(npm test) - exact npm test command
+
+write                 # Match file creation/modification tools
+
+<mcp-server>(tool?)   # Match MCP server tools
+                      # MyMCP           - all tools from MyMCP
+                      # MyMCP(my_tool)  - specific tool from MyMCP
+```
+
+**Examples:**
+
+```bash
+# Allow all git commands except push
+--allow-tool 'shell(git:*)' --deny-tool 'shell(git push)'
+
+# Allow file writing
+--allow-tool 'write'
+
+# Allow MCP server but deny specific tool
+--allow-tool 'MyMCP' --deny-tool 'MyMCP(dangerous_tool)'
+```
+
+**Current behavior:**
+
+- **allowAll** mode: Uses `--allow-all-tools` (default)
+- **custom** mode: Uses `copilotCliAllowedTools` and `copilotCliDeniedTools` arrays
+- Full pattern syntax support (`shell(git:*)`, `write`, `github(search_repositories)`)
+- Deny patterns take precedence over allow patterns
+
+### Session Management
+
+```bash
+--resume [sessionId]    # Resume previous session (optional specific ID)
+--continue              # Resume most recent session
+```
+
+**Current behavior:**
+
+- Session ID extracted from log files (`session-{GUID}.log`)
+- `prompt.newChatSession: false` uses `--resume <sessionId>`
+- `--continue` not implemented (we track explicit session IDs)
+
+### Agent Selection
+
+```bash
+--agent <agent>    # Use custom agent (only in prompt mode with -p)
+```
+
+**Current behavior:**
+
+- Full support via `prompt.agent` field
+- Automatically adds `.agent` suffix if missing
+- Enhanced error messages for agent discovery failures
+
+### MCP Configuration
+
+```bash
+--additional-mcp-config <json>       # Add MCP servers (JSON string or @filepath)
+--disable-builtin-mcps               # Disable all built-in MCPs
+--disable-mcp-server <server-name>   # Disable specific MCP server
+--enable-all-github-mcp-tools        # Enable full GitHub MCP tools
+```
+
+**Current behavior:** Not implemented
+
+### Logging
+
+```bash
+--log-dir <directory>    # Set log directory (default: ~/.copilot/logs/)
+--log-level <level>      # none, error, warning, info, debug, all, default
+```
+
+**Log levels:**
+
+- `none` - No logging
+- `error` - Only errors
+- `warning` - Errors and warnings
+- `info`/`default` - Errors, warnings, and info
+- `debug`/`all` - Everything including debug
+
+**Current behavior:**
+
+- `--log-dir` configurable via `flightpath.copilotCliLogDir` setting (defaults to OS temp)
+- `--log-level` configurable via `flightpath.copilotCliLogLevel` setting (defaults to CLI default)
+- Logs used for session ID extraction from log filenames
+
+### Streaming & Display
+
+```bash
+--stream <mode>      # on/off - enable/disable streaming
+--no-color           # Disable color output
+--banner             # Show startup banner
+--screen-reader      # Screen reader optimizations
+```
+
+**Current behavior:**
+
+- Streaming handled via stdout callbacks in `spawnProcess()`
+- Other flags not relevant for automation
+
+### Other Flags
+
+```bash
+--no-custom-instructions              # Disable AGENTS.md and instruction files
+--disable-parallel-tools-execution    # Execute tools sequentially
+```
+
+**Current behavior:** Not implemented
+
+## Environment Variables
+
+| Variable                           | Purpose                                |
+| ---------------------------------- | -------------------------------------- |
+| `COPILOT_ALLOW_ALL`                | Set to "true" to auto-allow all tools  |
+| `COPILOT_MODEL`                    | Default model (overridden by --model)  |
+| `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` | Additional instruction directories     |
+| `GH_TOKEN` / `GITHUB_TOKEN`        | Authentication token                   |
+| `XDG_CONFIG_HOME`                  | Config directory (default: ~/.copilot) |
+| `XDG_STATE_HOME`                   | State directory (default: ~/.copilot)  |
+
+**Current behavior:** None explicitly set by FlightPath
+
+---
+
+## Implemented Enhancements
+
+### 1. ✅ Granular Tool Permissions
+
+**Goal:** Allow users to specify exactly which tools Copilot can use.
+
+**Settings (`package.json`):**
+
+```json
+{
+  "flightpath.copilotCliToolPermissions": "allowAll" | "custom",
+  "flightpath.copilotCliAllowedTools": ["shell(git:*)", "write", "github"],
+  "flightpath.copilotCliDeniedTools": ["shell(git push)", "shell(rm:*)"]
+}
+```
+
+**Common Use Cases:**
+
+```json
+// Allow git but prevent pushes (in VS Code settings.json)
+{
+  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.copilotCliAllowedTools": ["shell(git:*)"],
+  "flightpath.copilotCliDeniedTools": ["shell(git push)", "shell(git push:*)"]
+}
+
+// Read-only mode (no file writing, no shell)
+{
+  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.copilotCliDeniedTools": ["write", "shell"]
+}
+
+// Only allow specific MCP tools
+{
+  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.copilotCliAllowedTools": ["github(search_repositories)", "github(get_file_contents)"]
+}
+```
+
+### 2. ✅ Logging Configuration
+
+**Goal:** Allow users to customize log directory and enable debug logging for troubleshooting.
+
+**Settings (`package.json`):**
+
+```json
+{
+  "flightpath.copilotCliLogDir": "/path/to/custom/logs",
+  "flightpath.copilotCliLogLevel": "debug"
+}
+```
+
+**Implementation details:**
+
+- `initializeLogDirectory()` checks the setting first, falls back to OS temp
+- `getLogLevelArgs()` adds `--log-level` flag when non-default
+- Both are applied during CLI argument building in `sendPrompt()`
+
+---
+
+## Future Enhancements
+
+### 1. MCP Server Configuration (MEDIUM PRIORITY)
+
+**Goal:** Allow users to add custom MCP servers for enhanced capabilities.
+
+**Schema Changes:**
+
+```json
+{
+  "mcpConfig": {
+    "type": "object",
+    "properties": {
+      "servers": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "command": { "type": "string" },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "env": { "type": "object" }
+          }
+        }
+      },
+      "disableBuiltins": { "type": "boolean" },
+      "disabledServers": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}
+```
+
+**Settings:**
+
+```json
+{
+  "flightpath.copilotCliMcpConfig": {
+    "type": "string",
+    "default": "",
+    "description": "Path to MCP config JSON file or inline JSON"
+  },
+  "flightpath.copilotCliDisableBuiltinMcps": {
+    "type": "boolean",
+    "default": false
+  }
+}
+```
+
+### 2. Parallel Tool Execution Control (LOW PRIORITY)
+
+**Goal:** Allow disabling parallel tool execution for debugging or specific workflows.
+
+**Schema:**
+
+```json
+{
+  "disableParallelTools": {
+    "type": "boolean",
+    "description": "Execute tools sequentially instead of in parallel"
+  }
+}
+```
+
+### 3. Custom Instructions Control (LOW PRIORITY)
+
+**Goal:** Allow disabling automatic instruction loading per-prompt.
+
+**Schema:**
+
+```json
+{
+  "noCustomInstructions": {
+    "type": "boolean",
+    "description": "Disable loading AGENTS.md and instruction files"
+  }
+}
+```
+
+---
+
+## Implementation Notes
+
+### Current Code Structure
+
+```typescript
+// src/types/CopilotTypes.ts
+
+interface CopilotCliOptions {
+  addDirs?: string[];
+  model?: string;
+  agent?: string;
+  resumeSession?: string;
+  // Tool permissions (per-prompt override)
+  allowedTools?: string[];
+  deniedTools?: string[];
+  // Logging (per-prompt override)
+  logLevel?: string;
+  logDir?: string;
+  // Advanced options (future use)
+  mcpConfig?: string;
+  disableParallelTools?: boolean;
+  noCustomInstructions?: boolean;
+}
+```
+
+### CLI Argument Building
+
+The implementation builds args incrementally in `sendPrompt()`:
+
+```typescript
+const args: string[] = [];
+
+// Tool permissions (allowAll or custom with allow/deny patterns)
+const toolPermissions = this.getToolPermissionArgs();
+args.push(...toolPermissions);
+
+// Path access
+if (this.shouldAllowAllPaths()) {
+  args.push("--allow-all-paths");
+}
+
+// Logging
+if (this.logDirectory) {
+  args.push("--log-dir", this.logDirectory);
+}
+// Log level (if non-default)
+const logLevelArgs = this.getLogLevelArgs();
+args.push(...logLevelArgs);
+
+// Directories
+if (options.addDirs && options.addDirs.length > 0) {
+  options.addDirs.forEach((dir) => {
+    args.push("--add-dir", dir);
+  });
+}
+
+// Model
+if (options.model) {
+  args.push("--model", options.model);
+}
+
+// Agent (requires -p flag)
+if (options.agent) {
+  const agentName = options.agent.endsWith(".agent")
+    ? options.agent
+    : `${options.agent}.agent`;
+  args.push("--agent", agentName);
+  args.push("-p", JSON.stringify(promptText));
+}
+
+// Session resume
+if (options.resumeSession) {
+  args.push("--resume", options.resumeSession);
+}
+```
+
+### Security Considerations
+
+1. **Tool denial precedence:** `--deny-tool` always takes precedence over `--allow-tool` and `--allow-all-tools`
+2. **Path restrictions:** Consider disabling `--allow-all-paths` in security-sensitive environments
+3. **Temp directory:** Use `--disallow-temp-dir` to prevent temp file manipulation
+4. **Shell commands:** Carefully scope shell permissions with patterns like `shell(npm:*)` instead of `shell`
+
+---
+
+## Implementation Tasks for Agents
+
+This section provides a clear checklist for implementing the remaining planned enhancements.
+
+### ✅ Completed Tasks
+
+| Task                      | Status  | Files Modified                                                                |
+| ------------------------- | ------- | ----------------------------------------------------------------------------- |
+| Log Directory Setting     | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`, `copilot-instructions.md` |
+| Log Level Setting         | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`                            |
+| Granular Tool Permissions | ✅ Done | `package.json`, `CopilotCommandLineIntegration.ts`                            |
+| Update CopilotCliOptions  | ✅ Done | `src/types/CopilotTypes.ts`                                                   |
+
+### Remaining Tasks
+
+| Task                     | Priority | Effort | Notes                          |
+| ------------------------ | -------- | ------ | ------------------------------ |
+| MCP Server Configuration | Medium   | Medium | Add custom MCP server support  |
+| Parallel Tool Execution  | Low      | Small  | Add `--disable-parallel-tools` |
+| Custom Instructions      | Low      | Small  | Add `--no-custom-instructions` |
+
+---
+
+## Related Documentation
+
+- [AGENT_SUPPORT_IMPLEMENTATION.md](./AGENT_SUPPORT_IMPLEMENTATION.md) - Agent discovery and usage
+- [CHAT_MODE_LIMITATIONS.md](./CHAT_MODE_LIMITATIONS.md) - Why CLI is preferred over Chat
+- [END_CONDITIONS.md](./END_CONDITIONS.md) - Validation script execution
+
+## Version Compatibility
+
+This documentation is based on Copilot CLI as of November 2025. Run `copilot --version` to check your installed version and `copilot --help` for the latest options.

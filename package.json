@@ -382,6 +382,54 @@
           "description": "Allow Copilot CLI to access any file path without confirmation",
           "markdownDescription": "When enabled (default), uses `--allow-all-paths` to disable path verification and prevent interactive prompts. Disable for stricter security if you want to control file access per-session."
         },
+        "flightpath.copilotCliLogDir": {
+          "type": "string",
+          "default": "",
+          "description": "Custom directory for Copilot CLI logs (default: system temp)",
+          "markdownDescription": "Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and can help with debugging."
+        },
+        "flightpath.copilotCliLogLevel": {
+          "type": "string",
+          "enum": [
+            "default",
+            "none",
+            "error",
+            "warning",
+            "info",
+            "debug",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Default logging (error, warning, info)",
+            "No logging output",
+            "Only error messages",
+            "Error and warning messages",
+            "Error, warning, and info messages",
+            "All messages including debug",
+            "Same as debug"
+          ],
+          "default": "default",
+          "description": "Copilot CLI log level for debugging",
+          "markdownDescription": "Copilot CLI log level for debugging. Use **debug** or **all** for troubleshooting."
+        },
+        "flightpath.copilotCliAllowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool patterns to allow when using custom tool permissions",
+          "markdownDescription": "Tool patterns to allow when `copilotCliToolPermissions` is set to **custom**. Examples: `shell(git:*)`, `write`, `github`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+        },
+        "flightpath.copilotCliDeniedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool patterns to deny (takes precedence over allows)",
+          "markdownDescription": "Tool patterns to deny (takes precedence over allows). Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+        },
         "flightpath.defaultMaxRetries": {
           "type": "number",
           "default": 3,

@@ -24,8 +24,16 @@ export interface CopilotCliOptions {
   model?: string;
   agent?: string; // Custom agent name (CLI mode only)
   resumeSession?: string;
+  // Tool permissions (per-prompt override)
   allowedTools?: string[];
   deniedTools?: string[];
+  // Logging (per-prompt override)
+  logLevel?: string;
+  logDir?: string;
+  // Advanced options (future use)
+  mcpConfig?: string;
+  disableParallelTools?: boolean;
+  noCustomInstructions?: boolean;
 }
 
 export interface CopilotCliResult {

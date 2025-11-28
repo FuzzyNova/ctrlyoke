@@ -78,12 +78,21 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
 
   /**
    * Initialize log directory for session ID tracking
-   * Uses OS temp directory + FlightPath subdirectory for cross-platform compatibility
+   * Uses configured directory or falls back to OS temp directory + FlightPath subdirectory
    */
   private initializeLogDirectory(): void {
-    // Create FlightPath-specific log directory in OS temp folder
-    // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
-    this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
+    // Check if user has configured a custom log directory
+    const configuredDir = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<string>("copilotCliLogDir", "");
+
+    if (configuredDir) {
+      this.logDirectory = configuredDir;
+    } else {
+      // Fallback: Create FlightPath-specific log directory in OS temp folder
+      // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
+      this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
+    }
     this.log(`📁 Log directory set to: ${this.logDirectory}`);
   }
 
@@ -198,6 +207,9 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
       if (this.logDirectory) {
         args.push("--log-dir", this.logDirectory);
       }
+      // Add log level if configured
+      const logLevelArgs = this.getLogLevelArgs();
+      args.push(...logLevelArgs);
       if (options.addDirs && options.addDirs.length > 0) {
         options.addDirs.forEach((dir) => {
           args.push("--add-dir", dir);
@@ -531,19 +543,61 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
-   * Get tool permission arguments
+   * Get tool permission arguments based on configuration
+   * Supports "allowAll" mode (--allow-all-tools) or "custom" mode with specific allow/deny patterns
+   *
+   * Pattern syntax:
+   * - shell(command:*?) - Match shell commands (e.g., shell(git:*), shell(npm test))
+   * - write - Match file creation/modification tools
+   * - <mcp-server>(tool?) - Match MCP server tools (e.g., github, github(search_repositories))
    */
   private getToolPermissionArgs(): string[] {
-    const mode = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotCliToolPermissions", "allowAll");
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const mode = config.get<string>("copilotCliToolPermissions", "allowAll");
 
     if (mode === "allowAll") {
       return ["--allow-all-tools"];
     }
 
-    // TODO: Add custom tool permission configuration
-    return ["--allow-all-tools"];
+    // Custom mode - use specific allow/deny patterns
+    const args: string[] = [];
+
+    const allowedTools = config.get<string[]>("copilotCliAllowedTools", []);
+    const deniedTools = config.get<string[]>("copilotCliDeniedTools", []);
+
+    // Add allowed tool patterns
+    allowedTools.forEach((tool) => {
+      args.push("--allow-tool", tool);
+    });
+
+    // Add denied tool patterns (these take precedence over allows)
+    deniedTools.forEach((tool) => {
+      args.push("--deny-tool", tool);
+    });
+
+    // If no patterns specified in custom mode, log a warning
+    if (args.length === 0) {
+      this.log(
+        "⚠️ Custom tool permissions mode enabled but no tools specified. Copilot will prompt for each tool."
+      );
+    }
+
+    return args;
+  }
+
+  /**
+   * Get log level arguments based on configuration
+   */
+  private getLogLevelArgs(): string[] {
+    const logLevel = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<string>("copilotCliLogLevel", "default");
+
+    if (logLevel !== "default") {
+      return ["--log-level", logLevel];
+    }
+
+    return [];
   }
 
   /**

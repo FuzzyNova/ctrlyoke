@@ -264,8 +264,22 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **Fallback behavior**: If prompt specifies unsupported CLI model, falls back to this default with warning
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
 - flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
+  - **allowAll**: Uses `--allow-all-tools` flag (default, grants full access)
+  - **custom**: Uses `copilotCliAllowedTools` and `copilotCliDeniedTools` patterns
+- flightpath.copilotCliAllowedTools (array of strings, default: []) - Tool patterns to allow in custom mode
+  - Examples: `shell(git:*)`, `write`, `github`, `github(search_repositories)`
+- flightpath.copilotCliDeniedTools (array of strings, default: []) - Tool patterns to deny (takes precedence)
+  - Examples: `shell(git push)`, `shell(rm:*)`, `write`
+- flightpath.copilotCliAllowAllPaths (boolean, default: true) - Allow CLI access to any file path
+- flightpath.copilotCliLogDir (string, default: "") - Custom directory for Copilot CLI logs
+  - Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`)
+  - Logs are used for session ID tracking and debugging
+- flightpath.copilotCliLogLevel (enum: "default" | "none" | "error" | "warning" | "info" | "debug" | "all", default: "default")
+  - Use **debug** or **all** for troubleshooting CLI issues
 - flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel
 - flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow", default: "chatPanel")
+
+**CLI Integration**: See `docs/COPILOT_CLI_DESIGN.md` for complete CLI flag reference, tool permission patterns, and planned enhancements.
 
 When adding settings:
 
