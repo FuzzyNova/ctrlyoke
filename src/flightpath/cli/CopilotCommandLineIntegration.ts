@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as os from "os";
@@ -8,7 +7,8 @@ import {
   CopilotIntegrationMode,
 } from "../../types/FlightPathTypes";
 import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
-import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import { CopilotStatus } from "../base/CopilotIntegration";
+import { BaseCliIntegration } from "./BaseCliIntegration";
 import {
   CLI_SUPPORTED_MODELS,
   CliSupportedModel,
@@ -28,53 +28,56 @@ import {
  * - Model selection support
  * - Session management for multi-turn conversations
  */
-export class CopilotCommandLineIntegration extends CopilotIntegration {
-  private sessionId?: string;
-  private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
-  private outputChannel?: vscode.OutputChannel;
-  private lastResult?: CopilotCliResult;
-  private lastCliCommand?: string; // Full command with args for debugging
-  private lastFullPrompt?: string; // Full prompt text sent to CLI (with all context)
-  private currentProcess?: ReturnType<typeof spawn>;
+export class CopilotCommandLineIntegration extends BaseCliIntegration {
   private logDirectory?: string;
 
   constructor(
     context: vscode.ExtensionContext,
     outputChannel?: vscode.OutputChannel
   ) {
-    super(context);
-    this.outputChannel = outputChannel;
+    super(context, outputChannel);
     this.initializeLogDirectory();
     this.initialize();
   }
 
+  // ============================================================
+  // ABSTRACT METHOD IMPLEMENTATIONS
+  // ============================================================
+
   /**
-   * Log message to both console and output channel (if enabled)
+   * Get the CLI command name
    */
-  private log(message: string): void {
-    console.log(message);
-    if (this.shouldShowOutput()) {
-      this.outputChannel?.appendLine(message);
+  protected getCliCommand(): string {
+    return "copilot";
+  }
+
+  /**
+   * Get the integration mode for status reporting
+   */
+  protected getIntegrationMode(): string {
+    return CopilotIntegrationMode.CLI;
+  }
+
+  /**
+   * Parse token counts from Copilot CLI statistics string
+   * Example statistics: "Total usage est: 1234 prompt + 5678 completion = 6912 total tokens"
+   */
+  parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined {
+    const match = statistics.match(/(\d+)\s+prompt\s+\+\s+(\d+)\s+completion/);
+    if (match) {
+      return {
+        prompt: parseInt(match[1], 10),
+        completion: parseInt(match[2], 10),
+      };
     }
+    return undefined;
   }
 
-  /**
-   * Check if output should be shown in Output panel
-   */
-  private shouldShowOutput(): boolean {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("showCliOutput", true);
-  }
-
-  /**
-   * Check if CLI command should be shown in dashboard output
-   */
-  private shouldShowCliCommand(): boolean {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("showCliCommand", false);
-  }
+  // ============================================================
+  // COPILOT-SPECIFIC CONFIGURATION
+  // ============================================================
 
   /**
    * Initialize log directory for session ID tracking
@@ -414,99 +417,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
-   * Spawn a child process and capture output
-   * Optionally writes to stdin if provided (for sending prompts to copilot CLI)
-   */
-  private spawnProcess(
-    command: string,
-    args: string[],
-    options: {
-      timeout?: number;
-      stdin?: string;
-      onStdout?: (chunk: string) => void;
-    } = {}
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-
-      // Always use shell:true for cross-platform copilot script execution
-      // When prompt is in args, it's wrapped with JSON.stringify for proper escaping
-      const child = spawn(command, args, {
-        cwd: this.getWorkspaceRoot(),
-        shell: true, // Required to find copilot in PATH
-      });
-
-      // Store reference for cancellation
-      this.currentProcess = child;
-
-      // Write to stdin if provided
-      if (options.stdin !== undefined) {
-        if (child.stdin) {
-          child.stdin.write(options.stdin);
-          child.stdin.end();
-        } else {
-          reject(new Error("Failed to access stdin"));
-          return;
-        }
-      }
-
-      child.stdout.on("data", (data) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        // Call streaming callback if provided
-        if (options.onStdout) {
-          options.onStdout(chunk);
-        }
-      });
-
-      child.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      child.on("error", (error) => {
-        console.error("❌ Process error:", error);
-        reject(error);
-      });
-
-      child.on("close", (code) => {
-        // Clear reference when process closes
-        if (this.currentProcess === child) {
-          this.currentProcess = undefined;
-        }
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code ?? 1,
-        });
-      });
-
-      // Handle timeout
-      if (options.timeout) {
-        setTimeout(() => {
-          child.kill();
-          reject(new Error(`Process timeout after ${options.timeout}ms`));
-        }, options.timeout);
-      }
-    });
-  }
-
-  /**
-   * Get workspace directories for --add-dir flag
-   */
-  private getWorkspaceDirs(): string[] {
-    const configured = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string[]>("copilotCliAllowedDirs", []);
-
-    // Always include workspace folders
-    const workspaceDirs =
-      vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) || [];
-
-    return [...workspaceDirs, ...configured];
-  }
-
-  /**
    * Get configured AI model
    */
   private getConfiguredModel(): string {
@@ -630,94 +540,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
   }
 
   /**
-   * Check if integration is available
-   */
-  isIntegrationAvailable(): boolean {
-    return this.isAvailable;
-  }
-
-  /**
-   * Check if Copilot is ready
-   */
-  isReady(): boolean {
-    return this.initializationStatus === CopilotStatus.Ready;
-  }
-
-  /**
-   * Get initialization status
-   */
-  getInitializationStatus(): CopilotStatus {
-    return this.initializationStatus;
-  }
-
-  /**
-   * Start a new session (clear session ID)
-   */
-  startNewSession(): void {
-    this.sessionId = undefined;
-  }
-
-  /**
-   * Continue with existing session
-   */
-  continueSession(sessionId: string): void {
-    this.sessionId = sessionId;
-  }
-
-  /**
-   * Get current session ID
-   */
-  getCurrentSession(): string | undefined {
-    return this.sessionId;
-  }
-
-  /**
-   * Get the last CLI result (includes response and statistics)
-   */
-  getLastResult(): CopilotCliResult | undefined {
-    return this.lastResult;
-  }
-
-  /**
-   * Get the last CLI command executed (for debugging)
-   */
-  getLastCliCommand(): string | undefined {
-    return this.lastCliCommand;
-  }
-
-  /**
-   * Get the full prompt text sent to CLI (includes all context and instructions)
-   */
-  getLastFullPrompt(): string | undefined {
-    return this.lastFullPrompt;
-  }
-
-  /**
-   * Parse token counts from statistics string
-   * Example statistics: "Usage estimate: 1234 prompt + 5678 completion = 6912 total tokens"
-   */
-  parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    const match = statistics.match(/(\d+)\s+prompt\s+\+\s+(\d+)\s+completion/);
-    if (match) {
-      return {
-        prompt: parseInt(match[1], 10),
-        completion: parseInt(match[2], 10),
-      };
-    }
-    return undefined;
-  }
-
-  /**
-   * Check if this is a CLI-based integration
-   * Returns true for CLI integration (supports output logging, token display, etc.)
-   */
-  isCli(): boolean {
-    return true;
-  }
-
-  /**
    * Extract session ID from log file name in log directory
    * Log files are named: session-{GUID}.log
    * Example: session-53b8fdf5-3aed-4dac-8953-822830d748e0.log
@@ -766,24 +588,6 @@ export class CopilotCommandLineIntegration extends CopilotIntegration {
     } catch (error) {
       console.error("❌ Failed to extract session ID from logs:", error);
       return undefined;
-    }
-  }
-
-  /**
-   * Cancel the current CLI process (platform-agnostic)
-   * Kills the running copilot CLI process if one is active
-   */
-  protected async cancelImplementation(): Promise<void> {
-    if (this.currentProcess) {
-      this.log("⏹️ Cancelling CLI process...");
-
-      // Platform-agnostic kill - sends SIGTERM on Unix, terminates on Windows
-      this.currentProcess.kill();
-
-      // Clear the reference
-      this.currentProcess = undefined;
-
-      this.log("✅ CLI process cancelled");
     }
   }
 }

@@ -37,15 +37,26 @@ export const ConfigurationUtils = {
 
   /**
    * Get the default Copilot integration mode from settings
+   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */
   getIntegrationMode(): CopilotIntegrationMode {
     const mode = getConfig().get<string>(
       "copilotIntegrationMode",
       CopilotIntegrationMode.CLI
     );
-    return mode === CopilotIntegrationMode.Chat
-      ? CopilotIntegrationMode.Chat
-      : CopilotIntegrationMode.CLI;
+
+    switch (mode) {
+      case "chat":
+      case CopilotIntegrationMode.Chat:
+        return CopilotIntegrationMode.Chat;
+      case "claude-cli":
+      case CopilotIntegrationMode.ClaudeCli:
+        return CopilotIntegrationMode.ClaudeCli;
+      case "cli":
+      case CopilotIntegrationMode.CLI:
+      default:
+        return CopilotIntegrationMode.CLI;
+    }
   },
 
   /**

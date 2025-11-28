@@ -10,9 +10,15 @@ import { SupportedModel } from "./ModelConstants";
  * Copilot integration mode
  */
 export enum CopilotIntegrationMode {
-  CLI = "cli",
-  Chat = "chat",
+  CLI = "cli", // Copilot CLI (original, backward compatible)
+  Chat = "chat", // Copilot Chat (legacy UI automation)
+  ClaudeCli = "claude-cli", // Claude Code CLI (new)
 }
+
+/**
+ * Claude CLI status (separate from Copilot status for clarity)
+ */
+export type ClaudeCliStatus = "Initializing" | "Ready" | "Unavailable";
 
 export interface PromptFile {
   prompt?: string;

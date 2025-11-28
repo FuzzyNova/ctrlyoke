@@ -5,6 +5,7 @@ import { PromptQueue } from "./PromptQueue";
 import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
+import { ClaudeCommandLineIntegration } from "./cli/ClaudeCommandLineIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
 import { WorkflowExecutor, WorkflowContext } from "./WorkflowExecutor";
@@ -24,6 +25,7 @@ export class FlightPathManager {
   private promptQueue: PromptQueue;
   private cliIntegration: CopilotCommandLineIntegration;
   private chatIntegration: CopilotChatIntegration;
+  private claudeCliIntegration: ClaudeCommandLineIntegration;
   private endConditionEvaluator: EndConditionEvaluator;
   private endConditionHandler: EndConditionHandler;
   private workflowExecutor: WorkflowExecutor;
@@ -48,12 +50,16 @@ export class FlightPathManager {
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     context.subscriptions.push(this.outputChannel);
 
-    // Initialize BOTH integrations so they're always ready to use
+    // Initialize ALL integrations so they're always ready to use
     this.cliIntegration = new CopilotCommandLineIntegration(
       context,
       this.outputChannel
     );
     this.chatIntegration = new CopilotChatIntegration(context);
+    this.claudeCliIntegration = new ClaudeCommandLineIntegration(
+      context,
+      this.outputChannel
+    );
 
     this.endConditionEvaluator = new EndConditionEvaluator(context);
     this.endConditionHandler = new EndConditionHandler(
@@ -99,13 +105,23 @@ export class FlightPathManager {
 
   /**
    * Get the default Copilot integration based on user settings
+   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */
   private getDefaultIntegration(): CopilotIntegration {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
-    return integrationMode === CopilotIntegrationMode.Chat
-      ? this.chatIntegration
-      : this.cliIntegration;
+    switch (integrationMode) {
+      case CopilotIntegrationMode.Chat:
+        console.log("🔄 FlightPath: Using Copilot Chat integration");
+        return this.chatIntegration;
+      case CopilotIntegrationMode.ClaudeCli:
+        console.log("🔄 FlightPath: Using Claude Code CLI integration");
+        return this.claudeCliIntegration;
+      case CopilotIntegrationMode.CLI:
+      default:
+        console.log("🔄 FlightPath: Using Copilot CLI integration");
+        return this.cliIntegration;
+    }
   }
 
   /**
@@ -125,9 +141,15 @@ export class FlightPathManager {
   ): CopilotIntegration {
     if (modeOverride) {
       console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
-      return modeOverride === CopilotIntegrationMode.Chat
-        ? this.chatIntegration
-        : this.cliIntegration;
+      switch (modeOverride) {
+        case CopilotIntegrationMode.Chat:
+          return this.chatIntegration;
+        case CopilotIntegrationMode.ClaudeCli:
+          return this.claudeCliIntegration;
+        case CopilotIntegrationMode.CLI:
+        default:
+          return this.cliIntegration;
+      }
     }
 
     // Use default integration based on user settings

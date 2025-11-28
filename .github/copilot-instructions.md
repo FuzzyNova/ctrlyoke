@@ -57,7 +57,8 @@ src/
 │   ├── chat/
 │   │   └── CopilotChatIntegration.ts  # Chat window automation
 │   ├── cli/
-│   │   └── CopilotCommandLineIntegration.ts  # CLI automation (default)
+│   │   ├── CopilotCommandLineIntegration.ts  # Copilot CLI automation (default)
+│   │   └── ClaudeCommandLineIntegration.ts   # Claude Code CLI automation
 │   ├── FlightPathManager.ts      # Orchestration with factory pattern
 │   ├── PromptQueue.ts            # Execution queue
 │   ├── PromptFileParser.ts       # JSON parsing
@@ -257,9 +258,12 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30000)
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
-- flightpath.copilotIntegrationMode (enum: "cli" | "chat", default: "cli")
+- flightpath.copilotIntegrationMode (enum: "cli" | "chat" | "claude-cli", default: "cli")
+  - **cli**: Copilot CLI (default, best reliability)
+  - **chat**: Copilot Chat window (legacy UI automation)
+  - **claude-cli**: Claude Code CLI (Anthropic's CLI)
 - flightpath.copilotCliModel (enum: "claude-sonnet-4.5" | "claude-sonnet-4" | "claude-haiku-4.5" | "gpt-5", default: "claude-sonnet-4.5")
-  - **Purpose**: Default model for CLI mode only
+  - **Purpose**: Default model for Copilot CLI mode only
   - **Note**: Prompts can override with any supported model (Chat superset includes 22 models)
   - **Fallback behavior**: If prompt specifies unsupported CLI model, falls back to this default with warning
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
@@ -278,6 +282,19 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - Use **debug** or **all** for troubleshooting CLI issues
 - flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel
 - flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow", default: "chatPanel")
+
+**Claude Code CLI Settings** (when using `claude-cli` mode):
+
+- flightpath.claudeCliModel (enum: "sonnet" | "opus" | "haiku", default: "sonnet")
+  - **sonnet**: Best balance of speed and capability (recommended)
+  - **opus**: Most capable, best for complex tasks
+  - **haiku**: Fastest, best for simple tasks
+- flightpath.claudeCliToolPermissions (enum: "skipAll" | "custom", default: "skipAll")
+  - **skipAll**: Uses `--dangerously-skip-permissions` (default, non-interactive)
+  - **custom**: Uses specific allow/disallow patterns
+- flightpath.claudeCliAllowedTools (array of strings, default: []) - Tool patterns to allow
+- flightpath.claudeCliDisallowedTools (array of strings, default: []) - Tool patterns to disallow
+- flightpath.claudeCliOutputFormat (enum: "json" | "text", default: "json")
 
 **CLI Integration**: See `docs/COPILOT_CLI_DESIGN.md` for complete CLI flag reference, tool permission patterns, and planned enhancements.
 

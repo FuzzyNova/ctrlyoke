@@ -331,15 +331,17 @@
           "type": "string",
           "enum": [
             "cli",
-            "chat"
+            "chat",
+            "claude-cli"
           ],
           "enumDescriptions": [
             "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
-            "Use Copilot Chat window (legacy UI automation, fallback if CLI unavailable)"
+            "Use Copilot Chat window (legacy UI automation, fallback if CLI unavailable)",
+            "Use Claude Code CLI (Anthropic's Claude AI via command line)"
           ],
           "default": "cli",
-          "description": "Choose how FlightPath interacts with GitHub Copilot",
-          "markdownDescription": "Choose how FlightPath interacts with GitHub Copilot. **CLI mode** (default) provides better reliability, deterministic completion, and model selection. Chat mode is available as fallback."
+          "description": "Choose how FlightPath interacts with AI providers",
+          "markdownDescription": "Choose how FlightPath interacts with AI providers. **Copilot CLI** (default) provides best reliability with GitHub Copilot. **Claude CLI** uses Anthropic's Claude Code CLI for Claude models. Chat mode is available as legacy fallback."
         },
         "flightpath.copilotCliModel": {
           "type": "string",
@@ -429,6 +431,68 @@
           "default": [],
           "description": "Tool patterns to deny (takes precedence over allows)",
           "markdownDescription": "Tool patterns to deny (takes precedence over allows). Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+        },
+        "flightpath.claudeCliModel": {
+          "type": "string",
+          "enum": [
+            "sonnet",
+            "opus",
+            "haiku"
+          ],
+          "enumDescriptions": [
+            "Claude Sonnet - Best balance of speed and capability (recommended)",
+            "Claude Opus - Most capable, best for complex tasks",
+            "Claude Haiku - Fastest, best for simple tasks"
+          ],
+          "default": "sonnet",
+          "description": "Default AI model for Claude Code CLI",
+          "markdownDescription": "Default AI model for Claude Code CLI. **Sonnet** (default) provides the best balance of speed and capability. Prompts can override this on a per-prompt basis."
+        },
+        "flightpath.claudeCliToolPermissions": {
+          "type": "string",
+          "enum": [
+            "skipAll",
+            "custom"
+          ],
+          "enumDescriptions": [
+            "Skip all permission prompts (--dangerously-skip-permissions)",
+            "Custom tool permissions (configure specific allows/disallows)"
+          ],
+          "default": "skipAll",
+          "description": "Permission mode for Claude Code CLI",
+          "markdownDescription": "Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses specific allow/disallow patterns."
+        },
+        "flightpath.claudeCliAllowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool patterns to allow when using custom permissions",
+          "markdownDescription": "Tool patterns to allow when `claudeCliToolPermissions` is set to **custom**. Examples: `Bash`, `Write`, `Read`. See Claude Code CLI docs for pattern syntax."
+        },
+        "flightpath.claudeCliDisallowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool patterns to disallow (takes precedence over allows)",
+          "markdownDescription": "Tool patterns to disallow (takes precedence over allows). Examples: `Bash(rm)`, `Bash(sudo:*)`. See Claude Code CLI docs for pattern syntax."
+        },
+        "flightpath.claudeCliOutputFormat": {
+          "type": "string",
+          "enum": [
+            "json",
+            "text"
+          ],
+          "enumDescriptions": [
+            "JSON output for structured parsing (recommended)",
+            "Plain text output"
+          ],
+          "default": "json",
+          "description": "Output format for Claude Code CLI responses",
+          "markdownDescription": "Output format for Claude Code CLI. **JSON** (default) enables structured parsing of response content and token statistics. **Text** returns raw response content."
         },
         "flightpath.defaultMaxRetries": {
           "type": "number",
