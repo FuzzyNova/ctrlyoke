@@ -107,7 +107,18 @@ JSON schema validation with AJV. Validates both `.prompt.json` and `.flightpath.
 
 ## PromptCompletionProvider
 
-IntelliSense for `#file:` references in prompt files. Provides workspace files and current editor selections.
+IntelliSense for FlightPath prompt files:
+
+- `#file:` references with workspace files and current selections
+- Dynamic model completions (models queried from Copilot API at activation)
+
+## ModelRegistry
+
+Queries available Copilot models via `vscode.lm.selectChatModels({ vendor: "copilot" })` at extension activation. Provides:
+
+- Runtime model discovery (different users may have different models)
+- Fallback to static list if API fails
+- CLI support detection for each model
 
 ## EndConditionEvaluator
 
@@ -200,9 +211,9 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 **Optional Fields:**
 
 - `model` - Override the AI model for a specific prompt.
-  - **All models**: See `src/types/ModelConstants.ts` for complete list (22 Chat models total)
+  - **Dynamic discovery**: Models are queried at runtime via `vscode.lm.selectChatModels()`. Different users may have different models available.
+  - **IntelliSense**: Use Ctrl+Space in prompt files to see available models with CLI support indicators.
   - **CLI-supported** (4 models): `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`
-  - **Chat-supported** (22 models): All CLI models plus `gpt-5-mini`, `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5-codex`, `gpt-4.1`, `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-4-0125-preview`, `gpt-3.5-turbo`, `gemini-2.5-pro`, `gemini-3-pro-preview`, `grok-code-fast-1`, `copilot-fast`, `oswe-vscode-secondary`, `auto`
   - **Behavior**:
     - CLI mode: Validates against CLI_SUPPORTED_MODELS, warns and falls back to default if unsupported
     - Chat mode: Switches model using `workbench.action.chat.changeModel` before sending prompt

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { getAvailableModelsSync } from "../utils/ModelRegistry";
 
 /**
  * Provides context-aware completions for FlightPath prompt files
@@ -9,6 +10,7 @@ import * as path from "path";
  * - Triggers on `#` character anywhere in Markdown files
  * - Offers workspace files as completions
  * - Special handling for current selection (#selection)
+ * - Dynamic model completions inside "model" string values (JSON files)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   // Cache for workspace files
@@ -25,7 +27,14 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     token: vscode.CancellationToken,
     context: vscode.CompletionContext
   ): Promise<vscode.CompletionList | undefined> {
-    // Check if we should provide completions based on file type
+    // For JSON files, check for model context first
+    if (document.languageId === "json" || document.languageId === "jsonc") {
+      if (this.isInsideModelString(document, position)) {
+        return this.getModelCompletions(document, position);
+      }
+    }
+
+    // Check if we should provide file/selection completions
     if (!this.shouldProvideCompletions(document, position)) {
       return undefined;
     }
@@ -119,6 +128,108 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // - We're after the opening quote
     // - Either no closing quote exists, or we're before it
     return charIndex > openQuoteIndex;
+  }
+
+  /**
+   * Check if cursor position is inside a "model" string value (JSON files only)
+   */
+  private isInsideModelString(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): boolean {
+    const line = document.lineAt(position.line).text;
+    const charIndex = position.character;
+
+    // Check if line contains "model":
+    const modelMatch = line.match(/\"model\"\s*:\s*\"/);
+    if (!modelMatch) {
+      return false;
+    }
+
+    // Find the opening quote of the value
+    const colonIndex = line.indexOf(":", modelMatch.index!);
+    const openQuoteIndex = line.indexOf('"', colonIndex);
+
+    if (openQuoteIndex === -1 || charIndex <= openQuoteIndex) {
+      return false;
+    }
+
+    // We're inside the string if we're after the opening quote
+    return charIndex > openQuoteIndex;
+  }
+
+  /**
+   * Get model completions from ModelRegistry
+   */
+  private getModelCompletions(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): vscode.CompletionList {
+    const models = getAvailableModelsSync();
+    const items: vscode.CompletionItem[] = [];
+
+    // Get the current partial text for filtering
+    const line = document.lineAt(position.line).text;
+    const modelMatch = line.match(/\"model\"\s*:\s*\"/);
+    if (!modelMatch) {
+      return new vscode.CompletionList(items, false);
+    }
+
+    const colonIndex = line.indexOf(":", modelMatch.index!);
+    const openQuoteIndex = line.indexOf('"', colonIndex);
+    const partialText = line.substring(openQuoteIndex + 1, position.character);
+
+    for (const model of models) {
+      const item = new vscode.CompletionItem(
+        model.id,
+        vscode.CompletionItemKind.EnumMember
+      );
+
+      // Replace the entire value inside the quotes
+      const startPos = new vscode.Position(position.line, openQuoteIndex + 1);
+      const endQuoteIndex = line.indexOf('"', position.character);
+      const endPos =
+        endQuoteIndex > position.character
+          ? new vscode.Position(position.line, endQuoteIndex)
+          : position;
+
+      item.range = new vscode.Range(startPos, endPos);
+      item.insertText = model.id;
+
+      // Show CLI support indicator
+      item.detail = model.cliSupported ? "CLI & Chat" : "Chat only";
+
+      // Documentation with model info
+      const doc = new vscode.MarkdownString();
+      doc.appendMarkdown(`**${model.id}**\n\n`);
+      doc.appendMarkdown(`- Vendor: ${model.vendor}\n`);
+      doc.appendMarkdown(`- Family: ${model.family}\n`);
+      doc.appendMarkdown(
+        `- CLI Support: ${model.cliSupported ? "✅ Yes" : "❌ No (Chat mode only)"}\n`
+      );
+      item.documentation = doc;
+
+      // Sort CLI-supported models first
+      item.sortText = model.cliSupported ? `0_${model.id}` : `1_${model.id}`;
+
+      // Filter text includes partial for search
+      item.filterText = model.id;
+
+      items.push(item);
+    }
+
+    // If no models available, show a helpful message
+    if (items.length === 0) {
+      const noModelsItem = new vscode.CompletionItem(
+        "No models available",
+        vscode.CompletionItemKind.Text
+      );
+      noModelsItem.detail = "Model registry not initialized";
+      noModelsItem.insertText = "";
+      items.push(noModelsItem);
+    }
+
+    return new vscode.CompletionList(items, false);
   }
 
   /**

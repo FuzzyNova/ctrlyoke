@@ -7,9 +7,9 @@ import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration } from "./BaseCliIntegration";
 import {
-  CLI_SUPPORTED_MODELS,
-  CliSupportedModel,
-} from "../../types/ModelConstants";
+  getCliSupportedModelIds,
+  isCliModelSupported,
+} from "../../utils/ModelRegistry";
 
 /**
  * Claude CLI tool names that need to be converted to Copilot format
@@ -457,6 +457,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Validate model is supported by CLI, fallback to default if not
+   * Uses dynamically discovered models from 'copilot --help' output
    * Shows user-friendly warning when unsupported model requested
    */
   private validateAndGetModel(requestedModel?: string): string {
@@ -466,17 +467,18 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       return defaultModel;
     }
 
-    // Check if model is supported by CLI
-    if (CLI_SUPPORTED_MODELS.includes(requestedModel as CliSupportedModel)) {
+    // Check if model is supported by CLI (using dynamically discovered models)
+    if (isCliModelSupported(requestedModel)) {
       return requestedModel;
     }
 
     // Model not supported - warn user and fallback
+    const supportedModels = getCliSupportedModelIds();
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
     this.log(`⚠️ ${message}`);
 
     vscode.window.showWarningMessage(
-      `FlightPath: ${message}\n\nCLI-supported models: ${CLI_SUPPORTED_MODELS.join(", ")}`
+      `FlightPath: ${message}\n\nCLI-supported models: ${supportedModels.join(", ")}`
     );
 
     return defaultModel;

@@ -38,30 +38,15 @@
         },
         "model": {
           "type": "string",
-          "enum": [
+          "description": "AI model to use for this prompt. Available models are queried dynamically from your Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting.",
+          "examples": [
             "claude-sonnet-4.5",
             "claude-sonnet-4",
             "claude-haiku-4.5",
             "gpt-5",
-            "gpt-5-mini",
-            "gpt-5.1",
-            "gpt-5.1-codex",
-            "gpt-5.1-codex-mini",
-            "gpt-5-codex",
-            "gpt-4.1",
             "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4",
-            "gpt-4-0125-preview",
-            "gpt-3.5-turbo",
-            "gemini-2.5-pro",
-            "gemini-3-pro-preview",
-            "grok-code-fast-1",
-            "copilot-fast",
-            "oswe-vscode-secondary",
-            "auto"
-          ],
-          "description": "AI model to use for this prompt. Supports all Chat models (22 total). CLI mode only supports: claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5 - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting. See src/types/ModelConstants.ts for source of truth."
+            "gemini-2.5-pro"
+          ]
         },
         "agent": {
           "type": "string",

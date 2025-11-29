@@ -3,6 +3,7 @@ import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { Provider } from "./types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
+import { initializeModelRegistry } from "./utils/ModelRegistry";
 
 let flightPathManager: FlightPathManager;
 let dashboardProvider: FlightPathDashboardProvider;
@@ -435,6 +436,12 @@ export async function activate(context: vscode.ExtensionContext) {
   console.log("FlightPath: Extension activating...");
 
   try {
+    // Initialize model registry (queries available Copilot models)
+    // Run this early so models are available for IntelliSense
+    initializeModelRegistry().catch((err) => {
+      console.warn("FlightPath: Model registry initialization failed:", err);
+    });
+
     // Register dashboard provider
     dashboardProvider = new FlightPathDashboardProvider(context);
     context.subscriptions.push(

@@ -4,10 +4,9 @@ import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration } from "./BaseCliIntegration";
 import {
-  CLAUDE_CLI_MODEL_ALIASES,
   CLAUDE_CLI_MODEL_MAP,
   CLAUDE_CLI_DEFAULT_MODEL,
-  ClaudeCliModelAlias,
+  getClaudeModelName,
 } from "../../types/ModelConstants";
 
 /**
@@ -551,42 +550,40 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Validate model is supported by Claude CLI, fallback to default if not
-   * Supports both aliases (sonnet, opus, haiku) and full model names
+   *
+   * Accepts:
+   * - Aliases: "sonnet", "opus", "haiku"
+   * - Generic Copilot-style names: "claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5"
+   * - Full Claude names: "claude-sonnet-4-5-20250929"
+   *
+   * All are converted to Claude's full model name format.
    */
   private validateAndGetModel(requestedModel?: string): string {
     const defaultModel = this.getConfiguredModel();
 
     if (!requestedModel) {
       // Return full model name for default
-      return CLAUDE_CLI_MODEL_MAP[defaultModel] || defaultModel;
+      const fullName = getClaudeModelName(defaultModel);
+      return fullName || defaultModel;
     }
 
-    // Check if it's a valid alias
-    if (
-      CLAUDE_CLI_MODEL_ALIASES.includes(requestedModel as ClaudeCliModelAlias)
-    ) {
-      return CLAUDE_CLI_MODEL_MAP[requestedModel] || requestedModel;
+    // Try to look up the model in our comprehensive map
+    const fullModelName = getClaudeModelName(requestedModel);
+    if (fullModelName) {
+      return fullModelName;
     }
 
-    // Check if it's already a full model name in our map values
-    const isFullModelName =
-      Object.values(CLAUDE_CLI_MODEL_MAP).includes(requestedModel);
-    if (isFullModelName) {
-      return requestedModel;
-    }
-
-    // Model not supported - warn user and fallback
-    const supportedModels = [
-      ...CLAUDE_CLI_MODEL_ALIASES,
-      ...Object.values(CLAUDE_CLI_MODEL_MAP),
-    ].join(", ");
+    // Model not recognized - warn user and fallback
+    const supportedFormats =
+      "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
     const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
     this.log(`⚠️ ${message}`);
-    this.log(`   Supported models: ${supportedModels}`);
+    this.log(`   Accepted formats: ${supportedFormats}`);
 
     vscode.window.showWarningMessage(`FlightPath: ${message}`);
 
-    return CLAUDE_CLI_MODEL_MAP[defaultModel] || defaultModel;
+    const defaultFullName = getClaudeModelName(defaultModel);
+    return defaultFullName || defaultModel;
   }
 
   /**

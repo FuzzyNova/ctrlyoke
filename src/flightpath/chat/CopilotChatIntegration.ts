@@ -1,10 +1,7 @@
 import * as vscode from "vscode";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
-import {
-  CHAT_SUPPORTED_MODELS,
-  ChatSupportedModel,
-} from "../../types/ModelConstants";
+import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ChatLogMonitor } from "./ChatLogMonitor";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 
@@ -91,8 +88,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
       return; // Use current/default chat model
     }
 
-    // Validate model is supported by Chat
-    if (!CHAT_SUPPORTED_MODELS.includes(model as ChatSupportedModel)) {
+    // Validate model is available (using dynamically discovered models)
+    if (!isModelAvailable(model)) {
       const message = `Model "${model}" not recognized. Using current chat model.`;
       console.warn(`⚠️ ${message}`);
       vscode.window.showWarningMessage(`FlightPath: ${message}`);

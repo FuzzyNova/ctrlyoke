@@ -1,19 +1,15 @@
 /**
- * Single source of truth for Copilot model support
+ * Model Constants for FlightPath - Claude Code CLI Support
  *
- * IMPORTANT: When updating model lists, also update:
- * - schemas/prompt-schema.json (model field enum - must be kept in sync manually)
+ * DYNAMIC MODELS: Copilot models are queried at runtime via:
+ * - vscode.lm.selectChatModels({ vendor: "copilot" }) for Chat models
+ * - 'copilot --help' output for CLI-supported models
  *
- * See docs/AGENT_CHAT_COMMANDS.md for latest model availability
+ * See ModelRegistry.ts for runtime model access.
+ *
+ * This file contains ONLY Claude Code CLI constants, which require
+ * model name mapping between generic names and Claude's specific format.
  */
-
-// Models supported by Copilot CLI (limited set verified working)
-export const CLI_SUPPORTED_MODELS = [
-  "claude-sonnet-4.5",
-  "claude-sonnet-4",
-  "claude-haiku-4.5",
-  "gpt-5",
-] as const;
 
 // ============================================================
 // CLAUDE CODE CLI MODEL SUPPORT
@@ -26,65 +22,60 @@ export const CLI_SUPPORTED_MODELS = [
 export const CLAUDE_CLI_MODEL_ALIASES = ["sonnet", "opus", "haiku"] as const;
 
 /**
- * Claude Code CLI full model names (official naming convention)
- * Used for validation and CLI command execution
- */
-export const CLAUDE_CLI_MODELS = [
-  "claude-sonnet-4-5-20250929",
-  "claude-opus-4-20250514",
-  "claude-haiku-4-20250514",
-] as const;
-
-/**
  * Default model for Claude Code CLI
  * Uses alias format for user-friendliness
  */
 export const CLAUDE_CLI_DEFAULT_MODEL = "sonnet" as const;
 
 /**
- * Map of aliases to full model names for Claude CLI
- * Note: Use aliases (sonnet, opus, haiku) in production - full names may change
+ * Comprehensive map of model names to Claude CLI full names
+ *
+ * Accepts:
+ * - Aliases: "sonnet", "opus", "haiku"
+ * - Generic Copilot-style names: "claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5"
+ * - Full Claude names: "claude-sonnet-4-5-20250929" (pass-through)
+ *
+ * Note: Full names may change with new model versions. Check Claude CLI docs for latest.
  */
 export const CLAUDE_CLI_MODEL_MAP: Record<string, string> = {
+  // Short aliases (recommended for stability)
   sonnet: "claude-sonnet-4-5-20250929",
   opus: "claude-opus-4-20250514",
   haiku: "claude-haiku-4-5-20251001",
+
+  // Generic Copilot-style names (for cross-provider compatibility)
+  "claude-sonnet-4.5": "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4": "claude-sonnet-4-20250514",
+  "claude-haiku-4.5": "claude-haiku-4-5-20251001",
+  "claude-opus-4": "claude-opus-4-20250514",
+
+  // Full names (pass-through for explicit specification)
+  "claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
+  "claude-opus-4-20250514": "claude-opus-4-20250514",
+  "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
 };
+
+/**
+ * Get the Claude CLI model name for a given model identifier
+ * Accepts aliases, generic names, or full names
+ *
+ * @param modelId The model identifier (alias, generic name, or full name)
+ * @returns The full Claude CLI model name, or undefined if not recognized
+ */
+export function getClaudeModelName(modelId: string): string | undefined {
+  return CLAUDE_CLI_MODEL_MAP[modelId];
+}
+
+/**
+ * Check if a model identifier is valid for Claude CLI
+ *
+ * @param modelId The model identifier to check
+ * @returns true if the model is valid for Claude CLI
+ */
+export function isValidClaudeModel(modelId: string): boolean {
+  return modelId in CLAUDE_CLI_MODEL_MAP;
+}
 
 // Type exports for Claude CLI
 export type ClaudeCliModelAlias = (typeof CLAUDE_CLI_MODEL_ALIASES)[number];
-export type ClaudeCliModel = (typeof CLAUDE_CLI_MODELS)[number];
-
-// All models supported by Copilot Chat window (superset)
-// Source: docs/AGENT_CHAT_COMMANDS.md (verified Nov 23, 2025)
-export const CHAT_SUPPORTED_MODELS = [
-  "claude-sonnet-4.5",
-  "claude-sonnet-4",
-  "claude-haiku-4.5",
-  "gpt-5",
-  "gpt-5-mini",
-  "gpt-5.1",
-  "gpt-5.1-codex",
-  "gpt-5.1-codex-mini",
-  "gpt-5-codex",
-  "gpt-4.1",
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gpt-4",
-  "gpt-4-0125-preview",
-  "gpt-3.5-turbo",
-  "gemini-2.5-pro",
-  "gemini-3-pro-preview",
-  "grok-code-fast-1",
-  "copilot-fast",
-  "oswe-vscode-secondary",
-  "auto",
-] as const;
-
-// All supported models (Chat is superset of CLI)
-export const ALL_SUPPORTED_MODELS = CHAT_SUPPORTED_MODELS;
-
-// Type exports for TypeScript validation
-export type CliSupportedModel = (typeof CLI_SUPPORTED_MODELS)[number];
-export type ChatSupportedModel = (typeof CHAT_SUPPORTED_MODELS)[number];
-export type SupportedModel = (typeof ALL_SUPPORTED_MODELS)[number];

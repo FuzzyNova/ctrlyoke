@@ -2,11 +2,11 @@
   "prompts": [
     {
       "prompt": "What is 2 + 2? Reply with just the number.",
-      "model": "gpt-5-mini"
+      "model": "oswe-vscode-prime"
     },
     {
       "prompt": "What is the capital of France? Reply with just the city name.",
-      "model": "claude-haiku-4.5"
+      "model": "gpt-5-mini"
     }
   ]
 }
