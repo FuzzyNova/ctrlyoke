@@ -1,4 +1,3 @@
 {
-  "prompt": "Analyze the code in #file:sample-code/example.ts and explain what it does.",
-  "model": "claude-haiku-4.5"
+  "prompt": "Analyze the code in #file:sample-code/example.ts and explain what it does."
 }

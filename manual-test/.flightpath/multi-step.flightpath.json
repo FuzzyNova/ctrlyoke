@@ -1,14 +1,12 @@
 {
   "prompts": [
     {
-      "prompt": "Step 1: List all TypeScript files in the sample-code directory"
+      "prompt": "What is 2 + 2? Reply with just the number.",
+      "model": "gpt-5-mini"
     },
     {
-      "prompt": "Step 2: Analyze the code patterns used in #file:sample-code/example.ts"
-    },
-    {
-      "prompt": "Step 3: Suggest improvements to the code structure",
-      "newChatSession": false 
+      "prompt": "What is the capital of France? Reply with just the city name.",
+      "model": "claude-haiku-4.5"
     }
   ]
 }

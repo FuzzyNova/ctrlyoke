@@ -8,20 +8,39 @@
 
 ## Test Files Available
 
-### Prompts (`.flightpath/` directory)
+### Core Tests (`.flightpath/` directory)
 
 - `simple.prompt.md` - Basic markdown prompt
 - `with-file.prompt.json` - Prompt with file attachment
-- `multi-step.flightpath.json` - Three-step workflow
-- `with-end-condition.prompt.json` - Prompt with end condition validation
+- `with-end-condition.prompt.json` - End condition validation
+- `multi-step.flightpath.json` - Model switching test
+
+### Retry Tests (root directory)
+
+- `retry-counter-test.flightpath.json` - Basic retry with counter
+- `retry-max-exhaustion-test.flightpath.json` - Max retries exhaustion
+- `retry-timeout-error-test.flightpath.json` - Timeout error path
+- `retry-multi-step-test.flightpath.json` - Multi-step with retries
+
+### Special Feature Tests
+
+- `agent-test.flightpath.json` - Agent switching (CLI only)
+- `new-chat-session-test.flightpath.json` - Session control
+- `multi-step-file-reference.flightpath.json` - File path references
+- `dynamic-queue-basic-example.flightpath.json` - Dynamic queue
+- `dynamic-queue-multi-stage.flightpath.json` - Complex dynamic queue
 
 ### End Condition Scripts (`.flightpath/scripts/`)
 
 - `always_true.py` - Always succeeds
 - `always_false.py` - Always fails
-- `timeout_test.py` - Tests timeout (60s sleep)
+- `always_fails.py` - For retry exhaustion tests
+- `timeout_test.py` - Timeout handling (60s sleep)
+- `timeout_script.py` - Retry timeout testing (20s sleep)
+- `check_counter.py` - Counter validation
+- `check_counter_value.py` - Counter with target value
 - `check_has_add_function.py` - Validates "add" function
-- `check_typescript.js` - Detects TypeScript syntax
+- `check_typescript.js` - TypeScript detection
 
 ### Sample Code (`sample-code/`)
 
@@ -52,15 +71,24 @@
 
 1. **Basic execution:** `simple.prompt.md` → Send to CLI
 2. **File attachment:** `with-file.prompt.json` → Send to CLI
-3. **Multi-step workflow:** `multi-step.flightpath.json` → Send to CLI
-4. **End condition success:** `with-end-condition.prompt.json` → Send to CLI
-5. **Chat mode:** Any prompt → Send to Chat
+3. **End condition:** `with-end-condition.prompt.json` → Send to CLI
+4. **Model switching:** `multi-step.flightpath.json` → Send to CLI
+5. **Retry mechanism:** `retry-counter-test.flightpath.json` → Send to CLI
+6. **Chat mode:** Any prompt → Send to Chat
+
+## Resetting Counter Tests
+
+```powershell
+echo 0 > manual-test\counter.txt
+echo 0 > manual-test\multi-step-counter.txt
+```
 
 ## Adding New Tests
 
 Create files in `manual-test/.flightpath/`:
 
 - New prompts: `.prompt.md` or `.prompt.json`
+- New workflows: `.flightpath.json`
 - New scripts: `.flightpath/scripts/yourscript.py`
 - New code: `sample-code/yourfile.ts`
 
