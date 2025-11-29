@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { isModelAvailable } from "../../utils/ModelRegistry";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ChatLogMonitor } from "./ChatLogMonitor";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 
@@ -350,8 +351,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Wait for completion using log monitoring (if needed)
       if (shouldDetectCompletion) {
+        const inactivityTimeoutMs =
+          ConfigurationUtils.getChatInactivityTimeoutMs();
         const result = await this.logMonitor.waitForCompletion(
-          () => this.isCancelling
+          () => this.isCancelling,
+          inactivityTimeoutMs
         );
 
         if (result.userCancelled) {
@@ -361,6 +365,22 @@ export class CopilotChatIntegration extends CopilotIntegration {
         }
 
         if (!result.completed) {
+          // Check if this was an inactivity timeout that should be treated as success
+          const isInactivityTimeout =
+            result.failureReason?.includes("inactivity timeout");
+          const treatTimeoutAsSuccess =
+            ConfigurationUtils.shouldTreatChatTimeoutAsSuccess();
+
+          if (isInactivityTimeout && treatTimeoutAsSuccess) {
+            console.warn(
+              "⚠️ Inactivity timeout - treating as successful completion (treatChatTimeoutAsSuccess=true)"
+            );
+            // Proceed as if completed - get chat content and fire event
+            const responseText = await this.getChatContent(chatPrompt);
+            this.responseCompleteEmitter.fire(responseText);
+            return true;
+          }
+
           console.error("❌ Completion detection failed");
           if (result.failureReason) {
             this.lastFailureReason = result.failureReason;

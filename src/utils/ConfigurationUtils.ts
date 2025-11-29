@@ -140,4 +140,24 @@ export const ConfigurationUtils = {
       "chatPanel"
     );
   },
+
+  /**
+   * Get chat inactivity timeout in milliseconds
+   * User configures in seconds, this returns milliseconds
+   */
+  getChatInactivityTimeoutMs(): number {
+    const timeoutSeconds = getConfig().get<number>(
+      "chatInactivityTimeout",
+      300
+    );
+    return timeoutSeconds * 1000;
+  },
+
+  /**
+   * Check if chat timeout should be treated as success
+   * When true, inactivity timeouts are treated as successful completions
+   */
+  shouldTreatChatTimeoutAsSuccess(): boolean {
+    return getConfig().get<boolean>("treatChatTimeoutAsSuccess", true);
+  },
 };

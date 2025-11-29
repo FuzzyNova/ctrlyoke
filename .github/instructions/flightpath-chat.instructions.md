@@ -44,7 +44,10 @@ Validated in `extension.ts:testCopilotAutomation()`:
 
 **Timeout handling:**
 
-- Inactivity timeout: 5 minutes without log changes → returns false
+- Inactivity timeout: Configurable via `chatInactivityTimeout` setting (default: 300 seconds)
+- Timeout behavior: Controlled by `treatChatTimeoutAsSuccess` setting
+  - When true (default): Timeout treated as successful completion (Copilot may have finished)
+  - When false: Timeout treated as error, workflow stops
 - Cancellation support: Checks `isCancelling` flag during polling
   </responseDetection>
 

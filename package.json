@@ -315,6 +315,20 @@
           "description": "Choose where to open GitHub Copilot Chat for automation",
           "markdownDescription": "Choose where to open GitHub Copilot Chat for automation. **Chat Panel** is recommended for most users."
         },
+        "flightpath.chatInactivityTimeout": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 3600,
+          "description": "Inactivity timeout in seconds for Chat mode response detection",
+          "markdownDescription": "How long to wait (in seconds) without log activity before considering the Copilot Chat response as timed out. Default is 300 seconds (5 minutes). Increase for very long-running responses."
+        },
+        "flightpath.treatChatTimeoutAsSuccess": {
+          "type": "boolean",
+          "default": true,
+          "description": "Treat chat inactivity timeout as successful completion",
+          "markdownDescription": "When enabled (default), chat inactivity timeouts are treated as successful completions rather than errors. This is useful because Copilot may have finished responding but the log marker wasn't detected. When disabled, timeouts are treated as errors and stop the workflow."
+        },
         "flightpath.showCliOutput": {
           "type": "boolean",
           "default": true,

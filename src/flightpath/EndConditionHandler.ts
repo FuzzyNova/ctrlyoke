@@ -29,6 +29,17 @@ export type SendRetryPromptCallback = (
 ) => Promise<string | null>;
 
 /**
+ * Result of handling an end condition evaluation.
+ * Contains all information needed for the caller to update UI/state.
+ */
+export interface EndConditionHandlerResult {
+  /** Whether the workflow should continue */
+  shouldContinue: boolean;
+  /** Failure reason if shouldContinue is false (for dashboard/logging) */
+  failureReason?: string;
+}
+
+/**
  * Handles end condition evaluation results, retry logic, and failure handling.
  *
  * Responsibilities:
@@ -50,14 +61,14 @@ export class EndConditionHandler {
 
   /**
    * Handle end condition evaluation result
-   * @returns true to continue workflow, false to stop
+   * @returns Result object with shouldContinue and optional failureReason
    */
   async handleEndConditionResult(
     prompt: PromptItem,
     evaluationResult: EvaluationResult,
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
-  ): Promise<boolean> {
+  ): Promise<EndConditionHandlerResult> {
     // Success case - continue to next prompt
     if (evaluationResult.success) {
       console.log("✅ FlightPath: End condition passed");
@@ -71,7 +82,7 @@ export class EndConditionHandler {
         currentResult.scriptOutput = evaluationResult.stdout;
       }
 
-      return true;
+      return { shouldContinue: true };
     }
 
     // Determine if this is an execution error or validation failure
@@ -97,12 +108,12 @@ export class EndConditionHandler {
 
   /**
    * Handle execution errors (script failed, timed out, etc.)
-   * @returns true to continue, false to stop
+   * @returns Result object with shouldContinue and optional failureReason
    */
   async handleExecutionError(
     prompt: PromptItem,
     evaluationResult: EvaluationResult
-  ): Promise<boolean> {
+  ): Promise<EndConditionHandlerResult> {
     let errorMessage = "End condition script execution failed";
 
     if (evaluationResult.timeout) {
@@ -122,7 +133,7 @@ export class EndConditionHandler {
 
     if (action === "Skip Condition") {
       console.log("⏭️ FlightPath: Skipping end condition and continuing");
-      return true;
+      return { shouldContinue: true };
     } else if (action === "Open Script") {
       // Try to open the script file
       if (prompt.endCondition?.script) {
@@ -134,27 +145,30 @@ export class EndConditionHandler {
           vscode.window.showErrorMessage("Failed to open script file");
         }
       }
-      return false;
+      return { shouldContinue: false, failureReason: errorMessage };
     }
 
     // Default: stop workflow
-    return false;
+    return { shouldContinue: false, failureReason: errorMessage };
   }
 
   /**
    * Handle validation failure (script succeeded but output doesn't match expected)
-   * @returns true to continue, false to stop
+   * @returns Result object with shouldContinue and optional failureReason
    */
   async handleValidationFailure(
     prompt: PromptItem,
     evaluationResult: EvaluationResult,
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
-  ): Promise<boolean> {
+  ): Promise<EndConditionHandlerResult> {
     // Check if workflow was stopped by user
     if (this.promptQueue.getState().stopped) {
       console.log("⚠️ FlightPath: Workflow stopped, aborting retry");
-      return false;
+      return {
+        shouldContinue: false,
+        failureReason: "Workflow stopped by user",
+      };
     }
 
     // Check if retry is possible
@@ -218,17 +232,21 @@ export class EndConditionHandler {
       );
 
       if (retryResponseText === null) {
-        // Failed to send retry prompt
+        // Failed to send retry prompt - get actual reason from integration
+        const failureReason = retryContext.integration.getLastFailureReason();
         vscode.window.showErrorMessage(
-          "FlightPath: Failed to send retry prompt"
+          `FlightPath: Failed to send retry prompt: ${failureReason}`
         );
-        return false;
+        return { shouldContinue: false, failureReason };
       }
 
       // Check if workflow was stopped during retry
       if (this.promptQueue.getState().stopped) {
         console.log("⚠️ FlightPath: Workflow stopped during retry");
-        return false;
+        return {
+          shouldContinue: false,
+          failureReason: "Workflow stopped during retry",
+        };
       }
 
       // Re-evaluate end condition after retry
@@ -253,12 +271,12 @@ export class EndConditionHandler {
 
   /**
    * Handle max retries exhausted
-   * @returns true to continue, false to stop
+   * @returns Result object with shouldContinue and optional failureReason
    */
   async handleMaxRetriesExhausted(
     prompt: PromptItem,
     evaluationResult: EvaluationResult
-  ): Promise<boolean> {
+  ): Promise<EndConditionHandlerResult> {
     const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
     const retryCount = this.promptQueue.getCurrentRetryCount();
 
@@ -281,18 +299,18 @@ export class EndConditionHandler {
     if (action === "Continue Anyway") {
       console.log("⏭️ FlightPath: Continuing despite validation failure");
       this.promptQueue.resetRetryCount();
-      return true;
+      return { shouldContinue: true };
     } else if (action === "Retry Once More") {
       // Allow one more retry even if max reached
       console.log("🔄 FlightPath: Manual retry requested");
       // Don't increment retry count, just return false to re-evaluate
       // The calling code will handle this case
-      return false;
+      return { shouldContinue: false, failureReason: message };
     }
 
     // Default: stop workflow
     this.promptQueue.resetRetryCount();
-    return false;
+    return { shouldContinue: false, failureReason: message };
   }
 
   /**

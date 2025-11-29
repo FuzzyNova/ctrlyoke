@@ -298,6 +298,8 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - Use **debug** or **all** for troubleshooting CLI issues
 - flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel
 - flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow", default: "chatPanel")
+- flightpath.chatInactivityTimeout (number, default: 300, range: 30-3600) - Seconds to wait for log activity before timeout
+- flightpath.treatChatTimeoutAsSuccess (boolean, default: true) - When true, inactivity timeouts are treated as completions (since Copilot may have finished)
 
 **Claude Code CLI Settings** (when using `claude-cli` mode):
 

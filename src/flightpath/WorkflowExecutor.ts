@@ -498,27 +498,26 @@ export class WorkflowExecutor {
       context
     );
 
-    const shouldContinue =
-      await this.endConditionHandler.handleEndConditionResult(
-        prompt,
-        evaluationResult,
-        retryContext,
-        sendRetryPromptCallback
-      );
+    const result = await this.endConditionHandler.handleEndConditionResult(
+      prompt,
+      evaluationResult,
+      retryContext,
+      sendRetryPromptCallback
+    );
 
-    if (!shouldContinue) {
-      // Update dashboard with failure
+    if (!result.shouldContinue) {
+      // Update dashboard with failure using the reason from EndConditionHandler
       if (context.dashboardProvider) {
         context.dashboardProvider.updateStepStatus(currentIndex, {
           state: STEP_STATUS.FAILED,
-          message: "End condition failed",
+          message: result.failureReason || "End condition failed",
           duration,
           endConditionResult: evaluationResult,
         });
       }
     }
 
-    return shouldContinue;
+    return result.shouldContinue;
   }
 
   /**
