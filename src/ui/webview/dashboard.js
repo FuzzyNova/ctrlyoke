@@ -17,6 +17,7 @@
     cliOutputs: {}, // Maps stepIndex -> array of outputs (including retries)
     retryStates: {}, // Maps stepIndex -> { currentRetry, maxRetries }
     statusMessages: {}, // Maps stepIndex -> array of status messages
+    provider: "cli", // Current AI provider: cli, chat, claude-cli
   };
 
   // DOM elements
@@ -34,6 +35,7 @@
     outputSection: document.getElementById("output-section"),
     outputContent: document.getElementById("output-content"),
     autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
+    providerDropdown: document.getElementById("provider-dropdown"),
   };
 
   // Event listeners
@@ -68,6 +70,15 @@
       type: MESSAGE_TYPES.EXPORT_OUTPUT,
       content: markdownContent,
       fileName: state.fileName,
+    });
+  });
+
+  elements.providerDropdown.addEventListener("change", (e) => {
+    const newProvider = e.target.value;
+    state.provider = newProvider;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CHANGE_PROVIDER,
+      provider: newProvider,
     });
   });
 
@@ -125,6 +136,11 @@
 
   function handleInit(data) {
     state = { ...state, ...data };
+    // Update provider dropdown to match current setting
+    if (data.provider && elements.providerDropdown) {
+      elements.providerDropdown.value = data.provider;
+      state.provider = data.provider;
+    }
     render();
   }
 

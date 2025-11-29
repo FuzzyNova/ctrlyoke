@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-  PromptItem,
-  CopilotIntegrationMode,
-} from "../../types/FlightPathTypes";
+import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration } from "./BaseCliIntegration";
@@ -128,7 +125,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    * Get the integration mode for status reporting
    */
   protected getIntegrationMode(): string {
-    return CopilotIntegrationMode.ClaudeCli;
+    return Provider.ClaudeCli;
   }
 
   /**
@@ -664,14 +661,14 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       return {
         available: true,
         message: `✅ Claude Code CLI available${this.cliVersion ? ` (${this.cliVersion})` : ""}`,
-        strategy: CopilotIntegrationMode.ClaudeCli,
+        strategy: Provider.ClaudeCli,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Claude Code CLI unavailable - please install @anthropic-ai/claude-code",
-        strategy: CopilotIntegrationMode.ClaudeCli,
+        strategy: Provider.ClaudeCli,
       };
     }
   }

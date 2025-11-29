@@ -110,7 +110,7 @@ FlightPath is a VS Code extension implementing a layered architecture with clear
 
 ```typescript
 async initialize(): Promise<void>
-async executePromptFile(filePath: string, modeOverride?: CopilotIntegrationMode): Promise<void>
+async executePromptFile(filePath: string, modeOverride?: Provider): Promise<void>
 async takeOff(): Promise<void>
 pause(): void
 async resume(): Promise<void>
@@ -120,9 +120,9 @@ async stop(): Promise<void>
 **Integration Selection:**
 
 ```typescript
-private createIntegrationForMode(modeOverride?: CopilotIntegrationMode): CopilotIntegration {
+private createIntegrationForMode(modeOverride?: Provider): CopilotIntegration {
   if (modeOverride) {
-    return modeOverride === CopilotIntegrationMode.Chat
+    return modeOverride === Provider.Chat
       ? this.chatIntegration
       : this.cliIntegration;
   }

@@ -2,10 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as os from "os";
-import {
-  PromptItem,
-  CopilotIntegrationMode,
-} from "../../types/FlightPathTypes";
+import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration } from "./BaseCliIntegration";
@@ -88,7 +85,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Get the integration mode for status reporting
    */
   protected getIntegrationMode(): string {
-    return CopilotIntegrationMode.CLI;
+    return Provider.CLI;
   }
 
   /**
@@ -625,14 +622,14 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       return {
         available: true,
         message: "✅ Copilot CLI available",
-        strategy: CopilotIntegrationMode.CLI,
+        strategy: Provider.CLI,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Copilot CLI unavailable - please install GitHub Copilot CLI",
-        strategy: CopilotIntegrationMode.CLI,
+        strategy: Provider.CLI,
       };
     }
   }

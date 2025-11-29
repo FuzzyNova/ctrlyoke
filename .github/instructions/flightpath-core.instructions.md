@@ -18,7 +18,7 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 **Critical patterns:**
 
 - Both integrations initialized in constructor (always ready)
-- `getDefaultIntegration()` respects `flightpath.copilotIntegrationMode`
+- `getDefaultIntegration()` respects `flightpath.provider`
 - Context menu commands override integration mode per-execution
 - Response complete event triggers `advanceQueue()`
 - Loop detection: Cancels chat if response fires without advancement

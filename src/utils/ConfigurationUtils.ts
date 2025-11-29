@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-  DynamicQueueConfig,
-  CopilotIntegrationMode,
-} from "../types/FlightPathTypes";
+import { DynamicQueueConfig, Provider } from "../types/FlightPathTypes";
 
 /**
  * Configuration namespace for FlightPath settings
@@ -39,23 +36,20 @@ export const ConfigurationUtils = {
    * Get the default Copilot integration mode from settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */
-  getIntegrationMode(): CopilotIntegrationMode {
-    const mode = getConfig().get<string>(
-      "copilotIntegrationMode",
-      CopilotIntegrationMode.CLI
-    );
+  getIntegrationMode(): Provider {
+    const mode = getConfig().get<string>("provider", Provider.CLI);
 
     switch (mode) {
       case "chat":
-      case CopilotIntegrationMode.Chat:
-        return CopilotIntegrationMode.Chat;
+      case Provider.Chat:
+        return Provider.Chat;
       case "claude-cli":
-      case CopilotIntegrationMode.ClaudeCli:
-        return CopilotIntegrationMode.ClaudeCli;
+      case Provider.ClaudeCli:
+        return Provider.ClaudeCli;
       case "cli":
-      case CopilotIntegrationMode.CLI:
+      case Provider.CLI:
       default:
-        return CopilotIntegrationMode.CLI;
+        return Provider.CLI;
     }
   },
 

@@ -110,7 +110,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 
 Key settings include:
 
-- `flightpath.copilotIntegrationMode`: CLI (default) or Chat
+- `flightpath.provider`: CLI (default) or Chat
 - `flightpath.copilotCliModel`: Default model for CLI mode
 - `flightpath.enableDynamicQueue`: Enable autonomous workflow extension
 - `flightpath.maxQueueSize`: Safety limit for dynamic queues (1-1000)

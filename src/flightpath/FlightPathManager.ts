@@ -13,7 +13,7 @@ import {
   PromptFile,
   PromptItem,
   QueueState,
-  CopilotIntegrationMode,
+  Provider,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
@@ -111,13 +111,13 @@ export class FlightPathManager {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     switch (integrationMode) {
-      case CopilotIntegrationMode.Chat:
+      case Provider.Chat:
         console.log("🔄 FlightPath: Using Copilot Chat integration");
         return this.chatIntegration;
-      case CopilotIntegrationMode.ClaudeCli:
+      case Provider.ClaudeCli:
         console.log("🔄 FlightPath: Using Claude Code CLI integration");
         return this.claudeCliIntegration;
-      case CopilotIntegrationMode.CLI:
+      case Provider.CLI:
       default:
         console.log("🔄 FlightPath: Using Copilot CLI integration");
         return this.cliIntegration;
@@ -137,16 +137,16 @@ export class FlightPathManager {
    * @returns Integration instance (either override or default)
    */
   private createIntegrationForMode(
-    modeOverride?: CopilotIntegrationMode
+    modeOverride?: Provider
   ): CopilotIntegration {
     if (modeOverride) {
       console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
       switch (modeOverride) {
-        case CopilotIntegrationMode.Chat:
+        case Provider.Chat:
           return this.chatIntegration;
-        case CopilotIntegrationMode.ClaudeCli:
+        case Provider.ClaudeCli:
           return this.claudeCliIntegration;
-        case CopilotIntegrationMode.CLI:
+        case Provider.CLI:
         default:
           return this.cliIntegration;
       }
@@ -239,9 +239,7 @@ export class FlightPathManager {
    * Execute the currently loaded prompt file
    * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */
-  async executeLoadedPromptFile(
-    modeOverride?: CopilotIntegrationMode
-  ): Promise<void> {
+  async executeLoadedPromptFile(modeOverride?: Provider): Promise<void> {
     if (!this.currentPromptFile) {
       vscode.window.showWarningMessage(
         "FlightPath: No prompt file loaded. Use 'Change' button to select a file first."
@@ -354,7 +352,7 @@ export class FlightPathManager {
    */
   async executePromptFile(
     filePath: string,
-    modeOverride?: CopilotIntegrationMode
+    modeOverride?: Provider
   ): Promise<void> {
     // Load the file first
     await this.loadPromptFile(filePath);

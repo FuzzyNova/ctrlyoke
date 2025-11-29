@@ -16,7 +16,7 @@ Core data structures. TypeScript strict mode enforced.
 
 **Enums:**
 
-- `CopilotIntegrationMode` - "cli" | "chat"
+- `Provider` - "cli" | "chat"
 
 **Important patterns:**
 

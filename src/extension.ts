@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
-import { CopilotIntegrationMode } from "./types/FlightPathTypes";
+import { Provider } from "./types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 
 let flightPathManager: FlightPathManager;
@@ -705,10 +705,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(
-          uri.fsPath,
-          CopilotIntegrationMode.CLI
-        );
+        await flightPathManager.executePromptFile(uri.fsPath, Provider.CLI);
         vscode.window.showInformationMessage(
           "FlightPath workflow started using CLI"
         );
@@ -732,10 +729,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(
-          uri.fsPath,
-          CopilotIntegrationMode.Chat
-        );
+        await flightPathManager.executePromptFile(uri.fsPath, Provider.Chat);
         vscode.window.showInformationMessage(
           "FlightPath workflow started using Chat"
         );

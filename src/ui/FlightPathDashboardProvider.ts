@@ -76,6 +76,12 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Handle provider change specially since it needs to update settings
+    if (message.type === MESSAGE_TYPES.CHANGE_PROVIDER) {
+      this.handleProviderChange(message.provider);
+      return;
+    }
+
     const commandId = this.messageCommandMap.get(message.type);
     if (commandId) {
       if (message.type === MESSAGE_TYPES.READY) {
@@ -83,6 +89,32 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       } else {
         vscode.commands.executeCommand(commandId);
       }
+    }
+  }
+
+  /**
+   * Handle provider change from webview
+   * Updates the flightpath.provider setting
+   */
+  private async handleProviderChange(provider: string): Promise<void> {
+    const validProviders = ["cli", "chat", "claude-cli"];
+    if (!validProviders.includes(provider)) {
+      vscode.window.showErrorMessage(`Invalid provider: ${provider}`);
+      return;
+    }
+
+    try {
+      const config = vscode.workspace.getConfiguration("flightpath");
+      await config.update(
+        "provider",
+        provider,
+        vscode.ConfigurationTarget.Global
+      );
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(
+        `Failed to update provider setting: ${errorMsg}`
+      );
     }
   }
 
@@ -313,6 +345,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   private getCurrentState(): any {
+    // Get current provider from settings
+    const config = vscode.workspace.getConfiguration("flightpath");
+    const provider = config.get<string>("provider", "cli");
+
     // Get actual state from FlightPathManager if available
     if (this.flightPathManager) {
       const queueState = this.flightPathManager.getQueueState();
@@ -324,6 +360,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         executionState: queueState.status,
         currentStep: queueState.currentIndex,
         totalSteps: queueState.prompts.length,
+        provider,
       };
     }
 
@@ -334,6 +371,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
       totalSteps: 0,
+      provider,
     };
   }
 

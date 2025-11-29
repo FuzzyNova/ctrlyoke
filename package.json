@@ -327,7 +327,7 @@
           "description": "Show the full CLI command with all arguments and flags in the dashboard output",
           "markdownDescription": "When enabled, displays the complete `copilot` command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
         },
-        "flightpath.copilotIntegrationMode": {
+        "flightpath.provider": {
           "type": "string",
           "enum": [
             "cli",
@@ -336,7 +336,7 @@
           ],
           "enumDescriptions": [
             "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
-            "Use Copilot Chat window (legacy UI automation, fallback if CLI unavailable)",
+            "Use Copilot Chat window (Use the chat window at the location specified by chatWindowLocation)",
             "Use Claude Code CLI (Anthropic's Claude AI via command line)"
           ],
           "default": "cli",

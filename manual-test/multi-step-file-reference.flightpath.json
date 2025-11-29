@@ -1,7 +1,8 @@
 {
   "prompts": [
     {
-      "prompt": "./sample-prompts/reusable-code-review.prompt.md"
+      "prompt": "./sample-prompts/reusable-code-review.prompt.md",
+      "model": "oswe-vscode-prime"
     },
     {
       "prompt": "./.flightpath/simple.prompt.md"

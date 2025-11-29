@@ -253,7 +253,7 @@ claude -p --allowedTools "Bash(git:*)" --allowedTools "Write" --disallowedTools 
 
 ```json
 {
-  "flightpath.copilotIntegrationMode": "claude-cli"
+  "flightpath.provider": "claude-cli"
 }
 ```
 

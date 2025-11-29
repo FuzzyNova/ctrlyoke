@@ -175,7 +175,7 @@ export const CLAUDE_CLI_MODELS = [
 
 ### Integration Mode Extension
 
-Current setting `flightpath.copilotIntegrationMode` supports: `"cli"` | `"chat"`
+Current setting `flightpath.provider` supports: `"cli"` | `"chat"`
 
 **Proposed extension:**
 

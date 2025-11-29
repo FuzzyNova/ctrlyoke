@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import {
-  PromptItem,
-  CopilotIntegrationMode,
-} from "../../types/FlightPathTypes";
+import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import {
   CHAT_SUPPORTED_MODELS,
@@ -649,14 +646,14 @@ export class CopilotChatIntegration extends CopilotIntegration {
         available: true,
         message:
           "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: CopilotIntegrationMode.Chat,
+        strategy: Provider.Chat,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Direct automation unavailable - required commands not found",
-        strategy: CopilotIntegrationMode.Chat,
+        strategy: Provider.Chat,
       };
     }
   }

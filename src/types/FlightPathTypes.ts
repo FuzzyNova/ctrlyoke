@@ -9,7 +9,7 @@ import { SupportedModel } from "./ModelConstants";
 /**
  * Copilot integration mode
  */
-export enum CopilotIntegrationMode {
+export enum Provider {
   CLI = "cli", // Copilot CLI (original, backward compatible)
   Chat = "chat", // Copilot Chat (legacy UI automation)
   ClaudeCli = "claude-cli", // Claude Code CLI (new)

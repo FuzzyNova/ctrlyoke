@@ -151,7 +151,7 @@ So that **I can configure my preferred Claude model and permissions**.
 
 **Note:** Tool settings are shared between Copilot and Claude CLI. Patterns use Copilot CLI format and are auto-converted for Claude (`shell` → `Bash`, `write` → `Write`).
 
-**And** `flightpath.copilotIntegrationMode` enum is updated to include:
+**And** `flightpath.provider` enum is updated to include:
 
 - `"copilot-cli"` (replaces current `"cli"`)
 - `"claude-cli"` (new option)
@@ -207,7 +207,7 @@ So that **I can switch between Copilot and Claude CLI by changing one setting**.
 
 **Acceptance Criteria:**
 
-**Given** the `flightpath.copilotIntegrationMode` setting  
+**Given** the `flightpath.provider` setting  
 **When** the setting value is `"claude-cli"`  
 **Then** `FlightPathManager.createCopilotIntegration()` returns a `ClaudeCommandLineIntegration` instance
 
