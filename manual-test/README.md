@@ -35,6 +35,7 @@ This directory serves as a dedicated workspace for manually testing the FlightPa
 | `retry-counter-test.flightpath.json`        | Basic retry      | Counter increment with validation |
 | `retry-max-exhaustion-test.flightpath.json` | Exhaustion       | Max retries reached behavior      |
 | `retry-timeout-error-test.flightpath.json`  | Error path       | Timeout doesn't trigger retry     |
+| `script-error-test.flightpath.json`         | Script crash     | Non-zero exit code error display  |
 | `retry-multi-step-test.flightpath.json`     | Multi-step retry | Retries in sequential workflow    |
 
 ### Special Feature Tests
@@ -145,7 +146,22 @@ echo 0 > counter.txt
 
 ---
 
-### 8. Multi-Step Retry Workflow
+### 8. Script Error Path
+
+**File:** `script-error-test.flightpath.json`
+
+**Test:** Right-click → "Send to CLI"
+
+**Expected:**
+
+- Script exits with non-zero code (simulated crash)
+- **NO retry attempts** (crashes are execution errors, not validation failures)
+- Error message from stderr displayed in output
+- Workflow stops with error dialog
+
+---
+
+### 9. Multi-Step Retry Workflow
 
 **File:** `retry-multi-step-test.flightpath.json`
 
@@ -233,6 +249,7 @@ Located in `.flightpath/scripts/`:
 | `always_true.py`            | Always succeeds         | `true`         |
 | `always_false.py`           | Always fails            | `false`        |
 | `always_fails.py`           | Exhaustion tests        | `false`        |
+| `throws_error.py`           | Script crash/error      | Exit code 1    |
 | `timeout_test.py`           | Timeout handling        | Sleeps 60s     |
 | `timeout_script.py`         | Retry timeout           | Sleeps 20s     |
 | `check_counter.py`          | Counter validation      | `true`/`false` |

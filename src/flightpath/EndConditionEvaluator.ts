@@ -23,6 +23,24 @@ export class EndConditionEvaluator {
   }
 
   /**
+   * Parse script command to separate script path from arguments.
+   * Handles both space-separated and quoted arguments.
+   * @returns { scriptPath: string, args: string[] }
+   */
+  private parseScriptCommand(script: string): {
+    scriptPath: string;
+    args: string[];
+  } {
+    // Simple parsing: split by spaces, first part is script, rest are args
+    // This handles common cases like ".flightpath/scripts/check.py 5"
+    const parts = script.trim().split(/\s+/);
+    return {
+      scriptPath: parts[0],
+      args: parts.slice(1),
+    };
+  }
+
+  /**
    * Evaluate an end condition
    */
   async evaluateCondition(
@@ -36,34 +54,40 @@ export class EndConditionEvaluator {
         `FlightPath: Evaluating end condition script: ${condition.script}`
       );
 
+      // Parse script command to separate path from arguments
+      const { scriptPath: rawScriptPath, args: additionalArgs } =
+        this.parseScriptCommand(condition.script);
+
       // Resolve script path
-      const scriptPath = await this.resolveScriptPath(
-        condition.script,
+      const resolvedScriptPath = await this.resolveScriptPath(
+        rawScriptPath,
         workingDirectory
       );
 
       let command: { executable: string; args: string[] } | null;
 
-      if (scriptPath) {
+      if (resolvedScriptPath) {
         // File found - determine script type and command
-        command = this.getScriptCommand(scriptPath);
+        command = this.getScriptCommand(resolvedScriptPath);
         if (!command) {
           return {
             success: false,
             stdout: "",
             stderr: "",
             result: "",
-            error: `Unsupported script type: ${path.extname(scriptPath)}`,
+            error: `Unsupported script type: ${path.extname(resolvedScriptPath)}`,
             duration: Date.now() - startTime,
           };
         }
+        // Append additional arguments from the script command
+        command.args = [...command.args, ...additionalArgs];
       } else {
         // File not found - treat as direct shell command
         console.log(
           `FlightPath: Script file not found, treating as direct command: ${condition.script}`
         );
         // Execute as shell command directly
-        command = { executable: condition.script, args: [] };
+        command = { executable: rawScriptPath, args: additionalArgs };
       }
 
       // Execute script with timeout

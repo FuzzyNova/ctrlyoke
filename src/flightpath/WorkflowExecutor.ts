@@ -475,11 +475,13 @@ export class WorkflowExecutor {
     // Send status message: End condition result
     if (context.dashboardProvider) {
       const resultStatus = evaluationResult.success ? "Passed ✓" : "Failed ✗";
-      const output = evaluationResult.stdout.trim().substring(0, 100);
-      const ellipsis = evaluationResult.stdout.trim().length > 100 ? "..." : "";
+      // Show error message when present, otherwise show stdout (no truncation)
+      const output = evaluationResult.error
+        ? evaluationResult.error
+        : evaluationResult.stdout.trim();
       context.dashboardProvider.updateStatusMessage(
         currentIndex,
-        `End condition ${resultStatus} - Output: ${output}${ellipsis}`
+        `End condition ${resultStatus} - Output: ${output}`
       );
     }
 
