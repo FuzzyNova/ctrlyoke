@@ -266,40 +266,50 @@
     "configuration": {
       "title": "FlightPath",
       "properties": {
+        "flightpath.provider": {
+          "order": 1,
+          "type": "string",
+          "enum": [
+            "copilot-cli",
+            "copilot-chat",
+            "claude-cli"
+          ],
+          "enumDescriptions": [
+            "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
+            "Use Copilot Chat window (UI automation - less reliable than CLI modes)",
+            "Use Claude Code CLI (Anthropic's Claude AI via command line)"
+          ],
+          "default": "copilot-cli",
+          "description": "Choose which AI provider integration to use",
+          "markdownDescription": "Choose which AI provider integration to use.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
+        },
         "flightpath.promptsDirectory": {
+          "order": 10,
           "type": "string",
           "default": ".flightpath",
           "description": "Directory containing prompt files relative to workspace root"
         },
         "flightpath.scriptTimeout": {
+          "order": 11,
           "type": "number",
           "default": 30000,
           "description": "Timeout for end condition scripts in milliseconds"
         },
         "flightpath.enableContextAwareness": {
+          "order": 12,
           "type": "boolean",
           "default": true,
           "description": "Enable context-aware prompt generation"
         },
         "flightpath.autoAttachFiles": {
+          "order": 13,
           "type": "boolean",
           "default": true,
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
         },
-        "flightpath.chatUseNativeAttachments": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use VS Code's native attachment commands in Chat mode",
-          "markdownDescription": "When enabled (default), FlightPath uses VS Code's native `attachFile` and `attachSelection` commands for clean UI in Chat mode. When disabled, uses raw XML attachment (reliable but shows raw text in chat). **Note:** Native attachments have a known VS Code bug with multiple file ranges - disable if you encounter issues. This setting only affects Chat mode; CLI mode always uses XML attachment."
-        },
-        "flightpath.forceAgentModeForChat": {
-          "type": "boolean",
-          "default": false,
-          "description": "Force chat to switch to default agent mode before sending prompts",
-          "markdownDescription": "When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices. Enable only if you frequently use Ask/Plan modes and want FlightPath to auto-switch away from them."
-        },
         "flightpath.chatWindowLocation": {
+          "order": 100,
           "type": "string",
           "enum": [
             "chatPanel",
@@ -312,52 +322,75 @@
             "Open Copilot Chat in a new window"
           ],
           "default": "chatPanel",
-          "description": "Choose where to open GitHub Copilot Chat for automation",
-          "markdownDescription": "Choose where to open GitHub Copilot Chat for automation. **Chat Panel** is recommended for most users."
+          "description": "[Chat Mode] Where to open GitHub Copilot Chat",
+          "markdownDescription": "**Chat Mode Only.** Choose where to open GitHub Copilot Chat for automation. **Chat Panel** is recommended for most users."
+        },
+        "flightpath.chatUseNativeAttachments": {
+          "order": 101,
+          "type": "boolean",
+          "default": true,
+          "description": "[Chat Mode] Use VS Code's native attachment commands",
+          "markdownDescription": "**Chat Mode Only.** When enabled (default), FlightPath uses VS Code's native `attachFile` and `attachSelection` commands for clean UI. When disabled, uses raw XML attachment (reliable but shows raw text in chat). **Note:** Native attachments have a known VS Code bug with multiple file ranges - disable if you encounter issues."
+        },
+        "flightpath.forceAgentModeForChat": {
+          "order": 102,
+          "type": "boolean",
+          "default": false,
+          "description": "[Chat Mode] Force chat to switch to default agent mode before sending prompts",
+          "markdownDescription": "**Chat Mode Only.** When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices."
         },
         "flightpath.chatInactivityTimeout": {
+          "order": 103,
           "type": "number",
           "default": 300,
           "minimum": 30,
           "maximum": 3600,
-          "description": "Inactivity timeout in seconds for Chat mode response detection",
-          "markdownDescription": "How long to wait (in seconds) without log activity before considering the Copilot Chat response as timed out. Default is 300 seconds (5 minutes). Increase for very long-running responses."
+          "description": "[Chat Mode] Inactivity timeout in seconds for response detection",
+          "markdownDescription": "**Chat Mode Only.** How long to wait (in seconds) without log activity before considering the Copilot Chat response as timed out. Default is 300 seconds (5 minutes). Increase for very long-running responses."
         },
         "flightpath.treatChatTimeoutAsSuccess": {
+          "order": 104,
           "type": "boolean",
           "default": true,
-          "description": "Treat chat inactivity timeout as successful completion",
-          "markdownDescription": "When enabled (default), chat inactivity timeouts are treated as successful completions rather than errors. This is useful because Copilot may have finished responding but the log marker wasn't detected. When disabled, timeouts are treated as errors and stop the workflow."
+          "description": "[Chat Mode] Treat inactivity timeout as successful completion",
+          "markdownDescription": "**Chat Mode Only.** When enabled (default), chat inactivity timeouts are treated as successful completions rather than errors. This is useful because Copilot may have finished responding but the log marker wasn't detected. When disabled, timeouts are treated as errors and stop the workflow."
         },
         "flightpath.showCliOutput": {
+          "order": 200,
           "type": "boolean",
           "default": true,
-          "description": "Show Copilot CLI output in the Output panel",
-          "markdownDescription": "Show Copilot CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
+          "description": "[CLI Modes] Show CLI output in the Output panel",
+          "markdownDescription": "**CLI Modes Only.** Show CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
         },
         "flightpath.showCliCommand": {
+          "order": 201,
           "type": "boolean",
           "default": false,
-          "description": "Show the full CLI command with all arguments and flags in the dashboard output",
-          "markdownDescription": "When enabled, displays the complete `copilot` command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
+          "description": "[CLI Modes] Show the full CLI command with all arguments in the dashboard",
+          "markdownDescription": "**CLI Modes Only.** When enabled, displays the complete CLI command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
         },
-        "flightpath.provider": {
-          "type": "string",
-          "enum": [
-            "copilot-cli",
-            "copilot-chat",
-            "claude-cli"
-          ],
-          "enumDescriptions": [
-            "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
-            "Use Copilot Chat window (Use the chat window at the location specified by chatWindowLocation)",
-            "Use Claude Code CLI (Anthropic's Claude AI via command line)"
-          ],
-          "default": "copilot-cli",
-          "description": "Choose which AI provider integration to use",
-          "markdownDescription": "Choose which AI provider integration to use. **Copilot CLI** (default) provides best reliability with GitHub Copilot. **Claude CLI** uses Anthropic's Claude Code CLI for Claude models. **Copilot Chat** uses the chat window but automation is not as reliable as CLIs."
+        "flightpath.cliAllowedTools": {
+          "order": 202,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "[CLI Modes] Tool patterns to allow when using custom tool permissions",
+          "markdownDescription": "**CLI Modes Only.** Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+        },
+        "flightpath.cliDeniedTools": {
+          "order": 203,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "[CLI Modes] Tool patterns to deny (takes precedence over allows)",
+          "markdownDescription": "**CLI Modes Only.** Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI. Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
         "flightpath.copilotCliModel": {
+          "order": 300,
           "type": "string",
           "enum": [
             "claude-sonnet-4.5",
@@ -366,19 +399,11 @@
             "gpt-5"
           ],
           "default": "claude-sonnet-4.5",
-          "description": "Default AI model for Copilot CLI mode (when prompt doesn't specify model)",
-          "markdownDescription": "Default AI model for Copilot CLI. Prompts can override with any supported model (22 total in Chat mode), but CLI mode only supports these 4 models - others will fallback to this default with warning. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
-        },
-        "flightpath.copilotCliAllowedDirs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Additional directories to allow Copilot CLI to access (beyond workspace)",
-          "markdownDescription": "List of additional directory paths that Copilot CLI can access. Workspace folders are automatically included."
+          "description": "[Copilot CLI] Default AI model",
+          "markdownDescription": "**Copilot CLI Only.** Default AI model for Copilot CLI mode. Prompts can override with `\"model\": \"...\"`. CLI mode only supports these 4 models - others will fallback to this default with warning. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
         },
         "flightpath.copilotCliToolPermissions": {
+          "order": 301,
           "type": "string",
           "enum": [
             "allowAll",
@@ -386,25 +411,38 @@
           ],
           "enumDescriptions": [
             "Allow all tools (--allow-all-tools)",
-            "Custom tool permissions (configure specific tools)"
+            "Custom tool permissions (uses cliAllowedTools/cliDeniedTools)"
           ],
           "default": "allowAll",
-          "description": "Tool permission mode for Copilot CLI",
-          "markdownDescription": "Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools."
+          "description": "[Copilot CLI] Tool permission mode",
+          "markdownDescription": "**Copilot CLI Only.** Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools. **Custom** mode uses `cliAllowedTools` and `cliDeniedTools` settings."
         },
         "flightpath.copilotCliAllowAllPaths": {
+          "order": 302,
           "type": "boolean",
           "default": true,
-          "description": "Allow Copilot CLI to access any file path without confirmation",
-          "markdownDescription": "When enabled (default), uses `--allow-all-paths` to disable path verification and prevent interactive prompts. Disable for stricter security if you want to control file access per-session."
+          "description": "[Copilot CLI] Allow access to any file path without confirmation",
+          "markdownDescription": "**Copilot CLI Only.** When enabled (default), uses `--allow-all-paths` to disable path verification and prevent interactive prompts. Disable for stricter security if you want to control file access per-session."
+        },
+        "flightpath.copilotCliAllowedDirs": {
+          "order": 303,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "[Copilot CLI] Additional directories to allow access (beyond workspace)",
+          "markdownDescription": "**Copilot CLI Only.** List of additional directory paths that Copilot CLI can access. Workspace folders are automatically included."
         },
         "flightpath.copilotCliLogDir": {
+          "order": 304,
           "type": "string",
           "default": "",
-          "description": "Custom directory for Copilot CLI logs (default: system temp)",
-          "markdownDescription": "Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and can help with debugging."
+          "description": "[Copilot CLI] Custom directory for logs (default: system temp)",
+          "markdownDescription": "**Copilot CLI Only.** Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and can help with debugging."
         },
         "flightpath.copilotCliLogLevel": {
+          "order": 305,
           "type": "string",
           "enum": [
             "default",
@@ -425,28 +463,11 @@
             "Same as debug"
           ],
           "default": "default",
-          "description": "Copilot CLI log level for debugging",
-          "markdownDescription": "Copilot CLI log level for debugging. Use **debug** or **all** for troubleshooting."
-        },
-        "flightpath.cliAllowedTools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Tool patterns to allow when using custom tool permissions (shared by Copilot and Claude CLI)",
-          "markdownDescription": "Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
-        },
-        "flightpath.cliDeniedTools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Tool patterns to deny (takes precedence over allows, shared by Copilot and Claude CLI)",
-          "markdownDescription": "Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI. Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+          "description": "[Copilot CLI] Log level for debugging",
+          "markdownDescription": "**Copilot CLI Only.** Log level for debugging. Use **debug** or **all** for troubleshooting."
         },
         "flightpath.claudeCliModel": {
+          "order": 400,
           "type": "string",
           "enum": [
             "sonnet",
@@ -459,10 +480,11 @@
             "Claude Haiku - Fastest, best for simple tasks"
           ],
           "default": "sonnet",
-          "description": "Default AI model for Claude Code CLI",
-          "markdownDescription": "Default AI model for Claude Code CLI. **Sonnet** (default) provides the best balance of speed and capability. Prompts can override this on a per-prompt basis."
+          "description": "[Claude CLI] Default AI model",
+          "markdownDescription": "**Claude CLI Only.** Default AI model for Claude Code CLI. **Sonnet** (default) provides the best balance of speed and capability. Prompts can override this with `\"model\": \"opus\"` or `\"model\": \"haiku\"`."
         },
         "flightpath.claudeCliToolPermissions": {
+          "order": 401,
           "type": "string",
           "enum": [
             "skipAll",
@@ -470,13 +492,14 @@
           ],
           "enumDescriptions": [
             "Skip all permission prompts (--dangerously-skip-permissions)",
-            "Custom tool permissions (configure specific allows/disallows)"
+            "Custom tool permissions (uses cliAllowedTools/cliDeniedTools)"
           ],
           "default": "skipAll",
-          "description": "Permission mode for Claude Code CLI",
-          "markdownDescription": "Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses specific allow/disallow patterns."
+          "description": "[Claude CLI] Permission mode",
+          "markdownDescription": "**Claude CLI Only.** Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses `cliAllowedTools` and `cliDeniedTools` settings."
         },
         "flightpath.claudeCliOutputFormat": {
+          "order": 402,
           "type": "string",
           "enum": [
             "json",
@@ -487,10 +510,11 @@
             "Plain text output"
           ],
           "default": "json",
-          "description": "Output format for Claude Code CLI responses",
-          "markdownDescription": "Output format for Claude Code CLI. **JSON** (default) enables structured parsing of response content and token statistics. **Text** returns raw response content."
+          "description": "[Claude CLI] Output format for responses",
+          "markdownDescription": "**Claude CLI Only.** Output format for Claude Code CLI. **JSON** (default) enables structured parsing of response content and token statistics. **Text** returns raw response content."
         },
         "flightpath.defaultMaxRetries": {
+          "order": 500,
           "type": "number",
           "default": 3,
           "minimum": -1,
@@ -499,50 +523,57 @@
           "markdownDescription": "Default number of retries to use when a `retryPrompt` is specified in an end condition but `maxRetries` is not explicitly set. Use `-1` for unlimited retries, `0` to disable default retries, or `1-100` for a specific limit. **Default: 3**"
         },
         "flightpath.defaultRetryPrompt": {
+          "order": 501,
           "type": "string",
           "default": "**Validation Failed** (Attempt {retryCount}/{maxRetries})\n\n**Expected:** `{expectedValue}`\n**Actual:** `{actualValue}`\n\n**Output:**\n```\n{scriptOutput}\n```\n\nPlease fix the issues above and try again.",
           "description": "Default retry prompt template when maxRetries is specified but retryPrompt is not",
           "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{scriptOutput}`, `{errorOutput}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, `{maxRetries}`. Leave empty to require explicit retry prompts."
         },
         "flightpath.enableDynamicQueue": {
+          "order": 600,
           "type": "boolean",
           "default": false,
-          "description": "Allow Copilot to extend the workflow by adding prompts to the .flightpath.json file during execution",
-          "markdownDescription": "Allow Copilot to extend the workflow by adding prompts to the `.flightpath.json` file during execution. This enables adaptive autonomous workflows where Copilot can break down complex tasks dynamically."
+          "description": "[Dynamic Queue] Allow AI to extend workflow by adding prompts during execution",
+          "markdownDescription": "Allow the AI to extend the workflow by adding prompts to the `.flightpath.json` file during execution. This enables adaptive autonomous workflows where the AI can break down complex tasks dynamically."
         },
         "flightpath.dynamicExtensionOnLastPrompt": {
+          "order": 601,
           "type": "boolean",
           "default": true,
-          "description": "When dynamic queues are enabled, allow extension on the last prompt when no explicit allowDynamicExtension flags are set",
+          "description": "[Dynamic Queue] Allow extension on last prompt when no explicit flags are set",
           "markdownDescription": "When dynamic queues are enabled, allow extension on the last prompt when no explicit `allowDynamicExtension` flags are set. Disable this if your last prompt should never extend the queue (e.g., 'commit changes')."
         },
         "flightpath.maxQueueSize": {
+          "order": 602,
           "type": "number",
           "default": 100,
           "minimum": 1,
           "maximum": 1000,
-          "description": "Maximum number of prompts allowed in a dynamic queue (prevents infinite loops). Ignored if unlimitedMode is enabled.",
+          "description": "[Dynamic Queue] Maximum prompts allowed (prevents infinite loops)",
           "markdownDescription": "Maximum number of prompts allowed in a dynamic queue (prevents infinite loops). Range: **1** to **1000**. Default: **100**. Ignored if `unlimitedMode` is enabled."
         },
         "flightpath.maxExecutionTime": {
+          "order": 603,
           "type": "number",
           "default": 18000,
           "minimum": 300,
           "maximum": 86400,
-          "description": "Maximum total execution time for a workflow in seconds (5 minutes to 24 hours, default: 5 hours). Ignored if unlimitedMode is enabled.",
+          "description": "[Dynamic Queue] Maximum execution time in seconds (default: 5 hours)",
           "markdownDescription": "Maximum total execution time for a workflow in seconds. Range: **5 minutes** (300) to **24 hours** (86400). Default: **5 hours** (18000). Ignored if `unlimitedMode` is enabled."
         },
         "flightpath.unlimitedMode": {
+          "order": 604,
           "type": "boolean",
           "default": false,
-          "description": "Enable unlimited mode: no queue size or execution time limits. When enabled, maxQueueSize and maxExecutionTime are both ignored. May be restricted to paid tier in future.",
+          "description": "[Dynamic Queue] Enable unlimited mode (no queue size or time limits)",
           "markdownDescription": "Enable unlimited mode: removes all queue size and execution time limits. When enabled, both `maxQueueSize` and `maxExecutionTime` are ignored. **Note:** This feature may be restricted to paid tier in future releases."
         },
         "flightpath.notifyOnQueueExtension": {
+          "order": 605,
           "type": "boolean",
           "default": true,
-          "description": "Show notification when Copilot extends the prompt queue",
-          "markdownDescription": "Show notification when Copilot extends the prompt queue during workflow execution."
+          "description": "[Dynamic Queue] Show notification when AI extends the prompt queue",
+          "markdownDescription": "Show notification when the AI extends the prompt queue during workflow execution."
         }
       }
     },
