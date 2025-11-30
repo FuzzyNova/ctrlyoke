@@ -269,7 +269,7 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30000)
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
-- flightpath.provider (enum: "cli" | "chat" | "claude-cli", default: "cli")
+- flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli", default: "copilot-cli")
   - **cli**: Copilot CLI (default, best reliability)
   - **chat**: Copilot Chat window (UI automation)
   - **claude-cli**: Claude Code CLI (Anthropic's CLI)

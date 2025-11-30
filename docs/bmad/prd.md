@@ -326,9 +326,10 @@ private createCopilotIntegration(): CopilotIntegration {
     case "claude-cli":
       return new ClaudeCommandLineIntegration(this.context, this.outputChannel);
     case "copilot-cli":
-    case "cli":
+    case "cli":  // backward compatibility
       return new CopilotCommandLineIntegration(this.context, this.outputChannel);
-    case "chat":
+    case "copilot-chat":
+    case "chat":  // backward compatibility
       return new CopilotChatIntegration(this.context, ...);
   }
 }

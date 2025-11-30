@@ -122,7 +122,7 @@ async stop(): Promise<void>
 ```typescript
 private createIntegrationForMode(modeOverride?: Provider): CopilotIntegration {
   if (modeOverride) {
-    return modeOverride === Provider.Chat
+    return modeOverride === Provider.CopilotChat
       ? this.chatIntegration
       : this.cliIntegration;
   }

@@ -97,7 +97,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
    * Updates the flightpath.provider setting
    */
   private async handleProviderChange(provider: string): Promise<void> {
-    const validProviders = ["cli", "chat", "claude-cli"];
+    const validProviders = ["copilot-cli", "copilot-chat", "claude-cli"];
     if (!validProviders.includes(provider)) {
       vscode.window.showErrorMessage(`Invalid provider: ${provider}`);
       return;
@@ -347,7 +347,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private getCurrentState(): any {
     // Get current provider from settings
     const config = vscode.workspace.getConfiguration("flightpath");
-    const provider = config.get<string>("provider", "cli");
+    const provider = config.get<string>("provider", "copilot-cli");
 
     // Get actual state from FlightPathManager if available
     if (this.flightPathManager) {

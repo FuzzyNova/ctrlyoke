@@ -9,9 +9,9 @@ import {
  * Copilot integration mode
  */
 export enum Provider {
-  CLI = "cli", // Copilot CLI (original, backward compatible)
-  Chat = "chat", // Copilot Chat (legacy UI automation)
-  ClaudeCli = "claude-cli", // Claude Code CLI (new)
+  CopilotCli = "copilot-cli", // Copilot CLI
+  CopilotChat = "copilot-chat", // Copilot Chat
+  ClaudeCli = "claude-cli", // Claude Code CLI
 }
 
 /**

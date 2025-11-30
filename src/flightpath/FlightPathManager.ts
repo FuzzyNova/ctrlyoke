@@ -111,13 +111,13 @@ export class FlightPathManager {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     switch (integrationMode) {
-      case Provider.Chat:
+      case Provider.CopilotChat:
         console.log("🔄 FlightPath: Using Copilot Chat integration");
         return this.chatIntegration;
       case Provider.ClaudeCli:
         console.log("🔄 FlightPath: Using Claude Code CLI integration");
         return this.claudeCliIntegration;
-      case Provider.CLI:
+      case Provider.CopilotCli:
       default:
         console.log("🔄 FlightPath: Using Copilot CLI integration");
         return this.cliIntegration;
@@ -142,11 +142,11 @@ export class FlightPathManager {
     if (modeOverride) {
       console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
       switch (modeOverride) {
-        case Provider.Chat:
+        case Provider.CopilotChat:
           return this.chatIntegration;
         case Provider.ClaudeCli:
           return this.claudeCliIntegration;
-        case Provider.CLI:
+        case Provider.CopilotCli:
         default:
           return this.cliIntegration;
       }

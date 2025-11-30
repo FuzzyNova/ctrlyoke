@@ -313,11 +313,11 @@ Workflow Progress:
 
 FlightPath supports three integration modes, with CLI as the default:
 
-| Mode        | Setting Value  | Implementation                  | Use Case                  |
-| ----------- | -------------- | ------------------------------- | ------------------------- |
-| Copilot CLI | `"cli"`        | `CopilotCommandLineIntegration` | Default, best reliability |
-| Claude CLI  | `"claude-cli"` | `ClaudeCommandLineIntegration`  | Claude model preference   |
-| Chat        | `"chat"`       | `CopilotChatIntegration`        | Legacy fallback           |
+| Mode        | Setting Value    | Implementation                  | Use Case                  |
+| ----------- | ---------------- | ------------------------------- | ------------------------- |
+| Copilot CLI | `"copilot-cli"`  | `CopilotCommandLineIntegration` | Default, best reliability |
+| Claude CLI  | `"claude-cli"`   | `ClaudeCommandLineIntegration`  | Claude model preference   |
+| Chat        | `"copilot-chat"` | `CopilotChatIntegration`        | Legacy fallback           |
 
 **Why CLI-first:**
 

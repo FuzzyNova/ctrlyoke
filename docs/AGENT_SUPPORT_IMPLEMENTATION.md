@@ -340,7 +340,7 @@ private async executeCopilotCommand(
 - No changes needed to `CopilotChatIntegration.ts`
 - Schema allows `agent` field universally (for consistency)
 - Documentation should clearly state CLI-only support
-- Consider showing a warning if user has `provider: "chat"` and uses `agent` field
+- Consider showing a warning if user has `provider: "copilot-chat"` and uses `agent` field
 
 ---
 
@@ -639,7 +639,7 @@ FlightPath's **CLI mode** supports GitHub Copilot's custom agent system, allowin
 
 **Requirements**:
 
-- Set `flightpath.provider` to `"cli"` (default)
+- Set `flightpath.provider` to `"copilot-cli"` (default)
 - Define agents in `.github/agents/*.agent.md` or `~/.copilot/agents/*.agent.md`
 - Use valid agent names (alphanumeric, hyphens, underscores only)
 
@@ -684,7 +684,7 @@ copilot --agent flightpath-orchestrator -p "Plan workflow for adding OAuth2 auth
 
 The `agent` field in `.flightpath.json` files is **ignored when executing workflows in Chat mode**. If you need agent selection:
 
-1. Use CLI mode (default): `flightpath.provider: "cli"`
+1. Use CLI mode (default): `flightpath.provider: "copilot-cli"`
 2. OR manually select the desired agent in Chat before running the workflow (cannot switch agents mid-workflow)
 
 For automated workflows with multiple agents, **CLI mode is required**.
@@ -750,7 +750,7 @@ See [GitHub's Custom Agent Documentation](https://docs.github.com/en/copilot/con
 
 ### Use Cases
 
-**Note**: All use cases below require **CLI mode execution** (`flightpath.provider: "cli"`).
+**Note**: All use cases below require **CLI mode execution** (`flightpath.provider: "copilot-cli"`).
 
 #### Use Case 1: Full-Stack Feature Development
 
@@ -906,7 +906,7 @@ This prevents agents from accidentally modifying code when they should only anal
 | Agent requires unavailable tool   | CLI error about tool access permissions                 | N/A (agent field ignored)                 |
 | Agent field in Chat mode workflow | N/A                                                     | ⚠️ Silently ignored (should show warning) |
 
-**Recommendation**: Implement a validation warning in `FlightPathManager` when user has `provider: "chat"` and workflow contains `agent` fields.
+**Recommendation**: Implement a validation warning in `FlightPathManager` when user has `provider: "copilot-chat"` and workflow contains `agent` fields.
 
 ---
 
@@ -987,14 +987,14 @@ describe("CopilotCommandLineIntegration - Agent Support", () => {
 
 1. **Agent Field Ignored Test**:
    - Create workflow with `agent` fields
-   - Set `provider: "chat"`
+   - Set `provider: "copilot-chat"`
    - Execute workflow
    - Verify `agent` field is silently ignored
    - Verify workflow uses manually-selected agent (if any)
 
 2. **Warning for Chat + Agent Test** (future enhancement):
    - Create workflow with `agent` fields
-   - Set `provider: "chat"`
+   - Set `provider: "copilot-chat"`
    - Verify FlightPath shows warning:
      - "This workflow uses agent assignments, which only work in CLI mode"
      - Suggest switching to CLI mode or removing agent fields
@@ -1005,7 +1005,7 @@ describe("CopilotCommandLineIntegration - Agent Support", () => {
 
 - [ ] Create custom agent in `.github/agents/my-test-agent.agent.md`
 - [ ] Reference agent in `.flightpath.json` workflow
-- [ ] Execute workflow with CLI mode (verify `flightpath.provider: "cli"`)
+- [ ] Execute workflow with CLI mode (verify `flightpath.provider: "copilot-cli"`)
 - [ ] Check output panel shows: `🤖 Using agent: my-test-agent`
 - [ ] Verify CLI logs include `--agent my-test-agent` flag
 - [ ] Test FlightPath Orchestrator via `copilot --agent flightpath-orchestrator -p "Plan feature"`
@@ -1018,7 +1018,7 @@ describe("CopilotCommandLineIntegration - Agent Support", () => {
 **Chat Mode Tests**:
 
 - [ ] Create workflow with `agent` fields
-- [ ] Set `flightpath.provider: "chat"`
+- [ ] Set `flightpath.provider: "copilot-chat"`
 - [ ] Execute workflow
 - [ ] Verify agent fields are ignored (workflow uses manually-selected agent)
 - [ ] Verify no errors occur (graceful degradation)

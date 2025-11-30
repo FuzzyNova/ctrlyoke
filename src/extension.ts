@@ -676,7 +676,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       await listAndDisplayCommands(
         "Available Chat Commands",
         (cmd) =>
-          cmd.includes("chat") ||
+          cmd.includes("copilot-chat") ||
           cmd.includes("copilot") ||
           cmd.includes("workbench.action.chat") ||
           cmd.includes("github.copilot")
@@ -712,7 +712,10 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(uri.fsPath, Provider.CLI);
+        await flightPathManager.executePromptFile(
+          uri.fsPath,
+          Provider.CopilotCli
+        );
         vscode.window.showInformationMessage(
           "FlightPath workflow started using CLI"
         );
@@ -736,7 +739,10 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(uri.fsPath, Provider.Chat);
+        await flightPathManager.executePromptFile(
+          uri.fsPath,
+          Provider.CopilotChat
+        );
         vscode.window.showInformationMessage(
           "FlightPath workflow started using Chat"
         );

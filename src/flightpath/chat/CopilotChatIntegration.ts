@@ -663,14 +663,14 @@ export class CopilotChatIntegration extends CopilotIntegration {
         available: true,
         message:
           "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: Provider.Chat,
+        strategy: Provider.CopilotChat,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Direct automation unavailable - required commands not found",
-        strategy: Provider.Chat,
+        strategy: Provider.CopilotChat,
       };
     }
   }
@@ -760,7 +760,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
     return {
       hasDirectAutomation: this.isAvailable,
       supportsZeroInteraction: this.isAvailable,
-      currentStrategy: this.isAvailable ? "chat" : "unavailable",
+      currentStrategy: this.isAvailable ? "copilot-chat" : "unavailable",
     };
   }
 

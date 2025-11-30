@@ -211,10 +211,10 @@ So that **I can switch between Copilot and Claude CLI by changing one setting**.
 **When** the setting value is `"claude-cli"`  
 **Then** `FlightPathManager.createCopilotIntegration()` returns a `ClaudeCommandLineIntegration` instance
 
-**And** when the setting value is `"copilot-cli"` or `"cli"`  
+**And** when the setting value is `"copilot-cli"` or `"cli"`
 **Then** it returns a `CopilotCommandLineIntegration` instance (existing behavior)
 
-**And** when the setting value is `"copilot-chat"` or `"chat"`  
+**And** when the setting value is `"copilot-chat"` or `"chat"`
 **Then** it returns a `CopilotChatIntegration` instance (existing behavior)
 
 **And** the factory method logs which integration mode was selected to the output channel
@@ -225,9 +225,7 @@ So that **I can switch between Copilot and Claude CLI by changing one setting**.
 
 - Update `createCopilotIntegration()` method in `FlightPathManager.ts`
 - Handle backward compatibility for old setting values (`"cli"` → `"copilot-cli"`)
-- Import `ClaudeCommandLineIntegration` at top of file
-
----
+- Import `ClaudeCommandLineIntegration` at top of file---
 
 ## Epic 2: CLI Detection & Initialization ✅ COMPLETED
 

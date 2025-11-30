@@ -37,19 +37,19 @@ export const ConfigurationUtils = {
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */
   getIntegrationMode(): Provider {
-    const mode = getConfig().get<string>("provider", Provider.CLI);
+    const mode = getConfig().get<string>("provider", Provider.CopilotCli);
 
     switch (mode) {
-      case "chat":
-      case Provider.Chat:
-        return Provider.Chat;
+      case "copilot-chat":
+      case Provider.CopilotChat:
+        return Provider.CopilotChat;
       case "claude-cli":
       case Provider.ClaudeCli:
         return Provider.ClaudeCli;
-      case "cli":
-      case Provider.CLI:
+      case "copilot-cli":
+      case Provider.CopilotCli:
       default:
-        return Provider.CLI;
+        return Provider.CopilotCli;
     }
   },
 

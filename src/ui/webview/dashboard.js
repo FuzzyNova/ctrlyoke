@@ -17,7 +17,7 @@
     cliOutputs: {}, // Maps stepIndex -> array of outputs (including retries)
     retryStates: {}, // Maps stepIndex -> { currentRetry, maxRetries }
     statusMessages: {}, // Maps stepIndex -> array of status messages
-    provider: "cli", // Current AI provider: cli, chat, claude-cli
+    provider: "copilot-cli", // Current AI provider: copilot-cli, copilot-chat, claude-cli
   };
 
   // DOM elements
@@ -443,7 +443,7 @@
       // Add CLI outputs with their timestamps
       outputs.forEach((output, attemptIndex) => {
         allMessages.push({
-          type: "cli",
+          type: "copilot-cli",
           stepIndex,
           timestamp:
             output.timestampMs ||
@@ -474,7 +474,7 @@
         html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
         html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
         html += "</div>";
-      } else if (item.type === "cli") {
+      } else if (item.type === "copilot-cli") {
         const output = item.data;
         const attemptIndex = item.attemptIndex;
         const stepIndex = item.stepIndex;
@@ -621,7 +621,7 @@
 
       outputs.forEach((output, attemptIndex) => {
         allMessages.push({
-          type: "cli",
+          type: "copilot-cli",
           stepIndex,
           timestamp:
             output.timestampMs ||
@@ -646,7 +646,7 @@
         const statusMsg = item.data;
         lines.push(`> **[${statusMsg.timestamp}]** ${statusMsg.message}`);
         lines.push("");
-      } else if (item.type === "cli") {
+      } else if (item.type === "copilot-cli") {
         const output = item.data;
         const attemptIndex = item.attemptIndex;
         const stepIndex = item.stepIndex;

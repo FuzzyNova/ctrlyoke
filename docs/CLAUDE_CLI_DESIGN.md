@@ -259,9 +259,9 @@ claude -p --allowedTools "Bash(git:*)" --allowedTools "Write" --disallowedTools 
 
 **Modes:**
 
-- `"cli"` - Copilot CLI (default)
+- `"copilot-cli"` - Copilot CLI (default)
 - `"claude-cli"` - Claude Code CLI
-- `"chat"` - Copilot Chat window (legacy)
+- `"copilot-chat"` - Copilot Chat window (legacy)
 
 ---
 

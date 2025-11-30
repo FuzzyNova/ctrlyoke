@@ -344,8 +344,8 @@
         "flightpath.provider": {
           "type": "string",
           "enum": [
-            "cli",
-            "chat",
+            "copilot-cli",
+            "copilot-chat",
             "claude-cli"
           ],
           "enumDescriptions": [
@@ -353,9 +353,9 @@
             "Use Copilot Chat window (Use the chat window at the location specified by chatWindowLocation)",
             "Use Claude Code CLI (Anthropic's Claude AI via command line)"
           ],
-          "default": "cli",
-          "description": "Choose how FlightPath interacts with AI providers",
-          "markdownDescription": "Choose how FlightPath interacts with AI providers. **Copilot CLI** (default) provides best reliability with GitHub Copilot. **Claude CLI** uses Anthropic's Claude Code CLI for Claude models. Chat mode is available as legacy fallback."
+          "default": "copilot-cli",
+          "description": "Choose which AI provider integration to use",
+          "markdownDescription": "Choose which AI provider integration to use. **Copilot CLI** (default) provides best reliability with GitHub Copilot. **Claude CLI** uses Anthropic's Claude Code CLI for Claude models. **Copilot Chat** uses the chat window but automation is not as reliable as CLIs."
         },
         "flightpath.copilotCliModel": {
           "type": "string",

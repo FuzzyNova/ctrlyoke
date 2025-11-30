@@ -85,7 +85,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Get the integration mode for status reporting
    */
   protected getIntegrationMode(): string {
-    return Provider.CLI;
+    return Provider.CopilotCli;
   }
 
   /**
@@ -624,14 +624,14 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       return {
         available: true,
         message: "✅ Copilot CLI available",
-        strategy: Provider.CLI,
+        strategy: Provider.CopilotCli,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Copilot CLI unavailable - please install GitHub Copilot CLI",
-        strategy: Provider.CLI,
+        strategy: Provider.CopilotCli,
       };
     }
   }
