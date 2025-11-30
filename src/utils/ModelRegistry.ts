@@ -72,19 +72,32 @@ export const CLAUDE_CLI_MODELS = [
 // Fallback model lists (used when queries fail)
 const FALLBACK_CHAT_MODELS = [
   "claude-sonnet-4.5",
-  "claude-sonnet-4",
   "claude-haiku-4.5",
   "claude-opus-4.5",
+  "claude-sonnet-4",
   "gpt-5",
+  "gpt-5.1",
+  "gpt-5.1-codex-mini",
+  "gpt-5.1-codex",
+  "gpt-5-mini",
+  "gpt-4.1",
   "gpt-4o",
+  "gemini-3-pro-preview",
   "gemini-2.5-pro",
 ];
 
 const FALLBACK_COPILOT_CLI_MODELS = [
   "claude-sonnet-4.5",
-  "claude-sonnet-4",
   "claude-haiku-4.5",
+  "claude-opus-4.5",
+  "claude-sonnet-4",
   "gpt-5",
+  "gpt-5.1",
+  "gpt-5.1-codex-mini",
+  "gpt-5.1-codex",
+  "gpt-5-mini",
+  "gpt-4.1",
+  "gemini-3-pro-preview",
 ];
 
 /**

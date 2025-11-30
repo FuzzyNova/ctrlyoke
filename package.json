@@ -394,13 +394,20 @@
           "type": "string",
           "enum": [
             "claude-sonnet-4.5",
-            "claude-sonnet-4",
             "claude-haiku-4.5",
-            "gpt-5"
+            "claude-opus-4.5",
+            "claude-sonnet-4",
+            "gpt-5",
+            "gpt-5.1",
+            "gpt-5.1-codex-mini",
+            "gpt-5.1-codex",
+            "gpt-5-mini",
+            "gpt-4.1",
+            "gemini-3-pro-preview"
           ],
           "default": "claude-sonnet-4.5",
           "description": "[Copilot CLI] Default AI model",
-          "markdownDescription": "**Copilot CLI Only.** Default AI model for Copilot CLI mode. Prompts can override with `\"model\": \"...\"`. CLI mode only supports these 4 models - others will fallback to this default with warning. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
+          "markdownDescription": "**Copilot CLI Only.** Default AI model for Copilot CLI mode. Prompts can override with `\"model\": \"...\"`. Models are discovered dynamically at runtime via `copilot help config`. **Claude Sonnet 4.5** (default) provides the best balance of performance and capability."
         },
         "flightpath.copilotCliToolPermissions": {
           "order": 301,
