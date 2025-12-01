@@ -76,8 +76,9 @@ We use **real integration tests** instead of mocks because:
 ### Quick Start
 
 1. **Press F5** in VS Code
-2. Extension Development Host opens with `manual-test/` workspace
+2. Extension Development Host opens with `flightpath-test.code-workspace` (root directory with test settings)
 3. FlightPath extension is active and ready to test
+4. Test files are available in `manual-test/` directory
 
 ### Test Files Available
 

@@ -1,13 +1,13 @@
 # FlightPath Manual Testing Workspace
 
-This directory serves as a dedicated workspace for manually testing the FlightPath extension. When you press **F5** to debug FlightPath, this workspace automatically opens in the Extension Development Host window.
+This directory contains test files for manually testing the FlightPath extension. When you press **F5** to debug FlightPath, the `flightpath-test.code-workspace` opens in the Extension Development Host window with the project root directory (giving you access to these tests and the ability to use FlightPath on FlightPath itself).
 
 ## Quick Start
 
 1. Press **F5** in VS Code to start debugging FlightPath
-2. The Extension Development Host window opens with this `manual-test` workspace
+2. The Extension Development Host window opens with the `flightpath-test.code-workspace` (root directory)
 3. FlightPath extension is active and ready to test
-4. Test prompts are available in `.flightpath/` directory
+4. Test prompts are available in `manual-test/.flightpath/` directory
 
 ## Test Philosophy
 

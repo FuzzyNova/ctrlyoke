@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "flightpath.promptsDirectory": "manual-test/.flightpath",
+    "flightpath.provider": "copilot-cli",
+    "flightpath.copilotCliModel": "claude-sonnet-4.5",
+    "flightpath.showCliOutput": true,
+    "flightpath.enableDynamicQueue": false,
+  },
+}

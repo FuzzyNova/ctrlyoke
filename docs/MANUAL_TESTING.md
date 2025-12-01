@@ -3,8 +3,15 @@
 ## Starting a Test Session
 
 1. **Press F5** in VS Code
-2. Extension Development Host opens with `manual-test/` workspace automatically
+2. Extension Development Host opens with `flightpath-test.code-workspace` (root directory with test settings)
 3. FlightPath extension is active and ready to test
+4. Test files are available in `manual-test/` directory
+
+**Note:** The workspace file uses the project root (`.`), allowing you to:
+
+- Access all manual tests in `manual-test/`
+- Use FlightPath to develop FlightPath itself
+- Run both instances side-by-side without duplicate project warnings
 
 ## Test Files Available
 
