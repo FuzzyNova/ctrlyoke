@@ -65,7 +65,10 @@ src/
 │   ├── PromptQueue.ts            # Execution queue
 │   ├── PromptFileParser.ts       # JSON parsing
 │   └── EndConditionEvaluator.ts  # Script validation
-├── templates/                    # End condition script templates
+├── templates/                    # Templates for scripts and agents
+│   ├── agents/                   # Custom agent templates
+│   │   ├── manifest.json         # Agent metadata and descriptions
+│   │   └── flightpath-orchestrator.agent.md  # Plan→Implement→Review workflow creator
 │   ├── check_condition.py        # Python template
 │   ├── check_condition.js        # JavaScript template
 │   ├── check_condition.sh        # Bash template
@@ -248,12 +251,13 @@ All three formats support context menu execution with mode override (Send to CLI
 
 ## Commands
 
-12 registered commands:
+13 registered commands:
 
 - flightpath.takeOff: Start workflow
 - flightpath.openPanel: Open panel
 - flightpath.createPromptFile: Create file
 - flightpath.createEndConditionScript: Create end condition script from templates
+- flightpath.importAgents: Import FlightPath custom agents to .github/agents/
 - flightpath.pause/resume/stop: Execution control
 - flightpath.debugState: Debug state
 - flightpath.showCopilotStatus: Show status

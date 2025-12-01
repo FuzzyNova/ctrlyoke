@@ -43,7 +43,34 @@ const esbuildProblemMatcherPlugin = {
 };
 
 /**
- * Plugin to copy template files to output directory
+ * Recursively copy a directory
+ * @param {string} src - Source directory
+ * @param {string} dest - Destination directory
+ */
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) {
+    return;
+  }
+
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+/**
+ * Plugin to copy template files to output directory (including subdirectories)
  * @type {import('esbuild').Plugin}
  */
 const copyTemplatesPlugin = {
@@ -59,14 +86,22 @@ const copyTemplatesPlugin = {
         fs.mkdirSync(outTemplates, { recursive: true });
       }
 
-      // Copy all template files
+      // Copy all template files and subdirectories
       if (fs.existsSync(srcTemplates)) {
-        const files = fs.readdirSync(srcTemplates);
-        files.forEach((file) => {
-          const srcFile = path.join(srcTemplates, file);
-          const outFile = path.join(outTemplates, file);
-          fs.copyFileSync(srcFile, outFile);
-          console.log(`[copy] ${file} -> out/templates/${file}`);
+        const entries = fs.readdirSync(srcTemplates, { withFileTypes: true });
+        entries.forEach((entry) => {
+          const srcPath = path.join(srcTemplates, entry.name);
+          const outPath = path.join(outTemplates, entry.name);
+
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, outPath);
+            console.log(
+              `[copy] ${entry.name}/ -> out/templates/${entry.name}/`
+            );
+          } else {
+            fs.copyFileSync(srcPath, outPath);
+            console.log(`[copy] ${entry.name} -> out/templates/${entry.name}`);
+          }
         });
       }
     });

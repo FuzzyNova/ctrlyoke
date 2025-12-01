@@ -213,6 +213,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Import FlightPath Agents command
+  const importAgentsCommand = vscode.commands.registerCommand(
+    "flightpath.importAgents",
+    async () => {
+      await flightPathManager.importAgents();
+    }
+  );
+
   // Run with FlightPath command (context menu) - runs using current provider
   const runFromContextCommand = vscode.commands.registerCommand(
     "flightpath.runFromContext",
@@ -335,6 +343,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     testAutomationCommand,
     retryCopilotDetectionCommand,
     createEndConditionScriptCommand,
+    importAgentsCommand,
     runFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,

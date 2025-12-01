@@ -524,6 +524,78 @@ Command to export current workflow as shareable template:
 
 ---
 
+## Custom Agents (Implemented)
+
+FlightPath ships with pre-built custom agents that work with Copilot CLI, Claude CLI, and VS Code Copilot Chat.
+
+### Agent Location Requirements
+
+| CLI/Tool         | Agent Location                    | Notes                                                |
+| ---------------- | --------------------------------- | ---------------------------------------------------- |
+| **Copilot CLI**  | `.github/agents/`                 | Only this folder works                               |
+| **Claude CLI**   | Any path (via `--agent` flag)     | Most flexible                                        |
+| **VS Code Chat** | `.github/agents/` or user profile | Profile agents work but no way to automate switching |
+
+**Recommendation**: Import agents to `.github/agents/` for maximum compatibility.
+
+### Available Agents
+
+#### FlightPath Orchestrator
+
+Creates structured FlightPath workflow files from feature requests.
+
+**Purpose**: Takes a user's feature request and generates a complete `.flightpath.json` workflow with:
+
+1. **PLAN Phase** (1-3 prompts): Analyze codebase, design approach
+2. **IMPLEMENT Phase** (1-5 prompts): Execute implementation tasks
+3. **REVIEW Phase** (1 prompt): Validate with tests/linters
+4. **DOCS Phase** (1 prompt): Update documentation (uses Haiku - cheaper)
+5. **COMMIT Phase** (1 prompt): Generate commit message (uses Haiku - cheaper)
+
+**Usage**: After importing the agent, FlightPath's CLI integrations (`CopilotCommandLineIntegration` and `ClaudeCommandLineIntegration`) automatically detect and use agents from `.github/agents/`. The agent creates the workflow file, then you run it with FlightPath.
+
+### Importing Agents
+
+Use the command palette:
+
+```
+> FlightPath: Import FlightPath Agents
+```
+
+This will:
+
+1. Show available agents with descriptions
+2. Allow selecting multiple agents
+3. Copy to `.github/agents/` in your workspace
+4. Handle existing file conflicts with confirmation
+
+### Agent File Structure
+
+Agents use the standard `.agent.md` format:
+
+```markdown
+---
+name: agent-name
+description: Brief description shown in agent picker
+tools: ["search", "fetch", "githubRepo", "usages"]
+model: Claude Sonnet 4.5
+---
+
+# Instructions
+
+Detailed agent instructions and behavior...
+```
+
+### Source Location
+
+Agent templates are stored in:
+
+- **Source**: `src/templates/agents/`
+- **Build output**: `out/templates/agents/`
+- **Manifest**: `manifest.json` lists all available agents
+
+---
+
 ## Related Documentation
 
 - [BMAD for FlightPath](./BMAD_FOR_FLIGHTPATH.md) - BMAD automation templates

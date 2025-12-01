@@ -850,6 +850,171 @@ export class FlightPathManager {
   }
 
   /**
+   * Import FlightPath custom agents to the workspace's .github/agents folder
+   */
+  async importAgents(): Promise<void> {
+    try {
+      if (!this.currentWorkspaceFolder) {
+        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
+        return;
+      }
+
+      // Load agent manifest
+      const manifestPath = path.join(
+        this.context.extensionPath,
+        "out",
+        "templates",
+        "agents",
+        "manifest.json"
+      );
+
+      let manifest: {
+        agents: Array<{
+          id: string;
+          label: string;
+          description: string;
+          file: string;
+          tags?: string[];
+          icon?: string;
+        }>;
+      };
+
+      try {
+        const manifestUri = vscode.Uri.file(manifestPath);
+        const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
+        manifest = JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
+      } catch (error) {
+        console.error("FlightPath: Failed to load agent manifest:", error);
+        vscode.window.showErrorMessage(
+          "❌ Failed to load FlightPath agents. The extension may not be properly installed."
+        );
+        return;
+      }
+
+      if (!manifest.agents || manifest.agents.length === 0) {
+        vscode.window.showInformationMessage(
+          "FlightPath: No agents available to import"
+        );
+        return;
+      }
+
+      // Show QuickPick with available agents
+      const selectedAgents = await vscode.window.showQuickPick(
+        manifest.agents.map((agent) => ({
+          label: `${agent.icon || "$(hubot)"} ${agent.label}`,
+          description: agent.description,
+          detail: agent.tags?.join(", "),
+          picked: true,
+          agent,
+        })),
+        {
+          placeHolder: "Select agents to import to .github/agents/",
+          title: "FlightPath: Import Custom Agents",
+          canPickMany: true,
+        }
+      );
+
+      if (!selectedAgents || selectedAgents.length === 0) {
+        return; // User cancelled
+      }
+
+      // Create .github/agents directory
+      const agentsDir = path.join(
+        this.currentWorkspaceFolder.uri.fsPath,
+        ".github",
+        "agents"
+      );
+
+      try {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(agentsDir));
+      } catch {
+        // Directory might already exist
+      }
+
+      // Copy selected agents
+      const templatesPath = path.join(
+        this.context.extensionPath,
+        "out",
+        "templates",
+        "agents"
+      );
+
+      const importedAgents: string[] = [];
+      const failedAgents: string[] = [];
+
+      for (const selection of selectedAgents) {
+        const agent = selection.agent;
+        const srcPath = path.join(templatesPath, agent.file);
+        const destPath = path.join(agentsDir, agent.file);
+
+        try {
+          // Check if agent already exists
+          try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(destPath));
+            // File exists, ask for confirmation
+            const overwrite = await vscode.window.showWarningMessage(
+              `Agent "${agent.label}" already exists. Overwrite?`,
+              "Yes",
+              "No"
+            );
+            if (overwrite !== "Yes") {
+              continue;
+            }
+          } catch {
+            // File doesn't exist, proceed with copy
+          }
+
+          // Copy the agent file
+          const content = await vscode.workspace.fs.readFile(
+            vscode.Uri.file(srcPath)
+          );
+          await vscode.workspace.fs.writeFile(
+            vscode.Uri.file(destPath),
+            content
+          );
+          importedAgents.push(agent.label);
+        } catch (error) {
+          console.error(
+            `FlightPath: Failed to import agent ${agent.id}:`,
+            error
+          );
+          failedAgents.push(agent.label);
+        }
+      }
+
+      // Show result
+      if (importedAgents.length > 0) {
+        const action = await vscode.window.showInformationMessage(
+          `✅ Imported ${importedAgents.length} agent(s): ${importedAgents.join(", ")}`,
+          "Open Agents Folder",
+          "View Agent"
+        );
+
+        if (action === "Open Agents Folder") {
+          await vscode.commands.executeCommand(
+            "revealFileInOS",
+            vscode.Uri.file(agentsDir)
+          );
+        } else if (action === "View Agent" && importedAgents.length === 1) {
+          // Open the first imported agent
+          const agentFile = path.join(agentsDir, selectedAgents[0].agent.file);
+          const doc = await vscode.workspace.openTextDocument(agentFile);
+          await vscode.window.showTextDocument(doc);
+        }
+      }
+
+      if (failedAgents.length > 0) {
+        vscode.window.showErrorMessage(
+          `❌ Failed to import: ${failedAgents.join(", ")}`
+        );
+      }
+    } catch (error) {
+      console.error("FlightPath: Error importing agents:", error);
+      vscode.window.showErrorMessage(`❌ Failed to import agents: ${error}`);
+    }
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {

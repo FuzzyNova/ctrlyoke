@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "description": "FlightPath custom agents for Copilot CLI and Claude CLI",
+  "agents": [
+    {
+      "id": "flightpath-orchestrator",
+      "label": "FlightPath Orchestrator",
+      "description": "Creates structured FlightPath workflow files from feature requests. Converts your task into a Plan→Implement→Review→Docs→Commit workflow.",
+      "file": "flightpath-orchestrator.agent.md",
+      "tags": ["workflow", "planning", "automation"],
+      "icon": "$(compass)"
+    }
+  ]
+}

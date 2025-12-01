@@ -135,6 +135,12 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "flightpath.importAgents",
+        "title": "Import FlightPath Agents",
+        "category": "FlightPath",
+        "icon": "$(hubot)"
+      },
+      {
         "command": "flightpath.runFromContext",
         "title": "Run with FlightPath",
         "category": "FlightPath",
@@ -205,6 +211,9 @@
         },
         {
           "command": "flightpath.createEndConditionScript"
+        },
+        {
+          "command": "flightpath.importAgents"
         },
         {
           "command": "flightpath.runFromContext",
