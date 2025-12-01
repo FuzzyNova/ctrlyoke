@@ -51,6 +51,8 @@ src/
 ├── extension.ts                  # Entry point
 ├── completions/                  # IntelliSense providers
 │   └── PromptCompletionProvider.ts  # File/selection completions for prompt files
+├── dev/                          # Development-only code (stripped in production)
+│   └── DevCommands.ts            # Dev commands (test functions, diagnostics)
 ├── flightpath/                   # Core logic
 │   ├── base/
 │   │   └── CopilotIntegration.ts # Abstract base class
@@ -79,9 +81,15 @@ src/
 │       ├── settings.html         # Settings template
 │       ├── settings.css          # Settings styles
 │       └── settings.js           # Settings logic
+├── utils/
+│   ├── BuildConfig.ts            # Build-time constants (IS_DEV_MODE, BUILD_DATE)
+│   ├── ModelConstants.ts         # Model definitions (single source of truth)
+│   └── ModelRegistry.ts          # Runtime model discovery
 └── test/                         # Tests
 schemas/                          # JSON schemas (source)
 └── prompt-schema.json            # Unified schema for both file types
+scripts/
+└── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json
 ```
 
 **Build Output**:
@@ -89,6 +97,7 @@ schemas/                          # JSON schemas (source)
 - Templates copied from `src/templates/` to `out/templates/` during build
 - Schemas copied from `schemas/` to `out/schemas/` during build
 - Single source of truth: `/schemas/prompt-schema.json` used for both VS Code IntelliSense and runtime validation
+- **Dev code stripped**: In production builds, `IS_DEV_MODE=false` enables dead code elimination
 
 <coreComponents>
 
@@ -335,6 +344,44 @@ When adding settings:
 3. Set sensible defaults
 4. Retrieve: vscode.workspace.getConfiguration("flightpath").get<Type>("settingName", defaultValue)
 
+## Development Mode Architecture
+
+**Build-time conditional compilation** strips dev commands from production builds:
+
+```typescript
+// src/utils/BuildConfig.ts
+export const IS_DEV_MODE: boolean = __DEV_MODE__; // Replaced by esbuild
+
+// src/extension.ts
+if (IS_DEV_MODE) {
+  const { registerDevCommands } = require("./dev/DevCommands");
+  registerDevCommands(context);
+}
+```
+
+**Build scripts:**
+
+- `npm run compile` - Development build (IS_DEV_MODE = true)
+- `npm run build:prod` - Production build (IS_DEV_MODE = false, minified)
+- `npm run package` - Full production package
+
+**Dev-only commands** (in `src/dev/DevCommands.ts`):
+
+- `flightpath.test.*` - Various test commands for Copilot integration
+- `flightpath.listChatCommands` - List all chat-related VS Code commands
+- `flightpath.listAllCommands` - List all VS Code commands
+- `flightpath.showLanguageId` - Debug language detection
+- `flightpath.investigateChatLogs` - Debug chat logs
+- `flightpath.exportDiscoveredModels` - Export models for sync-models.mjs
+
+**Updating Chat Models** (workflow for discovering new models):
+
+1. Run extension (F5 in dev mode)
+2. Run command: `FlightPath: Export Discovered Models`
+3. Run: `npm run sync-models:import` (updates ModelConstants.ts)
+4. Run: `npm run sync-models` (updates package.json)
+5. Commit both files
+
 ## Development Guidelines
 
 **Project Status**: Pre-release - No backward compatibility required. Break things freely to improve architecture.
@@ -358,6 +405,12 @@ When adding settings:
 - Message types between extension and webview → `src/types/DashboardConstants.ts`
 - Execution states and step statuses → `src/types/DashboardConstants.ts`
 - PromptFile/QueueState types → `src/types/FlightPathTypes.ts`
+- **Model definitions and display names** → `src/utils/ModelConstants.ts`
+  - Copilot Chat models (COPILOT_MODELS) - full set with display names
+  - Copilot CLI models (COPILOT_CLI_MODEL_IDS) - subset from `copilot help config`
+  - Claude CLI model aliases (CLAUDE_CLI_MODELS)
+  - Run `npm run sync-models` to sync package.json enums
+  - Run `node scripts/sync-models.mjs --discover` to see current CLI models
 
 **Single Source of Truth Principle**: Each shared constant must have exactly ONE definition. Import and reuse - never duplicate. When updating a constant value, you should only need to change it in ONE place.
 

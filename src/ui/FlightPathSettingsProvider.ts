@@ -10,6 +10,10 @@ import {
   onModelsLoaded,
   isRegistryInitialized,
 } from "../utils/ModelRegistry";
+import {
+  getModelDisplayName,
+  CLAUDE_CLI_MODEL_LABELS,
+} from "../utils/ModelConstants";
 
 const execAsync = promisify(exec);
 
@@ -333,7 +337,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       .filter((m) => !hiddenModels.has(m.id))
       .map((m) => ({
         value: m.id,
-        label: this.formatModelLabel(m.id),
+        label: getModelDisplayName(m.id),
       }));
 
     // Format CLI models for dropdown (only CLI-supported ones, filter hidden)
@@ -341,69 +345,19 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       .filter((id) => !hiddenModels.has(id))
       .map((id) => ({
         value: id,
-        label: this.formatModelLabel(id),
+        label: getModelDisplayName(id),
       }));
 
-    // Claude CLI uses static list with friendly labels
-    const claudeCliOptions = [
-      { value: "sonnet", label: "Sonnet (Recommended)" },
-      { value: "opus", label: "Opus (Most Capable)" },
-      { value: "haiku", label: "Haiku (Fastest)" },
-    ];
+    // Claude CLI uses static list with friendly labels from ModelConstants
+    const claudeCliOptions = Object.entries(CLAUDE_CLI_MODEL_LABELS).map(
+      ([value, label]) => ({ value, label })
+    );
 
     return {
       "copilot-cli": copilotCliOptions,
       "copilot-chat": copilotChatOptions,
       "claude-cli": claudeCliOptions,
     };
-  }
-
-  /**
-   * Format model ID into a human-readable label
-   */
-  private formatModelLabel(modelId: string): string {
-    // Model display name mappings
-    // Some models have internal IDs that differ from their public names
-    const labelMap: Record<string, string> = {
-      // Claude models
-      "claude-sonnet-4.5": "Claude Sonnet 4.5",
-      "claude-haiku-4.5": "Claude Haiku 4.5",
-      "claude-opus-4.5": "Claude Opus 4.5",
-      "claude-sonnet-4": "Claude Sonnet 4",
-      // GPT-5 family
-      "gpt-5": "GPT-5",
-      "gpt-5.1": "GPT-5.1",
-      "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
-      "gpt-5.1-codex": "GPT-5.1 Codex",
-      "gpt-5-codex": "GPT-5 Codex",
-      "gpt-5-mini": "GPT-5 Mini",
-      // GPT-4 family
-      "gpt-4.1": "GPT-4.1",
-      "gpt-4o": "GPT-4o",
-      "gpt-4o-mini": "GPT-4o Mini",
-      "gpt-4": "GPT-4",
-      "gpt-4-0125-preview": "GPT-4 Turbo",
-      // Legacy models
-      "gpt-3.5-turbo": "GPT-3.5 Turbo",
-      // Gemini models
-      "gemini-3-pro-preview": "Gemini 3 Pro",
-      "gemini-2.5-pro": "Gemini 2.5 Pro",
-      // Special models with internal IDs
-      "oswe-vscode-prime": "Raptor Mini",
-      "grok-code-fast-1": "Grok Code Fast",
-      // Auto model
-      auto: "Auto",
-    };
-
-    if (labelMap[modelId]) {
-      return labelMap[modelId];
-    }
-
-    // Fallback: capitalize and format the ID
-    return modelId
-      .split("-")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
   }
 
   private getModelForProvider(provider: string): string {

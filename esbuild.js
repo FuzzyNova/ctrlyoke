@@ -5,6 +5,18 @@ const path = require("path");
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 
+// Build-time constants for conditional compilation
+// In production: dev commands are stripped via dead code elimination
+const buildDate = new Date().toISOString();
+const defineConstants = {
+  __DEV_MODE__: production ? "false" : "true",
+  __BUILD_DATE__: JSON.stringify(buildDate),
+};
+
+console.log(
+  `[build] Mode: ${production ? "PRODUCTION" : "DEVELOPMENT"}, DEV_MODE: ${!production}`
+);
+
 /**
  * @type {import('esbuild').Plugin}
  */
@@ -136,6 +148,7 @@ async function main() {
     outfile: "out/extension.js",
     external: ["vscode"],
     logLevel: "silent",
+    define: defineConstants,
     plugins: [
       /* add to the end of plugins array */
       esbuildProblemMatcherPlugin,

@@ -15,12 +15,17 @@
  * - Validation of model selection
  * - CLI/Chat provider model switching
  *
- * Falls back to static model lists when queries fail.
+ * Falls back to static model lists from ModelConstants when queries fail.
  */
 
 import * as vscode from "vscode";
 import { exec } from "child_process";
 import { promisify } from "util";
+import {
+  COPILOT_CHAT_MODEL_IDS,
+  COPILOT_CLI_MODEL_IDS,
+  CLAUDE_CLI_MODELS,
+} from "./ModelConstants";
 
 const execAsync = promisify(exec);
 
@@ -53,61 +58,9 @@ let cachedCopilotCliModelIds: string[] = [];
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
-/**
- * Claude Code CLI supported models (static list)
- *
- * Claude CLI has no programmatic way to list models - the `/model` command
- * only works in interactive mode and uses tokens. This is a known limitation.
- * See: https://github.com/anthropics/claude-code/issues/12612
- *
- * Users can specify these via:
- * - Aliases: "sonnet", "opus", "haiku"
- * - Generic names: "claude-sonnet-4.5", "claude-opus-4"
- * - Full names: "claude-sonnet-4-5-20250929"
- *
- * The mapping is handled by ModelConstants.getClaudeModelName()
- */
-export const CLAUDE_CLI_MODELS = [
-  "sonnet",
-  "opus",
-  "haiku",
-  "claude-sonnet-4.5",
-  "claude-sonnet-4",
-  "claude-opus-4",
-  "claude-opus-4.5",
-  "claude-haiku-4.5",
-] as const;
-
-// Fallback model lists (used when queries fail)
-const FALLBACK_CHAT_MODELS = [
-  "claude-sonnet-4.5",
-  "claude-haiku-4.5",
-  "claude-opus-4.5",
-  "claude-sonnet-4",
-  "gpt-5",
-  "gpt-5.1",
-  "gpt-5.1-codex-mini",
-  "gpt-5.1-codex",
-  "gpt-5-mini",
-  "gpt-4.1",
-  "gpt-4o",
-  "gemini-3-pro-preview",
-  "gemini-2.5-pro",
-];
-
-const FALLBACK_COPILOT_CLI_MODELS = [
-  "claude-sonnet-4.5",
-  "claude-haiku-4.5",
-  "claude-opus-4.5",
-  "claude-sonnet-4",
-  "gpt-5",
-  "gpt-5.1",
-  "gpt-5.1-codex-mini",
-  "gpt-5.1-codex",
-  "gpt-5-mini",
-  "gpt-4.1",
-  "gemini-3-pro-preview",
-];
+// Fallback model lists - imported from ModelConstants (single source of truth)
+const FALLBACK_CHAT_MODELS = COPILOT_CHAT_MODEL_IDS;
+const FALLBACK_COPILOT_CLI_MODELS = [...COPILOT_CLI_MODEL_IDS];
 
 /**
  * Initialize the model registry by querying available models
