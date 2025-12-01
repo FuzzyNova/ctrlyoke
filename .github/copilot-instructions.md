@@ -69,6 +69,16 @@ src/
 │   ├── check_condition.sh        # Bash template
 │   └── check_condition.bat       # Windows batch template
 ├── types/                        # Type definitions
+├── ui/                           # User interface
+│   ├── FlightPathDashboardProvider.ts  # Dashboard webview provider
+│   ├── FlightPathSettingsProvider.ts   # Settings webview provider
+│   └── webview/                  # Webview assets
+│       ├── dashboard.html        # Dashboard template
+│       ├── dashboard.css         # Dashboard styles
+│       ├── dashboard.js          # Dashboard logic
+│       ├── settings.html         # Settings template
+│       ├── settings.css          # Settings styles
+│       └── settings.js           # Settings logic
 └── test/                         # Tests
 schemas/                          # JSON schemas (source)
 └── prompt-schema.json            # Unified schema for both file types
@@ -260,7 +270,7 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 
 ## Implementation Status
 
-**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar, WebView dashboard with HTML template
+**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar, WebView dashboard with HTML template, Settings panel with provider/model selection
 
 **Planned**: Comprehensive end-to-end workflow tests, enhanced error recovery, multi-turn CLI sessions
 
@@ -277,6 +287,10 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **Purpose**: Default model for Copilot CLI mode only
   - **Note**: Prompts can override with any supported model (Chat superset includes 22 models)
   - **Fallback behavior**: If prompt specifies unsupported CLI model, falls back to this default with warning
+- flightpath.copilotChatModel (enum: same as copilotCliModel, default: "claude-sonnet-4.5")
+  - **Purpose**: Default model for Copilot Chat mode
+  - **Behavior**: FlightPath always switches to this model before sending prompts (consistent with CLI modes)
+  - **Graceful degradation**: If model switch fails, shows warning and continues with current model
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
 - flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
   - **allowAll**: Uses `--allow-all-tools` flag (default, grants full access)

@@ -83,15 +83,21 @@ export class CopilotChatIntegration extends CopilotIntegration {
     }
   }
 
-  /** Switch chat model if specified in prompt */
+  /** Get the default model from settings */
+  private getDefaultModel(): string {
+    return vscode.workspace
+      .getConfiguration("flightpath")
+      .get<string>("copilotChatModel", "claude-sonnet-4.5");
+  }
+
+  /** Switch chat model - always switches to ensure consistency with CLI modes */
   private async switchModelIfNeeded(model?: string): Promise<void> {
-    if (!model) {
-      return; // Use current/default chat model
-    }
+    // Use prompt model if specified, otherwise use setting default
+    const targetModel = model || this.getDefaultModel();
 
     // Validate model is available (using dynamically discovered models)
-    if (!isModelAvailable(model)) {
-      const message = `Model "${model}" not recognized. Using current chat model.`;
+    if (!isModelAvailable(targetModel)) {
+      const message = `Model "${targetModel}" not recognized. Using current chat model.`;
       console.warn(`⚠️ ${message}`);
       vscode.window.showWarningMessage(`FlightPath: ${message}`);
       return;
@@ -100,10 +106,10 @@ export class CopilotChatIntegration extends CopilotIntegration {
     try {
       // Query available models to get correct family for this ID
       const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      const modelInfo = models.find((m) => m.id === model);
+      const modelInfo = models.find((m) => m.id === targetModel);
 
       if (!modelInfo) {
-        throw new Error(`Model "${model}" not found in available models`);
+        throw new Error(`Model "${targetModel}" not found in available models`);
       }
 
       // Execute model change command with correct family from Language Model API
@@ -116,11 +122,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Wait for model switch to complete (300ms proven reliable in testing)
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      console.log(`✅ Model: ${model}`);
+      console.log(`✅ Model: ${targetModel}`);
     } catch (error) {
-      console.error(`❌ Model switch failed (${model}):`, error);
+      console.error(`❌ Model switch failed (${targetModel}):`, error);
       vscode.window.showWarningMessage(
-        `FlightPath: Could not switch to model "${model}". Using current model.`
+        `FlightPath: Could not switch to model "${targetModel}". ` +
+          `This model may not be available on your subscription. ` +
+          `Using current model instead. You can change the default in Settings.`
       );
     }
   }

@@ -38,6 +38,12 @@ export const MESSAGE_TYPES = {
   SHOW_OUTPUT: "showOutput",
   EXPORT_OUTPUT: "exportOutput",
   CHANGE_PROVIDER: "changeProvider",
+
+  // Settings view messages
+  CHANGE_MODEL: "changeModel",
+  CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
+  MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
+  PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
 } as const;
 
 // ============================================================================

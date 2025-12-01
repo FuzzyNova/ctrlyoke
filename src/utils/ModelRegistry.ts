@@ -24,6 +24,15 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+// Event emitter for model registry changes
+const modelsLoadedEmitter = new vscode.EventEmitter<void>();
+
+/**
+ * Event that fires when model registry has finished loading
+ * Subscribe to this to know when models are available
+ */
+export const onModelsLoaded = modelsLoadedEmitter.event;
+
 /**
  * Represents a discovered Copilot model
  */
@@ -123,6 +132,8 @@ export async function initializeModelRegistry(): Promise<void> {
     await queryCopilotCliModels();
     await queryChatModels();
     isInitialized = true;
+    // Notify subscribers that models are now available
+    modelsLoadedEmitter.fire();
   })();
 
   await initializationPromise;

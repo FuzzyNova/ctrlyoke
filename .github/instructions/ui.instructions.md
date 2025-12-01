@@ -114,6 +114,48 @@ User interface components for status display and workflow monitoring.
 - Compiled separately to avoid VS Code API dependency in webview context
   </webviewFiles>
 
+<settingsProvider>
+**FlightPathSettingsProvider** - Settings panel in FlightPath container
+
+**Responsibilities:**
+
+- Provider and model selection (separate from main Dashboard)
+- Dynamic Queue toggle
+- Settings persistence to VS Code configuration
+- Cross-view synchronization via configuration change events
+
+**Architecture:**
+
+- **HTML Template**: `src/ui/webview/settings.html`
+- **CSS**: `src/ui/webview/settings.css` (VS Code theme variables)
+- **JavaScript**: `src/ui/webview/settings.js` (UI logic, model options per provider)
+- Uses same DashboardConstants.ts for MESSAGE_TYPES
+
+**Multi-View Panel Layout:**
+
+- Dashboard and Settings views display side-by-side in bottom panel
+- Each view has native VS Code collapsible header (`>` / `∨` toggle)
+- Views are registered as separate webview views in same container
+
+**Model Selection Per Provider:**
+
+- Copilot CLI: Uses `flightpath.copilotCliModel` setting
+- Copilot Chat: Uses `flightpath.copilotChatModel` setting
+- Claude CLI: Uses `flightpath.claudeCliModel` setting
+- Model dropdown updates options dynamically when provider changes
+
+**Cross-View Sync:**
+
+- Settings changes update VS Code configuration
+- Dashboard listens to `vscode.workspace.onDidChangeConfiguration`
+- Both views stay in sync via configuration events (not direct messages)
+
+**Order of Precedence:**
+
+1. `model` field in `.prompt.json` or `.flightpath.json` file
+2. Settings view selection (backed by VS Code setting)
+   </settingsProvider>
+
 <importantContext>
 **Progress calculation:**
 - `calculateProgress()` returns `{ current, total, percentage }`

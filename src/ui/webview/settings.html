@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}};"
+    />
+    <link rel="stylesheet" href="{{styleUri}}" />
+    <title>FlightPath Settings</title>
+  </head>
+  <body>
+    <div id="settings-app">
+      <div class="setting-group">
+        <label for="provider-dropdown">Provider</label>
+        <select
+          id="provider-dropdown"
+          title="Select AI provider for prompt execution"
+        >
+          <!-- Populated dynamically with availability status -->
+        </select>
+        <span class="setting-description">Choose which AI provider to use</span>
+      </div>
+
+      <div class="setting-group">
+        <label for="model-dropdown">Model</label>
+        <select id="model-dropdown" title="Select AI model">
+          <!-- Populated dynamically based on provider -->
+        </select>
+        <span class="setting-description">AI model for prompt execution</span>
+      </div>
+
+      <hr class="setting-divider" />
+
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="dynamic-queue-checkbox" />
+          <span>Enable Dynamic Queue Extension</span>
+        </label>
+        <span class="setting-description"
+          >Allow prompts to extend the workflow queue</span
+        >
+      </div>
+    </div>
+
+    <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
+    <script src="{{constantsUri}}"></script>
+    <!-- Then load settings view logic -->
+    <script src="{{scriptUri}}"></script>
+  </body>
+</html>

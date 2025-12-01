@@ -259,7 +259,14 @@
         {
           "type": "webview",
           "id": "flightpath.dashboard",
-          "name": "Dashboard"
+          "name": "Dashboard",
+          "icon": "$(dashboard)"
+        },
+        {
+          "type": "webview",
+          "id": "flightpath.settings",
+          "name": "Settings",
+          "icon": "$(settings-gear)"
         }
       ]
     },
@@ -354,6 +361,26 @@
           "default": true,
           "description": "[Chat Mode] Treat inactivity timeout as successful completion",
           "markdownDescription": "**Chat Mode Only.** When enabled (default), chat inactivity timeouts are treated as successful completions rather than errors. This is useful because Copilot may have finished responding but the log marker wasn't detected. When disabled, timeouts are treated as errors and stop the workflow."
+        },
+        "flightpath.copilotChatModel": {
+          "order": 110,
+          "type": "string",
+          "enum": [
+            "claude-sonnet-4.5",
+            "claude-haiku-4.5",
+            "claude-opus-4.5",
+            "claude-sonnet-4",
+            "gpt-5",
+            "gpt-5.1",
+            "gpt-5.1-codex-mini",
+            "gpt-5.1-codex",
+            "gpt-5-mini",
+            "gpt-4.1",
+            "gemini-3-pro-preview"
+          ],
+          "default": "claude-sonnet-4.5",
+          "description": "[Chat Mode] Default AI model",
+          "markdownDescription": "**Chat Mode Only.** Default AI model for Copilot Chat. FlightPath will switch to this model before sending each prompt. Prompts can override with `\"model\": \"...\"`."
         },
         "flightpath.showCliOutput": {
           "order": 200,

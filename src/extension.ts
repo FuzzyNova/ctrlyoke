@@ -3,10 +3,12 @@ import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { Provider } from "./types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
+import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 
 let flightPathManager: FlightPathManager;
 let dashboardProvider: FlightPathDashboardProvider;
+let settingsProvider: FlightPathSettingsProvider;
 
 /**
  * Test File Attachment - Test github.copilot.chat.attachFile and attachSelection commands
@@ -452,6 +454,17 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     console.log("FlightPath: Dashboard provider registered");
+
+    // Register settings provider
+    settingsProvider = new FlightPathSettingsProvider(context);
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        "flightpath.settings",
+        settingsProvider,
+        { webviewOptions: { retainContextWhenHidden: true } }
+      )
+    );
+    console.log("FlightPath: Settings provider registered");
 
     // Initialize FlightPath manager with dashboard provider
     flightPathManager = new FlightPathManager(context, dashboardProvider);

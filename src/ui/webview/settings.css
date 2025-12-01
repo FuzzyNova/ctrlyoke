@@ -1,0 +1,98 @@
+/* FlightPath Settings View Styles */
+/* Uses VS Code theme variables for native look */
+
+:root {
+  --bg-primary: var(--vscode-editor-background);
+  --bg-secondary: var(--vscode-sideBar-background);
+  --fg-primary: var(--vscode-editor-foreground);
+  --fg-secondary: var(--vscode-descriptionForeground);
+  --border-color: var(--vscode-panel-border);
+  --focus-border: var(--vscode-focusBorder);
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg-primary);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  background: var(--bg-primary);
+}
+
+#settings-app {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-group label {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg-primary);
+}
+
+.setting-group select {
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  cursor: pointer;
+  max-width: 200px;
+  outline: none;
+}
+
+.setting-group select:hover {
+  border-color: var(--focus-border);
+}
+
+.setting-group select:focus {
+  border-color: var(--focus-border);
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+
+.setting-description {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  line-height: 1.4;
+}
+
+.setting-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 8px 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: normal !important;
+  font-size: 13px !important;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--vscode-checkbox-background);
+}
+
+.checkbox-label span {
+  user-select: none;
+}
+
+/* Disabled provider option styling */
+.setting-group select option:disabled {
+  color: var(--fg-secondary);
+  font-style: italic;
+}
