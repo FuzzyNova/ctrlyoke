@@ -8,7 +8,8 @@
       "Bash(claude config --help:*)",
       "Bash(claude --version)",
       "WebSearch",
-      "Bash(claude mcp --help:*)"
+      "Bash(claude mcp --help:*)",
+      "WebFetch(domain:platform.claude.com)"
     ],
     "deny": [],
     "ask": []

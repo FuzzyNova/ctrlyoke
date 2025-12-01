@@ -18,16 +18,18 @@ npm install -g @anthropic-ai/claude-code
 
 ## Key Differences from Copilot CLI
 
-| Aspect               | Copilot CLI                         | Claude CLI                           |
-| -------------------- | ----------------------------------- | ------------------------------------ |
-| Command              | `copilot`                           | `claude`                             |
-| Tool permission flag | `--allow-all-tools`                 | `--dangerously-skip-permissions`     |
-| Shell tool name      | `shell`                             | `Bash`                               |
-| Write tool name      | `write`                             | `Write` (create) + `Edit` (modify)   |
-| Model flag           | `--model claude-sonnet-4.5`         | `--model claude-sonnet-4-5-20250929` |
-| Session resume       | `--resume <id>`                     | `-r <id>` or `-c` (most recent)      |
-| Output format        | Mixed text + stats                  | `--output-format json` or `text`     |
-| Prompt input         | `-p "<prompt>"` or `--agent` + `-p` | `-p` (stdin)                         |
+| Aspect               | Copilot CLI                         | Claude CLI                                   |
+| -------------------- | ----------------------------------- | -------------------------------------------- |
+| Command              | `copilot`                           | `claude`                                     |
+| Tool permission flag | `--allow-all-tools`                 | `--dangerously-skip-permissions`             |
+| Shell tool name      | `shell`                             | `Bash`                                       |
+| Write tool name      | `write`                             | `Write` (create) + `Edit` (modify)           |
+| Model flag           | `--model claude-sonnet-4.5`         | `--model claude-sonnet-4-5-20250929`         |
+| Session resume       | `--resume <id>`                     | `-r <id>` or `-c` (most recent)              |
+| Output format        | Mixed text + stats                  | `--output-format json/text/stream-json`      |
+| Prompt input         | `-p "<prompt>"` or `--agent` + `-p` | `-p` (stdin) or `--print` (non-interactive)  |
+| Thinking mode        | Not applicable                      | **NOT AVAILABLE** via CLI (model-controlled) |
+| Structured output    | Not available                       | `--json-schema` (validates response format)  |
 
 ## Current Implementation Status
 
@@ -43,17 +45,41 @@ npm install -g @anthropic-ai/claude-code
 | `--output-format <format>`       | `flightpath.claudeCliOutputFormat`             | Full support - json (default) or text                    |
 | `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID    | Full support                                             |
 | `-c`                             | `prompt.newChatSession: false` (no session ID) | Full support - continues most recent session             |
-| `-p`                             | Prompt text                                    | Full support (via stdin)                                 |
+| Prompt via stdin                 | Prompt text passed to process                  | Full support - current implementation sends via stdin    |
 
 ### ❌ Not Implemented Flags
 
-| CLI Flag                 | Priority | Notes                                  |
-| ------------------------ | -------- | -------------------------------------- |
-| `--print`                | Low      | Print-only mode without tool execution |
-| `--append-system-prompt` | Low      | Custom system prompt additions         |
-| `--mcp-server <config>`  | Medium   | MCP server configuration               |
-| `--verbose`              | Low      | Verbose output mode                    |
-| `--max-turns <n>`        | Low      | Limit conversation turns               |
+**High Priority (Automation-Relevant):**
+
+| CLI Flag                     | Priority | Notes                                                          |
+| ---------------------------- | -------- | -------------------------------------------------------------- |
+| `--json-schema <schema>`     | **HIGH** | JSON Schema for structured output validation - **CRITICAL**    |
+| `--permission-mode <mode>`   | **HIGH** | Granular permission modes (acceptEdits, bypassPermissions, default, dontAsk, plan) |
+| `--system-prompt <prompt>`   | MEDIUM   | Complete system prompt override (not just append)              |
+| `--fallback-model <model>`   | MEDIUM   | Auto-fallback when primary model is overloaded                 |
+| `--tools <tools...>`         | MEDIUM   | Specify built-in tools from predefined set (only with --print) |
+| `--fork-session`             | MEDIUM   | Create new session ID when resuming (use with -r or -c)        |
+| `--mcp-config <configs...>`  | MEDIUM   | Load MCP servers from JSON files/strings (space-separated)     |
+
+**Low Priority (Utility/Debug):**
+
+| CLI Flag                          | Priority | Notes                                                   |
+| --------------------------------- | -------- | ------------------------------------------------------- |
+| `--print`                         | LOW      | Print response and exit (non-interactive mode)          |
+| `--append-system-prompt <prompt>` | LOW      | Append to default system prompt                         |
+| `--verbose`                       | LOW      | Override verbose mode setting from config               |
+| `-d, --debug [filter]`            | LOW      | Debug mode with category filtering (e.g., "api,hooks")  |
+| `--input-format <format>`         | LOW      | Input format: text (default) or stream-json             |
+| `--include-partial-messages`      | LOW      | Include partial chunks (requires --print + stream-json) |
+| `--session-id <uuid>`             | LOW      | Use specific session ID (must be valid UUID)            |
+| `--agents <json>`                 | LOW      | Define custom agents via JSON object                    |
+| `--settings <file-or-json>`       | LOW      | Load settings from file path or JSON string             |
+| `--ide`                           | LOW      | Auto-connect to IDE if exactly one valid IDE available  |
+| `--strict-mcp-config`             | LOW      | Only use MCP servers from --mcp-config                  |
+| `--plugin-dir <paths...>`         | LOW      | Load plugins from directories (repeatable)              |
+| `--setting-sources <sources>`     | LOW      | Comma-separated setting sources (user, project, local)  |
+
+**Note:** `--max-turns <n>` does **NOT** exist in Claude CLI (removed from documentation)
 
 ---
 
@@ -146,11 +172,58 @@ npm install -g @anthropic-ai/claude-code
 - `prompt.newChatSession: false` without session ID uses `-c` (most recent)
 - `prompt.newChatSession: true` or undefined starts fresh session (no flags)
 
+### Print Mode (Non-Interactive)
+
+```bash
+-p, --print    # Print response and exit (non-interactive mode)
+```
+
+**Purpose:** Run Claude non-interactively for automation, piping, and scripting.
+
+**Key differences from interactive mode:**
+
+- **No workspace trust dialog** - Security prompts are skipped (use only in trusted directories)
+- **Single response** - Exits after generating response (no follow-up turns)
+- **Scriptable** - Works with pipes and redirection
+- **Required for many flags** - Some options only work with `--print`:
+  - `--json-schema` (structured output)
+  - `--tools` (tool specification)
+  - `--fallback-model` (automatic fallback)
+  - `--output-format stream-json` (streaming)
+
+**Examples:**
+
+```bash
+# Simple automation
+echo "Explain this error" | claude --print
+
+# Pipe log analysis
+tail -f app.log | claude --print "analyze this"
+
+# Structured output
+claude --print --json-schema '{"type":"object","properties":{"summary":{"type":"string"}}}' < prompt.txt
+
+# With output format
+claude --print --output-format json -p "List files in current dir"
+```
+
+**Status:** Not implemented in FlightPath
+
+**Potential use:** Could replace current stdin-based approach for better compatibility with advanced flags like `--json-schema`.
+
 ### Output Format
 
 ```bash
---output-format <format>    # json or text
+--output-format <format>    # text, json, or stream-json
 ```
+
+**Available formats:**
+
+| Format        | Description                                    | Use Case                      |
+| ------------- | ---------------------------------------------- | ----------------------------- |
+| `text`        | Plain text output (default for interactive)    | Human-readable responses      |
+| `json`        | Single JSON result object                      | Automation, structured parsing (FlightPath default) |
+| `stream-json` | Real-time streaming JSON chunks                | Live progress updates         |
 
 **JSON output structure:**
 
@@ -175,6 +248,132 @@ npm install -g @anthropic-ai/claude-code
 - Default: `json` (enables structured parsing)
 - Statistics extracted: token counts, model, duration
 - Graceful fallback: if JSON parsing fails, treats as plain text
+- `stream-json` not yet implemented (could enable real-time progress UI)
+
+### Structured Output (JSON Schema)
+
+```bash
+--json-schema <schema>    # JSON Schema for structured output validation
+```
+
+**Purpose:** Enforce structured responses from Claude for reliable parsing in automation workflows.
+
+**Example:**
+
+```bash
+claude -p --json-schema '{"type":"object","properties":{"success":{"type":"boolean"},"errors":{"type":"array","items":{"type":"string"}}},"required":["success"]}'
+```
+
+**Use cases for FlightPath:**
+
+- End condition validation with predictable response format
+- Multi-step workflows with structured intermediate outputs
+- Parsing tool usage results consistently
+- Extracting specific data from responses (e.g., file paths, test results)
+
+**Status:** **Not implemented** - HIGH priority for automation reliability
+
+**Potential integration:**
+
+- Add `responseSchema` field to `prompt-schema.json`
+- Validate response against schema after execution
+- Better error messages when responses don't match expected format
+
+### Permission Modes
+
+```bash
+--permission-mode <mode>    # Granular permission control
+```
+
+**Available modes:**
+
+| Mode                 | Behavior                                                    |
+| -------------------- | ----------------------------------------------------------- |
+| `default`            | Prompt for all permissions (interactive only)               |
+| `acceptEdits`        | Auto-accept file edits, prompt for other operations         |
+| `bypassPermissions`  | Skip all permission prompts (same as --dangerously-skip-permissions) |
+| `dontAsk`            | Similar to bypass but with different security implications  |
+| `plan`               | Planning mode (may restrict certain operations)             |
+
+**Current FlightPath implementation:**
+
+- Uses `--dangerously-skip-permissions` (equivalent to `bypassPermissions`)
+- Custom tool patterns via `--allowedTools`/`--disallowedTools`
+
+**Future enhancement:** Add `flightpath.claudeCliPermissionMode` setting to support all modes, especially:
+
+- `acceptEdits` - Safer for workflows that only modify existing files
+- `plan` - For multi-step planning before execution
+
+### System Prompt Customization
+
+```bash
+--system-prompt <prompt>           # Replace entire system prompt
+--append-system-prompt <prompt>    # Append to default system prompt
+```
+
+**Differences:**
+
+- `--system-prompt`: **Replaces** Claude's default system prompt entirely (advanced use only)
+- `--append-system-prompt`: **Adds** to the default system prompt (safer, recommended)
+
+**Use cases for FlightPath:**
+
+- Workflow-specific instructions (e.g., "Always include git commands in responses")
+- Domain-specific context (e.g., "You are helping with a React TypeScript project")
+- Output format preferences (e.g., "Always provide code with file paths")
+- Behavioral constraints (e.g., "Never suggest breaking changes without approval")
+
+**Status:** Not implemented - MEDIUM priority
+
+**Potential integration:**
+
+- Add `systemPromptAppend` field to `prompt-schema.json`
+- Allow per-workflow system prompt customization
+- Template variables for common patterns (project type, language, etc.)
+
+### Advanced Session Options
+
+```bash
+--fork-session                 # Create new session ID when resuming
+--session-id <uuid>            # Use specific session ID
+```
+
+**Fork session:** Useful for branching conversation trees
+
+- Resume from a previous session with `-r <id>`
+- But create a new session ID for this branch
+- Preserves history without polluting original session
+
+**Fixed session ID:** Reproducible automation
+
+- Specify exact UUID for the session
+- Useful for testing and debugging workflows
+- Must be valid UUID format
+
+**Status:** Not implemented - LOW priority
+
+### Fallback Model
+
+```bash
+--fallback-model <model>    # Auto-fallback when primary model overloaded
+```
+
+**Behavior:** When primary model returns overload error, automatically retry with fallback model.
+
+**Example:**
+
+```bash
+claude -p --model opus --fallback-model sonnet
+```
+
+**Use case for FlightPath:**
+
+- Start with Opus for complex tasks, fallback to Sonnet if unavailable
+- Ensure workflow continues even during high-demand periods
+- Cost optimization (prefer cheaper model when available)
+
+**Status:** Not implemented - MEDIUM priority (only works with `--print` mode)
 
 ---
 
@@ -369,12 +568,20 @@ const result = await this.spawnProcess("claude", args, {
 
 ## Future Enhancements
 
-| Enhancement              | Priority | Notes                                   |
-| ------------------------ | -------- | --------------------------------------- |
-| MCP server configuration | Medium   | Add custom MCP servers via settings     |
-| Agent support            | Medium   | Investigate Claude's agent capabilities |
-| Max turns limit          | Low      | Limit conversation turns per prompt     |
-| Custom system prompts    | Low      | Append to system prompt per-workflow    |
+| Enhancement                  | Priority   | CLI Flag                    | Notes                                                 |
+| ---------------------------- | ---------- | --------------------------- | ----------------------------------------------------- |
+| Structured output validation | **HIGH**   | `--json-schema`             | Critical for reliable automation and response parsing |
+| Permission modes             | **HIGH**   | `--permission-mode`         | Granular control (acceptEdits, plan, etc.)            |
+| System prompt customization  | **MEDIUM** | `--append-system-prompt`    | Workflow-specific instructions                        |
+| Model fallback               | **MEDIUM** | `--fallback-model`          | Handle overload situations gracefully                 |
+| MCP server configuration     | **MEDIUM** | `--mcp-config`              | Custom MCP servers for enhanced capabilities          |
+| Session forking              | MEDIUM     | `--fork-session`            | Branch conversation trees                             |
+| Agent support                | MEDIUM     | `--agents`                  | Custom agent definitions via JSON                     |
+| Tool specification           | LOW        | `--tools`                   | Limit to specific built-in tools                      |
+| Streaming output             | LOW        | `--output-format stream-json` | Real-time progress updates in UI                      |
+| Debug mode                   | LOW        | `-d, --debug`               | Category filtering for troubleshooting                |
+
+**Note on Thinking Mode:** Claude CLI does **NOT** provide a command-line option to control thinking mode/level. Thinking appears to be controlled at the model level and cannot be specified per-request via CLI flags.
 
 ---
 
