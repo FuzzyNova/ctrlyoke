@@ -810,11 +810,13 @@ export class FlightPathManager {
       {
         prompts: [
           {
+            id: "analyze",
             prompt:
-              "/explain @workspace #file:src/**/*.ts Analyze this codebase for potential bugs",
+              "Analyze this codebase for potential bugs and code quality issues. Focus on error handling, type safety, and security concerns.",
           },
           {
-            prompt: "/fix @workspace Fix any issues found in the analysis",
+            id: "fix",
+            prompt: "Fix any issues found in the previous analysis.",
             endCondition: {
               script: "run_tests.py",
               returns: "all_passed",

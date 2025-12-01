@@ -44,15 +44,15 @@ Focus on:
   "prompts": [
     {
       "id": "analyze",
-      "prompt": "@workspace Analyze the codebase for improvement opportunities"
+      "prompt": "Analyze this codebase for improvement opportunities. Look at the project structure, identify patterns, and note areas that could benefit from refactoring."
     },
     {
       "id": "implement",
-      "prompt": "Implement the top 3 improvements you identified in the previous step"
+      "prompt": "Implement the top 3 improvements you identified in the previous step."
     },
     {
       "id": "document",
-      "prompt": "Update documentation to reflect the changes made"
+      "prompt": "Update documentation to reflect the changes made."
     }
   ]
 }
@@ -69,11 +69,11 @@ Focus on:
   "prompts": [
     {
       "id": "implement-feature",
-      "prompt": "@workspace Add error handling to API endpoints"
+      "prompt": "Add comprehensive error handling to the API endpoints in this project. Include try-catch blocks, proper error responses, and logging."
     },
     {
       "id": "validate",
-      "prompt": "Review the implementation and fix any issues",
+      "prompt": "Review the error handling implementation and fix any issues found.",
       "endCondition": {
         "script": "npm test",
         "returns": "true",
@@ -96,7 +96,7 @@ Focus on:
   "prompts": [
     {
       "id": "plan",
-      "prompt": "@workspace [FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes."
+      "prompt": "[FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach."
     },
     {
       "id": "implement",
@@ -125,6 +125,30 @@ Focus on:
 ```
 
 **Use case**: Complete feature implementation with full quality assurance.
+
+## File Attachments
+
+Use `#file:` syntax to attach file content to prompts. FlightPath reads the file and includes its content in the prompt context.
+
+**Supported formats:**
+
+```
+#file:src/utils/helper.ts              # Attach entire file
+#file:src/utils/helper.ts:10-50        # Attach lines 10-50
+#file:"path with spaces/file.ts"       # Quoted paths for spaces
+#file:"my file.ts":1-20                # Quoted path with line range
+```
+
+**Example with file attachment:**
+
+```json
+{
+  "id": "refactor",
+  "prompt": "Refactor this utility to use async/await:\n\n#file:src/utils/legacy.ts"
+}
+```
+
+**Note:** FlightPath converts `#file:` references to inline content. Other context syntax like `@workspace` or `#codebase` are passed through as literal text (they're Copilot Chat-specific and not processed by FlightPath).
 
 ## Model Override
 

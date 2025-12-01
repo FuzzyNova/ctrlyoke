@@ -58,11 +58,26 @@ description: Brief description for picker
 - `.flightpath.json` - Multi-step workflow with optional validation
 </workflowFormat>
 
+<contextSyntax>
+**FlightPath parses and processes:**
+- `#file:path` - Attaches file content inline via `buildAttachmentXml()`
+- `#file:path:startLine-endLine` - Attaches specific line range
+- `#file:"path with spaces"` - Quoted paths for spaces
+
+**FlightPath does NOT parse (passed through as literal text):**
+- `@workspace` - Copilot Chat-specific
+- `#codebase` - Copilot Chat-specific
+- `/explain`, `/fix`, etc. - Slash commands (provider-specific)
+
+Use plain English prompts + `#file:` for portable templates.
+</contextSyntax>
+
 <workflowGuidelines>
 - Include `$schema` reference in JSON files
 - Use descriptive `id` for each prompt
 - Add `model` override only when needed (e.g., haiku for simple tasks)
 - Include `endCondition` for validation-required steps
+- Avoid provider-specific syntax (`@workspace`, `/commands`) in templates
 </workflowGuidelines>
 
 ## Build

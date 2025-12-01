@@ -41,7 +41,7 @@ suite("PromptFileParser Tests", () => {
       assert.strictEqual(result.prompts.length, 1);
       assert.strictEqual(
         result.prompts[0].prompt,
-        "Explain this code @workspace"
+        "Explain this code and suggest improvements"
       );
       assert.strictEqual(result.prompts[0].model, "claude-sonnet-4.5");
     });
@@ -165,14 +165,14 @@ suite("PromptFileParser Tests", () => {
       assert.ok(result.prompts[0].prompt.includes("external prompt"));
     });
 
-    test("should NOT treat #file:path as a file path reference", async () => {
-      // The single.prompt.json contains "#file:" syntax - it should NOT be treated as a path
+    test("should preserve prompt text as-is when not a file path", async () => {
+      // The single.prompt.json contains a regular prompt - it should be preserved
       const filePath = path.join(fixturesPath, "single.prompt.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      // The prompt text should be preserved as-is, not resolved
-      assert.ok(result.prompts[0].prompt.includes("@workspace"));
+      // The prompt text should be preserved as-is, not treated as a file path
+      assert.ok(result.prompts[0].prompt.includes("Explain this code"));
     });
   });
 
@@ -191,7 +191,7 @@ suite("PromptFileParser Tests", () => {
       // We can't easily test this without modifying fixtures
       // But the behavior is covered by the implementation - if file not found,
       // it returns the original prompt value as literal text
-      // This is implicitly tested by single.prompt.json not resolving @workspace
+      // This is implicitly tested by single.prompt.json preserving its prompt text
     });
   });
 
