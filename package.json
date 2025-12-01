@@ -392,7 +392,8 @@
             "gemini-3-pro-preview",
             "gemini-2.5-pro",
             "oswe-vscode-prime",
-            "grok-code-fast-1"
+            "grok-code-fast-1",
+            "auto"
           ],
           "default": "claude-sonnet-4.5",
           "description": "[Chat Mode] Default AI model",
@@ -521,11 +522,13 @@
           "type": "string",
           "enum": [
             "sonnet",
+            "sonnet[1m]",
             "opus",
             "haiku"
           ],
           "enumDescriptions": [
             "Claude Sonnet - Best balance of speed and capability (recommended)",
+            "Claude Sonnet 1M Context - Extended context window (new)",
             "Claude Opus - Most capable, best for complex tasks",
             "Claude Haiku - Fastest, best for simple tasks"
           ],

@@ -7,13 +7,15 @@
  * the enum arrays in package.json for:
  * - flightpath.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
  * - flightpath.copilotChatModel (uses COPILOT_MODELS keys - full set)
+ * - flightpath.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
  *
- * IMPORTANT: Copilot CLI and Copilot Chat support DIFFERENT model sets!
- * - CLI models come from `copilot help config`
- * - Chat models come from VS Code's Language Model API
+ * IMPORTANT: Different providers support different model sets!
+ * - Copilot CLI models come from `copilot help config` (smaller subset)
+ * - Copilot Chat models come from VS Code's Language Model API (larger set)
+ * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
  *
  * Usage:
- *   node scripts/sync-models.mjs             # Sync from ModelConstants.ts to package.json
+ *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts to package.json
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
  *   node scripts/sync-models.mjs --discover  # Discover models from Copilot CLI
  *   node scripts/sync-models.mjs --import    # Import from discovered-models.json and update ModelConstants.ts
@@ -102,6 +104,31 @@ function parseCliModels(content) {
 }
 
 /**
+ * Parse CLAUDE_CLI_MODELS (Claude CLI models) from ModelConstants.ts
+ */
+function parseClaudeModels(content) {
+  // Find the CLAUDE_CLI_MODELS array literal (use [\s\S]*? to handle multiline)
+  const claudeBlockMatch = content.match(
+    /export\s+const\s+CLAUDE_CLI_MODELS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
+  );
+
+  if (!claudeBlockMatch) {
+    throw new Error("Could not find CLAUDE_CLI_MODELS in ModelConstants.ts");
+  }
+
+  const arrayContent = claudeBlockMatch[1];
+  const modelIds = [];
+  const stringRegex = /["']([^"']+)["']/g;
+  let match;
+
+  while ((match = stringRegex.exec(arrayContent)) !== null) {
+    modelIds.push(match[1]);
+  }
+
+  return modelIds;
+}
+
+/**
  * Parse all model constants from ModelConstants.ts
  */
 function parseModelConstants() {
@@ -109,17 +136,24 @@ function parseModelConstants() {
 
   const chatModels = parseChatModels(content);
   const cliModels = parseCliModels(content);
+  const claudeModels = parseClaudeModels(content);
 
   console.log(`Found ${chatModels.length} Chat models in COPILOT_MODELS`);
   console.log(`Found ${cliModels.length} CLI models in COPILOT_CLI_MODEL_IDS`);
+  console.log(
+    `Found ${claudeModels.length} Claude models in CLAUDE_CLI_MODELS`
+  );
 
-  return { chatModels, cliModels };
+  return { chatModels, cliModels, claudeModels };
 }
 
 /**
  * Update enum arrays in package.json
  */
-function updatePackageJson({ chatModels, cliModels }, checkOnly = false) {
+function updatePackageJson(
+  { chatModels, cliModels, claudeModels },
+  checkOnly = false
+) {
   const content = readFileSync(PACKAGE_JSON_PATH, "utf-8");
   const pkg = JSON.parse(content);
 
@@ -127,6 +161,7 @@ function updatePackageJson({ chatModels, cliModels }, checkOnly = false) {
   const settingsMap = {
     "flightpath.copilotCliModel": cliModels,
     "flightpath.copilotChatModel": chatModels,
+    "flightpath.claudeCliModel": claudeModels,
   };
 
   let needsUpdate = false;
