@@ -346,7 +346,7 @@ private createCopilotIntegration(): CopilotIntegration {
 
 ### Files to Modify
 
-1. `src/types/ModelConstants.ts` - Add Claude model constants
+1. `src/utils/ModelConstants.ts` - Add Claude model constants
 2. `src/types/FlightPathTypes.ts` - Add `"claude-cli"` to integration mode enum
 3. `src/flightpath/FlightPathManager.ts` - Update factory pattern
 4. `package.json` - Add Claude-specific settings

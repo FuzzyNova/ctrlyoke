@@ -98,7 +98,22 @@ export const COPILOT_CLI_MODEL_IDS = [
  *
  * See: https://github.com/anthropics/claude-code
  */
-export const CLAUDE_CLI_MODELS = ["sonnet", "sonnet[1m]", "opus", "haiku"] as const;
+export const CLAUDE_CLI_MODELS = [
+  "sonnet",
+  "sonnet[1m]",
+  "opus",
+  "haiku",
+] as const;
+
+/**
+ * Alias for CLAUDE_CLI_MODELS (used by some imports)
+ */
+export const CLAUDE_CLI_MODEL_ALIASES = CLAUDE_CLI_MODELS;
+
+/**
+ * Default model for Claude Code CLI
+ */
+export const CLAUDE_CLI_DEFAULT_MODEL = "sonnet" as const;
 
 /**
  * Claude CLI model display names
@@ -142,26 +157,44 @@ export function isKnownCopilotModel(modelId: string): boolean {
 }
 
 /**
- * Get Claude CLI model name from various input formats
- * Handles aliases like "sonnet", full names like "claude-sonnet-4.5", etc.
+ * Check if a model identifier is valid for Claude CLI
+ *
+ * @param modelId The model identifier to check
+ * @returns true if the model is valid for Claude CLI
+ */
+export function isValidClaudeModel(modelId: string): boolean {
+  return CLAUDE_CLI_MODELS.includes(modelId as ClaudeCliModelAlias);
+}
+
+/**
+ * Get the Claude CLI model alias for a given model identifier
+ * Claude CLI accepts short aliases directly (sonnet, opus, haiku)
+ *
+ * @param model The model identifier (alias or Copilot-style name like "claude-sonnet-4.5")
+ * @returns The Claude CLI alias, or undefined if not recognized
  */
 export function getClaudeModelName(
   model: string
-): (typeof CLAUDE_CLI_MODELS)[number] {
-  const normalized = model.toLowerCase();
-
-  // Direct alias match
-  if (
-    CLAUDE_CLI_MODELS.includes(normalized as (typeof CLAUDE_CLI_MODELS)[number])
-  ) {
-    return normalized as (typeof CLAUDE_CLI_MODELS)[number];
+): ClaudeCliModelAlias | undefined {
+  // Direct match for aliases
+  if (CLAUDE_CLI_MODELS.includes(model as ClaudeCliModelAlias)) {
+    return model as ClaudeCliModelAlias;
   }
 
-  // Map Copilot-style names to Claude aliases
+  // Try lowercase normalization
+  const normalized = model.toLowerCase();
+  if (CLAUDE_CLI_MODELS.includes(normalized as ClaudeCliModelAlias)) {
+    return normalized as ClaudeCliModelAlias;
+  }
+
+  // Map Copilot-style names to aliases
   if (normalized.includes("sonnet")) return "sonnet";
   if (normalized.includes("opus")) return "opus";
   if (normalized.includes("haiku")) return "haiku";
 
-  // Default to sonnet
-  return "sonnet";
+  // Not recognized
+  return undefined;
 }
+
+// Type exports for Claude CLI
+export type ClaudeCliModelAlias = (typeof CLAUDE_CLI_MODELS)[number];

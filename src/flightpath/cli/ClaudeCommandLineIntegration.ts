@@ -4,10 +4,9 @@ import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration } from "./BaseCliIntegration";
 import {
-  CLAUDE_CLI_MODEL_MAP,
   CLAUDE_CLI_DEFAULT_MODEL,
   getClaudeModelName,
-} from "../../types/ModelConstants";
+} from "../../utils/ModelConstants";
 
 /**
  * Tool name mappings from Copilot CLI format to Claude CLI format

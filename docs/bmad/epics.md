@@ -105,7 +105,7 @@ So that **the type system supports Claude CLI integration with proper validation
 **Acceptance Criteria:**
 
 **Given** the FlightPath extension codebase  
-**When** I add Claude model constants to `src/types/ModelConstants.ts`  
+**When** I add Claude model constants to `src/utils/ModelConstants.ts`  
 **Then** the following constants are defined:
 
 - `CLAUDE_CLI_MODEL_ALIASES` array with `["sonnet", "opus", "haiku"]`
