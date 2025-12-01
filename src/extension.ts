@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
-import { Provider } from "./types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
@@ -214,9 +213,9 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
-  // Send to CLI command (context menu)
-  const sendToCliCommand = vscode.commands.registerCommand(
-    "flightpath.sendToCli",
+  // Run with FlightPath command (context menu) - runs using current provider
+  const runFromContextCommand = vscode.commands.registerCommand(
+    "flightpath.runFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage(
@@ -226,13 +225,9 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(
-          uri.fsPath,
-          Provider.CopilotCli
-        );
-        vscode.window.showInformationMessage(
-          "FlightPath workflow started using CLI"
-        );
+        // executePromptFile without provider override uses the current settings provider
+        await flightPathManager.executePromptFile(uri.fsPath);
+        vscode.window.showInformationMessage("FlightPath workflow started");
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to execute FlightPath workflow: ${error}`
@@ -241,9 +236,9 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
-  // Send to Chat command (context menu)
-  const sendToChatCommand = vscode.commands.registerCommand(
-    "flightpath.sendToChat",
+  // Load in FlightPath command (context menu) - loads without executing
+  const loadFromContextCommand = vscode.commands.registerCommand(
+    "flightpath.loadFromContext",
     async (uri: vscode.Uri) => {
       if (!uri) {
         vscode.window.showErrorMessage(
@@ -253,16 +248,12 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        await flightPathManager.executePromptFile(
-          uri.fsPath,
-          Provider.CopilotChat
-        );
-        vscode.window.showInformationMessage(
-          "FlightPath workflow started using Chat"
-        );
+        await flightPathManager.loadPromptFile(uri.fsPath);
+        // Open the FlightPath panel to show the loaded file
+        await vscode.commands.executeCommand("flightpath.dashboard.focus");
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to execute FlightPath workflow: ${error}`
+          `Failed to load FlightPath prompt file: ${error}`
         );
       }
     }
@@ -344,8 +335,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     testAutomationCommand,
     retryCopilotDetectionCommand,
     createEndConditionScriptCommand,
-    sendToCliCommand,
-    sendToChatCommand,
+    runFromContextCommand,
+    loadFromContextCommand,
     selectPromptFileCommand,
     editCurrentPromptFileCommand,
     runCommand,

@@ -135,16 +135,16 @@
         "icon": "$(new-file)"
       },
       {
-        "command": "flightpath.sendToCli",
-        "title": "Send to CLI",
+        "command": "flightpath.runFromContext",
+        "title": "Run with FlightPath",
         "category": "FlightPath",
-        "icon": "$(terminal)"
+        "icon": "$(send)"
       },
       {
-        "command": "flightpath.sendToChat",
-        "title": "Send to Chat",
+        "command": "flightpath.loadFromContext",
+        "title": "Load in FlightPath",
         "category": "FlightPath",
-        "icon": "$(comment)"
+        "icon": "$(file-symlink-file)"
       },
       {
         "command": "flightpath.selectPromptFile",
@@ -207,11 +207,11 @@
           "command": "flightpath.createEndConditionScript"
         },
         {
-          "command": "flightpath.sendToCli",
+          "command": "flightpath.runFromContext",
           "when": "false"
         },
         {
-          "command": "flightpath.sendToChat",
+          "command": "flightpath.loadFromContext",
           "when": "false"
         }
       ],
@@ -222,24 +222,31 @@
           "group": "2_workspace"
         },
         {
-          "command": "flightpath.sendToCli",
+          "command": "flightpath.runFromContext",
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@1"
         },
         {
-          "command": "flightpath.sendToChat",
+          "command": "flightpath.loadFromContext",
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
         }
       ],
+      "editor/title": [
+        {
+          "command": "flightpath.runFromContext",
+          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "group": "navigation"
+        }
+      ],
       "editor/title/context": [
         {
-          "command": "flightpath.sendToCli",
+          "command": "flightpath.runFromContext",
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@1"
         },
         {
-          "command": "flightpath.sendToChat",
+          "command": "flightpath.loadFromContext",
           "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
         }

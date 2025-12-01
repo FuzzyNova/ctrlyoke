@@ -6,7 +6,13 @@
     },
     {
       "prompt": "What is the capital of France? Reply with just the city name.",
-      "model": "gpt-5-mini"
+      "model": "gpt-5-mini",
+      "newChatSession": false
+    },
+    {
+      "prompt": "What is the capital of Germany? Reply with just the city name.",
+      "model": "gpt-5-mini",
+      "newChatSession": false
     }
   ]
 }
