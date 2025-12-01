@@ -167,33 +167,13 @@ User interface components for status display and workflow monitoring.
 
 - Success message shows for 5 seconds then reverts to idle
 - Prevents status bar clutter after workflow completes
+- Error messages do NOT auto-hide (user must acknowledge)
 
 **Build process:**
 
 - `copyWebviewPlugin` in esbuild.js copies all `src/ui/webview/*` to `out/ui/webview/`
 - HTML template must be present in output directory for runtime loading
 - Constants compiled separately as standalone bundle (no VS Code imports)
-  </importantContext>
-- Error messages do NOT auto-hide (user must acknowledge)
-
-**Click behavior:**
-
-- Default command: `flightpath.openPanel` (future WebView panel)
-- Currently shows "not implemented" message
-- Future: WebView with workflow visualization, history, logs
-
-**Why status bar vs. notifications:**
-
-- Status bar: Non-intrusive, always visible, real-time updates
-- Notifications: Too intrusive for frequent state changes
-- Output channel: Detailed logs for CLI mode (optional visibility)
-
-**Future enhancements:**
-
-- WebView panel with workflow visualization
-- Execution history and replay
-- Interactive progress tracking
-- Log filtering and search
   </importantContext>
 
 <relatedFiles>

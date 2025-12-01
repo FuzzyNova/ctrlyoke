@@ -123,47 +123,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Provider selector dropdown */
-#provider-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-#provider-selector label {
-  font-size: 11px;
-  color: var(--fg-secondary);
-  font-weight: 500;
-}
-
-#provider-dropdown {
-  padding: 3px 8px;
-  font-size: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--vscode-dropdown-background, var(--bg-primary));
-  color: var(--vscode-dropdown-foreground, var(--fg-primary));
-  cursor: pointer;
-  outline: none;
-}
-
-#provider-dropdown:hover {
-  border-color: var(--vscode-focusBorder, var(--vscode-button-background));
-}
-
-#provider-dropdown:focus {
-  border-color: var(--vscode-focusBorder, var(--vscode-button-background));
-  outline: 1px solid var(--vscode-focusBorder, var(--vscode-button-background));
-  outline-offset: -1px;
-}
-
-#provider-dropdown option {
-  background: var(--vscode-dropdown-listBackground, var(--bg-primary));
-  color: var(--vscode-dropdown-foreground, var(--fg-primary));
-}
-
 .btn-small {
   padding: 3px 10px;
   font-size: 12px;
