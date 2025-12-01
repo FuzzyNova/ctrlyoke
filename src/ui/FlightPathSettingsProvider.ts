@@ -429,6 +429,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     );
     const scriptUri = webview.asWebviewUri(this.getWebviewPath("settings.js"));
     const styleUri = webview.asWebviewUri(this.getWebviewPath("settings.css"));
+    const sharedStyleUri = webview.asWebviewUri(
+      this.getWebviewPath("shared.css")
+    );
 
     // Read HTML template and replace placeholders
     const htmlPath = this.getWebviewFsPath("settings.html");
@@ -451,6 +454,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{constantsUri\}\}/g, constantsUri.toString())
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
+      .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;

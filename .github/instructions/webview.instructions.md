@@ -7,10 +7,25 @@ WebView-based dashboard UI for real-time workflow visualization, execution contr
 </purpose>
 
 <architecture>
-**Three-part system:**
+**Four-part system:**
 1. **FlightPathDashboardProvider** (TypeScript) - VS Code WebView provider, message routing, state management
 2. **dashboard.js** (Client-side JavaScript) - DOM manipulation, state rendering, VS Code API communication
-3. **dashboard.css** (Styles) - Responsive layout with VS Code theme integration
+3. **shared.css** (Shared Styles) - Common variables, base styles, and theme integration for all FlightPath webviews
+4. **dashboard.css** (Dashboard Styles) - Extends shared.css with dashboard-specific layout
+
+**Shared styling architecture:**
+
+- `shared.css` defines CSS custom properties (spacing, colors) and base element styles
+- Each webview (dashboard, settings) has its own CSS file extending shared.css
+- HTML templates link `{{sharedStyleUri}}` first, then view-specific `{{styleUri}}`
+- Ensures consistent look and feel across all FlightPath panels
+
+**Spacing variables (compact for panel usage):**
+
+- `--spacing-xs: 4px` - Minimal spacing
+- `--spacing-sm: 6px` - Small gaps
+- `--spacing-md: 8px` - Standard spacing
+- `--spacing-lg: 12px` - Section spacing
 
 **Communication flow:**
 

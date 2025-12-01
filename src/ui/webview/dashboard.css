@@ -1,32 +1,19 @@
-:root {
-  --bg-primary: var(--vscode-editor-background);
-  --bg-secondary: var(--vscode-sideBar-background);
-  --fg-primary: var(--vscode-editor-foreground);
-  --fg-secondary: var(--vscode-descriptionForeground);
-  --border-color: var(--vscode-panel-border);
-  --status-success: var(--vscode-testing-iconPassed);
-  --status-error: var(--vscode-testing-iconFailed);
-  --status-pending: var(--vscode-descriptionForeground);
-  --status-running: var(--vscode-progressBar-background);
-}
+/* FlightPath Dashboard Styles */
+/* Extends shared.css (linked in HTML) */
 
+/* Dashboard-specific overrides */
 html,
 body {
-  margin: 0;
-  padding: 0;
   height: 100vh;
   overflow: hidden;
-  color: var(--fg-primary);
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
 }
 
 #app {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-md);
   height: 100vh;
-  padding: 12px;
+  padding: var(--spacing-md);
   box-sizing: border-box;
   overflow: hidden;
   max-width: 100%;
@@ -37,24 +24,24 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  padding: var(--spacing-md);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   flex-shrink: 0;
-  gap: 8px 12px;
+  gap: var(--spacing-sm) var(--spacing-md);
   overflow: hidden;
   max-width: 100%;
   box-sizing: border-box;
 }
 
-/* Section headers with counters */
+/* Section headers with counters - override shared */
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  gap: 8px;
+  margin-bottom: var(--spacing-xs);
+  gap: var(--spacing-sm);
   flex-shrink: 0;
   min-width: 0;
   overflow: hidden;
@@ -62,10 +49,14 @@ body {
 
 .section-header h3 {
   margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-secondary);
 }
 
 .prompt-counter {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--fg-secondary);
   font-weight: 500;
 }
@@ -74,8 +65,8 @@ body {
 .autoscroll-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--spacing-xs);
+  font-size: 11px;
   color: var(--fg-secondary);
   cursor: pointer;
   user-select: none;
@@ -95,14 +86,14 @@ body {
 .output-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
   flex-shrink: 0;
 }
 
 #file-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   min-width: 0;
   flex: 1 1 0;
   overflow: hidden;
@@ -119,13 +110,14 @@ body {
 
 .file-buttons {
   display: flex;
-  gap: 6px;
+  gap: var(--spacing-xs);
   flex-shrink: 0;
 }
 
+/* Override shared btn-small for dashboard */
 .btn-small {
-  padding: 3px 10px;
-  font-size: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 /* Execution state badge */
@@ -182,19 +174,20 @@ body {
 
 #controls {
   display: flex;
-  gap: 6px;
+  gap: var(--spacing-xs);
   flex: 1 1 0;
   justify-content: flex-end;
 }
 
+/* Override shared button styles for dashboard */
 button {
-  padding: 6px 12px;
+  padding: var(--spacing-xs) var(--spacing-md);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   background: var(--vscode-button-secondaryBackground);
   color: var(--vscode-button-secondaryForeground);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 button:hover:not(:disabled) {
@@ -228,17 +221,17 @@ button:disabled {
 
 /* Control buttons consistent sizing */
 #controls button {
-  min-width: 32px;
+  min-width: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Responsive main content area */
 #main-content {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-md);
   flex-wrap: wrap;
   flex: 1;
   min-height: 0;
@@ -272,8 +265,8 @@ button:disabled {
   }
 
   #header {
-    padding: 8px;
-    gap: 6px 8px;
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs) var(--spacing-sm);
   }
 
   #file-info {
@@ -303,8 +296,8 @@ button:disabled {
   }
 
   #controls button {
-    min-width: 28px;
-    padding: 4px 8px;
+    min-width: 26px;
+    padding: 3px 6px;
   }
 
   #prompts-section,
@@ -319,7 +312,7 @@ button:disabled {
 #output-section {
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: var(--spacing-md);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -329,11 +322,13 @@ button:disabled {
   box-sizing: border-box;
 }
 
+/* Override shared h3 for sections */
 h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: var(--fg-secondary);
   flex-shrink: 0;
 }
@@ -341,14 +336,14 @@ h3 {
 #prompts-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
   overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
 
 .prompt-item {
-  padding: 10px;
+  padding: var(--spacing-md);
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -357,37 +352,38 @@ h3 {
 .prompt-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   font-weight: 500;
+  font-size: 12px;
 }
 
 .prompt-icon {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .prompt-detail {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
   color: var(--fg-secondary);
-  padding-left: 24px;
+  padding-left: 20px;
 }
 
 .prompt-retry {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
   font-weight: 600;
   color: var(--vscode-editorWarning-foreground);
-  padding-left: 24px;
+  padding-left: 20px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .prompt-status-msg {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
   font-style: italic;
-  padding-left: 24px;
+  padding-left: 20px;
 }
 
 .status-completed .prompt-icon {
@@ -410,12 +406,13 @@ h3 {
   text-align: center;
   color: var(--fg-secondary);
   font-style: italic;
-  padding: 20px;
+  padding: var(--spacing-lg);
+  font-size: 12px;
 }
 
 #output-content {
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
+  font-size: 11px;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -423,9 +420,9 @@ h3 {
 
 .cli-output-item {
   background: var(--bg-primary);
-  padding: 12px;
+  padding: var(--spacing-md);
   border-radius: 4px;
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
   border: 1px solid var(--border-color);
 }
 
@@ -435,17 +432,18 @@ h3 {
 
 .output-header {
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-sm);
   color: var(--fg-secondary);
-  padding-bottom: 6px;
+  padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
 }
 
 .output-prompt,
 .output-response,
 .output-cli-command {
-  padding: 8px;
-  margin: 8px 0;
+  padding: var(--spacing-sm);
+  margin: var(--spacing-sm) 0;
   border-left: 3px solid var(--border-color);
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -470,25 +468,25 @@ h3 {
 }
 
 .output-stats {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--fg-secondary);
-  margin-top: 4px;
+  margin-top: var(--spacing-xs);
 }
 
 .status-message {
-  padding: 6px 10px;
-  margin: 6px 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin: var(--spacing-xs) 0;
   background: rgba(156, 220, 254, 0.15);
   border-left: 3px solid rgb(156, 220, 254);
   border-radius: 2px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--fg-primary);
 }
 
 .status-time {
   color: var(--fg-secondary);
-  font-size: 11px;
-  margin-right: 8px;
+  font-size: 10px;
+  margin-right: var(--spacing-sm);
 }
 
 .status-text {

@@ -1,34 +1,21 @@
-/* FlightPath Settings View Styles */
-/* Uses VS Code theme variables for native look */
+/* FlightPath Settings Styles */
+/* Extends shared.css (linked in HTML) */
 
-:root {
-  --bg-primary: var(--vscode-editor-background);
-  --bg-secondary: var(--vscode-sideBar-background);
-  --fg-primary: var(--vscode-editor-foreground);
-  --fg-secondary: var(--vscode-descriptionForeground);
-  --border-color: var(--vscode-panel-border);
-  --focus-border: var(--vscode-focusBorder);
-}
-
+/* Settings-specific styles */
 body {
-  margin: 0;
-  padding: 12px;
-  color: var(--fg-primary);
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-  background: var(--bg-primary);
+  padding: var(--spacing-md);
 }
 
 #settings-app {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-lg);
 }
 
 .setting-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .setting-group label {
@@ -38,25 +25,7 @@ body {
 }
 
 .setting-group select {
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--vscode-dropdown-background);
-  color: var(--vscode-dropdown-foreground);
-  cursor: pointer;
   max-width: 200px;
-  outline: none;
-}
-
-.setting-group select:hover {
-  border-color: var(--focus-border);
-}
-
-.setting-group select:focus {
-  border-color: var(--focus-border);
-  outline: 1px solid var(--focus-border);
-  outline-offset: -1px;
 }
 
 .setting-description {
@@ -68,22 +37,22 @@ body {
 .setting-divider {
   border: none;
   border-top: 1px solid var(--border-color);
-  margin: 8px 0;
+  margin: var(--spacing-sm) 0;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-md);
   cursor: pointer;
   font-weight: normal !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
 }
 
 .checkbox-label input[type="checkbox"] {
   cursor: pointer;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   accent-color: var(--vscode-checkbox-background);
 }
 
