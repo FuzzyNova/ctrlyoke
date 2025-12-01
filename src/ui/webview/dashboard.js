@@ -22,6 +22,7 @@
   // DOM elements
   const elements = {
     fileName: document.getElementById("file-name"),
+    newPromptBtn: document.getElementById("new-prompt"),
     selectFileBtn: document.getElementById("select-file"),
     editFileBtn: document.getElementById("edit-file"),
     executionState: document.getElementById("execution-state"),
@@ -37,6 +38,10 @@
   };
 
   // Event listeners
+  elements.newPromptBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.NEW_PROMPT });
+  });
+
   elements.selectFileBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
   });

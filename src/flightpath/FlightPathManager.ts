@@ -36,6 +36,7 @@ export class FlightPathManager {
   private dashboardProvider?: FlightPathDashboardProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
+  private promptFileWatcher?: vscode.FileSystemWatcher; // Watch for changes to current prompt file
 
   constructor(
     context: vscode.ExtensionContext,
@@ -213,6 +214,9 @@ export class FlightPathManager {
       // Store the loaded file
       this.currentPromptFile = { filePath, promptFile };
 
+      // Set up file watcher for live reload
+      this.setupPromptFileWatcher(filePath);
+
       // Load prompts into queue (but don't start execution)
       this.promptQueue.loadPrompts(promptFile.prompts);
 
@@ -247,7 +251,17 @@ export class FlightPathManager {
       return;
     }
 
-    const { filePath, promptFile } = this.currentPromptFile;
+    const { filePath } = this.currentPromptFile;
+
+    // Auto-save and reload if the file has unsaved changes
+    await this.saveAndReloadIfDirty(filePath);
+
+    // Re-read after potential reload
+    if (!this.currentPromptFile) {
+      return; // File was deleted or became invalid
+    }
+
+    const { promptFile } = this.currentPromptFile;
     const fileName = path.basename(filePath);
 
     try {
@@ -354,10 +368,41 @@ export class FlightPathManager {
     filePath: string,
     modeOverride?: Provider
   ): Promise<void> {
+    // Auto-save if the file is open with unsaved changes
+    await this.saveAndReloadIfDirty(filePath);
+
     // Load the file first
     await this.loadPromptFile(filePath);
     // Then execute it immediately (for backwards compatibility with context menu)
     await this.executeLoadedPromptFile(modeOverride);
+  }
+
+  /**
+   * Save the file if it's open in an editor with unsaved changes, then reload
+   * This ensures we always execute the latest user edits
+   */
+  private async saveAndReloadIfDirty(filePath: string): Promise<void> {
+    // Find if this file is open in any editor
+    const openDocument = vscode.workspace.textDocuments.find(
+      (doc) => doc.uri.fsPath === filePath
+    );
+
+    if (openDocument && openDocument.isDirty) {
+      console.log(
+        `FlightPath: Auto-saving dirty file before execution: ${filePath}`
+      );
+      try {
+        await openDocument.save();
+        // Reload the prompt file to pick up saved changes
+        await this.reloadCurrentPromptFile();
+      } catch (error) {
+        console.error("FlightPath: Failed to auto-save file:", error);
+        // Continue anyway - user may have unsaved changes but we'll use disk version
+        vscode.window.showWarningMessage(
+          "FlightPath: Could not auto-save file. Running with last saved version."
+        );
+      }
+    }
   }
 
   /**
@@ -539,6 +584,16 @@ export class FlightPathManager {
         this.currentWorkspaceFolder.uri.fsPath,
         promptsDir
       );
+
+      // Ensure directory exists
+      try {
+        await vscode.workspace.fs.createDirectory(
+          vscode.Uri.file(promptsDirPath)
+        );
+      } catch {
+        // Directory might already exist
+      }
+
       const filePath = path.join(promptsDirPath, fileName);
 
       // Create example content
@@ -1015,9 +1070,166 @@ export class FlightPathManager {
   }
 
   /**
+   * Set up file watcher for the currently loaded prompt file
+   * Reloads prompt content when file changes (only when not executing)
+   */
+  private setupPromptFileWatcher(filePath: string): void {
+    // Dispose existing watcher
+    this.promptFileWatcher?.dispose();
+
+    // Create watcher for this specific file
+    const pattern = new vscode.RelativePattern(
+      path.dirname(filePath),
+      path.basename(filePath)
+    );
+
+    this.promptFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+    this.promptFileWatcher.onDidChange(async (uri) => {
+      // Only reload if not currently executing
+      const state = this.promptQueue.getState();
+      if (
+        state.status === EXECUTION_STATES.IDLE ||
+        state.status === EXECUTION_STATES.COMPLETED ||
+        state.status === EXECUTION_STATES.ERROR
+      ) {
+        console.log(
+          `FlightPath: Prompt file changed, reloading: ${uri.fsPath}`
+        );
+        await this.reloadCurrentPromptFile();
+      }
+    });
+
+    // Also watch for deletion
+    this.promptFileWatcher.onDidDelete((uri) => {
+      console.log(`FlightPath: Prompt file deleted: ${uri.fsPath}`);
+      this.currentPromptFile = undefined;
+      this.promptFileWatcher?.dispose();
+      this.promptFileWatcher = undefined;
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateFileSelected("No file selected", []);
+      }
+    });
+  }
+
+  /**
+   * Reload the currently loaded prompt file
+   */
+  private async reloadCurrentPromptFile(): Promise<void> {
+    if (!this.currentPromptFile) return;
+
+    try {
+      const filePath = this.currentPromptFile.filePath;
+      const fileName = path.basename(filePath);
+
+      // Re-parse the file
+      const promptFile = await this.promptFileParser.parsePromptFile(filePath);
+      if (!promptFile || !promptFile.prompts) return;
+
+      // Validate
+      const validation = this.promptFileParser.validatePromptItems(
+        promptFile.prompts
+      );
+      if (!validation.valid) return;
+
+      // Update stored file
+      this.currentPromptFile = { filePath, promptFile };
+
+      // Reload queue
+      this.promptQueue.loadPrompts(promptFile.prompts);
+
+      // Update dashboard
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateFileSelected(
+          fileName,
+          promptFile.prompts.map((p) => ({ prompt: p.prompt }))
+        );
+      }
+
+      console.log(
+        `FlightPath: Reloaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
+      );
+    } catch (error) {
+      console.error("FlightPath: Failed to reload prompt file:", error);
+    }
+  }
+
+  /**
+   * Create a new draft prompt file with timestamp-based name
+   * Opens in editor and auto-selects in dashboard
+   */
+  async createDraftPrompt(): Promise<void> {
+    try {
+      if (!this.currentWorkspaceFolder) {
+        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
+        return;
+      }
+
+      // Generate timestamp-based filename: YYYYMMDD-HHmmss.prompt.md
+      const now = new Date();
+      const pad = (n: number) => n.toString().padStart(2, "0");
+      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const fileName = `${timestamp}.prompt.md`;
+
+      // Create drafts directory
+      const draftsDir = path.join(
+        this.currentWorkspaceFolder.uri.fsPath,
+        ".flightpath",
+        "drafts"
+      );
+
+      // Ensure directory exists
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(draftsDir));
+
+      const filePath = path.join(draftsDir, fileName);
+      const uri = vscode.Uri.file(filePath);
+
+      // Create empty file
+      await vscode.workspace.fs.writeFile(uri, Buffer.from("", "utf8"));
+
+      // Open file in editor
+      const document = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(document);
+
+      // Move editor to bottom panel (best effort)
+      try {
+        await vscode.commands.executeCommand(
+          "workbench.action.moveEditorToBelowGroup"
+        );
+      } catch {
+        // Ignore if command fails (no bottom group exists)
+      }
+
+      // Set up as current file (empty, but ready for the user to edit)
+      // We don't call loadPromptFile() because empty files are invalid
+      // Instead, we set up the watcher and show a placeholder in the dashboard
+      this.currentPromptFile = {
+        filePath,
+        promptFile: { prompts: [] }, // Empty prompts array
+      };
+
+      // Set up file watcher - will reload when user saves content
+      this.setupPromptFileWatcher(filePath);
+
+      // Show in dashboard with placeholder
+      if (this.dashboardProvider) {
+        this.dashboardProvider.updateFileSelected(fileName, []);
+      }
+
+      console.log(`FlightPath: Created draft prompt: ${fileName}`);
+    } catch (error) {
+      console.error("FlightPath: Failed to create draft prompt:", error);
+      vscode.window.showErrorMessage(
+        `FlightPath: Failed to create draft prompt: ${error}`
+      );
+    }
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
+    this.promptFileWatcher?.dispose();
     this.statusBarManager.dispose();
     this.endConditionEvaluator.dispose();
     console.log("FlightPath: Manager disposed");

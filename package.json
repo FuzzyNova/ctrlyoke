@@ -169,6 +169,12 @@
         "title": "Show Output Panel",
         "category": "FlightPath",
         "icon": "$(output)"
+      },
+      {
+        "command": "flightpath.createDraftPrompt",
+        "title": "New Draft Prompt",
+        "category": "FlightPath",
+        "icon": "$(new-file)"
       }
     ],
     "menus": {

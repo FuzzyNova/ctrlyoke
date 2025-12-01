@@ -330,6 +330,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Create Draft Prompt command (for dashboard New button)
+  const createDraftPromptCommand = vscode.commands.registerCommand(
+    "flightpath.createDraftPrompt",
+    async () => {
+      await flightPathManager.createDraftPrompt();
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -349,7 +357,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     selectPromptFileCommand,
     editCurrentPromptFileCommand,
     runCommand,
-    showOutputPanelCommand
+    showOutputPanelCommand,
+    createDraftPromptCommand
   );
 
   // Register development commands (only in dev mode)
