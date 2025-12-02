@@ -309,6 +309,11 @@ export class PromptFileParser {
     parsed: any,
     promptFilePath: string
   ): Promise<PromptFile> {
+    // Get the user's default setting for newChatSession
+    const defaultNewChatSession = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("newChatSessionPerPrompt", true);
+
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
       const resolvedPrompt = await this.resolvePromptContent(
@@ -321,7 +326,11 @@ export class PromptFileParser {
             prompt: resolvedPrompt,
             model: parsed.model,
             agent: parsed.agent,
-            newChatSession: parsed.newChatSession,
+            // Use explicit value if set, otherwise fall back to user's setting
+            newChatSession:
+              parsed.newChatSession !== undefined
+                ? parsed.newChatSession
+                : defaultNewChatSession,
             endCondition: parsed.endCondition,
           },
         ],
@@ -340,9 +349,11 @@ export class PromptFileParser {
             prompt: resolvedPrompt,
             model: item.model,
             agent: item.agent,
-            // Default newChatSession to true for multi-prompt workflows (unless explicitly set to false)
+            // Use explicit value if set, otherwise fall back to user's setting
             newChatSession:
-              item.newChatSession !== undefined ? item.newChatSession : true,
+              item.newChatSession !== undefined
+                ? item.newChatSession
+                : defaultNewChatSession,
             endCondition: item.endCondition,
           };
         })

@@ -43,6 +43,7 @@ export const MESSAGE_TYPES = {
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
+  CHANGE_NEW_CHAT_SESSION: "changeNewChatSession",
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
 

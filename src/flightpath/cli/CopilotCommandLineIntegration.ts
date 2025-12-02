@@ -219,11 +219,12 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       }
 
       // Get CLI options from configuration (or per-prompt override)
+      // newChatSession defaults to user's newChatSessionPerPrompt setting (parsed in PromptFileParser)
       const options: CopilotCliOptions = {
         addDirs: this.getWorkspaceDirs(),
         model: this.validateAndGetModel(prompt.model),
         agent: prompt.agent, // Pass agent to CLI (undefined if not specified)
-        // Only resume session if newChatSession is explicitly false AND we have a session ID
+        // Resume session if newChatSession is false AND we have a session ID
         resumeSession:
           prompt.newChatSession === false && this.sessionId
             ? this.sessionId

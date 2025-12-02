@@ -43,12 +43,16 @@
   let state = {
     provider: "copilot-cli",
     model: "claude-sonnet-4.5",
+    newChatSessionPerPrompt: true,
     dynamicQueueEnabled: false,
   };
 
   const elements = {
     providerDropdown: document.getElementById("provider-dropdown"),
     modelDropdown: document.getElementById("model-dropdown"),
+    newChatSessionCheckbox: document.getElementById(
+      "new-chat-session-checkbox"
+    ),
     dynamicQueueCheckbox: document.getElementById("dynamic-queue-checkbox"),
   };
 
@@ -68,6 +72,14 @@
       type: MESSAGE_TYPES.CHANGE_MODEL,
       model: state.model,
       provider: state.provider,
+    });
+  });
+
+  elements.newChatSessionCheckbox.addEventListener("change", (e) => {
+    state.newChatSessionPerPrompt = e.target.checked;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CHANGE_NEW_CHAT_SESSION,
+      enabled: state.newChatSessionPerPrompt,
     });
   });
 
@@ -114,6 +126,7 @@
 
     updateModelDropdownOptions(state.provider);
     elements.modelDropdown.value = state.model;
+    elements.newChatSessionCheckbox.checked = state.newChatSessionPerPrompt;
     elements.dynamicQueueCheckbox.checked = state.dynamicQueueEnabled;
   }
 

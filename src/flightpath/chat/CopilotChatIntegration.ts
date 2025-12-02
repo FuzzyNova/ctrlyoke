@@ -309,10 +309,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
         return false;
       }
 
-      // Start new chat session if requested (unless this is a retry scenario)
-      // Note: Retries should always use the same chat session
-      const isNewChatSession = prompt.newChatSession !== false;
-      if (isNewChatSession) {
+      // Start new chat session if requested
+      // When newChatSession is true (default from user setting), start fresh session
+      // When newChatSession is false, continue in existing chat session for context continuity
+      // Note: Retries should always use the same chat session (handled by retry logic setting newChatSession=false)
+      if (prompt.newChatSession === true) {
         await this.startNewChatSession();
       }
 
@@ -348,9 +349,10 @@ export class CopilotChatIntegration extends CopilotIntegration {
       await this.logMonitor.recordPositionBeforeSend();
 
       // Execute direct automation
+      // Pass whether this is a new chat session for submit verification logic
       const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        isNewChatSession
+        prompt.newChatSession === true
       );
 
       if (!sent) {

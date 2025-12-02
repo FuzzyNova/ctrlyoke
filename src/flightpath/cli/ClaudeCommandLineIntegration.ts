@@ -407,14 +407,15 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     args.push(...toolPermissionArgs);
 
     // Session management
+    // newChatSession defaults to user's newChatSessionPerPrompt setting (parsed in PromptFileParser)
     if (prompt.newChatSession === false && this.sessionId) {
       // Resume specific session
       args.push("-r", this.sessionId);
     } else if (prompt.newChatSession === false) {
-      // Continue most recent session (no specific ID)
+      // Continue most recent session (no specific ID yet)
       args.push("-c");
     }
-    // If newChatSession is true or undefined, start fresh (no session flags)
+    // If newChatSession is true, start fresh (no session flags)
 
     return args;
   }

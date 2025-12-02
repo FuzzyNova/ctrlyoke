@@ -136,6 +136,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.CHANGE_MODEL:
         this.handleModelChange(message.model, message.provider);
         break;
+      case MESSAGE_TYPES.CHANGE_NEW_CHAT_SESSION:
+        this.handleNewChatSessionChange(message.enabled);
+        break;
       case MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE:
         this.handleDynamicQueueChange(message.enabled);
         break;
@@ -150,6 +153,10 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration("flightpath");
     const provider = config.get<string>("provider", "copilot-cli");
     const model = this.getModelForProvider(provider);
+    const newChatSessionPerPrompt = config.get<boolean>(
+      "newChatSessionPerPrompt",
+      true
+    );
     const dynamicQueueEnabled = config.get<boolean>(
       "enableDynamicQueue",
       false
@@ -166,6 +173,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       data: {
         provider,
         model,
+        newChatSessionPerPrompt,
         dynamicQueueEnabled,
         modelOptions,
         providerStatus,
@@ -405,6 +413,23 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       console.log(`✅ Model changed to: ${model} (for ${provider})`);
     } catch (error) {
       console.error("Failed to update model setting:", error);
+    }
+  }
+
+  private async handleNewChatSessionChange(enabled: boolean): Promise<void> {
+    try {
+      await vscode.workspace
+        .getConfiguration("flightpath")
+        .update(
+          "newChatSessionPerPrompt",
+          enabled,
+          vscode.ConfigurationTarget.Global
+        );
+      console.log(
+        `✅ New chat session per prompt ${enabled ? "enabled" : "disabled"}`
+      );
+    } catch (error) {
+      console.error("Failed to update newChatSessionPerPrompt setting:", error);
     }
   }
 

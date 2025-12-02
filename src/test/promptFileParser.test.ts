@@ -93,12 +93,12 @@ suite("PromptFileParser Tests", () => {
       assert.strictEqual(endCondition.timeout, 30000);
     });
 
-    test("should default newChatSession to true for multi-prompt workflows", async () => {
+    test("should default newChatSession to user setting (true by default) for multi-prompt workflows", async () => {
       const filePath = path.join(fixturesPath, "multi.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      // Multi-prompt workflows should default to true for newChatSession
+      // Multi-prompt workflows should default to user's newChatSessionPerPrompt setting (default: true)
       assert.strictEqual(result.prompts[0].newChatSession, true);
       assert.strictEqual(result.prompts[1].newChatSession, true);
     });
