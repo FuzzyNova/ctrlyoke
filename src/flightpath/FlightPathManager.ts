@@ -1072,6 +1072,183 @@ export class FlightPathManager {
   }
 
   /**
+   * Import FlightPath workflow templates to the workspace's .flightpath folder
+   */
+  async importWorkflowTemplates(): Promise<void> {
+    try {
+      if (!this.currentWorkspaceFolder) {
+        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
+        return;
+      }
+
+      // Load workflow manifest
+      const manifestPath = path.join(
+        this.context.extensionPath,
+        "out",
+        "templates",
+        "workflows",
+        "manifest.json"
+      );
+
+      let manifest: {
+        workflows: Array<{
+          id: string;
+          label: string;
+          description: string;
+          file: string;
+          tags?: string[];
+          icon?: string;
+        }>;
+      };
+
+      try {
+        const manifestUri = vscode.Uri.file(manifestPath);
+        const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
+        manifest = JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
+      } catch (error) {
+        console.error("FlightPath: Failed to load workflow manifest:", error);
+        vscode.window.showErrorMessage(
+          "❌ Failed to load FlightPath workflow templates. The extension may not be properly installed."
+        );
+        return;
+      }
+
+      if (!manifest.workflows || manifest.workflows.length === 0) {
+        vscode.window.showInformationMessage(
+          "FlightPath: No workflow templates available to import"
+        );
+        return;
+      }
+
+      // Show QuickPick with available workflows
+      const selectedWorkflows = await vscode.window.showQuickPick(
+        manifest.workflows.map((workflow) => ({
+          label: `${workflow.icon || "$(file-code)"} ${workflow.label}`,
+          description: workflow.description,
+          detail: workflow.tags?.join(", "),
+          picked: false,
+          workflow,
+        })),
+        {
+          placeHolder: "Select workflow templates to import to .flightpath/",
+          title: "FlightPath: Import Workflow Templates",
+          canPickMany: true,
+        }
+      );
+
+      if (!selectedWorkflows || selectedWorkflows.length === 0) {
+        return; // User cancelled
+      }
+
+      // Get prompts directory from settings
+      const promptsDir = vscode.workspace
+        .getConfiguration("flightpath")
+        .get<string>("promptsDirectory", ".flightpath");
+
+      // Create .flightpath directory
+      const targetDir = path.join(
+        this.currentWorkspaceFolder.uri.fsPath,
+        promptsDir
+      );
+
+      try {
+        await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetDir));
+      } catch {
+        // Directory might already exist
+      }
+
+      // Copy selected workflows
+      const templatesPath = path.join(
+        this.context.extensionPath,
+        "out",
+        "templates",
+        "workflows"
+      );
+
+      const importedWorkflows: string[] = [];
+      const failedWorkflows: string[] = [];
+
+      for (const selection of selectedWorkflows) {
+        const workflow = selection.workflow;
+        const srcPath = path.join(templatesPath, workflow.file);
+        const destPath = path.join(targetDir, workflow.file);
+
+        try {
+          // Check if workflow already exists
+          try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(destPath));
+            // File exists, ask for confirmation
+            const overwrite = await vscode.window.showWarningMessage(
+              `Workflow "${workflow.label}" already exists. Overwrite?`,
+              "Yes",
+              "No"
+            );
+            if (overwrite !== "Yes") {
+              continue;
+            }
+          } catch {
+            // File doesn't exist, proceed with copy
+          }
+
+          // Copy the workflow file
+          const content = await vscode.workspace.fs.readFile(
+            vscode.Uri.file(srcPath)
+          );
+          await vscode.workspace.fs.writeFile(
+            vscode.Uri.file(destPath),
+            content
+          );
+          importedWorkflows.push(workflow.label);
+        } catch (error) {
+          console.error(
+            `FlightPath: Failed to import workflow ${workflow.id}:`,
+            error
+          );
+          failedWorkflows.push(workflow.label);
+        }
+      }
+
+      // Show result
+      if (importedWorkflows.length > 0) {
+        const action = await vscode.window.showInformationMessage(
+          `✅ Imported ${importedWorkflows.length} workflow(s): ${importedWorkflows.join(", ")}`,
+          "Open Folder",
+          "View Workflow"
+        );
+
+        if (action === "Open Folder") {
+          await vscode.commands.executeCommand(
+            "revealFileInOS",
+            vscode.Uri.file(targetDir)
+          );
+        } else if (
+          action === "View Workflow" &&
+          importedWorkflows.length === 1
+        ) {
+          // Open the first imported workflow
+          const workflowFile = path.join(
+            targetDir,
+            selectedWorkflows[0].workflow.file
+          );
+          const doc = await vscode.workspace.openTextDocument(workflowFile);
+          await vscode.window.showTextDocument(doc);
+        }
+      }
+
+      if (failedWorkflows.length > 0) {
+        vscode.window.showErrorMessage(
+          `❌ Failed to import: ${failedWorkflows.join(", ")}`
+        );
+      }
+    } catch (error) {
+      console.error("FlightPath: Error importing workflow templates:", error);
+      vscode.window.showErrorMessage(
+        `❌ Failed to import workflow templates: ${error}`
+      );
+    }
+  }
+
+  /**
    * Set up file watcher for the currently loaded prompt file
    * Reloads prompt content when file changes (only when not executing)
    */

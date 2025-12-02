@@ -65,6 +65,7 @@ description: Brief description for picker
 - `#file:"path with spaces"` - Quoted paths for spaces
 
 **FlightPath does NOT parse (passed through as literal text):**
+
 - `@workspace` - Copilot Chat-specific
 - `#codebase` - Copilot Chat-specific
 - `/explain`, `/fix`, etc. - Slash commands (provider-specific)

@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "description": "FlightPath workflow templates for common automation patterns",
+  "workflows": [
+    {
+      "id": "simple-feature",
+      "label": "Simple Feature Workflow",
+      "description": "Plan → Implement → Commit in same session",
+      "file": "simple-feature.flightpath.json",
+      "tags": ["beginner", "same-session"],
+      "icon": "$(lightbulb)"
+    },
+    {
+      "id": "fix-tests",
+      "label": "Fix Tests",
+      "description": "Fix failing tests with validation retry loop until they pass",
+      "file": "fix-tests.flightpath.json",
+      "tags": ["intermediate", "validation", "testing"],
+      "icon": "$(testing-run-icon)"
+    },
+    {
+      "id": "full-feature",
+      "label": "Full Feature Workflow",
+      "description": "Complete Plan→Implement→Review→Docs→Commit workflow",
+      "file": "full-feature.flightpath.json",
+      "tags": ["advanced", "complete"],
+      "icon": "$(rocket)"
+    }
+  ]
+}

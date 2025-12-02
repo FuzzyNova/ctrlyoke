@@ -10,84 +10,65 @@ FlightPath ships workflow templates that demonstrate common automation patterns.
 
 ```
 src/templates/workflows/
-├── manifest.json                    # Metadata for all workflows
-├── basic.prompt.md                  # Single markdown prompt
-├── basic-multi-step.flightpath.json # Sequential prompts
-├── with-validation.flightpath.json  # Prompts with end conditions
-└── full-feature.flightpath.json     # Complete development workflow
+├── manifest.json                         # Metadata for all workflows
+├── simple-feature.flightpath.json        # Plan → Implement → Commit (same session)
+├── fix-tests.flightpath.json             # Fix failing tests with retry loop
+└── full-feature.flightpath.json          # Complete development workflow
 ```
 
 ## Workflow Templates
 
-### 1. Basic Prompt (`basic.prompt.md`)
+### 1. Simple Feature Workflow (`simple-feature.flightpath.json`)
 
-**Simplest format** - A single markdown file containing one prompt.
-
-```markdown
-Analyze the current codebase structure and suggest improvements for code organization.
-
-Focus on:
-
-- File organization
-- Naming conventions
-- Code duplication opportunities
-```
-
-**Use case**: Quick, one-off tasks that don't need validation or multiple steps.
-
-### 2. Multi-Step Workflow (`basic-multi-step.flightpath.json`)
-
-**Sequential execution** - Multiple prompts that build on each other.
+**Same-session execution** - Uses `newChatSession: false` to maintain context between prompts.
 
 ```json
 {
   "prompts": [
     {
-      "id": "analyze",
-      "prompt": "Analyze this codebase for improvement opportunities. Look at the project structure, identify patterns, and note areas that could benefit from refactoring."
+      "id": "plan",
+      "prompt": "[FEATURE DESCRIPTION HERE]\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
     },
     {
       "id": "implement",
-      "prompt": "Implement the top 3 improvements you identified in the previous step."
+      "prompt": "Implement the plan you just created. Make all necessary code changes.",
+      "newChatSession": false
     },
     {
-      "id": "document",
-      "prompt": "Update documentation to reflect the changes made."
+      "id": "commit",
+      "prompt": "Generate a conventional commit message for the changes. Format: feat(scope): description",
+      "newChatSession": false
     }
   ]
 }
 ```
 
-**Use case**: Tasks that naturally break into phases where each step builds on the previous.
+**Use case**: Quick feature implementation where context from the planning phase is useful for implementation.
 
-### 3. Workflow with Validation (`with-validation.flightpath.json`)
+### 2. Fix Tests (`fix-tests.flightpath.json`)
 
-**Automated validation** - Uses end conditions to verify work before proceeding.
+**Validation retry loop** - Keeps fixing until tests pass.
 
 ```json
 {
   "prompts": [
     {
-      "id": "implement-feature",
-      "prompt": "Add comprehensive error handling to the API endpoints in this project. Include try-catch blocks, proper error responses, and logging."
-    },
-    {
-      "id": "validate",
-      "prompt": "Review the error handling implementation and fix any issues found.",
+      "id": "fix-tests",
+      "prompt": "There are currently failing tests. Run npm test to see which tests are failing, then fix them.",
       "endCondition": {
         "script": "npm test",
         "returns": "true",
-        "maxRetries": 2,
-        "retryPrompt": "Tests failed. Please fix:\n{scriptOutput}"
+        "maxRetries": 5,
+        "retryPrompt": "Tests are still failing. Please fix the remaining issues:\n{scriptOutput}"
       }
     }
   ]
 }
 ```
 
-**Use case**: Tasks requiring automated verification (tests, linting, type checking).
+**Use case**: Automated test fixing with validation loop - keeps retrying until all tests pass.
 
-### 4. Full Feature Workflow (`full-feature.flightpath.json`)
+### 3. Full Feature Workflow (`full-feature.flightpath.json`)
 
 **Complete development cycle** - Plan → Implement → Review → Docs → Commit.
 
@@ -96,21 +77,21 @@ Focus on:
   "prompts": [
     {
       "id": "plan",
-      "prompt": "[FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach."
+      "prompt": "[FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called docs/FEATURE_PLAN.md",
+      "endCondition": {
+        "script": "test -f docs/FEATURE_PLAN.md",
+        "returns": "true",
+        "maxRetries": 2,
+        "retryPrompt": "The plan document was not created. Please create docs/FEATURE_PLAN.md with the implementation plan."
+      }
     },
     {
       "id": "implement",
-      "prompt": "Implement the feature according to the plan. Make all necessary code changes."
+      "prompt": "Implement the feature according to the plan in #file:docs/FEATURE_PLAN.md. Make all necessary code changes."
     },
     {
       "id": "review",
-      "prompt": "Review the implementation for:\n- Code quality\n- Type safety\n- Error handling\n- Security issues\n\nFix any problems found.",
-      "endCondition": {
-        "script": "npm run lint && npm test",
-        "returns": "true",
-        "maxRetries": 2,
-        "retryPrompt": "Validation failed:\n{scriptOutput}"
-      }
+      "prompt": "Review the implementation for:\n- Code quality\n- Type safety\n- Error handling\n- Security issues\n\nFix any problems found."
     },
     {
       "id": "update-docs",
@@ -174,28 +155,20 @@ The `manifest.json` describes available templates:
   "description": "FlightPath workflow templates",
   "workflows": [
     {
-      "id": "basic-prompt",
-      "label": "Basic Prompt (Markdown)",
-      "description": "Single prompt in markdown format - simplest option",
-      "file": "basic.prompt.md",
-      "tags": ["beginner", "single"],
-      "icon": "$(file)"
+      "id": "simple-feature",
+      "label": "Simple Feature Workflow",
+      "description": "Plan → Implement → Commit in same session",
+      "file": "simple-feature.flightpath.json",
+      "tags": ["beginner", "same-session"],
+      "icon": "$(lightbulb)"
     },
     {
-      "id": "basic-multi-step",
-      "label": "Multi-Step Workflow",
-      "description": "Multiple sequential prompts",
-      "file": "basic-multi-step.flightpath.json",
-      "tags": ["beginner", "multi-step"],
-      "icon": "$(list-ordered)"
-    },
-    {
-      "id": "with-validation",
-      "label": "Workflow with Validation",
-      "description": "Automated testing/validation between steps",
-      "file": "with-validation.flightpath.json",
-      "tags": ["intermediate", "validation"],
-      "icon": "$(verified)"
+      "id": "fix-tests",
+      "label": "Fix Tests",
+      "description": "Fix failing tests with validation retry loop until they pass",
+      "file": "fix-tests.flightpath.json",
+      "tags": ["intermediate", "validation", "testing"],
+      "icon": "$(testing-run-icon)"
     },
     {
       "id": "full-feature",
@@ -209,15 +182,16 @@ The `manifest.json` describes available templates:
 }
 ```
 
-## Import Command (Future)
+## Import Command
 
-**Not yet implemented** - Currently users manually copy templates.
+The `flightpath.importWorkflowTemplates` command:
 
-Future `flightpath.importWorkflowTemplate` command will:
+1. Shows QuickPick with available workflows (multi-select)
+2. Copies selected templates to `.flightpath/` (or configured `promptsDirectory`)
+3. Prompts for overwrite confirmation if file exists
+4. Opens imported workflow for customization
 
-1. Show QuickPick with available workflows
-2. Copy selected template to `.flightpath/`
-3. Open file for customization
+**Usage**: Run `FlightPath: Import Workflow Templates` from Command Palette.
 
 ## Build System
 

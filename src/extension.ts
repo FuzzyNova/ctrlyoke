@@ -221,6 +221,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Import Workflow Templates command
+  const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
+    "flightpath.importWorkflowTemplates",
+    async () => {
+      await flightPathManager.importWorkflowTemplates();
+    }
+  );
+
   // Run with FlightPath command (context menu) - runs using current provider
   const runFromContextCommand = vscode.commands.registerCommand(
     "flightpath.runFromContext",
@@ -352,6 +360,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     retryCopilotDetectionCommand,
     createEndConditionScriptCommand,
     importAgentsCommand,
+    importWorkflowTemplatesCommand,
     runFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,

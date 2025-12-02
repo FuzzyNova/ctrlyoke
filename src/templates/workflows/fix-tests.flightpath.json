@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    {
+      "id": "fix-tests",
+      "prompt": "There are currently failing tests. Run npm test to see which tests are failing, then fix them.",
+      "endCondition": {
+        "script": "npm test",
+        "returns": "true",
+        "maxRetries": 5,
+        "retryPrompt": "Tests are still failing. Please fix the remaining issues:\n{scriptOutput}"
+      }
+    }
+  ]
+}

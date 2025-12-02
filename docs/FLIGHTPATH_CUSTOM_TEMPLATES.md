@@ -1,15 +1,16 @@
 # FlightPath Custom Templates
 
-This document describes FlightPath's template system for end condition scripts and custom agents.
+This document describes FlightPath's template system for end condition scripts, custom agents, and workflow templates.
 
 ## Overview
 
-FlightPath provides two types of templates:
+FlightPath provides three types of templates:
 
-| Template Type | Purpose | Destination | Command |
-|---------------|---------|-------------|---------|
-| **End Condition Scripts** | Validation scripts for workflows | `.flightpath/` | `flightpath.createEndConditionScript` |
-| **Custom Agents** | AI agents for CLI integration | `.github/agents/` | `flightpath.importAgents` |
+| Template Type             | Purpose                          | Destination       | Command                               |
+| ------------------------- | -------------------------------- | ----------------- | ------------------------------------- |
+| **End Condition Scripts** | Validation scripts for workflows | `.flightpath/`    | `flightpath.createEndConditionScript` |
+| **Custom Agents**         | AI agents for CLI integration    | `.github/agents/` | `flightpath.importAgents`             |
+| **Workflow Templates**    | Pre-built prompt workflows       | `.flightpath/`    | `flightpath.importWorkflowTemplates`  |
 
 ---
 
@@ -19,13 +20,13 @@ Pre-built validation script templates in multiple languages.
 
 ### Available Templates
 
-| Language | File | Use Case |
-|----------|------|----------|
-| JavaScript | `check_condition.js` | Node.js projects |
-| Python | `check_condition.py` | Python projects |
-| Bash | `check_condition.sh` | Unix/Linux systems |
+| Language   | File                  | Use Case               |
+| ---------- | --------------------- | ---------------------- |
+| JavaScript | `check_condition.js`  | Node.js projects       |
+| Python     | `check_condition.py`  | Python projects        |
+| Bash       | `check_condition.sh`  | Unix/Linux systems     |
 | PowerShell | `check_condition.ps1` | Windows/cross-platform |
-| Batch | `check_condition.bat` | Windows legacy |
+| Batch      | `check_condition.bat` | Windows legacy         |
 
 ### Usage
 
@@ -38,6 +39,14 @@ Pre-built validation script templates in multiple languages.
 
 ```
 src/templates/
+├── agents/
+│   ├── manifest.json
+│   └── flightpath-orchestrator.agent.md
+├── workflows/
+│   ├── manifest.json
+│   ├── simple-feature.flightpath.json
+│   ├── fix-tests.flightpath.json
+│   └── full-feature.flightpath.json
 ├── check_condition.js
 ├── check_condition.py
 ├── check_condition.sh
@@ -60,10 +69,10 @@ FlightPath ships pre-built agents that work with Copilot CLI, Claude CLI, and VS
 
 ### Agent Location Requirements
 
-| CLI/Tool | Agent Location | Notes |
-|----------|----------------|-------|
-| **Copilot CLI** | `.github/agents/` | Required location |
-| **Claude CLI** | Any path (via `--agent` flag) | Most flexible |
+| CLI/Tool         | Agent Location                    | Notes                                 |
+| ---------------- | --------------------------------- | ------------------------------------- |
+| **Copilot CLI**  | `.github/agents/`                 | Required location                     |
+| **Claude CLI**   | Any path (via `--agent` flag)     | Most flexible                         |
 | **VS Code Chat** | `.github/agents/` or user profile | Profile agents work but no automation |
 
 **Recommendation**: Import agents to `.github/agents/` for maximum compatibility.
@@ -75,6 +84,7 @@ FlightPath ships pre-built agents that work with Copilot CLI, Claude CLI, and VS
 Creates structured FlightPath workflow files from feature requests.
 
 **Purpose**: Takes a feature request and generates a complete `.flightpath.json` workflow with:
+
 1. **PLAN Phase** - Analyze codebase, design approach
 2. **IMPLEMENT Phase** - Execute implementation tasks
 3. **REVIEW Phase** - Validate with tests/linters
@@ -85,12 +95,12 @@ Creates structured FlightPath workflow files from feature requests.
 
 ### Planned Agents
 
-| Agent | Purpose |
-|-------|---------|
-| `flightpath-planner` | Analyzes requirements and creates implementation plans |
-| `flightpath-dev` | Main implementation agent - writes code following plans |
-| `flightpath-reviewer` | Code review, testing, and quality validation |
-| `flightpath-writer` | Updates documentation and generates commit messages |
+| Agent                 | Purpose                                                 |
+| --------------------- | ------------------------------------------------------- |
+| `flightpath-planner`  | Analyzes requirements and creates implementation plans  |
+| `flightpath-dev`      | Main implementation agent - writes code following plans |
+| `flightpath-reviewer` | Code review, testing, and quality validation            |
+| `flightpath-writer`   | Updates documentation and generates commit messages     |
 
 ### Importing Agents
 
@@ -148,6 +158,7 @@ The `manifest.json` lists available agents:
 ### Source Location
 
 Agent templates are stored in:
+
 - **Source**: `src/templates/agents/`
 - **Build output**: `out/templates/agents/`
 - **Runtime access**: `context.extensionPath + "/out/templates/agents/"`
@@ -160,7 +171,7 @@ Templates are copied during build via esbuild plugins:
 
 ```javascript
 // copyTemplatesPlugin - copies scripts
-// copyAgentTemplatesPlugin - copies agents  
+// copyAgentTemplatesPlugin - copies agents
 // copyWorkflowTemplatesPlugin - copies workflows (future)
 ```
 

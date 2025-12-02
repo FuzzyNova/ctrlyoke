@@ -141,6 +141,12 @@
         "icon": "$(hubot)"
       },
       {
+        "command": "flightpath.importWorkflowTemplates",
+        "title": "Import Workflow Templates",
+        "category": "FlightPath",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "flightpath.runFromContext",
         "title": "Run with FlightPath",
         "category": "FlightPath",
@@ -220,6 +226,9 @@
         },
         {
           "command": "flightpath.importAgents"
+        },
+        {
+          "command": "flightpath.importWorkflowTemplates"
         },
         {
           "command": "flightpath.runFromContext",

@@ -251,13 +251,14 @@ All three formats support context menu execution with mode override (Send to CLI
 
 ## Commands
 
-13 registered commands:
+14 registered commands:
 
 - flightpath.takeOff: Start workflow
 - flightpath.openPanel: Open panel
 - flightpath.createPromptFile: Create file
 - flightpath.createEndConditionScript: Create end condition script from templates
 - flightpath.importAgents: Import FlightPath custom agents to .github/agents/
+- flightpath.importWorkflowTemplates: Import workflow templates to .flightpath/
 - flightpath.pause/resume/stop: Execution control
 - flightpath.debugState: Debug state
 - flightpath.showCopilotStatus: Show status

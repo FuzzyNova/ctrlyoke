@@ -1,0 +1,18 @@
+{
+  "prompts": [
+    {
+      "id": "plan",
+      "prompt": "[FEATURE DESCRIPTION HERE]\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
+    },
+    {
+      "id": "implement",
+      "prompt": "Implement the plan you just created. Make all necessary code changes.",
+      "newChatSession": false
+    },
+    {
+      "id": "commit",
+      "prompt": "Generate a conventional commit message for the changes. Format: feat(scope): description",
+      "newChatSession": false
+    }
+  ]
+}
