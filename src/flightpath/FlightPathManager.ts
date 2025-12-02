@@ -105,6 +105,33 @@ export class FlightPathManager {
   }
 
   /**
+   * Open a prompt file in the editor.
+   * If openPromptsInSecondGroup setting is enabled, opens in ViewColumn.Two (right side)
+   * to keep main code files visible for #selection references.
+   * Otherwise opens in the active editor (default VS Code behavior).
+   * @param filePath Path to the prompt file to open
+   */
+  private async openPromptFile(filePath: string): Promise<void> {
+    try {
+      const document = await vscode.workspace.openTextDocument(filePath);
+
+      if (ConfigurationUtils.shouldOpenPromptsInSecondGroup()) {
+        // Open in second editor group (right side) to keep main code visible
+        await vscode.window.showTextDocument(document, {
+          viewColumn: vscode.ViewColumn.Two,
+          preview: false,
+          preserveFocus: false,
+        });
+      } else {
+        // Open in active editor (default VS Code behavior)
+        await vscode.window.showTextDocument(document);
+      }
+    } catch (error) {
+      console.error("FlightPath: Failed to open prompt file:", error);
+    }
+  }
+
+  /**
    * Get the default Copilot integration based on user settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */
@@ -608,9 +635,8 @@ export class FlightPathManager {
         Buffer.from(exampleContent, "utf8")
       );
 
-      // Open file for editing
-      const document = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(document);
+      // Open file in editor (respects openPromptsInSecondGroup setting)
+      await this.openPromptFile(filePath);
 
       vscode.window.showInformationMessage(`FlightPath: Created ${fileName}`);
     } catch (error) {
@@ -690,9 +716,7 @@ export class FlightPathManager {
     }
 
     try {
-      const uri = vscode.Uri.file(this.currentPromptFile.filePath);
-      const document = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(document);
+      await this.openPromptFile(this.currentPromptFile.filePath);
       console.log(
         `FlightPath: Opened prompt file: ${this.currentPromptFile.filePath}`
       );
@@ -1368,17 +1392,19 @@ export class FlightPathManager {
       // Create empty file
       await vscode.workspace.fs.writeFile(uri, Buffer.from("", "utf8"));
 
-      // Open file in editor
+      // Open file in editor (respects openPromptsInSecondGroup setting)
       const document = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(document);
-
-      // Move editor to bottom panel (best effort)
-      try {
-        await vscode.commands.executeCommand(
-          "workbench.action.moveEditorToBelowGroup"
-        );
-      } catch {
-        // Ignore if command fails (no bottom group exists)
+      if (ConfigurationUtils.shouldOpenPromptsInSecondGroup()) {
+        await vscode.window.showTextDocument(document, {
+          viewColumn: vscode.ViewColumn.Two,
+          preview: true,
+          preserveFocus: false,
+        });
+      } else {
+        await vscode.window.showTextDocument(document, {
+          preview: true,
+          preserveFocus: false,
+        });
       }
 
       // Set up as current file (empty, but ready for the user to edit)

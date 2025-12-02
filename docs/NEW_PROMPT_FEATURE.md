@@ -7,7 +7,7 @@ Add a "New" button to the FlightPath dashboard that creates a timestamped draft 
 ## User Flow
 
 1. User clicks **New** button in dashboard header (next to Edit button)
-2. FlightPath creates `.flightpath/drafts/YYYYMMDD-HHmmss.prompt.md`
+2. FlightPath creates `.flightpath/prompts/YYYYMMDD-HHmmss.prompt.md`
 3. File opens in VS Code editor, docked in bottom panel (if possible)
 4. User writes their prompt using full VS Code editor features
 5. File is auto-selected in dashboard, ready to run
@@ -17,7 +17,7 @@ Add a "New" button to the FlightPath dashboard that creates a timestamped draft 
 
 | Decision         | Choice                                                                  |
 | ---------------- | ----------------------------------------------------------------------- |
-| Folder name      | `.flightpath/drafts/`                                                   |
+| Folder name      | `.flightpath/prompts/`                                                  |
 | File naming      | `YYYYMMDD-HHmmss.prompt.md` (e.g., `20251201-143052.prompt.md`)         |
 | Template content | Empty file (blank)                                                      |
 | Auto-select      | Yes - auto-select in dashboard after creation                           |
@@ -117,17 +117,17 @@ async createDraftPrompt(): Promise<void> {
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const fileName = `${timestamp}.prompt.md`;
 
-    // Create drafts directory
-    const draftsDir = path.join(
+    // Create prompts directory
+    const promptsDir = path.join(
       this.currentWorkspaceFolder.uri.fsPath,
       ".flightpath",
-      "drafts"
+      "prompts"
     );
 
     // Ensure directory exists
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(draftsDir));
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(promptsDir));
 
-    const filePath = path.join(draftsDir, fileName);
+    const filePath = path.join(promptsDir, fileName);
     const uri = vscode.Uri.file(filePath);
 
     // Create empty file
@@ -301,7 +301,7 @@ Add command registration:
 ## Edge Cases
 
 1. **No workspace folder**: Show error message
-2. **Drafts folder doesn't exist**: Create it automatically (using `vscode.workspace.fs.createDirectory`)
+2. **Prompts folder doesn't exist**: Create it automatically (using `vscode.workspace.fs.createDirectory`)
 3. **Move to bottom fails**: Silently ignore - file is still open, just not positioned
 4. **File with same timestamp exists**: Extremely unlikely (second precision), but could add suffix
 5. **File deleted while selected**: Clear selection, show "No file selected"
@@ -309,11 +309,11 @@ Add command registration:
 
 ## Future Enhancements
 
-1. **Drafts cleanup**: Add command/button to delete old drafts (e.g., older than 7 days)
-2. **Draft renaming**: Prompt user to rename after successful execution
-3. **Draft templates**: Allow user-defined templates for new drafts
+1. **Prompt cleanup**: Add command/button to delete old prompts (e.g., older than 7 days)
+2. **Prompt renaming**: Prompt user to rename after successful execution
+3. **Prompt templates**: Allow user-defined templates for new prompts
 4. **Keyboard shortcut**: Add keybinding for rapid prompt creation
-5. **Recent drafts list**: Show recent drafts in dashboard for quick access
+5. **Recent prompts list**: Show recent prompts in dashboard for quick access
 
 ## Files to Modify
 

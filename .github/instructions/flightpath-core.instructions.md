@@ -36,6 +36,16 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 
 - Context menu "Send to CLI" / "Send to Chat" use mode override mechanism
 - Single-prompt files execute directly; multi-prompt use queue
+
+**Editor group management (configurable via `openPromptsInSecondGroup` setting):**
+
+- When `openPromptsInSecondGroup` is **enabled**: Opens prompts in `ViewColumn.Two` (right/second group)
+- When **disabled** (default): Opens prompts in active editor (standard VS Code behavior)
+- Uses `openPromptFile()` helper method that checks the setting
+- Keeps main code files in `ViewColumn.One` when enabled, so users can view and select code while editing prompts
+- Prevents the "splits keep multiplying" issue by explicitly targeting a specific column
+- DO NOT use `moveEditorToBelowGroup` command - it creates a new split every time it's called
+- Script files and other non-prompt files can open in active editor (user-controlled)
   </flightPathManager>
 
 <promptQueue>

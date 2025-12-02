@@ -33,6 +33,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if prompt files should open in the second editor group
+   */
+  shouldOpenPromptsInSecondGroup(): boolean {
+    return getConfig().get<boolean>("openPromptsInSecondGroup", false);
+  },
+
+  /**
    * Get the default Copilot integration mode from settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
    */

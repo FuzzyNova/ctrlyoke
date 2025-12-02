@@ -281,7 +281,7 @@
         {
           "id": "flightpath",
           "title": "FlightPath",
-          "icon": "$(rocket)"
+          "icon": "$(compass)"
         }
       ]
     },
@@ -345,6 +345,13 @@
           "default": true,
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
+        },
+        "flightpath.openPromptsInSecondGroup": {
+          "order": 14,
+          "type": "boolean",
+          "default": false,
+          "description": "Open prompt files in a separate editor group (right side)",
+          "markdownDescription": "When enabled, prompt files open in the second editor group (right side) instead of the active editor. This keeps your main code files visible for `#selection` references while editing prompts."
         },
         "flightpath.chatWindowLocation": {
           "order": 100,
