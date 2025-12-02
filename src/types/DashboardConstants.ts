@@ -86,9 +86,67 @@ export const STEP_STATUS = {
 } as const;
 
 // ============================================================================
+// PROVIDER IDS - Copilot integration modes
+// ============================================================================
+export const PROVIDER_IDS = {
+  COPILOT_CLI: "copilot-cli",
+  COPILOT_CHAT: "copilot-chat",
+  CLAUDE_CLI: "claude-cli",
+} as const;
+
+// ============================================================================
+// PROVIDER INFO - Display names and labels per provider
+// ============================================================================
+export const PROVIDER_INFO = {
+  [PROVIDER_IDS.COPILOT_CLI]: { name: "Copilot CLI", shortName: "Copilot CLI" },
+  [PROVIDER_IDS.COPILOT_CHAT]: {
+    name: "Copilot Chat",
+    shortName: "Copilot Chat",
+  },
+  [PROVIDER_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
+} as const;
+
+// ============================================================================
+// DEFAULT MODELS - Default model per provider
+// ============================================================================
+export const DEFAULT_MODELS = {
+  [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
+  [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
+  [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
+} as const;
+
+// ============================================================================
+// CLAUDE CLI MODELS - Static options (no programmatic way to query)
+// ============================================================================
+export const CLAUDE_CLI_MODELS = [
+  { value: "sonnet", label: "Sonnet (Recommended)" },
+  { value: "opus", label: "Opus (Most Capable)" },
+  { value: "haiku", label: "Haiku (Fastest)" },
+] as const;
+
+// ============================================================================
+// PROVIDER STATUS STRINGS - Status values for provider availability
+// ============================================================================
+export const PROVIDER_STATUS_STRINGS = {
+  CHECKING: "checking",
+  AVAILABLE: "available",
+  NOT_AVAILABLE: "not_available",
+} as const;
+
+// ============================================================================
+// UI STRINGS - UI text constants used in webview
+// ============================================================================
+export const UI_STRINGS = {
+  LOADING_MODELS: "Loading models...",
+  CHECKING_STATUS: "checking...",
+  NOT_AVAILABLE: "not available",
+} as const;
+
+// ============================================================================
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];

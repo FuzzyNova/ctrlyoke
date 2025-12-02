@@ -3,46 +3,45 @@
 
   // Import constants from compiled DashboardConstants.js (loaded via script tag in HTML)
   // Single source of truth - these match src/types/DashboardConstants.ts
-  const { MESSAGE_TYPES } = window.FlightPathConstants;
+  const {
+    MESSAGE_TYPES,
+    PROVIDER_IDS,
+    PROVIDER_INFO,
+    DEFAULT_MODELS,
+    CLAUDE_CLI_MODELS,
+    PROVIDER_STATUS_STRINGS,
+    UI_STRINGS,
+  } = window.FlightPathConstants;
 
   // Model options per provider - populated dynamically from ModelRegistry via INIT message
   // Chat models come from VS Code LM API (full list)
   // CLI models come from `copilot help config` (subset)
   // Claude CLI models are static (no programmatic way to query)
   let modelOptions = {
-    "copilot-cli": [],
-    "copilot-chat": [],
-    "claude-cli": [
-      { value: "sonnet", label: "Sonnet (Recommended)" },
-      { value: "opus", label: "Opus (Most Capable)" },
-      { value: "haiku", label: "Haiku (Fastest)" },
-    ],
+    [PROVIDER_IDS.COPILOT_CLI]: [],
+    [PROVIDER_IDS.COPILOT_CHAT]: [],
+    [PROVIDER_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
   };
 
   // Provider availability status
   let providerStatus = {
-    "copilot-cli": { available: false, status: "checking" },
-    "copilot-chat": { available: true, status: "available" },
-    "claude-cli": { available: false, status: "checking" },
-  };
-
-  // Provider display names and labels
-  const PROVIDER_INFO = {
-    "copilot-cli": { name: "Copilot CLI", shortName: "Copilot CLI" },
-    "copilot-chat": { name: "Copilot Chat", shortName: "Copilot Chat" },
-    "claude-cli": { name: "Claude CLI", shortName: "Claude CLI" },
-  };
-
-  // Default models per provider
-  const DEFAULT_MODELS = {
-    "copilot-cli": "claude-sonnet-4.5",
-    "copilot-chat": "claude-sonnet-4.5",
-    "claude-cli": "sonnet",
+    [PROVIDER_IDS.COPILOT_CLI]: {
+      available: false,
+      status: PROVIDER_STATUS_STRINGS.CHECKING,
+    },
+    [PROVIDER_IDS.COPILOT_CHAT]: {
+      available: true,
+      status: PROVIDER_STATUS_STRINGS.AVAILABLE,
+    },
+    [PROVIDER_IDS.CLAUDE_CLI]: {
+      available: false,
+      status: PROVIDER_STATUS_STRINGS.CHECKING,
+    },
   };
 
   let state = {
-    provider: "copilot-cli",
-    model: "claude-sonnet-4.5",
+    provider: PROVIDER_IDS.COPILOT_CLI,
+    model: DEFAULT_MODELS[PROVIDER_IDS.COPILOT_CLI],
     newChatSessionPerPrompt: true,
     dynamicQueueEnabled: false,
   };
@@ -164,20 +163,24 @@
    * Update provider dropdown to show availability status
    */
   function updateProviderDropdownOptions() {
-    const providers = ["copilot-cli", "copilot-chat", "claude-cli"];
+    const providers = [
+      PROVIDER_IDS.COPILOT_CLI,
+      PROVIDER_IDS.COPILOT_CHAT,
+      PROVIDER_IDS.CLAUDE_CLI,
+    ];
 
     elements.providerDropdown.innerHTML = providers
       .map((id) => {
         const info = PROVIDER_INFO[id];
         const status = providerStatus[id];
         const isAvailable = status?.available !== false;
-        const isChecking = status?.status === "checking";
+        const isChecking = status?.status === PROVIDER_STATUS_STRINGS.CHECKING;
 
         let label = info.name;
         if (isChecking) {
-          label += " (checking...)";
+          label += ` (${UI_STRINGS.CHECKING_STATUS})`;
         } else if (!isAvailable) {
-          label += " (not available)";
+          label += ` (${UI_STRINGS.NOT_AVAILABLE})`;
         }
 
         return `<option value="${id}" ${!isAvailable ? "disabled" : ""}>${label}</option>`;
@@ -190,8 +193,7 @@
 
     // Show loading state if no models yet
     if (options.length === 0) {
-      elements.modelDropdown.innerHTML =
-        '<option value="" disabled>Loading models...</option>';
+      elements.modelDropdown.innerHTML = `<option value="" disabled>${UI_STRINGS.LOADING_MODELS}</option>`;
       return;
     }
 
