@@ -1,7 +1,0 @@
-{
-  "prompt": "/fix #file:src/extension.ts #selection Fix the bug in the current file",
-  "endCondition": {
-    "script": "test_runner.py",
-    "returns": "true"
-  }
-}

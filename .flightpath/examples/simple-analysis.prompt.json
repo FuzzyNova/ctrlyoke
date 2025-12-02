@@ -1,8 +1,0 @@
-{
-  "prompt": "/explain #file:src/extension.ts Analyze the current file and suggest improvements for code quality, readability, and performance",
-  "endCondition": {
-    "script": "check_improvements.py",
-    "returns": "true",
-    "timeout": 30000
-  }
-}
