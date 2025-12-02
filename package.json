@@ -147,6 +147,18 @@
         "icon": "$(file-code)"
       },
       {
+        "command": "flightpath.newWorkflow",
+        "title": "New Workflow from Template",
+        "category": "FlightPath",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "flightpath.createNewTemplate",
+        "title": "Create New Custom Template",
+        "category": "FlightPath",
+        "icon": "$(file-add)"
+      },
+      {
         "command": "flightpath.runFromContext",
         "title": "Run with FlightPath",
         "category": "FlightPath",
@@ -333,21 +345,47 @@
           "default": 30000,
           "description": "Timeout for end condition scripts in milliseconds"
         },
-        "flightpath.enableContextAwareness": {
+        "flightpath.workflowsDirectory": {
           "order": 12,
+          "type": "string",
+          "default": ".flightpath/workflows",
+          "description": "Directory for generated workflow files (relative to workspace root)",
+          "markdownDescription": "Directory where workflows created from templates are saved. Relative to workspace root. Default: `.flightpath/workflows`"
+        },
+        "flightpath.defaultWorkflowTemplate": {
+          "order": 13,
+          "type": "string",
+          "default": "blank",
+          "description": "Default template selected in 'New Workflow' dialog",
+          "markdownDescription": "Default template selected when opening the **New Workflow** dialog. Use `custom:{filename}` for custom templates from `.flightpath/templates/`.",
+          "enum": [
+            "blank",
+            "simple-feature",
+            "fix-tests",
+            "full-feature"
+          ],
+          "enumDescriptions": [
+            "Empty 2-prompt workflow",
+            "Plan → Implement → Commit",
+            "Run tests and fix failures with retry",
+            "Plan → Implement → Review → Docs → Commit"
+          ]
+        },
+        "flightpath.enableContextAwareness": {
+          "order": 14,
           "type": "boolean",
           "default": true,
           "description": "Enable context-aware prompt generation"
         },
         "flightpath.autoAttachFiles": {
-          "order": 13,
+          "order": 15,
           "type": "boolean",
           "default": true,
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
         },
         "flightpath.openPromptsInSecondGroup": {
-          "order": 14,
+          "order": 16,
           "type": "boolean",
           "default": false,
           "description": "Open prompt files in a separate editor group (right side)",

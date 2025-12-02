@@ -45,6 +45,20 @@ export const MESSAGE_TYPES = {
   CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
+
+  // New Workflow Modal - Extension -> Webview
+  OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",
+  TEMPLATE_INFO: "templateInfo",
+  DEFAULT_TEMPLATE_SET: "defaultTemplateSet",
+  WORKFLOW_CREATED: "workflowCreated",
+  CLOSE_MODAL: "closeModal",
+
+  // New Workflow Modal - Webview -> Extension
+  NEW_WORKFLOW: "newWorkflow", // Opens modal (from button click)
+  TEMPLATE_SELECTED: "templateSelected",
+  SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
+  CREATE_WORKFLOW: "createWorkflow",
+  CREATE_NEW_TEMPLATE: "createNewTemplate",
 } as const;
 
 // ============================================================================

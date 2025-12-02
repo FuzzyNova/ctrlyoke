@@ -23,6 +23,7 @@
   const elements = {
     fileName: document.getElementById("file-name"),
     newPromptBtn: document.getElementById("new-prompt"),
+    newWorkflowBtn: document.getElementById("new-workflow"),
     selectFileBtn: document.getElementById("select-file"),
     editFileBtn: document.getElementById("edit-file"),
     executionState: document.getElementById("execution-state"),
@@ -35,11 +36,38 @@
     outputSection: document.getElementById("output-section"),
     outputContent: document.getElementById("output-content"),
     autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
+    // Modal elements
+    modal: document.getElementById("new-workflow-modal"),
+    modalOverlay: document.querySelector(".modal-overlay"),
+    modalClose: document.querySelector(".modal-close"),
+    templateSelect: document.getElementById("template-select"),
+    setDefaultBtn: document.getElementById("set-default-btn"),
+    defaultConfirmation: document.getElementById("default-confirmation"),
+    templateDescription: document.getElementById("template-description"),
+    variablesSection: document.getElementById("variables-section"),
+    workflowName: document.getElementById("workflow-name"),
+    savePathPreview: document.getElementById("save-path-preview"),
+    filenameError: document.getElementById("filename-error"),
+    modalCancel: document.getElementById("modal-cancel"),
+    modalCreate: document.getElementById("modal-create"),
+    modalCreateRun: document.getElementById("modal-create-run"),
+  };
+
+  // Modal state
+  let modalState = {
+    templates: [],
+    currentTemplate: null,
+    workflowsDir: ".flightpath/workflows",
+    defaultTemplateId: "blank",
   };
 
   // Event listeners
   elements.newPromptBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.NEW_PROMPT });
+  });
+
+  elements.newWorkflowBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
   });
 
   elements.selectFileBtn.addEventListener("click", () => {
@@ -74,6 +102,72 @@
       content: markdownContent,
       fileName: state.fileName,
     });
+  });
+
+  // Modal event listeners
+  elements.modalOverlay.addEventListener("click", () => {
+    closeModal();
+  });
+
+  elements.modalClose.addEventListener("click", () => {
+    closeModal();
+  });
+
+  elements.templateSelect.addEventListener("change", () => {
+    const templateId = elements.templateSelect.value;
+    if (templateId === "__create_new__") {
+      closeModal();
+      vscode.postMessage({ type: MESSAGE_TYPES.CREATE_NEW_TEMPLATE });
+    } else {
+      vscode.postMessage({ type: MESSAGE_TYPES.TEMPLATE_SELECTED, templateId });
+    }
+  });
+
+  elements.setDefaultBtn.addEventListener("click", () => {
+    const templateId = elements.templateSelect.value;
+    if (templateId && templateId !== "__create_new__") {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
+        templateId,
+      });
+    }
+  });
+
+  elements.workflowName.addEventListener("input", () => {
+    updatePathPreview();
+    validateFilename();
+  });
+
+  elements.modalCancel.addEventListener("click", () => {
+    closeModal();
+  });
+
+  elements.modalCreate.addEventListener("click", () => {
+    submitWorkflow(false);
+  });
+
+  elements.modalCreateRun.addEventListener("click", () => {
+    submitWorkflow(true);
+  });
+
+  // Keyboard handling for modal
+  document.addEventListener("keydown", (e) => {
+    if (!elements.modal.hidden) {
+      if (e.key === "Escape") {
+        closeModal();
+      } else if (e.key === "Enter" && e.ctrlKey) {
+        submitWorkflow(true);
+      } else if (
+        e.key === "Enter" &&
+        !e.ctrlKey &&
+        e.target.tagName !== "SELECT"
+      ) {
+        // Don't submit on Enter in select dropdown
+        if (e.target.tagName !== "INPUT" || e.target.id === "workflow-name") {
+          submitWorkflow(false);
+        }
+      }
+    }
   });
 
   // Message handler
@@ -124,6 +218,22 @@
         break;
       case MESSAGE_TYPES.PROMPTS_EXTENDED:
         handlePromptsExtended(message.prompts);
+        break;
+      // Modal messages
+      case MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL:
+        handleOpenNewWorkflowModal(message);
+        break;
+      case MESSAGE_TYPES.TEMPLATE_INFO:
+        handleTemplateInfo(message);
+        break;
+      case MESSAGE_TYPES.DEFAULT_TEMPLATE_SET:
+        handleDefaultTemplateSet(message);
+        break;
+      case MESSAGE_TYPES.WORKFLOW_CREATED:
+        handleWorkflowCreated(message);
+        break;
+      case MESSAGE_TYPES.CLOSE_MODAL:
+        closeModal();
         break;
     }
   });
@@ -694,6 +804,258 @@
     });
 
     return lines.join("\n");
+  }
+
+  // ============================================================================
+  // Modal Functions
+  // ============================================================================
+
+  /**
+   * Handle opening the new workflow modal
+   */
+  function handleOpenNewWorkflowModal(message) {
+    modalState.templates = message.templates || [];
+    modalState.workflowsDir = message.workflowsDir || ".flightpath/workflows";
+    modalState.defaultTemplateId = message.defaultTemplateId || "blank";
+
+    // Populate template dropdown
+    populateTemplateDropdown();
+
+    // Reset form
+    elements.workflowName.value = "";
+    elements.variablesSection.innerHTML = "";
+    elements.variablesSection.hidden = true;
+    elements.filenameError.hidden = true;
+    elements.defaultConfirmation.hidden = true;
+
+    // Select default template
+    elements.templateSelect.value = modalState.defaultTemplateId;
+
+    // Request info for default template
+    const defaultTemplate = modalState.templates.find(
+      (t) => t.id === modalState.defaultTemplateId
+    );
+    if (defaultTemplate) {
+      updateTemplateUI(defaultTemplate);
+    }
+
+    // Update path preview
+    updatePathPreview();
+
+    // Show modal
+    elements.modal.hidden = false;
+
+    // Focus first input
+    setTimeout(() => {
+      elements.workflowName.focus();
+    }, 100);
+  }
+
+  /**
+   * Populate the template dropdown with groups
+   */
+  function populateTemplateDropdown() {
+    elements.templateSelect.innerHTML = "";
+
+    const builtIn = modalState.templates.filter((t) => t.isBuiltIn);
+    const custom = modalState.templates.filter(
+      (t) => !t.isBuiltIn && !t.isAction
+    );
+    const actions = modalState.templates.filter((t) => t.isAction);
+
+    // Built-in templates
+    if (builtIn.length > 0) {
+      const group = document.createElement("optgroup");
+      group.label = "Built-in Templates";
+      builtIn.forEach((template) => {
+        const option = document.createElement("option");
+        option.value = template.id;
+        option.textContent = template.name;
+        group.appendChild(option);
+      });
+      elements.templateSelect.appendChild(group);
+    }
+
+    // Custom templates
+    if (custom.length > 0) {
+      const group = document.createElement("optgroup");
+      group.label = "Custom Templates";
+      custom.forEach((template) => {
+        const option = document.createElement("option");
+        option.value = template.id;
+        option.textContent = template.name;
+        group.appendChild(option);
+      });
+      elements.templateSelect.appendChild(group);
+    }
+
+    // Actions (Create New Template)
+    if (actions.length > 0) {
+      const group = document.createElement("optgroup");
+      group.label = "Actions";
+      actions.forEach((template) => {
+        const option = document.createElement("option");
+        option.value = template.id;
+        option.textContent = template.name;
+        option.dataset.action = "true";
+        group.appendChild(option);
+      });
+      elements.templateSelect.appendChild(group);
+    }
+  }
+
+  /**
+   * Handle template info update from extension
+   */
+  function handleTemplateInfo(message) {
+    const template = modalState.templates.find(
+      (t) => t.id === message.templateId
+    );
+    if (template) {
+      template.variables = message.variables || [];
+      template.description = message.description || template.description;
+      updateTemplateUI(template);
+    }
+  }
+
+  /**
+   * Update UI based on selected template
+   */
+  function updateTemplateUI(template) {
+    modalState.currentTemplate = template;
+
+    // Update description
+    elements.templateDescription.textContent = template.description || "";
+
+    // Update variables section
+    if (template.variables && template.variables.length > 0) {
+      elements.variablesSection.innerHTML = "";
+      template.variables.forEach((variable) => {
+        const div = document.createElement("div");
+        div.className = "variable-input";
+        div.innerHTML = `
+          <label for="var-${variable}">${variable}</label>
+          <input type="text" id="var-${variable}" data-variable="${variable}" placeholder="Enter ${variable}">
+        `;
+        elements.variablesSection.appendChild(div);
+      });
+      elements.variablesSection.hidden = false;
+    } else {
+      elements.variablesSection.innerHTML = "";
+      elements.variablesSection.hidden = true;
+    }
+  }
+
+  /**
+   * Handle default template set confirmation
+   */
+  function handleDefaultTemplateSet(message) {
+    if (message.success) {
+      modalState.defaultTemplateId = message.templateId;
+      elements.defaultConfirmation.hidden = false;
+      setTimeout(() => {
+        elements.defaultConfirmation.hidden = true;
+      }, 2000);
+    }
+  }
+
+  /**
+   * Handle workflow created response
+   */
+  function handleWorkflowCreated(message) {
+    if (message.success) {
+      closeModal();
+      // The extension will handle loading and optionally running the workflow
+    } else {
+      elements.filenameError.textContent =
+        message.error || "Failed to create workflow";
+      elements.filenameError.hidden = false;
+    }
+  }
+
+  /**
+   * Update the save path preview
+   */
+  function updatePathPreview() {
+    const filename = elements.workflowName.value.trim();
+    if (filename) {
+      elements.savePathPreview.textContent = `${modalState.workflowsDir}/${filename}.flightpath.json`;
+    } else {
+      elements.savePathPreview.textContent = `${modalState.workflowsDir}/`;
+    }
+  }
+
+  /**
+   * Validate the filename input
+   * @returns {boolean} True if valid
+   */
+  function validateFilename() {
+    const filename = elements.workflowName.value.trim();
+
+    // Check for empty
+    if (!filename) {
+      elements.filenameError.textContent = "Workflow name is required";
+      elements.filenameError.hidden = false;
+      return false;
+    }
+
+    // Check for invalid characters
+    const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+    if (invalidChars.test(filename)) {
+      elements.filenameError.textContent = "Invalid characters in filename";
+      elements.filenameError.hidden = false;
+      return false;
+    }
+
+    // Check for reserved names (Windows)
+    const reserved = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
+    if (reserved.test(filename)) {
+      elements.filenameError.textContent = "Reserved filename";
+      elements.filenameError.hidden = false;
+      return false;
+    }
+
+    elements.filenameError.hidden = true;
+    return true;
+  }
+
+  /**
+   * Submit the workflow creation form
+   * @param {boolean} runAfter Whether to run the workflow after creation
+   */
+  function submitWorkflow(runAfter) {
+    if (!validateFilename()) {
+      return;
+    }
+
+    const templateId = elements.templateSelect.value;
+    const filename = elements.workflowName.value.trim();
+
+    // Collect variable values
+    const variables = {};
+    const variableInputs = elements.variablesSection.querySelectorAll(
+      "input[data-variable]"
+    );
+    variableInputs.forEach((input) => {
+      variables[input.dataset.variable] = input.value;
+    });
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CREATE_WORKFLOW,
+      templateId,
+      variables,
+      filename,
+      workflowsDir: modalState.workflowsDir,
+      runAfter,
+    });
+  }
+
+  /**
+   * Close the modal
+   */
+  function closeModal() {
+    elements.modal.hidden = true;
+    modalState.currentTemplate = null;
   }
 
   // Signal ready

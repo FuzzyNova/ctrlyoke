@@ -493,3 +493,318 @@ h3 {
   color: rgb(156, 220, 254);
   font-weight: 500;
 }
+
+/* ============================================================================
+   Button Divider - Separates button groups
+   ============================================================================ */
+.button-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background-color: var(--vscode-widget-border, var(--border-color));
+  margin: 0 8px;
+  vertical-align: middle;
+}
+
+/* ============================================================================
+   Modal Styles - New Workflow Modal
+   ============================================================================ */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  animation: modalFadeIn 0.15s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-primary);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--fg-secondary);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-close:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  color: var(--fg-primary);
+}
+
+.modal-body {
+  padding: var(--spacing-md);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+/* Template Section */
+.template-section {
+  margin-bottom: var(--spacing-md);
+}
+
+.template-section label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.template-section select {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.template-section select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.default-template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.confirmation-message {
+  font-size: 11px;
+  color: var(--status-success);
+  animation: fadeInOut 2s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+}
+
+.template-description {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  margin: var(--spacing-sm) 0 var(--spacing-md);
+  font-style: italic;
+}
+
+/* Variables Section */
+.variables-section {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.variable-input {
+  margin-bottom: var(--spacing-md);
+}
+
+.variable-input:last-child {
+  margin-bottom: 0;
+}
+
+.variable-input label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.variable-input input {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.variable-input input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Filename Section */
+.filename-section {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.filename-section label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.filename-input-group {
+  display: flex;
+  align-items: center;
+}
+
+.filename-input-group input {
+  flex: 1;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 4px 0 0 4px;
+  font-size: 13px;
+}
+
+.filename-input-group input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.filename-extension {
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+  color: var(--fg-secondary);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.save-path-preview {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  margin-top: var(--spacing-xs);
+  font-style: italic;
+}
+
+.save-path-preview::before {
+  content: "📁 ";
+}
+
+.error-message {
+  font-size: 11px;
+  color: var(--status-error);
+  margin-top: var(--spacing-xs);
+}
+
+/* Template dropdown optgroup styling */
+.template-section select optgroup {
+  font-weight: 600;
+  font-style: normal;
+  color: var(--fg-secondary);
+}
+
+.template-section select option {
+  font-weight: normal;
+  padding: var(--spacing-xs);
+}
+
+.template-section select option[data-action="true"] {
+  color: var(--vscode-textLink-foreground);
+  font-style: italic;
+}

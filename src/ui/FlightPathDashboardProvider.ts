@@ -2,10 +2,12 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
+import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private flightPathManager?: any; // Reference to manager (set after construction to avoid circular dependency)
+  private templateManager: TemplateManager;
 
   // Webview path segments
   private static readonly WEBVIEW_PATH_SEGMENTS = ["out", "ui", "webview"];
@@ -23,7 +25,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     [MESSAGE_TYPES.SHOW_OUTPUT, "flightpath.showOutputPanel"],
   ]);
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.templateManager = new TemplateManager(context);
+  }
 
   /**
    * Get the webview directory path
@@ -74,6 +78,28 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     // Handle export specially since it needs message data
     if (message.type === MESSAGE_TYPES.EXPORT_OUTPUT) {
       this.handleExportOutput(message.content, message.fileName);
+      return;
+    }
+
+    // Handle modal messages
+    if (message.type === MESSAGE_TYPES.NEW_WORKFLOW) {
+      this.handleNewWorkflow();
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.TEMPLATE_SELECTED) {
+      this.handleTemplateSelected(message.templateId);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.SET_DEFAULT_TEMPLATE) {
+      this.handleSetDefaultTemplate(message.templateId);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.CREATE_WORKFLOW) {
+      this.handleCreateWorkflow(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.CREATE_NEW_TEMPLATE) {
+      this.handleCreateNewTemplate();
       return;
     }
 
@@ -214,6 +240,152 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
+  }
+
+  // ============================================================================
+  // Modal Handlers - New Workflow Modal
+  // ============================================================================
+
+  /**
+   * Handle request to open new workflow modal
+   */
+  private async handleNewWorkflow(): Promise<void> {
+    try {
+      const templates = await this.templateManager.getAvailableTemplates();
+      const workflowsDir = this.templateManager.getWorkflowsDirectory();
+      const defaultTemplateId = this.templateManager.getDefaultTemplateId();
+
+      this.postMessage({
+        type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,
+        templates: templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          variables: t.variables,
+          isBuiltIn: t.isBuiltIn,
+          isAction: t.isAction,
+        })),
+        workflowsDir,
+        defaultTemplateId,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to load templates: ${errorMsg}`);
+    }
+  }
+
+  /**
+   * Handle template selection in modal
+   */
+  private async handleTemplateSelected(templateId: string): Promise<void> {
+    try {
+      const template = await this.templateManager.getTemplateInfo(templateId);
+      if (!template) {
+        return;
+      }
+
+      // For non-blank templates, extract variables from actual content
+      let variables = template.variables;
+      if (templateId !== "blank" && !template.isAction) {
+        const content =
+          await this.templateManager.getTemplateContent(templateId);
+        variables = this.templateManager.extractVariables(content);
+      }
+
+      this.postMessage({
+        type: MESSAGE_TYPES.TEMPLATE_INFO,
+        templateId,
+        description: template.description,
+        variables,
+      });
+    } catch (error) {
+      console.error("Failed to get template info:", error);
+    }
+  }
+
+  /**
+   * Handle set default template request
+   */
+  private async handleSetDefaultTemplate(templateId: string): Promise<void> {
+    try {
+      await this.templateManager.setDefaultTemplateId(templateId);
+      this.postMessage({
+        type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
+        success: true,
+        templateId,
+      });
+    } catch (error) {
+      console.error("Failed to set default template:", error);
+      this.postMessage({
+        type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
+        success: false,
+        templateId,
+      });
+    }
+  }
+
+  /**
+   * Handle create workflow request
+   */
+  private async handleCreateWorkflow(message: any): Promise<void> {
+    try {
+      const { templateId, variables, filename, workflowsDir, runAfter } =
+        message;
+
+      // Create the workflow file
+      const filePath = await this.templateManager.createWorkflow(
+        templateId,
+        variables || {},
+        filename,
+        workflowsDir
+      );
+
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_CREATED,
+        success: true,
+        filePath,
+      });
+
+      // Load the workflow into the dashboard
+      if (this.flightPathManager) {
+        await this.flightPathManager.loadPromptFile(filePath);
+
+        // Optionally run the workflow
+        if (runAfter) {
+          await this.flightPathManager.executeLoadedPromptFile();
+        }
+      }
+
+      // Open the file in editor
+      const doc = await vscode.workspace.openTextDocument(filePath);
+      await vscode.window.showTextDocument(doc, { preview: false });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_CREATED,
+        success: false,
+        error: errorMsg,
+      });
+    }
+  }
+
+  /**
+   * Handle create new template request
+   * Triggers the createNewTemplate command flow
+   */
+  private async handleCreateNewTemplate(): Promise<void> {
+    // Close the modal first
+    this.postMessage({ type: MESSAGE_TYPES.CLOSE_MODAL });
+
+    // Execute the create new template command
+    await vscode.commands.executeCommand("flightpath.createNewTemplate");
+  }
+
+  /**
+   * Open the new workflow modal (can be called from command)
+   */
+  public openNewWorkflowModal(): void {
+    this.handleNewWorkflow();
   }
 
   /**

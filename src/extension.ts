@@ -229,6 +229,25 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // New Workflow command (opens modal in dashboard)
+  const newWorkflowCommand = vscode.commands.registerCommand(
+    "flightpath.newWorkflow",
+    async () => {
+      // Focus the dashboard panel first
+      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      // Then open the modal
+      dashboardProvider.openNewWorkflowModal();
+    }
+  );
+
+  // Create New Template command (QuickPick flow)
+  const createNewTemplateCommand = vscode.commands.registerCommand(
+    "flightpath.createNewTemplate",
+    async () => {
+      await flightPathManager.createNewTemplate();
+    }
+  );
+
   // Run with FlightPath command (context menu) - runs using current provider
   const runFromContextCommand = vscode.commands.registerCommand(
     "flightpath.runFromContext",
@@ -361,6 +380,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     createEndConditionScriptCommand,
     importAgentsCommand,
     importWorkflowTemplatesCommand,
+    newWorkflowCommand,
+    createNewTemplateCommand,
     runFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,

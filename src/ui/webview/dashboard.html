@@ -17,13 +17,7 @@
         <div id="file-info">
           <span id="file-name">No file selected</span>
           <div class="file-buttons">
-            <button
-              id="new-prompt"
-              class="btn-secondary btn-small"
-              title="Create new draft prompt"
-            >
-              New
-            </button>
+            <!-- Current file actions -->
             <button
               id="select-file"
               class="btn-secondary btn-small"
@@ -38,6 +32,24 @@
               disabled
             >
               Edit
+            </button>
+
+            <span class="button-divider"></span>
+
+            <!-- Creation actions -->
+            <button
+              id="new-prompt"
+              class="btn-secondary btn-small"
+              title="Create new draft prompt (.prompt.md)"
+            >
+              New Prompt
+            </button>
+            <button
+              id="new-workflow"
+              class="btn-secondary btn-small"
+              title="Create workflow from template"
+            >
+              New Workflow
             </button>
           </div>
         </div>
@@ -83,6 +95,66 @@
           </div>
           <div id="output-content">
             <div class="empty-state">No output yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Workflow Modal -->
+      <div id="new-workflow-modal" class="modal" hidden>
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>New Workflow</h2>
+            <button class="modal-close" title="Close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="template-section">
+              <label for="template-select">Template:</label>
+              <select id="template-select">
+                <!-- Populated dynamically -->
+              </select>
+              <div class="default-template-row">
+                <button
+                  id="set-default-btn"
+                  class="btn-link"
+                  title="Set as default template"
+                >
+                  Set as Default
+                </button>
+                <span
+                  id="default-confirmation"
+                  class="confirmation-message"
+                  hidden
+                  >✓ Set as default</span
+                >
+              </div>
+            </div>
+            <p id="template-description" class="template-description"></p>
+
+            <div id="variables-section" class="variables-section" hidden>
+              <!-- Variable inputs populated dynamically -->
+            </div>
+
+            <div class="filename-section">
+              <label for="workflow-name">Workflow name:</label>
+              <div class="filename-input-group">
+                <input
+                  type="text"
+                  id="workflow-name"
+                  placeholder="my-workflow"
+                />
+                <span class="filename-extension">.flightpath.json</span>
+              </div>
+              <p id="save-path-preview" class="save-path-preview"></p>
+              <p id="filename-error" class="error-message" hidden></p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="modal-cancel" class="btn-secondary">Cancel</button>
+            <button id="modal-create" class="btn-secondary">Create</button>
+            <button id="modal-create-run" class="btn-primary">
+              Create & Run
+            </button>
           </div>
         </div>
       </div>

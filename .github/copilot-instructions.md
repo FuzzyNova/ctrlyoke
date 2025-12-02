@@ -64,6 +64,7 @@ src/
 │   ├── FlightPathManager.ts      # Orchestration with factory pattern
 │   ├── PromptQueue.ts            # Execution queue
 │   ├── PromptFileParser.ts       # JSON parsing
+│   ├── TemplateManager.ts        # Workflow template management
 │   └── EndConditionEvaluator.ts  # Script validation
 ├── templates/                    # Templates for scripts, agents, and workflows
 │   ├── agents/                   # Custom agent templates
