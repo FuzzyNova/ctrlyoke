@@ -65,14 +65,19 @@ src/
 │   ├── PromptQueue.ts            # Execution queue
 │   ├── PromptFileParser.ts       # JSON parsing
 │   └── EndConditionEvaluator.ts  # Script validation
-├── templates/                    # Templates for scripts and agents
+├── templates/                    # Templates for scripts, agents, and workflows
 │   ├── agents/                   # Custom agent templates
 │   │   ├── manifest.json         # Agent metadata and descriptions
 │   │   └── flightpath-orchestrator.agent.md  # Plan→Implement→Review workflow creator
-│   ├── check_condition.py        # Python template
-│   ├── check_condition.js        # JavaScript template
-│   ├── check_condition.sh        # Bash template
-│   └── check_condition.bat       # Windows batch template
+│   ├── workflows/                # Workflow templates with {placeholder} variables
+│   │   ├── manifest.json         # Workflow metadata and descriptions
+│   │   ├── simple-feature.flightpath.json
+│   │   ├── fix-tests.flightpath.json
+│   │   └── full-feature.flightpath.json
+│   ├── check_condition.py        # Python script template
+│   ├── check_condition.js        # JavaScript script template
+│   ├── check_condition.sh        # Bash script template
+│   └── check_condition.bat       # Windows batch script template
 ├── types/                        # Type definitions
 ├── ui/                           # User interface
 │   ├── FlightPathDashboardProvider.ts  # Dashboard webview provider
@@ -93,6 +98,16 @@ schemas/                          # JSON schemas (source)
 └── prompt-schema.json            # Unified schema for both file types
 scripts/
 └── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json
+```
+
+**Workspace Folder Structure** (`.flightpath/`):
+
+```
+.flightpath/
+├── scripts/       # Validation scripts (end conditions)
+├── prompts/       # Draft prompts (*.prompt.md)
+├── templates/     # Workflow templates with {placeholder} variables
+└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
 ```
 
 **Build Output**:
@@ -251,14 +266,15 @@ All three formats support context menu execution with mode override (Send to CLI
 
 ## Commands
 
-14 registered commands:
+15 registered commands:
 
 - flightpath.takeOff: Start workflow
 - flightpath.openPanel: Open panel
 - flightpath.createPromptFile: Create file
 - flightpath.createEndConditionScript: Create end condition script from templates
 - flightpath.importAgents: Import FlightPath custom agents to .github/agents/
-- flightpath.importWorkflowTemplates: Import workflow templates to .flightpath/
+- flightpath.importWorkflowTemplates: Import workflow templates to .flightpath/templates/
+- flightpath.createFromTemplate: Create workflow from template with variable substitution (planned)
 - flightpath.pause/resume/stop: Execution control
 - flightpath.debugState: Debug state
 - flightpath.showCopilotStatus: Show status

@@ -2,15 +2,27 @@
 
 This document describes FlightPath's template system for end condition scripts, custom agents, and workflow templates.
 
+## Workspace Folder Structure
+
+FlightPath organizes user files in a structured `.flightpath/` directory:
+
+```
+.flightpath/
+├── scripts/       # Validation scripts (end conditions)
+├── prompts/       # Draft prompts (*.prompt.md)
+├── templates/     # Workflow templates with {placeholder} variables
+└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
+```
+
 ## Overview
 
 FlightPath provides three types of templates:
 
-| Template Type             | Purpose                          | Destination       | Command                               |
-| ------------------------- | -------------------------------- | ----------------- | ------------------------------------- |
-| **End Condition Scripts** | Validation scripts for workflows | `.flightpath/`    | `flightpath.createEndConditionScript` |
-| **Custom Agents**         | AI agents for CLI integration    | `.github/agents/` | `flightpath.importAgents`             |
-| **Workflow Templates**    | Pre-built prompt workflows       | `.flightpath/`    | `flightpath.importWorkflowTemplates`  |
+| Template Type             | Purpose                          | Destination              | Command                               |
+| ------------------------- | -------------------------------- | ------------------------ | ------------------------------------- |
+| **End Condition Scripts** | Validation scripts for workflows | `.flightpath/scripts/`   | `flightpath.createEndConditionScript` |
+| **Custom Agents**         | AI agents for CLI integration    | `.github/agents/`        | `flightpath.importAgents`             |
+| **Workflow Templates**    | Pre-built prompt workflows       | `.flightpath/templates/` | `flightpath.importWorkflowTemplates`  |
 
 ---
 
@@ -32,8 +44,8 @@ Pre-built validation script templates in multiple languages.
 
 1. Run command: `FlightPath: Create End Condition Script`
 2. Select script type from QuickPick
-3. Script copied to `.flightpath/` and opened for editing
-4. Reference in workflow: `"script": "check_condition.js"`
+3. Script copied to `.flightpath/scripts/` and opened for editing
+4. Reference in workflow: `"script": "scripts/check_condition.js"`
 
 ### File Structure
 

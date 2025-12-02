@@ -1,33 +1,98 @@
 # FlightPath Workflow Templates
 
-This document describes the workflow template system for FlightPath - pre-built prompt workflows users can import and customize.
+This document describes the workflow template system for FlightPath - pre-built prompt workflows users can import and customize with placeholder variables.
 
-## Overview
+## Workspace Folder Structure
 
-FlightPath ships workflow templates that demonstrate common automation patterns. Users can import these as starting points and customize them for their projects.
-
-## Template Categories
+FlightPath organizes user files in a structured `.flightpath/` directory:
 
 ```
-src/templates/workflows/
-├── manifest.json                         # Metadata for all workflows
-├── simple-feature.flightpath.json        # Plan → Implement → Commit (same session)
-├── fix-tests.flightpath.json             # Fix failing tests with retry loop
-└── full-feature.flightpath.json          # Complete development workflow
+.flightpath/
+├── scripts/       # Validation scripts (end conditions)
+├── prompts/       # Draft prompts (*.prompt.md)
+├── templates/     # Workflow templates with {placeholder} variables
+└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
 ```
 
-## Workflow Templates
+| Folder       | Purpose                              | File Types                          |
+| ------------ | ------------------------------------ | ----------------------------------- |
+| `scripts/`   | End condition validation scripts     | `.js`, `.py`, `.sh`, `.ps1`, `.bat` |
+| `prompts/`   | Single-prompt drafts for quick tasks | `.prompt.md`                        |
+| `templates/` | Parameterized workflow templates     | `.flightpath.json`                  |
+| `workflows/` | Executable workflow files            | `.flightpath.json`, `.prompt.json`  |
 
-### 1. Simple Feature Workflow (`simple-feature.flightpath.json`)
+## Template Detection
 
-**Same-session execution** - Uses `newChatSession: false` to maintain context between prompts.
+Templates and workflows use the same `.flightpath.json` extension. FlightPath distinguishes them by:
+
+1. **Location**: Files in `.flightpath/templates/` are treated as templates
+2. **Variable detection**: Files containing `{variableName}` patterns are templates
+
+This means:
+
+- Templates ARE valid workflows - they just have placeholders
+- You can run a template directly (placeholders become literal text)
+- Or generate a workflow from it with values filled in
+
+## Template Variables
+
+Templates use `{variableName}` syntax for placeholder values:
+
+```json
+{
+  "prompts": [
+    {
+      "id": "scan",
+      "prompt": "Look at {directory} and scan all the files, then create a summary."
+    },
+    {
+      "id": "save",
+      "prompt": "Save the summary to {outputFile} in {outputDir}."
+    }
+  ]
+}
+```
+
+**Variable extraction**: FlightPath scans the template for unique `{camelCase}` patterns and presents a form for the user to fill in values.
+
+**Example form for above template:**
+
+| Variable     | Value           |
+| ------------ | --------------- |
+| `directory`  | `[input field]` |
+| `outputFile` | `[input field]` |
+| `outputDir`  | `[input field]` |
+
+### Variable Naming Convention
+
+- Use `camelCase` for variable names: `{sourceDir}`, `{outputFile}`
+- Descriptive names: `{testCommand}` not `{cmd}`
+- Reuse variables when the same value appears multiple times
+
+### Reserved Variables (Future)
+
+Some variables may be auto-populated in the future:
+
+| Variable          | Description                   |
+| ----------------- | ----------------------------- |
+| `{workspaceRoot}` | Current workspace folder path |
+| `{workspaceName}` | Current workspace folder name |
+| `{currentFile}`   | Active editor file path       |
+| `{date}`          | Current date (YYYY-MM-DD)     |
+| `{timestamp}`     | Current timestamp             |
+
+## Built-in Templates
+
+FlightPath ships with starter templates that users can import:
+
+### 1. Simple Feature (`simple-feature.flightpath.json`)
 
 ```json
 {
   "prompts": [
     {
       "id": "plan",
-      "prompt": "[FEATURE DESCRIPTION HERE]\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
+      "prompt": "{featureDescription}\n\nCreate an implementation plan for this feature. Identify all files that need changes."
     },
     {
       "id": "implement",
@@ -36,27 +101,25 @@ src/templates/workflows/
     },
     {
       "id": "commit",
-      "prompt": "Generate a conventional commit message for the changes. Format: feat(scope): description",
+      "prompt": "Generate a conventional commit message. Format: feat(scope): description",
       "newChatSession": false
     }
   ]
 }
 ```
 
-**Use case**: Quick feature implementation where context from the planning phase is useful for implementation.
+**Variables detected**: `featureDescription`
 
 ### 2. Fix Tests (`fix-tests.flightpath.json`)
-
-**Validation retry loop** - Keeps fixing until tests pass.
 
 ```json
 {
   "prompts": [
     {
       "id": "fix-tests",
-      "prompt": "There are currently failing tests. Run npm test to see which tests are failing, then fix them.",
+      "prompt": "There are currently failing tests. Run {testCommand} to see which tests are failing, then fix them.",
       "endCondition": {
-        "script": "npm test",
+        "script": "{testCommand}",
         "returns": "true",
         "maxRetries": 5,
         "retryPrompt": "Tests are still failing. Please fix the remaining issues:\n{scriptOutput}"
@@ -66,28 +129,26 @@ src/templates/workflows/
 }
 ```
 
-**Use case**: Automated test fixing with validation loop - keeps retrying until all tests pass.
+**Variables detected**: `testCommand`
 
-### 3. Full Feature Workflow (`full-feature.flightpath.json`)
-
-**Complete development cycle** - Plan → Implement → Review → Docs → Commit.
+### 3. Full Feature (`full-feature.flightpath.json`)
 
 ```json
 {
   "prompts": [
     {
       "id": "plan",
-      "prompt": "[FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called docs/FEATURE_PLAN.md",
+      "prompt": "{featureDescription}\n\nAnalyze the codebase and create a detailed implementation plan. Save it to {planDocument}",
       "endCondition": {
-        "script": "test -f docs/FEATURE_PLAN.md",
+        "script": "test -f {planDocument}",
         "returns": "true",
         "maxRetries": 2,
-        "retryPrompt": "The plan document was not created. Please create docs/FEATURE_PLAN.md with the implementation plan."
+        "retryPrompt": "The plan document was not created. Please create {planDocument} with the implementation plan."
       }
     },
     {
       "id": "implement",
-      "prompt": "Implement the feature according to the plan in #file:docs/FEATURE_PLAN.md. Make all necessary code changes."
+      "prompt": "Implement the feature according to the plan in #file:{planDocument}. Make all necessary code changes."
     },
     {
       "id": "review",
@@ -105,103 +166,98 @@ src/templates/workflows/
 }
 ```
 
-**Use case**: Complete feature implementation with full quality assurance.
+**Variables detected**: `featureDescription`, `planDocument`
 
-## File Attachments
+## Dashboard Integration (Planned)
 
-Use `#file:` syntax to attach file content to prompts. FlightPath reads the file and includes its content in the prompt context.
+### Create Workflow from Template
 
-**Supported formats:**
+A new dashboard button **"New from Template"** opens the template workflow:
+
+1. **Select Template**: QuickPick shows available templates from:
+   - `.flightpath/templates/` (user templates)
+   - Built-in FlightPath templates
+
+2. **Fill Variables**: Form panel displays input fields for each detected `{variable}`:
+   - Variable name shown as label
+   - All fields are simple text inputs
+
+3. **Generate Workflow**: FlightPath:
+   - Replaces all `{variable}` placeholders with values
+   - Saves to `.flightpath/workflows/` with user-chosen filename
+   - Opens the new workflow file
+   - Optionally starts execution immediately
+
+### Template Form UI (Planned)
 
 ```
-#file:src/utils/helper.ts              # Attach entire file
-#file:src/utils/helper.ts:10-50        # Attach lines 10-50
-#file:"path with spaces/file.ts"       # Quoted paths for spaces
-#file:"my file.ts":1-20                # Quoted path with line range
+┌─────────────────────────────────────────────────────┐
+│ Create Workflow from Template                        │
+├─────────────────────────────────────────────────────┤
+│ Template: Full Feature Workflow                      │
+│                                                      │
+│ featureDescription:                                  │
+│ ┌─────────────────────────────────────────────────┐ │
+│ │ Add user authentication with OAuth2 support     │ │
+│ └─────────────────────────────────────────────────┘ │
+│                                                      │
+│ planDocument:                                        │
+│ ┌─────────────────────────────────────────────────┐ │
+│ │ docs/FEATURE_PLAN.md                            │ │
+│ └─────────────────────────────────────────────────┘ │
+│                                                      │
+│ Save as: ┌────────────────────────────────────────┐ │
+│          │ auth-feature.flightpath.json           │ │
+│          └────────────────────────────────────────┘ │
+│                                                      │
+│              [Cancel]  [Create]  [Create & Run]     │
+└─────────────────────────────────────────────────────┘
 ```
 
-**Example with file attachment:**
+## Commands
 
-```json
-{
-  "id": "refactor",
-  "prompt": "Refactor this utility to use async/await:\n\n#file:src/utils/legacy.ts"
-}
-```
-
-**Note:** FlightPath converts `#file:` references to inline content. Other context syntax like `@workspace` or `#codebase` are passed through as literal text (they're Copilot Chat-specific and not processed by FlightPath).
-
-## Model Override
-
-Templates use the default model from FlightPath settings. Override per-prompt when needed:
-
-```json
-{
-  "id": "quick-task",
-  "prompt": "Generate a commit message",
-  "model": "claude-haiku-4.5"
-}
-```
-
-**Available models**: `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `gpt-5`
-
-## Workflow Manifest
-
-The `manifest.json` describes available templates:
-
-```json
-{
-  "version": "1.0",
-  "description": "FlightPath workflow templates",
-  "workflows": [
-    {
-      "id": "simple-feature",
-      "label": "Simple Feature Workflow",
-      "description": "Plan → Implement → Commit in same session",
-      "file": "simple-feature.flightpath.json",
-      "tags": ["beginner", "same-session"],
-      "icon": "$(lightbulb)"
-    },
-    {
-      "id": "fix-tests",
-      "label": "Fix Tests",
-      "description": "Fix failing tests with validation retry loop until they pass",
-      "file": "fix-tests.flightpath.json",
-      "tags": ["intermediate", "validation", "testing"],
-      "icon": "$(testing-run-icon)"
-    },
-    {
-      "id": "full-feature",
-      "label": "Full Feature Workflow",
-      "description": "Complete Plan→Implement→Review→Docs→Commit workflow",
-      "file": "full-feature.flightpath.json",
-      "tags": ["advanced", "complete"],
-      "icon": "$(rocket)"
-    }
-  ]
-}
-```
+| Command                              | Description                                           |
+| ------------------------------------ | ----------------------------------------------------- |
+| `flightpath.importWorkflowTemplates` | Import built-in templates to `.flightpath/templates/` |
+| `flightpath.createFromTemplate`      | Create workflow from template (planned)               |
 
 ## Import Command
 
 The `flightpath.importWorkflowTemplates` command:
 
-1. Shows QuickPick with available workflows (multi-select)
-2. Copies selected templates to `.flightpath/` (or configured `promptsDirectory`)
+1. Shows QuickPick with available templates (multi-select)
+2. Copies selected templates to `.flightpath/templates/`
 3. Prompts for overwrite confirmation if file exists
-4. Opens imported workflow for customization
+4. Opens imported template for review
 
-**Usage**: Run `FlightPath: Import Workflow Templates` from Command Palette.
+## Variable Extraction Algorithm
+
+FlightPath extracts variables using a simple regex pattern:
+
+```javascript
+const variablePattern = /\{([a-z][a-zA-Z0-9]*)\}/g;
+```
+
+This matches:
+
+- `{featureDescription}` ✓
+- `{testCommand}` ✓
+- `{planDocument}` ✓
+- `{scriptOutput}` ✗ (reserved for retry prompts)
+- `{retryCount}` ✗ (reserved)
+- `{maxRetries}` ✗ (reserved)
+
+Reserved variables are filtered out during extraction.
 
 ## Build System
 
-Workflow templates are copied during build:
+Templates are copied during build:
 
 - **Source**: `src/templates/workflows/`
 - **Output**: `out/templates/workflows/`
 - **Access**: `context.extensionPath + "/out/templates/workflows/"`
 
-The `copyWorkflowTemplatesPlugin` in `esbuild.js` handles this.
+The existing `copyTemplatesPlugin` in `esbuild.js` handles subdirectory copying.
 
 ## Related Documentation
 

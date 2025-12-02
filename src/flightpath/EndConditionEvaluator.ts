@@ -396,10 +396,11 @@ export class EndConditionEvaluator {
 
     const baseDir = workingDirectory || workspaceFolder!.uri.fsPath;
     const flightpathDir = path.join(baseDir, ".flightpath");
+    const scriptsDir = path.join(flightpathDir, "scripts");
 
-    // Ensure .flightpath directory exists
+    // Ensure .flightpath/scripts directory exists
     try {
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(flightpathDir));
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(scriptsDir));
     } catch {
       // Directory might already exist
     }
@@ -443,7 +444,7 @@ export class EndConditionEvaluator {
       "templates",
       templateFileName
     );
-    const destinationPath = path.join(flightpathDir, destinationFileName);
+    const destinationPath = path.join(scriptsDir, destinationFileName);
 
     try {
       // Read template file

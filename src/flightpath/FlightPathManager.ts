@@ -1130,7 +1130,8 @@ export class FlightPathManager {
           workflow,
         })),
         {
-          placeHolder: "Select workflow templates to import to .flightpath/",
+          placeHolder:
+            "Select workflow templates to import to .flightpath/templates/",
           title: "FlightPath: Import Workflow Templates",
           canPickMany: true,
         }
@@ -1145,10 +1146,11 @@ export class FlightPathManager {
         .getConfiguration("flightpath")
         .get<string>("promptsDirectory", ".flightpath");
 
-      // Create .flightpath directory
+      // Create .flightpath/templates directory
       const targetDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        promptsDir
+        promptsDir,
+        "templates"
       );
 
       try {
@@ -1350,17 +1352,17 @@ export class FlightPathManager {
       const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
       const fileName = `${timestamp}.prompt.md`;
 
-      // Create drafts directory
-      const draftsDir = path.join(
+      // Create prompts directory
+      const promptsDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
         ".flightpath",
-        "drafts"
+        "prompts"
       );
 
       // Ensure directory exists
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(draftsDir));
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(promptsDir));
 
-      const filePath = path.join(draftsDir, fileName);
+      const filePath = path.join(promptsDir, fileName);
       const uri = vscode.Uri.file(filePath);
 
       // Create empty file

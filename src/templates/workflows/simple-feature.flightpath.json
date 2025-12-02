@@ -2,7 +2,7 @@
   "prompts": [
     {
       "id": "plan",
-      "prompt": "[FEATURE DESCRIPTION HERE]\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
+      "prompt": "{featureDescription}\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
     },
     {
       "id": "implement",

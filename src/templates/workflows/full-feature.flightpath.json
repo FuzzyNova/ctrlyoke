@@ -2,17 +2,17 @@
   "prompts": [
     {
       "id": "plan",
-      "prompt": "[FEATURE DESCRIPTION HERE]\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called docs/FEATURE_PLAN.md",
+      "prompt": "{featureDescription}\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called {planDocument}",
       "endCondition": {
-        "script": "test -f docs/FEATURE_PLAN.md",
+        "script": "test -f {planDocument}",
         "returns": "true",
         "maxRetries": 2,
-        "retryPrompt": "The plan document was not created. Please create docs/FEATURE_PLAN.md with the implementation plan."
+        "retryPrompt": "The plan document was not created. Please create {planDocument} with the implementation plan."
       }
     },
     {
       "id": "implement",
-      "prompt": "Implement the feature according to the plan in #file:docs/FEATURE_PLAN.md. Make all necessary code changes."
+      "prompt": "Implement the feature according to the plan in #file:{planDocument}. Make all necessary code changes."
     },
     {
       "id": "review",
