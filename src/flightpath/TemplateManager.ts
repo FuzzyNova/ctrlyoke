@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 /**
  * Template information structure for UI display
@@ -335,33 +336,13 @@ export class TemplateManager {
   }
 
   /**
-   * Get the workflows directory from settings
-   */
-  getWorkflowsDirectory(): string {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get("workflowsDirectory", ".flightpath/workflows");
-  }
-
-  /**
-   * Get the default template ID from settings
-   */
-  getDefaultTemplateId(): string {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get("defaultWorkflowTemplate", "blank");
-  }
-
-  /**
    * Set the default template ID in settings
    */
   async setDefaultTemplateId(templateId: string): Promise<void> {
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update(
-        "defaultWorkflowTemplate",
-        templateId,
-        vscode.ConfigurationTarget.Workspace
-      );
+    await ConfigurationUtils.updateSetting(
+      "defaultWorkflowTemplate",
+      templateId,
+      vscode.ConfigurationTarget.Workspace
+    );
   }
 }

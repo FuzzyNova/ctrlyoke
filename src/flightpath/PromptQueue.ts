@@ -8,6 +8,7 @@ import {
 } from "../types/FlightPathTypes";
 import { LoggingUtils } from "../utils/LoggingUtils";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -29,8 +30,7 @@ function getEffectiveMaxRetries(
 
   // Case 2: Only retryPrompt specified - use default from settings
   if (hasRetryPrompt) {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    return config.get<number>("defaultMaxRetries", 3);
+    return ConfigurationUtils.getDefaultMaxRetries();
   }
 
   // Case 3: Neither specified - no retries
@@ -58,8 +58,7 @@ function getEffectiveRetryPrompt(
 
   // Case 2: Only maxRetries specified - use default from settings
   if (hasMaxRetries) {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const defaultPrompt = config.get<string>("defaultRetryPrompt", "");
+    const defaultPrompt = ConfigurationUtils.getDefaultRetryPrompt();
     return defaultPrompt || undefined;
   }
 

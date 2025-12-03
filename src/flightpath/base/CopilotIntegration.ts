@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Copilot initialization status
@@ -101,9 +102,7 @@ export abstract class CopilotIntegration {
    */
   protected async buildPromptText(prompt: PromptItem): Promise<string> {
     // Check if auto-attachment is enabled
-    const autoAttach = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("autoAttachFiles", true);
+    const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
 
     // User's prompt text is already in final form with all context variables
     const promptText = prompt.prompt.trim();
@@ -134,13 +133,9 @@ export abstract class CopilotIntegration {
     let promptText = await this.buildPromptText(prompt);
 
     // Check if we should inject dynamic queue instructions
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const dynamicQueueEnabled = config.get<boolean>(
-      "enableDynamicQueue",
-      false
-    );
+    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
 
-    if (!dynamicQueueEnabled || !filePath) {
+    if (!dynamicQueueConfig.enabled || !filePath) {
       return promptText; // No instructions needed
     }
 
@@ -148,16 +143,12 @@ export abstract class CopilotIntegration {
     const {
       shouldInjectExtensionInstructions,
     } = require("../../utils/PromptIdentity");
-    const dynamicExtensionOnLastPrompt = config.get<boolean>(
-      "dynamicExtensionOnLastPrompt",
-      true
-    );
 
     const shouldInject = shouldInjectExtensionInstructions(
       prompt,
       promptIndex,
       allPrompts,
-      dynamicExtensionOnLastPrompt
+      dynamicQueueConfig.dynamicExtensionOnLastPrompt
     );
 
     if (!shouldInject) {
@@ -165,9 +156,8 @@ export abstract class CopilotIntegration {
     }
 
     // Get dynamic queue config for instruction template
-    const maxQueueSize = config.get<number>("maxQueueSize", 100);
-    const maxExecutionTime = config.get<number>("maxExecutionTime", 18000);
-    const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+    const { maxQueueSize, maxExecutionTime, unlimitedMode } =
+      dynamicQueueConfig;
 
     // Calculate current stats (approximations for instruction template)
     const currentSize = allPrompts.length;

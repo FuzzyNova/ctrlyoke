@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -252,8 +253,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private async handleNewWorkflow(): Promise<void> {
     try {
       const templates = await this.templateManager.getAvailableTemplates();
-      const workflowsDir = this.templateManager.getWorkflowsDirectory();
-      const defaultTemplateId = this.templateManager.getDefaultTemplateId();
+      const workflowsDir = ConfigurationUtils.getWorkflowsDirectory();
+      const defaultTemplateId = ConfigurationUtils.getDefaultWorkflowTemplate();
 
       this.postMessage({
         type: MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL,

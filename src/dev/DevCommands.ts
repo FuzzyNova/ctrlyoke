@@ -30,6 +30,7 @@ import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
 } from "../utils/ModelRegistry";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 // ============================================================================
 // Test Functions
@@ -353,8 +354,7 @@ async function testCopilotAutomation(): Promise<boolean> {
     );
 
     // Get chat window location from settings
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
+    const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
     const commandMap: Record<
       string,

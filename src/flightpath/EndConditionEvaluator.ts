@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
 import { EndCondition } from "../types/FlightPathTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 export interface EvaluationResult {
   success: boolean;
@@ -167,9 +168,7 @@ export class EndConditionEvaluator {
       }
 
       // Try in .flightpath directory
-      const flightpathDir = vscode.workspace
-        .getConfiguration("flightpath")
-        .get<string>("promptsDirectory", ".flightpath");
+      const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const flightpathPath = path.resolve(
         workspaceFolder.uri.fsPath,
         flightpathDir,

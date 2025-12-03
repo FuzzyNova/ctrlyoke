@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 /**
  * Extensions that indicate a prompt value might be a file path
@@ -270,9 +271,7 @@ export class PromptFileParser {
       }
 
       // Try in .flightpath directory
-      const flightpathDir = vscode.workspace
-        .getConfiguration("flightpath")
-        .get<string>("promptsDirectory", ".flightpath");
+      const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const relativeToFlightpath = path.resolve(
         workspaceFolder.uri.fsPath,
         flightpathDir,
@@ -310,9 +309,8 @@ export class PromptFileParser {
     promptFilePath: string
   ): Promise<PromptFile> {
     // Get the user's default setting for newChatSession
-    const defaultNewChatSession = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("newChatSessionPerPrompt", true);
+    const defaultNewChatSession =
+      ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
 
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
@@ -372,9 +370,7 @@ export class PromptFileParser {
   async discoverPromptFiles(
     workspaceFolder: vscode.WorkspaceFolder
   ): Promise<string[]> {
-    const promptsDir = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("promptsDirectory", ".flightpath");
+    const promptsDir = ConfigurationUtils.getPromptsDirectory();
     const promptsDirPath = path.join(workspaceFolder.uri.fsPath, promptsDir);
 
     try {

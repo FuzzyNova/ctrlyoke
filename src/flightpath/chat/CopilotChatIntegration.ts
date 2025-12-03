@@ -36,8 +36,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   /** Get the VS Code command for opening Copilot Chat based on user settings */
   private getChatWindowCommand(): string {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
+    const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
     const commandMap: Record<string, string> = {
       chatPanel: "workbench.panel.chat.view.copilot.focus",
@@ -50,8 +49,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   /** Start a new chat session. Mode/agent inherited from previous session. */
   private async startNewChatSession(): Promise<void> {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const chatLocation = config.get<string>("chatWindowLocation", "chatPanel");
+    const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
     const commandMap: Record<string, string> = {
       chatPanel: "workbench.action.chat.newChatInSideBar",
@@ -85,9 +83,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   /** Get the default model from settings */
   private getDefaultModel(): string {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotChatModel", "claude-sonnet-4.5");
+    return ConfigurationUtils.getCopilotChatModel();
   }
 
   /** Switch chat model - always switches to ensure consistency with CLI modes */
@@ -319,11 +315,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Ensure we're in agent mode if user has enabled force agent mode setting
       // This prevents issues with Ask/Plan modes but overrides custom agents
-      const config = vscode.workspace.getConfiguration("flightpath");
-      const forceAgentMode = config.get<boolean>(
-        "forceAgentModeForChat",
-        false
-      );
+      const forceAgentMode = ConfigurationUtils.shouldForceAgentModeForChat();
       if (forceAgentMode) {
         await this.ensureAgentMode();
       }
@@ -552,9 +544,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       }
 
       // Use longer delay for newWindow and newTab as they may need more setup time
-      const chatLocation = vscode.workspace
-        .getConfiguration("flightpath")
-        .get<string>("chatWindowLocation", "chatPanel");
+      const chatLocation = ConfigurationUtils.getChatWindowLocation();
       const focusDelay = chatLocation === "chatPanel" ? 1000 : 1500;
 
       await new Promise((resolve) => setTimeout(resolve, focusDelay));
@@ -625,14 +615,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
   /** Override to use native VS Code attachments when enabled */
   protected async buildPromptText(prompt: PromptItem): Promise<string> {
     // Check if auto-attachment is enabled
-    const autoAttach = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("autoAttachFiles", true);
+    const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
 
     // Check if native attachments are enabled for chat mode
-    const useNativeAttachments = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("chatUseNativeAttachments", true);
+    const useNativeAttachments =
+      ConfigurationUtils.shouldUseChatNativeAttachments();
 
     if (!autoAttach) {
       return prompt.prompt.trim();

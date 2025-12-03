@@ -7,6 +7,7 @@ import {
   CLAUDE_CLI_DEFAULT_MODEL,
   getClaudeModelName,
 } from "../../utils/ModelConstants";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Tool name mappings from Copilot CLI format to Claude CLI format
@@ -130,9 +131,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    * Check if full permissions are granted (no interactive prompts will occur)
    */
   protected hasFullPermissions(): boolean {
-    const toolMode = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("claudeCliToolPermissions", "skipAll");
+    const toolMode = ConfigurationUtils.getClaudeCliToolPermissions();
 
     return toolMode === "skipAll";
   }
@@ -327,9 +326,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     args.push("-p", JSON.stringify(promptText));
 
     // Output format (JSON for structured parsing)
-    const outputFormat = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("claudeCliOutputFormat", "json");
+    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
     args.push("--output-format", outputFormat);
 
     // Model selection
@@ -446,9 +443,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     );
 
     // Parse output (JSON or text)
-    const outputFormat = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("claudeCliOutputFormat", "json");
+    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
 
     if (outputFormat === "json") {
       return this.parseJsonOutput(stdout, stderr, exitCode);
@@ -545,9 +540,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    * Get configured AI model (with alias resolution)
    */
   private getConfiguredModel(): string {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("claudeCliModel", CLAUDE_CLI_DEFAULT_MODEL);
+    return ConfigurationUtils.getClaudeCliModel();
   }
 
   /**
@@ -613,8 +606,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    * Reads from shared cliAllowedTools/cliDeniedTools and converts to Claude format
    */
   private getToolPermissionArgs(): string[] {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const mode = config.get<string>("claudeCliToolPermissions", "skipAll");
+    const mode = ConfigurationUtils.getClaudeCliToolPermissions();
 
     if (mode === "skipAll") {
       return ["--dangerously-skip-permissions"];
@@ -623,8 +615,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Custom mode - read from shared settings and convert to Claude format
     const args: string[] = [];
 
-    const allowedTools = config.get<string[]>("cliAllowedTools", []);
-    const deniedTools = config.get<string[]>("cliDeniedTools", []);
+    const allowedTools = ConfigurationUtils.getCliAllowedTools();
+    const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
     // Add allowed tool patterns (converted to Claude format)
     allowedTools.forEach((tool) => {

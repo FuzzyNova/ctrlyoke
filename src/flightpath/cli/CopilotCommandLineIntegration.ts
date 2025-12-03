@@ -10,6 +10,7 @@ import {
   getCliSupportedModelIds,
   isCliModelSupported,
 } from "../../utils/ModelRegistry";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Claude CLI tool names that need to be converted to Copilot format
@@ -92,12 +93,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Check if full permissions are granted (no interactive prompts will occur)
    */
   protected hasFullPermissions(): boolean {
-    const toolMode = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotCliToolPermissions", "allowAll");
-    const allowAllPaths = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("copilotCliAllowAllPaths", true);
+    const toolMode = ConfigurationUtils.getCliToolPermissions();
+    const allowAllPaths = ConfigurationUtils.shouldAllowAllPaths();
 
     return toolMode === "allowAll" && allowAllPaths;
   }
@@ -129,9 +126,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    */
   private initializeLogDirectory(): void {
     // Check if user has configured a custom log directory
-    const configuredDir = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotCliLogDir", "");
+    const configuredDir = ConfigurationUtils.getCopilotCliLogDir();
 
     if (configuredDir) {
       this.logDirectory = configuredDir;
@@ -478,9 +473,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Get configured AI model
    */
   private getConfiguredModel(): string {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotCliModel", "claude-sonnet-4.5");
+    return ConfigurationUtils.getCliModel();
   }
 
   /**
@@ -562,8 +555,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * - Read/Glob/Grep/LS/WebFetch → filtered out (no Copilot equivalent)
    */
   private getToolPermissionArgs(): string[] {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const mode = config.get<string>("copilotCliToolPermissions", "allowAll");
+    const mode = ConfigurationUtils.getCliToolPermissions();
 
     if (mode === "allowAll") {
       return ["--allow-all-tools"];
@@ -573,8 +565,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     const args: string[] = [];
     const filteredTools: string[] = [];
 
-    const allowedTools = config.get<string[]>("cliAllowedTools", []);
-    const deniedTools = config.get<string[]>("cliDeniedTools", []);
+    const allowedTools = ConfigurationUtils.getCliAllowedTools();
+    const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
     // Track which tools we've already added to avoid duplicates
     // (e.g., both "Edit" and "Write" map to "write")
@@ -624,9 +616,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Get log level arguments based on configuration
    */
   private getLogLevelArgs(): string[] {
-    const logLevel = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>("copilotCliLogLevel", "default");
+    const logLevel = ConfigurationUtils.getCopilotCliLogLevel();
 
     if (logLevel !== "default") {
       return ["--log-level", logLevel];
@@ -639,9 +629,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * Check if all paths should be allowed (no interactive prompts)
    */
   private shouldAllowAllPaths(): boolean {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("copilotCliAllowAllPaths", true);
+    return ConfigurationUtils.shouldAllowAllPaths();
   }
 
   /**

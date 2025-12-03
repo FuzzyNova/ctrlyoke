@@ -167,4 +167,153 @@ export const ConfigurationUtils = {
   shouldTreatChatTimeoutAsSuccess(): boolean {
     return getConfig().get<boolean>("treatChatTimeoutAsSuccess", true);
   },
+
+  // ============================================================
+  // CLI EXECUTION SETTINGS
+  // ============================================================
+
+  /**
+   * Get CLI execution mode (interactive terminal or headless)
+   */
+  getCliExecutionMode(): string {
+    return getConfig().get<string>("cliExecutionMode", "interactive");
+  },
+
+  /**
+   * Get Copilot CLI log directory
+   */
+  getCopilotCliLogDir(): string {
+    return getConfig().get<string>("copilotCliLogDir", "");
+  },
+
+  /**
+   * Get Copilot CLI log level
+   */
+  getCopilotCliLogLevel(): string {
+    return getConfig().get<string>("copilotCliLogLevel", "default");
+  },
+
+  /**
+   * Check if all paths should be allowed for Copilot CLI
+   */
+  shouldAllowAllPaths(): boolean {
+    return getConfig().get<boolean>("copilotCliAllowAllPaths", true);
+  },
+
+  // ============================================================
+  // CLAUDE CLI SETTINGS
+  // ============================================================
+
+  /**
+   * Get Claude CLI model
+   */
+  getClaudeCliModel(): string {
+    return getConfig().get<string>("claudeCliModel", "sonnet");
+  },
+
+  /**
+   * Get Claude CLI tool permissions mode
+   */
+  getClaudeCliToolPermissions(): "skipAll" | "custom" {
+    return getConfig().get<"skipAll" | "custom">(
+      "claudeCliToolPermissions",
+      "skipAll"
+    );
+  },
+
+  /**
+   * Get Claude CLI output format
+   */
+  getClaudeCliOutputFormat(): "json" | "text" {
+    return getConfig().get<"json" | "text">("claudeCliOutputFormat", "json");
+  },
+
+  // ============================================================
+  // SHARED CLI TOOL SETTINGS
+  // ============================================================
+
+  /**
+   * Get allowed tools for CLI operations (shared between Copilot and Claude)
+   */
+  getCliAllowedTools(): string[] {
+    return getConfig().get<string[]>("cliAllowedTools", []);
+  },
+
+  /**
+   * Get denied tools for CLI operations (shared between Copilot and Claude)
+   */
+  getCliDeniedTools(): string[] {
+    return getConfig().get<string[]>("cliDeniedTools", []);
+  },
+
+  // ============================================================
+  // SESSION & WORKFLOW SETTINGS
+  // ============================================================
+
+  /**
+   * Check if new chat session should be started per prompt
+   */
+  shouldStartNewChatSessionPerPrompt(): boolean {
+    return getConfig().get<boolean>("newChatSessionPerPrompt", true);
+  },
+
+  /**
+   * Get workflows directory path
+   */
+  getWorkflowsDirectory(): string {
+    return getConfig().get<string>(
+      "workflowsDirectory",
+      ".flightpath/workflows"
+    );
+  },
+
+  /**
+   * Get default workflow template ID
+   */
+  getDefaultWorkflowTemplate(): string {
+    return getConfig().get<string>("defaultWorkflowTemplate", "blank");
+  },
+
+  // ============================================================
+  // CHAT MODE SETTINGS
+  // ============================================================
+
+  /**
+   * Get the default Copilot Chat model
+   */
+  getCopilotChatModel(): string {
+    return getConfig().get<string>("copilotChatModel", "claude-sonnet-4.5");
+  },
+
+  /**
+   * Check if agent mode should be forced for chat
+   */
+  shouldForceAgentModeForChat(): boolean {
+    return getConfig().get<boolean>("forceAgentModeForChat", false);
+  },
+
+  /**
+   * Check if native attachments should be used for chat mode
+   */
+  shouldUseChatNativeAttachments(): boolean {
+    return getConfig().get<boolean>("chatUseNativeAttachments", true);
+  },
+
+  // ============================================================
+  // SETTINGS UPDATE HELPERS
+  // ============================================================
+
+  /**
+   * Update a FlightPath configuration setting
+   * @param key The setting key (without 'flightpath.' prefix)
+   * @param value The new value
+   * @param target The configuration target (default: Global)
+   */
+  async updateSetting<T>(
+    key: string,
+    value: T,
+    target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
+  ): Promise<void> {
+    await getConfig().update(key, value, target);
+  },
 };

@@ -1166,9 +1166,7 @@ export class FlightPathManager {
       }
 
       // Get prompts directory from settings
-      const promptsDir = vscode.workspace
-        .getConfiguration("flightpath")
-        .get<string>("promptsDirectory", ".flightpath");
+      const promptsDir = ConfigurationUtils.getPromptsDirectory();
 
       // Create .flightpath/templates directory
       const targetDir = path.join(

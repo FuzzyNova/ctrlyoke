@@ -14,6 +14,7 @@ import {
   getModelDisplayName,
   CLAUDE_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 const execAsync = promisify(exec);
 
@@ -150,17 +151,12 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const provider = config.get<string>("provider", "copilot-cli");
+    const provider = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForProvider(provider);
-    const newChatSessionPerPrompt = config.get<boolean>(
-      "newChatSessionPerPrompt",
-      true
-    );
-    const dynamicQueueEnabled = config.get<boolean>(
-      "enableDynamicQueue",
-      false
-    );
+    const newChatSessionPerPrompt =
+      ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+    const dynamicQueueEnabled =
+      ConfigurationUtils.getDynamicQueueConfig().enabled;
 
     // Build dynamic model options from ModelRegistry
     const modelOptions = this.buildModelOptions();
@@ -369,14 +365,18 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   private getModelForProvider(provider: string): string {
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const settingKey =
-      FlightPathSettingsProvider.MODEL_SETTING_MAP[provider] ||
-      "copilotCliModel";
-    const defaultModel =
-      FlightPathSettingsProvider.DEFAULT_MODELS[provider] ||
-      "claude-sonnet-4.5";
-    return config.get<string>(settingKey, defaultModel);
+    // Return the appropriate model based on provider
+    switch (provider) {
+      case "copilot-cli":
+        return ConfigurationUtils.getCliModel();
+      case "copilot-chat":
+        // Chat model uses same setting as CLI model for now
+        return ConfigurationUtils.getCliModel();
+      case "claude-cli":
+        return ConfigurationUtils.getClaudeCliModel();
+      default:
+        return ConfigurationUtils.getCliModel();
+    }
   }
 
   private async handleProviderChange(provider: string): Promise<void> {
@@ -387,9 +387,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     }
 
     try {
-      await vscode.workspace
-        .getConfiguration("flightpath")
-        .update("provider", provider, vscode.ConfigurationTarget.Global);
+      await ConfigurationUtils.updateSetting("provider", provider);
       console.log(`✅ Provider changed to: ${provider}`);
     } catch (error) {
       console.error("Failed to update provider setting:", error);
@@ -407,9 +405,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     }
 
     try {
-      await vscode.workspace
-        .getConfiguration("flightpath")
-        .update(settingKey, model, vscode.ConfigurationTarget.Global);
+      await ConfigurationUtils.updateSetting(settingKey, model);
       console.log(`✅ Model changed to: ${model} (for ${provider})`);
     } catch (error) {
       console.error("Failed to update model setting:", error);
@@ -418,13 +414,10 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   private async handleNewChatSessionChange(enabled: boolean): Promise<void> {
     try {
-      await vscode.workspace
-        .getConfiguration("flightpath")
-        .update(
-          "newChatSessionPerPrompt",
-          enabled,
-          vscode.ConfigurationTarget.Global
-        );
+      await ConfigurationUtils.updateSetting(
+        "newChatSessionPerPrompt",
+        enabled
+      );
       console.log(
         `✅ New chat session per prompt ${enabled ? "enabled" : "disabled"}`
       );
@@ -435,13 +428,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
     try {
-      await vscode.workspace
-        .getConfiguration("flightpath")
-        .update(
-          "enableDynamicQueue",
-          enabled,
-          vscode.ConfigurationTarget.Global
-        );
+      await ConfigurationUtils.updateSetting("enableDynamicQueue", enabled);
       console.log(`✅ Dynamic queue ${enabled ? "enabled" : "disabled"}`);
     } catch (error) {
       console.error("Failed to update enableDynamicQueue setting:", error);

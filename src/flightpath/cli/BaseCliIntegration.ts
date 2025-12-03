@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { spawn, ChildProcess } from "child_process";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
  * Execution mode for CLI integrations
@@ -65,12 +66,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * Get the configured execution mode (interactive or headless)
    */
   protected getExecutionMode(): CliExecutionMode {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>(
-        "cliExecutionMode",
-        CLI_EXECUTION_MODE.INTERACTIVE
-      ) as CliExecutionMode;
+    return ConfigurationUtils.getCliExecutionMode() as CliExecutionMode;
   }
 
   /**
@@ -277,9 +273,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * Check if output should be shown in Output panel
    */
   protected shouldShowOutput(): boolean {
-    return vscode.workspace
-      .getConfiguration("flightpath")
-      .get<boolean>("showCliOutput", true);
+    return ConfigurationUtils.shouldShowCliOutput();
   }
 
   /**
@@ -415,9 +409,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * Returns workspace folders plus any configured additional directories
    */
   protected getWorkspaceDirs(): string[] {
-    const configured = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string[]>("copilotCliAllowedDirs", []);
+    const configured = ConfigurationUtils.getCliAllowedDirs();
 
     // Always include workspace folders
     const workspaceDirs =
