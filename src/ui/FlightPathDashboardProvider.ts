@@ -166,6 +166,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   public updateCliStreamingChunk(stepIndex: number, chunk: string): void {
+    console.log(
+      `🔍 DashboardProvider.updateCliStreamingChunk: stepIndex=${stepIndex}, chunk length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
+    );
     this.postMessage({
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,

@@ -208,6 +208,9 @@
         handleCliOutput(message.stepIndex, message.output);
         break;
       case MESSAGE_TYPES.CLI_STREAMING_CHUNK:
+        console.log(
+          `🔍 Dashboard: Received CLI_STREAMING_CHUNK message, stepIndex=${message.stepIndex}, chunk length=${message.chunk?.length}`
+        );
         handleCliStreamingChunk(message.stepIndex, message.chunk);
         break;
       case MESSAGE_TYPES.STATUS_MESSAGE:
@@ -365,14 +368,37 @@
     if (outputs.length > 0) {
       console.log(
         "📊 Dashboard: Last output isStreaming:",
-        outputs[outputs.length - 1].isStreaming
+        outputs[outputs.length - 1].isStreaming,
+        "response length:",
+        outputs[outputs.length - 1].response?.length || 0
       );
     }
 
-    // If the last entry is a streaming placeholder and this is the final version, replace it
+    // If the last entry is a streaming placeholder and this is the final version
     if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
-      console.log("📊 Dashboard: Replacing streaming entry with final output");
-      outputs[outputs.length - 1] = output;
+      const streamingEntry = outputs[outputs.length - 1];
+
+      // If the streaming entry has accumulated content, PRESERVE it
+      // Only update metadata (elapsed, tokens, isStreaming flag)
+      if (streamingEntry.response && streamingEntry.response.length > 0) {
+        console.log(
+          "📊 Dashboard: Preserving streamed response (" +
+            streamingEntry.response.length +
+            " chars), updating metadata only"
+        );
+        // Keep the streamed response, update everything else
+        outputs[outputs.length - 1] = {
+          ...output,
+          response: streamingEntry.response, // Keep streamed content!
+          timestampMs: streamingEntry.timestampMs, // Keep original timestamp
+        };
+      } else {
+        // No streamed content, use the final output as-is
+        console.log(
+          "📊 Dashboard: No streamed content, replacing with final output"
+        );
+        outputs[outputs.length - 1] = output;
+      }
     } else {
       console.log("📊 Dashboard: Appending new output (initial or retry)");
       outputs.push(output);
@@ -384,6 +410,10 @@
   }
 
   function handleCliStreamingChunk(stepIndex, chunk) {
+    console.log(
+      `🔍 Dashboard.handleCliStreamingChunk: stepIndex=${stepIndex}, chunk length=${chunk.length}, content (first 100): ${JSON.stringify(chunk.substring(0, 100))}`
+    );
+
     // Initialize array if needed
     if (!state.cliOutputs[stepIndex]) {
       state.cliOutputs[stepIndex] = [];
@@ -393,6 +423,9 @@
 
     // Initialize streaming buffer if needed
     if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
+      console.log(
+        "🔍 Dashboard.handleCliStreamingChunk: Creating new streaming buffer"
+      );
       outputs.push({
         prompt: "",
         response: "",
@@ -405,6 +438,9 @@
 
     // Append chunk to the last (streaming) output's response
     outputs[outputs.length - 1].response += chunk;
+    console.log(
+      `🔍 Dashboard.handleCliStreamingChunk: Total response length now: ${outputs[outputs.length - 1].response.length}`
+    );
 
     // Always render to show streaming updates
     renderAllCliOutputs();

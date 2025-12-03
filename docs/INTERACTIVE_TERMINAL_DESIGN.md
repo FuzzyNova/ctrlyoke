@@ -490,6 +490,32 @@ Shell integration requires:
 
 **Fallback strategy**: If shell integration isn't available within 3-5 seconds, fall back to `terminal.sendText()` with a warning that streaming won't work.
 
+### Output Streaming Limitations (Known Issue)
+
+**The `execution.read()` API may not capture output on all platforms**, especially Windows with PowerShell. This is a known VS Code limitation documented in:
+
+- [GitHub Issue #241592](https://github.com/microsoft/vscode/issues/241592)
+- Roo/Kilo Code documentation on shell integration issues
+
+**Symptoms:**
+
+- Dashboard shows "No output captured via shell integration" message
+- Export contains only the interactive mode header, not the actual CLI output
+- Terminal shows output correctly, but it's not captured by the extension
+
+**Workarounds implemented:**
+
+1. Show informational message in dashboard explaining interactive mode
+2. If no output captured, display clear warning with instructions
+3. User should view terminal directly for full output
+4. For export, the message explains the limitation
+
+**Future improvements:**
+
+- Consider adding terminal command delay setting (like Roo Code)
+- Investigate platform-specific workarounds for PowerShell
+- Document recommended shell (bash/zsh may be more reliable)
+
 ### ANSI Escape Codes
 
 Terminal output includes ANSI escape codes for colors, cursor positioning, etc. Options:

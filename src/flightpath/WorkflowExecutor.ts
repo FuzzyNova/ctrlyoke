@@ -215,6 +215,9 @@ export class WorkflowExecutor {
         });
 
         streamingDisposable = integration.onStreamingChunk((chunk) => {
+          console.log(
+            `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
+          );
           context.dashboardProvider?.updateCliStreamingChunk(i, chunk);
         });
       }

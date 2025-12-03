@@ -126,10 +126,37 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Strip ANSI escape codes from terminal output for clean display
+   * Strip ANSI escape codes and terminal control sequences from output for clean display.
+   *
+   * Handles:
+   * - CSI sequences: \x1B[...  (colors, cursor movement, etc.)
+   * - OSC sequences: \x1B]...\x07 or \x1B]...\x1B\\ (VS Code shell integration markers like 633;C)
+   * - Simple escapes: \x1B followed by single character
+   * - Bell character: \x07
+   * - Other control characters that shouldn't appear in output
+   *
+   * Special handling:
+   * - Cursor position sequences (\x1B[row;colH) are replaced with newlines
+   *   to preserve visual line breaks
    */
   protected stripAnsiCodes(text: string): string {
-    return text.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "");
+    return (
+      text
+        // OSC sequences: \x1B] ... terminated by BEL (\x07) or ST (\x1B\\)
+        .replace(/\x1B\].*?(?:\x07|\x1B\\)/g, "")
+        // Cursor position (H) and similar commands that move to new lines - replace with newline
+        .replace(/\x1B\[[0-9;]*[Hf]/g, "\n")
+        // Other CSI sequences: \x1B[ followed by parameters and command (remove)
+        .replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
+        // Other escape sequences: \x1B followed by various characters
+        .replace(/\x1B[@-Z\\-_]/g, "")
+        // Standalone BEL character
+        .replace(/\x07/g, "")
+        // Hide cursor and other private sequences
+        .replace(/\x1B\[\?[0-9;]*[A-Za-z]/g, "")
+        // Clean up multiple consecutive newlines (but keep at least one)
+        .replace(/\n{3,}/g, "\n\n")
+    );
   }
 
   /**
@@ -178,6 +205,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       cliCommand: command,
     });
 
+    // Send initial message to dashboard indicating interactive mode
+    // This helps user understand output is in the terminal
+    this.streamingChunkEmitter.fire(
+      "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
+        "   View the terminal for real-time output. This area will show captured output if available.\n\n"
+    );
+
     // Wait for shell integration (with fallback)
     let shellIntegration: vscode.TerminalShellIntegration;
     try {
@@ -193,6 +227,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.log(
         "⚠️ Shell integration unavailable - using sendText fallback (no completion detection)"
       );
+      this.streamingChunkEmitter.fire(
+        "⚠️ Shell integration unavailable - output capture disabled.\n" +
+          "   Please view the terminal directly for command output.\n"
+      );
       return true;
     }
 
@@ -201,30 +239,81 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const execution = shellIntegration.executeCommand(cliName, args);
     this.currentExecution = execution;
 
-    // Stream output to dashboard (don't await - runs in parallel)
-    this.streamTerminalOutput(execution);
+    // Start streaming output to dashboard (runs in parallel with completion detection)
+    const streamingPromise = this.streamTerminalOutput(execution);
 
-    // Wait for completion
-    return this.waitForTerminalCompletion(execution);
+    // Wait for command completion
+    const success = await this.waitForTerminalCompletion(execution);
+
+    // Wait for streaming to finish (important: the listener in WorkflowExecutor
+    // will be disposed after sendPrompt returns, so we must ensure all streaming
+    // events are fired before returning)
+    await streamingPromise;
+
+    return success;
   }
 
   /**
-   * Stream terminal output to the dashboard and output channel
+   * Stream terminal output to the dashboard and output channel.
+   *
+   * NOTE: VS Code's shell integration read() API can be unreliable on some
+   * platforms (especially Windows/PowerShell). If no data is captured, the
+   * user should view the terminal directly. See:
+   * https://github.com/microsoft/vscode/issues/241592
    */
   private async streamTerminalOutput(
     execution: vscode.TerminalShellExecution
   ): Promise<void> {
+    console.log("🔍 streamTerminalOutput: Starting to read terminal output...");
+    let chunkCount = 0;
+    let totalBytes = 0;
     try {
       for await (const data of execution.read()) {
+        chunkCount++;
+        totalBytes += data.length;
+        console.log(
+          `🔍 streamTerminalOutput: Received chunk ${chunkCount}, length=${data.length}`
+        );
+        console.log(
+          `🔍 streamTerminalOutput: Raw data (first 200 chars): ${JSON.stringify(data.substring(0, 200))}`
+        );
+
         // Strip ANSI codes for clean dashboard display
         const cleanData = this.stripAnsiCodes(data);
+        console.log(
+          `🔍 streamTerminalOutput: Clean data length=${cleanData.length}, content (first 200 chars): ${JSON.stringify(cleanData.substring(0, 200))}`
+        );
+
+        // Fire the streaming event
+        console.log(
+          `🔍 streamTerminalOutput: Firing streamingChunkEmitter with ${cleanData.length} chars...`
+        );
         this.streamingChunkEmitter.fire(cleanData);
+        console.log(
+          `🔍 streamTerminalOutput: streamingChunkEmitter.fire() completed`
+        );
 
         // Also log to output channel (with ANSI codes for color)
         this.outputChannel?.append(data);
       }
+      console.log(
+        `🔍 streamTerminalOutput: Finished reading, total chunks=${chunkCount}, bytes=${totalBytes}`
+      );
+
+      // If no output was captured, notify the user
+      if (chunkCount === 0) {
+        this.streamingChunkEmitter.fire(
+          "\n⚠️ No output captured via shell integration.\n" +
+            "   This is a known VS Code limitation on some platforms (especially Windows/PowerShell).\n" +
+            "   Please view the terminal window for the full output.\n"
+        );
+      }
     } catch (error) {
       console.error("Stream error:", error);
+      this.streamingChunkEmitter.fire(
+        `\n❌ Error capturing output: ${error}\n` +
+          "   Please view the terminal window for the output.\n"
+      );
     }
   }
 
