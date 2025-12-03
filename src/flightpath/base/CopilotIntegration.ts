@@ -255,6 +255,9 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
    * - #file:"path with spaces" (quoted path)
    * - #file:path:startLine-endLine (line range)
    * - #file:"path with spaces":startLine-endLine (quoted path with line range)
+   *
+   * Trailing punctuation (?, !, ., ,, ;, ), ], }) is stripped from unquoted paths
+   * to handle natural language like "can you look at #file:test.md?"
    */
   protected parseFileReferences(
     prompt: string
@@ -270,9 +273,19 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
     const regex = /#file:(?:"([^"]+)"|([^:\s]+))(?::(\d+)-(\d+))?/g;
     let match;
 
+    // Punctuation that commonly follows file references in natural language
+    // but is not part of the file path
+    const trailingPunctuation = /[?!.,;)\]}]+$/;
+
     while ((match = regex.exec(prompt)) !== null) {
       const [, quotedPath, unquotedPath, startLine, endLine] = match;
-      const filePath = quotedPath || unquotedPath; // Use quoted path if present, otherwise unquoted
+      let filePath = quotedPath || unquotedPath; // Use quoted path if present, otherwise unquoted
+
+      // Strip trailing punctuation from unquoted paths
+      // Quoted paths are taken literally (user explicitly quoted them)
+      if (!quotedPath && filePath) {
+        filePath = filePath.replace(trailingPunctuation, "");
+      }
 
       fileReferences.push({
         path: filePath,
