@@ -314,6 +314,10 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **cli**: Copilot CLI (default, best reliability)
   - **chat**: Copilot Chat window (UI automation)
   - **claude-cli**: Claude Code CLI (Anthropic's CLI)
+- flightpath.cliExecutionMode (enum: "interactive" | "headless", default: "interactive")
+  - **interactive**: Opens VS Code terminal for visibility, Ctrl+C abort, and user interaction (recommended)
+  - **headless**: Runs silently in background process
+  - **Note**: Headless mode without full permissions will auto-deny prompts, preventing agent actions
 - flightpath.copilotCliModel (enum: "claude-sonnet-4.5" | "claude-sonnet-4" | "claude-haiku-4.5" | "gpt-5", default: "claude-sonnet-4.5")
   - **Purpose**: Default model for Copilot CLI mode only
   - **Note**: Prompts can override with any supported model (Chat superset includes 22 models)

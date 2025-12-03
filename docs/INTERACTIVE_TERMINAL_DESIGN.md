@@ -4,6 +4,30 @@
 
 This document outlines a refactor of FlightPath's CLI integrations (`CopilotCommandLineIntegration`, `ClaudeCommandLineIntegration`) to use VS Code's interactive terminal instead of headless process spawning. This allows users to interact with CLI tools for approvals while still streaming output to the dashboard.
 
+## Prompt Passing Strategy
+
+**All prompts use `-p` flag with `JSON.stringify()` escaping.**
+
+We standardized on passing prompts via command-line argument rather than stdin for consistency:
+
+```typescript
+// Both interactive and headless modes use the same approach
+args.push("-p", JSON.stringify(promptText));
+```
+
+**Why not stdin?**
+
+1. **Terminal API limitation**: VS Code's `TerminalShellIntegration.executeCommand()` doesn't support stdin
+2. **Consistency**: Using the same approach in both modes simplifies the codebase
+3. **Debugging**: Easy to see the exact command being executed
+4. **JSON.stringify escaping**: Handles special characters, quotes, and newlines reliably
+
+**Why JSON.stringify?**
+
+- Properly escapes all special characters (quotes, newlines, backslashes)
+- Works cross-platform (Windows/macOS/Linux)
+- CLI tools interpret the escaped JSON string correctly
+
 ## Problem Statement
 
 FlightPath's current CLI integrations use headless mode with `--allow-all-tools` or `--dangerously-skip-permissions` for full automation. However:
@@ -30,30 +54,40 @@ This gives us the best of both worlds: interactive terminal + dashboard streamin
 
 ### Execution Mode Setting
 
-Replace the current `--allow-all-tools` behavior with a mode setting:
+Add a new setting to control where CLI commands execute:
 
 ```typescript
-// package.json - new setting per CLI provider
+// package.json - new setting
 "flightpath.cliExecutionMode": {
   "type": "string",
   "enum": ["interactive", "headless"],
   "default": "interactive",
-  "description": "How to execute CLI commands. 'interactive' opens a VS Code terminal for user interaction. 'headless' runs in background (requires allowAllTools)."
+  "description": "How to execute CLI commands. 'interactive' opens a VS Code terminal for visibility and user interaction. 'headless' runs in background process."
 }
 ```
 
-**Behavior:**
+**Key Insight: Execution mode and permission settings are independent concerns.**
 
-| Mode                    | Terminal Visible | User Interaction | Streaming to Dashboard         |
-| ----------------------- | ---------------- | ---------------- | ------------------------------ |
-| `interactive` (default) | ✅ Yes           | ✅ Yes           | ✅ Yes (via shell integration) |
-| `headless`              | ❌ No            | ❌ No            | ✅ Yes (via stdout)            |
+- **Execution Mode** controls _where_ the CLI runs (visible terminal vs background process)
+- **Permission Settings** control _what_ the CLI is allowed to do (tools, directories, etc.)
 
-**Headless mode constraints:**
+**Behavior Matrix:**
 
-- Only allowed when `allowAllTools` / `dangerouslySkipPermissions` is enabled
-- Shows warning if enabled without full permissions
-- Falls back to interactive if CLI prompts unexpectedly
+| Mode          | Terminal Visible | User Can Ctrl+C   | Streaming to Dashboard         |
+| ------------- | ---------------- | ----------------- | ------------------------------ |
+| `interactive` | ✅ Yes           | ✅ Immediate      | ✅ Yes (via shell integration) |
+| `headless`    | ❌ No            | ⏳ Via FlightPath | ✅ Yes (via stdout)            |
+
+**Why users want interactive mode even with full permissions:**
+
+1. **Immediate abort** - Press Ctrl+C directly instead of waiting for FlightPath's stop button
+2. **Real-time visibility** - See exactly what the CLI is doing as it happens
+3. **Debugging** - Easier to troubleshoot when you can see the terminal
+4. **Trust but verify** - Full permissions granted, but want to monitor execution
+
+**Headless mode warning:**
+
+- If `headless` mode is selected without full permissions, the CLI will auto-deny permission prompts (safe default). This means the agent may be unable to use tools or edit files. FlightPath will show a warning to help users understand why their workflow isn't making progress.
 
 ### Refactored Component Design
 
@@ -153,16 +187,22 @@ async sendPrompt(
 ): Promise<boolean> {
   const mode = this.getExecutionMode();
 
-  if (mode === 'headless' && this.canRunHeadless()) {
+  if (mode === 'headless') {
+    // Warn if headless will auto-deny permission prompts
+    if (!this.hasFullPermissions()) {
+      vscode.window.showWarningMessage(
+        'Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.'
+      );
+    }
     return this.executeHeadless(prompt, workflowContext);
   } else {
+    // Interactive mode - works with any permission setting
     return this.executeInTerminal(prompt, workflowContext);
   }
 }
 
-// Check if headless mode is safe
-protected canRunHeadless(): boolean {
-  // Only allow headless if full permissions are granted
+// Check if full permissions are granted (no prompts will occur)
+protected hasFullPermissions(): boolean {
   // Subclasses override with provider-specific checks
   return false;
 }
@@ -177,8 +217,8 @@ protected async executeInTerminal(
   prompt: PromptItem,
   workflowContext?: WorkflowContext
 ): Promise<boolean> {
-  // 1. Build the command (without auto-approve flags)
-  const command = await this.buildInteractiveCommand(prompt, workflowContext);
+  // 1. Build the command (same command as headless, just different execution context)
+  const command = await this.buildCommand(prompt, workflowContext);
 
   // 2. Get or create terminal
   const terminal = await this.getOrCreateTerminal();
@@ -241,54 +281,54 @@ private waitForCompletion(
 
 ### Phase 4: Provider-Specific Command Building
 
-Each CLI integration builds commands differently for interactive mode:
+Each CLI integration builds commands based on user's permission settings. The same permission flags are used for both interactive and headless modes - the only difference is _where_ the command runs.
 
 **CopilotCommandLineIntegration:**
 
 ```typescript
-protected async buildInteractiveCommand(
-  prompt: PromptItem,
-  workflowContext?: WorkflowContext
-): Promise<string> {
-  const promptText = await this.buildPromptText(prompt);
+private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
   const args: string[] = [];
 
-  // Prompt via stdin doesn't work in terminal, use -p
-  args.push('-p', this.escapeForShell(promptText));
+  // Always use -p with JSON.stringify for prompt
+  // Works identically for both interactive and headless modes
+  args.push('-p', JSON.stringify(promptText));
 
   // Model selection
-  if (prompt.model) {
-    args.push('--model', prompt.model);
+  const model = this.validateAndGetModel(prompt.model);
+  if (model) {
+    args.push('--model', model);
   }
 
   // Add workspace directories
   this.getWorkspaceDirs().forEach(dir => {
-    args.push('--add-dir', this.escapeForShell(dir));
+    args.push('--add-dir', dir);
   });
 
-  // NO --allow-all-tools (let user approve)
-  // Add specific tool permissions from settings if configured
-  const allowedTools = this.getAllowedTools();
-  allowedTools.forEach(tool => args.push('--allow-tool', tool));
+  // Apply permission settings (same for both interactive and headless)
+  const toolMode = this.getToolPermissionMode();
+  if (toolMode === 'allowAll') {
+    args.push('--allow-all-tools');
+  } else {
+    // Custom mode: use specific allow/deny patterns
+    const allowedTools = this.getAllowedTools();
+    allowedTools.forEach(tool => args.push('--allow-tool', tool));
 
-  const deniedTools = this.getDeniedTools();
-  deniedTools.forEach(tool => args.push('--deny-tool', tool));
+    const deniedTools = this.getDeniedTools();
+    deniedTools.forEach(tool => args.push('--deny-tool', tool));
+  }
 
   // Session management
   if (prompt.newChatSession === false && this.sessionId) {
     args.push('--resume', this.sessionId);
   }
 
-  return `copilot ${args.join(' ')}`;
+  return args;
 }
 
-protected canRunHeadless(): boolean {
-  const toolMode = vscode.workspace
-    .getConfiguration('flightpath')
-    .get<string>('copilotCliToolPermissions', 'allowAll');
-  const allowAllPaths = vscode.workspace
-    .getConfiguration('flightpath')
-    .get<boolean>('copilotCliAllowAllPaths', true);
+protected hasFullPermissions(): boolean {
+  // Check if all permissions are pre-granted (no prompts will occur)
+  const toolMode = this.getToolPermissionMode();
+  const allowAllPaths = this.getAllowAllPaths();
 
   return toolMode === 'allowAll' && allowAllPaths;
 }
@@ -297,39 +337,41 @@ protected canRunHeadless(): boolean {
 **ClaudeCommandLineIntegration:**
 
 ```typescript
-protected async buildInteractiveCommand(
-  prompt: PromptItem,
-  workflowContext?: WorkflowContext
-): Promise<string> {
-  const promptText = await this.buildPromptText(prompt);
+private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
   const args: string[] = [];
 
-  args.push('-p', this.escapeForShell(promptText));
+  // Always use -p with JSON.stringify for prompt
+  // Works identically for both interactive and headless modes
+  args.push('-p', JSON.stringify(promptText));
 
-  // Use default permission mode (prompts for approval)
-  args.push('--permission-mode', 'default');
+  // Apply permission settings (same for both interactive and headless)
+  const toolMode = this.getToolPermissionMode();
+  if (toolMode === 'skipAll') {
+    args.push('--dangerously-skip-permissions');
+  } else {
+    // Default mode: will prompt for approval when needed
+    args.push('--permission-mode', 'default');
+
+    // Add specific tool permissions from settings if configured
+    const allowedTools = this.getAllowedTools();
+    allowedTools.forEach(tool => args.push('--allowedTools', tool));
+  }
 
   // Model selection
-  if (prompt.model) {
-    args.push('--model', prompt.model);
-  }
+  const model = this.validateAndGetModel(prompt.model);
+  args.push('--model', model);
 
   // Add workspace directories
   this.getWorkspaceDirs().forEach(dir => {
-    args.push('--add-dir', this.escapeForShell(dir));
+    args.push('--add-dir', dir);
   });
 
-  // Add specific tool permissions from settings if configured
-  const allowedTools = this.getAllowedTools();
-  allowedTools.forEach(tool => args.push('--allowedTools', tool));
-
-  return `claude ${args.join(' ')}`;
+  return args;
 }
 
-protected canRunHeadless(): boolean {
-  const toolMode = vscode.workspace
-    .getConfiguration('flightpath')
-    .get<string>('claudeCliToolPermissions', 'skipAll');
+protected hasFullPermissions(): boolean {
+  // Check if all permissions are pre-granted (no prompts will occur)
+  const toolMode = this.getToolPermissionMode();
 
   return toolMode === 'skipAll';
 }
@@ -340,18 +382,21 @@ protected canRunHeadless(): boolean {
 Keep existing headless logic as `executeHeadless()`:
 
 ```typescript
-protected async executeHeadless(
-  prompt: PromptItem,
-  workflowContext?: WorkflowContext
+private async executeHeadless(
+  args: string[],
+  promptText: string
 ): Promise<boolean> {
-  // Existing spawnProcess-based implementation
-  // This is the current behavior - runs in background with no terminal
+  // Fire event with prompt and command ready
+  this.promptReadyEmitter.fire({
+    fullPrompt: promptText,
+    cliCommand: this.lastCliCommand!,
+  });
 
-  const promptText = workflowContext
-    ? await this.buildPromptWithInstructions(...)
-    : await this.buildPromptText(prompt);
+  // Execute CLI command (prompt is in args via -p flag)
+  // Uses spawnProcess for background execution
+  const result = await this.executeCopilotCommand(args);
 
-  // ... existing spawn logic with --allow-all-tools etc.
+  // ... handle result
 }
 ```
 
@@ -364,22 +409,35 @@ protected async executeHeadless(
   "type": "string",
   "enum": ["interactive", "headless"],
   "enumDescriptions": [
-    "Opens a VS Code terminal where you can see output and respond to prompts (recommended)",
-    "Runs in background without terminal. Only works with full tool permissions enabled."
+    "Opens a VS Code terminal where you can see output, interact if needed, and press Ctrl+C to stop immediately (recommended)",
+    "Runs in background process without visible terminal. Requires full permissions to avoid hanging on prompts."
   ],
   "default": "interactive",
-  "description": "How to execute CLI commands."
+  "description": "Where CLI commands execute. Interactive provides visibility and immediate abort via Ctrl+C. Headless runs silently in background."
 }
 ```
 
 ### Existing Settings Behavior
 
-| Setting                               | Interactive Mode            | Headless Mode                            |
-| ------------------------------------- | --------------------------- | ---------------------------------------- |
-| `cliAllowedTools`                     | Used as `--allow-tool` args | Used as `--allow-tool` args              |
-| `cliDeniedTools`                      | Used as `--deny-tool` args  | Used as `--deny-tool` args               |
-| `copilotCliToolPermissions: allowAll` | Ignored (user approves)     | Enables `--allow-all-tools`              |
-| `claudeCliToolPermissions: skipAll`   | Ignored (user approves)     | Enables `--dangerously-skip-permissions` |
+**Permission settings work identically in both modes.** The only difference is whether you can see/interact with the terminal.
+
+| Setting                               | Interactive Mode                   | Headless Mode                            |
+| ------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| `cliAllowedTools`                     | Used as `--allow-tool` args        | Used as `--allow-tool` args              |
+| `cliDeniedTools`                      | Used as `--deny-tool` args         | Used as `--deny-tool` args               |
+| `copilotCliToolPermissions: allowAll` | Enables `--allow-all-tools`        | Enables `--allow-all-tools`              |
+| `copilotCliToolPermissions: custom`   | Uses allow/deny patterns           | ⚠️ Auto-denies prompts (agent can't act) |
+| `claudeCliToolPermissions: skipAll`   | Enables `--dangerously-skip-perms` | Enables `--dangerously-skip-perms`       |
+| `claudeCliToolPermissions: default`   | Prompts for approval (interactive) | ⚠️ Auto-denies prompts (agent can't act) |
+
+**Common use cases:**
+
+| Want                                        | Mode          | Permissions |
+| ------------------------------------------- | ------------- | ----------- |
+| Full automation, don't need to see output   | `headless`    | `allowAll`  |
+| Full automation, but want visibility/Ctrl+C | `interactive` | `allowAll`  |
+| Review and approve each tool usage          | `interactive` | `custom`    |
+| Automation with specific tool restrictions  | `interactive` | `custom`    |
 
 ## API Reference
 
@@ -523,7 +581,7 @@ The dashboard already handles streaming output. Minimal changes needed:
    - User cancels in terminal → handled gracefully
    - Multi-prompt workflow → terminal reused
    - Exit code detection → success/failure reported
-   - Headless mode without full permissions → falls back to interactive
+   - Headless mode without full permissions → warns, CLI auto-denies prompts
    - Headless mode with full permissions → runs in background
 
 ## Migration Path
@@ -532,12 +590,18 @@ The dashboard already handles streaming output. Minimal changes needed:
 
 None - existing behavior preserved when:
 
-- `cliExecutionMode` defaults to `interactive`
-- Users who had `allowAllTools` enabled get same headless behavior with `cliExecutionMode: headless`
+- `cliExecutionMode` defaults to `interactive` (new behavior)
+- Permission settings (`allowAllTools`, `allowedTools`, etc.) work exactly as before
+- Users can set `cliExecutionMode: headless` to get the old invisible background behavior
 
-### Deprecation
+### No Deprecation Needed
 
-Consider deprecating direct control of `--allow-all-tools` flags in favor of the execution mode setting. The flags are still useful for fine-grained control but execution mode is the primary way to control visibility.
+Permission settings and execution mode are independent:
+
+- **Permission settings** control what the CLI can do
+- **Execution mode** controls where the CLI runs
+
+Both are useful and remain fully supported.
 
 ## Future Enhancements
 
@@ -548,12 +612,19 @@ Consider deprecating direct control of `--allow-all-tools` flags in favor of the
 
 ## Summary
 
-This refactor changes the default behavior from:
+This refactor adds a new execution mode setting that controls where CLI commands run:
 
-- **Before**: CLI runs headless in background, requires full permissions
-- **After**: CLI runs in VS Code terminal, user can interact, output streams to dashboard
+| Mode          | Description                                      |
+| ------------- | ------------------------------------------------ |
+| `interactive` | Runs in VS Code terminal (visible, Ctrl+C works) |
+| `headless`    | Runs in background process (current behavior)    |
 
-The headless mode is preserved for automation use cases where full permissions are acceptable.
+**Key insight: Execution mode and permission settings are orthogonal.**
+
+- A user with `allowAllTools: true` might still want `interactive` mode for visibility and immediate abort
+- A user with custom permissions must use `interactive` mode (headless would hang on prompts)
+
+Permission flags (`--allow-all-tools`, `--allow-tool`, etc.) are applied identically in both modes - only the execution context differs.
 
 ## References
 

@@ -468,6 +468,21 @@
           "description": "[Chat Mode] Default AI model",
           "markdownDescription": "**Chat Mode Only.** Default AI model for Copilot Chat. FlightPath will switch to this model before sending each prompt. Prompts can override with `\"model\": \"...\"`."
         },
+        "flightpath.cliExecutionMode": {
+          "order": 199,
+          "type": "string",
+          "enum": [
+            "interactive",
+            "headless"
+          ],
+          "enumDescriptions": [
+            "Opens a VS Code terminal where you can see output, interact if needed, and press Ctrl+C to stop immediately (recommended)",
+            "Runs in background process without visible terminal"
+          ],
+          "default": "interactive",
+          "description": "[CLI Modes] Where CLI commands execute",
+          "markdownDescription": "**CLI Modes Only.** Where CLI commands execute.\n\n- **Interactive** (default): Opens a VS Code terminal for visibility and immediate abort via Ctrl+C\n- **Headless**: Runs silently in background process\n\n**Note:** Headless mode without full permissions will auto-deny tool prompts, preventing the agent from acting."
+        },
         "flightpath.showCliOutput": {
           "order": 200,
           "type": "boolean",

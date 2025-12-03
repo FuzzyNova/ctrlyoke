@@ -3,9 +3,9 @@ import * as path from "path";
 import * as fs from "fs/promises";
 import * as os from "os";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
-import { CopilotCliOptions, CopilotCliResult } from "../../types/CopilotTypes";
+import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
-import { BaseCliIntegration } from "./BaseCliIntegration";
+import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import {
   getCliSupportedModelIds,
   isCliModelSupported,
@@ -75,9 +75,9 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   // ============================================================
 
   /**
-   * Get the CLI command name
+   * Get the CLI name for terminal/logging
    */
-  protected getCliCommand(): string {
+  protected getCliName(): string {
     return "copilot";
   }
 
@@ -86,6 +86,20 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    */
   protected getIntegrationMode(): string {
     return Provider.CopilotCli;
+  }
+
+  /**
+   * Check if full permissions are granted (no interactive prompts will occur)
+   */
+  protected hasFullPermissions(): boolean {
+    const toolMode = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<string>("copilotCliToolPermissions", "allowAll");
+    const allowAllPaths = vscode.workspace
+      .getConfiguration("flightpath")
+      .get<boolean>("copilotCliAllowAllPaths", true);
+
+    return toolMode === "allowAll" && allowAllPaths;
   }
 
   /**
@@ -137,8 +151,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     this.statusChangeEmitter.fire(CopilotStatus.Initializing);
 
     try {
-      // Check if copilot CLI is available by running --version
-      const result = await this.spawnProcess("copilot", ["--version"], {
+      // Check if CLI is available by running --version
+      const result = await this.spawnProcess(this.getCliName(), ["--version"], {
         timeout: 5000,
       });
 
@@ -163,6 +177,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Send prompt to Copilot via CLI
+   * Routes to interactive terminal or headless execution based on settings
    * @param needsCompletionDetection Ignored for CLI mode (completion is deterministic)
    * @param workflowContext Optional workflow context for dynamic queue instructions
    */
@@ -185,6 +200,15 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       return false;
     }
 
+    const mode = this.getExecutionMode();
+
+    // Warn if headless mode without full permissions
+    if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
+      vscode.window.showWarningMessage(
+        "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress."
+      );
+    }
+
     try {
       // Build prompt text with dynamic queue instructions if applicable
       const promptText = workflowContext
@@ -200,146 +224,22 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       this.lastFullPrompt = promptText;
 
       // Log the prompt being sent
-      if (this.shouldShowOutput()) {
-        this.outputChannel?.appendLine("");
-        this.outputChannel?.appendLine(
-          "═══════════════════════════════════════════════════════════"
-        );
-        this.outputChannel?.appendLine(
-          `[PROMPT] ${new Date().toLocaleTimeString()}`
-        );
-        this.outputChannel?.appendLine(
-          "───────────────────────────────────────────────────────────"
-        );
-        this.outputChannel?.appendLine(promptText);
-        this.outputChannel?.appendLine(
-          "───────────────────────────────────────────────────────────"
-        );
-        this.outputChannel?.appendLine("");
-      }
+      this.logPrompt(promptText);
 
-      // Get CLI options from configuration (or per-prompt override)
-      // newChatSession defaults to user's newChatSessionPerPrompt setting (parsed in PromptFileParser)
-      const options: CopilotCliOptions = {
-        addDirs: this.getWorkspaceDirs(),
-        model: this.validateAndGetModel(prompt.model),
-        agent: prompt.agent, // Pass agent to CLI (undefined if not specified)
-        // Resume session if newChatSession is false AND we have a session ID
-        resumeSession:
-          prompt.newChatSession === false && this.sessionId
-            ? this.sessionId
-            : undefined,
-      };
+      // Build CLI arguments
+      const args = this.buildCliArgs(prompt, promptText);
 
-      // Build CLI command args BEFORE execution so it's available for dashboard
-      const args: string[] = [];
-      const toolPermissions = this.getToolPermissionArgs();
-      args.push(...toolPermissions);
-      if (this.shouldAllowAllPaths()) {
-        args.push("--allow-all-paths");
-      }
-      if (this.logDirectory) {
-        args.push("--log-dir", this.logDirectory);
-      }
-      // Add log level if configured
-      const logLevelArgs = this.getLogLevelArgs();
-      args.push(...logLevelArgs);
-      if (options.addDirs && options.addDirs.length > 0) {
-        options.addDirs.forEach((dir) => {
-          args.push("--add-dir", dir);
-        });
-      }
-      if (options.model) {
-        args.push("--model", options.model);
-      }
-      if (options.agent) {
-        // Copilot CLI expects agent name with .agent suffix (e.g., "my-agent.agent")
-        // File on disk: my-agent.agent.md
-        // CLI expects: my-agent.agent
-        const agentName = options.agent.endsWith(".agent")
-          ? options.agent
-          : `${options.agent}.agent`;
-
-        args.push("--agent", agentName);
-        this.log(`🤖 Using agent: ${agentName}`);
-
-        // When using --agent, we need -p flag with prompt text
-        // Wrap prompt in quotes to handle special characters
-        // Use JSON.stringify to properly escape quotes and special chars
-        args.push("-p", JSON.stringify(promptText));
-      }
-      if (options.resumeSession) {
-        args.push("--resume", options.resumeSession);
-      } // Store full command for debugging (NOW available before execution)
-      this.lastCliCommand = `copilot ${args.join(" ")}`;
-
-      // Fire event with prompt and command ready (before execution starts)
-      this.promptReadyEmitter.fire({
-        fullPrompt: promptText,
-        cliCommand: this.lastCliCommand,
-      });
+      // Store full command for debugging
+      this.lastCliCommand = `${this.getCliName()} ${args.join(" ")}`;
 
       // Reset cancellation flag before execution
       this.resetCancellationFlag();
 
-      // Execute CLI command (args already built above)
-      // When using agent, we pass prompt as arg (quoted via JSON.stringify)
-      // Otherwise, use stdin to avoid escaping issues
-      const result = await this.executeCopilotCommand(
-        options.agent ? null : promptText,
-        args
-      );
-
-      // Check if this was a cancellation (not a real error)
-      if (this.isCancelling) {
-        console.log("⏹️ Prompt execution cancelled by user");
-        return false;
-      }
-
-      // Store the result for statistics retrieval
-      this.lastResult = result;
-
-      // Extract and store session ID from log files for resuming future conversations
-      const sessionId = await this.extractSessionIdFromLogs();
-      if (sessionId) {
-        this.sessionId = sessionId;
-        this.log(`💾 Session ID extracted: ${sessionId}`);
-      }
-
-      if (result.success) {
-        // Log response to output channel
-        if (this.shouldShowOutput()) {
-          this.outputChannel?.appendLine("[RESPONSE] ✓ Complete");
-          this.outputChannel?.appendLine(
-            "───────────────────────────────────────────────────────────"
-          );
-          this.outputChannel?.appendLine(result.response);
-          this.outputChannel?.appendLine(
-            "───────────────────────────────────────────────────────────"
-          );
-          this.outputChannel?.appendLine("");
-          this.outputChannel?.appendLine("[STATISTICS]");
-          this.outputChannel?.appendLine(result.statistics);
-          this.outputChannel?.appendLine(
-            "═══════════════════════════════════════════════════════════"
-          );
-          this.outputChannel?.appendLine("");
-        }
-
-        // Fire response complete event WITH THE ACTUAL RESPONSE TEXT
-        this.responseCompleteEmitter.fire(result.response);
-
-        // Update workflow progress
-        await this.updateWorkflowProgress();
-
-        return true;
+      // Route based on execution mode
+      if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
+        return await this.executeInteractive(args, promptText);
       } else {
-        console.error("❌ Copilot CLI failed:", result.error);
-        this.lastFailureReason = `Copilot CLI error: ${result.error}`;
-        vscode.window.showErrorMessage(
-          `FlightPath: Copilot CLI error: ${result.error}`
-        );
-        return false;
+        return await this.executeHeadless(args, promptText);
       }
     } catch (error) {
       console.error("❌ CLI execution error:", error);
@@ -355,21 +255,148 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Build CLI arguments for Copilot command
+   * @param prompt The prompt item
+   * @param promptText The full prompt text
+   */
+  private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
+    const args: string[] = [];
+
+    // Tool permissions
+    const toolPermissions = this.getToolPermissionArgs();
+    args.push(...toolPermissions);
+
+    // Path permissions
+    if (this.shouldAllowAllPaths()) {
+      args.push("--allow-all-paths");
+    }
+
+    // Logging
+    if (this.logDirectory) {
+      args.push("--log-dir", this.logDirectory);
+    }
+    const logLevelArgs = this.getLogLevelArgs();
+    args.push(...logLevelArgs);
+
+    // Workspace directories
+    const workspaceDirs = this.getWorkspaceDirs();
+    workspaceDirs.forEach((dir) => {
+      args.push("--add-dir", dir);
+    });
+
+    // Model
+    const model = this.validateAndGetModel(prompt.model);
+    if (model) {
+      args.push("--model", model);
+    }
+
+    // Agent handling
+    if (prompt.agent) {
+      const agentName = prompt.agent.endsWith(".agent")
+        ? prompt.agent
+        : `${prompt.agent}.agent`;
+      args.push("--agent", agentName);
+      this.log(`🤖 Using agent: ${agentName}`);
+    }
+
+    // Session resumption
+    if (prompt.newChatSession === false && this.sessionId) {
+      args.push("--resume", this.sessionId);
+    }
+
+    // Always use -p with JSON.stringify for prompt
+    // This works for both interactive and headless modes
+    args.push("-p", JSON.stringify(promptText));
+
+    return args;
+  }
+
+  /**
+   * Execute in interactive terminal mode
+   */
+  private async executeInteractive(
+    args: string[],
+    promptText: string
+  ): Promise<boolean> {
+    const success = await this.executeInTerminal(
+      this.getCliName(),
+      args,
+      promptText
+    );
+
+    if (success) {
+      // Extract session ID for future resumption
+      const sessionId = await this.extractSessionIdFromLogs();
+      if (sessionId) {
+        this.sessionId = sessionId;
+        this.log(`💾 Session ID extracted: ${sessionId}`);
+      }
+      await this.updateWorkflowProgress();
+    }
+
+    return success;
+  }
+
+  /**
+   * Execute in headless mode (background process)
+   */
+  private async executeHeadless(
+    args: string[],
+    promptText: string
+  ): Promise<boolean> {
+    // Fire event with prompt and command ready (before execution starts)
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptText,
+      cliCommand: this.lastCliCommand!,
+    });
+
+    // Execute CLI command (prompt is already in args via -p flag)
+    const result = await this.executeCopilotCommand(args);
+
+    // Check if this was a cancellation
+    if (this.isCancelling) {
+      console.log("⏹️ Prompt execution cancelled by user");
+      return false;
+    }
+
+    // Store the result for statistics retrieval
+    this.lastResult = result;
+
+    // Extract and store session ID
+    const sessionId = await this.extractSessionIdFromLogs();
+    if (sessionId) {
+      this.sessionId = sessionId;
+      this.log(`💾 Session ID extracted: ${sessionId}`);
+    }
+
+    if (result.success) {
+      this.logResponse(result.response, result.statistics);
+      this.responseCompleteEmitter.fire(result.response);
+      await this.updateWorkflowProgress();
+      return true;
+    } else {
+      console.error("❌ Copilot CLI failed:", result.error);
+      this.lastFailureReason = `Copilot CLI error: ${result.error}`;
+      vscode.window.showErrorMessage(
+        `FlightPath: Copilot CLI error: ${result.error}`
+      );
+      return false;
+    }
+  }
+
+  /**
    * Execute copilot CLI command with args
-   * @param prompt The prompt text to send via stdin (or null if using -p flag)
-   * @param args Pre-built command-line arguments
+   * Prompt is already included in args via -p flag
+   * @param args Pre-built command-line arguments (includes -p with prompt)
    */
   private async executeCopilotCommand(
-    prompt: string | null,
     args: string[]
   ): Promise<CopilotCliResult> {
-    // Execute command with stdin for prompt (5 minute timeout)
-    // When using --agent with -p flag, prompt is in args (JSON.stringify wrapped)
+    // Execute command (prompt is in args via -p flag, 5 minute timeout)
     const { stdout, stderr, exitCode } = await this.spawnProcess(
-      "copilot",
+      this.getCliName(),
       args,
       {
-        stdin: prompt || undefined,
         timeout: 300000, // 5 minutes
         onStdout: (chunk) => {
           // Emit streaming chunk for real-time display
