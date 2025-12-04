@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 import { spawn, ChildProcess } from "child_process";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -49,6 +52,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected terminal?: vscode.Terminal;
   protected shellIntegration?: vscode.TerminalShellIntegration;
   protected currentExecution?: vscode.TerminalShellExecution;
+
+  // Temp file for prompt storage (interactive mode)
+  protected tempPromptFile?: string;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -171,29 +177,145 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract hasFullPermissions(): boolean;
 
   // ============================================================
+  // TEMP FILE MANAGEMENT FOR PROMPT PASSING
+  // ============================================================
+
+  /**
+   * Write prompt to a temporary file and return the file path.
+   * This avoids shell escaping issues when passing prompts with special characters.
+   *
+   * @param promptText The prompt text to write
+   * @returns The path to the temp file
+   */
+  protected async writePromptToTempFile(promptText: string): Promise<string> {
+    // Create unique temp file name
+    const tempDir = os.tmpdir();
+    const fileName = `flightpath-prompt-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.txt`;
+    const filePath = path.join(tempDir, fileName);
+
+    // Write the prompt to the file (no escaping needed)
+    await fs.writeFile(filePath, promptText, "utf-8");
+
+    // Track for cleanup
+    this.tempPromptFile = filePath;
+
+    // DEBUG: Log file size info
+    const stats = await fs.stat(filePath);
+    this.log(`📝 Wrote prompt to temp file: ${filePath}`);
+    this.log(
+      `📝 DEBUG: Prompt length: ${promptText.length} chars, File size: ${stats.size} bytes`
+    );
+
+    return filePath;
+  }
+
+  /**
+   * Clean up the temporary prompt file if it exists.
+   * Called after command execution completes.
+   *
+   * DEBUG: Set DEBUG_KEEP_TEMP_FILES=true to prevent deletion for debugging
+   */
+  protected async cleanupTempPromptFile(): Promise<void> {
+    if (this.tempPromptFile) {
+      // DEBUG: Skip cleanup to inspect temp files
+      const debugKeepFiles = true; // TODO: Set to false after debugging
+      if (debugKeepFiles) {
+        this.log(
+          `🔍 DEBUG: Keeping temp file for inspection: ${this.tempPromptFile}`
+        );
+        this.log(
+          `🔍 DEBUG: Run 'Get-Content "${this.tempPromptFile}"' to view contents`
+        );
+        this.tempPromptFile = undefined;
+        return;
+      }
+
+      try {
+        await fs.unlink(this.tempPromptFile);
+        this.log(`🧹 Cleaned up temp file: ${this.tempPromptFile}`);
+      } catch (error) {
+        // Ignore errors (file may already be deleted)
+        console.warn(
+          `Failed to delete temp file: ${this.tempPromptFile}`,
+          error
+        );
+      }
+      this.tempPromptFile = undefined;
+    }
+  }
+
+  // ============================================================
+  // SHARED PROMPT PREPARATION (used by both interactive and headless modes)
+  // ============================================================
+
+  /**
+   * Prepare prompt for CLI execution using temp file approach.
+   * For interactive mode, builds a shell command that reads from file.
+   * For headless mode, returns args that can use shell expansion.
+   *
+   * @param args The command-line arguments (WITHOUT prompt)
+   * @param promptText The prompt text (will be written to temp file)
+   * @returns Object with:
+   *   - shellCommand: Full shell command for interactive mode (uses script block)
+   *   - argsWithPrompt: Args array for headless mode (with file read expression)
+   *   - displayCommand: Human-readable command (with <prompt> placeholder)
+   */
+  protected async preparePromptForExecution(
+    args: string[],
+    promptText: string
+  ): Promise<{
+    shellCommand: string;
+    argsWithPrompt: string[];
+    displayCommand: string;
+  }> {
+    // Write prompt to temp file
+    const tempFile = await this.writePromptToTempFile(promptText);
+
+    // Delegate to subclass for CLI-specific command building
+    return this.buildPromptCommand(args, tempFile);
+  }
+
+  /**
+   * Build the shell command and args for executing with a prompt from a temp file.
+   * Each CLI has different conventions for passing the prompt.
+   *
+   * @param args The command-line arguments (WITHOUT prompt)
+   * @param tempFilePath Path to the temp file containing the prompt
+   * @returns Object with shellCommand (for interactive), argsWithPrompt (for headless), displayCommand
+   */
+  protected abstract buildPromptCommand(
+    args: string[],
+    tempFilePath: string
+  ): { shellCommand: string; argsWithPrompt: string[]; displayCommand: string };
+
+  // ============================================================
   // INTERACTIVE TERMINAL EXECUTION
   // ============================================================
 
   /**
    * Execute a CLI command in an interactive VS Code terminal
-   * Uses shell integration for output streaming and completion detection
+   * Uses shell integration for output streaming and completion detection.
    *
-   * Note: The terminal API doesn't support stdin, so we pass the prompt via
-   * command-line argument (-p) with JSON.stringify escaping. This is the same
-   * approach used for agent mode in headless execution.
+   * Uses temp file approach to pass prompts safely:
+   * 1. Write prompt to temp file (no escaping needed)
+   * 2. Execute shell command that reads file content inside a script block
+   * 3. Clean up temp file after execution
    *
-   * @param cliName The CLI executable name (e.g., "copilot" or "claude")
-   * @param args The command-line arguments (should include -p with escaped prompt)
-   * @param promptText The original prompt text for logging/events
+   * @param args The command-line arguments (WITHOUT prompt - prompt handled separately)
+   * @param promptText The prompt text (will be written to temp file)
    * @returns Promise<boolean> indicating success
    */
   protected async executeInTerminal(
-    cliName: string,
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    // Build full command string for display/fallback
-    const command = `${cliName} ${args.join(" ")}`;
+    // Use shared method to prepare prompt command (delegates to subclass)
+    const { shellCommand, displayCommand } =
+      await this.preparePromptForExecution(args, promptText);
+
+    // DEBUG: Log command length - shellCommand uses script block to avoid expansion
+    this.log(`🔍 DEBUG: Shell command length: ${shellCommand.length} chars`);
+    this.log(`🔍 DEBUG: Display command: ${displayCommand}`);
 
     // Get or create terminal
     const terminal = await this.getOrCreateTerminal();
@@ -202,7 +324,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     // Fire prompt ready event (before execution starts)
     this.promptReadyEmitter.fire({
       fullPrompt: promptText,
-      cliCommand: command,
+      cliCommand: displayCommand,
     });
 
     // Send initial message to dashboard indicating interactive mode
@@ -212,45 +334,50 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         "   View the terminal for real-time output. This area will show captured output if available.\n\n"
     );
 
-    // Wait for shell integration (with fallback)
-    let shellIntegration: vscode.TerminalShellIntegration;
     try {
-      shellIntegration = await this.waitForShellIntegration(terminal);
-    } catch {
-      // Fallback: use sendText without streaming
-      vscode.window.showWarningMessage(
-        "Shell integration unavailable. Output streaming disabled, using fallback mode."
-      );
-      terminal.sendText(command);
-      // Can't detect completion without shell integration
-      // Return true and let user manage manually
-      this.log(
-        "⚠️ Shell integration unavailable - using sendText fallback (no completion detection)"
-      );
-      this.streamingChunkEmitter.fire(
-        "⚠️ Shell integration unavailable - output capture disabled.\n" +
-          "   Please view the terminal directly for command output.\n"
-      );
-      return true;
+      // Wait for shell integration (with fallback)
+      let shellIntegration: vscode.TerminalShellIntegration;
+      try {
+        shellIntegration = await this.waitForShellIntegration(terminal);
+      } catch {
+        // Fallback: use sendText without streaming
+        vscode.window.showWarningMessage(
+          "Shell integration unavailable. Output streaming disabled, using fallback mode."
+        );
+        terminal.sendText(shellCommand);
+        // Can't detect completion without shell integration
+        // Return true and let user manage manually
+        this.log(
+          "⚠️ Shell integration unavailable - using sendText fallback (no completion detection)"
+        );
+        this.streamingChunkEmitter.fire(
+          "⚠️ Shell integration unavailable - output capture disabled.\n" +
+            "   Please view the terminal directly for command output.\n"
+        );
+        return true;
+      }
+
+      // Execute shell command via shell integration
+      // Uses script block approach to keep prompt content off main command line
+      const execution = shellIntegration.executeCommand(shellCommand);
+      this.currentExecution = execution;
+
+      // Start streaming output to dashboard (runs in parallel with completion detection)
+      const streamingPromise = this.streamTerminalOutput(execution);
+
+      // Wait for command completion
+      const success = await this.waitForTerminalCompletion(execution);
+
+      // Wait for streaming to finish (important: the listener in WorkflowExecutor
+      // will be disposed after sendPrompt returns, so we must ensure all streaming
+      // events are fired before returning)
+      await streamingPromise;
+
+      return success;
+    } finally {
+      // Always clean up temp file
+      await this.cleanupTempPromptFile();
     }
-
-    // Execute command via shell integration
-    // Use the executable + args overload for proper escaping of individual args
-    const execution = shellIntegration.executeCommand(cliName, args);
-    this.currentExecution = execution;
-
-    // Start streaming output to dashboard (runs in parallel with completion detection)
-    const streamingPromise = this.streamTerminalOutput(execution);
-
-    // Wait for command completion
-    const success = await this.waitForTerminalCompletion(execution);
-
-    // Wait for streaming to finish (important: the listener in WorkflowExecutor
-    // will be disposed after sendPrompt returns, so we must ensure all streaming
-    // events are fired before returning)
-    await streamingPromise;
-
-    return success;
   }
 
   /**
@@ -413,6 +540,48 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   // ============================================================
+  // HEADLESS PROCESS EXECUTION
+  // ============================================================
+
+  /**
+   * Execute a CLI command in headless mode (background process).
+   * Handles temp file setup, prompt ready event, and cleanup.
+   *
+   * Subclasses call this and provide a callback for CLI-specific execution.
+   *
+   * @param args The command-line arguments (WITHOUT prompt)
+   * @param promptText The prompt text
+   * @param executeCallback Callback that executes the CLI and returns success
+   * @returns Promise<boolean> indicating success
+   */
+  protected async executeHeadlessBase(
+    args: string[],
+    promptText: string,
+    executeCallback: (argsWithPrompt: string[]) => Promise<boolean>
+  ): Promise<boolean> {
+    // Use shared method to prepare prompt args (delegates to subclass for arg placement)
+    const { argsWithPrompt, displayCommand } =
+      await this.preparePromptForExecution(args, promptText);
+
+    // Store for debugging
+    this.lastCliCommand = displayCommand;
+
+    // Fire event with prompt and command ready (before execution starts)
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptText,
+      cliCommand: displayCommand,
+    });
+
+    try {
+      // Execute via callback (CLI-specific logic)
+      return await executeCallback(argsWithPrompt);
+    } finally {
+      // Always clean up temp file
+      await this.cleanupTempPromptFile();
+    }
+  }
+
+  // ============================================================
   // PROCESS MANAGEMENT (shared spawning logic)
   // ============================================================
 
@@ -420,8 +589,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * Spawn a child process and capture output
    * Used for headless CLI execution where we need process control
    *
-   * Note: Prompts are passed via command-line arguments (-p flag with JSON.stringify)
-   * rather than stdin for consistency between interactive and headless modes.
+   * Uses shell:true to resolve commands from PATH. Prompts should be passed
+   * via temp file (using buildShellFileReadExpression) to avoid escaping issues.
    */
   protected spawnProcess(
     command: string,
@@ -435,7 +604,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       let stdout = "";
       let stderr = "";
 
-      // Always use shell:true for cross-platform CLI script execution
+      // Use shell:true to resolve command from PATH
+      // Prompts are passed via temp file to avoid shell escaping issues
       const child = spawn(command, args, {
         cwd: this.getWorkspaceRoot(),
         shell: true,
@@ -620,18 +790,27 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       this.log("✅ CLI process cancelled");
     }
+
+    // Clean up temp file on cancellation
+    await this.cleanupTempPromptFile();
   }
 
   /**
-   * Dispose of resources including terminal
+   * Dispose of resources including terminal and temp files
    */
   dispose(): void {
+    // Clean up terminal
     if (this.terminal) {
       this.terminal.dispose();
       this.terminal = undefined;
     }
     this.shellIntegration = undefined;
     this.currentExecution = undefined;
+
+    // Clean up temp file (fire and forget - don't await in dispose)
+    this.cleanupTempPromptFile().catch(() => {
+      // Ignore cleanup errors in dispose
+    });
   }
 
   // ============================================================

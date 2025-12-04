@@ -83,6 +83,52 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Build the shell command and args for executing Copilot CLI with a prompt.
+   * Copilot uses -p flag before the prompt.
+   *
+   * For interactive mode: Uses PowerShell script block to avoid command-line length limits
+   * For headless mode: Uses shell expansion (spawn with shell:true handles this)
+   *
+   * @param args The command-line arguments (WITHOUT prompt)
+   * @param tempFilePath Path to the temp file containing the prompt
+   * @returns Object with shellCommand, argsWithPrompt, and displayCommand
+   */
+  protected buildPromptCommand(
+    args: string[],
+    tempFilePath: string
+  ): {
+    shellCommand: string;
+    argsWithPrompt: string[];
+    displayCommand: string;
+  } {
+    const cliName = this.getCliName();
+    const isWindows = process.platform === "win32";
+    const argsStr = args.join(" ");
+
+    // Display command (for logging/UI)
+    const displayCommand = `${cliName} -p "<prompt>" ${argsStr}`;
+
+    // Shell command for interactive mode - uses script block to avoid expansion
+    let shellCommand: string;
+    if (isWindows) {
+      // PowerShell: Read file into variable inside script block, then pass to CLI
+      // This keeps the prompt content within the block, not on the main command line
+      shellCommand = `& { $p = Get-Content -Raw "${tempFilePath}"; ${cliName} -p $p ${argsStr} }`;
+    } else {
+      // Bash/Zsh: Use command substitution
+      shellCommand = `${cliName} -p "$(cat '${tempFilePath}')" ${argsStr}`;
+    }
+
+    // Args for headless mode - shell expansion happens during spawn
+    const fileReadExpr = isWindows
+      ? `(Get-Content -Raw "${tempFilePath}")`
+      : `"$(cat '${tempFilePath}')"`;
+    const argsWithPrompt = ["-p", fileReadExpr, ...args];
+
+    return { shellCommand, argsWithPrompt, displayCommand };
+  }
+
+  /**
    * Get the integration mode for status reporting
    */
   protected getIntegrationMode(): string {
@@ -221,11 +267,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       // Log the prompt being sent
       this.logPrompt(promptText);
 
-      // Build CLI arguments
-      const args = this.buildCliArgs(prompt, promptText);
+      // Build CLI arguments (without prompt - handled by execution methods)
+      const args = this.buildCliArgs(prompt);
 
-      // Store full command for debugging
-      this.lastCliCommand = `${this.getCliName()} ${args.join(" ")}`;
+      // Store full command for debugging (will be updated by execution methods)
+      this.lastCliCommand = `${this.getCliName()} -p "<prompt>" ${args.join(" ")}`;
 
       // Reset cancellation flag before execution
       this.resetCancellationFlag();
@@ -250,11 +296,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Build CLI arguments for Copilot command
+   * Build CLI arguments for Copilot command (without prompt - handled separately)
    * @param prompt The prompt item
-   * @param promptText The full prompt text
    */
-  private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
+  private buildCliArgs(prompt: PromptItem): string[] {
     const args: string[] = [];
 
     // Tool permissions
@@ -299,25 +344,22 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       args.push("--resume", this.sessionId);
     }
 
-    // Always use -p with JSON.stringify for prompt
-    // This works for both interactive and headless modes
-    args.push("-p", JSON.stringify(promptText));
+    // Note: Prompt is NOT included here - it's handled separately by the execution methods
+    // This allows using temp file approach for interactive mode and direct args for headless mode
 
     return args;
   }
 
   /**
    * Execute in interactive terminal mode
+   * Uses temp file approach via base class to avoid shell escaping issues
    */
   private async executeInteractive(
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    const success = await this.executeInTerminal(
-      this.getCliName(),
-      args,
-      promptText
-    );
+    // Use base class executeInTerminal (buildArgsWithPrompt handles -p flag)
+    const success = await this.executeInTerminal(args, promptText);
 
     if (success) {
       // Extract session ID for future resumption
@@ -334,49 +376,50 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Execute in headless mode (background process)
+   * Uses base class executeHeadlessBase for common setup/teardown
    */
   private async executeHeadless(
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    // Fire event with prompt and command ready (before execution starts)
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: this.lastCliCommand!,
-    });
+    return this.executeHeadlessBase(
+      args,
+      promptText,
+      async (argsWithPrompt) => {
+        // Execute CLI command with prompt in args
+        const result = await this.executeCopilotCommand(argsWithPrompt);
 
-    // Execute CLI command (prompt is already in args via -p flag)
-    const result = await this.executeCopilotCommand(args);
+        // Check if this was a cancellation
+        if (this.isCancelling) {
+          console.log("⏹️ Prompt execution cancelled by user");
+          return false;
+        }
 
-    // Check if this was a cancellation
-    if (this.isCancelling) {
-      console.log("⏹️ Prompt execution cancelled by user");
-      return false;
-    }
+        // Store the result for statistics retrieval
+        this.lastResult = result;
 
-    // Store the result for statistics retrieval
-    this.lastResult = result;
+        // Extract and store session ID
+        const sessionId = await this.extractSessionIdFromLogs();
+        if (sessionId) {
+          this.sessionId = sessionId;
+          this.log(`💾 Session ID extracted: ${sessionId}`);
+        }
 
-    // Extract and store session ID
-    const sessionId = await this.extractSessionIdFromLogs();
-    if (sessionId) {
-      this.sessionId = sessionId;
-      this.log(`💾 Session ID extracted: ${sessionId}`);
-    }
-
-    if (result.success) {
-      this.logResponse(result.response, result.statistics);
-      this.responseCompleteEmitter.fire(result.response);
-      await this.updateWorkflowProgress();
-      return true;
-    } else {
-      console.error("❌ Copilot CLI failed:", result.error);
-      this.lastFailureReason = `Copilot CLI error: ${result.error}`;
-      vscode.window.showErrorMessage(
-        `FlightPath: Copilot CLI error: ${result.error}`
-      );
-      return false;
-    }
+        if (result.success) {
+          this.logResponse(result.response, result.statistics);
+          this.responseCompleteEmitter.fire(result.response);
+          await this.updateWorkflowProgress();
+          return true;
+        } else {
+          console.error("❌ Copilot CLI failed:", result.error);
+          this.lastFailureReason = `Copilot CLI error: ${result.error}`;
+          vscode.window.showErrorMessage(
+            `FlightPath: Copilot CLI error: ${result.error}`
+          );
+          return false;
+        }
+      }
+    );
   }
 
   /**

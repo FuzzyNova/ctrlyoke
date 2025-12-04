@@ -121,6 +121,52 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Build the shell command and args for executing Claude CLI with a prompt.
+   * Claude uses positional argument at the end.
+   *
+   * For interactive mode: Uses PowerShell script block to avoid command-line length limits
+   * For headless mode: Uses shell expansion (spawn with shell:true handles this)
+   *
+   * @param args The command-line arguments (WITHOUT prompt)
+   * @param tempFilePath Path to the temp file containing the prompt
+   * @returns Object with shellCommand, argsWithPrompt, and displayCommand
+   */
+  protected buildPromptCommand(
+    args: string[],
+    tempFilePath: string
+  ): {
+    shellCommand: string;
+    argsWithPrompt: string[];
+    displayCommand: string;
+  } {
+    const cliName = this.getCliName();
+    const isWindows = process.platform === "win32";
+    const argsStr = args.join(" ");
+
+    // Display command (for logging/UI)
+    const displayCommand = `${cliName} ${argsStr} "<prompt>"`;
+
+    // Shell command for interactive mode - uses script block to avoid expansion
+    let shellCommand: string;
+    if (isWindows) {
+      // PowerShell: Read file into variable inside script block, then pass to CLI
+      // Claude uses positional argument at the end
+      shellCommand = `& { $p = Get-Content -Raw "${tempFilePath}"; ${cliName} ${argsStr} $p }`;
+    } else {
+      // Bash/Zsh: Use command substitution
+      shellCommand = `${cliName} ${argsStr} "$(cat '${tempFilePath}')"`;
+    }
+
+    // Args for headless mode - shell expansion happens during spawn
+    const fileReadExpr = isWindows
+      ? `(Get-Content -Raw "${tempFilePath}")`
+      : `"$(cat '${tempFilePath}')"`;
+    const argsWithPrompt = [...args, fileReadExpr];
+
+    return { shellCommand, argsWithPrompt, displayCommand };
+  }
+
+  /**
    * Get the integration mode for status reporting
    */
   protected getIntegrationMode(): string {
@@ -287,11 +333,12 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       // Log the prompt being sent
       this.logPrompt(promptText);
 
-      // Build CLI arguments
-      const args = this.buildCliArgs(prompt, promptText);
+      // Build CLI arguments (mode-specific: interactive mode skips -p flag)
+      const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+      const args = this.buildCliArgs(prompt, isInteractive);
 
-      // Store full command for debugging
-      this.lastCliCommand = `${this.getCliName()} ${args.join(" ")}`;
+      // Store full command for debugging (will be updated by execution methods)
+      this.lastCliCommand = `${this.getCliName()} ${args.join(" ")} "<prompt>"`;
 
       // Reset cancellation flag before execution
       this.resetCancellationFlag();
@@ -314,20 +361,32 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Build CLI arguments for Claude command
+   * Build CLI arguments for Claude command (without prompt - handled separately)
+   *
+   * Note: In Claude CLI:
+   * - `-p` or `--print` means print mode (non-interactive output)
+   * - The prompt is passed as a positional argument at the end of the command
+   * - Interactive mode: `claude --model sonnet "prompt"` (allows user input)
+   * - Headless mode: `claude -p --output-format json --model sonnet "prompt"` (automated)
+   *
    * @param prompt The prompt item
-   * @param promptText The full prompt text
+   * @param isInteractive Whether this is interactive mode (skips -p flag)
    */
-  private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
+  private buildCliArgs(
+    prompt: PromptItem,
+    isInteractive: boolean = false
+  ): string[] {
     const args: string[] = [];
 
-    // Always use -p with JSON.stringify for prompt
-    // This works for both interactive and headless modes
-    args.push("-p", JSON.stringify(promptText));
+    // Only add print mode for headless (non-interactive) execution
+    // Interactive mode should allow user input, so we skip -p
+    if (!isInteractive) {
+      args.push("-p");
 
-    // Output format (JSON for structured parsing)
-    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
-    args.push("--output-format", outputFormat);
+      // Output format only applies to print mode (headless)
+      const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
+      args.push("--output-format", outputFormat);
+    }
 
     // Model selection
     const model = this.validateAndGetModel(prompt.model);
@@ -350,21 +409,22 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       args.push("-c");
     }
 
+    // Note: Prompt is NOT included here - it's a positional argument
+    // handled by the execution methods
+
     return args;
   }
 
   /**
    * Execute in interactive terminal mode
+   * Uses temp file approach via base class to avoid shell escaping issues
    */
   private async executeInteractive(
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    const success = await this.executeInTerminal(
-      this.getCliName(),
-      args,
-      promptText
-    );
+    // Use base class executeInTerminal (buildArgsWithPrompt handles positional arg)
+    const success = await this.executeInTerminal(args, promptText);
 
     // Note: In interactive mode, we can't easily extract session ID from JSON output
     // since the terminal output is mixed with ANSI codes. Session continuity may be limited.
@@ -377,48 +437,50 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Execute in headless mode (background process)
+   * Uses base class executeHeadlessBase for common setup/teardown
    */
   private async executeHeadless(
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    // Fire event with prompt and command ready (before execution starts)
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: this.lastCliCommand!,
-    });
+    return this.executeHeadlessBase(
+      args,
+      promptText,
+      async (argsWithPrompt) => {
+        // Execute CLI command with prompt as positional argument
+        const result = await this.executeClaude(argsWithPrompt);
 
-    // Execute CLI command (prompt is already in args via -p flag)
-    const result = await this.executeClaude(args);
+        // Check if this was a cancellation
+        if (this.isCancelling) {
+          console.log("⏹️ Prompt execution cancelled by user");
+          return false;
+        }
 
-    // Check if this was a cancellation
-    if (this.isCancelling) {
-      console.log("⏹️ Prompt execution cancelled by user");
-      return false;
-    }
+        // Store the result for statistics retrieval
+        this.lastResult = result;
 
-    // Store the result for statistics retrieval
-    this.lastResult = result;
+        // Extract and store session ID
+        if (result.sessionId) {
+          this.sessionId = result.sessionId;
+          this.log(`💾 Session ID: ${this.sessionId}`);
+        }
 
-    // Extract and store session ID
-    if (result.sessionId) {
-      this.sessionId = result.sessionId;
-      this.log(`💾 Session ID: ${this.sessionId}`);
-    }
-
-    if (result.success) {
-      this.logResponse(result.response, result.statistics);
-      this.responseCompleteEmitter.fire(result.response);
-      return true;
-    } else {
-      const errorMsg = result.error || "Claude CLI returned non-zero exit code";
-      console.error("❌ Claude CLI execution failed:", errorMsg);
-      this.lastFailureReason = errorMsg;
-      vscode.window.showErrorMessage(
-        `FlightPath: Claude CLI failed: ${errorMsg}`
-      );
-      return false;
-    }
+        if (result.success) {
+          this.logResponse(result.response, result.statistics);
+          this.responseCompleteEmitter.fire(result.response);
+          return true;
+        } else {
+          const errorMsg =
+            result.error || "Claude CLI returned non-zero exit code";
+          console.error("❌ Claude CLI execution failed:", errorMsg);
+          this.lastFailureReason = errorMsg;
+          vscode.window.showErrorMessage(
+            `FlightPath: Claude CLI failed: ${errorMsg}`
+          );
+          return false;
+        }
+      }
+    );
   }
 
   /**
