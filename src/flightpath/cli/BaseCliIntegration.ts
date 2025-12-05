@@ -991,31 +991,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   // ============================================================
-  // SESSION MANAGEMENT
-  // ============================================================
-
-  /**
-   * Start a new session (clear session ID)
-   */
-  startNewSession(): void {
-    this.sessionId = undefined;
-  }
-
-  /**
-   * Continue with existing session
-   */
-  continueSession(sessionId: string): void {
-    this.sessionId = sessionId;
-  }
-
-  /**
-   * Get current session ID
-   */
-  getCurrentSession(): string | undefined {
-    return this.sessionId;
-  }
-
-  // ============================================================
   // RESULT ACCESSORS
   // ============================================================
 

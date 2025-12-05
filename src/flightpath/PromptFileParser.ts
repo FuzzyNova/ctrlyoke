@@ -95,10 +95,16 @@ export class PromptFileParser {
         throw new Error("Prompt file is empty");
       }
 
+      // Get the user's default setting for newChatSession
+      const defaultNewChatSession =
+        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+
       return {
         prompts: [
           {
             prompt: promptText,
+            // Honor the global newChatSession setting for markdown files too
+            newChatSession: defaultNewChatSession,
             // No end condition for markdown files (they're single prompts)
             endCondition: undefined,
           },
