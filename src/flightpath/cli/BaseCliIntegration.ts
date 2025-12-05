@@ -81,12 +81,33 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Get or create a VS Code terminal for interactive execution
+   * Dispose the current terminal if it exists.
+   * This does NOT clear the session ID - that's preserved for potential resume.
+   *
+   * Call this before starting a new CLI process in interactive mode to ensure
+   * we get a fresh terminal. The old terminal output remains visible until
+   * the user closes it or the new terminal opens.
    */
-  protected async getOrCreateTerminal(): Promise<vscode.Terminal> {
-    if (this.terminal && !this.isTerminalClosed()) {
-      return this.terminal;
+  protected disposeTerminalIfExists(): void {
+    if (this.terminal) {
+      this.log("🗑️ Disposing existing terminal for fresh CLI session");
+      this.terminal.dispose();
+      this.terminal = undefined;
+      this.shellIntegration = undefined;
+      this.currentExecution = undefined;
     }
+  }
+
+  /**
+   * Create a fresh VS Code terminal for interactive execution.
+   * Always creates a new terminal, disposing any existing one first.
+   *
+   * This ensures each CLI invocation starts fresh - the session resume flag
+   * handles context continuity at the CLI level, not the terminal level.
+   */
+  protected async createFreshTerminal(): Promise<vscode.Terminal> {
+    // Dispose any existing terminal first
+    this.disposeTerminalIfExists();
 
     this.terminal = vscode.window.createTerminal({
       name: `FlightPath: ${this.getCliName()}`,
@@ -94,13 +115,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     });
 
     return this.terminal;
-  }
-
-  /**
-   * Check if the terminal has been closed
-   */
-  private isTerminalClosed(): boolean {
-    return !this.terminal || this.terminal.exitStatus !== undefined;
   }
 
   /**
@@ -613,15 +627,19 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * Execute a CLI command in interactive TUI mode.
    *
    * Strategy:
-   * 1. Start CLI in interactive mode (gets proper TTY)
-   * 2. Wait for TUI to be ready (delay-based, simple)
-   * 3. Send prompt via terminal.sendText() (no length limits!)
-   * 4. Stream output via execution.read() and detect completion
+   * 1. Dispose any existing terminal (CLI may be running in it)
+   * 2. Create fresh terminal and start CLI in interactive mode
+   * 3. Wait for TUI to be ready (delay-based, simple)
+   * 4. Send prompt via terminal.sendText() (no length limits!)
+   * 5. Stream output via execution.read() and detect completion
+   *
+   * Session continuity is handled via --resume flag in CLI args, not by
+   * reusing the same terminal. Each execution starts a fresh CLI process.
    *
    * Completion detection uses the stable TerminalShellExecution.read() API
    * to watch for the escape indicator to disappear from recent output.
    *
-   * @param args The CLI arguments (WITHOUT prompt)
+   * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
    * @returns Promise<boolean> indicating success
    */
@@ -639,10 +657,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     );
     this.log(`📝 Prompt length: ${promptText.length} characters`);
 
-    // Get or create terminal
-    this.log(`🎮 [TRACE] Getting or creating terminal...`);
-    const terminal = await this.getOrCreateTerminal();
-    this.log(`🎮 [TRACE] Got terminal, showing it...`);
+    // Always create a fresh terminal to ensure clean CLI state
+    // The old terminal may have a CLI process still running in interactive mode,
+    // and sending a new command would paste into that session instead of starting fresh.
+    // Session continuity is handled via --resume flag, not terminal reuse.
+    this.log(`🎮 [TRACE] Creating fresh terminal...`);
+    const terminal = await this.createFreshTerminal();
+    this.log(`🎮 [TRACE] Got fresh terminal, showing it...`);
     terminal.show();
 
     // Fire prompt ready event

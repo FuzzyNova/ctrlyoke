@@ -1,0 +1,12 @@
+{
+  "prompts": [
+    {
+      "prompt": "this is a memory test, my name is nathan and favorite color is orange",
+      "newChatSession": false
+    },
+    {
+      "prompt": "what is my name and favorite color?",
+      "newChatSession": false
+    }
+  ]
+}

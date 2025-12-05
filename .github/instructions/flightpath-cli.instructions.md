@@ -8,16 +8,18 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 
 <architecture>
 - Two execution modes: **interactive** (TUI injection) and **headless** (spawn + stdin)
-- Interactive: Starts TUI, sends prompt via `terminal.sendText()`, detects completion by escape indicator disappearing
+- Interactive: Creates fresh terminal, starts CLI, sends prompt via `terminal.sendText()`, detects completion
 - Headless: Spawns CLI with stdin pipe, writes prompt to stdin, waits for process exit
 - Process exit = completion signal (headless), escape indicator disappearing = completion (interactive)
 - Stdout: response + statistics (parse via delimiter detection)
-- Session support: `--resume-session <id>` for multi-turn conversations
+- Session support: `--resume <id>` for multi-turn conversations (handled via CLI flags, not terminal reuse)
 - Process tracking: `currentProcess` (headless) or `currentExecution` (interactive)
 </architecture>
 
 <executionModes>
 **Interactive Mode (TUI Injection):**
+- **Always creates fresh terminal** for each prompt execution
+- Old terminal disposed before starting new CLI (session resume via `--resume` flag, not terminal reuse)
 - Starts CLI in interactive TUI mode (no -p flag, no prompt on command line)
 - Waits for TUI to be ready (escape indicator appears)
 - Sends prompt via `terminal.sendText()` - works for ANY prompt length!
@@ -35,6 +37,20 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 - Claude: Requires -p flag (Ink TUI crashes without it)
 - Warning shown if running without full permissions (auto-deny behavior)
   </executionModes>
+
+<sessionManagement>
+**Session continuity** is handled via CLI resume flags, NOT terminal reuse:
+- Session ID extracted from CLI logs (Copilot) or JSON response (Claude)
+- Session ID persists at integration level across prompt executions
+- When `prompt.newChatSession === false && sessionId` exists: adds `--resume <id>` (Copilot) or `-r <id>` (Claude)
+- When `prompt.newChatSession === false` but no session ID: Claude uses `-c` (continue most recent)
+- When `prompt.newChatSession === true` (default): fresh session started, no resume flag
+
+**Single-prompt workflows**:
+
+- Session ID persists between executions
+- If global setting `newChatSessionPerPrompt: false`, subsequent single prompts will resume previous session
+  </sessionManagement>
 
 <abstractMethods>
 Subclasses must implement:
