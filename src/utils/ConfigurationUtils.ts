@@ -232,16 +232,6 @@ export const ConfigurationUtils = {
     );
   },
 
-  /**
-   * Get Claude CLI output format
-   */
-  getClaudeCliOutputFormat(): "stream-json" | "json" | "text" {
-    return getConfig().get<"stream-json" | "json" | "text">(
-      "claudeCliOutputFormat",
-      "stream-json"
-    );
-  },
-
   // ============================================================
   // SHARED CLI TOOL SETTINGS
   // ============================================================

@@ -647,23 +647,6 @@
           "description": "[Claude CLI] Permission mode",
           "markdownDescription": "**Claude CLI Only.** Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses `cliAllowedTools` and `cliDeniedTools` settings."
         },
-        "flightpath.claudeCliOutputFormat": {
-          "order": 402,
-          "type": "string",
-          "enum": [
-            "stream-json",
-            "json",
-            "text"
-          ],
-          "enumDescriptions": [
-            "Streaming JSON (real-time updates, recommended)",
-            "JSON output (single result, no streaming)",
-            "Plain text output"
-          ],
-          "default": "stream-json",
-          "description": "[Claude CLI] Output format for responses",
-          "markdownDescription": "**Claude CLI Only.** Output format for Claude Code CLI. **Stream JSON** (default) provides real-time streaming updates as Claude generates responses. **JSON** waits for completion before parsing. **Text** returns raw response content."
-        },
         "flightpath.defaultMaxRetries": {
           "order": 500,
           "type": "number",

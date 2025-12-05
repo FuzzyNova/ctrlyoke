@@ -154,15 +154,10 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   /**
    * Determine if stdout should be streamed in real-time during headless execution.
    *
-   * For Claude CLI:
-   * - stream-json: Stream with parsing (extracts content from JSON chunks)
-   * - json: Don't stream (wait for complete JSON, parse after)
-   * - text: Stream as-is (already human-readable)
+   * For Claude CLI: Always stream with stream-json format (extracts content from JSON chunks)
    */
   protected shouldStreamHeadlessOutput(): boolean {
-    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
-    // Only disable streaming for non-streaming JSON format
-    return outputFormat !== "json";
+    return true;
   }
 
   /**
@@ -252,13 +247,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    * We extract and stream the response text from object #2.
    */
   protected processStreamingChunk(chunk: string): string | undefined {
-    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
-
-    // Only process for stream-json format
-    if (outputFormat !== "stream-json") {
-      return chunk; // Pass through for text format
-    }
-
     // Accumulate into buffer
     this.streamBuffer += chunk;
 
@@ -550,14 +538,9 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     if (!isInteractive) {
       args.push("-p");
 
-      // Output format only applies to print mode (headless)
-      const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
-      args.push("--output-format", outputFormat);
-
-      // stream-json requires --verbose flag
-      if (outputFormat === "stream-json") {
-        args.push("--verbose");
-      }
+      // Always use stream-json format with verbose flag for headless mode
+      args.push("--output-format", "stream-json");
+      args.push("--verbose");
     }
 
     // Model selection
@@ -622,33 +605,12 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       args,
       promptText,
       async (result: { stdout: string; stderr: string; exitCode: number }) => {
-        const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
-
-        // Parse the CLI output based on format
-        const cliResult =
-          outputFormat === "stream-json"
-            ? this.parseStreamJsonOutput(
-                result.stdout,
-                result.stderr,
-                result.exitCode
-              )
-            : outputFormat === "json"
-              ? this.parseJsonOutput(
-                  result.stdout,
-                  result.stderr,
-                  result.exitCode
-                )
-              : this.parseTextOutput(
-                  result.stdout,
-                  result.stderr,
-                  result.exitCode
-                );
-
-        // For non-streaming JSON format, emit the parsed response now
-        // (stream-json already streamed during execution, text streams as-is)
-        if (outputFormat === "json" && cliResult.response) {
-          this.streamingChunkEmitter.fire(cliResult.response);
-        }
+        // Parse the CLI output using stream-json format
+        const cliResult = this.parseStreamJsonOutput(
+          result.stdout,
+          result.stderr,
+          result.exitCode
+        );
 
         // Check if this was a cancellation
         if (this.isCancelling) {
@@ -681,86 +643,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         }
       }
     );
-  }
-
-  /**
-   * Parse JSON output from Claude CLI (Story 3.3)
-   */
-  private parseJsonOutput(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): CopilotCliResult & { sessionId?: string } {
-    try {
-      const json: ClaudeCliJsonResponse = JSON.parse(stdout);
-
-      // Check for error conditions first
-      // Claude CLI may return is_error: true even with exitCode 0
-      if (json.is_error || json.error) {
-        const errorMessage =
-          json.error || json.result || stderr || "Unknown Claude CLI error";
-        return {
-          success: false,
-          response: "",
-          statistics: "",
-          error: errorMessage,
-          exitCode: exitCode !== 0 ? exitCode : 1,
-          sessionId: json.session_id,
-        };
-      }
-
-      // Extract response text (Claude may use different field names)
-      const response = json.result || json.response || json.content || "";
-
-      // Build statistics string
-      let statistics = "";
-      if (json.usage) {
-        const { input_tokens, output_tokens, total_tokens } = json.usage;
-        const total = total_tokens || input_tokens + output_tokens;
-        statistics = `Usage: ${input_tokens} input + ${output_tokens} output = ${total} tokens`;
-        if (json.model) {
-          statistics += ` | Model: ${json.model}`;
-        }
-      }
-      if (json.duration_ms) {
-        statistics += statistics
-          ? ` | Duration: ${json.duration_ms}ms`
-          : `Duration: ${json.duration_ms}ms`;
-      }
-
-      return {
-        success: exitCode === 0,
-        response,
-        statistics,
-        error: exitCode !== 0 ? stderr : undefined,
-        exitCode,
-        sessionId: json.session_id,
-      };
-    } catch (parseError) {
-      // JSON parsing failed, fall back to text parsing
-      console.warn(
-        "Failed to parse JSON output, falling back to text:",
-        parseError
-      );
-      return this.parseTextOutput(stdout, stderr, exitCode);
-    }
-  }
-
-  /**
-   * Parse plain text output from Claude CLI
-   */
-  private parseTextOutput(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): CopilotCliResult & { sessionId?: string } {
-    return {
-      success: exitCode === 0,
-      response: stdout.trim(),
-      statistics: "",
-      error: exitCode !== 0 ? stderr || "Command failed" : undefined,
-      exitCode,
-    };
   }
 
   /**

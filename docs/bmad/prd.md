@@ -169,9 +169,8 @@ export const CLAUDE_CLI_MODELS = [
 | `flightpath.claudeCliToolPermissions` | enum     | `"skipAll"` | Permission mode                                         |
 | `flightpath.cliAllowedTools`          | string[] | `[]`        | Shared tool patterns (Copilot format, auto-converted)   |
 | `flightpath.cliDeniedTools`           | string[] | `[]`        | Shared denied patterns (Copilot format, auto-converted) |
-| `flightpath.claudeCliOutputFormat`    | enum     | `"json"`    | Output format preference                                |
 
-**Note:** Tool permission settings (`cliAllowedTools`, `cliDeniedTools`) are shared between Copilot and Claude CLI. They use Copilot CLI format and are automatically converted for Claude (`shell` → `Bash`, `write` → `Write`).
+**Note:** Claude CLI always uses `stream-json` output format (hardcoded). Tool permission settings (`cliAllowedTools`, `cliDeniedTools`) are shared between Copilot and Claude CLI. They use Copilot CLI format and are automatically converted for Claude (`shell` → `Bash`, `write` → `Write`).
 
 ### Integration Mode Extension
 

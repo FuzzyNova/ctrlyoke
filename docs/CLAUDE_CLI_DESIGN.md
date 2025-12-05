@@ -35,18 +35,18 @@ npm install -g @anthropic-ai/claude-code
 
 ### ✅ Implemented Flags
 
-| CLI Flag                         | FlightPath Setting/Schema                      | Implementation                                           |
-| -------------------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| `--model <model>`                | `flightpath.claudeCliModel`, `prompt.model`    | Full support - aliases (sonnet/opus/haiku) or full names |
-| `--add-dir <directory>`          | Auto-includes workspace folders                | Full support - workspace folders auto-included           |
-| `--dangerously-skip-permissions` | `flightpath.claudeCliToolPermissions: skipAll` | Full support - default behavior                          |
-| `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)          | Full support - auto-converted from Copilot format        |
-| `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)           | Full support - auto-converted from Copilot format        |
-| `--output-format <format>`       | `flightpath.claudeCliOutputFormat`             | Full support - stream-json (default), json, or text      |
-| `--verbose`                      | Auto-added when using stream-json              | Full support - required for stream-json format           |
-| `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID    | Full support                                             |
-| `-c`                             | `prompt.newChatSession: false` (no session ID) | Full support - continues most recent session             |
-| Prompt via stdin                 | Prompt text passed to process                  | Full support - current implementation sends via stdin    |
+| CLI Flag                         | FlightPath Setting/Schema                      | Implementation                                              |
+| -------------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| `--model <model>`                | `flightpath.claudeCliModel`, `prompt.model`    | Full support - aliases (sonnet/opus/haiku) or full names    |
+| `--add-dir <directory>`          | Auto-includes workspace folders                | Full support - workspace folders auto-included              |
+| `--dangerously-skip-permissions` | `flightpath.claudeCliToolPermissions: skipAll` | Full support - default behavior                             |
+| `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)          | Full support - auto-converted from Copilot format           |
+| `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)           | Full support - auto-converted from Copilot format           |
+| `--output-format stream-json`    | Hardcoded                                      | Full support - always uses stream-json for real-time output |
+| `--verbose`                      | Auto-added for stream-json                     | Full support - required for stream-json format              |
+| `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID    | Full support                                                |
+| `-c`                             | `prompt.newChatSession: false` (no session ID) | Full support - continues most recent session                |
+| Prompt via stdin                 | Prompt text passed to process                  | Full support - current implementation sends via stdin       |
 
 ### ❌ Not Implemented Flags
 
@@ -215,17 +215,11 @@ claude --print --output-format json -p "List files in current dir"
 ### Output Format
 
 ```bash
---output-format <format>    # text, json, or stream-json
---verbose                   # Required for stream-json format
+--output-format stream-json    # Real-time streaming with metadata (always used)
+--verbose                      # Required for stream-json format (auto-added)
 ```
 
-**Available formats:**
-
-| Format        | Description                                 | Use Case                                            |
-| ------------- | ------------------------------------------- | --------------------------------------------------- |
-| `text`        | Plain text output (default for interactive) | Human-readable responses                            |
-| `json`        | Single JSON result object                   | Automation, structured parsing                      |
-| `stream-json` | Real-time streaming with metadata           | Live progress + token tracking (FlightPath default) |
+**FlightPath always uses `stream-json` format** for real-time streaming updates with full metadata. The `--verbose` flag is automatically added.
 
 **stream-json output structure:**
 
@@ -284,12 +278,12 @@ The `stream-json` format with `--verbose` outputs **a stream of JSON objects** a
 }
 ```
 
-**Current behavior:**
+**FlightPath implementation:**
 
-- Default: `stream-json` (enables real-time streaming + full metadata)
+- Always uses `stream-json` format for real-time streaming + full metadata
 - Statistics extracted: token counts, model, duration, costs
-- Graceful fallback: if JSON parsing fails, treats as plain text
-- `--verbose` flag automatically added for stream-json format
+- Graceful fallback: if JSON parsing fails, workflow continues with error logged
+- `--verbose` flag automatically added
 
 ### Structured Output (JSON Schema)
 
@@ -476,11 +470,10 @@ claude -p --allowedTools "Bash(git:*)" --allowedTools "Write" --disallowedTools 
 
 ### Claude-Specific Settings
 
-| Setting                               | Type | Default         | Description                             |
-| ------------------------------------- | ---- | --------------- | --------------------------------------- |
-| `flightpath.claudeCliModel`           | enum | `"sonnet"`      | Default model (sonnet, opus, haiku)     |
-| `flightpath.claudeCliToolPermissions` | enum | `"skipAll"`     | Permission mode (skipAll, custom)       |
-| `flightpath.claudeCliOutputFormat`    | enum | `"stream-json"` | Output format (stream-json, json, text) |
+| Setting                               | Type | Default     | Description                         |
+| ------------------------------------- | ---- | ----------- | ----------------------------------- |
+| `flightpath.claudeCliModel`           | enum | `"sonnet"`  | Default model (sonnet, opus, haiku) |
+| `flightpath.claudeCliToolPermissions` | enum | `"skipAll"` | Permission mode (skipAll, custom)   |
 
 ### Shared Settings (Copilot + Claude)
 

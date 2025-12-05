@@ -147,9 +147,8 @@ So that **I can configure my preferred Claude model and permissions**.
 | `flightpath.claudeCliToolPermissions` | enum  | `"skipAll"` | Permission mode (skipAll, custom)                       |
 | `flightpath.cliAllowedTools`          | array | `[]`        | Shared tool patterns (Copilot format, auto-converted)   |
 | `flightpath.cliDeniedTools`           | array | `[]`        | Shared denied patterns (Copilot format, auto-converted) |
-| `flightpath.claudeCliOutputFormat`    | enum  | `"json"`    | Output format (json, text)                              |
 
-**Note:** Tool settings are shared between Copilot and Claude CLI. Patterns use Copilot CLI format and are auto-converted for Claude (`shell` → `Bash`, `write` → `Write`).
+**Note:** Claude CLI always uses `stream-json` output format (hardcoded). Tool settings are shared between Copilot and Claude CLI. Patterns use Copilot CLI format and are auto-converted for Claude (`shell` → `Bash`, `write` → `Write`).
 
 **And** `flightpath.provider` enum is updated to include:
 
