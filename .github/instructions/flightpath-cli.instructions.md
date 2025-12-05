@@ -7,34 +7,47 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 </purpose>
 
 <architecture>
-- Two execution modes: **interactive** (terminal) and **headless** (spawn)
-- Interactive: Uses VS Code Shell Integration API for streaming + completion detection
-- Headless: `copilot` command blocks until complete (no polling)
-- Process exit = completion signal
-- Stdout mixed: response + statistics (parse via delimiter detection)
+- Two execution modes: **interactive** (TUI injection) and **headless** (spawn + stdin)
+- Interactive: Starts TUI, sends prompt via `terminal.sendText()`, detects completion by escape indicator disappearing
+- Headless: Spawns CLI with stdin pipe, writes prompt to stdin, waits for process exit
+- Process exit = completion signal (headless), escape indicator disappearing = completion (interactive)
+- Stdout: response + statistics (parse via delimiter detection)
 - Session support: `--resume-session <id>` for multi-turn conversations
-- Process tracking: Stores `currentProcess` (headless) or `currentExecution` (interactive)
+- Process tracking: `currentProcess` (headless) or `currentExecution` (interactive)
 </architecture>
 
 <executionModes>
-**Interactive Mode (default):**
-- Opens VS Code terminal with shell integration
-- User can see output in real-time
-- Ctrl+C in terminal aborts immediately
-- Prompt passed via `-p JSON.stringify(prompt)` (no stdin in terminal API)
-- Uses `shellIntegration.executeCommand(cli, args)` for proper arg escaping
+**Interactive Mode (TUI Injection):**
+- Starts CLI in interactive TUI mode (no -p flag, no prompt on command line)
+- Waits for TUI to be ready (escape indicator appears)
+- Sends prompt via `terminal.sendText()` - works for ANY prompt length!
+- Detects completion by watching for escape indicator to disappear
+  - Copilot: "(esc to cancel)" 
+  - Claude: "(esc to interrupt)"
+- User can see output in real-time, Ctrl+C aborts immediately
 
-**Headless Mode:**
+**Headless Mode (stdin):**
 
-- Runs in background process via `spawn()`
-- Prompt passed via stdin (cleaner, no escaping needed)
-- Exception: agents require `-p` flag even in headless mode
+- Spawns CLI process with `stdio: ['pipe', 'pipe', 'pipe']`
+- Writes prompt to stdin, then closes stdin
+- No shell escaping issues, works for any prompt size
+- Copilot: No -p flag needed (reads stdin when not a TTY)
+- Claude: Requires -p flag (Ink TUI crashes without it)
 - Warning shown if running without full permissions (auto-deny behavior)
   </executionModes>
 
+<abstractMethods>
+Subclasses must implement:
+- `getCliName()`: Returns "copilot" or "claude"
+- `getEscapeIndicator()`: Pattern that appears during generation, disappears when complete
+- `buildHeadlessArgs(baseArgs)`: Args for headless mode (Copilot: no -p, Claude: with -p)
+- `buildInteractiveTuiCommand(baseArgs)`: Command to start interactive TUI
+- `hasFullPermissions()`: Check if headless mode will auto-grant permissions
+</abstractMethods>
+
 <cancellation>
 **cancel() method:**
-- Interactive: Sends Ctrl+C (`\x03`) to terminal
+- Interactive: Sends Ctrl+C (`\x03`) to terminal, cleans up completion detection listeners
 - Headless: Kills the CLI process via `child.kill()`
 - Platform-agnostic: Sends SIGTERM on Unix, terminates on Windows
 - Clears process/execution reference after cancel
@@ -48,7 +61,7 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
   </cancellation>
 
 <differenceFromChat>
-- No timing delays or UI automation
+- No timing delays or UI automation polling
 - Direct response text access (not clipboard-based)
 - No tool instruction XML needed (deterministic completion)
 - Structured output (response + statistics separated)
@@ -56,7 +69,7 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 </differenceFromChat>
 
 <configuration>
-- `cliExecutionMode`: Interactive (terminal) vs headless (background)
+- `cliExecutionMode`: Interactive (TUI) vs headless (background)
 - `copilotCliModel`: AI model selection
 - `copilotCliAllowedDirs`: Additional accessible directories
 - `copilotCliToolPermissions`: Tool access control

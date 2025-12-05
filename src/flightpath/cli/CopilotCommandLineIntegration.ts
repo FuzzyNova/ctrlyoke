@@ -83,49 +83,40 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Build the shell command and args for executing Copilot CLI with a prompt.
-   * Copilot uses -p flag before the prompt.
-   *
-   * For interactive mode: Uses PowerShell script block to avoid command-line length limits
-   * For headless mode: Uses shell expansion (spawn with shell:true handles this)
-   *
-   * @param args The command-line arguments (WITHOUT prompt)
-   * @param tempFilePath Path to the temp file containing the prompt
-   * @returns Object with shellCommand, argsWithPrompt, and displayCommand
+   * Get the escape indicator for Copilot CLI.
+   * This text appears while generating and disappears when complete.
+   * The TUI shows "Esc to cancel" (capital E, no outer parentheses)
    */
-  protected buildPromptCommand(
-    args: string[],
-    tempFilePath: string
-  ): {
-    shellCommand: string;
-    argsWithPrompt: string[];
-    displayCommand: string;
-  } {
+  protected getEscapeIndicator(): string {
+    return "Esc to cancel";
+  }
+
+  /**
+   * Get the screen end pattern for Copilot CLI.
+   * Copilot TUI screens end with the status bar: "Ctrl+c Exit · Ctrl+r Expand recent"
+   */
+  protected getScreenEndPattern(): RegExp {
+    return /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi;
+  }
+
+  /**
+   * Build headless args for Copilot CLI.
+   * Copilot reads from stdin when not a TTY, so NO -p flag needed.
+   */
+  protected buildHeadlessArgs(baseArgs: string[]): string[] {
+    // For headless mode with stdin, Copilot reads from stdin automatically
+    // No -p flag needed - it detects non-TTY and reads stdin
+    return [...baseArgs];
+  }
+
+  /**
+   * Build interactive TUI command for Copilot CLI.
+   * Starts the CLI in interactive mode without a prompt.
+   */
+  protected buildInteractiveTuiCommand(baseArgs: string[]): string {
     const cliName = this.getCliName();
-    const isWindows = process.platform === "win32";
-    const argsStr = args.join(" ");
-
-    // Display command (for logging/UI)
-    const displayCommand = `${cliName} -p "<prompt>" ${argsStr}`;
-
-    // Shell command for interactive mode - uses script block to avoid expansion
-    let shellCommand: string;
-    if (isWindows) {
-      // PowerShell: Read file into variable inside script block, then pass to CLI
-      // This keeps the prompt content within the block, not on the main command line
-      shellCommand = `& { $p = Get-Content -Raw "${tempFilePath}"; ${cliName} -p $p ${argsStr} }`;
-    } else {
-      // Bash/Zsh: Use command substitution
-      shellCommand = `${cliName} -p "$(cat '${tempFilePath}')" ${argsStr}`;
-    }
-
-    // Args for headless mode - shell expansion happens during spawn
-    const fileReadExpr = isWindows
-      ? `(Get-Content -Raw "${tempFilePath}")`
-      : `"$(cat '${tempFilePath}')"`;
-    const argsWithPrompt = ["-p", fileReadExpr, ...args];
-
-    return { shellCommand, argsWithPrompt, displayCommand };
+    // Start in interactive mode - prompt will be sent via sendText
+    return `${cliName} ${baseArgs.join(" ")}`;
   }
 
   /**
@@ -193,9 +184,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
     try {
       // Check if CLI is available by running --version
-      const result = await this.spawnProcess(this.getCliName(), ["--version"], {
-        timeout: 5000,
-      });
+      const result = await this.spawnSimpleCommand(
+        this.getCliName(),
+        ["--version"],
+        5000
+      );
 
       if (result.exitCode === 0) {
         console.log("✅ Copilot CLI available:", result.stdout.trim());
@@ -376,18 +369,22 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Execute in headless mode (background process)
-   * Uses base class executeHeadlessBase for common setup/teardown
+   * Uses stdin to pass the prompt (no -p flag, no temp files)
    */
   private async executeHeadless(
     args: string[],
     promptText: string
   ): Promise<boolean> {
-    return this.executeHeadlessBase(
+    return this.executeHeadlessWithStdin(
       args,
       promptText,
-      async (argsWithPrompt) => {
-        // Execute CLI command with prompt in args
-        const result = await this.executeCopilotCommand(argsWithPrompt);
+      async (result: { stdout: string; stderr: string; exitCode: number }) => {
+        // Parse the CLI output
+        const cliResult = this.parseCliOutput(
+          result.stdout,
+          result.stderr,
+          result.exitCode
+        );
 
         // Check if this was a cancellation
         if (this.isCancelling) {
@@ -396,7 +393,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
         }
 
         // Store the result for statistics retrieval
-        this.lastResult = result;
+        this.lastResult = cliResult;
 
         // Extract and store session ID
         const sessionId = await this.extractSessionIdFromLogs();
@@ -405,16 +402,16 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
           this.log(`💾 Session ID extracted: ${sessionId}`);
         }
 
-        if (result.success) {
-          this.logResponse(result.response, result.statistics);
-          this.responseCompleteEmitter.fire(result.response);
+        if (cliResult.success) {
+          this.logResponse(cliResult.response, cliResult.statistics);
+          this.responseCompleteEmitter.fire(cliResult.response);
           await this.updateWorkflowProgress();
           return true;
         } else {
-          console.error("❌ Copilot CLI failed:", result.error);
-          this.lastFailureReason = `Copilot CLI error: ${result.error}`;
+          console.error("❌ Copilot CLI failed:", cliResult.error);
+          this.lastFailureReason = `Copilot CLI error: ${cliResult.error}`;
           vscode.window.showErrorMessage(
-            `FlightPath: Copilot CLI error: ${result.error}`
+            `FlightPath: Copilot CLI error: ${cliResult.error}`
           );
           return false;
         }
@@ -423,74 +420,25 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Execute copilot CLI command with args
-   * Prompt is already included in args via -p flag
-   * @param args Pre-built command-line arguments (includes -p with prompt)
+   * Parse CLI output into a structured result
    */
-  private async executeCopilotCommand(
-    args: string[]
-  ): Promise<CopilotCliResult> {
-    // Execute command (prompt is in args via -p flag, 5 minute timeout)
-    const { stdout, stderr, exitCode } = await this.spawnProcess(
-      this.getCliName(),
-      args,
-      {
-        timeout: 300000, // 5 minutes
-        onStdout: (chunk) => {
-          // Emit streaming chunk for real-time display
-          this.streamingChunkEmitter.fire(chunk);
-        },
-      }
-    );
-
+  private parseCliOutput(
+    stdout: string,
+    stderr: string,
+    exitCode: number
+  ): CopilotCliResult {
     // Handle agent-specific errors with helpful messages
-    const agentArg = args.find((arg, i) => args[i - 1] === "--agent");
-    if (exitCode !== 0 && agentArg) {
-      let enhancedError = stderr || "Unknown error";
+    // Note: We don't have direct access to args here, so we can't check for agent
+    // This will be handled by the caller if needed
 
-      // Check for common agent error patterns
-      if (
-        stderr.toLowerCase().includes("agent") &&
-        (stderr.toLowerCase().includes("not found") ||
-          stderr.toLowerCase().includes("could not find") ||
-          stderr.toLowerCase().includes("does not exist"))
-      ) {
-        enhancedError =
-          `Agent '${agentArg}' not found. Please ensure it exists in:\n` +
-          `  - .github/agents/${agentArg}.agent.md (project-level)\n` +
-          `  - ~/.copilot/agents/${agentArg}.agent.md (user-level)\n\n` +
-          `Original error: ${stderr}`;
-      } else if (
-        stderr.toLowerCase().includes("yaml") ||
-        stderr.toLowerCase().includes("frontmatter") ||
-        stderr.toLowerCase().includes("syntax error")
-      ) {
-        enhancedError =
-          `Agent '${agentArg}' has invalid YAML frontmatter. ` +
-          `Please check the agent file for syntax errors.\n\n` +
-          `Original error: ${stderr}`;
-      }
-
-      // Parse output
-      const { response, statistics } = this.parseCliOutput(stdout);
-
-      return {
-        success: false,
-        response,
-        statistics,
-        error: enhancedError,
-        exitCode,
-      };
-    }
-
-    // Parse output
-    const { response, statistics } = this.parseCliOutput(stdout);
+    // Parse output to separate response from statistics
+    const { response, statistics } = this.parseCliOutputParts(stdout);
 
     return {
       success: exitCode === 0,
       response,
       statistics,
-      error: stderr || undefined,
+      error: exitCode !== 0 ? stderr || undefined : undefined,
       exitCode,
     };
   }
@@ -498,7 +446,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   /**
    * Parse CLI output to separate response from statistics
    */
-  private parseCliOutput(output: string): {
+  private parseCliOutputParts(output: string): {
     response: string;
     statistics: string;
   } {
