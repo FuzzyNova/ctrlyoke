@@ -42,7 +42,8 @@ npm install -g @anthropic-ai/claude-code
 | `--dangerously-skip-permissions` | `flightpath.claudeCliToolPermissions: skipAll` | Full support - default behavior                          |
 | `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)          | Full support - auto-converted from Copilot format        |
 | `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)           | Full support - auto-converted from Copilot format        |
-| `--output-format <format>`       | `flightpath.claudeCliOutputFormat`             | Full support - json (default) or text                    |
+| `--output-format <format>`       | `flightpath.claudeCliOutputFormat`             | Full support - stream-json (default), json, or text      |
+| `--verbose`                      | Auto-added when using stream-json              | Full support - required for stream-json format           |
 | `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID    | Full support                                             |
 | `-c`                             | `prompt.newChatSession: false` (no session ID) | Full support - continues most recent session             |
 | Prompt via stdin                 | Prompt text passed to process                  | Full support - current implementation sends via stdin    |
@@ -51,15 +52,15 @@ npm install -g @anthropic-ai/claude-code
 
 **High Priority (Automation-Relevant):**
 
-| CLI Flag                     | Priority | Notes                                                          |
-| ---------------------------- | -------- | -------------------------------------------------------------- |
-| `--json-schema <schema>`     | **HIGH** | JSON Schema for structured output validation - **CRITICAL**    |
-| `--permission-mode <mode>`   | **HIGH** | Granular permission modes (acceptEdits, bypassPermissions, default, dontAsk, plan) |
-| `--system-prompt <prompt>`   | MEDIUM   | Complete system prompt override (not just append)              |
-| `--fallback-model <model>`   | MEDIUM   | Auto-fallback when primary model is overloaded                 |
-| `--tools <tools...>`         | MEDIUM   | Specify built-in tools from predefined set (only with --print) |
-| `--fork-session`             | MEDIUM   | Create new session ID when resuming (use with -r or -c)        |
-| `--mcp-config <configs...>`  | MEDIUM   | Load MCP servers from JSON files/strings (space-separated)     |
+| CLI Flag                    | Priority | Notes                                                                              |
+| --------------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `--json-schema <schema>`    | **HIGH** | JSON Schema for structured output validation - **CRITICAL**                        |
+| `--permission-mode <mode>`  | **HIGH** | Granular permission modes (acceptEdits, bypassPermissions, default, dontAsk, plan) |
+| `--system-prompt <prompt>`  | MEDIUM   | Complete system prompt override (not just append)                                  |
+| `--fallback-model <model>`  | MEDIUM   | Auto-fallback when primary model is overloaded                                     |
+| `--tools <tools...>`        | MEDIUM   | Specify built-in tools from predefined set (only with --print)                     |
+| `--fork-session`            | MEDIUM   | Create new session ID when resuming (use with -r or -c)                            |
+| `--mcp-config <configs...>` | MEDIUM   | Load MCP servers from JSON files/strings (space-separated)                         |
 
 **Low Priority (Utility/Debug):**
 
@@ -215,15 +216,55 @@ claude --print --output-format json -p "List files in current dir"
 
 ```bash
 --output-format <format>    # text, json, or stream-json
+--verbose                   # Required for stream-json format
 ```
 
 **Available formats:**
 
-| Format        | Description                                    | Use Case                      |
-| ------------- | ---------------------------------------------- | ----------------------------- |
-| `text`        | Plain text output (default for interactive)    | Human-readable responses      |
-| `json`        | Single JSON result object                      | Automation, structured parsing (FlightPath default) |
-| `stream-json` | Real-time streaming JSON chunks                | Live progress updates         |
+| Format        | Description                                 | Use Case                                            |
+| ------------- | ------------------------------------------- | --------------------------------------------------- |
+| `text`        | Plain text output (default for interactive) | Human-readable responses                            |
+| `json`        | Single JSON result object                   | Automation, structured parsing                      |
+| `stream-json` | Real-time streaming with metadata           | Live progress + token tracking (FlightPath default) |
+
+**stream-json output structure:**
+
+The `stream-json` format with `--verbose` outputs **a stream of JSON objects** as Claude processes the request:
+
+1. **Init event** - Session metadata (once at start):
+
+```json
+{"type":"system","subtype":"init","session_id":"...","tools":[...],"model":"..."}
+```
+
+2. **Assistant messages** - Response content (one or more as generated):
+
+```json
+{"type":"assistant","message":{"content":[{"type":"text","text":"Response chunk"}],"usage":{...}},"session_id":"..."}
+```
+
+3. **Tool use events** - When Claude calls tools (if applicable):
+
+```json
+{"type":"tool_use","name":"Read","input":{...}}
+{"type":"tool_result","content":"..."}
+```
+
+4. **Result summary** - Final metadata (once at end):
+
+```json
+{"type":"result","subtype":"success","result":"Full response","session_id":"...","usage":{...},"total_cost_usd":0.123,"modelUsage":{...}}
+```
+
+**Real-time streaming:** Multiple JSON objects are emitted as Claude thinks, uses tools, and generates responses - not just 3 fixed objects. The stream includes all intermediate steps in the agent's workflow.
+
+**FlightPath parsing:**
+
+- Real-time streaming: Extracts text from `message.content` in assistant objects as they arrive
+- Tool call summaries: Displays detailed tool usage (e.g., `[Tool: Bash → git status]`, `[Tool: Write → file.txt]`)
+- Metadata extraction: Parses session_id, usage stats, and costs from result object at completion
+- Human-readable output: Displays clean text in dashboard, not raw JSON
+- Handles variable-length streams with tool calls and multi-turn reasoning
 
 **JSON output structure:**
 
@@ -245,10 +286,10 @@ claude --print --output-format json -p "List files in current dir"
 
 **Current behavior:**
 
-- Default: `json` (enables structured parsing)
-- Statistics extracted: token counts, model, duration
+- Default: `stream-json` (enables real-time streaming + full metadata)
+- Statistics extracted: token counts, model, duration, costs
 - Graceful fallback: if JSON parsing fails, treats as plain text
-- `stream-json` not yet implemented (could enable real-time progress UI)
+- `--verbose` flag automatically added for stream-json format
 
 ### Structured Output (JSON Schema)
 
@@ -287,13 +328,13 @@ claude -p --json-schema '{"type":"object","properties":{"success":{"type":"boole
 
 **Available modes:**
 
-| Mode                 | Behavior                                                    |
-| -------------------- | ----------------------------------------------------------- |
-| `default`            | Prompt for all permissions (interactive only)               |
-| `acceptEdits`        | Auto-accept file edits, prompt for other operations         |
-| `bypassPermissions`  | Skip all permission prompts (same as --dangerously-skip-permissions) |
-| `dontAsk`            | Similar to bypass but with different security implications  |
-| `plan`               | Planning mode (may restrict certain operations)             |
+| Mode                | Behavior                                                             |
+| ------------------- | -------------------------------------------------------------------- |
+| `default`           | Prompt for all permissions (interactive only)                        |
+| `acceptEdits`       | Auto-accept file edits, prompt for other operations                  |
+| `bypassPermissions` | Skip all permission prompts (same as --dangerously-skip-permissions) |
+| `dontAsk`           | Similar to bypass but with different security implications           |
+| `plan`              | Planning mode (may restrict certain operations)                      |
 
 **Current FlightPath implementation:**
 
@@ -435,11 +476,11 @@ claude -p --allowedTools "Bash(git:*)" --allowedTools "Write" --disallowedTools 
 
 ### Claude-Specific Settings
 
-| Setting                               | Type | Default     | Description                         |
-| ------------------------------------- | ---- | ----------- | ----------------------------------- |
-| `flightpath.claudeCliModel`           | enum | `"sonnet"`  | Default model (sonnet, opus, haiku) |
-| `flightpath.claudeCliToolPermissions` | enum | `"skipAll"` | Permission mode (skipAll, custom)   |
-| `flightpath.claudeCliOutputFormat`    | enum | `"json"`    | Output format (json, text)          |
+| Setting                               | Type | Default         | Description                             |
+| ------------------------------------- | ---- | --------------- | --------------------------------------- |
+| `flightpath.claudeCliModel`           | enum | `"sonnet"`      | Default model (sonnet, opus, haiku)     |
+| `flightpath.claudeCliToolPermissions` | enum | `"skipAll"`     | Permission mode (skipAll, custom)       |
+| `flightpath.claudeCliOutputFormat`    | enum | `"stream-json"` | Output format (stream-json, json, text) |
 
 ### Shared Settings (Copilot + Claude)
 
@@ -568,18 +609,17 @@ const result = await this.spawnProcess("claude", args, {
 
 ## Future Enhancements
 
-| Enhancement                  | Priority   | CLI Flag                    | Notes                                                 |
-| ---------------------------- | ---------- | --------------------------- | ----------------------------------------------------- |
-| Structured output validation | **HIGH**   | `--json-schema`             | Critical for reliable automation and response parsing |
-| Permission modes             | **HIGH**   | `--permission-mode`         | Granular control (acceptEdits, plan, etc.)            |
-| System prompt customization  | **MEDIUM** | `--append-system-prompt`    | Workflow-specific instructions                        |
-| Model fallback               | **MEDIUM** | `--fallback-model`          | Handle overload situations gracefully                 |
-| MCP server configuration     | **MEDIUM** | `--mcp-config`              | Custom MCP servers for enhanced capabilities          |
-| Session forking              | MEDIUM     | `--fork-session`            | Branch conversation trees                             |
-| Agent support                | MEDIUM     | `--agents`                  | Custom agent definitions via JSON                     |
-| Tool specification           | LOW        | `--tools`                   | Limit to specific built-in tools                      |
-| Streaming output             | LOW        | `--output-format stream-json` | Real-time progress updates in UI                      |
-| Debug mode                   | LOW        | `-d, --debug`               | Category filtering for troubleshooting                |
+| Enhancement                  | Priority   | CLI Flag                 | Notes                                                 |
+| ---------------------------- | ---------- | ------------------------ | ----------------------------------------------------- |
+| Structured output validation | **HIGH**   | `--json-schema`          | Critical for reliable automation and response parsing |
+| Permission modes             | **HIGH**   | `--permission-mode`      | Granular control (acceptEdits, plan, etc.)            |
+| System prompt customization  | **MEDIUM** | `--append-system-prompt` | Workflow-specific instructions                        |
+| Model fallback               | **MEDIUM** | `--fallback-model`       | Handle overload situations gracefully                 |
+| MCP server configuration     | **MEDIUM** | `--mcp-config`           | Custom MCP servers for enhanced capabilities          |
+| Session forking              | MEDIUM     | `--fork-session`         | Branch conversation trees                             |
+| Agent support                | MEDIUM     | `--agents`               | Custom agent definitions via JSON                     |
+| Tool specification           | LOW        | `--tools`                | Limit to specific built-in tools                      |
+| Debug mode                   | LOW        | `-d, --debug`            | Category filtering for troubleshooting                |
 
 **Note on Thinking Mode:** Claude CLI does **NOT** provide a command-line option to control thinking mode/level. Thinking appears to be controlled at the model level and cannot be specified per-request via CLI flags.
 

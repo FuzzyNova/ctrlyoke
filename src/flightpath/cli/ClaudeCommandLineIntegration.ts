@@ -199,6 +199,32 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Format a tool call summary for display
+   * @param toolName The name of the tool (e.g., "Bash", "Write", "Read")
+   * @param input The tool input object with tool-specific fields
+   * @returns Formatted summary string
+   */
+  private formatToolCallSummary(toolName: string, input: any): string {
+    let summary = `\n\n[Tool: ${toolName}`;
+
+    // Add tool-specific details
+    if (toolName === "Bash" && input?.command) {
+      summary += ` → ${input.command}`;
+    } else if (toolName === "Write" && input?.file_path) {
+      summary += ` → ${input.file_path}`;
+    } else if (toolName === "Edit" && input?.file_path) {
+      summary += ` → ${input.file_path}`;
+    } else if (toolName === "Read" && input?.file_path) {
+      summary += ` → ${input.file_path}`;
+    } else if (toolName === "WebFetch" && input?.url) {
+      summary += ` → ${input.url}`;
+    }
+
+    summary += "]\n\n";
+    return summary;
+  }
+
+  /**
    * Parse token counts from Claude CLI statistics string
    * Example: "Usage: 1234 input + 5678 output = 6912 tokens"
    */
@@ -291,9 +317,30 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         try {
           const json = JSON.parse(objStr);
 
-          // Extract response text from assistant message
-          if (json.type === "assistant" && json.message?.content?.[0]?.text) {
-            contentToEmit += json.message.content[0].text;
+          // Extract response text and tool calls from assistant message
+          // Assistant messages contain an array of content items:
+          // - { type: "text", text: "..." } - Claude's text responses
+          // - { type: "tool_use", id: "...", name: "Bash", input: {...} } - Tool calls
+          if (json.type === "assistant" && json.message?.content) {
+            // Extract text content
+            const textContent = json.message.content.find(
+              (item: any) => item.type === "text"
+            );
+            if (textContent?.text) {
+              contentToEmit += textContent.text;
+            }
+
+            // Extract tool use and format as summary for user visibility
+            const toolUse = json.message.content.find(
+              (item: any) => item.type === "tool_use"
+            );
+            if (toolUse) {
+              const toolSummary = this.formatToolCallSummary(
+                toolUse.name,
+                toolUse.input
+              );
+              contentToEmit += toolSummary;
+            }
           }
         } catch (parseError) {
           // Invalid JSON - skip and continue
@@ -577,24 +624,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       async (result: { stdout: string; stderr: string; exitCode: number }) => {
         const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
 
-        // DEBUG: Log complete output structure for analysis
-        this.log(`\n${"=".repeat(80)}`);
-        this.log(`📊 [DEBUG] Claude CLI Output Analysis`);
-        this.log(`${"=".repeat(80)}`);
-        this.log(`Format: ${outputFormat}`);
-        this.log(`Exit Code: ${result.exitCode}`);
-        this.log(`Stdout Length: ${result.stdout.length} chars`);
-        this.log(`Stderr Length: ${result.stderr.length} chars`);
-        this.log(`\n--- FULL STDOUT ---`);
-        this.log(result.stdout);
-        this.log(`\n--- END STDOUT ---`);
-        if (result.stderr) {
-          this.log(`\n--- STDERR ---`);
-          this.log(result.stderr);
-          this.log(`\n--- END STDERR ---`);
-        }
-        this.log(`${"=".repeat(80)}\n`);
-
         // Parse the CLI output based on format
         const cliResult =
           outputFormat === "stream-json"
@@ -813,8 +842,29 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Extract data from parsed objects
     for (const json of objects) {
       // Extract response from assistant message
-      if (json.type === "assistant" && json.message?.content?.[0]?.text) {
-        fullResponse = json.message.content[0].text;
+      // Assistant messages contain an array of content items:
+      // - { type: "text", text: "..." } - Claude's text responses
+      // - { type: "tool_use", id: "...", name: "Bash", input: {...} } - Tool calls
+      if (json.type === "assistant" && json.message?.content) {
+        // Check for text content
+        const textContent = json.message.content.find(
+          (item: any) => item.type === "text"
+        );
+        if (textContent?.text) {
+          fullResponse += textContent.text;
+        }
+
+        // Check for tool use (and format as summary for user visibility)
+        const toolUse = json.message.content.find(
+          (item: any) => item.type === "tool_use"
+        );
+        if (toolUse) {
+          const toolSummary = this.formatToolCallSummary(
+            toolUse.name,
+            toolUse.input
+          );
+          fullResponse += toolSummary;
+        }
       }
 
       // Extract metadata from result object
