@@ -49,17 +49,33 @@ Uses VS Code Shell Integration + sendText injection:
 1. **Start CLI via `executeCommand()`**: Gets execution object for `read()` streaming
 2. **Wait for TUI ready**: Stream output via `execution.read()`, detect ready indicators
 3. **Send prompt via `sendText()`**: Inject prompt as "keyboard input" (no length limit!)
-4. **Submit with Enter key (`\r`)**: In raw terminal mode, Enter = carriage return
-5. **Detect completion**: Watch for escape indicator to disappear from output
+4. **Wait for paste to complete**: Dynamic detection with verification (see below)
+5. **Submit with Enter key (`\r`)**: In raw terminal mode, Enter = carriage return
+6. **Detect completion**: Watch for escape indicator to disappear from output
 
 ### Key Implementation Details
 
 **Race condition fix**: Originally used `executeCommand()` then immediately `sendText()`, but `executeCommand()` has internal queuing while `sendText()` is immediate. Solution: Wait for TUI output before sending prompt.
 
+**Dynamic paste detection with verification**: Large prompts can take a while to paste, but different CLIs handle this differently:
+
+- **Claude**: Shows the full prompt text as it pastes (streaming updates)
+- **Copilot**: Shows nothing until paste completes, then displays `[Paste #1 - 2987 lines]`
+
+We use a two-phase approach:
+
+1. **Wait for 1 second of terminal silence** (fast for small prompts)
+2. **Verify the paste actually happened** before submitting by checking for:
+   - The last 50 characters of the prompt in terminal output (works for Claude)
+   - The `[Paste #N - X lines]` pattern (works for Copilot)
+
+This prevents false positives from initial silence before any paste begins, while keeping the automation responsive.
+
 **Prompt submission**: Copilot CLI uses the Ink TUI framework which operates in raw terminal mode. In raw mode, the Enter key sends `\r` (carriage return), not `\n` (newline):
 
 ```typescript
 terminal.sendText(promptText, false); // Send text WITHOUT newline
+// ... wait for paste to complete (5s silence detection) ...
 terminal.sendText("\r"); // Enter key (carriage return) to submit
 ```
 
@@ -173,15 +189,57 @@ To avoid spamming the dashboard with repeated TUI redraws, we track emitted cont
 
 **Problem**: Copilot CLI uses Ink TUI framework which operates in raw terminal mode. In raw mode, Enter sends `\r` (carriage return), not `\n` (newline).
 
-**Solution**: Send prompt text, then send carriage return to submit:
+**Solution**: Send prompt text, wait for paste to complete, then send carriage return to submit:
 
 ```typescript
 terminal.sendText(promptText, false); // Send without trailing newline
-await this.delay(1000); // Allow TUI to process input
+// Dynamic paste detection: wait for 5s of terminal silence
+startSubmissionTimer(); // Resets on each chunk received
+// Timer callback when paste is complete:
 terminal.sendText("\r"); // Enter key in raw mode = carriage return
 ```
 
 **Note**: The `/terminal-setup` command maps Shift+Enter to `\n` for inserting newlines. Regular Enter (`\r`) submits. See [Ghostty issue #9264](https://github.com/ghostty-org/ghostty/discussions/9264).
+
+### Issue: Large Prompts Taking Long to Paste (FIXED)
+
+**Problem**: Very large prompts (8k+ lines with file attachments) can take a while to paste. The old approach of waiting for 5 seconds of silence was too slow, and a simple 1-second timeout caused false positives before any paste began.
+
+**Additional complexity**: Different CLIs handle paste differently:
+
+- **Copilot**: Shows nothing during paste, then displays `[Paste #1 - 2987 lines]` when complete
+- **Claude**: Streams the text as it pastes, showing full content
+
+**Solution**: Two-phase detection with verification:
+
+```typescript
+const PASTE_SILENCE_THRESHOLD_MS = 1000; // 1 second for responsiveness
+const PROMPT_TAIL_LENGTH = 50;
+const promptTail = promptText.slice(-PROMPT_TAIL_LENGTH).toLowerCase();
+// Matches both: [Paste #1 - 2987 lines] and [Pasted text #2 +2124 lines]
+const PASTE_INDICATOR_PATTERN =
+  /\[Paste[d]?\s*(?:text\s*)?#?\d*\s*[-+]?\s*\d*\s*lines?\]/i;
+
+const isPasteComplete = (): boolean => {
+  // Check for CLI paste indicator (works for both Copilot and Claude)
+  if (PASTE_INDICATOR_PATTERN.test(pasteVerificationBuffer)) return true;
+  // Check for the tail of the prompt (fallback)
+  if (bufferLower.includes(promptTail)) return true;
+  return false;
+};
+
+const startSubmissionTimer = () => {
+  clearTimeout(submissionTimeoutId);
+  submissionTimeoutId = setTimeout(() => {
+    if (isPasteComplete()) {
+      terminal.sendText("\r", true); // Submit
+    }
+    // If not verified, keep waiting for more output
+  }, PASTE_SILENCE_THRESHOLD_MS);
+};
+```
+
+This approach is both fast (1s detection) and reliable (verified before submit).
 
 ### Issue: Case-sensitive Indicator Matching
 

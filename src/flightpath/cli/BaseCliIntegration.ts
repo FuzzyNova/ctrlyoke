@@ -191,8 +191,26 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   ): Promise<boolean> {
     const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
+    // Paste silence threshold - wait this long with no terminal activity before checking
+    // if paste is complete. We use a short timeout (1s) for responsiveness, but verify
+    // the paste actually happened before submitting.
+    const PASTE_SILENCE_THRESHOLD_MS = 1000;
+
+    // Extract the last N characters of the prompt for verification
+    // This helps detect if the paste actually completed (vs initial silence before paste)
+    const PROMPT_TAIL_LENGTH = 50;
+    const promptTail = promptText.slice(-PROMPT_TAIL_LENGTH).toLowerCase();
+
+    // Both CLIs collapse large pastes into indicator patterns:
+    // - Copilot: "[Paste #1 - 2987 lines]"
+    // - Claude:  "[Pasted text #2 +2124 lines]"
+    // This regex matches both formats
+    const PASTE_INDICATOR_PATTERN =
+      /\[Paste[d]?\s*(?:text\s*)?#?\d*\s*[-+]?\s*\d*\s*lines?\]/i;
+
     let tuiReady = false;
-    let promptSent = false;
+    let promptTextSent = false; // True after sendText(promptText) is called
+    let promptSubmitted = false; // True after carriage return is sent to submit
     let completed = false;
     let chunkCount = 0;
     let totalBytes = 0;
@@ -200,9 +218,61 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     // TUI screen buffer - chunks can contain multiple screens or partial screens
     // We accumulate into a buffer and extract complete screens by detecting boundaries
     let screenBuffer = "";
+    // Accumulator to track all terminal output since prompt was sent (for paste verification)
+    let pasteVerificationBuffer = "";
     let lastEmittedContent = new Set<string>(); // Track what we've already sent to dashboard
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
+
+    // Check if paste has completed by looking for evidence in terminal output
+    const isPasteComplete = (): boolean => {
+      const bufferLower = pasteVerificationBuffer.toLowerCase();
+
+      // Check for CLI paste indicator: [Paste #1 - 2987 lines] or [Pasted text #2 +2124 lines]
+      if (PASTE_INDICATOR_PATTERN.test(pasteVerificationBuffer)) {
+        this.log(`🔍 Paste verified: found paste indicator in output`);
+        return true;
+      }
+
+      // Check for the tail of the prompt (works when CLI shows full text)
+      if (bufferLower.includes(promptTail)) {
+        this.log(
+          `🔍 Paste verified: found last ${PROMPT_TAIL_LENGTH} chars of prompt`
+        );
+        return true;
+      }
+
+      return false;
+    };
+
+    // Dynamic paste completion detection - submit prompt after terminal output settles
+    // AND we can verify the paste actually happened
+    let submissionTimeoutId: NodeJS.Timeout | undefined;
+    const startSubmissionTimer = () => {
+      if (submissionTimeoutId) {
+        clearTimeout(submissionTimeoutId);
+      }
+      submissionTimeoutId = setTimeout(() => {
+        if (promptTextSent && !promptSubmitted) {
+          // Verify paste actually completed before submitting
+          if (isPasteComplete()) {
+            this.log(
+              `📤 Paste complete (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified), sending carriage return to submit...`
+            );
+            // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
+            // In raw mode, Enter key sends \r (carriage return), not \n (newline).
+            terminal.sendText("\r", true);
+            promptSubmitted = true;
+          } else {
+            // Silence detected but paste not verified - keep waiting
+            this.log(
+              `⏳ Silence detected but paste not verified yet, continuing to wait...`
+            );
+            // Don't restart timer here - we'll restart when next chunk arrives
+          }
+        }
+      }, PASTE_SILENCE_THRESHOLD_MS);
+    };
 
     // Create abort controller for timeout/cancellation
     this.readAbortController = new AbortController();
@@ -230,6 +300,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const cleanData = this.stripAnsiCodes(data);
         screenBuffer += cleanData;
 
+        // Accumulate output for paste verification (only while waiting to submit)
+        if (promptTextSent && !promptSubmitted) {
+          pasteVerificationBuffer += cleanData;
+        }
+
         // Always log raw data to output channel for debugging
         this.outputChannel?.append(data);
 
@@ -254,26 +329,25 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             // Send prompt text (without adding newline - we'll submit separately)
             this.log(`📤 Sending prompt to TUI via terminal.sendText...`);
             terminal.sendText(promptText, false);
+            promptTextSent = true;
 
-            // must have delay between send and submit
-            await this.delay(1000);
-
-            // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
-            // In raw mode, Enter key sends \r (carriage return), not \n (newline).
-            // The /terminal-setup command maps Shift+Enter to \n for multiline input,
-            // but regular Enter (which submits) should still be \r.
-            // See: https://github.com/ghostty-org/ghostty/discussions/9264
-            this.log(`📤 Sending carriage return to submit prompt...`);
-            terminal.sendText("\r", true); // Enter key in raw mode = carriage return
-
-            promptSent = true;
+            // Start the dynamic paste detection timer
+            // The timer will be reset on each chunk received while pasting
+            // When no chunks arrive for PASTE_SILENCE_THRESHOLD_MS, we submit
             this.log(
-              `🎮 [TRACE] Prompt sent and submitted, now watching for completion`
+              `⏳ Waiting for paste to complete (will submit after ${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence)...`
             );
+            startSubmissionTimer();
           }
 
-          // Phase 2: After prompt sent, detect completion and emit deltas
-          if (promptSent) {
+          // Reset submission timer on each chunk while waiting for paste to complete
+          // This ensures we don't submit until the terminal has been quiet for the threshold
+          if (promptTextSent && !promptSubmitted) {
+            startSubmissionTimer();
+          }
+
+          // Phase 2: After prompt submitted, detect completion and emit deltas
+          if (promptSubmitted) {
             // Extract and emit new content (delta from this screen)
             const delta = this.extractNewContent(screen, lastEmittedContent);
             if (delta.trim().length > 0) {
@@ -317,20 +391,31 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         }
       }
 
+      // Clear the submission timer if still pending
+      if (submissionTimeoutId) {
+        clearTimeout(submissionTimeoutId);
+      }
       clearTimeout(timeoutId);
 
       this.log(
-        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes, tuiReady=${tuiReady}, promptSent=${promptSent}, completed=${completed}`
+        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes, tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
       );
 
       if (completed) {
         this.responseCompleteEmitter.fire("Response complete");
         return true;
-      } else if (promptSent) {
-        // Stream ended after prompt was sent - treat as success
-        this.log("⚠️ Stream ended after prompt sent - treating as success");
+      } else if (promptSubmitted) {
+        // Stream ended after prompt was submitted - treat as success
+        this.log(
+          "⚠️ Stream ended after prompt submitted - treating as success"
+        );
         this.responseCompleteEmitter.fire("Stream ended");
         return true;
+      } else if (promptTextSent) {
+        // Prompt text was sent but not yet submitted (paste still in progress?)
+        this.log("⚠️ Stream ended during paste - may be incomplete");
+        this.responseCompleteEmitter.fire("Stream ended during paste");
+        return false;
       } else {
         // TUI never became ready
         this.log("❌ TUI never became ready");
@@ -338,13 +423,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         return false;
       }
     } catch (error) {
+      if (submissionTimeoutId) {
+        clearTimeout(submissionTimeoutId);
+      }
       clearTimeout(timeoutId);
 
       // AbortError is expected on timeout/cancel
       if (error instanceof Error && error.name === "AbortError") {
-        if (promptSent) {
-          this.responseCompleteEmitter.fire("Timeout after prompt sent");
-          return true; // Treat as success if prompt was sent
+        if (promptSubmitted) {
+          this.responseCompleteEmitter.fire("Timeout after prompt submitted");
+          return true; // Treat as success if prompt was submitted
         }
         this.responseCompleteEmitter.fire("Timeout");
         return false;
@@ -944,11 +1032,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       this.log(`📤 Spawning: ${command} ${args.join(" ")}`);
 
-      // Spawn WITHOUT shell to avoid escaping issues
-      // Use shell: false with direct command execution
+      // Spawn WITH shell for PATH resolution (needed on Windows especially)
+      // Since we pass prompt via stdin, no escaping issues with command args
       const child = spawn(command, args, {
         cwd: this.getWorkspaceRoot(),
-        shell: false, // Important: no shell interpretation
+        shell: true, // Required for PATH resolution of copilot/claude commands
         stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr all piped
         env: { ...process.env },
       });

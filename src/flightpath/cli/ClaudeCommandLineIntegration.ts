@@ -143,12 +143,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   /**
    * Build headless args for Claude CLI.
    * Claude REQUIRES -p flag for headless mode (Ink TUI crashes without it).
-   * The prompt will be passed via stdin with the -p flag.
+   * Note: -p is already added by buildCliArgs for headless mode, so we just return as-is.
    */
   protected buildHeadlessArgs(baseArgs: string[]): string[] {
-    // Claude requires -p flag for headless mode (print mode)
-    // The prompt comes from stdin
-    return ["-p", ...baseArgs];
+    // -p flag is already included from buildCliArgs, just pass through
+    return baseArgs;
   }
 
   /**
