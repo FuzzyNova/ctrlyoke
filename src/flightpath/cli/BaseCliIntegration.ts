@@ -611,6 +611,32 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract buildHeadlessArgs(baseArgs: string[]): string[];
 
   /**
+   * Determine if stdout should be streamed in real-time during headless execution.
+   *
+   * By default, returns true to stream output as it arrives.
+   * Subclasses can override to return false if the raw output format is not
+   * human-readable (e.g., JSON), and instead emit parsed content after completion.
+   *
+   * @returns true to stream stdout chunks in real-time, false to buffer until complete
+   */
+  protected shouldStreamHeadlessOutput(): boolean {
+    return true;
+  }
+
+  /**
+   * Process a stdout chunk before streaming to the dashboard.
+   *
+   * By default, passes the chunk through as-is.
+   * Subclasses can override to parse/transform the chunk (e.g., extract content from JSON).
+   *
+   * @param chunk The raw stdout chunk
+   * @returns The processed chunk to emit, or undefined to skip emission
+   */
+  protected processStreamingChunk(chunk: string): string | undefined {
+    return chunk;
+  }
+
+  /**
    * Build interactive TUI command to start the CLI in interactive mode.
    * Should NOT include the prompt - it will be sent via sendText().
    *
@@ -760,6 +786,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     });
 
     try {
+      // Check if we should stream output in real-time
+      // Some formats (like JSON) aren't human-readable and should be parsed first
+      const shouldStream = this.shouldStreamHeadlessOutput();
+
       // Spawn with stdin pipe and execute
       const result = await this.spawnWithStdin(
         this.getCliName(),
@@ -767,9 +797,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         promptText,
         {
           timeout: ConfigurationUtils.getCliExecutionTimeoutMs(),
-          onStdout: (chunk) => {
-            this.streamingChunkEmitter.fire(chunk);
-          },
+          onStdout: shouldStream
+            ? (chunk) => {
+                const processedChunk = this.processStreamingChunk(chunk);
+                if (processedChunk !== undefined) {
+                  this.streamingChunkEmitter.fire(processedChunk);
+                }
+              }
+            : undefined,
         }
       );
 

@@ -235,8 +235,11 @@ export const ConfigurationUtils = {
   /**
    * Get Claude CLI output format
    */
-  getClaudeCliOutputFormat(): "json" | "text" {
-    return getConfig().get<"json" | "text">("claudeCliOutputFormat", "json");
+  getClaudeCliOutputFormat(): "stream-json" | "json" | "text" {
+    return getConfig().get<"stream-json" | "json" | "text">(
+      "claudeCliOutputFormat",
+      "stream-json"
+    );
   },
 
   // ============================================================

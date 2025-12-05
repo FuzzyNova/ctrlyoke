@@ -100,6 +100,7 @@ interface ClaudeCliJsonResponse {
  */
 export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   private cliVersion?: string;
+  private streamBuffer: string = ""; // Buffer for incomplete JSON lines in streaming mode
 
   constructor(
     context: vscode.ExtensionContext,
@@ -151,6 +152,20 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Determine if stdout should be streamed in real-time during headless execution.
+   *
+   * For Claude CLI:
+   * - stream-json: Stream with parsing (extracts content from JSON chunks)
+   * - json: Don't stream (wait for complete JSON, parse after)
+   * - text: Stream as-is (already human-readable)
+   */
+  protected shouldStreamHeadlessOutput(): boolean {
+    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
+    // Only disable streaming for non-streaming JSON format
+    return outputFormat !== "json";
+  }
+
+  /**
    * Build interactive TUI command for Claude CLI.
    * Starts the CLI in interactive mode without a prompt.
    */
@@ -198,6 +213,108 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       };
     }
     return undefined;
+  }
+
+  /**
+   * Process stdout chunks for stream-json format.
+   *
+   * stream-json format outputs concatenated JSON objects (NOT newline-delimited):
+   * 1. {"type":"system","subtype":"init",...} - Session init
+   * 2. {"type":"assistant","message":{...}} - Response with content at message.content[0].text
+   * 3. {"type":"result",...} - Final summary
+   *
+   * We extract and stream the response text from object #2.
+   */
+  protected processStreamingChunk(chunk: string): string | undefined {
+    const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
+
+    // Only process for stream-json format
+    if (outputFormat !== "stream-json") {
+      return chunk; // Pass through for text format
+    }
+
+    // Accumulate into buffer
+    this.streamBuffer += chunk;
+
+    // Try to extract complete JSON objects by finding balanced braces
+    // This is a simple approach - look for }{ boundaries between objects
+    let contentToEmit = "";
+    let startIdx = 0;
+
+    while (startIdx < this.streamBuffer.length) {
+      // Find the start of a JSON object
+      const objStart = this.streamBuffer.indexOf("{", startIdx);
+      if (objStart === -1) {
+        break;
+      }
+
+      // Try to parse from this position
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      let objEnd = -1;
+
+      for (let i = objStart; i < this.streamBuffer.length; i++) {
+        const char = this.streamBuffer[i];
+
+        if (escape) {
+          escape = false;
+          continue;
+        }
+
+        if (char === "\\") {
+          escape = true;
+          continue;
+        }
+
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+
+        if (!inString) {
+          if (char === "{") {
+            depth++;
+          } else if (char === "}") {
+            depth--;
+            if (depth === 0) {
+              objEnd = i + 1;
+              break;
+            }
+          }
+        }
+      }
+
+      // If we found a complete object, parse it
+      if (objEnd !== -1) {
+        const objStr = this.streamBuffer.substring(objStart, objEnd);
+        try {
+          const json = JSON.parse(objStr);
+
+          // Extract response text from assistant message
+          if (json.type === "assistant" && json.message?.content?.[0]?.text) {
+            contentToEmit += json.message.content[0].text;
+          }
+        } catch (parseError) {
+          // Invalid JSON - skip and continue
+          console.warn(
+            "Failed to parse stream-json object:",
+            objStr.substring(0, 100),
+            parseError
+          );
+        }
+
+        startIdx = objEnd;
+      } else {
+        // No complete object found - keep remainder in buffer
+        break;
+      }
+    }
+
+    // Keep unparsed portion in buffer
+    this.streamBuffer = this.streamBuffer.substring(startIdx);
+
+    return contentToEmit || undefined;
   }
 
   // ============================================================
@@ -389,6 +506,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       // Output format only applies to print mode (headless)
       const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
       args.push("--output-format", outputFormat);
+
+      // stream-json requires --verbose flag
+      if (outputFormat === "stream-json") {
+        args.push("--verbose");
+      }
     }
 
     // Model selection
@@ -446,24 +568,58 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     args: string[],
     promptText: string
   ): Promise<boolean> {
+    // Reset stream buffer for new execution
+    this.streamBuffer = "";
+
     return this.executeHeadlessWithStdin(
       args,
       promptText,
       async (result: { stdout: string; stderr: string; exitCode: number }) => {
-        // Parse the CLI output (JSON or text format)
         const outputFormat = ConfigurationUtils.getClaudeCliOutputFormat();
+
+        // DEBUG: Log complete output structure for analysis
+        this.log(`\n${"=".repeat(80)}`);
+        this.log(`📊 [DEBUG] Claude CLI Output Analysis`);
+        this.log(`${"=".repeat(80)}`);
+        this.log(`Format: ${outputFormat}`);
+        this.log(`Exit Code: ${result.exitCode}`);
+        this.log(`Stdout Length: ${result.stdout.length} chars`);
+        this.log(`Stderr Length: ${result.stderr.length} chars`);
+        this.log(`\n--- FULL STDOUT ---`);
+        this.log(result.stdout);
+        this.log(`\n--- END STDOUT ---`);
+        if (result.stderr) {
+          this.log(`\n--- STDERR ---`);
+          this.log(result.stderr);
+          this.log(`\n--- END STDERR ---`);
+        }
+        this.log(`${"=".repeat(80)}\n`);
+
+        // Parse the CLI output based on format
         const cliResult =
-          outputFormat === "json"
-            ? this.parseJsonOutput(
+          outputFormat === "stream-json"
+            ? this.parseStreamJsonOutput(
                 result.stdout,
                 result.stderr,
                 result.exitCode
               )
-            : this.parseTextOutput(
-                result.stdout,
-                result.stderr,
-                result.exitCode
-              );
+            : outputFormat === "json"
+              ? this.parseJsonOutput(
+                  result.stdout,
+                  result.stderr,
+                  result.exitCode
+                )
+              : this.parseTextOutput(
+                  result.stdout,
+                  result.stderr,
+                  result.exitCode
+                );
+
+        // For non-streaming JSON format, emit the parsed response now
+        // (stream-json already streamed during execution, text streams as-is)
+        if (outputFormat === "json" && cliResult.response) {
+          this.streamingChunkEmitter.fire(cliResult.response);
+        }
 
         // Check if this was a cancellation
         if (this.isCancelling) {
@@ -575,6 +731,139 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       statistics: "",
       error: exitCode !== 0 ? stderr || "Command failed" : undefined,
       exitCode,
+    };
+  }
+
+  /**
+   * Parse stream-json output from Claude CLI (concatenated JSON objects)
+   *
+   * Stream-json format outputs 3 concatenated JSON objects:
+   * 1. {"type":"system","subtype":"init",...} - Session metadata
+   * 2. {"type":"assistant","message":{...}} - Response at message.content[0].text
+   * 3. {"type":"result",...} - Usage stats, session_id, costs
+   *
+   * We extract the response and metadata from these objects.
+   */
+  private parseStreamJsonOutput(
+    stdout: string,
+    stderr: string,
+    exitCode: number
+  ): CopilotCliResult & { sessionId?: string } {
+    let fullResponse = "";
+    let sessionId: string | undefined;
+    let usage:
+      | { input_tokens: number; output_tokens: number; total_tokens?: number }
+      | undefined;
+    let model: string | undefined;
+    let isError = false;
+    let errorMessage: string | undefined;
+
+    // Extract JSON objects by finding balanced braces
+    const objects: any[] = [];
+    let startIdx = 0;
+
+    while (startIdx < stdout.length) {
+      const objStart = stdout.indexOf("{", startIdx);
+      if (objStart === -1) break;
+
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      let objEnd = -1;
+
+      for (let i = objStart; i < stdout.length; i++) {
+        const char = stdout[i];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (char === "\\") {
+          escape = true;
+          continue;
+        }
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (char === "{") depth++;
+          else if (char === "}") {
+            depth--;
+            if (depth === 0) {
+              objEnd = i + 1;
+              break;
+            }
+          }
+        }
+      }
+
+      if (objEnd !== -1) {
+        try {
+          const json = JSON.parse(stdout.substring(objStart, objEnd));
+          objects.push(json);
+        } catch (e) {
+          console.warn("Failed to parse JSON object:", e);
+        }
+        startIdx = objEnd;
+      } else {
+        break;
+      }
+    }
+
+    // Extract data from parsed objects
+    for (const json of objects) {
+      // Extract response from assistant message
+      if (json.type === "assistant" && json.message?.content?.[0]?.text) {
+        fullResponse = json.message.content[0].text;
+      }
+
+      // Extract metadata from result object
+      if (json.type === "result") {
+        sessionId = json.session_id;
+        if (json.usage) {
+          usage = {
+            input_tokens: json.usage.input_tokens,
+            output_tokens: json.usage.output_tokens,
+            total_tokens: json.usage.input_tokens + json.usage.output_tokens,
+          };
+        }
+        model = json.model;
+        if (json.is_error) {
+          isError = true;
+          errorMessage = json.result || "Unknown error";
+        }
+      }
+    }
+
+    // Build statistics string
+    let statistics = "";
+    if (usage) {
+      const { input_tokens, output_tokens, total_tokens } = usage;
+      const total = total_tokens || input_tokens + output_tokens;
+      statistics = `Usage: ${input_tokens} input + ${output_tokens} output = ${total} tokens`;
+      if (model) {
+        statistics += ` | Model: ${model}`;
+      }
+    }
+
+    if (isError) {
+      return {
+        success: false,
+        response: "",
+        statistics,
+        error: errorMessage || stderr || "Stream contained error",
+        exitCode: exitCode !== 0 ? exitCode : 1,
+        sessionId,
+      };
+    }
+
+    return {
+      success: exitCode === 0,
+      response: fullResponse.trim(),
+      statistics,
+      error: exitCode !== 0 ? stderr : undefined,
+      exitCode,
+      sessionId,
     };
   }
 

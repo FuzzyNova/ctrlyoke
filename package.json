@@ -651,16 +651,18 @@
           "order": 402,
           "type": "string",
           "enum": [
+            "stream-json",
             "json",
             "text"
           ],
           "enumDescriptions": [
-            "JSON output for structured parsing (recommended)",
+            "Streaming JSON (real-time updates, recommended)",
+            "JSON output (single result, no streaming)",
             "Plain text output"
           ],
-          "default": "json",
+          "default": "stream-json",
           "description": "[Claude CLI] Output format for responses",
-          "markdownDescription": "**Claude CLI Only.** Output format for Claude Code CLI. **JSON** (default) enables structured parsing of response content and token statistics. **Text** returns raw response content."
+          "markdownDescription": "**Claude CLI Only.** Output format for Claude Code CLI. **Stream JSON** (default) provides real-time streaming updates as Claude generates responses. **JSON** waits for completion before parsing. **Text** returns raw response content."
         },
         "flightpath.defaultMaxRetries": {
           "order": 500,

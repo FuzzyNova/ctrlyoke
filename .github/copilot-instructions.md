@@ -359,7 +359,10 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 - flightpath.claudeCliToolPermissions (enum: "skipAll" | "custom", default: "skipAll")
   - **skipAll**: Uses `--dangerously-skip-permissions` (default, non-interactive)
   - **custom**: Uses shared `cliAllowedTools` and `cliDeniedTools` (auto-converted to Claude format)
-- flightpath.claudeCliOutputFormat (enum: "json" | "text", default: "json")
+- flightpath.claudeCliOutputFormat (enum: "stream-json" | "json" | "text", default: "stream-json")
+  - **stream-json**: Real-time streaming with JSON parsing (recommended, default)
+  - **json**: Single JSON result after completion (no streaming)
+  - **text**: Plain text output
 
 **CLI Integration**: See `docs/COPILOT_CLI_DESIGN.md` for complete CLI flag reference, tool permission patterns, and planned enhancements.
 
