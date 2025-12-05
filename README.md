@@ -183,7 +183,7 @@ The context menu allows you to override your default integration mode for a spec
 FlightPath contributes the following settings:
 
 - **`flightpath.promptsDirectory`**: Directory for prompt files (default: `.flightpath`)
-- **`flightpath.scriptTimeout`**: Default timeout for end condition scripts (default: 30000ms)
+- **`flightpath.scriptTimeout`**: Timeout for end condition scripts in seconds (default: 30s)
 - **`flightpath.chatWindowLocation`**: Choose where to open Copilot Chat for automation
   - `chatPanel` (default): Open in the Chat panel - recommended for most users
   - `newTab`: Open in an editor tab

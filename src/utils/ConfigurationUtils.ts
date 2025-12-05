@@ -88,9 +88,11 @@ export const ConfigurationUtils = {
 
   /**
    * Get the script timeout in milliseconds
+   * User configures in seconds, this returns milliseconds
    */
-  getScriptTimeout(): number {
-    return getConfig().get<number>("scriptTimeout", 30000);
+  getScriptTimeoutMs(): number {
+    const timeoutSeconds = getConfig().get<number>("scriptTimeout", 30);
+    return timeoutSeconds * 1000;
   },
 
   /**
@@ -177,6 +179,15 @@ export const ConfigurationUtils = {
    */
   getCliExecutionMode(): string {
     return getConfig().get<string>("cliExecutionMode", "interactive");
+  },
+
+  /**
+   * Get CLI execution timeout in milliseconds
+   * User configures in seconds, this returns milliseconds
+   */
+  getCliExecutionTimeoutMs(): number {
+    const timeoutSeconds = getConfig().get<number>("cliExecutionTimeout", 300);
+    return timeoutSeconds * 1000;
   },
 
   /**

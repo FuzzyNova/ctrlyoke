@@ -137,36 +137,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Wait for terminal shell execution to end.
-   * Uses onDidEndTerminalShellExecution to detect when commands complete.
-   */
-  private waitForShellExecutionEnd(
-    terminal: vscode.Terminal,
-    timeoutMs: number
-  ): Promise<boolean> {
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        disposable.dispose();
-        this.log("⏱️ Shell execution end detection timed out");
-        resolve(false);
-      }, timeoutMs);
-
-      const disposable = vscode.window.onDidEndTerminalShellExecution(
-        (event) => {
-          if (event.terminal === terminal) {
-            clearTimeout(timeout);
-            disposable.dispose();
-            this.log(
-              `✅ Shell execution ended with exit code: ${event.exitCode}`
-            );
-            resolve(true);
-          }
-        }
-      );
-    });
-  }
-
-  /**
    * Wait for TUI to be ready, send prompt, then stream and detect completion.
    *
    * This method:
@@ -181,13 +151,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * @param terminal The terminal to send the prompt to
    * @param execution The shell execution to read from
    * @param promptText The prompt text to send once TUI is ready
-   * @param timeoutMs Maximum time to wait for completion
+   * @param timeoutMs Maximum time to wait for completion (defaults to configured CLI execution timeout)
    */
   private async waitForTuiAndExecute(
     terminal: vscode.Terminal,
     execution: vscode.TerminalShellExecution,
     promptText: string,
-    timeoutMs: number = 300000
+    timeoutMs: number = ConfigurationUtils.getCliExecutionTimeoutMs()
   ): Promise<boolean> {
     const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
@@ -473,67 +443,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Extract the meaningful delta between two TUI screen states.
-   *
-   * TUI apps redraw the entire screen each frame. This method finds what's
-   * actually new or changed between frames to avoid spamming the dashboard
-   * with repeated content.
-   *
-   * Strategy:
-   * 1. Split both screens into lines
-   * 2. Find lines in current that aren't in previous (new content)
-   * 3. Filter out UI chrome (borders, prompts, status bars)
-   * 4. Return only the meaningful new content
-   *
-   * @param previousScreen The previous screen state
-   * @param currentScreen The current screen state
-   * @returns The delta (new/changed content only)
-   */
-  private extractScreenDelta(
-    previousScreen: string,
-    currentScreen: string
-  ): string {
-    if (!previousScreen) {
-      // First screen - return empty to avoid initial TUI spam
-      return "";
-    }
-
-    // Split into lines and normalize
-    const prevLines = new Set(
-      previousScreen
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0)
-    );
-
-    const currentLines = currentScreen
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-
-    // Find lines that are new (not in previous screen)
-    const newLines = currentLines.filter((line) => {
-      // Skip if was in previous screen
-      if (prevLines.has(line)) {
-        return false;
-      }
-
-      // Skip TUI chrome and status lines
-      if (this.isTuiChromeLine(line)) {
-        return false;
-      }
-
-      return true;
-    });
-
-    if (newLines.length === 0) {
-      return "";
-    }
-
-    return newLines.join("\n") + "\n";
-  }
-
-  /**
    * Extract complete TUI screens from a buffer.
    *
    * TUI apps redraw the entire screen each frame. Chunks from execution.read()
@@ -751,15 +660,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     try {
       // Wait for shell integration (needed for executeCommand and read())
       this.log(`🎮 [TRACE] Waiting for shell integration...`);
-      let shellIntegration: vscode.TerminalShellIntegration;
-      try {
-        shellIntegration = await this.waitForShellIntegration(terminal);
-        this.shellIntegration = shellIntegration;
-        this.log(`🎮 [TRACE] Got shell integration`);
-      } catch {
-        this.log(`🎮 [TRACE] Shell integration failed, using fallback`);
-        return this.executeWithFallbackTui(terminal, tuiCommand, promptText);
-      }
+      const shellIntegration = await this.waitForShellIntegration(terminal);
+      this.shellIntegration = shellIntegration;
+      this.log(`🎮 [TRACE] Got shell integration`);
 
       // Use executeCommand to get an execution object for read() streaming
       // Note: executeCommand queues internally, so we wait for TUI output before sending prompt
@@ -782,152 +685,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       return success;
     } catch (error) {
       this.log(`❌ TUI execution error: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Fallback TUI execution when shell integration is not available.
-   * Uses sendText for everything - no completion detection possible.
-   */
-  private async executeWithFallbackTui(
-    terminal: vscode.Terminal,
-    tuiCommand: string,
-    promptText: string
-  ): Promise<boolean> {
-    vscode.window.showWarningMessage(
-      "Shell integration unavailable. Using fallback TUI mode - check terminal for output."
-    );
-
-    this.log("⚠️ Shell integration unavailable - using fallback TUI mode");
-    this.streamingChunkEmitter.fire(
-      "⚠️ Shell integration unavailable - using fallback mode.\n" +
-        "   Check the terminal window for output.\n" +
-        "   Completion will be detected by timeout.\n"
-    );
-
-    // Start CLI
-    terminal.sendText(tuiCommand);
-
-    // Wait a bit for TUI to start
-    await this.delay(5000);
-
-    // Send prompt text (without newline) then submit with Enter (carriage return)
-    terminal.sendText(promptText, false);
-    terminal.sendText("\r"); // Enter key in raw mode = carriage return
-
-    // Without shell integration, we can't stream or detect completion
-    // Just wait for the configured timeout and treat as success
-    const timeoutMs = 300000; // 5 minutes
-    this.log(
-      `⏳ Waiting ${timeoutMs / 1000}s for completion (no streaming available)...`
-    );
-    await this.delay(timeoutMs);
-
-    this.responseCompleteEmitter.fire("Timeout reached");
-    return true;
-  }
-
-  /**
-   * Stream terminal output using execution.read() and detect completion.
-   *
-   * This uses the stable TerminalShellExecution.read() API (not proposed).
-   * Completion is detected when the escape indicator disappears from recent output.
-   *
-   * @param execution The terminal shell execution to read from
-   * @param timeoutMs Maximum time to wait for completion
-   * @returns Promise<boolean> indicating success
-   */
-  private async streamAndDetectCompletion(
-    execution: vscode.TerminalShellExecution,
-    timeoutMs: number = 300000 // 5 minute default
-  ): Promise<boolean> {
-    const escapeIndicator = this.getEscapeIndicator();
-    let indicatorVisible = false;
-    let recentOutput = "";
-    let completed = false;
-    let chunkCount = 0;
-    let totalBytes = 0;
-
-    // Create abort controller for timeout/cancellation
-    this.readAbortController = new AbortController();
-
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      this.log("⏱️ TUI completion detection timed out");
-      this.readAbortController?.abort();
-    }, timeoutMs);
-
-    try {
-      this.log("📺 Starting terminal output streaming via read()...");
-
-      for await (const data of execution.read()) {
-        // Check for abort
-        if (this.readAbortController?.signal.aborted) {
-          break;
-        }
-
-        chunkCount++;
-        totalBytes += data.length;
-
-        // Clean and stream to dashboard
-        const cleanData = this.stripAnsiCodes(data);
-        this.streamingChunkEmitter.fire(cleanData);
-        this.outputChannel?.append(data);
-
-        // Track recent output for escape indicator detection
-        recentOutput += cleanData;
-        if (recentOutput.length > 1000) {
-          recentOutput = recentOutput.slice(-1000);
-        }
-
-        // Check if escape indicator is visible
-        const indicatorNowVisible = recentOutput.includes(escapeIndicator);
-
-        // Detect completion: indicator was visible but now gone
-        if (indicatorVisible && !indicatorNowVisible) {
-          this.log("✅ Response complete (escape indicator disappeared)");
-          completed = true;
-          break;
-        }
-
-        indicatorVisible = indicatorNowVisible;
-      }
-
-      clearTimeout(timeoutId);
-
-      this.log(
-        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes, completed=${completed}`
-      );
-
-      if (completed) {
-        this.responseCompleteEmitter.fire("Response complete");
-        return true;
-      } else {
-        // Stream ended without detecting completion - treat as success
-        this.log(
-          "⚠️ Stream ended without detecting escape indicator - treating as success"
-        );
-        this.responseCompleteEmitter.fire("Stream ended");
-        return true;
-      }
-    } catch (error) {
-      clearTimeout(timeoutId);
-
-      // AbortError is expected on timeout/cancel
-      if (error instanceof Error && error.name === "AbortError") {
-        this.responseCompleteEmitter.fire("Timeout");
-        return true; // Treat timeout as success
-      }
-
-      this.log(`❌ Stream error: ${error}`);
-      this.streamingChunkEmitter.fire(
-        `\n❌ Error capturing output: ${error}\n` +
-          "   Please view the terminal window for the output.\n"
-      );
-      return false;
-    } finally {
-      this.readAbortController = undefined;
+      throw error;
     }
   }
 
@@ -987,7 +745,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         headlessArgs,
         promptText,
         {
-          timeout: 300000, // 5 minutes
+          timeout: ConfigurationUtils.getCliExecutionTimeoutMs(),
           onStdout: (chunk) => {
             this.streamingChunkEmitter.fire(chunk);
           },

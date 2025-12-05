@@ -308,7 +308,7 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 ## Extension Settings
 
 - flightpath.promptsDirectory (string, default: ".flightpath")
-- flightpath.scriptTimeout (number, default: 30000)
+- flightpath.scriptTimeout (number, default: 30) - End condition script timeout in seconds
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
 - flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli", default: "copilot-cli")
   - **cli**: Copilot CLI (default, best reliability)

@@ -342,8 +342,11 @@
         "flightpath.scriptTimeout": {
           "order": 11,
           "type": "number",
-          "default": 30000,
-          "description": "Timeout for end condition scripts in milliseconds"
+          "default": 30,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Timeout for end condition scripts in seconds",
+          "markdownDescription": "Maximum time in seconds to wait for end condition scripts to complete. Default is 30 seconds. Range: 5 seconds to 5 minutes."
         },
         "flightpath.workflowsDirectory": {
           "order": 12,
@@ -469,7 +472,7 @@
           "markdownDescription": "**Chat Mode Only.** Default AI model for Copilot Chat. FlightPath will switch to this model before sending each prompt. Prompts can override with `\"model\": \"...\"`."
         },
         "flightpath.cliExecutionMode": {
-          "order": 199,
+          "order": 200,
           "type": "string",
           "enum": [
             "interactive",
@@ -483,22 +486,31 @@
           "description": "[CLI Modes] Where CLI commands execute",
           "markdownDescription": "**CLI Modes Only.** Where CLI commands execute.\n\n- **Interactive** (default): Opens a VS Code terminal for visibility and immediate abort via Ctrl+C\n- **Headless**: Runs silently in background process\n\n**Note:** Headless mode without full permissions will auto-deny tool prompts, preventing the agent from acting."
         },
+        "flightpath.cliExecutionTimeout": {
+          "order": 201,
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 3600,
+          "description": "[CLI Modes] Maximum time in seconds to wait for CLI execution",
+          "markdownDescription": "**CLI Modes Only.** Maximum time in seconds to wait for a CLI prompt to complete. Default is 5 minutes (300s). Increase for complex operations that take longer. Range: 30 seconds to 1 hour."
+        },
         "flightpath.showCliOutput": {
-          "order": 200,
+          "order": 202,
           "type": "boolean",
           "default": true,
           "description": "[CLI Modes] Show CLI output in the Output panel",
           "markdownDescription": "**CLI Modes Only.** Show CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
         },
         "flightpath.showCliCommand": {
-          "order": 201,
+          "order": 203,
           "type": "boolean",
           "default": false,
           "description": "[CLI Modes] Show the full CLI command with all arguments in the dashboard",
           "markdownDescription": "**CLI Modes Only.** When enabled, displays the complete CLI command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
         },
         "flightpath.cliAllowedTools": {
-          "order": 202,
+          "order": 204,
           "type": "array",
           "items": {
             "type": "string"
@@ -508,7 +520,7 @@
           "markdownDescription": "**CLI Modes Only.** Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
         "flightpath.cliDeniedTools": {
-          "order": 203,
+          "order": 205,
           "type": "array",
           "items": {
             "type": "string"

@@ -91,8 +91,9 @@ export class EndConditionEvaluator {
         command = { executable: rawScriptPath, args: additionalArgs };
       }
 
-      // Execute script with timeout
-      const timeout = condition.timeout || 30000; // 30 seconds default
+      // Execute script with timeout from config or per-condition override
+      const timeout =
+        condition.timeout || ConfigurationUtils.getScriptTimeoutMs();
       const result = await this.executeScript(
         command.executable,
         command.args,
@@ -230,7 +231,7 @@ export class EndConditionEvaluator {
     executable: string,
     args: string[],
     workingDirectory?: string,
-    timeout: number = 30000
+    timeout: number = ConfigurationUtils.getScriptTimeoutMs()
   ): Promise<{
     success: boolean;
     result: string;
