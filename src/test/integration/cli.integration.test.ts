@@ -47,8 +47,8 @@ suite("CLI Integration Tests", () => {
       "flightpath.stop",
       "flightpath.showCopilotStatus",
       "flightpath.createPromptFile",
-      "flightpath.sendToCli",
-      "flightpath.sendToChat",
+      "flightpath.runFromContext",
+      "flightpath.loadFromContext",
     ];
 
     for (const cmd of flightPathCommands) {

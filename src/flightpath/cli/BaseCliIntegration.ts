@@ -18,6 +18,14 @@ export const CLI_EXECUTION_MODE = {
 };
 
 /**
+ * Warning messages - single source of truth
+ */
+export const CLI_WARNING_MESSAGES = {
+  HEADLESS_WITHOUT_PERMISSIONS:
+    "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.",
+} as const;
+
+/**
  * Base class for CLI integrations (Copilot CLI and Claude CLI)
  *
  * **Architecture:**
@@ -1051,6 +1059,69 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   // ============================================================
+  // INITIALIZATION
+  // ============================================================
+
+  /**
+   * Initialize CLI by checking availability via --version command.
+   * Subclasses can override for custom initialization logic.
+   */
+  async initialize(): Promise<void> {
+    this.initializationStatus = CopilotStatus.Initializing;
+    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
+
+    try {
+      const result = await this.spawnSimpleCommand(
+        this.getCliName(),
+        ["--version"],
+        5000
+      );
+
+      if (result.exitCode === 0) {
+        const version = result.stdout.trim();
+        console.log(`✅ ${this.getCliName()} CLI available:`, version);
+        this.log(`✅ ${this.getCliName()} CLI available: ${version}`);
+        this.isAvailable = true;
+        this.initializationStatus = CopilotStatus.Ready;
+        this.statusChangeEmitter.fire(CopilotStatus.Ready);
+      } else {
+        this.handleInitializationError("command_failed", result.stderr);
+      }
+    } catch (error) {
+      this.handleInitializationError("exception", error);
+    }
+  }
+
+  /**
+   * Handle initialization errors with logging.
+   * Subclasses can override for custom error messages.
+   */
+  protected handleInitializationError(
+    type: "command_failed" | "exception",
+    error: unknown
+  ): void {
+    this.isAvailable = false;
+    this.initializationStatus = CopilotStatus.Unavailable;
+    this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`❌ ${this.getCliName()} CLI not available:`, errorMessage);
+    this.log(`❌ ${this.getCliName()} CLI unavailable: ${errorMessage}`);
+  }
+
+  /**
+   * Show warning when running in headless mode without full permissions
+   */
+  protected warnIfHeadlessWithoutPermissions(): void {
+    const mode = this.getExecutionMode();
+    if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
+      vscode.window.showWarningMessage(
+        CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS
+      );
+    }
+  }
+
+  // ============================================================
   // STATUS METHODS
   // ============================================================
 
@@ -1118,13 +1189,60 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   // ============================================================
+  // STATUS METHODS (CONTINUED)
+  // ============================================================
+
+  /**
+   * Get integration status.
+   * Subclasses can override getCliDisplayName() and getInstallCommand() for custom messages.
+   */
+  getStatus(): { available: boolean; message: string; strategy: string } {
+    if (this.isAvailable) {
+      return {
+        available: true,
+        message: `✅ ${this.getCliDisplayName()} available`,
+        strategy: this.getIntegrationMode(),
+      };
+    } else {
+      return {
+        available: false,
+        message: `❌ ${this.getCliDisplayName()} unavailable - ${this.getInstallHint()}`,
+        strategy: this.getIntegrationMode(),
+      };
+    }
+  }
+
+  /**
+   * Parse pattern: toolName or toolName(args)
+   * Returns [toolName, args] or null if invalid
+   */
+  protected parseToolPattern(pattern: string): [string, string?] | null {
+    const match = pattern.match(/^(\w+)(\(.+\))?$/);
+    if (!match) {
+      return null;
+    }
+    const [, toolName, args] = match;
+    return args ? [toolName, args] : [toolName];
+  }
+
+  // ============================================================
   // ABSTRACT METHODS
   // ============================================================
 
   /**
-   * Get the CLI-specific integration mode string
+   * Get the CLI-specific integration mode string (e.g., "copilot-cli")
    */
   protected abstract getIntegrationMode(): string;
+
+  /**
+   * Get display name for status messages (e.g., "Copilot CLI", "Claude Code CLI")
+   */
+  protected abstract getCliDisplayName(): string;
+
+  /**
+   * Get installation hint for unavailable CLI
+   */
+  protected abstract getInstallHint(): string;
 
   /**
    * Parse token counts from statistics string

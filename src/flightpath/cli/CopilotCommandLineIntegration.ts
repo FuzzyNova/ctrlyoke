@@ -5,7 +5,11 @@ import * as os from "os";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
-import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
+import {
+  BaseCliIntegration,
+  CLI_EXECUTION_MODE,
+  CLI_WARNING_MESSAGES,
+} from "./BaseCliIntegration";
 import {
   getCliSupportedModelIds,
   isCliModelSupported,
@@ -13,16 +17,9 @@ import {
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
- * Claude CLI tool names that need to be converted to Copilot format
- * Maps Claude tool names (case-insensitive) to Copilot permission patterns
- *
- * Copilot uses permission KINDS (categories), not individual tool names:
- * - shell(command:*?) - Controls powershell, write_powershell, read_powershell, stop_powershell
- * - write - Controls create and edit tools
- * - <mcp-server>(tool?) - Controls MCP server tools
- *
- * Note: Copilot's "view" tool (read files) doesn't require permission - it's always allowed.
- * Similarly, Glob/Grep/LS equivalents don't exist as restricted operations.
+ * Maps Claude tool names to Copilot permission categories.
+ * Copilot uses permission KINDS (shell, write, <mcp-server>) not individual tools.
+ * Read-only tools (read, glob, grep, ls) map to null (always allowed in Copilot).
  */
 const CLAUDE_TO_COPILOT_TOOL_MAP: Record<string, string | null> = {
   // Shell commands - Bash maps to shell category
@@ -46,18 +43,12 @@ const CLAUDE_TO_COPILOT_TOOL_MAP: Record<string, string | null> = {
 };
 
 /**
- * Copilot CLI Integration
+ * GitHub Copilot CLI Integration
  *
- * Implements Copilot integration using the GitHub Copilot CLI.
- * Provides deterministic completion detection, structured output parsing,
- * and simpler architecture compared to chat window automation.
- *
- * Key advantages:
- * - No UI timing dependencies
- * - Command returns when complete (no polling needed)
- * - Structured output format (response vs. statistics)
- * - Model selection support
- * - Session management for multi-turn conversations
+ * CLI-specific features:
+ * - Log directory for session ID tracking
+ * - Statistics parsing: "Total usage est: X prompt + Y completion"
+ * - Tool permission conversion from Claude format
  */
 export class CopilotCommandLineIntegration extends BaseCliIntegration {
   private logDirectory?: string;
@@ -82,48 +73,32 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return "copilot";
   }
 
-  /**
-   * Get the escape indicator for Copilot CLI.
-   * This text appears while generating and disappears when complete.
-   * The TUI shows "Esc to cancel" (capital E, no outer parentheses)
-   */
   protected getEscapeIndicator(): string {
     return "Esc to cancel";
   }
 
-  /**
-   * Get the screen end pattern for Copilot CLI.
-   * Copilot TUI screens end with the status bar: "Ctrl+c Exit · Ctrl+r Expand recent"
-   */
   protected getScreenEndPattern(): RegExp {
     return /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi;
   }
 
-  /**
-   * Build headless args for Copilot CLI.
-   * Copilot reads from stdin when not a TTY, so NO -p flag needed.
-   */
   protected buildHeadlessArgs(baseArgs: string[]): string[] {
-    // For headless mode with stdin, Copilot reads from stdin automatically
-    // No -p flag needed - it detects non-TTY and reads stdin
-    return [...baseArgs];
+    return [...baseArgs]; // Copilot auto-detects stdin, no -p flag needed
   }
 
-  /**
-   * Build interactive TUI command for Copilot CLI.
-   * Starts the CLI in interactive mode without a prompt.
-   */
   protected buildInteractiveTuiCommand(baseArgs: string[]): string {
-    const cliName = this.getCliName();
-    // Start in interactive mode - prompt will be sent via sendText
-    return `${cliName} ${baseArgs.join(" ")}`;
+    return `${this.getCliName()} ${baseArgs.join(" ")}`;
   }
 
-  /**
-   * Get the integration mode for status reporting
-   */
   protected getIntegrationMode(): string {
     return Provider.CopilotCli;
+  }
+
+  protected getCliDisplayName(): string {
+    return "Copilot CLI";
+  }
+
+  protected getInstallHint(): string {
+    return "run: npm install -g @github/copilot";
   }
 
   /**
@@ -138,19 +113,36 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Parse token counts from Copilot CLI statistics string
-   * Example statistics: "Total usage est: 1234 prompt + 5678 completion = 6912 total tokens"
+   *
+   * Format (as of 2025-12):
+   * "Usage by model:
+   *     capi-...-gpt-5-mini-... 25.7k input, 223 output, 6.1k cache read (Est. 1 Premium request)"
    */
   parseTokenCounts(
     statistics: string
   ): { prompt: number; completion: number } | undefined {
-    const match = statistics.match(/(\d+)\s+prompt\s+\+\s+(\d+)\s+completion/);
-    if (match) {
-      return {
-        prompt: parseInt(match[1], 10),
-        completion: parseInt(match[2], 10),
-      };
+    // Parse format: "25.7k input, 223 output"
+    // The regex captures number (with optional decimal) and checks for k suffix separately
+    const match = statistics.match(
+      /([\d.]+)(k)?\s+input,\s+([\d.]+)(k)?\s+output/i
+    );
+    if (!match) {
+      return undefined;
     }
-    return undefined;
+
+    const parseValue = (
+      numStr: string,
+      hasSuffix: string | undefined
+    ): number => {
+      const num = parseFloat(numStr);
+      // If suffix exists (captured as 'k'), multiply by 1000
+      return hasSuffix ? Math.round(num * 1000) : num;
+    };
+
+    return {
+      prompt: parseValue(match[1], match[2]),
+      completion: parseValue(match[3], match[4]),
+    };
   }
 
   // ============================================================
@@ -175,39 +167,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     this.log(`📁 Log directory set to: ${this.logDirectory}`);
   }
 
-  /**
-   * Initialize CLI integration by checking if copilot CLI is available
-   */
-  async initialize(): Promise<void> {
-    this.initializationStatus = CopilotStatus.Initializing;
-    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
-
-    try {
-      // Check if CLI is available by running --version
-      const result = await this.spawnSimpleCommand(
-        this.getCliName(),
-        ["--version"],
-        5000
-      );
-
-      if (result.exitCode === 0) {
-        console.log("✅ Copilot CLI available:", result.stdout.trim());
-        this.isAvailable = true;
-        this.initializationStatus = CopilotStatus.Ready;
-        this.statusChangeEmitter.fire(CopilotStatus.Ready);
-      } else {
-        console.error("❌ Copilot CLI not found or not working");
-        this.isAvailable = false;
-        this.initializationStatus = CopilotStatus.Unavailable;
-        this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
-      }
-    } catch (error) {
-      console.error("❌ Error checking Copilot CLI:", error);
-      this.isAvailable = false;
-      this.initializationStatus = CopilotStatus.Unavailable;
-      this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
-    }
-  }
+  // Uses base class initialize() method
 
   /**
    * Send prompt to Copilot via CLI
@@ -234,14 +194,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       return false;
     }
 
-    const mode = this.getExecutionMode();
-
     // Warn if headless mode without full permissions
-    if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
-      vscode.window.showWarningMessage(
-        "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress."
-      );
-    }
+    this.warnIfHeadlessWithoutPermissions();
 
     try {
       // Build prompt text with dynamic queue instructions if applicable
@@ -270,6 +224,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       this.resetCancellationFlag();
 
       // Route based on execution mode
+      const mode = this.getExecutionMode();
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
         return await this.executeInteractive(args, promptText);
       } else {
@@ -461,19 +416,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Get configured AI model
-   */
-  private getConfiguredModel(): string {
-    return ConfigurationUtils.getCliModel();
-  }
-
-  /**
    * Validate model is supported by CLI, fallback to default if not
-   * Uses dynamically discovered models from 'copilot --help' output
-   * Shows user-friendly warning when unsupported model requested
    */
   private validateAndGetModel(requestedModel?: string): string {
-    const defaultModel = this.getConfiguredModel();
+    const defaultModel = ConfigurationUtils.getCliModel();
 
     if (!requestedModel) {
       return defaultModel;
@@ -509,13 +455,12 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    * - "github(search)" → "github(search)" (MCP tools pass through)
    */
   private convertToolPatternToCopilotFormat(pattern: string): string | null {
-    // Match pattern: toolName or toolName(args)
-    const match = pattern.match(/^(\w+)(\(.+\))?$/);
-    if (!match) {
-      return pattern; // Return as-is if pattern doesn't match expected format (e.g., MCP tools)
+    const parsed = this.parseToolPattern(pattern);
+    if (!parsed) {
+      return pattern; // Return as-is (e.g., MCP tools)
     }
 
-    const [, toolName, args] = match;
+    const [toolName, args] = parsed;
     const lowerToolName = toolName.toLowerCase();
 
     // Check if this is a Claude tool that needs conversion
@@ -623,25 +568,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return ConfigurationUtils.shouldAllowAllPaths();
   }
 
-  /**
-   * Get integration status
-   */
-  getStatus(): { available: boolean; message: string; strategy: string } {
-    if (this.isAvailable) {
-      return {
-        available: true,
-        message: "✅ Copilot CLI available",
-        strategy: Provider.CopilotCli,
-      };
-    } else {
-      return {
-        available: false,
-        message:
-          "❌ Copilot CLI unavailable - please install GitHub Copilot CLI",
-        strategy: Provider.CopilotCli,
-      };
-    }
-  }
+  // Uses base class getStatus() method
 
   /**
    * Extract session ID from log file name in log directory

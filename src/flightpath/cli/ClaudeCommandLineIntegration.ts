@@ -2,7 +2,11 @@ import * as vscode from "vscode";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
-import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
+import {
+  BaseCliIntegration,
+  CLI_EXECUTION_MODE,
+  CLI_WARNING_MESSAGES,
+} from "./BaseCliIntegration";
 import {
   CLAUDE_CLI_DEFAULT_MODEL,
   getClaudeModelName,
@@ -10,29 +14,8 @@ import {
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 /**
- * Tool name mappings from Copilot CLI format to Claude CLI format
- * Used to convert shared cliAllowedTools/cliDeniedTools settings
- *
- * Copilot CLI uses permission KINDS (categories), not individual tool names:
- * - shell(command:*?) - Controls powershell, write_powershell, read_powershell, stop_powershell
- * - write - Controls create and edit tools
- * - <mcp-server>(tool?) - Controls MCP server tools
- * Note: Copilot's "view" tool (read files) doesn't require permission.
- *
- * Claude CLI has granular tool permissions:
- * - Bash(command:*?) - Shell commands (equivalent to Copilot's shell)
- * - Read - Read files (no Copilot equivalent - always allowed in Copilot)
- * - Write - Write/create files
- * - Edit - Edit existing files
- * - MultiEdit - Batch editing
- * - Glob - File pattern matching (no Copilot equivalent - always allowed)
- * - Grep - Text search (no Copilot equivalent - always allowed)
- * - LS - List directories (no Copilot equivalent - always allowed)
- * - WebFetch - Fetch web content (no Copilot equivalent)
- * - TodoWrite - Todo management (no Copilot equivalent)
- *
- * When converting Copilot's "write" to Claude, it maps to "Write" only.
- * Users should add "Edit" separately if they want to allow file modifications.
+ * Maps Copilot permission patterns to Claude tool names.
+ * Copilot uses categories (shell, write), Claude uses granular tools (Bash, Write, Edit, Read, etc.).
  */
 const COPILOT_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
   // Shell commands
@@ -78,25 +61,10 @@ interface ClaudeCliJsonResponse {
 /**
  * Claude Code CLI Integration
  *
- * Implements Copilot integration using the Claude Code CLI (Anthropic).
- * Provides deterministic completion detection, structured output parsing,
- * and simpler architecture compared to chat window automation.
- *
- * Key advantages:
- * - No UI timing dependencies
- * - Command returns when complete (no polling needed)
- * - Structured JSON output format
- * - Model selection support (sonnet, opus, haiku)
- * - Session management for multi-turn conversations
- *
- * CLI Command Reference:
- * - `claude -p "<prompt>"` - Non-interactive prompt execution
- * - `--output-format json` - Structured output
- * - `--model <model>` - Model selection
- * - `-c` - Continue most recent session
- * - `-r <session-id>` - Resume specific session
- * - `--add-dir <path>` - Add accessible directory
- * - `--dangerously-skip-permissions` - Skip all permission prompts
+ * CLI-specific features:
+ * - Stream-json output format with real-time content extraction
+ * - Model alias resolution (sonnet, opus, haiku)
+ * - Tool call summaries for user visibility
  */
 export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   private cliVersion?: string;
@@ -121,67 +89,43 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return "claude";
   }
 
-  /**
-   * Get the escape indicator for Claude CLI.
-   * This text appears while generating and disappears when complete.
-   * The TUI shows "esc to interrupt" (may have different casing)
-   */
   protected getEscapeIndicator(): string {
     return "esc to interrupt";
   }
 
-  /**
-   * Get the screen end pattern for Claude CLI.
-   * Claude TUI screens end with a line of dashes followed by "> " prompt.
-   * The status bar text varies based on user's tab settings, so we use
-   * the more stable prompt pattern.
-   */
   protected getScreenEndPattern(): RegExp {
-    // Match: line of ─ characters, newline, > followed by space(s) or end
     return /─{20,}\r?\n>\s*/g;
   }
 
-  /**
-   * Build headless args for Claude CLI.
-   * Claude REQUIRES -p flag for headless mode (Ink TUI crashes without it).
-   * Note: -p is already added by buildCliArgs for headless mode, so we just return as-is.
-   */
   protected buildHeadlessArgs(baseArgs: string[]): string[] {
-    // -p flag is already included from buildCliArgs, just pass through
-    return baseArgs;
+    return baseArgs; // -p flag already added by buildCliArgs
   }
 
-  /**
-   * Determine if stdout should be streamed in real-time during headless execution.
-   *
-   * For Claude CLI: Always stream with stream-json format (extracts content from JSON chunks)
-   */
   protected shouldStreamHeadlessOutput(): boolean {
-    return true;
+    return true; // Stream and extract content from JSON chunks
   }
 
-  /**
-   * Build interactive TUI command for Claude CLI.
-   * Starts the CLI in interactive mode without a prompt.
-   */
   protected buildInteractiveTuiCommand(baseArgs: string[]): string {
-    const cliName = this.getCliName();
-    // Start in interactive mode - prompt will be sent via sendText
-    // Remove -p flag and output-format for interactive mode
+    // Filter out headless-only flags for interactive mode
     const interactiveArgs = baseArgs.filter(
       (arg, i, arr) =>
         arg !== "-p" &&
         arg !== "--output-format" &&
         arr[i - 1] !== "--output-format"
     );
-    return `${cliName} ${interactiveArgs.join(" ")}`;
+    return `${this.getCliName()} ${interactiveArgs.join(" ")}`;
   }
 
-  /**
-   * Get the integration mode for status reporting
-   */
   protected getIntegrationMode(): string {
     return Provider.ClaudeCli;
+  }
+
+  protected getCliDisplayName(): string {
+    return "Claude Code CLI";
+  }
+
+  protected getInstallHint(): string {
+    return "run: npm install -g @anthropic-ai/claude-code";
   }
 
   /**
@@ -388,15 +332,13 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Handle initialization errors with user-friendly messages (Story 2.3)
+   * Override base class to provide Claude-specific installation instructions
    */
-  private handleInitializationError(
+  protected handleInitializationError(
     type: "command_failed" | "exception",
     error: unknown
   ): void {
-    this.isAvailable = false;
-    this.initializationStatus = CopilotStatus.Unavailable;
-    this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
+    super.handleInitializationError(type, error);
 
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -406,29 +348,10 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       errorMessage.includes("not found") ||
       errorMessage.includes("not recognized")
     ) {
-      const message =
-        "Claude Code CLI not found. Install with: npm install -g @anthropic-ai/claude-code";
-      console.error(`❌ ${message}`);
-      this.log(`❌ ${message}`);
+      this.log("   💻 Install: npm install -g @anthropic-ai/claude-code");
       this.log(
         "   📖 Documentation: https://docs.anthropic.com/en/docs/claude-code"
       );
-    } else if (
-      errorMessage.includes("EACCES") ||
-      errorMessage.includes("permission denied")
-    ) {
-      const message =
-        "Claude Code CLI permission denied. Check PATH and file permissions.";
-      console.error(`❌ ${message}`);
-      this.log(`❌ ${message}`);
-    } else if (errorMessage.includes("ETIMEDOUT") || type === "exception") {
-      const message =
-        "Claude Code CLI detection timed out. Check system resources and try again.";
-      console.error(`❌ ${message}`);
-      this.log(`❌ ${message}`);
-    } else {
-      console.error("❌ Claude Code CLI not available:", errorMessage);
-      this.log(`❌ Claude Code CLI unavailable: ${errorMessage}`);
     }
   }
 
@@ -462,14 +385,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       return false;
     }
 
-    const mode = this.getExecutionMode();
-
     // Warn if headless mode without full permissions
-    if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
-      vscode.window.showWarningMessage(
-        "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress."
-      );
-    }
+    this.warnIfHeadlessWithoutPermissions();
 
     try {
       // Build prompt text with dynamic queue instructions if applicable
@@ -489,6 +406,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       this.logPrompt(promptText);
 
       // Build CLI arguments (mode-specific: interactive mode skips -p flag)
+      const mode = this.getExecutionMode();
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
       const args = this.buildCliArgs(prompt, isInteractive);
 
@@ -804,24 +722,10 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   // ============================================================
 
   /**
-   * Get configured AI model (with alias resolution)
-   */
-  private getConfiguredModel(): string {
-    return ConfigurationUtils.getClaudeCliModel();
-  }
-
-  /**
    * Validate model is supported by Claude CLI, fallback to default if not
-   *
-   * Accepts:
-   * - Aliases: "sonnet", "opus", "haiku"
-   * - Generic Copilot-style names: "claude-sonnet-4.5", "claude-sonnet-4", "claude-haiku-4.5"
-   * - Full Claude names: "claude-sonnet-4-5-20250929"
-   *
-   * All are converted to Claude's full model name format.
    */
   private validateAndGetModel(requestedModel?: string): string {
-    const defaultModel = this.getConfiguredModel();
+    const defaultModel = ConfigurationUtils.getClaudeCliModel();
 
     if (!requestedModel) {
       // Return full model name for default
@@ -848,21 +752,13 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return defaultFullName || defaultModel;
   }
 
-  /**
-   * Convert a Copilot CLI tool pattern to Claude CLI format
-   * Examples:
-   * - "shell(git:*)" → "Bash(git:*)"
-   * - "write" → "Write"
-   * - "github(search_repositories)" → "github(search_repositories)" (no mapping, keep as-is)
-   */
   private convertToolPatternToClaudeFormat(copilotPattern: string): string {
-    // Match pattern: toolName or toolName(args)
-    const match = copilotPattern.match(/^(\w+)(\(.+\))?$/);
-    if (!match) {
-      return copilotPattern; // Return as-is if pattern doesn't match expected format
+    const parsed = this.parseToolPattern(copilotPattern);
+    if (!parsed) {
+      return copilotPattern; // Keep as-is if pattern doesn't match expected format
     }
 
-    const [, toolName, args] = match;
+    const [toolName, args] = parsed;
     const claudeToolName =
       COPILOT_TO_CLAUDE_TOOL_MAP[toolName.toLowerCase()] || toolName;
     return args ? claudeToolName + args : claudeToolName;
@@ -911,23 +807,5 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   // STATUS METHODS (Story 2.4)
   // ============================================================
 
-  /**
-   * Get integration status
-   */
-  getStatus(): { available: boolean; message: string; strategy: string } {
-    if (this.isAvailable) {
-      return {
-        available: true,
-        message: `✅ Claude Code CLI available${this.cliVersion ? ` (${this.cliVersion})` : ""}`,
-        strategy: Provider.ClaudeCli,
-      };
-    } else {
-      return {
-        available: false,
-        message:
-          "❌ Claude Code CLI unavailable - please install @anthropic-ai/claude-code",
-        strategy: Provider.ClaudeCli,
-      };
-    }
-  }
+  // Uses base class getStatus() method
 }

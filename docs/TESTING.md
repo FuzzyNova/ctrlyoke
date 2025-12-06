@@ -12,10 +12,10 @@ FlightPath uses a hybrid testing approach:
 
 ## Automated Tests
 
-### Current Coverage (18 passing tests)
+### Current Coverage (222 passing tests)
 
 ```
-✨ 18 passing (24ms)
+✨ 222 passing (~650ms)
 ⏸️ 0 pending
 ❌ 0 failing
 ```
@@ -28,8 +28,11 @@ FlightPath uses a hybrid testing approach:
 - ✅ Configuration access (1 test)
 - ✅ Chat commands availability (1 test)
 - ✅ File attachment detection (1 test)
-- ✅ Settings validation (2 tests)
-- ✅ Core utilities - PromptQueue, ValidationUtils, PromptFileParser (8 tests)
+- ✅ Settings validation (45 tests)
+- ✅ Core utilities - PromptQueue, ValidationUtils, PromptFileParser (120 tests)
+- ✅ Token parsing - Copilot CLI and Claude CLI (8 tests)
+- ✅ End condition evaluator (19 tests)
+- ✅ Prompt identity and dynamic queue (21 tests)
 - ✅ Workspace handling (1 test)
 
 ### Running Automated Tests
@@ -50,14 +53,20 @@ npm run compile-tests    # Compiles tests with tsc
 ```
 src/test/
 ├── integration/
-│   ├── cli.integration.test.ts    # CLI integration (6 tests)
-│   ├── chat.integration.test.ts   # Chat integration (8 tests)
+│   ├── cli.integration.test.ts       # CLI integration (6 tests)
+│   ├── chat.integration.test.ts      # Chat integration (8 tests)
+│   ├── token-parsing.test.ts         # Token parsing (8 tests)
 │   └── workflow.integration.test.ts
-├── extension.test.ts              # Extension lifecycle
-├── flightpath.test.ts             # Core utilities (8 tests)
-├── runTest.ts                     # Test runner
+├── extension.test.ts                 # Extension lifecycle
+├── flightpath.test.ts                # Core utilities (8 tests)
+├── endCondition.test.ts              # End condition evaluator (19 tests)
+├── promptFileParser.test.ts          # Prompt file parsing (40+ tests)
+├── promptIdentity.test.ts            # Dynamic queue identity (21 tests)
+├── promptQueue.test.ts               # State machine (70+ tests)
+├── validationUtils.test.ts           # Validation utilities (45+ tests)
+├── runTest.ts                        # Test runner
 └── suite/
-    └── index.ts                   # Test suite loader
+    └── index.ts                      # Test suite loader
 ```
 
 ### Testing Philosophy
@@ -232,9 +241,9 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 
 **Automated Tests:**
 
-- 100% pass rate (18/18 tests)
-- Fast execution (~25ms)
-- No external dependencies (workspace, Copilot CLI)
+- 100% pass rate (222/222 tests)
+- Fast execution (~650ms)
+- Comprehensive coverage of core utilities, CLI integrations, and business logic
 
 **Manual Tests:**
 

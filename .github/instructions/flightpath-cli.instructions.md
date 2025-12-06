@@ -14,6 +14,10 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 - Stdout: response + statistics (parse via delimiter detection)
 - Session support: `--resume <id>` for multi-turn conversations (handled via CLI flags, not terminal reuse)
 - Process tracking: `currentProcess` (headless) or `currentExecution` (interactive)
+- **Token parsing**: Extracts token counts from statistics output for dashboard display
+  - Copilot CLI: "25.7k input, 223 output" (format as of Dec 2025)
+  - Claude CLI: "1234 input + 5678 output"
+  - Dashboard displays: "📊 Tokens: X prompt / Y completion"
 </architecture>
 
 <executionModes>
@@ -59,6 +63,10 @@ Subclasses must implement:
 - `buildHeadlessArgs(baseArgs)`: Args for headless mode (Copilot: no -p, Claude: with -p)
 - `buildInteractiveTuiCommand(baseArgs)`: Command to start interactive TUI
 - `hasFullPermissions()`: Check if headless mode will auto-grant permissions
+- `parseTokenCounts(statistics)`: Extract token counts from CLI statistics output
+  - Returns `{ prompt: number; completion: number } | undefined`
+  - Handles CLI-specific output formats (k suffix, decimal numbers, etc.)
+  - Used by WorkflowExecutor to populate dashboard token display
 </abstractMethods>
 
 <cancellation>
