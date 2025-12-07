@@ -131,11 +131,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   /**
    * Check if full permissions are granted (no interactive prompts will occur)
    * Full permissions with:
-   * - dangerouslySkipAll: bypasses ALL checks including deny list
+   * - dangerouslyAllowAll: bypasses ALL checks including deny list
    * - allowAll/custom: uses --permission-mode bypassPermissions (respects deny list)
    */
   protected hasFullPermissions(): boolean {
-    // All modes now auto-grant permissions (dangerouslySkipAll, allowAll, custom)
+    // All modes now auto-grant permissions (dangerouslyAllowAll, allowAll, custom)
     // The difference is whether deny list is respected
     return true;
   }
@@ -770,21 +770,21 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   /**
    * Get tool permission arguments based on configuration
    * Supports three modes:
-   * - "dangerouslySkipAll": --dangerously-skip-permissions (bypasses ALL checks, ignores deny list)
-   * - "allowAll": --tools "default" with deny patterns (safe automation, respects deny list)
-   * - "custom": specific allow/deny patterns
+   * - "dangerouslyAllowAll": --dangerously-skip-permissions (bypasses ALL checks, ignores deny list)
+   * - "allowAll": --permission-mode bypassPermissions + --tools "default" with deny patterns (safe automation, respects deny list)
+   * - "custom": --permission-mode bypassPermissions with specific allow/deny patterns
    *
    * Reads from shared cliAllowedTools/cliDeniedTools and converts to Claude format
    */
   private getToolPermissionArgs(): string[] {
-    const mode = ConfigurationUtils.getClaudeCliToolPermissions();
+    const mode = ConfigurationUtils.getCliToolPermissions();
 
-    if (mode === "dangerouslySkipAll") {
+    if (mode === "dangerouslyAllowAll") {
       return ["--dangerously-skip-permissions"];
     }
 
-    // Both allowAll and custom modes use tool patterns
-    const args: string[] = [];
+    // Both allowAll and custom modes use --permission-mode bypassPermissions
+    const args: string[] = ["--permission-mode", "bypassPermissions"];
     const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
     if (mode === "allowAll") {

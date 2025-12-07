@@ -484,8 +484,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Get tool permission arguments based on configuration
-   * Supports "allowAll" mode (--allow-all-tools) or "custom" mode with specific allow patterns.
-   * DENY PATTERNS ARE ALWAYS APPLIED regardless of mode (per Copilot CLI design).
+   * Supports three modes:
+   * - "dangerouslyAllowAll": --allow-all-tools with NO deny patterns (bypasses all restrictions)
+   * - "allowAll": --allow-all-tools with deny patterns (safe automation, recommended)
+   * - "custom": Specific allow patterns with deny patterns
    *
    * Pattern syntax:
    * - shell(command:*?) - Match shell commands (e.g., shell(git:*), shell(npm test))
@@ -502,7 +504,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     const filteredTools: string[] = [];
 
     // Add allow mode first
-    if (mode === "allowAll") {
+    if (mode === "dangerouslyAllowAll" || mode === "allowAll") {
       args.push("--allow-all-tools");
     } else {
       // Custom mode - use specific allow patterns
@@ -532,25 +534,28 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       }
     }
 
-    // ALWAYS add denied tool patterns (deny takes precedence per Copilot CLI)
-    const deniedTools = ConfigurationUtils.getCliDeniedTools();
-    const convertedDenyTools: string[] = [];
+    // Add denied tool patterns (unless dangerouslyAllowAll mode)
+    // In dangerouslyAllowAll mode, we skip deny patterns entirely
+    if (mode !== "dangerouslyAllowAll") {
+      const deniedTools = ConfigurationUtils.getCliDeniedTools();
+      const convertedDenyTools: string[] = [];
 
-    deniedTools.forEach((tool) => {
-      const converted = this.convertToolPatternToCopilotFormat(tool);
-      if (converted === null) {
-        filteredTools.push(tool);
-      } else if (!convertedDenyTools.includes(converted)) {
-        convertedDenyTools.push(converted);
+      deniedTools.forEach((tool) => {
+        const converted = this.convertToolPatternToCopilotFormat(tool);
+        if (converted === null) {
+          filteredTools.push(tool);
+        } else if (!convertedDenyTools.includes(converted)) {
+          convertedDenyTools.push(converted);
+        }
+      });
+
+      // Add all denied tools as variadic arguments to single --deny-tool flag
+      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
+      if (convertedDenyTools.length > 0) {
+        const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
+        args.push("--deny-tool", ...quotedTools);
+        this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
-    });
-
-    // Add all denied tools as variadic arguments to single --deny-tool flag
-    // Quote each pattern to handle spaces and special characters (shell: true in spawn)
-    if (convertedDenyTools.length > 0) {
-      const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
-      args.push("--deny-tool", ...quotedTools);
-      this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 
     // Log filtered tools for visibility

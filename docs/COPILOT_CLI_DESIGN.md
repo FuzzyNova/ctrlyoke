@@ -12,19 +12,19 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 
 ### ✅ Implemented Flags
 
-| CLI Flag                | FlightPath Setting/Schema                    | Implementation                                        |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------------- |
-| `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models |
-| `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included        |
-| `--allow-all-tools`     | `flightpath.copilotCliToolPermissions`       | Full support - "allowAll" and "custom" modes          |
-| `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions         |
-| `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)       |
-| `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                          |
-| `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp           |
-| `--log-level <level>`   | `flightpath.copilotCliLogLevel`              | Full support - debug/all for troubleshooting          |
-| `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                          |
-| `-p, --prompt <text>`   | Prompt text                                  | Full support (stdin for non-agent, arg for agent)     |
-| `--agent <agent>`       | `prompt.agent`                               | Full support                                          |
+| CLI Flag                | FlightPath Setting/Schema                    | Implementation                                                   |
+| ----------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models            |
+| `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included                   |
+| `--allow-all-tools`     | `flightpath.cliToolPermissions`              | Full support - "dangerouslyAllowAll", "allowAll", "custom" modes |
+| `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions                    |
+| `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                  |
+| `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                     |
+| `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp                      |
+| `--log-level <level>`   | `flightpath.copilotCliLogLevel`              | Full support - debug/all for troubleshooting                     |
+| `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                                     |
+| `-p, --prompt <text>`   | Prompt text                                  | Full support (stdin for non-agent, arg for agent)                |
+| `--agent <agent>`       | `prompt.agent`                               | Full support                                                     |
 
 ### ❌ Not Implemented Flags
 
@@ -222,42 +222,51 @@ write                 # Match file creation/modification tools
 
 ```json
 {
-  "flightpath.copilotCliToolPermissions": "allowAll" | "custom",
+  "flightpath.cliToolPermissions": "dangerouslyAllowAll" | "allowAll" | "custom",
   "flightpath.cliAllowedTools": ["shell(git:*)", "write", "github"],
   "flightpath.cliDeniedTools": ["shell(git push)", "shell(rm:*)"]
 }
 ```
 
-**Note:** These settings are shared between Copilot CLI and Claude CLI. For Claude, tool names are automatically converted (`shell` → `Bash`, `write` → `Write`).
+**Note:** This setting is shared between Copilot CLI and Claude CLI. For Claude, tool names are automatically converted (`shell` → `Bash`, `write` → `Write`).
 
-**Important:** `cliDeniedTools` is ALWAYS applied in both modes. This enables the common pattern: "allow all tools except specific ones."
+**Modes:**
+
+- **dangerouslyAllowAll**: Bypasses ALL restrictions, ignores deny list (Copilot: `--allow-all-tools` only, Claude: `--dangerously-skip-permissions`)
+- **allowAll**: Auto-grants all tools but respects deny list (Copilot: `--allow-all-tools` + denies, Claude: `--tools "default"` + denies) - RECOMMENDED
+- **custom**: Uses specific allow/deny patterns from `cliAllowedTools` and `cliDeniedTools`
 
 **Common Use Cases:**
 
 ```json
 // Most common: Allow all but deny destructive operations (RECOMMENDED)
 {
-  "flightpath.copilotCliToolPermissions": "allowAll",
+  "flightpath.cliToolPermissions": "allowAll",
   "flightpath.cliDeniedTools": ["shell(rm:*)", "shell(git push:*)"]
 }
 
 // Allow git but prevent pushes
 {
-  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.cliToolPermissions": "custom",
   "flightpath.cliAllowedTools": ["shell(git:*)"],
   "flightpath.cliDeniedTools": ["shell(git push)", "shell(git push:*)"]
 }
 
 // Read-only mode (no file writing, no shell)
 {
-  "flightpath.copilotCliToolPermissions": "allowAll",
+  "flightpath.cliToolPermissions": "allowAll",
   "flightpath.cliDeniedTools": ["write", "shell"]
 }
 
 // Only allow specific MCP tools
 {
-  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.cliToolPermissions": "custom",
   "flightpath.cliAllowedTools": ["github(search_repositories)", "github(get_file_contents)"]
+}
+
+// Maximum freedom (no restrictions, use with caution)
+{
+  "flightpath.cliToolPermissions": "dangerouslyAllowAll"
 }
 ```
 

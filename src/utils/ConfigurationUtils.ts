@@ -131,11 +131,11 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get CLI tool permissions mode
+   * Get CLI tool permissions mode (shared between Copilot and Claude)
    */
-  getCliToolPermissions(): "allowAll" | "custom" {
-    return getConfig().get<"allowAll" | "custom">(
-      "copilotCliToolPermissions",
+  getCliToolPermissions(): "dangerouslyAllowAll" | "allowAll" | "custom" {
+    return getConfig().get<"dangerouslyAllowAll" | "allowAll" | "custom">(
+      "cliToolPermissions",
       "allowAll"
     );
   },
@@ -220,16 +220,6 @@ export const ConfigurationUtils = {
    */
   getClaudeCliModel(): string {
     return getConfig().get<string>("claudeCliModel", "sonnet");
-  },
-
-  /**
-   * Get Claude CLI tool permissions mode
-   */
-  getClaudeCliToolPermissions(): "dangerouslySkipAll" | "allowAll" | "custom" {
-    return getConfig().get<"dangerouslySkipAll" | "allowAll" | "custom">(
-      "claudeCliToolPermissions",
-      "allowAll"
-    );
   },
 
   // ============================================================

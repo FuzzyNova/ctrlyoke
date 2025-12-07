@@ -327,9 +327,10 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **Behavior**: FlightPath always switches to this model before sending prompts (consistent with CLI modes)
   - **Graceful degradation**: If model switch fails, shows warning and continues with current model
 - flightpath.copilotCliAllowedDirs (array of strings, default: [])
-- flightpath.copilotCliToolPermissions (enum: "allowAll" | "custom", default: "allowAll")
-  - **allowAll**: Uses `--allow-all-tools` flag (default, grants full access)
-  - **custom**: Uses `cliAllowedTools` and `cliDeniedTools` patterns
+- flightpath.cliToolPermissions (enum: "dangerouslyAllowAll" | "allowAll" | "custom", default: "allowAll") - **SHARED** between Copilot and Claude CLI
+  - **dangerouslyAllowAll**: Bypasses ALL restrictions, ignores deny list (Copilot: `--allow-all-tools` only, Claude: `--dangerously-skip-permissions`)
+  - **allowAll**: Auto-grants all tools but respects deny list (Copilot: `--allow-all-tools` + denies, Claude: `--tools "default"` + denies) - RECOMMENDED
+  - **custom**: Uses specific allow/deny patterns from `cliAllowedTools` and `cliDeniedTools`
 - flightpath.cliAllowedTools (array of strings, default: []) - Shared tool patterns to allow in custom mode
   - Uses Copilot CLI format, automatically converted for Claude CLI
   - **Copilot tools**: `shell(command:*)`, `write`, `<mcp-server>(tool)`
@@ -356,10 +357,6 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **sonnet**: Best balance of speed and capability (recommended)
   - **opus**: Most capable, best for complex tasks
   - **haiku**: Fastest, best for simple tasks
-- flightpath.claudeCliToolPermissions (enum: "dangerouslySkipAll" | "allowAll" | "custom", default: "allowAll")
-  - **dangerouslySkipAll**: Uses `--dangerously-skip-permissions` (bypasses ALL checks, ignores deny list)
-  - **allowAll**: Uses `--permission-mode bypassPermissions` + `--tools "default"` with deny patterns (recommended, safe automation with auto-grant)
-  - **custom**: Uses `--permission-mode bypassPermissions` with shared `cliAllowedTools` and `cliDeniedTools` (auto-converted to Claude format)
 
 **Note**: Claude CLI always uses `stream-json` output format for real-time streaming with full metadata. This is hardcoded and not configurable.
 

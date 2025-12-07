@@ -346,7 +346,7 @@ private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
 
   // Apply permission settings (same for both interactive and headless)
   const toolMode = this.getToolPermissionMode();
-  if (toolMode === 'dangerouslySkipAll') {
+  if (toolMode === 'dangerouslyAllowAll') {
     args.push('--dangerously-skip-permissions');
   } else if (toolMode === 'allowAll') {
     // Allow all tools but apply deny list
@@ -377,7 +377,7 @@ protected hasFullPermissions(): boolean {
   // Check if all permissions are pre-granted (no prompts will occur)
   const toolMode = this.getToolPermissionMode();
 
-  return toolMode === 'dangerouslySkipAll';
+  return toolMode === 'dangerouslyAllowAll';
 }
 ```
 
@@ -425,15 +425,18 @@ private async executeHeadless(
 
 **Permission settings work identically in both modes.** The only difference is whether you can see/interact with the terminal.
 
-| Setting                                        | Interactive Mode                          | Headless Mode                             |
-| ---------------------------------------------- | ----------------------------------------- | ----------------------------------------- |
-| `cliAllowedTools`                              | Used in custom mode only                  | Used in custom mode only                  |
-| `cliDeniedTools`                               | ALWAYS used (all modes)                   | ALWAYS used (except dangerouslySkipAll)   |
-| `copilotCliToolPermissions: allowAll`          | `--allow-all-tools` + deny list           | `--allow-all-tools` + deny list           |
-| `copilotCliToolPermissions: custom`            | Uses allow/deny patterns                  | ⚠️ Auto-denies prompts (agent can't act)  |
-| `claudeCliToolPermissions: dangerouslySkipAll` | `--dangerously-skip-perms` (ignores deny) | `--dangerously-skip-perms` (ignores deny) |
-| `claudeCliToolPermissions: allowAll`           | `--tools "default"` + deny list           | `--tools "default"` + deny list           |
-| `claudeCliToolPermissions: custom`             | Uses allow/deny patterns                  | ⚠️ Auto-denies prompts (agent can't act)  |
+| Setting                                   | Interactive Mode               | Headless Mode                            |
+| ----------------------------------------- | ------------------------------ | ---------------------------------------- |
+| `cliAllowedTools`                         | Used in custom mode only       | Used in custom mode only                 |
+| `cliDeniedTools`                          | Used in allowAll/custom modes  | Used in allowAll/custom modes            |
+| `cliToolPermissions: dangerouslyAllowAll` | No restrictions (ignores deny) | No restrictions (ignores deny)           |
+| `cliToolPermissions: allowAll`            | Auto-grants all + deny list    | Auto-grants all + deny list              |
+| `cliToolPermissions: custom`              | Uses allow/deny patterns       | ⚠️ Auto-denies prompts (agent can't act) |
+
+**Note:** The `cliToolPermissions` setting is shared between Copilot CLI and Claude CLI. Implementation details:
+
+- **Copilot**: `dangerouslyAllowAll` uses `--allow-all-tools` without deny patterns
+- **Claude**: `dangerouslyAllowAll` uses `--dangerously-skip-permissions`
 
 **Common use cases:**
 
