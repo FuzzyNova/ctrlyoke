@@ -635,7 +635,8 @@
         }
 
         if (output.tokens) {
-          html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion</div>`;
+          const total = output.tokens.prompt + output.tokens.completion;
+          html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total</div>`;
         }
 
         if (!output.isStreaming && output.elapsed !== undefined) {
@@ -821,8 +822,9 @@
         // Stats section
         const stats = [];
         if (output.tokens) {
+          const total = output.tokens.prompt + output.tokens.completion;
           stats.push(
-            `📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion`
+            `📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
           );
         }
         if (output.elapsed !== undefined) {
