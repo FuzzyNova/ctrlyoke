@@ -515,9 +515,21 @@
           "items": {
             "type": "string"
           },
-          "default": [],
+          "default": [
+            "write",
+            "shell(git status)",
+            "shell(git diff)",
+            "shell(git add:*)",
+            "shell(git commit:*)",
+            "shell(git log:*)",
+            "shell(npm:*)",
+            "shell(yarn:*)",
+            "shell(pnpm:*)",
+            "shell(node:*)",
+            "shell(npx:*)"
+          ],
           "description": "[CLI Modes] Tool patterns to allow when using custom tool permissions",
-          "markdownDescription": "**CLI Modes Only.** Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+          "markdownDescription": "**CLI Modes Only.** Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Default allows:** File writing, safe Git operations (status/diff/add/commit/log), package managers (npm/yarn/pnpm), Node.js execution.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
         "flightpath.cliDeniedTools": {
           "order": 205,
@@ -525,9 +537,25 @@
           "items": {
             "type": "string"
           },
-          "default": [],
+          "default": [
+            "shell(rm:*)",
+            "shell(del:*)",
+            "shell(Remove-Item:*)",
+            "shell(rd:*)",
+            "shell(rmdir:*)",
+            "shell(sudo:*)",
+            "shell(chmod:*)",
+            "shell(chown:*)",
+            "shell(git push:*)",
+            "shell(git reset:*)",
+            "shell(git checkout:*)",
+            "shell(git clean:*)",
+            "shell(docker rm:*)",
+            "shell(docker rmi:*)",
+            "shell(kubectl delete:*)"
+          ],
           "description": "[CLI Modes] Tool patterns to deny (takes precedence over allows)",
-          "markdownDescription": "**CLI Modes Only.** Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI. Examples: `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
+          "markdownDescription": "**CLI Modes Only.** Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Default denies:** File deletion (rm/del/Remove-Item/rd/rmdir), privilege escalation (sudo), permission changes (chmod/chown), destructive Git operations (push/reset/checkout/clean), destructive container operations.\n\n**Includes both Unix and Windows commands** for cross-platform protection.\n\n**Examples:** `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax.\n\n**Note:** For Claude CLI, deny lists have known reliability issues. Consider using `allowAll` mode or rely on filesystem permissions for critical protection."
         },
         "flightpath.copilotCliModel": {
           "order": 300,
@@ -557,12 +585,12 @@
             "custom"
           ],
           "enumDescriptions": [
-            "Allow all tools (--allow-all-tools)",
-            "Custom tool permissions (uses cliAllowedTools/cliDeniedTools)"
+            "Allow all tools (--allow-all-tools) - deny list still applies",
+            "Only allow specific tools (uses cliAllowedTools) - deny list still applies"
           ],
           "default": "allowAll",
           "description": "[Copilot CLI] Tool permission mode",
-          "markdownDescription": "**Copilot CLI Only.** Control which tools Copilot CLI can use. **Allow All** (default) grants full access to all tools. **Custom** mode uses `cliAllowedTools` and `cliDeniedTools` settings."
+          "markdownDescription": "**Copilot CLI Only.** Control which tools Copilot CLI can use. **Allow All** (default) uses `--allow-all-tools` but still applies `cliDeniedTools` patterns. **Custom** mode uses specific `cliAllowedTools` patterns plus `cliDeniedTools`. Deny patterns always take precedence per Copilot CLI design."
         },
         "flightpath.copilotCliAllowAllPaths": {
           "order": 302,
@@ -636,16 +664,18 @@
           "order": 401,
           "type": "string",
           "enum": [
-            "skipAll",
+            "dangerouslySkipAll",
+            "allowAll",
             "custom"
           ],
           "enumDescriptions": [
-            "Skip all permission prompts (--dangerously-skip-permissions)",
-            "Custom tool permissions (uses cliAllowedTools/cliDeniedTools)"
+            "Bypass ALL permission checks (--dangerously-skip-permissions) - IGNORES deny list",
+            "Auto-grant all tools (--permission-mode bypassPermissions + --tools default) - respects deny list (recommended)",
+            "Auto-grant specific tools (--permission-mode bypassPermissions + cliAllowedTools) - respects deny list"
           ],
-          "default": "skipAll",
+          "default": "allowAll",
           "description": "[Claude CLI] Permission mode",
-          "markdownDescription": "**Claude CLI Only.** Control how Claude Code CLI handles permission prompts. **Skip All** (default) uses `--dangerously-skip-permissions` for non-interactive execution. **Custom** mode uses `cliAllowedTools` and `cliDeniedTools` settings."
+          "markdownDescription": "**Claude CLI Only.** Control how Claude Code CLI handles permissions. **Allow All** (default, recommended) uses `--permission-mode bypassPermissions` with `--tools \"default\"` and `cliDeniedTools` for safe automation. **Dangerously Skip All** uses `--dangerously-skip-permissions` (bypasses ALL checks including deny list). **Custom** mode uses `--permission-mode bypassPermissions` with specific `cliAllowedTools` and `cliDeniedTools` patterns."
         },
         "flightpath.defaultMaxRetries": {
           "order": 500,

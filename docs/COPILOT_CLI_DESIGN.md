@@ -108,11 +108,14 @@ write                 # Match file creation/modification tools
 
 **Current behavior:**
 
-- **allowAll** mode: Uses `--allow-all-tools` (default)
-- **custom** mode: Uses `cliAllowedTools` and `cliDeniedTools` arrays
+- **allowAll** mode: Uses `--allow-all-tools` with deny patterns (default)
+- **custom** mode: Uses specific `cliAllowedTools` patterns with deny patterns
+- **Deny patterns ALWAYS applied** regardless of mode (per Copilot CLI design)
 - Full pattern syntax support (`shell(git:*)`, `write`, `github(search_repositories)`)
 - Deny patterns take precedence over allow patterns
 - Settings are shared with Claude CLI (auto-converted: `shell` → `Bash`, `write` → `Write`)
+
+**Important:** Both modes respect `cliDeniedTools`. This enables the common pattern of "allow all tools except these specific ones" via `allowAll` mode with custom deny list.
 
 ### Session Management
 
@@ -213,7 +216,7 @@ write                 # Match file creation/modification tools
 
 ### 1. ✅ Granular Tool Permissions
 
-**Goal:** Allow users to specify exactly which tools Copilot can use.
+**Goal:** Allow users to specify exactly which tools Copilot can use, with deny patterns always taking precedence.
 
 **Settings (`package.json`):**
 
@@ -227,10 +230,18 @@ write                 # Match file creation/modification tools
 
 **Note:** These settings are shared between Copilot CLI and Claude CLI. For Claude, tool names are automatically converted (`shell` → `Bash`, `write` → `Write`).
 
+**Important:** `cliDeniedTools` is ALWAYS applied in both modes. This enables the common pattern: "allow all tools except specific ones."
+
 **Common Use Cases:**
 
 ```json
-// Allow git but prevent pushes (in VS Code settings.json)
+// Most common: Allow all but deny destructive operations (RECOMMENDED)
+{
+  "flightpath.copilotCliToolPermissions": "allowAll",
+  "flightpath.cliDeniedTools": ["shell(rm:*)", "shell(git push:*)"]
+}
+
+// Allow git but prevent pushes
 {
   "flightpath.copilotCliToolPermissions": "custom",
   "flightpath.cliAllowedTools": ["shell(git:*)"],
@@ -239,7 +250,7 @@ write                 # Match file creation/modification tools
 
 // Read-only mode (no file writing, no shell)
 {
-  "flightpath.copilotCliToolPermissions": "custom",
+  "flightpath.copilotCliToolPermissions": "allowAll",
   "flightpath.cliDeniedTools": ["write", "shell"]
 }
 

@@ -35,18 +35,19 @@ npm install -g @anthropic-ai/claude-code
 
 ### ✅ Implemented Flags
 
-| CLI Flag                         | FlightPath Setting/Schema                      | Implementation                                              |
-| -------------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| `--model <model>`                | `flightpath.claudeCliModel`, `prompt.model`    | Full support - aliases (sonnet/opus/haiku) or full names    |
-| `--add-dir <directory>`          | Auto-includes workspace folders                | Full support - workspace folders auto-included              |
-| `--dangerously-skip-permissions` | `flightpath.claudeCliToolPermissions: skipAll` | Full support - default behavior                             |
-| `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)          | Full support - auto-converted from Copilot format           |
-| `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)           | Full support - auto-converted from Copilot format           |
-| `--output-format stream-json`    | Hardcoded                                      | Full support - always uses stream-json for real-time output |
-| `--verbose`                      | Auto-added for stream-json                     | Full support - required for stream-json format              |
-| `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID    | Full support                                                |
-| `-c`                             | `prompt.newChatSession: false` (no session ID) | Full support - continues most recent session                |
-| Prompt via stdin                 | Prompt text passed to process                  | Full support - current implementation sends via stdin       |
+| CLI Flag                         | FlightPath Setting/Schema                                 | Implementation                                                                              |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `--model <model>`                | `flightpath.claudeCliModel`, `prompt.model`               | Full support - aliases (sonnet/opus/haiku) or full names                                    |
+| `--add-dir <directory>`          | Auto-includes workspace folders                           | Full support - workspace folders auto-included                                              |
+| `--tools "default"`              | `flightpath.claudeCliToolPermissions: allowAll`           | Full support - default mode (safe automation)                                               |
+| `--dangerously-skip-permissions` | `flightpath.claudeCliToolPermissions: dangerouslySkipAll` | Full support - bypasses all checks (use with caution)                                       |
+| `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)                     | Full support - auto-converted from Copilot format                                           |
+| `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)                      | Full support - auto-converted from Copilot format, always applied except dangerouslySkipAll |
+| `--output-format stream-json`    | Hardcoded                                                 | Full support - always uses stream-json for real-time output                                 |
+| `--verbose`                      | Auto-added for stream-json                                | Full support - required for stream-json format                                              |
+| `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID               | Full support                                                                                |
+| `-c`                             | `prompt.newChatSession: false` (no session ID)            | Full support - continues most recent session                                                |
+| Prompt via stdin                 | Prompt text passed to process                             | Full support - current implementation sends via stdin                                       |
 
 ### ❌ Not Implemented Flags
 
@@ -154,10 +155,13 @@ npm install -g @anthropic-ai/claude-code
 
 **Permission modes:**
 
-| Mode     | Setting Value | Behavior                                       |
-| -------- | ------------- | ---------------------------------------------- |
-| Skip All | `"skipAll"`   | Uses `--dangerously-skip-permissions`          |
-| Custom   | `"custom"`    | Uses shared `cliAllowedTools`/`cliDeniedTools` |
+| Mode                    | Setting Value          | Behavior                                                                    |
+| ----------------------- | ---------------------- | --------------------------------------------------------------------------- |
+| Dangerously Skip All    | `"dangerouslySkipAll"` | Uses `--dangerously-skip-permissions` (bypasses ALL checks, even deny list) |
+| Allow All (RECOMMENDED) | `"allowAll"`           | Uses `--tools "default"` with deny patterns (safe automation)               |
+| Custom                  | `"custom"`             | Uses specific `cliAllowedTools`/`cliDeniedTools` patterns                   |
+
+**Default:** `allowAll` provides safe automation while respecting deny lists. Use `dangerouslySkipAll` only in trusted sandboxed environments.
 
 ### Session Management
 
@@ -326,14 +330,17 @@ claude -p --json-schema '{"type":"object","properties":{"success":{"type":"boole
 | ------------------- | -------------------------------------------------------------------- |
 | `default`           | Prompt for all permissions (interactive only)                        |
 | `acceptEdits`       | Auto-accept file edits, prompt for other operations                  |
-| `bypassPermissions` | Skip all permission prompts (same as --dangerously-skip-permissions) |
+| `bypassPermissions` | Skip all permission prompts BUT respects deny list (safe automation) |
 | `dontAsk`           | Similar to bypass but with different security implications           |
 | `plan`              | Planning mode (may restrict certain operations)                      |
 
 **Current FlightPath implementation:**
 
-- Uses `--dangerously-skip-permissions` (equivalent to `bypassPermissions`)
-- Custom tool patterns via `--allowedTools`/`--disallowedTools`
+- **allowAll mode**: Uses `--permission-mode bypassPermissions` + `--tools "default"` with deny list (recommended)
+- **custom mode**: Uses `--permission-mode bypassPermissions` with custom allow/deny patterns
+- **dangerouslySkipAll mode**: Uses `--dangerously-skip-permissions` (bypasses ALL checks including deny list)
+
+**Key discovery (Dec 2025):** `--permission-mode bypassPermissions` RESPECTS the deny list, making it safe for automation. This is different from `--dangerously-skip-permissions` which ignores all rules.
 
 **Future enhancement:** Add `flightpath.claudeCliPermissionMode` setting to support all modes, especially:
 
@@ -464,23 +471,42 @@ private convertToolPatternToClaudeFormat(copilotPattern: string): string {
 claude -p --allowedTools "Bash(git:*)" --allowedTools "Write" --disallowedTools "Bash(git push)"
 ```
 
+**Most common pattern (recommended):**
+
+```json
+{
+  "flightpath.claudeCliToolPermissions": "allowAll",
+  "flightpath.cliDeniedTools": ["shell(rm:*)", "shell(git push:*)"]
+}
+```
+
+**Resulting Claude CLI arguments:**
+
+```bash
+claude -p --tools "default" --disallowedTools "Bash(rm:*)" --disallowedTools "Bash(git push:*)"
+```
+
+This enables safe automation: allow all tools but deny destructive operations.
+
 ---
 
 ## VS Code Settings Reference
 
 ### Claude-Specific Settings
 
-| Setting                               | Type | Default     | Description                         |
-| ------------------------------------- | ---- | ----------- | ----------------------------------- |
-| `flightpath.claudeCliModel`           | enum | `"sonnet"`  | Default model (sonnet, opus, haiku) |
-| `flightpath.claudeCliToolPermissions` | enum | `"skipAll"` | Permission mode (skipAll, custom)   |
+| Setting                               | Type | Default      | Description                                            |
+| ------------------------------------- | ---- | ------------ | ------------------------------------------------------ |
+| `flightpath.claudeCliModel`           | enum | `"sonnet"`   | Default model (sonnet, opus, haiku)                    |
+| `flightpath.claudeCliToolPermissions` | enum | `"allowAll"` | Permission mode (dangerouslySkipAll, allowAll, custom) |
 
 ### Shared Settings (Copilot + Claude)
 
-| Setting                      | Type     | Default | Description                             |
-| ---------------------------- | -------- | ------- | --------------------------------------- |
-| `flightpath.cliAllowedTools` | string[] | `[]`    | Tool patterns to allow (Copilot format) |
-| `flightpath.cliDeniedTools`  | string[] | `[]`    | Tool patterns to deny (Copilot format)  |
+| Setting                      | Type     | Default                | Description                                                        |
+| ---------------------------- | -------- | ---------------------- | ------------------------------------------------------------------ |
+| `flightpath.cliAllowedTools` | string[] | `[...]`                | Tool patterns to allow (Copilot format) - used in custom mode only |
+| `flightpath.cliDeniedTools`  | string[] | `["shell(rm:*)", ...]` | Tool patterns to deny (Copilot format) - ALWAYS applied            |
+
+**Note:** `cliDeniedTools` applies in all modes except `dangerouslySkipAll`.
 
 ### Integration Mode Selection
 

@@ -103,12 +103,15 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Check if full permissions are granted (no interactive prompts will occur)
+   * Full permissions require: allowAll tools mode, allowAllPaths, and NO deny patterns
    */
   protected hasFullPermissions(): boolean {
     const toolMode = ConfigurationUtils.getCliToolPermissions();
     const allowAllPaths = ConfigurationUtils.shouldAllowAllPaths();
+    const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
-    return toolMode === "allowAll" && allowAllPaths;
+    // Full permissions only if allowAll mode, all paths allowed, and no deny patterns
+    return toolMode === "allowAll" && allowAllPaths && deniedTools.length === 0;
   }
 
   /**
@@ -295,6 +298,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     // Note: Prompt is NOT included here - it's handled separately by the execution methods
     // This allows using temp file approach for interactive mode and direct args for headless mode
 
+    this.log(`🔧 CLI arguments: ${JSON.stringify(args)}`);
+
     return args;
   }
 
@@ -479,7 +484,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Get tool permission arguments based on configuration
-   * Supports "allowAll" mode (--allow-all-tools) or "custom" mode with specific allow/deny patterns
+   * Supports "allowAll" mode (--allow-all-tools) or "custom" mode with specific allow patterns.
+   * DENY PATTERNS ARE ALWAYS APPLIED regardless of mode (per Copilot CLI design).
    *
    * Pattern syntax:
    * - shell(command:*?) - Match shell commands (e.g., shell(git:*), shell(npm test))
@@ -492,56 +498,65 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    */
   private getToolPermissionArgs(): string[] {
     const mode = ConfigurationUtils.getCliToolPermissions();
-
-    if (mode === "allowAll") {
-      return ["--allow-all-tools"];
-    }
-
-    // Custom mode - use specific allow/deny patterns
     const args: string[] = [];
     const filteredTools: string[] = [];
 
-    const allowedTools = ConfigurationUtils.getCliAllowedTools();
-    const deniedTools = ConfigurationUtils.getCliDeniedTools();
+    // Add allow mode first
+    if (mode === "allowAll") {
+      args.push("--allow-all-tools");
+    } else {
+      // Custom mode - use specific allow patterns
+      const allowedTools = ConfigurationUtils.getCliAllowedTools();
+      const convertedAllowTools: string[] = [];
 
-    // Track which tools we've already added to avoid duplicates
-    // (e.g., both "Edit" and "Write" map to "write")
-    const addedAllowTools = new Set<string>();
-    const addedDenyTools = new Set<string>();
+      allowedTools.forEach((tool) => {
+        const converted = this.convertToolPatternToCopilotFormat(tool);
+        if (converted === null) {
+          filteredTools.push(tool);
+        } else if (!convertedAllowTools.includes(converted)) {
+          convertedAllowTools.push(converted);
+        }
+      });
 
-    // Add allowed tool patterns (with conversion)
-    allowedTools.forEach((tool) => {
-      const converted = this.convertToolPatternToCopilotFormat(tool);
-      if (converted === null) {
-        filteredTools.push(tool);
-      } else if (!addedAllowTools.has(converted)) {
-        args.push("--allow-tool", converted);
-        addedAllowTools.add(converted);
+      // Add all allowed tools as variadic arguments to single --allow-tool flag
+      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
+      if (convertedAllowTools.length > 0) {
+        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
+        args.push("--allow-tool", ...quotedTools);
+        this.log(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+      } else if (allowedTools.length > 0) {
+        // No valid allow patterns after conversion
+        this.log(
+          "⚠️ Custom tool permissions mode enabled but no valid tools specified. Copilot will prompt for each tool."
+        );
       }
-    });
+    }
 
-    // Add denied tool patterns (with conversion)
+    // ALWAYS add denied tool patterns (deny takes precedence per Copilot CLI)
+    const deniedTools = ConfigurationUtils.getCliDeniedTools();
+    const convertedDenyTools: string[] = [];
+
     deniedTools.forEach((tool) => {
       const converted = this.convertToolPatternToCopilotFormat(tool);
       if (converted === null) {
         filteredTools.push(tool);
-      } else if (!addedDenyTools.has(converted)) {
-        args.push("--deny-tool", converted);
-        addedDenyTools.add(converted);
+      } else if (!convertedDenyTools.includes(converted)) {
+        convertedDenyTools.push(converted);
       }
     });
+
+    // Add all denied tools as variadic arguments to single --deny-tool flag
+    // Quote each pattern to handle spaces and special characters (shell: true in spawn)
+    if (convertedDenyTools.length > 0) {
+      const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
+      args.push("--deny-tool", ...quotedTools);
+      this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+    }
 
     // Log filtered tools for visibility
     if (filteredTools.length > 0) {
       this.log(
         `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
-      );
-    }
-
-    // If no patterns specified in custom mode, log a warning
-    if (args.length === 0) {
-      this.log(
-        "⚠️ Custom tool permissions mode enabled but no tools specified. Copilot will prompt for each tool."
       );
     }
 

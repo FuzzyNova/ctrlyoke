@@ -130,11 +130,14 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Check if full permissions are granted (no interactive prompts will occur)
+   * Full permissions with:
+   * - dangerouslySkipAll: bypasses ALL checks including deny list
+   * - allowAll/custom: uses --permission-mode bypassPermissions (respects deny list)
    */
   protected hasFullPermissions(): boolean {
-    const toolMode = ConfigurationUtils.getClaudeCliToolPermissions();
-
-    return toolMode === "skipAll";
+    // All modes now auto-grant permissions (dangerouslySkipAll, allowAll, custom)
+    // The difference is whether deny list is respected
+    return true;
   }
 
   /**
@@ -766,38 +769,67 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Get tool permission arguments based on configuration
+   * Supports three modes:
+   * - "dangerouslySkipAll": --dangerously-skip-permissions (bypasses ALL checks, ignores deny list)
+   * - "allowAll": --tools "default" with deny patterns (safe automation, respects deny list)
+   * - "custom": specific allow/deny patterns
+   *
    * Reads from shared cliAllowedTools/cliDeniedTools and converts to Claude format
    */
   private getToolPermissionArgs(): string[] {
     const mode = ConfigurationUtils.getClaudeCliToolPermissions();
 
-    if (mode === "skipAll") {
+    if (mode === "dangerouslySkipAll") {
       return ["--dangerously-skip-permissions"];
     }
 
-    // Custom mode - read from shared settings and convert to Claude format
+    // Both allowAll and custom modes use tool patterns
     const args: string[] = [];
-
-    const allowedTools = ConfigurationUtils.getCliAllowedTools();
     const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
-    // Add allowed tool patterns (converted to Claude format)
-    allowedTools.forEach((tool) => {
-      const claudeTool = this.convertToolPatternToClaudeFormat(tool);
-      args.push("--allowedTools", claudeTool);
-    });
+    if (mode === "allowAll") {
+      // Allow all tools (--tools "default") but still apply deny list
+      args.push("--tools", "default");
+    } else {
+      // Custom mode - read specific allow patterns
+      const allowedTools = ConfigurationUtils.getCliAllowedTools();
+      const convertedAllowTools: string[] = [];
 
-    // Add disallowed tool patterns (converted to Claude format)
+      allowedTools.forEach((tool) => {
+        const claudeTool = this.convertToolPatternToClaudeFormat(tool);
+        if (!convertedAllowTools.includes(claudeTool)) {
+          convertedAllowTools.push(claudeTool);
+        }
+      });
+
+      // Add all allowed tools as variadic arguments to single flag
+      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
+      if (convertedAllowTools.length > 0) {
+        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
+        args.push("--allowedTools", ...quotedTools);
+        this.log(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+      } else if (allowedTools.length > 0) {
+        this.log(
+          "⚠️ Custom tool permissions mode enabled but no allowed tools specified. Claude will prompt for each tool."
+        );
+      }
+    }
+
+    // Add disallowed tool patterns (for both allowAll and custom modes)
+    // Quote each pattern to handle spaces and special characters (shell: true in spawn)
+    const convertedDenyTools: string[] = [];
+
     deniedTools.forEach((tool) => {
       const claudeTool = this.convertToolPatternToClaudeFormat(tool);
-      args.push("--disallowedTools", claudeTool);
+      if (!convertedDenyTools.includes(claudeTool)) {
+        convertedDenyTools.push(claudeTool);
+      }
     });
 
-    // If no patterns specified in custom mode, log a warning
-    if (args.length === 0) {
-      this.log(
-        "⚠️ Custom tool permissions mode enabled but no tools specified. Claude will prompt for each tool."
-      );
+    if (convertedDenyTools.length > 0) {
+      const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
+      args.push("--disallowedTools", ...quotedTools);
+      this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 
     return args;

@@ -225,10 +225,10 @@ export const ConfigurationUtils = {
   /**
    * Get Claude CLI tool permissions mode
    */
-  getClaudeCliToolPermissions(): "skipAll" | "custom" {
-    return getConfig().get<"skipAll" | "custom">(
+  getClaudeCliToolPermissions(): "dangerouslySkipAll" | "allowAll" | "custom" {
+    return getConfig().get<"dangerouslySkipAll" | "allowAll" | "custom">(
       "claudeCliToolPermissions",
-      "skipAll"
+      "allowAll"
     );
   },
 
