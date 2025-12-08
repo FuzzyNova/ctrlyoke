@@ -28,6 +28,7 @@ npm install -g @anthropic-ai/claude-code
 | Session resume       | `--resume <id>`                     | `-r <id>` or `-c` (most recent)              |
 | Output format        | Mixed text + stats                  | `--output-format json/text/stream-json`      |
 | Prompt input         | `-p "<prompt>"` or `--agent` + `-p` | `-p` (stdin) or `--print` (non-interactive)  |
+| File attachment      | `@path` (no auto-content)           | `@path` (auto-attaches content)              |
 | Thinking mode        | Not applicable                      | **NOT AVAILABLE** via CLI (model-controlled) |
 | Structured output    | Not available                       | `--json-schema` (validates response format)  |
 
@@ -641,6 +642,95 @@ const result = await this.spawnProcess("claude", args, {
 | Debug mode                   | LOW        | `-d, --debug`            | Category filtering for troubleshooting                |
 
 **Note on Thinking Mode:** Claude CLI does **NOT** provide a command-line option to control thinking mode/level. Thinking appears to be controlled at the model level and cannot be specified per-request via CLI flags.
+
+---
+
+## Context Attachment Behavior
+
+### Automatic File Content Attachment
+
+Claude CLI **automatically attaches file content** when you reference files in the prompt using `@pathFromRoot` syntax:
+
+- **Format**: `@path\to\file.md` (Windows) or `@path/to/file.md` (Unix)
+- **Important**: Omit the root directory name and leading slash
+- **Example**: For `c:\dev\FlightPath\docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`, use `@docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`
+- **Behavior**: Claude automatically reads and includes the full file content in the context
+
+**Key differences from Copilot CLI:**
+
+| Aspect              | Copilot CLI                                                 | Claude CLI                                             |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| File content        | **NOT** auto-attached, requires explicit tool calls         | **Auto-attached** with `@path` syntax                  |
+| Custom instructions | Auto-attached for `.github/copilot-instructions.md`         | Auto-attached (same behavior)                          |
+| Instruction mapping | Requires `@filepath` references to trigger folder-level     | Auto-attached with `@path` syntax                      |
+| Line ranges         | Not supported natively (FlightPath implements via XML)      | Not supported natively (FlightPath implements via XML) |
+| Syntax              | `#file:path` (FlightPath convention, not native CLI syntax) | `@path` (native CLI syntax)                            |
+
+### FlightPath Implementation for Claude CLI
+
+**Current behavior (needs optimization):**
+
+- FlightPath uses `processPromptAttachments()` from base class
+- Converts `#file:path` to XML `<attachment>` blocks
+- **Issue**: Duplicates file content (both XML attachment + Claude auto-attachment)
+
+**Proposed optimization:**
+
+- Convert `#file:path` → `@path` for full file references
+- Keep XML attachments only for line ranges (`#file:path:10-20`)
+- Let Claude's native attachment handle full files (more efficient, includes custom instructions)
+
+### Line Range Support
+
+Neither Copilot nor Claude CLI natively support line ranges. FlightPath implements this feature for both:
+
+- **Format**: `#file:path:startLine-endLine`
+- **Implementation**: Extract lines and include in XML `<attachment>` block
+- **Behavior**: Works consistently across both CLI integrations
+
+**Example:**
+
+```markdown
+Analyze the error handling in #file:src/extension.ts:45-67
+```
+
+FlightPath converts this to:
+
+````xml
+<attachment id="file:src/extension.ts:45-67">
+Excerpt from src/extension.ts, lines 45 to 67:
+```typescript
+// ... line 45-67 content ...
+````
+
+</attachment>
+```
+
+### Custom Instructions
+
+Both CLIs automatically discover and attach custom instructions:
+
+- `.github/copilot-instructions.md` (project-level, always included)
+- `.github/instructions/*.instructions.md` (folder-level, when referenced files match front matter)
+
+**To trigger folder-level instructions:**
+
+- Copilot CLI: Reference a file matching the instruction's `applyTo` pattern using `@pathFromRoot`
+- Claude CLI: Same behavior as Copilot (reference file with `@pathFromRoot`)
+
+**Example:**
+
+```markdown
+Improve error handling in @src/flightpath/base/CopilotIntegration.ts
+```
+
+This automatically attaches `.github/instructions/flightpath-base.instructions.md` because it has:
+
+```yaml
+---
+applyTo: "src/flightpath/base/**"
+---
+```
 
 ---
 

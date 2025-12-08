@@ -485,6 +485,100 @@ This section provides a clear checklist for implementing the remaining planned e
 - [CHAT_MODE_LIMITATIONS.md](./CHAT_MODE_LIMITATIONS.md) - Why CLI is preferred over Chat
 - [END_CONDITIONS.md](./END_CONDITIONS.md) - Validation script execution
 
+## Context Attachment Behavior
+
+### File Reference Syntax: `@pathFromRoot`
+
+Copilot CLI uses `@pathFromRoot` syntax to reference files in prompts:
+
+- **Format**: `@path\to\file.md` (Windows) or `@path/to/file.md` (Unix)
+- **Important**: Omit the root directory name and leading slash
+- **Example**: For `c:\dev\FlightPath\docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`, use `@docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`
+
+### Automatic Context from Custom Instructions
+
+When you invoke the Copilot CLI, custom instructions are automatically discovered and loaded:
+
+- `.github/copilot-instructions.md` (project-level, always included)
+- `.github/instructions/*.instructions.md` (folder-level, when referenced files match front matter)
+- These are automatically attached without explicit CLI flags
+
+**To trigger folder-level instructions:**
+
+- Reference a file matching the instruction's `applyTo` pattern using `@pathFromRoot` syntax
+
+**Example:**
+
+```markdown
+Improve error handling in @src/flightpath/base/CopilotIntegration.ts
+```
+
+This automatically attaches `.github/instructions/flightpath-base.instructions.md` because it has:
+
+```yaml
+---
+applyTo: "src/flightpath/base/**"
+---
+```
+
+### Important: Copilot CLI Does Not Auto-Attach File Content
+
+**Key difference from Claude CLI:**
+
+- When you reference files with `@path` syntax, Copilot CLI does **NOT** automatically include file content
+- The Copilot CLI agent must explicitly read files using available tools (`shell`, `read`, MCP tools)
+- This is a security feature—files are only accessed when the agent explicitly requests them
+
+**Comparison:**
+
+| Aspect              | Copilot CLI                                                 | Claude CLI                                             |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| File content        | **NOT** auto-attached, requires explicit tool calls         | **Auto-attached** with `@path` syntax                  |
+| Custom instructions | Auto-attached for `.github/copilot-instructions.md`         | Auto-attached (same behavior)                          |
+| Instruction mapping | Requires `@filepath` references to trigger folder-level     | Auto-attached with `@path` syntax                      |
+| Line ranges         | Not supported natively (FlightPath implements via XML)      | Not supported natively (FlightPath implements via XML) |
+| Syntax              | `#file:path` (FlightPath convention, not native CLI syntax) | `@path` (native CLI syntax)                            |
+
+### FlightPath Implementation for Copilot CLI
+
+**Current behavior (needs optimization):**
+
+- FlightPath uses `#file:path` syntax (user-facing convention)
+- `processPromptAttachments()` converts to XML `<attachment>` blocks
+- **Issue**: Copilot doesn't receive file content OR custom instructions from `#file:path`
+
+**Proposed optimization:**
+
+- Convert `#file:path` → `@path` reference (triggers custom instructions)
+- **Also** include XML attachment for file content (Copilot needs explicit content)
+- Keep XML attachments for line ranges (`#file:path:10-20`)
+
+### Line Range Support
+
+Neither Copilot nor Claude CLI natively support line ranges. FlightPath implements this feature for both:
+
+- **Format**: `#file:path:startLine-endLine`
+- **Implementation**: Extract lines and include in XML `<attachment>` block
+- **Behavior**: Works consistently across both CLI integrations
+
+**Example:**
+
+```markdown
+Analyze the error handling in #file:src/extension.ts:45-67
+```
+
+FlightPath converts this to:
+
+````xml
+<attachment id="file:src/extension.ts:45-67">
+Excerpt from src/extension.ts, lines 45 to 67:
+```typescript
+// ... line 45-67 content ...
+````
+
+</attachment>
+```
+
 ## Version Compatibility
 
 This documentation is based on Copilot CLI as of November 2025. Run `copilot --version` to check your installed version and `copilot --help` for the latest options.
