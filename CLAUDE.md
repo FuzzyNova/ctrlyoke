@@ -75,7 +75,7 @@ Pre-release - No backward compatibility constraints. Prioritize clean architectu
 
 ## Key Principles
 
-- **SOLID principles**: Strict separation of concerns
+- **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principal.
 - **TypeScript strict mode**: Comprehensive type safety
 - **Single source of truth**: No hardcoded string duplication across files
 - **Security first**: Workspace-scoped operations, process isolation for scripts

@@ -183,40 +183,27 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return undefined;
   }
 
-  /**
-   * Process stdout chunks for stream-json format.
-   *
-   * stream-json format outputs concatenated JSON objects (NOT newline-delimited):
-   * 1. {"type":"system","subtype":"init",...} - Session init
-   * 2. {"type":"assistant","message":{...}} - Response with content at message.content[0].text
-   * 3. {"type":"result",...} - Final summary
-   *
-   * We extract and stream the response text from object #2.
-   */
-  protected processStreamingChunk(chunk: string): string | undefined {
-    // Accumulate into buffer
-    this.streamBuffer += chunk;
+  private extractJsonObjectsFromStream(data: string): {
+    objects: any[];
+    remainder: string;
+  } {
+    const objects: any[] = [];
+    let cursor = 0;
 
-    // Try to extract complete JSON objects by finding balanced braces
-    // This is a simple approach - look for }{ boundaries between objects
-    let contentToEmit = "";
-    let startIdx = 0;
-
-    while (startIdx < this.streamBuffer.length) {
-      // Find the start of a JSON object
-      const objStart = this.streamBuffer.indexOf("{", startIdx);
+    while (cursor < data.length) {
+      const objStart = data.indexOf("{", cursor);
       if (objStart === -1) {
+        cursor = data.length;
         break;
       }
 
-      // Try to parse from this position
       let depth = 0;
       let inString = false;
       let escape = false;
       let objEnd = -1;
 
-      for (let i = objStart; i < this.streamBuffer.length; i++) {
-        const char = this.streamBuffer[i];
+      for (let i = objStart; i < data.length; i++) {
+        const char = data[i];
 
         if (escape) {
           escape = false;
@@ -246,55 +233,74 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         }
       }
 
-      // If we found a complete object, parse it
       if (objEnd !== -1) {
-        const objStr = this.streamBuffer.substring(objStart, objEnd);
+        const objStr = data.substring(objStart, objEnd);
         try {
           const json = JSON.parse(objStr);
-
-          // Extract response text and tool calls from assistant message
-          // Assistant messages contain an array of content items:
-          // - { type: "text", text: "..." } - Claude's text responses
-          // - { type: "tool_use", id: "...", name: "Bash", input: {...} } - Tool calls
-          if (json.type === "assistant" && json.message?.content) {
-            // Extract text content
-            const textContent = json.message.content.find(
-              (item: any) => item.type === "text"
-            );
-            if (textContent?.text) {
-              contentToEmit += textContent.text;
-            }
-
-            // Extract tool use and format as summary for user visibility
-            const toolUse = json.message.content.find(
-              (item: any) => item.type === "tool_use"
-            );
-            if (toolUse) {
-              const toolSummary = this.formatToolCallSummary(
-                toolUse.name,
-                toolUse.input
-              );
-              contentToEmit += toolSummary;
-            }
-          }
+          objects.push(json);
         } catch (parseError) {
-          // Invalid JSON - skip and continue
           console.warn(
             "Failed to parse stream-json object:",
             objStr.substring(0, 100),
             parseError
           );
         }
-
-        startIdx = objEnd;
-      } else {
-        // No complete object found - keep remainder in buffer
-        break;
+        cursor = objEnd;
+        continue;
       }
+
+      cursor = objStart;
+      break;
     }
 
-    // Keep unparsed portion in buffer
-    this.streamBuffer = this.streamBuffer.substring(startIdx);
+    return {
+      objects,
+      remainder: data.substring(cursor),
+    };
+  }
+
+  /**
+   * Process stdout chunks for stream-json format.
+   *
+   * stream-json format outputs concatenated JSON objects (NOT newline-delimited):
+   * 1. {"type":"system","subtype":"init",...} - Session init
+   * 2. {"type":"assistant","message":{...}} - Response with content at message.content[0].text
+   * 3. {"type":"result",...} - Final summary
+   *
+   * We extract and stream the response text from object #2.
+   */
+  protected processStreamingChunk(chunk: string): string | undefined {
+    // Accumulate into buffer
+    this.streamBuffer += chunk;
+
+    const { objects, remainder } = this.extractJsonObjectsFromStream(
+      this.streamBuffer
+    );
+    this.streamBuffer = remainder;
+
+    let contentToEmit = "";
+
+    for (const json of objects) {
+      if (json.type === "assistant" && json.message?.content) {
+        const textContent = json.message.content.find(
+          (item: any) => item.type === "text"
+        );
+        if (textContent?.text) {
+          contentToEmit += textContent.text;
+        }
+
+        const toolUse = json.message.content.find(
+          (item: any) => item.type === "tool_use"
+        );
+        if (toolUse) {
+          const toolSummary = this.formatToolCallSummary(
+            toolUse.name,
+            toolUse.input
+          );
+          contentToEmit += toolSummary;
+        }
+      }
+    }
 
     return contentToEmit || undefined;
   }
@@ -590,57 +596,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     let isError = false;
     let errorMessage: string | undefined;
 
-    // Extract JSON objects by finding balanced braces
-    const objects: any[] = [];
-    let startIdx = 0;
-
-    while (startIdx < stdout.length) {
-      const objStart = stdout.indexOf("{", startIdx);
-      if (objStart === -1) break;
-
-      let depth = 0;
-      let inString = false;
-      let escape = false;
-      let objEnd = -1;
-
-      for (let i = objStart; i < stdout.length; i++) {
-        const char = stdout[i];
-        if (escape) {
-          escape = false;
-          continue;
-        }
-        if (char === "\\") {
-          escape = true;
-          continue;
-        }
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-        if (!inString) {
-          if (char === "{") depth++;
-          else if (char === "}") {
-            depth--;
-            if (depth === 0) {
-              objEnd = i + 1;
-              break;
-            }
-          }
-        }
-      }
-
-      if (objEnd !== -1) {
-        try {
-          const json = JSON.parse(stdout.substring(objStart, objEnd));
-          objects.push(json);
-        } catch (e) {
-          console.warn("Failed to parse JSON object:", e);
-        }
-        startIdx = objEnd;
-      } else {
-        break;
-      }
-    }
+    const { objects } = this.extractJsonObjectsFromStream(stdout);
 
     // Extract data from parsed objects
     for (const json of objects) {

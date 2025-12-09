@@ -4,6 +4,8 @@
 
 This document details the integration-specific optimizations for file attachment behavior in FlightPath CLI integrations (Copilot and Claude).
 
+**Syntax Note**: FlightPath uses `@path` syntax for file references (aligned with CLI standards). See [PROMPT_SYNTAX.md](./PROMPT_SYNTAX.md) for complete syntax reference and design rationale. Legacy `#file:path` syntax is deprecated but temporarily supported during migration.
+
 ## Problem Statement
 
 ### Current Implementation
@@ -580,6 +582,7 @@ ${file.content}
 
 ## Related Documentation
 
+- [PROMPT_SYNTAX.md](./PROMPT_SYNTAX.md) - **Prompt syntax reference and design rationale**
 - [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) - Copilot CLI reference
 - [CLAUDE_CLI_DESIGN.md](./CLAUDE_CLI_DESIGN.md) - Claude CLI reference
 - [CONTEXT_ATTACHMENT.md](./CONTEXT_ATTACHMENT.md) - Original design doc (if exists)
