@@ -137,6 +137,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.CHANGE_MODEL:
         this.handleModelChange(message.model, message.provider);
         break;
+      case MESSAGE_TYPES.CHANGE_EXECUTION_MODE:
+        this.handleExecutionModeChange(message.executionMode);
+        break;
       case MESSAGE_TYPES.CHANGE_NEW_CHAT_SESSION:
         this.handleNewChatSessionChange(message.enabled);
         break;
@@ -153,6 +156,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     const provider = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForProvider(provider);
+    const executionMode = ConfigurationUtils.getCliExecutionMode();
     const newChatSessionPerPrompt =
       ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
     const dynamicQueueEnabled =
@@ -169,6 +173,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       data: {
         provider,
         model,
+        executionMode,
         newChatSessionPerPrompt,
         dynamicQueueEnabled,
         modelOptions,
@@ -409,6 +414,23 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       console.log(`✅ Model changed to: ${model} (for ${provider})`);
     } catch (error) {
       console.error("Failed to update model setting:", error);
+    }
+  }
+
+  private async handleExecutionModeChange(
+    executionMode: string
+  ): Promise<void> {
+    const validModes = ["interactive", "headless"];
+    if (!validModes.includes(executionMode)) {
+      console.error(`Invalid execution mode: ${executionMode}`);
+      return;
+    }
+
+    try {
+      await ConfigurationUtils.updateSetting("cliExecutionMode", executionMode);
+      console.log(`✅ Execution mode changed to: ${executionMode}`);
+    } catch (error) {
+      console.error("Failed to update cliExecutionMode setting:", error);
     }
   }
 

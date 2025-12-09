@@ -32,6 +32,18 @@
         <span class="setting-description">AI model for prompt execution</span>
       </div>
 
+      <div class="setting-group" id="execution-mode-group">
+        <label for="execution-mode-dropdown">Execution Mode</label>
+        <select id="execution-mode-dropdown" title="Select CLI execution mode">
+          <option value="interactive">Interactive</option>
+          <option value="headless">Headless</option>
+        </select>
+        <span class="setting-description"
+          >Where CLI commands execute (interactive shows terminal, headless runs
+          in background)</span
+        >
+      </div>
+
       <div class="setting-group">
         <label class="checkbox-label">
           <input type="checkbox" id="new-chat-session-checkbox" />

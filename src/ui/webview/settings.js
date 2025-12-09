@@ -42,6 +42,7 @@
   let state = {
     provider: PROVIDER_IDS.COPILOT_CLI,
     model: DEFAULT_MODELS[PROVIDER_IDS.COPILOT_CLI],
+    executionMode: "interactive",
     newChatSessionPerPrompt: true,
     dynamicQueueEnabled: false,
   };
@@ -49,6 +50,8 @@
   const elements = {
     providerDropdown: document.getElementById("provider-dropdown"),
     modelDropdown: document.getElementById("model-dropdown"),
+    executionModeDropdown: document.getElementById("execution-mode-dropdown"),
+    executionModeGroup: document.getElementById("execution-mode-group"),
     newChatSessionCheckbox: document.getElementById(
       "new-chat-session-checkbox"
     ),
@@ -59,6 +62,7 @@
   elements.providerDropdown.addEventListener("change", (e) => {
     state.provider = e.target.value;
     updateModelDropdownOptions(state.provider);
+    updateExecutionModeVisibility(state.provider);
     vscode.postMessage({
       type: MESSAGE_TYPES.CHANGE_PROVIDER,
       provider: state.provider,
@@ -71,6 +75,14 @@
       type: MESSAGE_TYPES.CHANGE_MODEL,
       model: state.model,
       provider: state.provider,
+    });
+  });
+
+  elements.executionModeDropdown.addEventListener("change", (e) => {
+    state.executionMode = e.target.value;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
+      executionMode: state.executionMode,
     });
   });
 
@@ -125,6 +137,8 @@
 
     updateModelDropdownOptions(state.provider);
     elements.modelDropdown.value = state.model;
+    elements.executionModeDropdown.value = state.executionMode;
+    updateExecutionModeVisibility(state.provider);
     elements.newChatSessionCheckbox.checked = state.newChatSessionPerPrompt;
     elements.dynamicQueueCheckbox.checked = state.dynamicQueueEnabled;
   }
@@ -216,6 +230,17 @@
         provider: state.provider,
       });
     }
+  }
+
+  /**
+   * Show/hide execution mode dropdown based on provider
+   * Only CLI providers (copilot-cli, claude-cli) support execution mode
+   */
+  function updateExecutionModeVisibility(provider) {
+    const isCli =
+      provider === PROVIDER_IDS.COPILOT_CLI ||
+      provider === PROVIDER_IDS.CLAUDE_CLI;
+    elements.executionModeGroup.style.display = isCli ? "block" : "none";
   }
 
   // Request initial state
