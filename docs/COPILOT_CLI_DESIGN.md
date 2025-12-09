@@ -489,11 +489,12 @@ This section provides a clear checklist for implementing the remaining planned e
 
 ### File Reference Syntax: `@pathFromRoot`
 
-Copilot CLI uses `@pathFromRoot` syntax to reference files in prompts:
+Both Copilot and Claude CLI use identical `@pathFromRoot` syntax to reference files in prompts:
 
 - **Format**: `@path\to\file.md` (Windows) or `@path/to/file.md` (Unix)
 - **Important**: Omit the root directory name and leading slash
 - **Example**: For `c:\dev\FlightPath\docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`, use `@docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`
+- **Platform**: Both CLIs accept forward or backslashes (normalized internally)
 
 ### Automatic Context from Custom Instructions
 
@@ -531,13 +532,15 @@ applyTo: "src/flightpath/base/**"
 
 **Comparison:**
 
-| Aspect              | Copilot CLI                                                 | Claude CLI                                             |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
-| File content        | **NOT** auto-attached, requires explicit tool calls         | **Auto-attached** with `@path` syntax                  |
-| Custom instructions | Auto-attached for `.github/copilot-instructions.md`         | Auto-attached (same behavior)                          |
-| Instruction mapping | Requires `@filepath` references to trigger folder-level     | Auto-attached with `@path` syntax                      |
-| Line ranges         | Not supported natively (FlightPath implements via XML)      | Not supported natively (FlightPath implements via XML) |
-| Syntax              | `#file:path` (FlightPath convention, not native CLI syntax) | `@path` (native CLI syntax)                            |
+| Aspect              | Copilot CLI                                              | Claude CLI                                               |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| File content        | **NOT** auto-attached, requires explicit tool calls      | **Auto-attached** with `@path` syntax                    |
+| Custom instructions | `.github/copilot-instructions.md` + folder-level pattern | **Only** `CLAUDE.md` (root + per-folder)                 |
+| Instruction mapping | Requires `@filepath` references to trigger folder-level  | No conditional mapping (only fixed `CLAUDE.md` files)    |
+| Line ranges         | Not supported natively (FlightPath implements via XML)   | Not supported natively (FlightPath implements via XML)   |
+| Directory context   | Not supported natively (Chat only, FlightPath can add)   | Not supported natively (Chat only, FlightPath can add)   |
+| Symbol context      | Not supported natively (Chat only, FlightPath can add)   | Not supported natively (Chat only, FlightPath can add)   |
+| File reference      | `@path` (native) or `#file:path` (FlightPath convention) | `@path` (native) or `#file:path` (FlightPath convention) |
 
 ### FlightPath Implementation for Copilot CLI
 
@@ -574,10 +577,75 @@ FlightPath converts this to:
 Excerpt from src/extension.ts, lines 45 to 67:
 ```typescript
 // ... line 45-67 content ...
+```
+</attachment>
 ````
 
-</attachment>
+### Directory Context Inclusion
+
+**VS Code Chat Feature**: `#file:directoryPath`
+
+When used in VS Code Chat, referencing a directory with `#file:` provides the directory structure:
+
+```markdown
+Explain the structure of #file:src/ui
 ```
+
+**What VS Code attaches:**
+
+- Complete directory tree (files and subdirectories)
+- File names only (not file contents)
+- Useful for understanding project organization
+
+**CLI Support**: ❌ Not natively supported by Copilot or Claude CLI
+
+**FlightPath implementation**: Not yet implemented
+
+- Could read directory structure and format as XML attachment
+- Useful for "analyze this module" or "explain folder structure" prompts
+- Lower priority than file/symbol support
+
+### Symbol Context Inclusion
+
+**VS Code Chat Feature**: `#sym:symbolName`
+
+When used in VS Code Chat, referencing a symbol provides targeted code context:
+
+```markdown
+Refactor #sym:cancelImplementation to improve error handling
+```
+
+**What VS Code attaches:**
+
+- Specific function/method/class definition
+- Precise line range for that symbol only
+- Much more targeted than full file attachment
+
+**CLI Support**: ❌ Not natively supported by Copilot or Claude CLI
+
+**FlightPath implementation**: Not yet implemented
+
+- Would require symbol resolution via VS Code Language Server
+- Could use `vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider')` to find symbols
+- Extract symbol location and convert to line range attachment
+- **High value**: Very useful for focused refactoring prompts
+
+**Proposed FlightPath syntax extension:**
+
+```json
+{
+  "prompt": "Refactor #sym:cancelImplementation in #file:src/flightpath/cli/BaseCliIntegration.ts"
+}
+```
+
+FlightPath would:
+
+1. Parse `#sym:symbolName` from prompt
+2. Resolve symbol location using VS Code API
+3. Convert to `#file:path:startLine-endLine` format
+4. Process as line range attachment (existing implementation)
+
+**Implementation priority**: Medium (symbol resolution adds complexity but high user value)
 
 ## Version Compatibility
 

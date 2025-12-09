@@ -647,24 +647,28 @@ const result = await this.spawnProcess("claude", args, {
 
 ## Context Attachment Behavior
 
+### File Reference Syntax
+
+Both Copilot and Claude CLI use identical `@pathFromRoot` syntax. See [COPILOT_CLI_DESIGN.md - File Reference Syntax](./COPILOT_CLI_DESIGN.md#file-reference-syntax-pathfromroot) for complete format documentation.
+
 ### Automatic File Content Attachment
 
-Claude CLI **automatically attaches file content** when you reference files in the prompt using `@pathFromRoot` syntax:
+Claude CLI **automatically attaches file content** when you reference files using `@path` syntax:
 
-- **Format**: `@path\to\file.md` (Windows) or `@path/to/file.md` (Unix)
-- **Important**: Omit the root directory name and leading slash
 - **Example**: For `c:\dev\FlightPath\docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`, use `@docs\COPILOT_SYSTEM_PROMPT_SONNET4.5.md`
 - **Behavior**: Claude automatically reads and includes the full file content in the context
 
 **Key differences from Copilot CLI:**
 
-| Aspect              | Copilot CLI                                                 | Claude CLI                                             |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
-| File content        | **NOT** auto-attached, requires explicit tool calls         | **Auto-attached** with `@path` syntax                  |
-| Custom instructions | Auto-attached for `.github/copilot-instructions.md`         | Auto-attached (same behavior)                          |
-| Instruction mapping | Requires `@filepath` references to trigger folder-level     | Auto-attached with `@path` syntax                      |
-| Line ranges         | Not supported natively (FlightPath implements via XML)      | Not supported natively (FlightPath implements via XML) |
-| Syntax              | `#file:path` (FlightPath convention, not native CLI syntax) | `@path` (native CLI syntax)                            |
+| Aspect              | Copilot CLI                                              | Claude CLI                                               |
+| ------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| File content        | **NOT** auto-attached, requires explicit tool calls      | **Auto-attached** with `@path` syntax                    |
+| Custom instructions | `.github/copilot-instructions.md` + folder-level pattern | **Only** `CLAUDE.md` (root + per-folder)                 |
+| Instruction mapping | Requires `@filepath` references to trigger folder-level  | No conditional mapping (only fixed `CLAUDE.md` files)    |
+| Line ranges         | Not supported natively (FlightPath implements via XML)   | Not supported natively (FlightPath implements via XML)   |
+| Directory context   | Not supported natively (Chat only, FlightPath can add)   | Not supported natively (Chat only, FlightPath can add)   |
+| Symbol context      | Not supported natively (Chat only, FlightPath can add)   | Not supported natively (Chat only, FlightPath can add)   |
+| File reference      | `@path` (native) or `#file:path` (FlightPath convention) | `@path` (native) or `#file:path` (FlightPath convention) |
 
 ### FlightPath Implementation for Claude CLI
 
@@ -678,7 +682,8 @@ Claude CLI **automatically attaches file content** when you reference files in t
 
 - Convert `#file:path` → `@path` for full file references
 - Keep XML attachments only for line ranges (`#file:path:10-20`)
-- Let Claude's native attachment handle full files (more efficient, includes custom instructions)
+- Let Claude's native attachment handle full files (more efficient)
+- **Note**: Custom instructions limited to `CLAUDE.md` files only
 
 ### Line Range Support
 
@@ -701,36 +706,104 @@ FlightPath converts this to:
 Excerpt from src/extension.ts, lines 45 to 67:
 ```typescript
 // ... line 45-67 content ...
+```
+</attachment>
 ````
 
-</attachment>
-```
+### Directory Context Inclusion
+
+**VS Code Chat Feature**: `#file:directoryPath`
+
+See [COPILOT_CLI_DESIGN.md - Directory Context Inclusion](./COPILOT_CLI_DESIGN.md#directory-context-inclusion) for complete documentation.
+
+**Summary for Claude CLI:**
+
+- VS Code Chat supports directory structure attachment via `#file:directoryPath`
+- ❌ Not natively supported by Claude CLI
+- Same FlightPath implementation approach as Copilot (read directory structure → XML attachment)
+
+### Symbol Context Inclusion
+
+**VS Code Chat Feature**: `#sym:symbolName`
+
+See [COPILOT_CLI_DESIGN.md - Symbol Context Inclusion](./COPILOT_CLI_DESIGN.md#symbol-context-inclusion) for complete documentation.
+
+**Summary for Claude CLI:**
+
+- VS Code Chat supports targeted symbol attachment via `#sym:symbolName`
+- ❌ Not natively supported by Claude CLI
+- Same FlightPath implementation approach as Copilot (symbol resolution → line range → XML attachment)
 
 ### Custom Instructions
 
-Both CLIs automatically discover and attach custom instructions:
+**Copilot CLI:**
 
-- `.github/copilot-instructions.md` (project-level, always included)
-- `.github/instructions/*.instructions.md` (folder-level, when referenced files match front matter)
+- Automatically attaches `.github/copilot-instructions.md` (project-level, always included)
+- Automatically attaches `.github/instructions/*.instructions.md` (folder-level, when referenced files match front matter)
+- Requires `@pathFromRoot` syntax to trigger folder-level instruction discovery
 
-**To trigger folder-level instructions:**
+**Claude CLI:**
 
-- Copilot CLI: Reference a file matching the instruction's `applyTo` pattern using `@pathFromRoot`
-- Claude CLI: Same behavior as Copilot (reference file with `@pathFromRoot`)
+- Natively supports only `CLAUDE.md` files (one at project root, optionally one per folder)
+- Does NOT natively support `.github/instructions/*.instructions.md` pattern
+- **Does NOT support conditional attachment** based on front matter (key limitation vs Copilot)
+- **File chaining works**: `@` references in instruction files are loaded recursively
+  - `CLAUDE.md` can use `@.github/copilot-instructions.md` to include that file
+  - Those files can in turn use `@` to include other files (e.g., `@.github/instructions/ui.instructions.md`)
+  - Creates recursive reference chain that loads multiple instruction files
+  - **Limitation**: ALL files in chain are ALWAYS included (no selective/conditional loading)
+- **Needed enhancement**: FlightPath should implement Copilot's pattern-based conditional inclusion
+  - Parse `applyTo` front matter from `.github/instructions/*.instructions.md` files
+  - Only include instruction files when working with files matching their patterns
+  - Provides intelligent, context-aware instruction loading (not just static file chains)
 
-**Example:**
+**Example (Copilot native):**
 
 ```markdown
 Improve error handling in @src/flightpath/base/CopilotIntegration.ts
 ```
 
-This automatically attaches `.github/instructions/flightpath-base.instructions.md` because it has:
+This automatically attaches `.github/instructions/flightpath-base.instructions.md` in Copilot because it has:
 
 ```yaml
 ---
 applyTo: "src/flightpath/base/**"
 ---
 ```
+
+**Example (Claude workaround using chained references):**
+
+`CLAUDE.md` can include multiple instruction files via `@` references:
+
+```markdown
+# FlightPath Project Memory
+
+## Core Project Context
+
+Always read the main project instructions:
+
+@.github/copilot-instructions.md
+
+## Selective Instruction Files
+
+Read the relevant instruction file(s) based on which files you're working with:
+
+- `src/flightpath/cli/**` → `@.github/instructions/flightpath-cli.instructions.md`
+- `src/ui/**` → `@.github/instructions/ui.instructions.md`
+```
+
+Those referenced files can in turn reference others:
+
+`.github/copilot-instructions.md`:
+```markdown
+# FlightPath VS Code Extension
+
+## Test: Chained reference from copilot-instructions.md
+
+@.github/instructions/ui.instructions.md
+```
+
+This creates a recursive chain that loads all instruction files. However, **this is NOT equivalent to Copilot's conditional inclusion system** - all files in the chain are always loaded, regardless of which files you're actually working with. FlightPath should implement pattern-based conditional inclusion for Claude to match Copilot's intelligent context-aware behavior.
 
 ---
 

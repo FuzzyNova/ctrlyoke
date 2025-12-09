@@ -21,13 +21,22 @@ FlightPath uses a unified `processPromptAttachments()` method in the base `Copil
 - **Claude CLI**: Duplicates file content (XML attachment + Claude's auto-attachment from `@path`)
 - **Both**: Line ranges work correctly (neither CLI supports natively)
 
+**Out of scope (future enhancements):**
+
+- `#file:directory` - Directory structure attachment (VS Code Chat feature, not CLI-supported)
+- `#sym:symbolName` - Symbol-specific code attachment (VS Code Chat feature, requires Language Server integration)
+
+See [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) for complete documentation on these VS Code Chat features and proposed FlightPath implementations.
+
 ### Discovered Behaviors
 
-| CLI        | `@path` File Content  | `@path` Custom Instructions | `#file:path` Recognition |
-| ---------- | --------------------- | --------------------------- | ------------------------ |
-| Copilot    | ❌ No (explicit read) | ✅ Yes                      | ❌ No                    |
-| Claude     | ✅ Yes (auto)         | ✅ Yes                      | ❌ No                    |
-| Line Range | ❌ Not supported      | N/A                         | N/A                      |
+| CLI        | `@path` File Content  | `@path` Custom Instructions                                           | `#file:path` Recognition |
+| ---------- | --------------------- | --------------------------------------------------------------------- | ------------------------ |
+| Copilot    | ❌ No (explicit read) | ✅ Yes (`.github/copilot-instructions.md` + conditional folder-level) | ❌ No                    |
+| Claude     | ✅ Yes (auto)         | ✅ Partial (only `CLAUDE.md` files, no conditional)                   | ❌ No                    |
+| Line Range | ❌ Not supported      | N/A                                                                   | N/A                      |
+
+**Note**: Claude only supports `CLAUDE.md` files (one at root, one per folder). It does NOT support Copilot's `.github/instructions/*.instructions.md` pattern or conditional front matter matching.
 
 ## Proposed Solution
 
@@ -57,7 +66,8 @@ protected async processPromptAttachments(prompt: string): Promise<string> {
   const xmlAttachments: string[] = [];
 
   for (const ref of fileReferences) {
-    const atPath = this.convertToAtSyntax(ref.path); // path\to\file.md → @path\to\file.md
+    // Use shared base class method for @path conversion
+    const atPath = this.convertToAtSyntax(ref.path);
 
     if (ref.startLine && ref.endLine) {
       // Line range: Use XML attachment only (not supported by @path)
@@ -104,6 +114,7 @@ protected async processPromptAttachments(prompt: string): Promise<string> {
   const xmlAttachments: string[] = [];
 
   for (const ref of fileReferences) {
+    // Use shared base class method for @path conversion
     const atPath = this.convertToAtSyntax(ref.path);
 
     if (ref.startLine && ref.endLine) {
@@ -111,14 +122,14 @@ protected async processPromptAttachments(prompt: string): Promise<string> {
       const xml = await this.buildAttachmentXml(ref.path, ref.startLine, ref.endLine);
       xmlAttachments.push(xml);
     } else {
-      // Full file: Use @path ONLY (Claude auto-attaches content + instructions)
+      // Full file: Use @path ONLY (Claude auto-attaches content)
       atReferences.push(atPath);
       // NO XML attachment needed - would duplicate content
     }
   }
 
   // Build final prompt:
-  // 1. @path references (auto-attaches content + instructions)
+  // 1. @path references (auto-attaches content + CLAUDE.md instructions)
   // 2. XML attachments (only for line ranges)
   // 3. Original prompt (keeps #file: syntax for LLM context)
   const atSection = atReferences.length > 0
@@ -132,7 +143,8 @@ protected async processPromptAttachments(prompt: string): Promise<string> {
 
 **Why only `@path` for Claude (no XML)?**
 
-- `@path`: Claude automatically attaches full file content + custom instructions
+- `@path`: Claude automatically attaches full file content
+- `CLAUDE.md`: Only static instruction files (no conditional front matter matching)
 - XML: Would duplicate content unnecessarily
 - Result: Cleaner prompts, less token usage
 
@@ -154,7 +166,7 @@ export abstract class CopilotIntegration {
 
   /**
    * Process #file: references (integration-specific override point)
-   * Default implementation uses XML attachments only
+   * Default implementation uses XML attachments only (for Chat integration)
    */
   protected async processPromptAttachments(prompt: string): Promise<string> {
     // Default implementation for Chat integration
@@ -197,13 +209,17 @@ export abstract class CopilotIntegration {
 
   /**
    * Convert workspace-relative path to @path syntax
-   * PROTECTED - Used by CLI integration overrides
+   * PROTECTED - SHARED by both Copilot and Claude CLI integrations
+   *
+   * IMPORTANT: Both CLIs use identical @path format. This is the single
+   * source of truth for path conversion used by both CLI integrations.
    */
   protected convertToAtSyntax(filePath: string): string {
     // Remove leading slash/backslash if present
     const normalized = filePath.replace(/^[\/\\]/, "");
 
     // Platform-specific path separator (use native for consistency)
+    // Both CLIs accept either separator, but we use platform-native
     const separator = process.platform === "win32" ? "\\" : "/";
     const pathWithCorrectSeparator = normalized.replace(/[\/\\]/g, separator);
 
@@ -220,8 +236,10 @@ export abstract class CopilotIntegration {
 
 1. ✅ Move `buildAttachmentXml()` from private to protected
 2. ✅ Keep `processPromptAttachments()` as-is (will be overridden by CLI integrations)
-3. ✅ Add `convertToAtSyntax()` utility method
+3. ✅ Add `convertToAtSyntax()` utility method (SINGLE implementation shared by both CLIs)
 4. ✅ Update visibility of `parseFileReferences()` to protected (already is)
+
+**Key insight**: Since both Copilot and Claude CLI use identical `@path` format, `convertToAtSyntax()` is implemented once in the base class and reused by both CLI integrations. No duplication needed!
 
 **Files**:
 
@@ -458,13 +476,14 @@ Create test prompt files in `manual-test/`:
 
 ## Success Criteria
 
-- ✅ Copilot CLI receives both custom instructions and file content
-- ✅ Claude CLI avoids duplicate content
+- ✅ Copilot CLI receives both custom instructions (`.github/copilot-instructions.md` + folder-level) and file content
+- ✅ Claude CLI avoids duplicate content (uses `@path` for file content, `CLAUDE.md` for instructions)
 - ✅ Line ranges work consistently across all integrations
 - ✅ No regressions in Chat integration
 - ✅ Clear documentation of behavior differences
 - ⬜ Comprehensive test coverage (unit + integration)
 - ⬜ User-facing documentation updated
+- ⬜ (Future) Implement Copilot-style instruction system for Claude
 
 ## Rollout Plan
 
@@ -484,6 +503,80 @@ Create test prompt files in `manual-test/`:
 | Performance degradation (duplicate reads) | LOW    | Implement caching if needed                        |
 | Cross-platform path issues                | LOW    | Extensive testing on Windows + Unix                |
 | Custom instruction discovery doesn't work | MEDIUM | Manual testing with real instruction files         |
+
+## Future Enhancements
+
+### Custom Instruction System for Claude CLI
+
+**Goal**: Bring Copilot's folder-level instruction system to Claude CLI
+
+**Current limitation**: Claude natively supports only fixed `CLAUDE.md` files (one at root, one per folder). It does NOT natively support:
+
+- Conditional instruction attachment based on front matter
+- Multiple instruction files per folder
+- The `.github/instructions/*.instructions.md` pattern
+
+**Current state**: Chained `@` references in `CLAUDE.md` (basic file inclusion only)
+
+Claude Code CLI supports `@` syntax for file references in `CLAUDE.md`, and these references can be chained recursively:
+
+1. `CLAUDE.md` includes `@.github/copilot-instructions.md`
+2. That file includes `@.github/instructions/ui.instructions.md`
+3. Those files are loaded recursively when Claude reads `CLAUDE.md`
+
+**Critical limitation**: This is NOT equivalent to Copilot's conditional inclusion system:
+- ❌ No pattern matching based on `applyTo` front matter
+- ❌ No selective loading (ALL files in chain are ALWAYS included)
+- ❌ No context-awareness (doesn't matter which files you're actually working with)
+- ✅ Only provides basic multi-file loading via static reference chain
+
+This makes FlightPath's pattern-based implementation still necessary for intelligent, context-aware instruction loading.
+
+**Proposed automated solution**: FlightPath-managed instruction attachment
+
+1. Parse `.github/instructions/*.instructions.md` files
+2. Match `applyTo` front matter against referenced files in prompt
+3. Manually prepend matching instruction content to Claude prompts
+4. Wrap in XML structure to distinguish from user content
+
+**Example implementation:**
+
+```typescript
+// In ClaudeCommandLineIntegration.ts
+protected async attachCustomInstructions(
+  prompt: string,
+  fileReferences: string[]
+): Promise<string> {
+  const instructionFiles = await this.findMatchingInstructions(fileReferences);
+  if (instructionFiles.length === 0) {
+    return prompt;
+  }
+
+  const instructionBlocks = instructionFiles.map(file =>
+    `<customInstruction source="${file.path}">
+${file.content}
+</customInstruction>`
+  );
+
+  return `${instructionBlocks.join('\n\n')}\n\n${prompt}`;
+}
+```
+
+**Benefits over manual chained references:**
+
+- **Conditional loading** based on `applyTo` front matter (like Copilot) - THE KEY FEATURE
+- Only includes relevant instruction files for the files you're working with
+- Reduces token usage (doesn't load ALL instructions for EVERY prompt)
+- Context-aware and intelligent (not just static file chains)
+- No need to manually maintain `CLAUDE.md` index file
+- Consistent instruction system across Copilot and Claude
+- Single source of truth for project conventions
+
+**Implementation priority**: Medium-High (chained references don't provide conditional/pattern-based inclusion)
+
+**See also**: Consider creating `docs/INSTRUCTION_ATTACHMENT_DESIGN.md` for detailed specification when ready to implement.
+
+---
 
 ## Related Documentation
 
