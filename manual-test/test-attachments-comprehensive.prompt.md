@@ -2,7 +2,7 @@
 
 This prompt demonstrates the automatic file attachment feature:
 
-1. Full file attachment: Review the entire extension entry point in #file:src/extension.ts
+1. Full file attachment: Review the entire extension entry point in @src/extension.ts
 
 2. Line range attachment: Analyze the sendPrompt method implementation in #file:src/flightpath/cli/CopilotCommandLineIntegration.ts:90-130
 

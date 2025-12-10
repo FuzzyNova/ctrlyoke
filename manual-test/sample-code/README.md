@@ -16,7 +16,7 @@ TypeScript file demonstrating:
 
 **Test scenarios:**
 
-- Reference entire file: `#file:sample-code/example.ts`
+- Reference entire file: `@sample-code/example.ts`
 - Reference specific method: `#file:sample-code/example.ts:23-26` (getUser method)
 - Reference interface: `#file:sample-code/example.ts:6-11` (User interface)
 
@@ -32,7 +32,7 @@ Python file demonstrating:
 
 **Test scenarios:**
 
-- Reference entire file: `#file:sample-code/example.py`
+- Reference entire file: `@sample-code/example.py`
 - Reference class: `#file:sample-code/example.py:8-20` (Product dataclass)
 - Reference method: `#file:sample-code/example.py:43-45` (total_inventory_value)
 
@@ -42,7 +42,7 @@ Python file demonstrating:
 
 ```json
 {
-  "prompt": "Explain what #file:sample-code/example.ts does"
+  "prompt": "Explain what @sample-code/example.ts does"
 }
 ```
 
@@ -58,6 +58,6 @@ Python file demonstrating:
 
 ```json
 {
-  "prompt": "Compare these implementations: #file:sample-code/example.ts and #file:sample-code/example.py"
+  "prompt": "Compare these implementations: @sample-code/example.ts and @sample-code/example.py"
 }
 ```
