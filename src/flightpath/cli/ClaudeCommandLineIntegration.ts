@@ -306,6 +306,82 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   // ============================================================
+  // FILE ATTACHMENT PROCESSING
+  // ============================================================
+
+  /**
+   * Process #file: references for Claude CLI
+   *
+   * CLAUDE-SPECIFIC BEHAVIOR:
+   * - Full files: Use @path ONLY (Claude automatically attaches file content)
+   * - Line ranges: Use XML attachment (not supported by @path syntax)
+   *
+   * Why @path only for full files (no XML)?
+   * - @path triggers Claude's native file attachment (auto-reads content)
+   * - Adding XML would duplicate the content unnecessarily
+   * - This reduces token usage and keeps prompts cleaner
+   *
+   * @param prompt Original prompt text with #file: references
+   * @returns Prompt with @path references and XML attachments (for line ranges only) prepended
+   */
+  protected async processPromptAttachments(prompt: string): Promise<string> {
+    try {
+      // Parse file references from prompt
+      const fileReferences = this.parseFileReferences(prompt);
+
+      if (fileReferences.length === 0) {
+        return prompt; // No attachments needed
+      }
+
+      const atReferences: string[] = [];
+      const xmlAttachments: string[] = [];
+
+      // Process each file reference
+      for (const ref of fileReferences) {
+        // Convert path to @path syntax
+        const atPath = this.convertToAtSyntax(ref.path);
+
+        if (ref.startLine && ref.endLine) {
+          // Line range: Use XML attachment only (not supported by @path)
+          const xml = await this.buildAttachmentXml(
+            ref.path,
+            ref.startLine,
+            ref.endLine
+          ).catch((err) => {
+            console.error(
+              `Failed to attach ${ref.path}:${ref.startLine}-${ref.endLine}:`,
+              err
+            );
+            return null;
+          });
+          if (xml) {
+            xmlAttachments.push(xml);
+          }
+        } else {
+          // Full file: Use @path ONLY (Claude auto-attaches content)
+          // NO XML attachment - would duplicate content unnecessarily
+          atReferences.push(atPath);
+        }
+      }
+
+      // Build final prompt:
+      // 1. @path references (Claude auto-attaches content + CLAUDE.md instructions)
+      // 2. XML attachments (only for line ranges)
+      // 3. Original prompt (keeps #file: syntax for LLM context)
+      const atSection =
+        atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
+      const xmlSection =
+        xmlAttachments.length > 0 ? xmlAttachments.join("\n\n") + "\n\n" : "";
+
+      return `${atSection}${xmlSection}${prompt}`;
+    } catch (error) {
+      console.error("Error processing Claude prompt attachments:", error);
+      // Return original prompt on error
+      return prompt;
+    }
+  }
+
+  // ============================================================
   // INITIALIZATION (Epic 2: Story 2.1, 2.2)
   // ============================================================
 

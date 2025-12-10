@@ -173,6 +173,84 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   // Uses base class initialize() method
 
   /**
+   * Process #file: references for Copilot CLI
+   *
+   * COPILOT-SPECIFIC BEHAVIOR:
+   * - Full files: Use BOTH @path (triggers custom instruction discovery) AND XML (provides content)
+   * - Line ranges: Use XML only (not supported by @path syntax)
+   *
+   * Why both @path and XML?
+   * - @path triggers .github/copilot-instructions.md and folder-level instruction discovery
+   * - Copilot CLI does NOT auto-attach file content from @path (unlike Claude)
+   * - XML provides the actual file content since Copilot doesn't auto-read @path files
+   *
+   * @param prompt Original prompt text with #file: references
+   * @returns Prompt with @path references and XML attachments prepended
+   */
+  protected async processPromptAttachments(prompt: string): Promise<string> {
+    try {
+      // Parse file references from prompt
+      const fileReferences = this.parseFileReferences(prompt);
+
+      if (fileReferences.length === 0) {
+        return prompt; // No attachments needed
+      }
+
+      const atReferences: string[] = [];
+      const xmlAttachments: string[] = [];
+
+      // Process each file reference
+      for (const ref of fileReferences) {
+        // Convert path to @path syntax
+        const atPath = this.convertToAtSyntax(ref.path);
+
+        if (ref.startLine && ref.endLine) {
+          // Line range: Use XML attachment only (not supported by @path)
+          const xml = await this.buildAttachmentXml(
+            ref.path,
+            ref.startLine,
+            ref.endLine
+          ).catch((err) => {
+            console.error(
+              `Failed to attach ${ref.path}:${ref.startLine}-${ref.endLine}:`,
+              err
+            );
+            return null;
+          });
+          if (xml) {
+            xmlAttachments.push(xml);
+          }
+        } else {
+          // Full file: Use BOTH @path (for instructions) AND XML (for content)
+          atReferences.push(atPath);
+          const xml = await this.buildAttachmentXml(ref.path).catch((err) => {
+            console.error(`Failed to attach ${ref.path}:`, err);
+            return null;
+          });
+          if (xml) {
+            xmlAttachments.push(xml);
+          }
+        }
+      }
+
+      // Build final prompt:
+      // 1. @path references (triggers custom instructions)
+      // 2. XML attachments (provides file content)
+      // 3. Original prompt (keeps #file: syntax for LLM context)
+      const atSection =
+        atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
+      const xmlSection =
+        xmlAttachments.length > 0 ? xmlAttachments.join("\n\n") + "\n\n" : "";
+
+      return `${atSection}${xmlSection}${prompt}`;
+    } catch (error) {
+      console.error("Error processing Copilot prompt attachments:", error);
+      // Return original prompt on error
+      return prompt;
+    }
+  }
+
+  /**
    * Send prompt to Copilot via CLI
    * Routes to interactive terminal or headless execution based on settings
    * @param needsCompletionDetection Ignored for CLI mode (completion is deterministic)

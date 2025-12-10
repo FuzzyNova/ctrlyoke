@@ -4,31 +4,31 @@
 
 FlightPath supports rich context references in prompts using a syntax aligned with CLI standards while adding workspace intelligence features. This document defines the syntax, completion behavior, and migration path.
 
-**Last Updated**: 2025-12-09
+**Last Updated**: 2025-12-10
 
 ---
 
-## ⚠️ CURRENT IMPLEMENTATION STATUS
+## ✅ IMPLEMENTATION STATUS
 
-**What's Implemented** (in `PromptCompletionProvider.ts`):
+**What's Implemented**:
 
-- ✅ `#` trigger only (no `@` trigger yet)
-- ✅ `#file:path` completions for workspace files (max 500, 5s cache)
-- ✅ `#file:path:10-20` line range support
+- ✅ `@` trigger for full file completions (CLI-native syntax)
+- ✅ `#` trigger for selection completions only (line ranges)
+- ✅ `@path` syntax parsed in all integrations (Copilot CLI, Claude CLI, Chat)
+- ✅ `#file:path:10-20` line range support (XML attachments)
 - ✅ Selection completions (inserts `file:path:line-line`)
 - ✅ Model completions in "model" field
 - ✅ Works in JSON and Markdown prompt files
+- ✅ Migration script: `scripts/migrate-prompt-syntax.mjs`
 
 **What's NOT Implemented Yet**:
 
-- ❌ `@` completion trigger/handler
-- ❌ `@path` syntax for full file references
 - ❌ `#sym:name` symbol completions
-- ❌ `@dir:path` directory structure references
-- ❌ Migration tooling (`#file:path` → `@path`)
-- ❌ Deprecation warnings for old syntax
+- ❌ `@path/` directory structure references (trailing slash)
+- ❌ Deprecation warnings for legacy `#file:path` without line ranges
 
-**Bottom Line**: All completions currently use `#file:` prefix. The `@` syntax described in this document is the planned migration target, not current behavior.
+**Breaking Change Applied**: `#file:path` for full files is DEPRECATED. Use `@path` instead.
+Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 ---
 
@@ -38,10 +38,10 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 
 ### Mental Model
 
-- **`@` = Full Content**: Complete files or directory structures
+- **`@` = Full Content**: Complete files or directory structures (trailing slash for directories)
 - **`#` = Snippets/Excerpts**: Line ranges, selections, symbols
 
-### Full File Attachment: `@path` _(PLANNED - NOT IMPLEMENTED)_
+### Full File Attachment: `@path` ✅ IMPLEMENTED
 
 **Purpose**: Attach entire file content
 
@@ -59,7 +59,7 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 }
 ```
 
-**Behavior** _(when implemented)_:
+**Behavior**:
 
 - **CLI handles natively**: File content auto-attached by Copilot/Claude CLI
 - **Path resolution**: Workspace-relative (no leading `/` or `\`)
@@ -67,38 +67,39 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 
 **CLI Integration**:
 
-- Copilot CLI: `@path` triggers `.github/copilot-instructions.md` + folder-level instructions
-- Claude CLI: `@path` auto-attaches content + `CLAUDE.md` instructions
+- Copilot CLI: `@path` triggers `.github/copilot-instructions.md` + folder-level instructions, XML provides content
+- Claude CLI: `@path` auto-attaches content + `CLAUDE.md` instructions (no XML duplication)
+- Chat mode: `@path` converted to native attachment via `github.copilot.chat.attachFile`
 - See [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) and [CLAUDE_CLI_DESIGN.md](./CLAUDE_CLI_DESIGN.md) for details
 
-**Important**: CLIs don't support line range syntax. `@path:10-20` would attach the entire file, not lines 10-20.
-
-**Current Implementation**: NOT IMPLEMENTED. Completion provider currently only offers `#file:` completions.
+**Important**: CLIs don't support line range syntax. Use `#file:path:10-20` for line ranges.
 
 ---
 
-### Directory Structure: `@dir:path` _(Planned)_
+### Directory Structure: `@path\to\directory\` _(Planned)_
 
 **Purpose**: Attach directory structure (file tree, no content)
 
 **Format**:
 
 ```
-@dir:path/to/directory        # Directory structure
+@path/to/directory/           # Directory structure (trailing slash)
+@path\to\directory\          # Windows-style also supported
 ```
 
 **Example**:
 
 ```json
 {
-  "prompt": "Explain the architecture of @dir:src/flightpath"
+  "prompt": "Explain the architecture of @src/flightpath/"
 }
 ```
 
 **Behavior** _(when implemented)_:
 
-- **FlightPath handles**: Reads directory tree and wraps in XML attachment
+- **FlightPath handles**: Detects trailing slash, reads directory tree, wraps in XML attachment
 - **No content**: Shows file names and structure only
+- **CLI alignment**: Claude natively recognizes `@path/` as directory (no conversion needed)
 - Useful for "explain module" or "understand organization" prompts
 
 **Priority**: Medium (useful for architectural questions)
@@ -181,29 +182,11 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 
 **Priority**: Medium-High (high user value for focused refactoring)
 
-#### Directory Context: `#dir:path` _(Planned)_
+#### Directory Context: `@path\to\directory\` _(See Full Content Section)_
 
-**Format**:
+**Note**: Directory references belong in the "Full Content" category (use `@` prefix with trailing slash).
 
-```
-#dir:path/to/directory        # Directory structure
-```
-
-**Example**:
-
-```json
-{
-  "prompt": "Explain the architecture of #dir:src/flightpath"
-}
-```
-
-**Behavior** _(when implemented)_:
-
-- Reads directory structure (file tree, no content)
-- Wraps in XML attachment
-- Useful for "explain module" or "understand organization" prompts
-
-**Priority**: Medium (useful for architectural questions)
+See "Directory Structure: `@path\to\directory\`" in the Full Content section above for complete documentation.
 
 ---
 
@@ -213,22 +196,20 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 
 FlightPath plans to use **two separate completion handlers** to avoid performance issues:
 
-#### Handler 1: `@` Completion (Fast - Full Content) _(NOT IMPLEMENTED)_
+#### Handler 1: `@` Completion (Fast - Full Content) ✅ IMPLEMENTED
 
 **Trigger**: `@` character
 
-**Items** _(planned)_:
+**Items**:
 
-- ⬜ Workspace files (cached, max 500 items)
-- ⬜ Directories (when `@dir:` is typed)
+- ✅ Workspace files (cached, max 500 items)
+- ⬜ Directories (trailing slash detection for `@path/`) _(planned)_
 
-**Performance** _(when implemented)_:
+**Performance**:
 
 - File cache: 5-second TTL, refreshed on demand
 - Parallel file reads for attachments
 - Sorted by path depth (shorter paths first)
-
-**Current Status**: NOT IMPLEMENTED. No `@` trigger exists in PromptCompletionProvider yet.
 
 **Example completions**:
 
@@ -236,33 +217,24 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 @src/extension.ts                    (file - src/)
 @package.json                        (file - Root)
 @src/flightpath/PromptQueue.ts       (file - src/flightpath/)
-@dir:src/flightpath                  (directory - 8 files) [PLANNED]
+@src/flightpath/                     (directory - 8 files) [PLANNED]
 ```
 
-#### Handler 2: `#` Completion (Current Implementation)
+#### Handler 2: `#` Completion (Selections Only) ✅ IMPLEMENTED
 
 **Trigger**: `#` character
 
-**Items shown immediately**:
+**Items shown**:
 
 - ✅ Current editor selections (labeled `$(selection) Current Selection`)
   - Inserts `file:path:startLine-endLine` format
-- ✅ `#file:path` workspace files (cached, max 500 items)
-  - Allows manual line range entry like `#file:path:10-20`
+- ❌ NO file completions (use `@` for full files)
 
 **Items shown after typing** _(planned)_:
 
 - ⬜ `#sym:<search>` - Fuzzy search symbols matching typed text
 
-**Performance**:
-
-- File cache: 5-second TTL, refreshed on demand
-- Selection completions from all visible editors
-- Sorted by path depth (shorter paths first)
-
-**Current Status**: ✅ FULLY IMPLEMENTED for `#file:` completions. Symbol completions planned.
-
-**Note**: This is currently the ONLY completion handler. All file completions use `#file:` prefix, not `@`.
+**Important Change**: The `#` trigger now shows **selections only**, not files. Use `@` for full file completions.
 
 **Example completions**:
 
@@ -270,15 +242,17 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 # (user types #)
 $(selection) Current Selection          → inserts: file:src/extension.ts:45-67
 $(selection) extension.ts (lines 45-67) → inserts: file:src/extension.ts:45-67
-extension.ts                            → inserts: file:src/extension.ts
-package.json                            → inserts: file:package.json
 
-# (user types #file:src/extension.ts:)
-  [User manually types line range like :10-20, no completion needed]
+# For full files, use @ instead:
+@ (user types @)
+extension.ts                            → inserts: src/extension.ts
+package.json                            → inserts: package.json
 
-# (user types #sym:Flight)
-#sym:FlightPathManager                  → inserts: file:src/.../Manager.ts:10-50 [PLANNED]
-#sym:FlightPathDashboardProvider        → inserts: file:src/.../Dashboard.ts:15-80 [PLANNED]
+# For line ranges, manually type:
+#file:src/extension.ts:10-20           (no completion, user types manually)
+
+# (user types #sym:Flight) [PLANNED]
+#sym:FlightPathManager                  → inserts: file:src/.../Manager.ts:10-50
 ```
 
 **Note**: Selection completions show `$(selection)` label but insert `file:path:line-line` text.
@@ -327,30 +301,29 @@ FlightPath previously used `#file:path` for full file attachment:
 
 ### Migration Path
 
-**Status**: Pre-release - breaking change acceptable for full file references only
+**Status**: ✅ BREAKING CHANGE APPLIED
 
-**Timeline**:
+The migration from `#file:path` to `@path` for full files has been completed.
 
-1. **Phase 1** (Current): Support both `@path` and `#file:path` for full files
-2. **Phase 2** (Next release): Show deprecation warnings for `#file:path` without line ranges
-3. **Phase 3** (Future): Remove `#file:path` support for full files (keep for line ranges)
+**What Changed**:
 
-**Migration Tooling** _(planned)_:
+1. ✅ `@path` syntax now works in all integrations (Copilot CLI, Claude CLI, Chat)
+2. ✅ `#` completion trigger shows selections only (not files)
+3. ✅ Use `@` for file completions, `#` for selections
+4. ✅ All templates and manual-test files migrated
 
-1. **Code Action**: "Convert #file:path to @path"
-   - Only appears on full file references (no `:line-line`)
-   - One-click conversion
+**Migration Tooling**:
 
-2. **Batch Conversion Command**: `FlightPath: Migrate Prompt Syntax`
-   - Scans workspace for `.prompt.json` and `.flightpath.json` files
-   - Converts `#file:path` → `@path` (preserves `#file:path:10-20`)
-   - Shows preview before applying
+- ✅ **Migration Script**: `node scripts/migrate-prompt-syntax.mjs`
+  - Converts `#file:path` → `@path` (preserves `#file:path:10-20`)
+  - Scans `manual-test/`, `src/templates/`, `.flightpath/`
+  - Run manually when migrating existing prompts
 
-**User Communication**:
+**Legacy Support**:
 
-- Changelog explaining full file vs. snippet distinction
-- Update all templates and examples
-- Migration guide in README
+- `#file:path` (without line range) still works but is DEPRECATED
+- `#file:path:10-20` (with line range) is the correct syntax for line ranges
+- Future versions may show deprecation warnings for `#file:path` without line ranges
 
 ---
 
@@ -374,12 +347,12 @@ FlightPath previously used `#file:path` for full file attachment:
 
 ### Mental Model Summary
 
-| Syntax Type        | Purpose                  | Who Handles      | Example                        | Notes                              |
-| ------------------ | ------------------------ | ---------------- | ------------------------------ | ---------------------------------- |
-| `@path`            | Full file content        | CLI (native)     | `@src/extension.ts`            | CLI attaches entire file           |
-| `@dir:path`        | Full directory structure | FlightPath (XML) | `@dir:src/flightpath`          | File tree, no content _(planned)_  |
-| `#file:path:10-20` | Line range snippet       | FlightPath (XML) | `#file:src/extension.ts:10-20` | Extracts specific lines            |
-| `#sym:name`        | Symbol snippet           | FlightPath (XML) | `#sym:FlightPathManager`       | Resolves to line range _(planned)_ |
+| Syntax Type        | Purpose                  | Who Handles      | Example                        | Notes                                  |
+| ------------------ | ------------------------ | ---------------- | ------------------------------ | -------------------------------------- |
+| `@path`            | Full file content        | CLI (native)     | `@src/extension.ts`            | CLI attaches entire file               |
+| `@path/`           | Full directory structure | FlightPath (XML) | `@src/flightpath/`             | Trailing slash = directory _(planned)_ |
+| `#file:path:10-20` | Line range snippet       | FlightPath (XML) | `#file:src/extension.ts:10-20` | Extracts specific lines                |
+| `#sym:name`        | Symbol snippet           | FlightPath (XML) | `#sym:FlightPathManager`       | Resolves to line range _(planned)_     |
 
 **Note**: There is no `#selection` syntax. The completion provider shows `$(selection)` as a label but inserts `file:path:line-line`.
 
@@ -400,19 +373,17 @@ FlightPath previously used `#file:path` for full file attachment:
 
 | Feature                          | Status  | Priority | Notes                                                   |
 | -------------------------------- | ------- | -------- | ------------------------------------------------------- |
-| `#` trigger for file completions | ✅ Done | -        | Only trigger currently implemented                      |
-| `#file:path` completions         | ✅ Done | -        | Workspace files with 5s cache, max 500 items            |
-| `#file:path:10-20` line ranges   | ✅ Done | -        | Completions support, XML attachment in CLI integration  |
+| `@` trigger for file completions | ✅ Done | -        | Workspace files with 5s cache, max 500 items            |
+| `@path` file references          | ✅ Done | -        | Parsed in all integrations (CLI + Chat)                 |
+| `#` trigger for selections       | ✅ Done | -        | Selections only (no files - use `@` for files)          |
+| `#file:path:10-20` line ranges   | ✅ Done | -        | Manual typing, XML attachment in all integrations       |
 | Selection completions            | ✅ Done | -        | Inserts `file:path:line-line` from editor selections    |
 | Model completions                | ✅ Done | -        | Dynamic model list in "model" field                     |
-| `@` trigger handler              | ⬜ TODO | **HIGH** | **NEW HANDLER NEEDED** - separate from `#`              |
-| `@path` file references          | ⬜ TODO | **HIGH** | Requires new `@` completion handler                     |
+| Migration script                 | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                     |
+| `@path/` directory refs          | ⬜ TODO | LOW      | Trailing slash detection, directory tree attachment     |
 | `#sym:name` symbol refs          | ⬜ TODO | MEDIUM   | Requires Language Server integration                    |
-| `@dir:path` directory refs       | ⬜ TODO | LOW      | Directory structure attachment                          |
 | Lazy symbol search               | ⬜ TODO | MEDIUM   | Performance optimization for `#sym:`                    |
-| Migration code action            | ⬜ TODO | **HIGH** | One-click `#file:` → `@` conversion                     |
-| Batch migration command          | ⬜ TODO | **HIGH** | Workspace-wide syntax migration                         |
-| Deprecation warnings             | ⬜ TODO | MEDIUM   | Show hints when using `#file:` for full files (Phase 2) |
+| Deprecation warnings             | ⬜ TODO | LOW      | Show hints when using `#file:` for full files           |
 
 ---
 
@@ -472,11 +443,11 @@ _FlightPath resolves symbol location, converts to line range, wraps in XML_
 
 ```json
 {
-  "prompt": "Explain the architecture of @dir:src/flightpath and suggest improvements"
+  "prompt": "Explain the architecture of @src/flightpath/ and suggest improvements"
 }
 ```
 
-_FlightPath reads directory tree (no file content), wraps in XML_
+_Trailing slash indicates directory. FlightPath reads directory tree (no file content), wraps in XML_
 
 ### Mixed Content and Snippets
 
@@ -488,110 +459,58 @@ _FlightPath reads directory tree (no file content), wraps in XML_
 
 _Full architecture doc + specific code snippet_
 
+### Directory Structure + Files _(Future)_
+
+```json
+{
+  "prompt": "Given the structure in @src/flightpath/ explain how @src/flightpath/FlightPathManager.ts orchestrates the workflow"
+}
+```
+
+_Directory tree context + specific file content_
+
 ---
 
 ## Implementation Roadmap
 
-### Phase 1: Add `@` Completion Handler (HIGH PRIORITY)
+### Phase 1: Add `@` Completion Handler ✅ COMPLETED
 
-**Current State**: `PromptCompletionProvider.ts` only has `#` trigger logic
+**Status**: Implemented in `PromptCompletionProvider.ts` and `extension.ts`
 
-**Required Changes**:
+**Completed Changes**:
 
-1. **Register second completion provider** in `extension.ts`:
+1. ✅ Registered both `@` and `#` completion triggers in `extension.ts`
+2. ✅ Added `getAtCompletions()` for full file references
+3. ✅ Updated `getHashCompletions()` to show selections only (no files)
+4. ✅ Added `@path` parsing to all integrations:
+   - `CopilotIntegration.ts` (base class): `parseAtReferences()`, `convertToAtSyntax()`
+   - `CopilotCommandLineIntegration.ts`: `processPromptAttachments()` override
+   - `ClaudeCommandLineIntegration.ts`: `processPromptAttachments()` override
+   - `NativeAttachmentHandler.ts` (Chat): `parseFileReferences()` updated
 
-   ```typescript
-   // Current: Only one provider registered
-   const promptCompletionProvider = new PromptCompletionProvider();
-   context.subscriptions.push(
-     vscode.languages.registerCompletionItemProvider(
-       ["json", "jsonc", "markdown", "prompt"],
-       promptCompletionProvider,
-       "#" // Only # trigger
-     )
-   );
+### Phase 2: Migration Tooling ✅ COMPLETED
 
-   // Needed: Add @ trigger
-   context.subscriptions.push(
-     vscode.languages.registerCompletionItemProvider(
-       ["json", "jsonc", "markdown", "prompt"],
-       promptCompletionProvider,
-       "@" // Add @ trigger
-     )
-   );
-   ```
+**Status**: Migration script created and executed
 
-2. **Update `provideCompletionItems()` logic**:
+**Completed**:
 
-   ```typescript
-   // Add detection for @ vs # trigger
-   const line = document.lineAt(position.line).text;
-   const textBeforeCursor = line.substring(0, position.character);
-   const lastAtIndex = textBeforeCursor.lastIndexOf("@");
-   const lastHashIndex = textBeforeCursor.lastIndexOf("#");
+1. ✅ **Migration Script**: `scripts/migrate-prompt-syntax.mjs`
+   - Scans `manual-test/`, `src/templates/`, `.flightpath/`
+   - Converts `#file:path` → `@path` (preserves line ranges)
+   - 14 files updated, 144 replacements made
 
-   // Determine which trigger is active
-   if (lastAtIndex > lastHashIndex) {
-     // @ trigger - provide full file completions
-     return this.getAtCompletions(document, position);
-   } else if (lastHashIndex !== -1) {
-     // # trigger - provide snippet completions (current behavior)
-     return this.getHashCompletions(document, position);
-   }
-   ```
+**Future Enhancements** (optional):
 
-3. **Split completion methods**:
-   - `getAtCompletions()` - Full file references (no line ranges)
-     - Insert text: `src/extension.ts` (no `@` prefix in insert text)
-     - Documentation: Show `@src/extension.ts` examples
-   - `getHashCompletions()` - Current behavior (selections + files with line range support)
-     - Keep current `#file:` insert text
+- Code Action Provider for one-click conversion
+- Deprecation diagnostics for legacy syntax
 
-4. **Update file completion insert text** in `getFileCompletions()`:
+### Phase 3: Documentation & Communication ✅ COMPLETED
 
-   ```typescript
-   // Current (always #file:):
-   item.insertText = `file:${relativePath}`;
-
-   // Needed (conditional based on trigger):
-   if (triggerChar === "@") {
-     item.insertText = relativePath; // Just the path
-     item.documentation = `Insert reference:\n\n\`@${relativePath}\``;
-   } else {
-     item.insertText = `file:${relativePath}`; // Current behavior
-     item.documentation = `Insert reference:\n\n\`#file:${relativePath}\``;
-   }
-   ```
-
-### Phase 2: Migration Tooling (HIGH PRIORITY)
-
-**Goal**: Help users convert existing `#file:path` (full file) to `@path`
-
-**Required Features**:
-
-1. **Code Action Provider**: `PromptSyntaxCodeActionProvider.ts`
-   - Detects `#file:path` without line ranges in prompt strings
-   - Offers Quick Fix: "Convert to @path syntax"
-   - Uses `WorkspaceEdit` to replace `#file:path` → `@path`
-
-2. **Batch Migration Command**: `FlightPath: Migrate Prompt Syntax`
-   - Scans workspace for `.prompt.json`, `.flightpath.json`, `.prompt.md`
-   - Finds all `#file:path` references without `:line-line`
-   - Shows preview tree view before applying
-   - Applies changes with undo support
-
-3. **Deprecation Diagnostics**: `PromptSyntaxDiagnostics.ts`
-   - Creates `DiagnosticCollection` for prompt files
-   - Shows warning on `#file:path` without line ranges
-   - Message: "Use @path for full files. #file: is for line ranges."
-   - Severity: Warning (not error - still works)
-
-### Phase 3: Documentation & Communication (MEDIUM PRIORITY)
-
-1. Update all templates to use `@path` for full files
-2. Add migration guide to README
-3. Update CHANGELOG with breaking change notice
-4. Update copilot-instructions.md examples
+1. ✅ Updated all templates to use `@path` for full files
+2. ✅ Updated `docs/PROMPT_SYNTAX.md` with implemented status
+3. ✅ Updated `docs/CONTEXT_ATTACHMENT_IMPLEMENTATION.md`
+4. ⬜ Update CHANGELOG with breaking change notice (on release)
+5. ⬜ Update copilot-instructions.md examples
 
 ## Related Documentation
 
@@ -609,6 +528,7 @@ _Full architecture doc + specific code snippet_
 **Full Content** (`@` prefix):
 
 - `@workspace:name/path` - Files from specific workspace folder (multi-root workspaces)
+- `@path/to/dir/` - Directory structure (trailing slash = directory, already planned)
 
 **Snippets** (`#` prefix):
 
@@ -637,6 +557,7 @@ _Full architecture doc + specific code snippet_
 
 ## Version History
 
-| Version | Date       | Changes                                       |
-| ------- | ---------- | --------------------------------------------- |
-| 1.0     | 2025-12-08 | Initial specification with `@` and `#` syntax |
+| Version | Date       | Changes                                                          |
+| ------- | ---------- | ---------------------------------------------------------------- |
+| 1.0     | 2025-12-08 | Initial specification with `@` and `#` syntax                    |
+| 2.0     | 2025-12-10 | **IMPLEMENTED**: `@path` completions, CLI integration, migration |

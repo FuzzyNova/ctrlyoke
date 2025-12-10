@@ -9,7 +9,9 @@
       "Bash(claude --version)",
       "WebSearch",
       "Bash(claude mcp --help:*)",
-      "WebFetch(domain:platform.claude.com)"
+      "WebFetch(domain:platform.claude.com)",
+      "Bash(npm run compile:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

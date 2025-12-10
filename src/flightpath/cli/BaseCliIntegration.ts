@@ -159,6 +159,67 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
+   * Sanitize text before sending to terminal via sendText().
+   *
+   * Removes or escapes characters that could be interpreted as terminal control
+   * sequences, which would interrupt the paste or cause unexpected behavior.
+   *
+   * Problem: Files attached via #file: references may contain ANSI escape codes
+   * or other control characters. When sent via terminal.sendText(), these are
+   * interpreted as commands rather than literal text, causing the CLI to exit
+   * prematurely.
+   *
+   * @param text The text to sanitize
+   * @returns Sanitized text safe for terminal.sendText()
+   */
+  private sanitizeForTerminalPaste(text: string): string {
+    let sanitized = text;
+    let removedCount = 0;
+
+    // Remove ANSI escape sequences
+    // CSI sequences: ESC [ ... letter
+    const csiPattern = /\x1B\[[0-9;?]*[A-Za-z]/g;
+    const csiMatches = sanitized.match(csiPattern);
+    if (csiMatches) {
+      removedCount += csiMatches.length;
+      sanitized = sanitized.replace(csiPattern, "");
+    }
+
+    // OSC sequences: ESC ] ... (BEL or ESC \)
+    const oscPattern = /\x1B\].*?(?:\x07|\x1B\\)/g;
+    const oscMatches = sanitized.match(oscPattern);
+    if (oscMatches) {
+      removedCount += oscMatches.length;
+      sanitized = sanitized.replace(oscPattern, "");
+    }
+
+    // Other escape sequences
+    const otherEscPattern = /\x1B[@-Z\\-_]/g;
+    const otherEscMatches = sanitized.match(otherEscPattern);
+    if (otherEscMatches) {
+      removedCount += otherEscMatches.length;
+      sanitized = sanitized.replace(otherEscPattern, "");
+    }
+
+    // Remove control characters except newlines, tabs, and carriage returns
+    // We keep \n, \t, \r as they're part of normal text formatting
+    const controlPattern = /[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g;
+    const controlMatches = sanitized.match(controlPattern);
+    if (controlMatches) {
+      removedCount += controlMatches.length;
+      sanitized = sanitized.replace(controlPattern, "");
+    }
+
+    if (removedCount > 0) {
+      this.log(
+        `🧹 Sanitized prompt: removed ${removedCount} control sequences`
+      );
+    }
+
+    return sanitized;
+  }
+
+  /**
    * Wait for TUI to be ready, send prompt, then stream and detect completion.
    *
    * This method:
@@ -183,15 +244,23 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   ): Promise<boolean> {
     const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
+    // Sanitize prompt text FIRST to remove ANSI codes and control characters
+    // that could be interpreted as terminal commands
+    this.log(`🧹 [TRACE] Sanitizing prompt (length: ${promptText.length})...`);
+    const sanitizedPrompt = this.sanitizeForTerminalPaste(promptText);
+    this.log(
+      `🧹 [TRACE] Sanitization complete (new length: ${sanitizedPrompt.length})`
+    );
+
     // Paste silence threshold - wait this long with no terminal activity before checking
     // if paste is complete. We use a short timeout (1s) for responsiveness, but verify
     // the paste actually happened before submitting.
     const PASTE_SILENCE_THRESHOLD_MS = 1000;
 
-    // Extract the last N characters of the prompt for verification
+    // Extract the last N characters of the SANITIZED prompt for verification
     // This helps detect if the paste actually completed (vs initial silence before paste)
     const PROMPT_TAIL_LENGTH = 50;
-    const promptTail = promptText.slice(-PROMPT_TAIL_LENGTH).toLowerCase();
+    const promptTail = sanitizedPrompt.slice(-PROMPT_TAIL_LENGTH).toLowerCase();
 
     // Both CLIs collapse large pastes into indicator patterns:
     // - Copilot: "[Paste #1 - 2987 lines]"
@@ -318,9 +387,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             // Small delay to ensure TUI is fully interactive
             await this.delay(500);
 
-            // Send prompt text (without adding newline - we'll submit separately)
+            // Send sanitized prompt text in chunks to avoid overwhelming the TUI
+            // Large pastes (>100KB) can cause React error #185 in Claude's TUI
             this.log(`📤 Sending prompt to TUI via terminal.sendText...`);
-            terminal.sendText(promptText, false);
+            await this.sendTextInChunks(terminal, sanitizedPrompt);
             promptTextSent = true;
 
             // Start the dynamic paste detection timer
@@ -749,6 +819,51 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Send text to terminal in chunks with delays to avoid overwhelming TUI.
+   *
+   * Large pastes can cause React error #185 (maximum update depth exceeded)
+   * in Claude's TUI when the entire text is sent at once via sendText().
+   * Breaking into chunks with small delays prevents this.
+   *
+   * @param terminal The terminal to send text to
+   * @param text The text to send (will be chunked)
+   * @param chunkSize Size of each chunk in characters (default: 50KB)
+   * @param delayMs Delay between chunks in milliseconds (default: 50ms)
+   */
+  private async sendTextInChunks(
+    terminal: vscode.Terminal,
+    text: string,
+    chunkSize: number = 1000,
+    delayMs: number = 1000
+  ): Promise<void> {
+    const totalLength = text.length;
+
+    if (totalLength <= chunkSize) {
+      // Small enough to send in one go
+      terminal.sendText(text, false);
+      return;
+    }
+
+    // Send in chunks
+    const numChunks = Math.ceil(totalLength / chunkSize);
+    this.log(
+      `📦 Sending prompt in ${numChunks} chunks (${chunkSize} chars each, ${delayMs}ms delay)`
+    );
+
+    for (let i = 0; i < totalLength; i += chunkSize) {
+      const chunk = text.slice(i, i + chunkSize);
+      terminal.sendText(chunk, false);
+
+      // Don't delay after the last chunk
+      if (i + chunkSize < totalLength) {
+        await this.delay(delayMs);
+      }
+    }
+
+    this.log(`✅ All ${numChunks} chunks sent`);
   }
 
   // ============================================================

@@ -24,7 +24,7 @@ This directory contains test files for manually testing the FlightPath extension
 | File                             | Purpose         | Tests                            |
 | -------------------------------- | --------------- | -------------------------------- |
 | `simple.prompt.md`               | Markdown format | Basic prompt execution           |
-| `with-file.prompt.json`          | File attachment | `#file:` reference processing    |
+| `with-file.prompt.json`          | File attachment | `@` reference processing    |
 | `with-end-condition.prompt.json` | End condition   | Script validation                |
 | `multi-step.flightpath.json`     | Model switching | Multi-step with different models |
 
@@ -358,9 +358,9 @@ Located in `sample-code/`:
 - **`example.ts`** - TypeScript class with interfaces, generics, Map
 - **`example.py`** - Python dataclasses with type hints
 
-Use in prompts: `#file:sample-code/example.ts`
+Use in prompts: `@sample-code/example.ts`
 
-Line ranges: `#file:sample-code/example.ts:6-11`
+Line ranges: `@sample-code/example.ts:6-11`
 
 ---
 

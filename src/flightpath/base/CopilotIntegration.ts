@@ -298,9 +298,72 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
   }
 
   /**
-   * Build Copilot attachment XML for a file or file excerpt
+   * Parse @path references from prompt text (CLI-native full file syntax)
+   * Supports formats:
+   * - @path/to/file.ts (full file - CLI handles natively)
+   * - @"path with spaces/file.ts" (quoted path)
+   *
+   * Note: @path does NOT support line ranges - CLIs don't support them.
+   * Line ranges should use #file:path:start-end syntax instead.
+   *
+   * Trailing punctuation is stripped from unquoted paths.
    */
-  private async buildAttachmentXml(
+  protected parseAtReferences(prompt: string): Array<{ path: string }> {
+    const atReferences: Array<{ path: string }> = [];
+
+    // Regex to match @path or @"path with spaces"
+    // Group 1: quoted path, Group 2: unquoted path
+    // Unquoted paths end at whitespace, colon, or common punctuation
+    const regex = /@(?:"([^"]+)"|([^\s:?!.,;)\]}"]+))/g;
+    let match;
+
+    // Punctuation that commonly follows file references in natural language
+    const trailingPunctuation = /[?!.,;)\]}]+$/;
+
+    while ((match = regex.exec(prompt)) !== null) {
+      const [, quotedPath, unquotedPath] = match;
+      let filePath = quotedPath || unquotedPath;
+
+      // Strip trailing punctuation from unquoted paths
+      if (!quotedPath && filePath) {
+        filePath = filePath.replace(trailingPunctuation, "");
+      }
+
+      // Skip if path is empty or looks like a mention (@workspace, @user, etc.)
+      // We only want file paths
+      if (filePath && filePath.includes("/") || filePath.includes("\\") || filePath.includes(".")) {
+        atReferences.push({ path: filePath });
+      }
+    }
+
+    return atReferences;
+  }
+
+  /**
+   * Convert a workspace-relative path to @path syntax
+   * SHARED utility used by both Copilot and Claude CLI integrations
+   *
+   * Both CLIs use identical @path format. This is the single source of truth
+   * for path conversion used by both CLI integrations.
+   *
+   * @param filePath Workspace-relative path (e.g., "src/extension.ts")
+   * @returns @path syntax (e.g., "@src/extension.ts")
+   */
+  protected convertToAtSyntax(filePath: string): string {
+    // Remove leading slash/backslash if present
+    const normalized = filePath.replace(/^[/\\]/, "");
+
+    // Use forward slashes for consistency (both CLIs accept this)
+    const pathWithSlashes = normalized.replace(/\\/g, "/");
+
+    return `@${pathWithSlashes}`;
+  }
+
+  /**
+   * Build Copilot attachment XML for a file or file excerpt
+   * PROTECTED - Used by CLI subclass overrides for attachment processing
+   */
+  protected async buildAttachmentXml(
     filePath: string,
     startLine?: number,
     endLine?: number

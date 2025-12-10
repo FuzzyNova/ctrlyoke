@@ -25,8 +25,9 @@ FlightPath uses a unified `processPromptAttachments()` method in the base `Copil
 
 **Out of scope (future enhancements):**
 
-- `#file:directory` - Directory structure attachment (VS Code Chat feature, not CLI-supported)
 - `#sym:symbolName` - Symbol-specific code attachment (VS Code Chat feature, requires Language Server integration)
+
+**Note**: Directory references use `@path\to\directory\` syntax (trailing slash indicates directory). This aligns with Claude's native format and requires no conversion.
 
 See [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) for complete documentation on these VS Code Chat features and proposed FlightPath implementations.
 
@@ -527,6 +528,7 @@ Claude Code CLI supports `@` syntax for file references in `CLAUDE.md`, and thes
 3. Those files are loaded recursively when Claude reads `CLAUDE.md`
 
 **Critical limitation**: This is NOT equivalent to Copilot's conditional inclusion system:
+
 - ❌ No pattern matching based on `applyTo` front matter
 - ❌ No selective loading (ALL files in chain are ALWAYS included)
 - ❌ No context-awareness (doesn't matter which files you're actually working with)

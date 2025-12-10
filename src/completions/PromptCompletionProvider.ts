@@ -3,14 +3,24 @@ import * as path from "path";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 
 /**
+ * Trigger character types for context-aware completions
+ */
+type TriggerChar = "@" | "#";
+
+/**
  * Provides context-aware completions for FlightPath prompt files
  *
  * Features:
- * - Triggers on `#` character inside "prompt" string values (JSON files)
- * - Triggers on `#` character anywhere in Markdown files
+ * - Triggers on `@` character for full file references (CLI-native syntax)
+ * - Triggers on `#` character for snippet references (line ranges, selections)
  * - Offers workspace files as completions
- * - Special handling for current selection (#selection)
+ * - Special handling for current selection (inserts #file:path:line-line)
  * - Dynamic model completions inside "model" string values (JSON files)
+ *
+ * Syntax Reference (see docs/PROMPT_SYNTAX.md):
+ * - @path/to/file.ts       → Full file (CLI handles natively)
+ * - #file:path:10-20       → Line range snippet (FlightPath XML)
+ * - #sym:symbolName        → Symbol reference (planned)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   // Cache for workspace files
@@ -39,37 +49,119 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       return undefined;
     }
 
-    // Check if we just typed # or are continuing after #
+    // Determine which trigger character is active
     const line = document.lineAt(position.line).text;
     const textBeforeCursor = line.substring(0, position.character);
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
     const lastHashIndex = textBeforeCursor.lastIndexOf("#");
 
-    if (lastHashIndex === -1) {
-      return undefined; // No # found
+    // Determine which trigger is more recent (closer to cursor)
+    let triggerChar: TriggerChar | undefined;
+    let afterTrigger: string;
+
+    if (lastAtIndex > lastHashIndex) {
+      triggerChar = "@";
+      afterTrigger = textBeforeCursor.substring(lastAtIndex + 1);
+    } else if (lastHashIndex !== -1) {
+      triggerChar = "#";
+      afterTrigger = textBeforeCursor.substring(lastHashIndex + 1);
+    } else {
+      return undefined; // No trigger found
     }
 
-    // Get the partial text after # (for filtering)
-    const afterHash = textBeforeCursor.substring(lastHashIndex + 1);
-
-    // Don't provide completions if there's a space after #
+    // Don't provide completions if there's a space after trigger
     // (user has moved on to next context item)
-    if (afterHash.includes(" ")) {
+    if (afterTrigger.includes(" ")) {
       return undefined;
     }
 
-    // Generate completions
+    // Route to appropriate handler based on trigger
+    if (triggerChar === "@") {
+      return this.getAtCompletions(afterTrigger);
+    } else {
+      return this.getHashCompletions(afterTrigger);
+    }
+  }
+
+  /**
+   * Get completions for @ trigger (full file references)
+   * CLI-native syntax for full file attachment
+   */
+  private async getAtCompletions(
+    filterText: string
+  ): Promise<vscode.CompletionList> {
+    const items: vscode.CompletionItem[] = [];
+    const files = await this.getWorkspaceFiles();
+
+    // Convert filter text to lowercase for case-insensitive matching
+    const filter = filterText.toLowerCase();
+
+    for (const fileUri of files) {
+      const relativePath = vscode.workspace.asRelativePath(fileUri, false);
+
+      // Simple filtering: check if the path contains the filter text
+      if (filter && !relativePath.toLowerCase().includes(filter)) {
+        continue;
+      }
+
+      const fileName = path.basename(relativePath);
+      const dirName = path.dirname(relativePath);
+
+      const item = new vscode.CompletionItem(
+        fileName,
+        vscode.CompletionItemKind.File
+      );
+
+      // Insert just the path (@ is already typed)
+      item.insertText = relativePath;
+
+      // Show directory in detail
+      item.detail = dirName === "." ? "Root directory" : dirName;
+
+      // Full path in documentation with @path example
+      item.documentation = new vscode.MarkdownString(
+        `**Full file attachment** (CLI-native)\n\n` +
+          `Insert: \`@${relativePath}\`\n\n` +
+          `The CLI will automatically attach this file's content.\n\n` +
+          `_For line ranges, use \`#file:${relativePath}:10-20\`_`
+      );
+
+      // Sort by path depth (shorter paths first) then alphabetically
+      const depth = relativePath.split(path.sep).length;
+      item.sortText = `0_${depth}_${relativePath}`;
+
+      // Include path in filter text for fuzzy search
+      item.filterText = `${relativePath} ${fileName}`;
+
+      items.push(item);
+
+      // Limit to 500 items for performance
+      if (items.length >= 500) {
+        break;
+      }
+    }
+
+    return new vscode.CompletionList(items, false);
+  }
+
+  /**
+   * Get completions for # trigger (selections only)
+   *
+   * IMPORTANT: # trigger shows SELECTIONS ONLY, not files.
+   * - Use @path for full file references
+   * - Use #file:path:10-20 for line ranges (manually typed, no completion)
+   * - # completion only shows current editor selections
+   */
+  private async getHashCompletions(
+    _filterText: string
+  ): Promise<vscode.CompletionList> {
     const items: vscode.CompletionItem[] = [];
 
-    // 1. Add all editor selection completions (from visible editors)
+    // Only add selection completions (from visible editors)
+    // NO file completions - users should use @path for full files
     const selectionItems = this.getAllSelectionCompletions();
     items.push(...selectionItems);
 
-    // 2. Add workspace files
-    const fileItems = await this.getFileCompletions(afterHash);
-    items.push(...fileItems);
-
-    // Return a complete list (not incomplete) so it works even with quick suggestions disabled
-    // VS Code will still filter these items based on what the user types
     return new vscode.CompletionList(items, false);
   }
 
@@ -310,65 +402,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
       items.push(item);
       selectionIndex++;
-    }
-
-    return items;
-  }
-
-  /**
-   * Get file completions from workspace
-   */
-  private async getFileCompletions(
-    filterText: string
-  ): Promise<vscode.CompletionItem[]> {
-    const files = await this.getWorkspaceFiles();
-    const items: vscode.CompletionItem[] = [];
-
-    // Convert filter text to lowercase for case-insensitive matching
-    const filter = filterText.toLowerCase().replace(/^file:/, "");
-
-    for (const fileUri of files) {
-      const relativePath = vscode.workspace.asRelativePath(fileUri, false);
-
-      // Simple filtering: check if the path contains the filter text
-      if (filter && !relativePath.toLowerCase().includes(filter)) {
-        continue;
-      }
-
-      const fileName = path.basename(relativePath);
-      const dirName = path.dirname(relativePath);
-
-      const item = new vscode.CompletionItem(
-        fileName,
-        vscode.CompletionItemKind.File
-      );
-
-      // The text to insert
-      item.insertText = `file:${relativePath}`;
-
-      // Show directory in detail
-      item.detail = dirName === "." ? "Root directory" : dirName;
-
-      // Full path in documentation
-      item.documentation = new vscode.MarkdownString(
-        `Insert reference to file:\n\n\`#file:${relativePath}\`\n\n` +
-          `You can also add line ranges:\n\`#file:${relativePath}:10-20\``
-      );
-
-      // Sort by path depth (shorter paths first) then alphabetically
-      // Use "!1" prefix to sort near top but after selections
-      const depth = relativePath.split(path.sep).length;
-      item.sortText = `!1_${depth}_${relativePath}`;
-
-      // Include path in filter text for fuzzy search
-      item.filterText = `file ${relativePath} ${fileName}`;
-
-      items.push(item);
-
-      // Limit to 500 items for performance
-      if (items.length >= 500) {
-        break;
-      }
     }
 
     return items;

@@ -35,7 +35,7 @@ Every workflow you create follows this pattern:
 
 - Execute specific implementation tasks
 - Each prompt should be focused and actionable
-- Reference specific files using `#file:path` syntax
+- Reference specific files using `@path` syntax
 - Use `claude-sonnet-4.5` for implementation work
 
 ### 3. REVIEW Phase (1 prompt)
@@ -84,7 +84,7 @@ Every workflow you create follows this pattern:
   "prompts": [
     {
       "id": "unique-step-id",
-      "prompt": "The actual prompt text with @workspace and #file:path references",
+      "prompt": "The actual prompt text with @workspace and @path references",
       "model": "claude-sonnet-4.5 | claude-haiku-4.5",
       "endCondition": {
         "script": "npm test",
@@ -107,8 +107,7 @@ Every workflow you create follows this pattern:
 
 Use these in your generated prompts:
 
-- `@workspace` - Reference entire codebase for broad context
-- `#file:path/to/file.ts` - Reference specific file
+- `@path/to/file.ts` - Reference specific file
 - `#file:path/to/file.ts:10-50` - Reference specific lines
 - `/explain`, `/fix`, `/tests` - Copilot slash commands (optional)
 
@@ -140,7 +139,7 @@ User: "Add a loading spinner to the dashboard component"
     },
     {
       "id": "implement-spinner",
-      "prompt": "#file:src/components/Dashboard.tsx Add a loading spinner that shows during data fetching. Follow existing UI patterns. Use the loading state from the data hook.",
+      "prompt": "@src/components/Dashboard.tsx Add a loading spinner that shows during data fetching. Follow existing UI patterns. Use the loading state from the data hook.",
       "model": "claude-sonnet-4.5",
       "endCondition": {
         "script": "npm run lint",

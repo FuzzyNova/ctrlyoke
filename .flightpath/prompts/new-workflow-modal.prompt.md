@@ -2,11 +2,11 @@
 
 ## Overview
 
-Implement the "New Workflow" modal dialog feature for the FlightPath dashboard as specified in `#file:docs/WORKFLOW_TEMPLATES_DESIGN.md`. This feature allows users to create workflow files from built-in or custom templates, with variable substitution and a streamlined UX.
+Implement the "New Workflow" modal dialog feature for the FlightPath dashboard as specified in `@docs/WORKFLOW_TEMPLATES_DESIGN.md`. This feature allows users to create workflow files from built-in or custom templates, with variable substitution and a streamlined UX.
 
 ## Design Reference
 
-The complete UX design and technical specification is in `#file:docs/WORKFLOW_TEMPLATES_DESIGN.md`. Read the "Dashboard Integration" and "Implementation Architecture" sections carefully before implementing.
+The complete UX design and technical specification is in `@docs/WORKFLOW_TEMPLATES_DESIGN.md`. Read the "Dashboard Integration" and "Implementation Architecture" sections carefully before implementing.
 
 ## Implementation Tasks
 

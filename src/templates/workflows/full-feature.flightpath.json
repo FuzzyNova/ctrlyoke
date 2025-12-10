@@ -12,7 +12,7 @@
     },
     {
       "id": "implement",
-      "prompt": "Implement the feature according to the plan in #file:{planDocument}. Make all necessary code changes."
+      "prompt": "Implement the feature according to the plan in @{planDocument}. Make all necessary code changes."
     },
     {
       "id": "review",

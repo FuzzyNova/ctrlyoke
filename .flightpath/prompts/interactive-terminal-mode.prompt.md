@@ -6,7 +6,7 @@ Refactor FlightPath's CLI integrations to support running in VS Code's interacti
 
 ## Design Reference
 
-Full design rationale in `#file:docs/INTERACTIVE_TERMINAL_DESIGN.md`.
+Full design rationale in `@docs/INTERACTIVE_TERMINAL_DESIGN.md`.
 
 ## Key Concepts
 
