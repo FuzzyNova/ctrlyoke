@@ -217,8 +217,12 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       // Log the prompt being sent
       this.logPrompt(promptText);
 
+      // Route based on execution mode
+      const mode = this.getExecutionMode();
+      const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
+
       // Build CLI arguments (without prompt - handled by execution methods)
-      const args = this.buildCliArgs(prompt);
+      const args = this.buildCliArgs(prompt, isInteractive);
 
       // Store full command for debugging (will be updated by execution methods)
       this.lastCliCommand = `${this.getCliName()} -p "<prompt>" ${args.join(" ")}`;
@@ -226,9 +230,8 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       // Reset cancellation flag before execution
       this.resetCancellationFlag();
 
-      // Route based on execution mode
-      const mode = this.getExecutionMode();
-      if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
+      // Execute based on mode
+      if (isInteractive) {
         return await this.executeInteractive(args, promptText);
       } else {
         return await this.executeHeadless(args, promptText);
@@ -249,13 +252,19 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   /**
    * Build CLI arguments for Copilot command (without prompt - handled separately)
    * @param prompt The prompt item
+   * @param isInteractive Whether this is interactive mode (skips tool permissions)
    */
-  private buildCliArgs(prompt: PromptItem): string[] {
+  private buildCliArgs(
+    prompt: PromptItem,
+    isInteractive: boolean = false
+  ): string[] {
     const args: string[] = [];
 
-    // Tool permissions
-    const toolPermissions = this.getToolPermissionArgs();
-    args.push(...toolPermissions);
+    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    if (!isInteractive) {
+      const toolPermissions = this.getToolPermissionArgs();
+      args.push(...toolPermissions);
+    }
 
     // Path permissions
     if (this.shouldAllowAllPaths()) {

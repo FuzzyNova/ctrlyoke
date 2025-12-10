@@ -31,6 +31,7 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
   - Copilot: "(esc to cancel)" 
   - Claude: "(esc to interrupt)"
 - User can see output in real-time, Ctrl+C aborts immediately
+- **No tool permission flags**: User interactively approves/denies tools through TUI
 
 **Headless Mode (stdin):**
 
@@ -40,6 +41,7 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
 - Copilot: No -p flag needed (reads stdin when not a TTY)
 - Claude: Requires -p flag (Ink TUI crashes without it)
 - Warning shown if running without full permissions (auto-deny behavior)
+- **Tool permission flags applied**: Automation requires explicit tool/path configuration
   </executionModes>
 
 <sessionManagement>

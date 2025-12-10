@@ -480,9 +480,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       args.push("--add-dir", dir);
     });
 
-    // Tool permissions
-    const toolPermissionArgs = this.getToolPermissionArgs();
-    args.push(...toolPermissionArgs);
+    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    if (!isInteractive) {
+      const toolPermissionArgs = this.getToolPermissionArgs();
+      args.push(...toolPermissionArgs);
+    }
 
     // Session management
     if (prompt.newChatSession === false && this.sessionId) {
