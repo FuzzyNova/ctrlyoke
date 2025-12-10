@@ -3,6 +3,15 @@ import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import {
+  FileReference,
+  parseAllFileReferences,
+  convertToAtSyntax as convertPathToAtSyntax,
+} from "../../utils/FileReferenceParser";
+import {
+  resolveSymbol,
+  buildDirectoryAttachmentXml,
+} from "../../utils/AttachmentBuilders";
 
 /**
  * Copilot initialization status
@@ -203,30 +212,56 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
   }
 
   /**
-   * Process #file: references in prompt and build Copilot attachment XML
-   * @param prompt Original prompt text with #file: references
-   * @returns Final prompt with attachment XML prepended (keeps #file: syntax in prompt text)
+   * Process all file references in prompt and build attachments
+   * Handles: @path, @path/, #file:path:line-line, #sym:name
+   * @param prompt Original prompt text with file references
+   * @returns Final prompt with attachment XML prepended
    */
   protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
-      // Parse file references from prompt
-      const fileReferences = this.parseFileReferences(prompt);
+      // Parse all file references from prompt
+      let fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt; // No attachments needed
       }
 
-      // Build attachments in parallel for performance
-      const attachmentPromises = fileReferences.map((ref) =>
-        this.buildAttachmentXml(ref.path, ref.startLine, ref.endLine).catch(
-          (err) => {
-            console.error(
-              `Failed to attach ${ref.path}${ref.startLine ? `:${ref.startLine}-${ref.endLine}` : ""}:`,
-              err
-            );
-            return null; // Skip failed attachments
+      // Resolve symbol references to actual file locations
+      const resolvedRefs: FileReference[] = [];
+
+      for (const ref of fileReferences) {
+        if (ref.symbolName) {
+          // Symbol reference - resolve to file location
+          const resolved = await resolveSymbol(ref.symbolName);
+          if (resolved) {
+            resolvedRefs.push(resolved);
+          } else {
+            console.warn(`Could not resolve symbol: ${ref.symbolName}`);
           }
-        )
+        } else {
+          // Regular file/directory reference
+          resolvedRefs.push(ref);
+        }
+      }
+
+      if (resolvedRefs.length === 0) {
+        return prompt; // No valid attachments after resolution
+      }
+
+      // Build attachments in parallel for performance
+      const attachmentPromises = resolvedRefs.map((ref) =>
+        this.buildAttachmentForReference(ref).catch((err) => {
+          const refDesc = ref.symbolName
+            ? `symbol:${ref.symbolName}`
+            : ref.isDirectory
+              ? `directory:${ref.path}`
+              : ref.startLine
+                ? `${ref.path}:${ref.startLine}-${ref.endLine}`
+                : ref.path;
+
+          console.error(`Failed to attach ${refDesc}:`, err);
+          return null; // Skip failed attachments
+        })
       );
 
       const attachments = await Promise.all(attachmentPromises);
@@ -238,7 +273,7 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
         return prompt; // No valid attachments
       }
 
-      // Prepend attachments to prompt (keeps #file: syntax in prompt body)
+      // Prepend attachments to prompt
       const attachmentsSection = validAttachments.join("\n\n");
       return `${attachmentsSection}\n\n${prompt}`;
     } catch (error) {
@@ -249,114 +284,35 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
   }
 
   /**
-   * Parse #file: references from prompt text
-   * Supports formats:
-   * - #file:path (entire file)
-   * - #file:"path with spaces" (quoted path)
-   * - #file:path:startLine-endLine (line range)
-   * - #file:"path with spaces":startLine-endLine (quoted path with line range)
-   *
-   * Trailing punctuation (?, !, ., ,, ;, ), ], }) is stripped from unquoted paths
-   * to handle natural language like "can you look at #file:test.md?"
+   * Build attachment XML for a single file reference
+   * Routes to appropriate builder based on reference type
    */
-  protected parseFileReferences(
-    prompt: string
-  ): Array<{ path: string; startLine?: number; endLine?: number }> {
-    const fileReferences: Array<{
-      path: string;
-      startLine?: number;
-      endLine?: number;
-    }> = [];
-
-    // Regex to match #file:path or #file:"path with spaces" with optional :start-end
-    // Group 1: quoted path, Group 2: unquoted path, Group 3: startLine, Group 4: endLine
-    const regex = /#file:(?:"([^"]+)"|([^:\s]+))(?::(\d+)-(\d+))?/g;
-    let match;
-
-    // Punctuation that commonly follows file references in natural language
-    // but is not part of the file path
-    const trailingPunctuation = /[?!.,;)\]}]+$/;
-
-    while ((match = regex.exec(prompt)) !== null) {
-      const [, quotedPath, unquotedPath, startLine, endLine] = match;
-      let filePath = quotedPath || unquotedPath; // Use quoted path if present, otherwise unquoted
-
-      // Strip trailing punctuation from unquoted paths
-      // Quoted paths are taken literally (user explicitly quoted them)
-      if (!quotedPath && filePath) {
-        filePath = filePath.replace(trailingPunctuation, "");
+  private async buildAttachmentForReference(
+    ref: FileReference
+  ): Promise<string> {
+    if (ref.isDirectory) {
+      // Directory reference - build tree structure
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        throw new Error("No workspace folder found");
       }
-
-      fileReferences.push({
-        path: filePath,
-        startLine: startLine ? parseInt(startLine, 10) : undefined,
-        endLine: endLine ? parseInt(endLine, 10) : undefined,
-      });
+      return buildDirectoryAttachmentXml(ref.path, workspaceRoot);
+    } else {
+      // File reference (full file or line range)
+      return this.buildAttachmentXml(ref.path, ref.startLine, ref.endLine);
     }
-
-    return fileReferences;
-  }
-
-  /**
-   * Parse @path references from prompt text (CLI-native full file syntax)
-   * Supports formats:
-   * - @path/to/file.ts (full file - CLI handles natively)
-   * - @"path with spaces/file.ts" (quoted path)
-   *
-   * Note: @path does NOT support line ranges - CLIs don't support them.
-   * Line ranges should use #file:path:start-end syntax instead.
-   *
-   * Trailing punctuation is stripped from unquoted paths.
-   */
-  protected parseAtReferences(prompt: string): Array<{ path: string }> {
-    const atReferences: Array<{ path: string }> = [];
-
-    // Regex to match @path or @"path with spaces"
-    // Group 1: quoted path, Group 2: unquoted path
-    // Unquoted paths end at whitespace, colon, or common punctuation
-    const regex = /@(?:"([^"]+)"|([^\s:?!.,;)\]}"]+))/g;
-    let match;
-
-    // Punctuation that commonly follows file references in natural language
-    const trailingPunctuation = /[?!.,;)\]}]+$/;
-
-    while ((match = regex.exec(prompt)) !== null) {
-      const [, quotedPath, unquotedPath] = match;
-      let filePath = quotedPath || unquotedPath;
-
-      // Strip trailing punctuation from unquoted paths
-      if (!quotedPath && filePath) {
-        filePath = filePath.replace(trailingPunctuation, "");
-      }
-
-      // Skip if path is empty or looks like a mention (@workspace, @user, etc.)
-      // We only want file paths
-      if (filePath && filePath.includes("/") || filePath.includes("\\") || filePath.includes(".")) {
-        atReferences.push({ path: filePath });
-      }
-    }
-
-    return atReferences;
   }
 
   /**
    * Convert a workspace-relative path to @path syntax
-   * SHARED utility used by both Copilot and Claude CLI integrations
+   * SHARED utility - delegates to FileReferenceParser
    *
-   * Both CLIs use identical @path format. This is the single source of truth
-   * for path conversion used by both CLI integrations.
-   *
+   * @deprecated Use FileReferenceParser.convertToAtSyntax directly
    * @param filePath Workspace-relative path (e.g., "src/extension.ts")
    * @returns @path syntax (e.g., "@src/extension.ts")
    */
   protected convertToAtSyntax(filePath: string): string {
-    // Remove leading slash/backslash if present
-    const normalized = filePath.replace(/^[/\\]/, "");
-
-    // Use forward slashes for consistency (both CLIs accept this)
-    const pathWithSlashes = normalized.replace(/\\/g, "/");
-
-    return `@${pathWithSlashes}`;
+    return convertPathToAtSyntax(filePath);
   }
 
   /**

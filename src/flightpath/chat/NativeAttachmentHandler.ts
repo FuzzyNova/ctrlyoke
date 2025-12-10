@@ -1,13 +1,8 @@
 import * as vscode from "vscode";
-
-/**
- * File reference parsed from prompt text
- */
-export interface FileReference {
-  path: string;
-  startLine?: number;
-  endLine?: number;
-}
+import {
+  FileReference,
+  parseAllFileReferences,
+} from "../../utils/FileReferenceParser";
 
 /** Function type for resolving workspace-relative paths */
 export type PathResolver = (relativePath: string) => string;
@@ -18,63 +13,6 @@ export type PathResolver = (relativePath: string) => string;
  */
 export class NativeAttachmentHandler {
   constructor(private readonly resolvePath: PathResolver) {}
-
-  /**
-   * Parse file references from prompt text
-   *
-   * Supports two syntaxes:
-   * - @path → Full file (CLI-native syntax, no line range support)
-   * - #file:path:startLine-endLine → Line range only (FlightPath syntax)
-   *
-   * Note: @path does NOT support line ranges (CLIs don't support it).
-   * Use #file:path:10-20 for line ranges.
-   */
-  parseFileReferences(prompt: string): FileReference[] {
-    const references: FileReference[] = [];
-
-    // Match @path for full files (no line range support)
-    // Handles: @path/to/file.ts, @"path with spaces/file.ts"
-    // Trailing punctuation is stripped from unquoted paths
-    const fullFileRegex = /@(?:"([^"]+)"|([^\s:?!.,;)\]}"]+))/g;
-    let match;
-
-    while ((match = fullFileRegex.exec(prompt)) !== null) {
-      let filePath = match[1] || match[2]; // quoted or unquoted
-
-      // Strip trailing punctuation from unquoted paths
-      if (!match[1] && filePath) {
-        filePath = filePath.replace(/[?!.,;)\]}]+$/, "");
-      }
-
-      // Skip if path looks like a mention (@workspace, @user) not a file
-      if (
-        filePath &&
-        (filePath.includes("/") ||
-          filePath.includes("\\") ||
-          filePath.includes("."))
-      ) {
-        references.push({
-          path: filePath,
-          // No line range for @path syntax
-        });
-      }
-    }
-
-    // Match #file:path:startLine-endLine for line ranges ONLY
-    // Note: #file:path (without line range) is DEPRECATED - use @path instead
-    const lineRangeRegex = /#file:(?:"([^"]+)"|([^\s:]+)):(\d+)-(\d+)/g;
-
-    while ((match = lineRangeRegex.exec(prompt)) !== null) {
-      const filePath = match[1] || match[2]; // quoted or unquoted
-      references.push({
-        path: filePath,
-        startLine: parseInt(match[3], 10),
-        endLine: parseInt(match[4], 10),
-      });
-    }
-
-    return references;
-  }
 
   /** Open document, execute action, then close */
   private async withFocusedDocument(
@@ -97,7 +35,7 @@ export class NativeAttachmentHandler {
   /** Attach files via native commands; returns prompt unchanged */
   async processAttachments(prompt: string): Promise<string> {
     try {
-      const fileReferences = this.parseFileReferences(prompt);
+      const fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt;

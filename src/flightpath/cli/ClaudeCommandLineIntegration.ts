@@ -12,6 +12,7 @@ import {
   getClaudeModelName,
 } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { parseAllFileReferences } from "../../utils/FileReferenceParser";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -327,7 +328,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
       // Parse file references from prompt
-      const fileReferences = this.parseFileReferences(prompt);
+      const fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt; // No attachments needed

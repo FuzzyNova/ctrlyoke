@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
+import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 
 /**
  * Trigger character types for context-aware completions
@@ -84,8 +85,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   }
 
   /**
-   * Get completions for @ trigger (full file references)
-   * CLI-native syntax for full file attachment
+   * Get completions for @ trigger (full file and directory references)
+   * CLI-native syntax for full file/directory attachment
    */
   private async getAtCompletions(
     filterText: string
@@ -95,6 +96,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
     // Convert filter text to lowercase for case-insensitive matching
     const filter = filterText.toLowerCase();
+
+    // Track unique directories we've seen
+    const directories = new Set<string>();
 
     for (const fileUri of files) {
       const relativePath = vscode.workspace.asRelativePath(fileUri, false);
@@ -107,19 +111,20 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       const fileName = path.basename(relativePath);
       const dirName = path.dirname(relativePath);
 
-      const item = new vscode.CompletionItem(
+      // Add file completion
+      const fileItem = new vscode.CompletionItem(
         fileName,
         vscode.CompletionItemKind.File
       );
 
       // Insert just the path (@ is already typed)
-      item.insertText = relativePath;
+      fileItem.insertText = relativePath;
 
       // Show directory in detail
-      item.detail = dirName === "." ? "Root directory" : dirName;
+      fileItem.detail = dirName === "." ? "Root directory" : dirName;
 
       // Full path in documentation with @path example
-      item.documentation = new vscode.MarkdownString(
+      fileItem.documentation = new vscode.MarkdownString(
         `**Full file attachment** (CLI-native)\n\n` +
           `Insert: \`@${relativePath}\`\n\n` +
           `The CLI will automatically attach this file's content.\n\n` +
@@ -128,12 +133,17 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
       // Sort by path depth (shorter paths first) then alphabetically
       const depth = relativePath.split(path.sep).length;
-      item.sortText = `0_${depth}_${relativePath}`;
+      fileItem.sortText = `0_${depth}_${relativePath}`;
 
       // Include path in filter text for fuzzy search
-      item.filterText = `${relativePath} ${fileName}`;
+      fileItem.filterText = `${relativePath} ${fileName}`;
 
-      items.push(item);
+      items.push(fileItem);
+
+      // Track directory for directory completions
+      if (dirName !== ".") {
+        directories.add(dirName);
+      }
 
       // Limit to 500 items for performance
       if (items.length >= 500) {
@@ -141,28 +151,134 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       }
     }
 
+    // Add directory completions (with trailing slash)
+    for (const dirPath of directories) {
+      if (filter && !dirPath.toLowerCase().includes(filter)) {
+        continue;
+      }
+
+      const dirName = path.basename(dirPath);
+      const parentDir = path.dirname(dirPath);
+
+      const dirItem = new vscode.CompletionItem(
+        dirName + "/",
+        vscode.CompletionItemKind.Folder
+      );
+
+      // Insert directory path WITH trailing slash
+      dirItem.insertText = dirPath + "/";
+
+      // Show parent directory
+      dirItem.detail = parentDir === "." ? "Root directory" : parentDir;
+
+      // Documentation
+      dirItem.documentation = new vscode.MarkdownString(
+        `**Directory structure attachment**\n\n` +
+          `Insert: \`@${dirPath}/\`\n\n` +
+          `FlightPath will attach a file tree of this directory.\n\n` +
+          `_No file contents, just structure._`
+      );
+
+      // Sort directories before files at same depth
+      const depth = dirPath.split(path.sep).length;
+      dirItem.sortText = `0_${depth}_0_${dirPath}`;
+
+      dirItem.filterText = `${dirPath} ${dirName}`;
+
+      items.push(dirItem);
+    }
+
     return new vscode.CompletionList(items, false);
   }
 
   /**
-   * Get completions for # trigger (selections only)
+   * Get completions for # trigger (selections + symbols)
    *
-   * IMPORTANT: # trigger shows SELECTIONS ONLY, not files.
-   * - Use @path for full file references
-   * - Use #file:path:10-20 for line ranges (manually typed, no completion)
-   * - # completion only shows current editor selections
+   * Shows:
+   * 1. Current editor selections (bubbled to top, if any)
+   * 2. Workspace symbols (functions, classes, methods, etc.)
+   *
+   * User types #, sees selections first, then symbol list below
    */
   private async getHashCompletions(
-    _filterText: string
+    filterText: string
   ): Promise<vscode.CompletionList> {
     const items: vscode.CompletionItem[] = [];
 
-    // Only add selection completions (from visible editors)
-    // NO file completions - users should use @path for full files
+    // 1. Add selection completions FIRST (bubbled to top with sortText)
     const selectionItems = this.getAllSelectionCompletions();
+    selectionItems.forEach((item) => {
+      // Prefix sortText to bubble selections to top
+      item.sortText = `0_${item.sortText || item.label}`;
+    });
     items.push(...selectionItems);
 
+    // 2. Add workspace symbols
+    const symbolItems = await this.getSymbolCompletions(filterText);
+    symbolItems.forEach((item) => {
+      // Prefix sortText to keep symbols below selections
+      item.sortText = `1_${item.sortText || item.label}`;
+    });
+    items.push(...symbolItems);
+
     return new vscode.CompletionList(items, false);
+  }
+
+  /**
+   * Get symbol completions for # trigger
+   * Shows workspace symbols (functions, classes, methods, variables)
+   */
+  private async getSymbolCompletions(
+    filterText: string
+  ): Promise<vscode.CompletionItem[]> {
+    const items: vscode.CompletionItem[] = [];
+
+    try {
+      // Query workspace symbols (max 100 for performance)
+      const symbols = await getWorkspaceSymbols(filterText, 100);
+
+      for (const symbol of symbols) {
+        const item = new vscode.CompletionItem(
+          symbol.name,
+          vscode.CompletionItemKind.Reference
+        );
+
+        // Insert #sym:SymbolName
+        item.insertText = `sym:${symbol.name}`;
+
+        // Get workspace-relative path for detail
+        const relativePath = vscode.workspace.asRelativePath(
+          symbol.location.uri,
+          false
+        );
+
+        // Show symbol kind and location
+        const symbolKindName = vscode.SymbolKind[symbol.kind];
+        item.detail = `${symbolKindName} in ${relativePath}`;
+
+        // Documentation shows full location
+        const line = symbol.location.range.start.line + 1;
+        item.documentation = new vscode.MarkdownString(
+          `**Symbol Reference**\n\n` +
+            `Type: ${symbolKindName}\n\n` +
+            `Location: \`${relativePath}:${line}\`\n\n` +
+            `Insert: \`#sym:${symbol.name}\`\n\n` +
+            `_FlightPath will resolve this symbol to its exact location and attach the code._`
+        );
+
+        // Sort by symbol name
+        item.sortText = symbol.name;
+
+        // Filter text includes both symbol name and file path
+        item.filterText = `${symbol.name} ${relativePath}`;
+
+        items.push(item);
+      }
+    } catch (error) {
+      console.error("Failed to get symbol completions:", error);
+    }
+
+    return items;
   }
 
   /**
