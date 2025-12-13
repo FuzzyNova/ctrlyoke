@@ -28,7 +28,6 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 
 - ❌ `@path/` directory structure references (trailing slash)
 - ❌ Deprecation warnings for legacy `#file:path` without line ranges
-- ❌ Symbol resolution at runtime (completions work, but `#sym:` references not yet processed by integrations)
 
 **Breaking Change Applied**: `#file:path` for full files is DEPRECATED. Use `@path` instead.
 Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
@@ -161,7 +160,7 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 **Note**: There is no `#selection` prompt syntax. The completion provider automatically converts selections to `#file:path:line-line` format.
 
-#### Symbol References: `#sym:symbolName` ✅ IMPLEMENTED
+#### Symbol References: `#sym:symbolName` ✅ FULLY IMPLEMENTED
 
 **Format**:
 
@@ -179,19 +178,31 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 **Behavior**:
 
-- Uses VS Code Language Server to resolve symbol location
-- Inserts `sym:symbolName` which FlightPath resolves to line range at runtime
-- Completion shows symbols from workspace-wide search
-- Filters out markdown/text/JSON files (focuses on code symbols)
-- Shows up to 500 symbols matching your search query
-- Dynamic refresh as you type more characters
+- **IntelliSense**: Completion shows workspace symbols as you type
+- **Resolution**: Uses VS Code Language Server to resolve symbol to file location + line range
+- **Processing**: FlightPath resolves at runtime before sending to CLI/Chat
+- **Attachment**: Creates XML attachment with special symbol ID: `<attachment id="symbol:symbolName">`
+- **Smart filtering**: Excludes markdown/text/JSON files (focuses on code symbols)
+- **Performance**: Shows up to 500 symbols with dynamic refresh
+
+**Implementation Details**:
+
+All integrations (Copilot CLI, Claude CLI, Chat) support symbol resolution:
+
+- `parseSymbolReferences()` extracts `#sym:name` patterns from prompt text
+- `resolveSymbol(name)` queries VS Code's `executeWorkspaceSymbolProvider`
+- Returns `FileReference` with path, line range, and symbolName
+- `buildAttachmentXml()` creates special symbol attachment:
+  - ID: `symbol:FlightPathManager` (not `file:path:line-line`)
+  - Description: "Symbol: FlightPathManager in src/flightpath/FlightPathManager.ts, lines 42 to 156"
+  - Content: Extracted source code with syntax highlighting
 
 **Usage**:
 
 - Type `#` → See selections + all symbols
 - Type `#Fl` → See selections + symbols matching "Fl"
 - Select a symbol → Inserts `#sym:FlightPathManager`
-- FlightPath resolves to actual location when executing prompt
+- FlightPath resolves to actual location and attaches code automatically
 
 #### Directory Context: `@path\to\directory\` _(See Full Content Section)_
 

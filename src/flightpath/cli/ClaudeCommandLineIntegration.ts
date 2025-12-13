@@ -12,7 +12,11 @@ import {
   getClaudeModelName,
 } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { parseAllFileReferences } from "../../utils/FileReferenceParser";
+import {
+  parseAllFileReferences,
+  FileReference,
+  convertToAtSyntax,
+} from "../../utils/FileReferenceParser";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -328,33 +332,30 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
       // Parse file references from prompt
-      const fileReferences = parseAllFileReferences(prompt);
+      let fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt; // No attachments needed
       }
 
+      // Resolve symbol references to actual file locations (base class method)
+      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
+
+      if (resolvedRefs.length === 0) {
+        return prompt; // No valid attachments after resolution
+      }
+
       const atReferences: string[] = [];
       const xmlAttachments: string[] = [];
 
-      // Process each file reference
-      for (const ref of fileReferences) {
+      // Process each resolved file reference
+      for (const ref of resolvedRefs) {
         // Convert path to @path syntax
-        const atPath = this.convertToAtSyntax(ref.path);
+        const atPath = convertToAtSyntax(ref.path);
 
         if (ref.startLine && ref.endLine) {
-          // Line range: Use XML attachment only (not supported by @path)
-          const xml = await this.buildAttachmentXml(
-            ref.path,
-            ref.startLine,
-            ref.endLine
-          ).catch((err) => {
-            console.error(
-              `Failed to attach ${ref.path}:${ref.startLine}-${ref.endLine}:`,
-              err
-            );
-            return null;
-          });
+          // Line range or symbol: Use XML attachment only (not supported by @path)
+          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
           if (xml) {
             xmlAttachments.push(xml);
           }

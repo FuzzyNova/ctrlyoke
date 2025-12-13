@@ -6,7 +6,6 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   FileReference,
   parseAllFileReferences,
-  convertToAtSyntax as convertPathToAtSyntax,
 } from "../../utils/FileReferenceParser";
 import {
   resolveSymbol,
@@ -212,6 +211,35 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
   }
 
   /**
+   * Resolve symbol references to file locations
+   * Shared by all integrations to avoid duplication
+   * @param fileReferences Array of file references from parseAllFileReferences
+   * @returns Array with symbols resolved to actual file locations
+   */
+  protected async resolveSymbolReferences(
+    fileReferences: FileReference[]
+  ): Promise<FileReference[]> {
+    const resolvedRefs: FileReference[] = [];
+
+    for (const ref of fileReferences) {
+      if (ref.symbolName) {
+        // Symbol reference - resolve to file location
+        const resolved = await resolveSymbol(ref.symbolName);
+        if (resolved) {
+          resolvedRefs.push(resolved);
+        } else {
+          console.warn(`Could not resolve symbol: ${ref.symbolName}`);
+        }
+      } else {
+        // Regular file/directory reference
+        resolvedRefs.push(ref);
+      }
+    }
+
+    return resolvedRefs;
+  }
+
+  /**
    * Process all file references in prompt and build attachments
    * Handles: @path, @path/, #file:path:line-line, #sym:name
    * @param prompt Original prompt text with file references
@@ -227,22 +255,7 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
       }
 
       // Resolve symbol references to actual file locations
-      const resolvedRefs: FileReference[] = [];
-
-      for (const ref of fileReferences) {
-        if (ref.symbolName) {
-          // Symbol reference - resolve to file location
-          const resolved = await resolveSymbol(ref.symbolName);
-          if (resolved) {
-            resolvedRefs.push(resolved);
-          } else {
-            console.warn(`Could not resolve symbol: ${ref.symbolName}`);
-          }
-        } else {
-          // Regular file/directory reference
-          resolvedRefs.push(ref);
-        }
-      }
+      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
 
       if (resolvedRefs.length === 0) {
         return prompt; // No valid attachments after resolution
@@ -298,31 +311,54 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
       }
       return buildDirectoryAttachmentXml(ref.path, workspaceRoot);
     } else {
-      // File reference (full file or line range)
-      return this.buildAttachmentXml(ref.path, ref.startLine, ref.endLine);
+      // File reference (full file, line range, or symbol)
+      return this.buildAttachmentXml(
+        ref.path,
+        ref.startLine,
+        ref.endLine,
+        ref.symbolName
+      );
     }
   }
 
   /**
-   * Convert a workspace-relative path to @path syntax
-   * SHARED utility - delegates to FileReferenceParser
-   *
-   * @deprecated Use FileReferenceParser.convertToAtSyntax directly
-   * @param filePath Workspace-relative path (e.g., "src/extension.ts")
-   * @returns @path syntax (e.g., "@src/extension.ts")
+   * Helper to build attachment XML with standardized error handling
+   * Used by CLI subclasses to avoid duplicating error handling logic
    */
-  protected convertToAtSyntax(filePath: string): string {
-    return convertPathToAtSyntax(filePath);
+  protected async buildAttachmentXmlWithErrorHandling(
+    ref: FileReference
+  ): Promise<string | null> {
+    try {
+      return await this.buildAttachmentXml(
+        ref.path,
+        ref.startLine,
+        ref.endLine,
+        ref.symbolName
+      );
+    } catch (err) {
+      const refDesc = ref.symbolName
+        ? `symbol:${ref.symbolName}`
+        : ref.startLine && ref.endLine
+          ? `${ref.path}:${ref.startLine}-${ref.endLine}`
+          : ref.path;
+      console.error(`Failed to attach ${refDesc}:`, err);
+      return null;
+    }
   }
 
   /**
    * Build Copilot attachment XML for a file or file excerpt
    * PROTECTED - Used by CLI subclass overrides for attachment processing
+   * @param filePath Workspace-relative file path
+   * @param startLine Optional start line (1-indexed)
+   * @param endLine Optional end line (1-indexed)
+   * @param symbolName Optional symbol name (for #sym: references)
    */
   protected async buildAttachmentXml(
     filePath: string,
     startLine?: number,
-    endLine?: number
+    endLine?: number,
+    symbolName?: string
   ): Promise<string> {
     // Resolve to absolute path
     const absolutePath = this.resolveWorkspacePath(filePath);
@@ -335,8 +371,15 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
     // If no line range, attach entire file
     if (!startLine || !endLine) {
       const content = doc.getText();
-      return `<attachment id="file:${filePath}">
-File: ${filePath}
+      const attachmentId = symbolName
+        ? `symbol:${symbolName}`
+        : `file:${filePath}`;
+      const description = symbolName
+        ? `Symbol: ${symbolName} in ${filePath}`
+        : `File: ${filePath}`;
+
+      return `<attachment id="${attachmentId}">
+${description}
 \`\`\`${language}
 ${content}
 \`\`\`
@@ -349,8 +392,16 @@ ${content}
     const range = new vscode.Range(start, end);
     const content = doc.getText(range);
 
-    return `<attachment id="file:${filePath}:${startLine}-${endLine}">
-Excerpt from ${filePath}, lines ${startLine} to ${endLine}:
+    // Build attachment with symbol-aware ID and description
+    const attachmentId = symbolName
+      ? `symbol:${symbolName}`
+      : `file:${filePath}:${startLine}-${endLine}`;
+    const description = symbolName
+      ? `Symbol: ${symbolName} in ${filePath}, lines ${startLine} to ${endLine}`
+      : `Excerpt from ${filePath}, lines ${startLine} to ${endLine}`;
+
+    return `<attachment id="${attachmentId}">
+${description}:
 \`\`\`${language}
 ${content}
 \`\`\`
