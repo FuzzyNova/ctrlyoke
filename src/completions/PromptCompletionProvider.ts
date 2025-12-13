@@ -248,26 +248,31 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
           vscode.CompletionItemKind.Reference
         );
 
-        // Insert #sym:SymbolName
-        item.insertText = `sym:${symbol.name}`;
-
         // Get workspace-relative path for detail
         const relativePath = vscode.workspace.asRelativePath(
           symbol.location.uri,
           false
         );
 
+        // Get line number (1-based)
+        const line = symbol.location.range.start.line + 1;
+
+        // Insert #sym:path/to/file.ts:SymbolName:123
+        // This format allows disambiguation when:
+        // - Same symbol name exists in multiple files
+        // - Same symbol name appears multiple times in same file
+        item.insertText = `sym:${relativePath}:${symbol.name}:${line}`;
+
         // Show symbol kind and location
         const symbolKindName = vscode.SymbolKind[symbol.kind];
-        item.detail = `${symbolKindName} in ${relativePath}`;
+        item.detail = `${symbolKindName} in ${relativePath}:${line}`;
 
         // Documentation shows full location
-        const line = symbol.location.range.start.line + 1;
         item.documentation = new vscode.MarkdownString(
           `**Symbol Reference**\n\n` +
             `Type: ${symbolKindName}\n\n` +
             `Location: \`${relativePath}:${line}\`\n\n` +
-            `Insert: \`#sym:${symbol.name}\`\n\n` +
+            `Insert: \`#sym:${relativePath}:${symbol.name}:${line}\`\n\n` +
             `_FlightPath will resolve this symbol to its exact location and attach the code._`
         );
 

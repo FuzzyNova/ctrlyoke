@@ -7,58 +7,162 @@ import { FileReference } from "./FileReferenceParser";
  */
 
 /**
- * Resolve a symbol name to its file location using VS Code's workspace symbol provider
+ * Resolve a symbol reference to its file location
  *
- * @param symbolName The symbol name to resolve (e.g., "FlightPathManager")
+ * Format: "path/to/file.ts:SymbolName:123"
+ * - File path (workspace-relative)
+ * - Symbol name
+ * - Line number (1-based)
+ *
+ * This format ensures unique identification when:
+ * - Same symbol name exists in multiple files
+ * - Same symbol name appears multiple times in same file
+ *
+ * @param symbolRef Symbol reference string (e.g., "src/utils/AttachmentBuilders.ts:resolveSymbol:10")
  * @returns FileReference with path and line range, or null if not found
  */
 export async function resolveSymbol(
-  symbolName: string
+  symbolRef: string
 ): Promise<FileReference | null> {
   try {
-    // Query workspace symbols
-    const symbols = (await vscode.commands.executeCommand(
-      "vscode.executeWorkspaceSymbolProvider",
-      symbolName
-    )) as vscode.SymbolInformation[];
+    console.log(`[resolveSymbol] Resolving: ${symbolRef}`);
 
-    if (!symbols || symbols.length === 0) {
-      console.warn(`Symbol not found: ${symbolName}`);
+    // Parse format: path/to/file.ts:SymbolName:123
+    // Use lastIndexOf to handle the line number (last colon), then second-to-last for symbol name
+    const lastColonIndex = symbolRef.lastIndexOf(":");
+    if (lastColonIndex === -1) {
+      console.warn(`Invalid symbol reference (no colons): ${symbolRef}`);
       return null;
     }
 
-    // Find exact match (prefer exact name match over partial)
-    let targetSymbol = symbols.find((s) => s.name === symbolName);
+    const lineStr = symbolRef.substring(lastColonIndex + 1);
+    const targetLine = parseInt(lineStr, 10);
 
-    // If no exact match, use first result (partial match)
-    if (!targetSymbol) {
-      targetSymbol = symbols[0];
-      console.log(
-        `No exact match for '${symbolName}', using '${targetSymbol.name}' instead`
-      );
+    if (isNaN(targetLine)) {
+      console.warn(`Invalid line number in symbol reference: ${symbolRef}`);
+      return null;
     }
 
-    // Get workspace-relative path
-    const workspaceFolder = vscode.workspace.getWorkspaceFolder(
-      targetSymbol.location.uri
-    );
-    const relativePath = workspaceFolder
-      ? vscode.workspace.asRelativePath(targetSymbol.location.uri, false)
-      : targetSymbol.location.uri.fsPath;
+    // Now find the second-to-last colon (separates path from symbol name)
+    const remainingRef = symbolRef.substring(0, lastColonIndex);
+    const secondLastColonIndex = remainingRef.lastIndexOf(":");
 
-    // Extract line range from symbol location
-    const range = targetSymbol.location.range;
+    if (secondLastColonIndex === -1) {
+      console.warn(
+        `Invalid symbol reference (missing symbol name): ${symbolRef}`
+      );
+      return null;
+    }
+
+    const filePath = remainingRef.substring(0, secondLastColonIndex);
+    const symbolName = remainingRef.substring(secondLastColonIndex + 1);
+
+    console.log(
+      `[resolveSymbol] Parsed: filePath="${filePath}", symbolName="${symbolName}", line=${targetLine}`
+    );
+
+    // Resolve workspace-relative path to URI
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      console.warn("No workspace folder open");
+      return null;
+    }
+
+    const fileUri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
+
+    // Open document to query symbols
+    const document = await vscode.workspace.openTextDocument(fileUri);
+
+    // Get document symbols
+    const symbols = (await vscode.commands.executeCommand(
+      "vscode.executeDocumentSymbolProvider",
+      fileUri
+    )) as vscode.DocumentSymbol[];
+
+    if (!symbols || symbols.length === 0) {
+      console.warn(`No symbols found in ${filePath}`);
+      return null;
+    }
+
+    console.log(
+      `[resolveSymbol] Found ${symbols.length} top-level symbols, searching for "${symbolName}" at line ${targetLine}...`
+    );
+
+    // Find symbol at or near the target line
+    const targetSymbol = findSymbolAtLine(symbols, symbolName, targetLine);
+
+    if (!targetSymbol) {
+      console.warn(
+        `Symbol '${symbolName}' not found at line ${targetLine} in ${filePath}`
+      );
+      return null;
+    }
+
+    console.log(
+      `[resolveSymbol] Found symbol: ${targetSymbol.name} (lines ${targetSymbol.range.start.line + 1}-${targetSymbol.range.end.line + 1})`
+    );
 
     return {
-      path: relativePath,
-      startLine: range.start.line + 1, // Convert to 1-based
-      endLine: range.end.line + 1,
+      path: filePath,
+      startLine: targetSymbol.range.start.line + 1,
+      endLine: targetSymbol.range.end.line + 1,
       symbolName: targetSymbol.name,
     };
   } catch (error) {
-    console.error(`Failed to resolve symbol '${symbolName}':`, error);
+    console.error(`Failed to resolve symbol '${symbolRef}':`, error);
     return null;
   }
+}
+
+/**
+ * Recursively find a symbol at a specific line in a symbol tree
+ * @param symbols Array of document symbols to search
+ * @param symbolName Name of the symbol to find (may include () for methods)
+ * @param targetLine Line number to match (1-based)
+ * @returns Matching symbol or null
+ */
+function findSymbolAtLine(
+  symbols: vscode.DocumentSymbol[],
+  symbolName: string,
+  targetLine: number
+): vscode.DocumentSymbol | null {
+  // Normalize symbol names for comparison:
+  // - VS Code returns "methodName" but user may search for "methodName()"
+  // - Strip trailing () from search term for matching
+  const normalizedSearchName = symbolName.replace(/\(\)$/, "");
+
+  for (const symbol of symbols) {
+    // Check if this symbol matches (name and line)
+    const symbolStartLine = symbol.range.start.line + 1; // Convert to 1-based
+    const normalizedSymbolName = symbol.name.replace(/\(\)$/, "");
+
+    console.log(
+      `[findSymbolAtLine] Checking: "${symbol.name}" (normalized: "${normalizedSymbolName}") at line ${symbolStartLine}, ` +
+        `looking for "${symbolName}" (normalized: "${normalizedSearchName}") at line ${targetLine}`
+    );
+
+    if (
+      normalizedSymbolName === normalizedSearchName &&
+      symbolStartLine === targetLine
+    ) {
+      console.log(`[findSymbolAtLine] ✓ Match found: ${symbol.name}`);
+      return symbol;
+    }
+
+    // Recursively check children
+    if (symbol.children && symbol.children.length > 0) {
+      const childMatch = findSymbolAtLine(
+        symbol.children,
+        symbolName,
+        targetLine
+      );
+      if (childMatch) {
+        return childMatch;
+      }
+    }
+  }
+
+  return null;
 }
 
 /**

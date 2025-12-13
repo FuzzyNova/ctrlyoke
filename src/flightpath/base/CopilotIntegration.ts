@@ -223,12 +223,14 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
 
     for (const ref of fileReferences) {
       if (ref.symbolName) {
-        // Symbol reference - resolve to file location
-        const resolved = await resolveSymbol(ref.symbolName);
+        // Symbol reference - build full reference string for resolveSymbol
+        // Format: path/to/file.ts:SymbolName:123
+        const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
+        const resolved = await resolveSymbol(symbolRef);
         if (resolved) {
           resolvedRefs.push(resolved);
         } else {
-          console.warn(`Could not resolve symbol: ${ref.symbolName}`);
+          console.warn(`Could not resolve symbol: ${symbolRef}`);
         }
       } else {
         // Regular file/directory reference

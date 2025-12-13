@@ -23,9 +23,9 @@ FlightPath uses a unified `processPromptAttachments()` method in the base `Copil
 - **Claude CLI**: Duplicates file content (XML attachment + Claude's auto-attachment from `@path`)
 - **Both**: Line ranges work correctly (neither CLI supports natively)
 
-**Out of scope (future enhancements):**
+**Implemented:**
 
-- `#sym:symbolName` - Symbol-specific code attachment (VS Code Chat feature, requires Language Server integration)
+- ✅ `#sym:path/to/file.ts:SymbolName:123` - Symbol-specific code attachment with exact line disambiguation
 
 **Note**: Directory references use `@path\to\directory\` syntax (trailing slash indicates directory). This aligns with Claude's native format and requires no conversion.
 

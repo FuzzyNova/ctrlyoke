@@ -113,32 +113,36 @@ export function parseFileReferences(prompt: string): FileReference[] {
 }
 
 /**
- * Parse #sym:symbolName references from prompt text (symbol references)
+ * Parse #sym: references from prompt text (symbol references)
  *
- * Supports formats:
- * - #sym:ClassName
- * - #sym:methodName
- * - #sym:CONSTANT_NAME
+ * Format: #sym:path/to/file.ts:SymbolName:123
+ * - File path (workspace-relative)
+ * - Symbol name (may include () for methods)
+ * - Line number (1-based) for disambiguation
  *
- * Note: Symbol resolution happens at attachment time using VS Code Language Server
+ * This format ensures unique identification when:
+ * - Same symbol name exists in multiple files
+ * - Same symbol name appears multiple times in same file
  *
  * @param prompt The prompt text containing #sym: references
- * @returns Array of symbol references (need resolution to file locations)
+ * @returns Array of symbol references with file path, symbol name, and line number
  */
 export function parseSymbolReferences(prompt: string): FileReference[] {
   const references: FileReference[] = [];
 
-  // Match #sym:symbolName
-  // Symbol names: start with letter/underscore, contain letters/numbers/underscores
-  const regex = /#sym:([a-zA-Z_][a-zA-Z0-9_]*)/g;
+  // Match #sym:path/to/file.ts:SymbolName:123 or #sym:path/to/file.ts:methodName():123
+  // Captures: (1) file path, (2) symbol name (with optional parens), (3) line number
+  const regex = /#sym:([^:]+):([a-zA-Z_][a-zA-Z0-9_]*(?:\(\))?):(\d+)/g;
   let match;
 
   while ((match = regex.exec(prompt)) !== null) {
-    const symbolName = match[1];
+    const [, filePath, symbolName, lineStr] = match;
+    const lineNumber = parseInt(lineStr, 10);
 
     references.push({
-      path: "", // Will be resolved later
+      path: filePath,
       symbolName,
+      startLine: lineNumber, // Store the line number for symbol resolution
     });
   }
 
