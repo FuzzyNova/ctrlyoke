@@ -30,11 +30,11 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - `executePromptFile(filePath, mode?)` - Legacy method (loads then immediately executes for backwards compatibility)
 - Dashboard "Change" button → calls `loadPromptFile()` → user can review prompts before clicking "Run"
 - Dashboard "Run" button → calls `executeLoadedPromptFile()` → starts execution immediately (no confirmation dialog)
-- Context menu "Send to CLI/Chat" → calls `executePromptFile()` → loads and executes immediately
+- Context menu "Run with FlightPath" → calls `executePromptFile()` → loads and executes immediately
 
 **Mode override:**
 
-- Context menu "Send to CLI" / "Send to Chat" use mode override mechanism
+- Context menu "Run with FlightPath" / "Load in FlightPath" commands respect provider setting
 - Single-prompt files execute directly; multi-prompt use queue
 
 **Editor group management (configurable via `openPromptsInSecondGroup` setting):**

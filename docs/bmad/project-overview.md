@@ -103,7 +103,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 | ---------------- | ------------------------------------------------------------- |
 | **Core**         | Take Off, Pause, Resume, Stop, Create Prompt File, Open Panel |
 | **Integration**  | Show Copilot Status, Test Automation, Retry Detection         |
-| **Context Menu** | Send to CLI, Send to Chat                                     |
+| **Context Menu** | Run with FlightPath, Load in FlightPath                       |
 | **Testing**      | Various test commands for automation validation               |
 
 ## Configuration Settings (25+ Settings)

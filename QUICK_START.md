@@ -64,7 +64,7 @@ Create: `analyze-code.prompt.md`
 Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
 ```
 
-Then right-click the file and select **FlightPath: Send to CLI** or **FlightPath: Send to Chat**.
+Then right-click the file and select **FlightPath: Run with FlightPath** (or press the play icon in the editor title bar).
 
 ### Simple Single Prompt (JSON)
 

@@ -58,8 +58,8 @@
 
 **Right-click any prompt file:**
 
-- **Send to CLI** - Uses Copilot CLI (default)
-- **Send to Chat** - Uses Chat window automation
+- **Run with FlightPath** - Executes using your configured provider
+- **Load in FlightPath** - Loads into dashboard without running
 
 **Command Palette (`Ctrl+Shift+P`):**
 
@@ -76,12 +76,12 @@
 
 ## Common Test Scenarios
 
-1. **Basic execution:** `simple.prompt.md` → Send to CLI
-2. **File attachment:** `with-file.prompt.json` → Send to CLI
-3. **End condition:** `with-end-condition.prompt.json` → Send to CLI
-4. **Model switching:** `multi-step.flightpath.json` → Send to CLI
-5. **Retry mechanism:** `retry-counter-test.flightpath.json` → Send to CLI
-6. **Chat mode:** Any prompt → Send to Chat
+1. **Basic execution:** `simple.prompt.md` → Run with FlightPath
+2. **File attachment:** `with-file.prompt.json` → Run with FlightPath
+3. **End condition:** `with-end-condition.prompt.json` → Run with FlightPath
+4. **Model switching:** `multi-step.flightpath.json` → Run with FlightPath
+5. **Retry mechanism:** `retry-counter-test.flightpath.json` → Run with FlightPath
+6. **Chat mode:** Set provider to "copilot-chat" in settings, then any prompt → Run with FlightPath
 
 ## Resetting Counter Tests
 

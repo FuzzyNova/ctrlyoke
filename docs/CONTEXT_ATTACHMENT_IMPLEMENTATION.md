@@ -151,13 +151,46 @@ protected async processPromptAttachments(prompt: string): Promise<string> {
 - XML: Would duplicate content unnecessarily
 - Result: Cleaner prompts, less token usage
 
-#### Chat Integration (No Change)
+#### Chat Integration (Symbol Support)
 
 ```typescript
-// CopilotChatIntegration.ts
-// Keep current implementation from base class
-// Chat doesn't support @path syntax, XML attachments work correctly
+// NativeAttachmentHandler.ts
+async processAttachments(prompt: string): Promise<string> {
+  // Parse all references (including symbols)
+  let fileReferences = parseAllFileReferences(prompt);
+
+  // Resolve symbol references to file locations
+  const resolvedRefs: FileReference[] = [];
+  for (const ref of fileReferences) {
+    if (ref.symbolName) {
+      const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
+      const resolved = await resolveSymbol(symbolRef);
+      if (resolved) {
+        resolvedRefs.push(resolved);
+      }
+    } else {
+      resolvedRefs.push(ref);
+    }
+  }
+
+  // Attach resolved references
+  for (const ref of resolvedRefs) {
+    if (!ref.startLine || !ref.endLine) {
+      // Attach full file
+      await vscode.commands.executeCommand("github.copilot.chat.attachFile");
+    } else {
+      // Attach line range (including symbols) as selection
+      editor.selection = new vscode.Selection(
+        new vscode.Position(ref.startLine - 1, 0),
+        new vscode.Position(ref.endLine - 1, Number.MAX_SAFE_INTEGER)
+      );
+      await vscode.commands.executeCommand("github.copilot.chat.attachSelection");
+    }
+  }
+}
 ```
+
+**Symbol Handling**: Chat mode uses `github.copilot.chat.attachSelection` to attach symbol ranges after resolving them with `resolveSymbol()` from AttachmentBuilders.
 
 ### Base Class Refactoring
 
@@ -283,7 +316,7 @@ export abstract class CopilotIntegration {
 
 1. ✅ Override `processPromptAttachments()` in `ClaudeCommandLineIntegration`
 2. ✅ Implement `@path`-only logic for full files
-3. ✅ Keep XML attachments for line ranges
+3. ✅ Keep XML attachments for line ranges and symbols
 4. ✅ Test with same manual prompts as Phase 2
 
 **Files**:
@@ -296,6 +329,36 @@ export abstract class CopilotIntegration {
 - Verify no duplicate content in Claude responses
 - Verify custom instructions are loaded
 - Verify line ranges work correctly
+- Verify symbols resolve to correct line ranges
+
+### Phase 3.5: Implement Chat Symbol Support ✅ COMPLETED
+
+**Goal**: Resolve and attach symbols in Chat mode using native selection attachment
+
+1. ✅ Import `resolveSymbol` in `NativeAttachmentHandler`
+2. ✅ Parse symbol references with `parseAllFileReferences()`
+3. ✅ Resolve symbols to file locations before attachment
+4. ✅ Attach symbol ranges using `github.copilot.chat.attachSelection`
+
+**Files**:
+
+- `src/flightpath/chat/NativeAttachmentHandler.ts`
+
+**Implementation Details**:
+
+- Symbols are resolved using the same `resolveSymbol()` utility as CLI modes
+- Resolved symbols are attached as selections (line ranges)
+- Reuses existing `withFocusedDocument()` helper and selection attachment logic
+- Includes improved logging with symbol names in console output
+
+**Key Insight**: Instead of trying to figure out `workbench.action.chat.attachContext`, we leverage the existing `github.copilot.chat.attachSelection` command that we already use for line ranges. Since symbols resolve to file locations with line ranges, they can be attached exactly like manual line range selections.
+
+**Validation**:
+
+- ✅ Symbols resolve correctly using VS Code's document symbol provider
+- ✅ Symbol ranges are attached as selections via native command
+- ✅ Console logs show symbol resolution steps
+- ✅ TypeScript compilation passes
 
 ### Phase 4: Update Documentation
 
@@ -311,9 +374,11 @@ export abstract class CopilotIntegration {
 
 1. ⬜ Copilot CLI workflow with file references and custom instructions
 2. ⬜ Claude CLI workflow with file references and custom instructions
-3. ⬜ Chat workflow (verify no regression)
+3. ✅ Chat workflow (symbol support implemented, verify no regression)
 4. ⬜ Line range handling across all integrations
-5. ⬜ Mixed file references (full + line ranges)
+5. ⬜ Mixed file references (full + line ranges + symbols)
+6. ✅ Symbol resolution in Chat mode (implemented)
+7. ⬜ Symbol resolution in CLI modes (needs manual testing)
 
 ## Edge Cases & Considerations
 

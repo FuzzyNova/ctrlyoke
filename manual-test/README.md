@@ -24,7 +24,7 @@ This directory contains test files for manually testing the FlightPath extension
 | File                             | Purpose         | Tests                            |
 | -------------------------------- | --------------- | -------------------------------- |
 | `simple.prompt.md`               | Markdown format | Basic prompt execution           |
-| `with-file.prompt.json`          | File attachment | `@` reference processing    |
+| `with-file.prompt.json`          | File attachment | `@` reference processing         |
 | `with-end-condition.prompt.json` | End condition   | Script validation                |
 | `multi-step.flightpath.json`     | Model switching | Multi-step with different models |
 
@@ -56,7 +56,7 @@ This directory contains test files for manually testing the FlightPath extension
 
 **File:** `.flightpath/simple.prompt.md`
 
-**Test:** Right-click → "Send to CLI" or "Send to Chat"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:** Copilot responds with explanation of FlightPath.
 
@@ -66,7 +66,7 @@ This directory contains test files for manually testing the FlightPath extension
 
 **File:** `.flightpath/with-file.prompt.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:** Copilot analyzes `sample-code/example.ts` and explains its functionality.
 
@@ -76,7 +76,7 @@ This directory contains test files for manually testing the FlightPath extension
 
 **File:** `.flightpath/with-end-condition.prompt.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -90,7 +90,7 @@ This directory contains test files for manually testing the FlightPath extension
 
 **File:** `.flightpath/multi-step.flightpath.json`
 
-**Test:** Right-click → "Send to CLI" or "Send to Chat"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:** Two sequential responses using different models (gpt-5-mini, claude-haiku-4.5).
 
@@ -106,7 +106,7 @@ This directory contains test files for manually testing the FlightPath extension
 echo 0 > counter.txt
 ```
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -120,7 +120,7 @@ echo 0 > counter.txt
 
 **File:** `retry-max-exhaustion-test.flightpath.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -135,7 +135,7 @@ echo 0 > counter.txt
 
 **File:** `retry-timeout-error-test.flightpath.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -150,7 +150,7 @@ echo 0 > counter.txt
 
 **File:** `script-error-test.flightpath.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -171,7 +171,7 @@ echo 0 > counter.txt
 echo 0 > multi-step-counter.txt
 ```
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -186,7 +186,7 @@ echo 0 > multi-step-counter.txt
 
 **File:** `new-chat-session-test.flightpath.json`
 
-**Test:** Right-click → "Send to CLI" or "Send to Chat"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -200,7 +200,7 @@ echo 0 > multi-step-counter.txt
 
 **File:** `agent-test.flightpath.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -216,7 +216,7 @@ echo 0 > multi-step-counter.txt
 
 **File:** `multi-step-file-reference.flightpath.json`
 
-**Test:** Right-click → "Send to CLI"
+**Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
 
@@ -230,7 +230,7 @@ echo 0 > multi-step-counter.txt
 
 **Files:** `dynamic-queue-basic-example.flightpath.json`, `dynamic-queue-multi-stage.flightpath.json`
 
-**Test:** Right-click → "Send to CLI" (with `enableDynamicQueue` setting enabled)
+**Test:** Right-click → "Run with FlightPath" (with `enableDynamicQueue` setting enabled)
 
 **Expected:**
 

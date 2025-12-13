@@ -3,6 +3,7 @@ import {
   FileReference,
   parseAllFileReferences,
 } from "../../utils/FileReferenceParser";
+import { resolveSymbol } from "../../utils/AttachmentBuilders";
 
 /** Function type for resolving workspace-relative paths */
 export type PathResolver = (relativePath: string) => string;
@@ -35,15 +36,41 @@ export class NativeAttachmentHandler {
   /** Attach files via native commands; returns prompt unchanged */
   async processAttachments(prompt: string): Promise<string> {
     try {
-      const fileReferences = parseAllFileReferences(prompt);
+      let fileReferences = parseAllFileReferences(prompt);
 
       if (fileReferences.length === 0) {
         return prompt;
       }
 
-      console.log(`📎 Attaching ${fileReferences.length} file(s)...`);
-
+      // Resolve symbol references to actual file locations
+      const resolvedRefs: FileReference[] = [];
       for (const ref of fileReferences) {
+        if (ref.symbolName) {
+          // Symbol reference - resolve to file location
+          const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
+          console.log(`🔍 Resolving symbol: ${symbolRef}`);
+          const resolved = await resolveSymbol(symbolRef);
+          if (resolved) {
+            resolvedRefs.push(resolved);
+            console.log(
+              `✓ Resolved to: ${resolved.path}:${resolved.startLine}-${resolved.endLine}`
+            );
+          } else {
+            console.warn(`Could not resolve symbol: ${symbolRef}`);
+          }
+        } else {
+          // Regular file/directory reference
+          resolvedRefs.push(ref);
+        }
+      }
+
+      if (resolvedRefs.length === 0) {
+        return prompt;
+      }
+
+      console.log(`📎 Attaching ${resolvedRefs.length} file(s)...`);
+
+      for (const ref of resolvedRefs) {
         const absolutePath = this.resolvePath(ref.path);
         const uri = vscode.Uri.file(absolutePath);
 
@@ -73,14 +100,15 @@ export class NativeAttachmentHandler {
                 "github.copilot.chat.attachSelection"
               );
             });
-            console.log(
-              `✅ Selection: ${ref.path}:${ref.startLine}-${ref.endLine}`
-            );
+            const refDesc = ref.symbolName
+              ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`
+              : `${ref.path}:${ref.startLine}-${ref.endLine}`;
+            console.log(`✅ Selection: ${refDesc}`);
           } catch (error) {
-            console.error(
-              `❌ Attach failed: ${ref.path}:${ref.startLine}-${ref.endLine}`,
-              error
-            );
+            const refDesc = ref.symbolName
+              ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`
+              : `${ref.path}:${ref.startLine}-${ref.endLine}`;
+            console.error(`❌ Attach failed: ${refDesc}`, error);
           }
         }
 

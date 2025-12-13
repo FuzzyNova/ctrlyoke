@@ -244,7 +244,7 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 - No JSON parsing or schema validation needed
 - Cannot include `model` override or `endCondition` (single prompt execution only)
 - Supports same context variables: `@workspace`, `#file:path`, slash commands
-- Use context menu (right-click) to execute: **Send to CLI** or **Send to Chat**
+- Use context menu (right-click) to execute: **Run with FlightPath** (or use the play icon in the editor title bar)
 
 **Optional Fields:**
 
@@ -263,7 +263,7 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 - `.prompt.json` - Typically for single prompts or simple workflows
 - `.flightpath.json` - Typically for complex multi-step workflows
 
-All three formats support context menu execution with mode override (Send to CLI / Send to Chat).
+All three formats support context menu execution (Run with FlightPath / Load in FlightPath).
 
 ## Commands
 

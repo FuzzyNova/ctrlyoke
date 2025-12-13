@@ -120,7 +120,7 @@ Use files in `manual-test/` directory:
 
 - `dynamic-queue-*.flightpath.json` - Dynamic queue tests
 - `retry-*.flightpath.json` - End condition retry tests
-- Right-click → Send to CLI or Send to Chat
+- Right-click → Run with FlightPath
 
 ## Build Process
 
