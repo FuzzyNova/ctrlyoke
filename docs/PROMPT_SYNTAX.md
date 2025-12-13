@@ -13,19 +13,22 @@ FlightPath supports rich context references in prompts using a syntax aligned wi
 **What's Implemented**:
 
 - ✅ `@` trigger for full file completions (CLI-native syntax)
-- ✅ `#` trigger for selection completions only (line ranges)
+- ✅ `#` trigger for selection + symbol completions
 - ✅ `@path` syntax parsed in all integrations (Copilot CLI, Claude CLI, Chat)
 - ✅ `#file:path:10-20` line range support (XML attachments)
 - ✅ Selection completions (inserts `file:path:line-line`)
+- ✅ Symbol completions (inserts `sym:symbolName`, shows immediately when typing #)
+- ✅ Smart filtering (excludes markdown/text/JSON files from symbol results)
+- ✅ Dynamic refresh (re-queries as you type, up to 500 symbols)
 - ✅ Model completions in "model" field
 - ✅ Works in JSON and Markdown prompt files
 - ✅ Migration script: `scripts/migrate-prompt-syntax.mjs`
 
 **What's NOT Implemented Yet**:
 
-- ❌ `#sym:name` symbol completions
 - ❌ `@path/` directory structure references (trailing slash)
 - ❌ Deprecation warnings for legacy `#file:path` without line ranges
+- ❌ Symbol resolution at runtime (completions work, but `#sym:` references not yet processed by integrations)
 
 **Breaking Change Applied**: `#file:path` for full files is DEPRECATED. Use `@path` instead.
 Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
@@ -158,7 +161,7 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 
 **Note**: There is no `#selection` prompt syntax. The completion provider automatically converts selections to `#file:path:line-line` format.
 
-#### Symbol References: `#sym:symbolName` _(Planned)_
+#### Symbol References: `#sym:symbolName` ✅ IMPLEMENTED
 
 **Format**:
 
@@ -174,13 +177,21 @@ Line ranges (`#file:path:10-20`) continue to use `#file:` syntax.
 }
 ```
 
-**Behavior** _(when implemented)_:
+**Behavior**:
 
 - Uses VS Code Language Server to resolve symbol location
-- Converts to line range: `@file:path:startLine-endLine`
-- Completion shows symbols from current file or workspace-wide search
+- Inserts `sym:symbolName` which FlightPath resolves to line range at runtime
+- Completion shows symbols from workspace-wide search
+- Filters out markdown/text/JSON files (focuses on code symbols)
+- Shows up to 500 symbols matching your search query
+- Dynamic refresh as you type more characters
 
-**Priority**: Medium-High (high user value for focused refactoring)
+**Usage**:
+
+- Type `#` → See selections + all symbols
+- Type `#Fl` → See selections + symbols matching "Fl"
+- Select a symbol → Inserts `#sym:FlightPathManager`
+- FlightPath resolves to actual location when executing prompt
 
 #### Directory Context: `@path\to\directory\` _(See Full Content Section)_
 
@@ -220,7 +231,7 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 @src/flightpath/                     (directory - 8 files) [PLANNED]
 ```
 
-#### Handler 2: `#` Completion (Selections Only) ✅ IMPLEMENTED
+#### Handler 2: `#` Completion (Selections + Symbols) ✅ IMPLEMENTED
 
 **Trigger**: `#` character
 
@@ -228,13 +239,19 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 
 - ✅ Current editor selections (labeled `$(selection) Current Selection`)
   - Inserts `file:path:startLine-endLine` format
+- ✅ Workspace symbols matching the typed text (functions, classes, methods, variables)
+  - Filters out markdown/text/JSON files (focuses on code symbols only)
+  - Dynamic refresh as you type more characters
+  - Shows up to 500 symbols (increased from 100)
 - ❌ NO file completions (use `@` for full files)
 
-**Items shown after typing** _(planned)_:
+**Behavior**:
 
-- ⬜ `#sym:<search>` - Fuzzy search symbols matching typed text
+- `#` → Shows selections + all symbols
+- `#Fl` → Shows selections + symbols matching "Fl" (from TypeScript, JavaScript, Python, etc.)
+- `#Flight` → Shows selections + symbols matching "Flight"
 
-**Important Change**: The `#` trigger now shows **selections only**, not files. Use `@` for full file completions.
+**Important Change**: The `#` trigger shows **selections + symbols** immediately. Use `@` for full file completions.
 
 **Example completions**:
 
@@ -243,6 +260,12 @@ FlightPath plans to use **two separate completion handlers** to avoid performanc
 $(selection) Current Selection          → inserts: file:src/extension.ts:45-67
 $(selection) extension.ts (lines 45-67) → inserts: file:src/extension.ts:45-67
 
+# (user types #Fl) - Shows selections + symbols
+$(selection) Current Selection          → inserts: file:src/extension.ts:45-67
+FlightPathManager                       → inserts: sym:FlightPathManager
+FlightPathDashboardProvider             → inserts: sym:FlightPathDashboardProvider
+...more symbols matching "Fl"...
+
 # For full files, use @ instead:
 @ (user types @)
 extension.ts                            → inserts: src/extension.ts
@@ -250,9 +273,6 @@ package.json                            → inserts: package.json
 
 # For line ranges, manually type:
 #file:src/extension.ts:10-20           (no completion, user types manually)
-
-# (user types #sym:Flight) [PLANNED]
-#sym:FlightPathManager                  → inserts: file:src/.../Manager.ts:10-50
 ```
 
 **Note**: Selection completions show `$(selection)` label but insert `file:path:line-line` text.
@@ -375,14 +395,15 @@ The migration from `#file:path` to `@path` for full files has been completed.
 | -------------------------------- | ------- | -------- | ------------------------------------------------------- |
 | `@` trigger for file completions | ✅ Done | -        | Workspace files with 5s cache, max 500 items            |
 | `@path` file references          | ✅ Done | -        | Parsed in all integrations (CLI + Chat)                 |
-| `#` trigger for selections       | ✅ Done | -        | Selections only (no files - use `@` for files)          |
+| - ✅ `#` trigger for selections  | ✅ Done | -        | Selections shown when typing `#`                        |
+| - ✅ `#` symbol completions      | ✅ Done | -        | Shows immediately with `#`, filters code files, 500 max |
 | `#file:path:10-20` line ranges   | ✅ Done | -        | Manual typing, XML attachment in all integrations       |
 | Selection completions            | ✅ Done | -        | Inserts `file:path:line-line` from editor selections    |
+| Symbol completions               | ✅ Done | -        | Inserts `sym:symbolName`, dynamic refresh as you type   |
 | Model completions                | ✅ Done | -        | Dynamic model list in "model" field                     |
 | Migration script                 | ✅ Done | -        | `scripts/migrate-prompt-syntax.mjs`                     |
 | `@path/` directory refs          | ⬜ TODO | LOW      | Trailing slash detection, directory tree attachment     |
-| `#sym:name` symbol refs          | ⬜ TODO | MEDIUM   | Requires Language Server integration                    |
-| Lazy symbol search               | ⬜ TODO | MEDIUM   | Performance optimization for `#sym:`                    |
+| `#sym:name` runtime resolution   | ⬜ TODO | MEDIUM   | Integrations need to resolve symbols to line ranges     |
 | Deprecation warnings             | ⬜ TODO | LOW      | Show hints when using `#file:` for full files           |
 
 ---

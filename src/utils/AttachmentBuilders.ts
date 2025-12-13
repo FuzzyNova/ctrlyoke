@@ -175,19 +175,23 @@ ${tree}
  *
  * @param query Search query (empty string returns all symbols)
  * @param maxResults Maximum number of results (default: 100)
- * @returns Array of symbol information
+ * @returns Array of symbol information from all file types
  */
 export async function getWorkspaceSymbols(
   query: string = "",
   maxResults: number = 100
 ): Promise<vscode.SymbolInformation[]> {
   try {
-    const symbols = (await vscode.commands.executeCommand(
+    const allSymbols = (await vscode.commands.executeCommand(
       "vscode.executeWorkspaceSymbolProvider",
       query
     )) as vscode.SymbolInformation[];
 
-    return (symbols || []).slice(0, maxResults);
+    if (!allSymbols || allSymbols.length === 0) {
+      return [];
+    }
+
+    return allSymbols.slice(0, maxResults);
   } catch (error) {
     console.error("Failed to get workspace symbols:", error);
     return [];

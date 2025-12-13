@@ -198,7 +198,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
    * 1. Current editor selections (bubbled to top, if any)
    * 2. Workspace symbols (functions, classes, methods, etc.)
    *
-   * User types #, sees selections first, then symbol list below
+   * Behavior:
+   * - `#` → Shows selections + symbols
+   * - `#Fl` → Shows selections + symbols matching "Fl"
    */
   private async getHashCompletions(
     filterText: string
@@ -221,12 +223,15 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     });
     items.push(...symbolItems);
 
-    return new vscode.CompletionList(items, false);
+    // Mark as incomplete so VS Code re-queries as user types more characters
+    // This ensures we get fresh symbol results as the filter text changes
+    return new vscode.CompletionList(items, true);
   }
 
   /**
    * Get symbol completions for # trigger
    * Shows workspace symbols (functions, classes, methods, variables)
+   * Filters out markdown/text files to focus on code symbols
    */
   private async getSymbolCompletions(
     filterText: string
@@ -234,8 +239,8 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const items: vscode.CompletionItem[] = [];
 
     try {
-      // Query workspace symbols (max 100 for performance)
-      const symbols = await getWorkspaceSymbols(filterText, 100);
+      // Query workspace symbols (all file types)
+      const symbols = await getWorkspaceSymbols(filterText, 500);
 
       for (const symbol of symbols) {
         const item = new vscode.CompletionItem(
