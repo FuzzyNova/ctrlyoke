@@ -94,8 +94,9 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const items: vscode.CompletionItem[] = [];
     const files = await this.getWorkspaceFiles();
 
-    // Convert filter text to lowercase for case-insensitive matching
-    const filter = filterText.toLowerCase();
+    // Convert filter text to lowercase and normalize path separators
+    // (VS Code always uses forward slashes, but Windows users type backslashes)
+    const filter = filterText.toLowerCase().replace(/\\/g, "/");
 
     // Track unique directories we've seen
     const directories = new Set<string>();
