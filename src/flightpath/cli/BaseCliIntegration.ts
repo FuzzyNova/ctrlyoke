@@ -69,6 +69,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // TUI completion detection - now using execution.read() instead of proposed API
   private readAbortController?: AbortController;
 
+  // Track the sanitized prompt sent to terminal for filtering echo in response
+  private lastSanitizedPrompt?: string;
+
   constructor(
     context: vscode.ExtensionContext,
     outputChannel?: vscode.OutputChannel
@@ -391,9 +394,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           pasteVerificationBuffer += cleanData;
         }
 
-        // Always log raw data to output channel for debugging
-        this.outputChannel?.append(data);
-
         // Extract complete screens from buffer using CLI-specific screen end pattern
         // If we get any complete screens, the TUI is ready (screen end pattern matched)
         const { screens, remainder } =
@@ -422,6 +422,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             );
             await this.sendTextInChunks(terminal, sanitizedPrompt);
             promptTextSent = true;
+            // Store the prompt for echo detection and filtering
+            this.lastSanitizedPrompt = sanitizedPrompt;
             this.log(
               `📤 ✅ All prompt chunks sent to terminal. Waiting for paste to complete...`
             );
@@ -447,9 +449,17 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           // Phase 2: After prompt submitted, detect completion and emit deltas
           if (promptSubmitted) {
             // Extract and emit new content (delta from this screen)
-            const delta = this.extractNewContent(screen, lastEmittedContent);
+            const delta = this.extractNewContent(
+              screen,
+              lastEmittedContent,
+              this.lastSanitizedPrompt
+            );
             if (delta.trim().length > 0) {
               this.streamingChunkEmitter.fire(delta);
+              // Also append filtered delta to output channel (not raw TUI data)
+              if (this.shouldShowOutput()) {
+                this.outputChannel?.append(delta);
+              }
             }
 
             // Check for escape indicator in this screen
@@ -626,17 +636,33 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * - Preserves empty lines (important for code blocks and formatting)
    * - Only filters TUI chrome, not content
    * - Tracks content by trimmed line for dedup, but preserves original formatting
+   * - Filters out the prompt echo (already shown in Prompt section)
+   * - Collapses consecutive blank lines to maximum of 2
    *
    * @param screen The current screen content
    * @param emittedContent Set of content lines already emitted (normalized)
+   * @param promptToFilter Optional prompt text to filter from the response (for echo removal)
    * @returns New content to emit (modifies emittedContent set)
    */
   private extractNewContent(
     screen: string,
-    emittedContent: Set<string>
+    emittedContent: Set<string>,
+    promptToFilter?: string
   ): string {
     const lines = screen.split(/\r?\n/);
     const newLines: string[] = [];
+    let consecutiveBlankLines = 0;
+
+    // Build set of prompt lines for efficient filtering (normalize for comparison)
+    const promptLines = new Set<string>();
+    if (promptToFilter) {
+      promptToFilter.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (trimmed.length > 0) {
+          promptLines.add(trimmed);
+        }
+      });
+    }
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -646,14 +672,32 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         continue;
       }
 
+      // Skip prompt echo lines (already shown in Prompt section)
+      if (trimmed.length > 0 && promptLines.has(trimmed)) {
+        continue;
+      }
+
       // For deduplication, use normalized (trimmed) version
       // But preserve original line formatting in output
       const dedupKey = trimmed;
 
       // Skip if we've already emitted this content line
-      // Empty lines are NOT deduplicated (always pass through)
+      // Empty lines are NOT deduplicated (always pass through, but limited)
       if (dedupKey.length > 0 && emittedContent.has(dedupKey)) {
         continue;
+      }
+
+      // Handle blank line collapsing (max 2 consecutive blank lines)
+      if (trimmed.length === 0) {
+        consecutiveBlankLines++;
+        if (consecutiveBlankLines <= 2) {
+          newLines.push(line);
+        }
+        // Skip blank lines beyond 2
+        continue;
+      } else {
+        // Reset counter on non-blank line
+        consecutiveBlankLines = 0;
       }
 
       // New content - track it and preserve original line (with indentation)
@@ -895,8 +939,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   private async sendTextInChunks(
     terminal: vscode.Terminal,
     text: string,
-    chunkSize: number = 1000,
-    delayMs: number = 1000
+    chunkSize: number = 2000,
+    delayMs: number = 800
   ): Promise<void> {
     const totalLength = text.length;
 
