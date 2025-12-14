@@ -224,15 +224,19 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     });
     items.push(...symbolItems);
 
-    // Mark as incomplete so VS Code re-queries as user types more characters
-    // This ensures we get fresh symbol results as the filter text changes
+    // CRITICAL: Must be true to get fresh symbol queries as user types
+    // DO NOT CHANGE TO FALSE - list will not refresh without this
+    //
+    // Known VS Code bug: isIncomplete: true sometimes shows duplicate entries in the
+    // completion dropdown (only affects UI, not the data we return). This is a VS Code
+    // issue with how it handles completion list updates. isIncomplete: false is worse:
+    // it still has dupes AND doesn't update the list as the user types.
     return new vscode.CompletionList(items, true);
   }
 
   /**
    * Get symbol completions for # trigger
-   * Shows workspace symbols (functions, classes, methods, variables)
-   * Filters out markdown/text files to focus on code symbols
+   * Shows workspace symbols from all file types (functions, classes, methods, variables, markdown headers, etc.)
    */
   private async getSymbolCompletions(
     filterText: string

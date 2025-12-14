@@ -555,24 +555,24 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
   /**
    * Strip ANSI escape codes and terminal control sequences from output for clean display.
+   *
+   * This is surgical - only removes actual terminal control sequences, not content.
+   * Preserves all printable characters including markdown formatting (*, #, `, etc.)
    */
   protected stripAnsiCodes(text: string): string {
     return (
       text
         // OSC sequences: \x1B] ... terminated by BEL (\x07) or ST (\x1B\\)
         .replace(/\x1B\].*?(?:\x07|\x1B\\)/g, "")
-        // Cursor position (H) and similar commands that move to new lines - replace with newline
-        .replace(/\x1B\[[0-9;]*[Hf]/g, "\n")
-        // Other CSI sequences: \x1B[ followed by parameters and command (remove)
-        .replace(/\x1B\[[0-9;]*[A-Za-z]/g, "")
-        // Other escape sequences: \x1B followed by various characters
+        // CSI sequences: \x1B[ followed by parameters and command letter
+        // This includes cursor movement, colors, etc. but NOT printable content
+        .replace(/\x1B\[[0-9;?]*[A-Za-z]/g, "")
+        // Other escape sequences: \x1B followed by single character (not [)
         .replace(/\x1B[@-Z\\-_]/g, "")
-        // Standalone BEL character
+        // Standalone BEL character (used in some terminals)
         .replace(/\x07/g, "")
-        // Hide cursor and other private sequences
-        .replace(/\x1B\[\?[0-9;]*[A-Za-z]/g, "")
-        // Clean up multiple consecutive newlines (but keep at least one)
-        .replace(/\n{3,}/g, "\n\n")
+        // Clean up excessive newlines but preserve paragraph breaks
+        .replace(/\n{4,}/g, "\n\n\n")
     );
   }
 
@@ -622,37 +622,44 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   /**
    * Extract new content from a screen that hasn't been emitted yet.
    *
-   * Tracks what content has already been sent to the dashboard and only
-   * returns truly new lines. This prevents duplicate output.
+   * Uses a smarter approach to deduplication:
+   * - Preserves empty lines (important for code blocks and formatting)
+   * - Only filters TUI chrome, not content
+   * - Tracks content by trimmed line for dedup, but preserves original formatting
    *
    * @param screen The current screen content
-   * @param emittedContent Set of content lines already emitted
+   * @param emittedContent Set of content lines already emitted (normalized)
    * @returns New content to emit (modifies emittedContent set)
    */
   private extractNewContent(
     screen: string,
     emittedContent: Set<string>
   ): string {
-    const lines = screen
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
-
+    const lines = screen.split(/\r?\n/);
     const newLines: string[] = [];
 
     for (const line of lines) {
-      // Skip TUI chrome
-      if (this.isTuiChromeLine(line)) {
+      const trimmed = line.trim();
+
+      // Skip TUI chrome (but not empty lines - they're important for formatting)
+      if (trimmed.length > 0 && this.isTuiChromeLine(line)) {
         continue;
       }
 
-      // Skip if already emitted
-      if (emittedContent.has(line)) {
+      // For deduplication, use normalized (trimmed) version
+      // But preserve original line formatting in output
+      const dedupKey = trimmed;
+
+      // Skip if we've already emitted this content line
+      // Empty lines are NOT deduplicated (always pass through)
+      if (dedupKey.length > 0 && emittedContent.has(dedupKey)) {
         continue;
       }
 
-      // New content - add to emitted set and output
-      emittedContent.add(line);
+      // New content - track it and preserve original line (with indentation)
+      if (dedupKey.length > 0) {
+        emittedContent.add(dedupKey);
+      }
       newLines.push(line);
     }
 
@@ -660,29 +667,39 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       return "";
     }
 
+    // Join with newlines and add trailing newline
     return newLines.join("\n") + "\n";
   }
 
   /**
    * Check if a line is TUI chrome (borders, prompts, status) that should be filtered.
+   *
+   * Patterns are specific to match complete TUI elements, not content fragments.
+   * Avoids matching markdown headers (#), code fences (```), or horizontal rules (---).
    */
   private isTuiChromeLine(line: string): boolean {
+    const trimmed = line.trim();
+
+    // Empty or whitespace-only lines - keep them (preserve formatting)
+    if (trimmed.length === 0) {
+      return false;
+    }
+
     const chromPatterns = [
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]+$/, // Box drawing characters only
-      /^[─═]+$/, // Horizontal lines
-      /Ctrl\+[a-z]\s+\w+/i, // Keyboard shortcuts like "Ctrl+c Exit"
-      /Enter @ to mention/i, // Copilot prompt hint
-      /Esc to cancel/i, // Thinking indicator (we want to filter this from output)
-      /Esc to interrupt/i, // Claude thinking indicator
-      /^\s*>\s*$/, // Empty prompt
-      /^\s*[∙◉◎●]\s*$/, // Spinner characters alone
-      /^Thinking\s*\(/i, // Thinking status
-      /^\s*[⎇]\s*\w+\*?\s*$/, // Git branch indicator alone
-      /gpt-\d|claude-|gemini-/i, // Model names in status bar
-      /^\d+x\)?\s*$/, // Token multiplier like "0x)"
+      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only (8+ chars to avoid false positives)
+      /Ctrl\+[a-z]\s+\w+.*Ctrl\+/i, // Multiple keyboard shortcuts (status bar pattern)
+      /^Enter @ to mention/i, // Copilot prompt hint at start of line
+      /^\(Esc to cancel\)/i, // Exact thinking indicator
+      /^\(Esc to interrupt\)/i, // Exact Claude thinking indicator
+      /^>\s*$/, // Empty prompt only
+      /^[∙◉◎●]\s*$/, // Spinner alone
+      /^Thinking\s*\([^)]*\)\s*$/i, // Complete thinking status line
+      /^⎇\s+\w+\*?\s*[│|]\s*gpt-/i, // Git branch + model (status bar combo)
+      /^\d+x\)\s*$/, // Exact token multiplier pattern
+      /^Welcome to (GitHub Copilot|Claude)/i, // Welcome messages
     ];
 
-    return chromPatterns.some((pattern) => pattern.test(line));
+    return chromPatterns.some((pattern) => pattern.test(trimmed));
   }
 
   /**
