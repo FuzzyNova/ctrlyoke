@@ -41,20 +41,30 @@ export function parseAtReferences(prompt: string): FileReference[] {
 
   // Regex to match @path or @"path with spaces"
   // Group 1: quoted path, Group 2: unquoted path
-  // Unquoted paths end at whitespace, colon, or common punctuation
-  const regex = /@(?:"([^"]+)"|([^\s:?!.,;)\]}"]+))/g;
+  // Unquoted paths end at whitespace or colon (include . for extensions)
+  const regex = /@(?:"([^"]+)"|([^\s:]+))/g;
   let match;
-
-  // Punctuation that commonly follows file references in natural language
-  const trailingPunctuation = /[?!.,;)\]}]+$/;
 
   while ((match = regex.exec(prompt)) !== null) {
     const [, quotedPath, unquotedPath] = match;
     let filePath = quotedPath || unquotedPath;
 
     // Strip trailing punctuation from unquoted paths
+    // But preserve file extensions and multi-dot filenames (e.g., .ts, .flightpath.json, config.test.ts)
     if (!quotedPath && filePath) {
-      filePath = filePath.replace(trailingPunctuation, "");
+      // Strategy: File paths end with alphanumeric or dot+alphanumeric (extensions)
+      // Sentence punctuation (?!,;)]}") appears after the last alphanumeric
+
+      // Strip common sentence-ending punctuation: ?!,;)]}
+      // But NOT periods yet (they might be part of extensions or relative paths)
+      filePath = filePath.replace(/[?!,;)\]}"]+$/, "");
+
+      // For trailing periods: only strip if they come AFTER the extension/filename
+      // i.e., the path already has alphanumeric at the end before the period(s)
+      // Example: "file.ts." → strip the last period (sentence ending)
+      // Example: "file.ts" → keep as-is (extension)
+      // Example: "../file" → keep as-is (relative path)
+      filePath = filePath.replace(/(\w)\.+$/, "$1");
     }
 
     // Skip if path is empty or looks like a mention (@workspace, @user, etc.)
@@ -147,6 +157,21 @@ export function parseSymbolReferences(prompt: string): FileReference[] {
   }
 
   return references;
+}
+
+/**
+ * Parse directory references ONLY from prompt text (@path/ with trailing slash)
+ *
+ * This is used by CLI integrations to identify directories that need XML
+ * tree structure generation, while leaving native @path file references untouched.
+ *
+ * @param prompt The prompt text containing directory references
+ * @returns Array of directory references only (isDirectory: true)
+ */
+export function parseDirectoryReferences(prompt: string): FileReference[] {
+  const atRefs = parseAtReferences(prompt);
+  // Filter to only directory references (trailing slash)
+  return atRefs.filter((ref) => ref.isDirectory);
 }
 
 /**

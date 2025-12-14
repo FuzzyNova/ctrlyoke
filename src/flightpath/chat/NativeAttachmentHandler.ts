@@ -74,7 +74,18 @@ export class NativeAttachmentHandler {
         const absolutePath = this.resolvePath(ref.path);
         const uri = vscode.Uri.file(absolutePath);
 
-        if (!ref.startLine || !ref.endLine) {
+        if (ref.isDirectory) {
+          // Attach directory structure using native folder attachment
+          try {
+            await vscode.commands.executeCommand(
+              "workbench.action.chat.attachFolder",
+              uri
+            );
+            console.log(`✅ Directory: ${ref.path}`);
+          } catch (error) {
+            console.error(`❌ Attach directory failed: ${ref.path}`, error);
+          }
+        } else if (!ref.startLine || !ref.endLine) {
           // Attach entire file
           try {
             await this.withFocusedDocument(uri, async () => {

@@ -16,7 +16,9 @@ import {
 } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
-  parseAllFileReferences,
+  parseFileReferences,
+  parseSymbolReferences,
+  parseDirectoryReferences,
   FileReference,
   convertToAtSyntax,
 } from "../../utils/FileReferenceParser";
@@ -178,24 +180,44 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   // Uses base class initialize() method
 
   /**
-   * Process #file: references for Copilot CLI
+   * Process #file:, #sym:, and @path/ references for Copilot CLI
    *
    * COPILOT-SPECIFIC BEHAVIOR:
-   * - Full files: Use BOTH @path (triggers custom instruction discovery) AND XML (provides content)
-   * - Line ranges: Use XML only (not supported by @path syntax)
+   * - #file:path (full files): Convert to @path AND provide XML (Copilot needs both)
+   * - #file:path:line-line (line ranges): Use XML only (not supported by @path syntax)
+   * - #sym:name (symbols): Resolve and attach as XML
+   * - @path/ (directories with trailing slash): Generate XML tree structure
+   * - @path (native file syntax): LEFT UNTOUCHED - Copilot handles these natively
    *
-   * Why both @path and XML?
+   * Why convert #file: to both @path and XML?
    * - @path triggers .github/copilot-instructions.md and folder-level instruction discovery
    * - Copilot CLI does NOT auto-attach file content from @path (unlike Claude)
    * - XML provides the actual file content since Copilot doesn't auto-read @path files
    *
-   * @param prompt Original prompt text with #file: references
-   * @returns Prompt with @path references and XML attachments prepended
+   * Why XML for directories?
+   * - Copilot doesn't auto-generate directory tree structures
+   * - FlightPath builds tree with buildDirectoryAttachmentXml()
+   * - Provides structured overview of directory contents
+   *
+   * Why leave @path (files) untouched?
+   * - User may have written @path directly (native CLI syntax)
+   * - Extracting and re-prepending would create duplicates
+   * - Copilot handles native @path references without FlightPath processing
+   *
+   * @param prompt Original prompt text with #file:, #sym:, @path, or @path/ references
+   * @returns Prompt with converted @path references and XML attachments prepended
    */
   protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
-      // Parse file references from prompt
-      let fileReferences = parseAllFileReferences(prompt);
+      // Parse FlightPath-specific syntax that needs conversion:
+      // - #file: (deprecated, converts to @path)
+      // - #sym: (symbol references, converts to XML)
+      // - @path/ (directories with trailing slash, converts to XML tree)
+      // Native @path file references are left untouched - Copilot handles them directly
+      const fileRefs = parseFileReferences(prompt);
+      const symRefs = parseSymbolReferences(prompt);
+      const dirRefs = parseDirectoryReferences(prompt);
+      let fileReferences = [...fileRefs, ...symRefs, ...dirRefs];
 
       if (fileReferences.length === 0) {
         return prompt; // No attachments needed
@@ -213,10 +235,13 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
       // Process each resolved file reference
       for (const ref of resolvedRefs) {
-        // Convert path to @path syntax
-        const atPath = convertToAtSyntax(ref.path);
-
-        if (ref.startLine && ref.endLine) {
+        if (ref.isDirectory) {
+          // Directory: Use XML tree structure only (Copilot doesn't auto-generate trees)
+          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
+          if (xml) {
+            xmlAttachments.push(xml);
+          }
+        } else if (ref.startLine && ref.endLine) {
           // Line range or symbol: Use XML attachment only (not supported by @path)
           const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
           if (xml) {
@@ -224,6 +249,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
           }
         } else {
           // Full file: Use BOTH @path (for instructions) AND XML (for content)
+          const atPath = convertToAtSyntax(ref.path);
           atReferences.push(atPath);
           const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
           if (xml) {
@@ -233,9 +259,9 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       }
 
       // Build final prompt:
-      // 1. @path references (triggers custom instructions)
-      // 2. XML attachments (provides file content)
-      // 3. Original prompt (keeps #file: syntax for LLM context)
+      // 1. @path references (converted from #file:, triggers custom instructions)
+      // 2. XML attachments (provides file content for #file: and #sym:)
+      // 3. Original prompt (may contain native @path, #file:, or #sym: references)
       const atSection =
         atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
       const xmlSection =

@@ -311,23 +311,48 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     let submissionTimeoutId: NodeJS.Timeout | undefined;
     const startSubmissionTimer = () => {
       if (submissionTimeoutId) {
+        this.log(
+          `⏳ [SUBMISSION TIMER] Clearing previous timer (new chunk received, restarting ${PASTE_SILENCE_THRESHOLD_MS}ms silence counter)`
+        );
         clearTimeout(submissionTimeoutId);
+      } else {
+        this.log(
+          `⏳ [SUBMISSION TIMER] Starting new timer (${PASTE_SILENCE_THRESHOLD_MS}ms to submission)`
+        );
       }
       submissionTimeoutId = setTimeout(() => {
+        this.log(
+          `⏳ [SUBMISSION TIMER] Fired! Checking paste completion (promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, pasteBufferLen=${pasteVerificationBuffer.length})`
+        );
         if (promptTextSent && !promptSubmitted) {
           // Verify paste actually completed before submitting
           if (isPasteComplete()) {
             this.log(
-              `📤 Paste complete (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified), sending carriage return to submit...`
+              `📤 ✅ Paste verified (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
             );
             // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
             // In raw mode, Enter key sends \r (carriage return), not \n (newline).
             terminal.sendText("\r", true);
             promptSubmitted = true;
+            this.log(
+              `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
+            );
           } else {
             // Silence detected but paste not verified - keep waiting
             this.log(
-              `⏳ Silence detected but paste not verified yet, continuing to wait...`
+              `⏳ [PASTE VERIFICATION FAILED] Silence detected (${PASTE_SILENCE_THRESHOLD_MS}ms) but paste not yet verified. pasteBufferLen=${pasteVerificationBuffer.length}`
+            );
+            this.log(
+              `⏳ [PASTE VERIFICATION DEBUG] Checking for paste indicator or prompt tail (${PROMPT_TAIL_LENGTH} chars)`
+            );
+            this.log(
+              `⏳ [PASTE VERIFICATION DEBUG] Prompt tail we're looking for: "${promptTail}"`
+            );
+            this.log(
+              `⏳ [PASTE VERIFICATION DEBUG] Last 150 chars of paste buffer: ${pasteVerificationBuffer.slice(-150).replace(/\n/g, "\\n")}`
+            );
+            this.log(
+              `⏳ [PASTE VERIFICATION DEBUG] Will continue waiting for next chunk to restart timer...`
             );
             // Don't restart timer here - we'll restart when next chunk arrives
           }
@@ -389,15 +414,23 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
             // Send sanitized prompt text in chunks to avoid overwhelming the TUI
             // Large pastes (>100KB) can cause React error #185 in Claude's TUI
-            this.log(`📤 Sending prompt to TUI via terminal.sendText...`);
+            this.log(
+              `📤 Sending prompt to TUI via terminal.sendText() in chunks...`
+            );
+            this.log(
+              `📤 [PASTE FLOW] sanitizedPrompt length=${sanitizedPrompt.length} chars, chunkSize=1000, delayMs=1000`
+            );
             await this.sendTextInChunks(terminal, sanitizedPrompt);
             promptTextSent = true;
+            this.log(
+              `📤 ✅ All prompt chunks sent to terminal. Waiting for paste to complete...`
+            );
 
             // Start the dynamic paste detection timer
             // The timer will be reset on each chunk received while pasting
             // When no chunks arrive for PASTE_SILENCE_THRESHOLD_MS, we submit
             this.log(
-              `⏳ Waiting for paste to complete (will submit after ${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence)...`
+              `⏳ [PASTE FLOW] Entering paste completion detection phase. Will submit after ${PASTE_SILENCE_THRESHOLD_MS}ms of silence + paste verification.`
             );
             startSubmissionTimer();
           }
@@ -405,6 +438,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           // Reset submission timer on each chunk while waiting for paste to complete
           // This ensures we don't submit until the terminal has been quiet for the threshold
           if (promptTextSent && !promptSubmitted) {
+            this.log(
+              `⏳ [PASTE FLOW] Screen processed, restarting silence timer (will fire if no more chunks for ${PASTE_SILENCE_THRESHOLD_MS}ms)`
+            );
             startSubmissionTimer();
           }
 
@@ -455,12 +491,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       // Clear the submission timer if still pending
       if (submissionTimeoutId) {
+        this.log(
+          `⏳ [CLEANUP] Clearing pending submission timer (stream ended)`
+        );
         clearTimeout(submissionTimeoutId);
       }
       clearTimeout(timeoutId);
 
       this.log(
-        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes, tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
+        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes | State: tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
+      );
+      this.log(
+        `📺 [PASTE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed}`
       );
 
       if (completed) {

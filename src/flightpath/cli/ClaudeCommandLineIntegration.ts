@@ -13,7 +13,9 @@ import {
 } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
-  parseAllFileReferences,
+  parseFileReferences,
+  parseSymbolReferences,
+  parseDirectoryReferences,
   FileReference,
   convertToAtSyntax,
 } from "../../utils/FileReferenceParser";
@@ -315,24 +317,44 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   // ============================================================
 
   /**
-   * Process #file: references for Claude CLI
+   * Process #file:, #sym:, and @path/ references for Claude CLI
    *
    * CLAUDE-SPECIFIC BEHAVIOR:
-   * - Full files: Use @path ONLY (Claude automatically attaches file content)
-   * - Line ranges: Use XML attachment (not supported by @path syntax)
+   * - #file:path (full files): Convert to @path ONLY (Claude auto-attaches content)
+   * - #file:path:line-line (line ranges): Use XML attachment (not supported by @path)
+   * - #sym:name (symbols): Resolve and attach as XML
+   * - @path/ (directories with trailing slash): Generate XML tree structure
+   * - @path (native file syntax): LEFT UNTOUCHED - Claude handles these natively
    *
-   * Why @path only for full files (no XML)?
+   * Why convert #file: to @path only (no XML)?
    * - @path triggers Claude's native file attachment (auto-reads content)
    * - Adding XML would duplicate the content unnecessarily
    * - This reduces token usage and keeps prompts cleaner
    *
-   * @param prompt Original prompt text with #file: references
-   * @returns Prompt with @path references and XML attachments (for line ranges only) prepended
+   * Why XML for directories?
+   * - Claude doesn't auto-generate directory tree structures
+   * - FlightPath builds tree with buildDirectoryAttachmentXml()
+   * - Provides structured overview of directory contents
+   *
+   * Why leave @path (files) untouched?
+   * - User may have written @path directly (native CLI syntax)
+   * - Extracting and re-prepending would create duplicates
+   * - Claude handles native @path references without FlightPath processing
+   *
+   * @param prompt Original prompt text with #file:, #sym:, @path, or @path/ references
+   * @returns Prompt with converted @path references and XML attachments prepended
    */
   protected async processPromptAttachments(prompt: string): Promise<string> {
     try {
-      // Parse file references from prompt
-      let fileReferences = parseAllFileReferences(prompt);
+      // Parse FlightPath-specific syntax that needs conversion:
+      // - #file: (deprecated, converts to @path)
+      // - #sym: (symbol references, converts to XML)
+      // - @path/ (directories with trailing slash, converts to XML tree)
+      // Native @path file references are left untouched - Claude handles them directly
+      const fileRefs = parseFileReferences(prompt);
+      const symRefs = parseSymbolReferences(prompt);
+      const dirRefs = parseDirectoryReferences(prompt);
+      let fileReferences = [...fileRefs, ...symRefs, ...dirRefs];
 
       if (fileReferences.length === 0) {
         return prompt; // No attachments needed
@@ -350,10 +372,13 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       // Process each resolved file reference
       for (const ref of resolvedRefs) {
-        // Convert path to @path syntax
-        const atPath = convertToAtSyntax(ref.path);
-
-        if (ref.startLine && ref.endLine) {
+        if (ref.isDirectory) {
+          // Directory: Use XML tree structure only (Claude doesn't auto-generate trees)
+          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
+          if (xml) {
+            xmlAttachments.push(xml);
+          }
+        } else if (ref.startLine && ref.endLine) {
           // Line range or symbol: Use XML attachment only (not supported by @path)
           const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
           if (xml) {
@@ -362,14 +387,15 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         } else {
           // Full file: Use @path ONLY (Claude auto-attaches content)
           // NO XML attachment - would duplicate content unnecessarily
+          const atPath = convertToAtSyntax(ref.path);
           atReferences.push(atPath);
         }
       }
 
       // Build final prompt:
-      // 1. @path references (Claude auto-attaches content + CLAUDE.md instructions)
-      // 2. XML attachments (only for line ranges)
-      // 3. Original prompt (keeps #file: syntax for LLM context)
+      // 1. @path references (converted from #file:, Claude auto-attaches content)
+      // 2. XML attachments (only for line ranges and symbols)
+      // 3. Original prompt (may contain native @path, #file:, or #sym: references)
       const atSection =
         atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
       const xmlSection =
