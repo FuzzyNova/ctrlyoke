@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
+import kill from "tree-kill";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
@@ -1213,6 +1214,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.log(`📤 Spawning: ${command} ${args.join(" ")}`);
 
       // Spawn WITH shell for PATH resolution (needed on Windows especially)
+      // tree-kill library handles process tree killing on all platforms
       const child = spawn(command, args, {
         cwd: this.getWorkspaceRoot(),
         shell: true, // Required for PATH resolution of copilot/claude commands
@@ -1511,23 +1513,44 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   /**
    * Gracefully kill a process: SIGTERM first, escalate to SIGKILL after 3 seconds
    * This is critical for CLI tools that might ignore SIGTERM when executing tool actions
+   *
+   * Uses tree-kill library which handles cross-platform process tree killing:
+   * - Windows: taskkill /T /F
+   * - Linux: ps -o pid --ppid to find children
+   * - macOS: pgrep -P to find children
+   *
    * @param child The process to kill
    */
   private killProcessGracefully(child: ChildProcess): void {
+    if (!child.pid) {
+      this.log("⚠️ No PID available to kill");
+      return;
+    }
+
     // Clear any existing timeout first
     this.clearKillTimeout();
 
-    // Send SIGTERM (graceful shutdown)
-    child.kill("SIGTERM");
-    this.log("📤 Sent SIGTERM to process (graceful shutdown requested)");
+    // Kill the process tree (graceful attempt with SIGTERM)
+    this.log(
+      "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
+    );
+    kill(child.pid, "SIGTERM", (err) => {
+      if (err) {
+        this.log(`⚠️ SIGTERM failed: ${err.message}`);
+      }
+    });
 
-    // Escalate to SIGKILL after 3 seconds if process hasn't exited
+    // Escalate to forceful kill after 3 seconds if process hasn't exited
     this.killTimeoutId = setTimeout(() => {
-      if (this.currentProcess === child) {
+      if (this.currentProcess === child && child.pid) {
         this.log(
-          "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL (forceful termination)"
+          "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
         );
-        child.kill("SIGKILL");
+        kill(child.pid, "SIGKILL", (err) => {
+          if (err) {
+            this.log(`❌ SIGKILL failed: ${err.message}`);
+          }
+        });
         this.streamingChunkEmitter.fire(
           "\n⚠️ Process did not stop gracefully - forceful termination applied\n"
         );
