@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
 import { CopilotCliResult } from "../../types/CopilotTypes";
+import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { TempFileManager } from "../../utils/TempFileManager";
 
 /**
  * Execution mode for CLI integrations
@@ -38,12 +41,22 @@ export const CLI_WARNING_MESSAGES = {
  * - Copilot: No -p flag (reads from stdin when not a TTY)
  * - Claude: Requires -p flag (Ink TUI crashes without it)
  *
- * **Interactive Mode (TUI injection):**
+ * **Interactive Mode (file-based prompt passing):**
  * - Starts CLI in interactive TUI mode (no prompt flags)
- * - Sends prompt via terminal.sendText() as "keyboard input"
+ * - Writes fully-expanded prompt to .flightpath/temp/prompt-{uuid}.txt
+ * - Sends @file reference via terminal.sendText() (instant, no chunking!)
  * - Detects completion by watching for escape indicator to disappear
  * - Copilot: "(esc to cancel)" disappears when response complete
  * - Claude: "(esc to interrupt)" disappears when response complete
+ * - Benefits: No React error #185, works for any prompt size, instant
+ *
+ * **Context Expansion:**
+ * All prompts are pre-processed to expand context references:
+ * - @path/to/file → Full file content
+ * - #file:path:line-line → Line range with header
+ * - #sym:path:symbol → Symbol context
+ * This ensures CLI @file references work correctly and fixes Copilot CLI bug
+ * where @ references weren't expanded in paste mode.
  *
  * Subclasses implement CLI-specific logic:
  * - Command and argument building
@@ -69,6 +82,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // TUI completion detection - now using execution.read() instead of proposed API
   private readAbortController?: AbortController;
 
+  // Track the file reference sent to terminal for paste detection
+  private lastFileReference?: string;
   // Track the sanitized prompt sent to terminal for filtering echo in response
   private lastSanitizedPrompt?: string;
 
@@ -238,12 +253,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * @param execution The shell execution to read from
    * @param promptText The prompt text to send once TUI is ready
    * @param timeoutMs Maximum time to wait for completion (defaults to configured CLI execution timeout)
+   * @param workflowContext Optional workflow context for temp file naming
    */
   private async waitForTuiAndExecute(
     terminal: vscode.Terminal,
     execution: vscode.TerminalShellExecution,
     promptText: string,
-    timeoutMs: number = ConfigurationUtils.getCliExecutionTimeoutMs()
+    timeoutMs: number = ConfigurationUtils.getCliExecutionTimeoutMs(),
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
     const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
@@ -260,22 +281,22 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     // the paste actually happened before submitting.
     const PASTE_SILENCE_THRESHOLD_MS = 1000;
 
-    // Extract the last N characters of the SANITIZED prompt for verification
-    // This helps detect if the paste actually completed (vs initial silence before paste)
-    const PROMPT_TAIL_LENGTH = 50;
-    const promptTail = sanitizedPrompt.slice(-PROMPT_TAIL_LENGTH).toLowerCase();
+    // File-based approach: Look for the file reference we sent, not prompt content
+    // The file reference is short and will appear quickly in the output
+    let fileReferenceSent = ""; // Will be set after we send the @file reference
 
     // Both CLIs collapse large pastes into indicator patterns:
     // - Copilot: "[Paste #1 - 2987 lines]"
     // - Claude:  "[Pasted text #2 +2124 lines]"
-    // This regex matches both formats
+    // This regex matches both formats (used for fallback detection)
     const PASTE_INDICATOR_PATTERN =
       /\[Paste[d]?\s*(?:text\s*)?#?\d*\s*[-+]?\s*\d*\s*lines?\]/i;
 
     let tuiReady = false;
-    let promptTextSent = false; // True after sendText(promptText) is called
+    let promptTextSent = false; // True after sendText(@file reference) is called
     let promptSubmitted = false; // True after carriage return is sent to submit
     let completed = false;
+    let tempFilePath: string | undefined; // Track temp file for cleanup
     let chunkCount = 0;
     let totalBytes = 0;
     let errorDetected = false; // True if CLI error detected in output
@@ -291,20 +312,25 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
 
-    // Check if paste has completed by looking for evidence in terminal output
+    // Check if file reference has been processed by looking for evidence in terminal output
     const isPasteComplete = (): boolean => {
       const bufferLower = pasteVerificationBuffer.toLowerCase();
 
       // Check for CLI paste indicator: [Paste #1 - 2987 lines] or [Pasted text #2 +2124 lines]
+      // This appears when the CLI processes the @file reference and loads the content
       if (PASTE_INDICATOR_PATTERN.test(pasteVerificationBuffer)) {
-        this.log(`🔍 Paste verified: found paste indicator in output`);
+        this.log(`🔍 File read verified: found paste indicator in output`);
         return true;
       }
 
-      // Check for the tail of the prompt (works when CLI shows full text)
-      if (bufferLower.includes(promptTail)) {
+      // Check for the file reference we sent (appears in the echo)
+      // This is much more reliable than looking for prompt content since the reference is short
+      if (
+        fileReferenceSent &&
+        bufferLower.includes(fileReferenceSent.toLowerCase())
+      ) {
         this.log(
-          `🔍 Paste verified: found last ${PROMPT_TAIL_LENGTH} chars of prompt`
+          `🔍 File reference verified: found "${fileReferenceSent}" in output`
         );
         return true;
       }
@@ -413,10 +439,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           `⏳ [SUBMISSION TIMER] Fired! Checking paste completion (promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, pasteBufferLen=${pasteVerificationBuffer.length})`
         );
         if (promptTextSent && !promptSubmitted) {
-          // Verify paste actually completed before submitting
+          // Verify file reference was processed before submitting
           if (isPasteComplete()) {
             this.log(
-              `📤 ✅ Paste verified (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
+              `📤 ✅ File read verified (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
             );
             // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
             // In raw mode, Enter key sends \r (carriage return), not \n (newline).
@@ -426,21 +452,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
               `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
             );
           } else {
-            // Silence detected but paste not verified - keep waiting
+            // Silence detected but file reference not verified - keep waiting
             this.log(
-              `⏳ [PASTE VERIFICATION FAILED] Silence detected (${PASTE_SILENCE_THRESHOLD_MS}ms) but paste not yet verified. pasteBufferLen=${pasteVerificationBuffer.length}`
+              `⏳ [FILE VERIFICATION FAILED] Silence detected (${PASTE_SILENCE_THRESHOLD_MS}ms) but file reference not yet verified. bufferLen=${pasteVerificationBuffer.length}`
             );
             this.log(
-              `⏳ [PASTE VERIFICATION DEBUG] Checking for paste indicator or prompt tail (${PROMPT_TAIL_LENGTH} chars)`
+              `⏳ [FILE VERIFICATION DEBUG] Looking for file reference: "${fileReferenceSent}"`
             );
             this.log(
-              `⏳ [PASTE VERIFICATION DEBUG] Prompt tail we're looking for: "${promptTail}"`
+              `⏳ [FILE VERIFICATION DEBUG] Last 150 chars of buffer: ${pasteVerificationBuffer.slice(-150).replace(/\n/g, "\\n")}`
             );
             this.log(
-              `⏳ [PASTE VERIFICATION DEBUG] Last 150 chars of paste buffer: ${pasteVerificationBuffer.slice(-150).replace(/\n/g, "\\n")}`
-            );
-            this.log(
-              `⏳ [PASTE VERIFICATION DEBUG] Will continue waiting for next chunk to restart timer...`
+              `⏳ [FILE VERIFICATION DEBUG] Will continue waiting for next chunk to restart timer...`
             );
             // Don't restart timer here - we'll restart when next chunk arrives
           }
@@ -497,9 +520,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           break; // Exit the for-await loop
         }
 
-        // Always log raw data to output channel for debugging
-        this.outputChannel?.append(data);
-
         // Extract complete screens from buffer using CLI-specific screen end pattern
         // If we get any complete screens, the TUI is ready (screen end pattern matched)
         const { screens, remainder } =
@@ -510,7 +530,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         for (const screen of screens) {
           const screenLower = screen.toLowerCase();
 
-          // Phase 1: First complete screen means TUI is ready - send prompt
+          // Phase 1: First complete screen means TUI is ready - send prompt via @file reference
           if (!tuiReady) {
             this.log("✅ TUI is ready (first complete screen detected)");
             tuiReady = true;
@@ -518,27 +538,45 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             // Small delay to ensure TUI is fully interactive
             await this.delay(500);
 
-            // Send sanitized prompt text in chunks to avoid overwhelming the TUI
-            // Large pastes (>100KB) can cause React error #185 in Claude's TUI
+            // File-based prompt passing - write to temp file and send @file reference
+            // This eliminates React error #185 issues and is instant (no chunking delays)
             this.log(
-              `📤 Sending prompt to TUI via terminal.sendText() in chunks...`
-            );
-            this.log(
-              `📤 [PASTE FLOW] sanitizedPrompt length=${sanitizedPrompt.length} chars, chunkSize=1000, delayMs=1000`
-            );
-            await this.sendTextInChunks(terminal, sanitizedPrompt);
-            promptTextSent = true;
-            // Store the prompt for echo detection and filtering
-            this.lastSanitizedPrompt = sanitizedPrompt;
-            this.log(
-              `📤 ✅ All prompt chunks sent to terminal. Waiting for paste to complete...`
+              `📁 Sending prompt via @file reference (${sanitizedPrompt.length} chars)...`
             );
 
-            // Start the dynamic paste detection timer
-            // The timer will be reset on each chunk received while pasting
-            // When no chunks arrive for PASTE_SILENCE_THRESHOLD_MS, we submit
+            // Write prompt to temp file (will be cleaned up in finally block)
+            const workspaceRoot = this.getWorkspaceRoot();
+            if (!workspaceRoot) {
+              throw new Error("No workspace root available for temp file");
+            }
+
+            const tempMgr = new TempFileManager(workspaceRoot);
+            tempFilePath = await tempMgr.createPromptFile(
+              sanitizedPrompt,
+              workflowContext?.filePath,
+              workflowContext ? workflowContext.promptIndex + 1 : undefined
+            );
+            const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
+
+            this.log(`📁 Temp file created: ${relativeFilePath}`);
+
+            // Send @file reference to CLI (instant, no chunking!)
+            const fileReference = `@${relativeFilePath}`;
+            terminal.sendText(fileReference, false);
+            promptTextSent = true;
+
+            // Store the file reference for verification and the prompt for echo filtering
+            fileReferenceSent = fileReference;
+            this.lastFileReference = fileReference;
+            this.lastSanitizedPrompt = sanitizedPrompt;
             this.log(
-              `⏳ [PASTE FLOW] Entering paste completion detection phase. Will submit after ${PASTE_SILENCE_THRESHOLD_MS}ms of silence + paste verification.`
+              `📁 ✅ File reference sent. Waiting for CLI to read file...`
+            );
+
+            // Start the submission timer to submit after file has been read
+            // The timer will be reset on each chunk received while CLI processes the file
+            this.log(
+              `⏳ Entering file read detection phase. Will submit after ${PASTE_SILENCE_THRESHOLD_MS}ms of silence.`
             );
             startSubmissionTimer();
           }
@@ -564,7 +602,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
               this.streamingChunkEmitter.fire(delta);
               // Also append filtered delta to output channel (not raw TUI data)
               if (this.shouldShowOutput()) {
-                //this.outputChannel?.append(delta);
+                this.outputChannel?.append(delta);
               }
             }
 
@@ -709,6 +747,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       return false;
     } finally {
       this.readAbortController = undefined;
+
+      // Cleanup temp prompt file if it was created
+      if (tempFilePath) {
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (workspaceRoot) {
+          const tempMgr = new TempFileManager(workspaceRoot);
+          await tempMgr.deleteFile(tempFilePath);
+          this.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+        }
+      }
     }
   }
 
@@ -1010,11 +1058,17 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    *
    * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
+   * @param workflowContext Optional workflow context for temp file naming
    * @returns Promise<boolean> indicating success
    */
   protected async executeInTerminal(
     args: string[],
-    promptText: string
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
     const tuiCommand = this.buildInteractiveTuiCommand(args);
     const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
@@ -1069,7 +1123,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       const success = await this.waitForTuiAndExecute(
         terminal,
         execution,
-        promptText
+        promptText,
+        ConfigurationUtils.getCliExecutionTimeoutMs(),
+        workflowContext
       );
 
       return success;
@@ -1084,51 +1140,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Send text to terminal in chunks with delays to avoid overwhelming TUI.
-   *
-   * Large pastes can cause React error #185 (maximum update depth exceeded)
-   * in Claude's TUI when the entire text is sent at once via sendText().
-   * Breaking into chunks with small delays prevents this.
-   *
-   * @param terminal The terminal to send text to
-   * @param text The text to send (will be chunked)
-   * @param chunkSize Size of each chunk in characters (default: 50KB)
-   * @param delayMs Delay between chunks in milliseconds (default: 50ms)
-   */
-  private async sendTextInChunks(
-    terminal: vscode.Terminal,
-    text: string,
-    chunkSize: number = 200000,
-    delayMs: number = 800
-  ): Promise<void> {
-    const totalLength = text.length;
-
-    if (totalLength <= chunkSize) {
-      // Small enough to send in one go
-      terminal.sendText(text, false);
-      return;
-    }
-
-    // Send in chunks
-    const numChunks = Math.ceil(totalLength / chunkSize);
-    this.log(
-      `📦 Sending prompt in ${numChunks} chunks (${chunkSize} chars each, ${delayMs}ms delay)`
-    );
-
-    for (let i = 0; i < totalLength; i += chunkSize) {
-      const chunk = text.slice(i, i + chunkSize);
-      terminal.sendText(chunk, false);
-
-      // Don't delay after the last chunk
-      if (i + chunkSize < totalLength) {
-        await this.delay(delayMs);
-      }
-    }
-
-    this.log(`✅ All ${numChunks} chunks sent`);
   }
 
   // ============================================================

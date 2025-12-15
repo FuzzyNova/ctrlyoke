@@ -183,102 +183,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   // Uses base class initialize() method
-
-  /**
-   * Process #file:, #sym:, and @path/ references for Copilot CLI
-   *
-   * COPILOT-SPECIFIC BEHAVIOR:
-   * - #file:path (full files): Convert to @path AND provide XML (Copilot needs both)
-   * - #file:path:line-line (line ranges): Use XML only (not supported by @path syntax)
-   * - #sym:name (symbols): Resolve and attach as XML
-   * - @path/ (directories with trailing slash): Generate XML tree structure
-   * - @path (native file syntax): LEFT UNTOUCHED - Copilot handles these natively
-   *
-   * Why convert #file: to both @path and XML?
-   * - @path triggers .github/copilot-instructions.md and folder-level instruction discovery
-   * - Copilot CLI does NOT auto-attach file content from @path (unlike Claude)
-   * - XML provides the actual file content since Copilot doesn't auto-read @path files
-   *
-   * Why XML for directories?
-   * - Copilot doesn't auto-generate directory tree structures
-   * - FlightPath builds tree with buildDirectoryAttachmentXml()
-   * - Provides structured overview of directory contents
-   *
-   * Why leave @path (files) untouched?
-   * - User may have written @path directly (native CLI syntax)
-   * - Extracting and re-prepending would create duplicates
-   * - Copilot handles native @path references without FlightPath processing
-   *
-   * @param prompt Original prompt text with #file:, #sym:, @path, or @path/ references
-   * @returns Prompt with converted @path references and XML attachments prepended
-   */
-  protected async processPromptAttachments(prompt: string): Promise<string> {
-    try {
-      // Parse FlightPath-specific syntax that needs conversion:
-      // - #file: (deprecated, converts to @path)
-      // - #sym: (symbol references, converts to XML)
-      // - @path/ (directories with trailing slash, converts to XML tree)
-      // Native @path file references are left untouched - Copilot handles them directly
-      const fileRefs = parseFileReferences(prompt);
-      const symRefs = parseSymbolReferences(prompt);
-      const dirRefs = parseDirectoryReferences(prompt);
-      let fileReferences = [...fileRefs, ...symRefs, ...dirRefs];
-
-      if (fileReferences.length === 0) {
-        return prompt; // No attachments needed
-      }
-
-      // Resolve symbol references to actual file locations (base class method)
-      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
-
-      if (resolvedRefs.length === 0) {
-        return prompt; // No valid attachments after resolution
-      }
-
-      const atReferences: string[] = [];
-      const xmlAttachments: string[] = [];
-
-      // Process each resolved file reference
-      for (const ref of resolvedRefs) {
-        if (ref.isDirectory) {
-          // Directory: Use XML tree structure only (Copilot doesn't auto-generate trees)
-          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
-          if (xml) {
-            xmlAttachments.push(xml);
-          }
-        } else if (ref.startLine && ref.endLine) {
-          // Line range or symbol: Use XML attachment only (not supported by @path)
-          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
-          if (xml) {
-            xmlAttachments.push(xml);
-          }
-        } else {
-          // Full file: Use BOTH @path (for instructions) AND XML (for content)
-          const atPath = convertToAtSyntax(ref.path);
-          atReferences.push(atPath);
-          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
-          if (xml) {
-            xmlAttachments.push(xml);
-          }
-        }
-      }
-
-      // Build final prompt:
-      // 1. @path references (converted from #file:, triggers custom instructions)
-      // 2. XML attachments (provides file content for #file: and #sym:)
-      // 3. Original prompt (may contain native @path, #file:, or #sym: references)
-      const atSection =
-        atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
-      const xmlSection =
-        xmlAttachments.length > 0 ? xmlAttachments.join("\n\n") + "\n\n" : "";
-
-      return `${atSection}${xmlSection}${prompt}`;
-    } catch (error) {
-      console.error("Error processing Copilot prompt attachments:", error);
-      // Return original prompt on error
-      return prompt;
-    }
-  }
+  // Context expansion now handled by ContextExpander utility (no override needed)
 
   /**
    * Send prompt to Copilot via CLI
@@ -340,7 +245,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
       // Execute based on mode
       if (isInteractive) {
-        return await this.executeInteractive(args, promptText);
+        return await this.executeInteractive(args, promptText, workflowContext);
       } else {
         return await this.executeHeadless(args, promptText);
       }
@@ -426,10 +331,19 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
    */
   private async executeInteractive(
     args: string[],
-    promptText: string
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
-    // Use base class executeInTerminal (buildArgsWithPrompt handles -p flag)
-    const success = await this.executeInTerminal(args, promptText);
+    // Use base class executeInTerminal (passes workflow context for temp file naming)
+    const success = await this.executeInTerminal(
+      args,
+      promptText,
+      workflowContext
+    );
 
     if (success) {
       // Extract session ID for future resumption

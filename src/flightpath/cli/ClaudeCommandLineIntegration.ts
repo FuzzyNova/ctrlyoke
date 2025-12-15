@@ -12,13 +12,6 @@ import {
   getClaudeModelName,
 } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import {
-  parseFileReferences,
-  parseSymbolReferences,
-  parseDirectoryReferences,
-  FileReference,
-  convertToAtSyntax,
-} from "../../utils/FileReferenceParser";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -322,102 +315,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return contentToEmit || undefined;
   }
 
-  // ============================================================
-  // FILE ATTACHMENT PROCESSING
-  // ============================================================
-
-  /**
-   * Process #file:, #sym:, and @path/ references for Claude CLI
-   *
-   * CLAUDE-SPECIFIC BEHAVIOR:
-   * - #file:path (full files): Convert to @path ONLY (Claude auto-attaches content)
-   * - #file:path:line-line (line ranges): Use XML attachment (not supported by @path)
-   * - #sym:name (symbols): Resolve and attach as XML
-   * - @path/ (directories with trailing slash): Generate XML tree structure
-   * - @path (native file syntax): LEFT UNTOUCHED - Claude handles these natively
-   *
-   * Why convert #file: to @path only (no XML)?
-   * - @path triggers Claude's native file attachment (auto-reads content)
-   * - Adding XML would duplicate the content unnecessarily
-   * - This reduces token usage and keeps prompts cleaner
-   *
-   * Why XML for directories?
-   * - Claude doesn't auto-generate directory tree structures
-   * - FlightPath builds tree with buildDirectoryAttachmentXml()
-   * - Provides structured overview of directory contents
-   *
-   * Why leave @path (files) untouched?
-   * - User may have written @path directly (native CLI syntax)
-   * - Extracting and re-prepending would create duplicates
-   * - Claude handles native @path references without FlightPath processing
-   *
-   * @param prompt Original prompt text with #file:, #sym:, @path, or @path/ references
-   * @returns Prompt with converted @path references and XML attachments prepended
-   */
-  protected async processPromptAttachments(prompt: string): Promise<string> {
-    try {
-      // Parse FlightPath-specific syntax that needs conversion:
-      // - #file: (deprecated, converts to @path)
-      // - #sym: (symbol references, converts to XML)
-      // - @path/ (directories with trailing slash, converts to XML tree)
-      // Native @path file references are left untouched - Claude handles them directly
-      const fileRefs = parseFileReferences(prompt);
-      const symRefs = parseSymbolReferences(prompt);
-      const dirRefs = parseDirectoryReferences(prompt);
-      let fileReferences = [...fileRefs, ...symRefs, ...dirRefs];
-
-      if (fileReferences.length === 0) {
-        return prompt; // No attachments needed
-      }
-
-      // Resolve symbol references to actual file locations (base class method)
-      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
-
-      if (resolvedRefs.length === 0) {
-        return prompt; // No valid attachments after resolution
-      }
-
-      const atReferences: string[] = [];
-      const xmlAttachments: string[] = [];
-
-      // Process each resolved file reference
-      for (const ref of resolvedRefs) {
-        if (ref.isDirectory) {
-          // Directory: Use XML tree structure only (Claude doesn't auto-generate trees)
-          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
-          if (xml) {
-            xmlAttachments.push(xml);
-          }
-        } else if (ref.startLine && ref.endLine) {
-          // Line range or symbol: Use XML attachment only (not supported by @path)
-          const xml = await this.buildAttachmentXmlWithErrorHandling(ref);
-          if (xml) {
-            xmlAttachments.push(xml);
-          }
-        } else {
-          // Full file: Use @path ONLY (Claude auto-attaches content)
-          // NO XML attachment - would duplicate content unnecessarily
-          const atPath = convertToAtSyntax(ref.path);
-          atReferences.push(atPath);
-        }
-      }
-
-      // Build final prompt:
-      // 1. @path references (converted from #file:, Claude auto-attaches content)
-      // 2. XML attachments (only for line ranges and symbols)
-      // 3. Original prompt (may contain native @path, #file:, or #sym: references)
-      const atSection =
-        atReferences.length > 0 ? atReferences.join(" ") + "\n\n" : "";
-      const xmlSection =
-        xmlAttachments.length > 0 ? xmlAttachments.join("\n\n") + "\n\n" : "";
-
-      return `${atSection}${xmlSection}${prompt}`;
-    } catch (error) {
-      console.error("Error processing Claude prompt attachments:", error);
-      // Return original prompt on error
-      return prompt;
-    }
-  }
+  // Context expansion now handled by ContextExpander utility (no override needed)
 
   // ============================================================
   // INITIALIZATION (Epic 2: Story 2.1, 2.2)
@@ -541,7 +439,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       // Route based on execution mode
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
-        return await this.executeInteractive(args, promptText);
+        return await this.executeInteractive(args, promptText, workflowContext);
       } else {
         return await this.executeHeadless(args, promptText);
       }
@@ -619,10 +517,19 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    */
   private async executeInteractive(
     args: string[],
-    promptText: string
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
-    // Use base class executeInTerminal (buildArgsWithPrompt handles positional arg)
-    const success = await this.executeInTerminal(args, promptText);
+    // Use base class executeInTerminal (passes workflow context for temp file naming)
+    const success = await this.executeInTerminal(
+      args,
+      promptText,
+      workflowContext
+    );
 
     // Note: In interactive mode, we can't easily extract session ID from JSON output
     // since the terminal output is mixed with ANSI codes. Session continuity may be limited.

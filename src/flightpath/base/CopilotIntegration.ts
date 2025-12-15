@@ -3,14 +3,7 @@ import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import {
-  FileReference,
-  parseAllFileReferences,
-} from "../../utils/FileReferenceParser";
-import {
-  resolveSymbol,
-  buildDirectoryAttachmentXml,
-} from "../../utils/AttachmentBuilders";
+import { ContextExpander } from "../../utils/ContextExpander";
 
 /**
  * Copilot initialization status
@@ -75,7 +68,7 @@ export abstract class CopilotIntegration {
    * Must be implemented by subclasses
    * @param prompt The prompt item to send
    * @param needsCompletionDetection If true, set up completion detection mechanisms (default: true)
-   * @param workflowContext Optional workflow context for dynamic queue instructions
+   * @param workflowContext Optional workflow context for dynamic queue instructions and temp file naming
    * @returns True if prompt was sent successfully
    */
   abstract sendPrompt(
@@ -106,7 +99,7 @@ export abstract class CopilotIntegration {
 
   /**
    * Build prompt text from prompt item
-   * Common logic for extracting prompt text (without tool instruction XML)
+   * Common logic for extracting prompt text and expanding context references
    */
   protected async buildPromptText(prompt: PromptItem): Promise<string> {
     // Check if auto-attachment is enabled
@@ -115,9 +108,16 @@ export abstract class CopilotIntegration {
     // User's prompt text is already in final form with all context variables
     const promptText = prompt.prompt.trim();
 
-    // Process file attachments if enabled
+    // Expand context references if enabled
     if (autoAttach) {
-      return await this.processPromptAttachments(promptText);
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        console.warn("No workspace root, skipping context expansion");
+        return promptText;
+      }
+
+      const expander = new ContextExpander(workspaceRoot);
+      return await expander.expandContext(promptText);
     }
 
     return promptText;
@@ -208,206 +208,6 @@ IMPORTANT: Only extend the queue if truly necessary. Each prompt adds execution 
 
     // Prepend instructions to prompt
     return instructions + promptText;
-  }
-
-  /**
-   * Resolve symbol references to file locations
-   * Shared by all integrations to avoid duplication
-   * @param fileReferences Array of file references from parseAllFileReferences
-   * @returns Array with symbols resolved to actual file locations
-   */
-  protected async resolveSymbolReferences(
-    fileReferences: FileReference[]
-  ): Promise<FileReference[]> {
-    const resolvedRefs: FileReference[] = [];
-
-    for (const ref of fileReferences) {
-      if (ref.symbolName) {
-        // Symbol reference - build full reference string for resolveSymbol
-        // Format: path/to/file.ts:SymbolName:123
-        const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-        const resolved = await resolveSymbol(symbolRef);
-        if (resolved) {
-          resolvedRefs.push(resolved);
-        } else {
-          console.warn(`Could not resolve symbol: ${symbolRef}`);
-        }
-      } else {
-        // Regular file/directory reference
-        resolvedRefs.push(ref);
-      }
-    }
-
-    return resolvedRefs;
-  }
-
-  /**
-   * Process all file references in prompt and build attachments
-   * Handles: @path, @path/, #file:path:line-line, #sym:name
-   * @param prompt Original prompt text with file references
-   * @returns Final prompt with attachment XML prepended
-   */
-  protected async processPromptAttachments(prompt: string): Promise<string> {
-    try {
-      // Parse all file references from prompt
-      let fileReferences = parseAllFileReferences(prompt);
-
-      if (fileReferences.length === 0) {
-        return prompt; // No attachments needed
-      }
-
-      // Resolve symbol references to actual file locations
-      const resolvedRefs = await this.resolveSymbolReferences(fileReferences);
-
-      if (resolvedRefs.length === 0) {
-        return prompt; // No valid attachments after resolution
-      }
-
-      // Build attachments in parallel for performance
-      const attachmentPromises = resolvedRefs.map((ref) =>
-        this.buildAttachmentForReference(ref).catch((err) => {
-          const refDesc = ref.symbolName
-            ? `symbol:${ref.symbolName}`
-            : ref.isDirectory
-              ? `directory:${ref.path}`
-              : ref.startLine
-                ? `${ref.path}:${ref.startLine}-${ref.endLine}`
-                : ref.path;
-
-          console.error(`Failed to attach ${refDesc}:`, err);
-          return null; // Skip failed attachments
-        })
-      );
-
-      const attachments = await Promise.all(attachmentPromises);
-      const validAttachments = attachments.filter(
-        (a) => a !== null
-      ) as string[];
-
-      if (validAttachments.length === 0) {
-        return prompt; // No valid attachments
-      }
-
-      // Prepend attachments to prompt
-      const attachmentsSection = validAttachments.join("\n\n");
-      return `${attachmentsSection}\n\n${prompt}`;
-    } catch (error) {
-      console.error("Error processing prompt attachments:", error);
-      // Return original prompt on error
-      return prompt;
-    }
-  }
-
-  /**
-   * Build attachment XML for a single file reference
-   * Routes to appropriate builder based on reference type
-   */
-  private async buildAttachmentForReference(
-    ref: FileReference
-  ): Promise<string> {
-    if (ref.isDirectory) {
-      // Directory reference - build tree structure
-      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!workspaceRoot) {
-        throw new Error("No workspace folder found");
-      }
-      return buildDirectoryAttachmentXml(ref.path, workspaceRoot);
-    } else {
-      // File reference (full file, line range, or symbol)
-      return this.buildAttachmentXml(
-        ref.path,
-        ref.startLine,
-        ref.endLine,
-        ref.symbolName
-      );
-    }
-  }
-
-  /**
-   * Helper to build attachment XML with standardized error handling
-   * Used by CLI subclasses to avoid duplicating error handling logic
-   */
-  protected async buildAttachmentXmlWithErrorHandling(
-    ref: FileReference
-  ): Promise<string | null> {
-    try {
-      return await this.buildAttachmentXml(
-        ref.path,
-        ref.startLine,
-        ref.endLine,
-        ref.symbolName
-      );
-    } catch (err) {
-      const refDesc = ref.symbolName
-        ? `symbol:${ref.symbolName}`
-        : ref.startLine && ref.endLine
-          ? `${ref.path}:${ref.startLine}-${ref.endLine}`
-          : ref.path;
-      console.error(`Failed to attach ${refDesc}:`, err);
-      return null;
-    }
-  }
-
-  /**
-   * Build Copilot attachment XML for a file or file excerpt
-   * PROTECTED - Used by CLI subclass overrides for attachment processing
-   * @param filePath Workspace-relative file path
-   * @param startLine Optional start line (1-indexed)
-   * @param endLine Optional end line (1-indexed)
-   * @param symbolName Optional symbol name (for #sym: references)
-   */
-  protected async buildAttachmentXml(
-    filePath: string,
-    startLine?: number,
-    endLine?: number,
-    symbolName?: string
-  ): Promise<string> {
-    // Resolve to absolute path
-    const absolutePath = this.resolveWorkspacePath(filePath);
-    const uri = vscode.Uri.file(absolutePath);
-
-    // Read file content
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const language = doc.languageId;
-
-    // If no line range, attach entire file
-    if (!startLine || !endLine) {
-      const content = doc.getText();
-      const attachmentId = symbolName
-        ? `symbol:${symbolName}`
-        : `file:${filePath}`;
-      const description = symbolName
-        ? `Symbol: ${symbolName} in ${filePath}`
-        : `File: ${filePath}`;
-
-      return `<attachment id="${attachmentId}">
-${description}
-\`\`\`${language}
-${content}
-\`\`\`
-</attachment>`;
-    }
-
-    // Extract line range (convert to 0-indexed)
-    const start = new vscode.Position(startLine - 1, 0);
-    const end = new vscode.Position(endLine - 1, Number.MAX_SAFE_INTEGER);
-    const range = new vscode.Range(start, end);
-    const content = doc.getText(range);
-
-    // Build attachment with symbol-aware ID and description
-    const attachmentId = symbolName
-      ? `symbol:${symbolName}`
-      : `file:${filePath}:${startLine}-${endLine}`;
-    const description = symbolName
-      ? `Symbol: ${symbolName} in ${filePath}, lines ${startLine} to ${endLine}`
-      : `Excerpt from ${filePath}, lines ${startLine} to ${endLine}`;
-
-    return `<attachment id="${attachmentId}">
-${description}:
-\`\`\`${language}
-${content}
-\`\`\`
-</attachment>`;
   }
 
   /**

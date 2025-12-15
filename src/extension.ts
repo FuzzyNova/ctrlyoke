@@ -4,6 +4,7 @@ import { PromptCompletionProvider } from "./completions/PromptCompletionProvider
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
+import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 
 let flightPathManager: FlightPathManager;
@@ -22,6 +23,20 @@ export async function activate(context: vscode.ExtensionContext) {
     initializeModelRegistry().catch((err) => {
       console.warn("FlightPath: Model registry initialization failed:", err);
     });
+
+    // Clean up orphaned temp prompt files (from previous sessions)
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const tempMgr = new TempFileManager(workspaceRoot);
+      tempMgr.cleanupOrphanedFiles().then((count) => {
+        if (count > 0) {
+          console.log(
+            `FlightPath: Cleaned up ${count} orphaned temp prompt file(s)`
+          );
+        }
+      });
+    }
 
     // Register dashboard provider
     dashboardProvider = new FlightPathDashboardProvider(context);
