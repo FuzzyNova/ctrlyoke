@@ -93,8 +93,14 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi;
   }
 
-  protected buildHeadlessArgs(baseArgs: string[]): string[] {
-    return [...baseArgs]; // Copilot auto-detects stdin, no -p flag needed
+  protected buildHeadlessArgs(
+    baseArgs: string[],
+    promptFileRef: string
+  ): string[] {
+    // Copilot requires --prompt flag to specify agents and pass file references
+    // Format: copilot --prompt "@path/to/file" [other args]
+    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
+    return ["--prompt", `"${promptFileRef}"`, ...baseArgs];
   }
 
   protected buildInteractiveTuiCommand(baseArgs: string[]): string {
@@ -247,7 +253,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       if (isInteractive) {
         return await this.executeInteractive(args, promptText, workflowContext);
       } else {
-        return await this.executeHeadless(args, promptText);
+        return await this.executeHeadless(args, promptText, workflowContext);
       }
     } catch (error) {
       console.error("❌ CLI execution error:", error);
@@ -360,15 +366,21 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Execute in headless mode (background process)
-   * Uses stdin to pass the prompt (no -p flag, no temp files)
+   * Uses temp file parameter to pass the prompt (--prompt @file)
    */
   private async executeHeadless(
     args: string[],
-    promptText: string
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
-    return this.executeHeadlessWithStdin(
+    return this.executeHeadlessWithPromptFile(
       args,
       promptText,
+      workflowContext,
       async (result: { stdout: string; stderr: string; exitCode: number }) => {
         // Parse the CLI output
         const cliResult = this.parseCliOutput(

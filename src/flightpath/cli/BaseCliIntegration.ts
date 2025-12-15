@@ -177,67 +177,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Sanitize text before sending to terminal via sendText().
-   *
-   * Removes or escapes characters that could be interpreted as terminal control
-   * sequences, which would interrupt the paste or cause unexpected behavior.
-   *
-   * Problem: Files attached via #file: references may contain ANSI escape codes
-   * or other control characters. When sent via terminal.sendText(), these are
-   * interpreted as commands rather than literal text, causing the CLI to exit
-   * prematurely.
-   *
-   * @param text The text to sanitize
-   * @returns Sanitized text safe for terminal.sendText()
-   */
-  private sanitizeForTerminalPaste(text: string): string {
-    let sanitized = text;
-    let removedCount = 0;
-
-    // Remove ANSI escape sequences
-    // CSI sequences: ESC [ ... letter
-    const csiPattern = /\x1B\[[0-9;?]*[A-Za-z]/g;
-    const csiMatches = sanitized.match(csiPattern);
-    if (csiMatches) {
-      removedCount += csiMatches.length;
-      sanitized = sanitized.replace(csiPattern, "");
-    }
-
-    // OSC sequences: ESC ] ... (BEL or ESC \)
-    const oscPattern = /\x1B\].*?(?:\x07|\x1B\\)/g;
-    const oscMatches = sanitized.match(oscPattern);
-    if (oscMatches) {
-      removedCount += oscMatches.length;
-      sanitized = sanitized.replace(oscPattern, "");
-    }
-
-    // Other escape sequences
-    const otherEscPattern = /\x1B[@-Z\\-_]/g;
-    const otherEscMatches = sanitized.match(otherEscPattern);
-    if (otherEscMatches) {
-      removedCount += otherEscMatches.length;
-      sanitized = sanitized.replace(otherEscPattern, "");
-    }
-
-    // Remove control characters except newlines, tabs, and carriage returns
-    // We keep \n, \t, \r as they're part of normal text formatting
-    const controlPattern = /[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g;
-    const controlMatches = sanitized.match(controlPattern);
-    if (controlMatches) {
-      removedCount += controlMatches.length;
-      sanitized = sanitized.replace(controlPattern, "");
-    }
-
-    if (removedCount > 0) {
-      this.log(
-        `🧹 Sanitized prompt: removed ${removedCount} control sequences`
-      );
-    }
-
-    return sanitized;
-  }
-
-  /**
    * Wait for TUI to be ready, send prompt, then stream and detect completion.
    *
    * This method:
@@ -268,29 +207,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   ): Promise<boolean> {
     const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
-    // Sanitize prompt text FIRST to remove ANSI codes and control characters
-    // that could be interpreted as terminal commands
-    this.log(`🧹 [TRACE] Sanitizing prompt (length: ${promptText.length})...`);
-    const sanitizedPrompt = this.sanitizeForTerminalPaste(promptText);
-    this.log(
-      `🧹 [TRACE] Sanitization complete (new length: ${sanitizedPrompt.length})`
-    );
+    // File processing silence threshold - wait this long with no terminal activity
+    // before checking if the file has been read. We use a short timeout (1s) for
+    // responsiveness, but verify the file reference was echoed before submitting.
+    const FILE_PROCESSING_SILENCE_MS = 1000;
 
-    // Paste silence threshold - wait this long with no terminal activity before checking
-    // if paste is complete. We use a short timeout (1s) for responsiveness, but verify
-    // the paste actually happened before submitting.
-    const PASTE_SILENCE_THRESHOLD_MS = 1000;
-
-    // File-based approach: Look for the file reference we sent, not prompt content
-    // The file reference is short and will appear quickly in the output
+    // File-based approach: Look for the file reference we sent in the terminal echo
+    // The file reference is short (@.flightpath/temp/...) and will appear quickly
     let fileReferenceSent = ""; // Will be set after we send the @file reference
-
-    // Both CLIs collapse large pastes into indicator patterns:
-    // - Copilot: "[Paste #1 - 2987 lines]"
-    // - Claude:  "[Pasted text #2 +2124 lines]"
-    // This regex matches both formats (used for fallback detection)
-    const PASTE_INDICATOR_PATTERN =
-      /\[Paste[d]?\s*(?:text\s*)?#?\d*\s*[-+]?\s*\d*\s*lines?\]/i;
 
     let tuiReady = false;
     let promptTextSent = false; // True after sendText(@file reference) is called
@@ -305,32 +229,26 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     // TUI screen buffer - chunks can contain multiple screens or partial screens
     // We accumulate into a buffer and extract complete screens by detecting boundaries
     let screenBuffer = "";
-    // Accumulator to track all terminal output since prompt was sent (for paste verification)
-    let pasteVerificationBuffer = "";
+    // Accumulator to track terminal output for file reference echo detection
+    let fileEchoBuffer = "";
     let rawPasteBuffer = ""; // RAW buffer with ANSI codes for error detection
     let lastEmittedContent = new Set<string>(); // Track what we've already sent to dashboard
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
 
-    // Check if file reference has been processed by looking for evidence in terminal output
-    const isPasteComplete = (): boolean => {
-      const bufferLower = pasteVerificationBuffer.toLowerCase();
-
-      // Check for CLI paste indicator: [Paste #1 - 2987 lines] or [Pasted text #2 +2124 lines]
-      // This appears when the CLI processes the @file reference and loads the content
-      if (PASTE_INDICATOR_PATTERN.test(pasteVerificationBuffer)) {
-        this.log(`🔍 File read verified: found paste indicator in output`);
-        return true;
+    // Check if file reference has been echoed back by the CLI
+    // This confirms the CLI received and is processing the @file reference
+    const isFileReferenceEchoed = (): boolean => {
+      if (!fileReferenceSent) {
+        return false;
       }
 
-      // Check for the file reference we sent (appears in the echo)
-      // This is much more reliable than looking for prompt content since the reference is short
-      if (
-        fileReferenceSent &&
-        bufferLower.includes(fileReferenceSent.toLowerCase())
-      ) {
+      const bufferLower = fileEchoBuffer.toLowerCase();
+      const fileRefLower = fileReferenceSent.toLowerCase();
+
+      if (bufferLower.includes(fileRefLower)) {
         this.log(
-          `🔍 File reference verified: found "${fileReferenceSent}" in output`
+          `🔍 File reference verified: found "${fileReferenceSent}" in terminal echo`
         );
         return true;
       }
@@ -426,23 +344,23 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const startSubmissionTimer = () => {
       if (submissionTimeoutId) {
         this.log(
-          `⏳ [SUBMISSION TIMER] Clearing previous timer (new chunk received, restarting ${PASTE_SILENCE_THRESHOLD_MS}ms silence counter)`
+          `⏳ [SUBMISSION TIMER] Clearing previous timer (new chunk received, restarting ${FILE_PROCESSING_SILENCE_MS}ms silence counter)`
         );
         clearTimeout(submissionTimeoutId);
       } else {
         this.log(
-          `⏳ [SUBMISSION TIMER] Starting new timer (${PASTE_SILENCE_THRESHOLD_MS}ms to submission)`
+          `⏳ [SUBMISSION TIMER] Starting new timer (${FILE_PROCESSING_SILENCE_MS}ms to submission)`
         );
       }
       submissionTimeoutId = setTimeout(() => {
         this.log(
-          `⏳ [SUBMISSION TIMER] Fired! Checking paste completion (promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, pasteBufferLen=${pasteVerificationBuffer.length})`
+          `⏳ [SUBMISSION TIMER] Fired! Checking file echo (promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, echoBufferLen=${fileEchoBuffer.length})`
         );
         if (promptTextSent && !promptSubmitted) {
-          // Verify file reference was processed before submitting
-          if (isPasteComplete()) {
+          // Verify file reference was echoed before submitting
+          if (isFileReferenceEchoed()) {
             this.log(
-              `📤 ✅ File read verified (${PASTE_SILENCE_THRESHOLD_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
+              `📤 ✅ File read verified (${FILE_PROCESSING_SILENCE_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
             );
             // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
             // In raw mode, Enter key sends \r (carriage return), not \n (newline).
@@ -452,23 +370,23 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
               `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
             );
           } else {
-            // Silence detected but file reference not verified - keep waiting
+            // Silence detected but file reference echo not found yet - keep waiting
             this.log(
-              `⏳ [FILE VERIFICATION FAILED] Silence detected (${PASTE_SILENCE_THRESHOLD_MS}ms) but file reference not yet verified. bufferLen=${pasteVerificationBuffer.length}`
+              `⏳ [FILE ECHO PENDING] Silence detected (${FILE_PROCESSING_SILENCE_MS}ms) but file reference not yet echoed. bufferLen=${fileEchoBuffer.length}`
             );
             this.log(
-              `⏳ [FILE VERIFICATION DEBUG] Looking for file reference: "${fileReferenceSent}"`
+              `⏳ [FILE ECHO DEBUG] Looking for: "${fileReferenceSent}"`
             );
             this.log(
-              `⏳ [FILE VERIFICATION DEBUG] Last 150 chars of buffer: ${pasteVerificationBuffer.slice(-150).replace(/\n/g, "\\n")}`
+              `⏳ [FILE ECHO DEBUG] Last 150 chars: ${fileEchoBuffer.slice(-150).replace(/\n/g, "\\n")}`
             );
             this.log(
-              `⏳ [FILE VERIFICATION DEBUG] Will continue waiting for next chunk to restart timer...`
+              `⏳ [FILE ECHO DEBUG] Waiting for next chunk to restart timer...`
             );
             // Don't restart timer here - we'll restart when next chunk arrives
           }
         }
-      }, PASTE_SILENCE_THRESHOLD_MS);
+      }, FILE_PROCESSING_SILENCE_MS);
     };
 
     // Create abort controller for timeout/cancellation
@@ -497,9 +415,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const cleanData = this.stripAnsiCodes(data);
         screenBuffer += cleanData;
 
-        // Accumulate output for paste verification (only while waiting to submit)
+        // Accumulate output for file reference echo detection (only while waiting to submit)
         if (promptTextSent && !promptSubmitted) {
-          pasteVerificationBuffer += cleanData;
+          fileEchoBuffer += cleanData;
           rawPasteBuffer += data; // Also keep raw buffer for error detection
         }
 
@@ -541,7 +459,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             // File-based prompt passing - write to temp file and send @file reference
             // This eliminates React error #185 issues and is instant (no chunking delays)
             this.log(
-              `📁 Sending prompt via @file reference (${sanitizedPrompt.length} chars)...`
+              `📁 Sending prompt via @file reference (${promptText.length} chars)...`
             );
 
             // Write prompt to temp file (will be cleaned up in finally block)
@@ -552,7 +470,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
             const tempMgr = new TempFileManager(workspaceRoot);
             tempFilePath = await tempMgr.createPromptFile(
-              sanitizedPrompt,
+              promptText,
               workflowContext?.filePath,
               workflowContext ? workflowContext.promptIndex + 1 : undefined
             );
@@ -565,10 +483,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             terminal.sendText(fileReference, false);
             promptTextSent = true;
 
-            // Store the file reference for verification and the prompt for echo filtering
+            // Store the file reference for verification
             fileReferenceSent = fileReference;
             this.lastFileReference = fileReference;
-            this.lastSanitizedPrompt = sanitizedPrompt;
             this.log(
               `📁 ✅ File reference sent. Waiting for CLI to read file...`
             );
@@ -576,16 +493,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             // Start the submission timer to submit after file has been read
             // The timer will be reset on each chunk received while CLI processes the file
             this.log(
-              `⏳ Entering file read detection phase. Will submit after ${PASTE_SILENCE_THRESHOLD_MS}ms of silence.`
+              `⏳ Entering file read detection phase. Will submit after ${FILE_PROCESSING_SILENCE_MS}ms of silence.`
             );
             startSubmissionTimer();
           }
 
-          // Reset submission timer on each chunk while waiting for paste to complete
+          // Reset submission timer on each chunk while waiting for file to be processed
           // This ensures we don't submit until the terminal has been quiet for the threshold
           if (promptTextSent && !promptSubmitted) {
             this.log(
-              `⏳ [PASTE FLOW] Screen processed, restarting silence timer (will fire if no more chunks for ${PASTE_SILENCE_THRESHOLD_MS}ms)`
+              `⏳ [FILE FLOW] Screen processed, restarting silence timer (will fire if no more chunks for ${FILE_PROCESSING_SILENCE_MS}ms)`
             );
             startSubmissionTimer();
           }
@@ -674,7 +591,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes | State: tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
       );
       this.log(
-        `📺 [PASTE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed} | Error detected? ${errorDetected}`
+        `📺 [FILE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed} | Error detected? ${errorDetected}`
       );
 
       // Handle CLI errors detected during execution
@@ -713,9 +630,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         this.responseCompleteEmitter.fire("Stream ended");
         return true;
       } else if (promptTextSent) {
-        // Prompt text was sent but not yet submitted (paste still in progress?)
-        this.log("⚠️ Stream ended during paste - may be incomplete");
-        this.responseCompleteEmitter.fire("Stream ended during paste");
+        // File reference was sent but not yet submitted (file still being processed?)
+        this.log("⚠️ Stream ended during file processing - may be incomplete");
+        this.responseCompleteEmitter.fire(
+          "Stream ended during file processing"
+        );
         return false;
       } else {
         // TUI never became ready
@@ -993,13 +912,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract getScreenEndPattern(): RegExp;
 
   /**
-   * Build headless CLI arguments WITHOUT the prompt.
-   * The prompt will be passed via stdin.
+   * Build headless CLI arguments with temp file reference.
+   * The prompt has been written to a temp file, and this method
+   * should add the appropriate flag to reference it.
    *
    * @param baseArgs The base CLI arguments
-   * @returns Args array for headless mode (prompt passed via stdin)
+   * @param promptFileRef The @-prefixed relative file reference (e.g., "@.flightpath/temp/prompt-123.md")
+   * @returns Args array for headless mode with prompt file reference
    */
-  protected abstract buildHeadlessArgs(baseArgs: string[]): string[];
+  protected abstract buildHeadlessArgs(
+    baseArgs: string[],
+    promptFileRef: string
+  ): string[];
 
   /**
    * Determine if stdout should be streamed in real-time during headless execution.
@@ -1147,65 +1071,90 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // ============================================================
 
   /**
-   * Execute a CLI command in headless mode using stdin for prompt passing.
+   * Execute a CLI command in headless mode using temp file for prompt passing.
    *
    * Strategy:
-   * 1. Spawn CLI process with stdin pipe
-   * 2. Write prompt to stdin
-   * 3. Close stdin to signal end of input
-   * 4. Wait for process to complete
+   * 1. Write fully-expanded prompt to temp file
+   * 2. Spawn CLI process with @temp-file or --prompt @temp-file parameter
+   * 3. Wait for process to complete
+   * 4. Cleanup temp file
+   *
+   * Benefits over stdin approach:
+   * - Copilot: Allows agent specification with --prompt flag
+   * - Claude: Avoids auto-expansion of @path references (no duplicates)
+   * - Codex: Supports all CLIs (codex doesn't support stdin)
+   * - Unified: Same approach for interactive and headless modes
    *
    * @param args The CLI arguments (WITHOUT prompt)
-   * @param promptText The prompt text (will be written to stdin)
+   * @param promptText The prompt text (will be written to temp file)
+   * @param workflowContext Optional workflow context for temp file naming
    * @param executeCallback Callback for CLI-specific result handling
    * @returns Promise<boolean> indicating success
    */
-  protected async executeHeadlessWithStdin(
+  protected async executeHeadlessWithPromptFile(
     args: string[],
     promptText: string,
+    workflowContext:
+      | {
+          promptIndex: number;
+          allPrompts: PromptItem[];
+          filePath?: string;
+        }
+      | undefined,
     executeCallback: (result: {
       stdout: string;
       stderr: string;
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean> {
-    const headlessArgs = this.buildHeadlessArgs(args);
-    const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")} [stdin]`;
-
-    this.log(`🚀 Starting headless mode with stdin: ${displayCommand}`);
-    this.log(`📝 Prompt length: ${promptText.length} characters`);
-
-    // Store for debugging
-    this.lastCliCommand = displayCommand;
-
-    // Fire prompt ready event
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: displayCommand,
-    });
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace root available for temp file");
+    }
+    const tempMgr = new TempFileManager(workspaceRoot);
+    let tempFilePath: string | undefined;
 
     try {
+      // Create temp file with workflow context for meaningful filename
+      tempFilePath = await tempMgr.createPromptFile(
+        promptText,
+        workflowContext?.filePath,
+        workflowContext ? workflowContext.promptIndex + 1 : undefined
+      );
+      const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
+      this.log(`📝 Created temp file: ${relativeFilePath}`);
+
+      // Build args with temp file reference
+      const headlessArgs = this.buildHeadlessArgs(args, `@${relativeFilePath}`);
+      const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
+
+      this.log(`🚀 Starting headless mode with file: ${displayCommand}`);
+      this.log(`📝 Prompt length: ${promptText.length} characters`);
+
+      // Store for debugging
+      this.lastCliCommand = displayCommand;
+
+      // Fire prompt ready event
+      this.promptReadyEmitter.fire({
+        fullPrompt: promptText,
+        cliCommand: displayCommand,
+      });
+
       // Check if we should stream output in real-time
-      // Some formats (like JSON) aren't human-readable and should be parsed first
       const shouldStream = this.shouldStreamHeadlessOutput();
 
-      // Spawn with stdin pipe and execute
-      const result = await this.spawnWithStdin(
-        this.getCliName(),
-        headlessArgs,
-        promptText,
-        {
-          timeout: ConfigurationUtils.getCliExecutionTimeoutMs(),
-          onStdout: shouldStream
-            ? (chunk) => {
-                const processedChunk = this.processStreamingChunk(chunk);
-                if (processedChunk !== undefined) {
-                  this.streamingChunkEmitter.fire(processedChunk);
-                }
+      // Spawn and execute (no stdin needed)
+      const result = await this.spawnProcess(this.getCliName(), headlessArgs, {
+        timeout: ConfigurationUtils.getCliExecutionTimeoutMs(),
+        onStdout: shouldStream
+          ? (chunk) => {
+              const processedChunk = this.processStreamingChunk(chunk);
+              if (processedChunk !== undefined) {
+                this.streamingChunkEmitter.fire(processedChunk);
               }
-            : undefined,
-        }
-      );
+            }
+          : undefined,
+      });
 
       // Check for cancellation
       if (this.isCancelling) {
@@ -1218,22 +1167,26 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     } catch (error) {
       this.log(`❌ Headless execution error: ${error}`);
       return false;
+    } finally {
+      // Cleanup temp file
+      if (tempFilePath) {
+        await tempMgr.deleteFile(tempFilePath);
+        this.log(`🗑️ Cleaned up temp file`);
+      }
     }
   }
 
   /**
-   * Spawn a child process and pass prompt via stdin.
-   * This avoids all shell escaping issues and works for any prompt size.
+   * Spawn a child process for headless CLI execution.
+   * Prompt is passed via command line argument (temp file reference).
    *
    * @param command The command to run
-   * @param args Command arguments (NOT including prompt)
-   * @param stdinContent Content to write to stdin
+   * @param args Command arguments (including prompt file reference)
    * @param options Timeout and streaming options
    */
-  protected spawnWithStdin(
+  protected spawnProcess(
     command: string,
     args: string[],
-    stdinContent: string,
     options: {
       timeout?: number;
       onStdout?: (chunk: string) => void;
@@ -1246,11 +1199,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.log(`📤 Spawning: ${command} ${args.join(" ")}`);
 
       // Spawn WITH shell for PATH resolution (needed on Windows especially)
-      // Since we pass prompt via stdin, no escaping issues with command args
       const child = spawn(command, args, {
         cwd: this.getWorkspaceRoot(),
         shell: true, // Required for PATH resolution of copilot/claude commands
-        stdio: ["pipe", "pipe", "pipe"], // stdin, stdout, stderr all piped
+        stdio: ["ignore", "pipe", "pipe"], // No stdin needed, pipe stdout/stderr
         env: { ...process.env },
       });
 
@@ -1290,11 +1242,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           exitCode: code ?? 1,
         });
       });
-
-      // Write prompt to stdin and close it
-      child.stdin.write(stdinContent);
-      child.stdin.end();
-      this.log(`📤 Wrote ${stdinContent.length} chars to stdin`);
 
       // Handle timeout
       if (options.timeout) {

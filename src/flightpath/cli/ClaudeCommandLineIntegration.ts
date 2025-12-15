@@ -107,8 +107,15 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return /─{20,}\r?\n>\s*/g;
   }
 
-  protected buildHeadlessArgs(baseArgs: string[]): string[] {
-    return baseArgs; // -p flag already added by buildCliArgs
+  protected buildHeadlessArgs(
+    baseArgs: string[],
+    promptFileRef: string
+  ): string[] {
+    // Claude CLI expects the prompt as the FIRST positional argument (right after command name)
+    // This is critical because variadic flags like --disallowedTools will consume any args after them
+    // Format: claude "@path/to/file" -p [other args]
+    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
+    return [`"${promptFileRef}"`, ...baseArgs];
   }
 
   protected shouldStreamHeadlessOutput(): boolean {
@@ -441,7 +448,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
         return await this.executeInteractive(args, promptText, workflowContext);
       } else {
-        return await this.executeHeadless(args, promptText);
+        return await this.executeHeadless(args, promptText, workflowContext);
       }
     } catch (error) {
       console.error("❌ Claude CLI execution error:", error);
@@ -542,18 +549,24 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Execute in headless mode (background process)
-   * Uses stdin to pass the prompt (with -p flag required by Claude's Ink TUI)
+   * Uses temp file parameter to pass the prompt (-p @file)
    */
   private async executeHeadless(
     args: string[],
-    promptText: string
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
   ): Promise<boolean> {
     // Reset stream buffer for new execution
     this.streamBuffer = "";
 
-    return this.executeHeadlessWithStdin(
+    return this.executeHeadlessWithPromptFile(
       args,
       promptText,
+      workflowContext,
       async (result: { stdout: string; stderr: string; exitCode: number }) => {
         // Parse the CLI output using stream-json format
         const cliResult = this.parseStreamJsonOutput(
