@@ -100,6 +100,16 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return "esc to interrupt";
   }
 
+  protected getTuiChromePattern(): RegExp {
+    // Claude's TUI chrome: horizontal separator lines (─) that appear throughout the TUI
+    // These appear:
+    // - Before/after prompts in the input area
+    // - In the status bar area
+    // - Around various TUI sections
+    // Match 60+ dashes to ensure we're matching TUI chrome, not markdown content
+    return /─{60,}/;
+  }
+
   protected getScreenEndPattern(): RegExp {
     return /─{20,}\r?\n>\s*/g;
   }

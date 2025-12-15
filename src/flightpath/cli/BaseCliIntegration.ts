@@ -278,12 +278,15 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     let completed = false;
     let chunkCount = 0;
     let totalBytes = 0;
+    let errorDetected = false; // True if CLI error detected in output
+    let errorMessage = ""; // Store the detected error message
 
     // TUI screen buffer - chunks can contain multiple screens or partial screens
     // We accumulate into a buffer and extract complete screens by detecting boundaries
     let screenBuffer = "";
     // Accumulator to track all terminal output since prompt was sent (for paste verification)
     let pasteVerificationBuffer = "";
+    let rawPasteBuffer = ""; // RAW buffer with ANSI codes for error detection
     let lastEmittedContent = new Set<string>(); // Track what we've already sent to dashboard
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
@@ -306,6 +309,88 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         return true;
       }
 
+      return false;
+    };
+
+    // Check if CLI has crashed with an error in the output
+    // We check the RAW buffer (with ANSI codes) to ensure we capture complete error text
+    const detectCliError = (rawBuffer: string): boolean => {
+      // TUI chrome pattern - CLI-specific pattern that marks the bottom of the TUI
+      // Real errors appear AFTER this chrome with NO chrome following them
+      // False positives (errors in pasted text) have chrome BOTH before AND after
+      const tuiChromePattern = this.getTuiChromePattern();
+
+      // Error patterns that indicate CLI crash
+      const errorPatterns = [
+        /Error: Minified React error #\d+/i, // React errors (Claude CLI)
+        /Error:.*\n\s+at\s+/s, // Error with stack trace
+        /TypeError:.*\n\s+at\s+/s, // TypeError with stack trace
+        /ReferenceError:.*\n\s+at\s+/s, // ReferenceError with stack trace
+        /Uncaught Exception:/i, // Uncaught exceptions
+      ];
+
+      for (const pattern of errorPatterns) {
+        const errorMatch = rawBuffer.match(pattern);
+        if (errorMatch) {
+          const errorStartIndex = errorMatch.index!;
+
+          // Find the last occurrence of TUI chrome BEFORE the error
+          const beforeError = rawBuffer.substring(0, errorStartIndex);
+          const chromeBeforeMatch = beforeError.match(tuiChromePattern);
+
+          if (!chromeBeforeMatch) {
+            // No chrome before error - likely not a real CLI error (or very early in stream)
+            this.log(
+              `⚠️ [FALSE POSITIVE] Error pattern found but no TUI chrome before it - likely prompt echo`
+            );
+            continue;
+          }
+
+          // Check if there's TUI chrome AFTER the error
+          const afterError = rawBuffer.substring(
+            errorStartIndex + errorMatch[0].length
+          );
+          const chromeAfterMatch = afterError.match(tuiChromePattern);
+
+          if (chromeAfterMatch) {
+            // Chrome appears both before AND after - error is inside TUI (prompt echo)
+            this.log(
+              `⚠️ [FALSE POSITIVE] Error pattern surrounded by TUI chrome - this is pasted prompt content, not a real error`
+            );
+            continue;
+          }
+
+          // Real error: chrome before, no chrome after
+          // Extract full error with complete stack trace from RAW output
+          const errorWithStack = /Error:[^\n]+(?:\n\s+at\s+[^\n]+)*/i.exec(
+            rawBuffer.substring(errorStartIndex)
+          );
+
+          if (errorWithStack) {
+            // Strip ANSI codes from the captured error block for clean display
+            const rawError = errorWithStack[0];
+            errorMessage = this.stripAnsiCodes(rawError);
+            this.log(
+              `❌ [REAL ERROR DETECTED] CLI crashed after TUI chrome with no chrome following:`
+            );
+            this.log(errorMessage);
+            return true;
+          }
+
+          // Fallback: if regex didn't capture stack, just get the error line
+          const errorLineMatch = /Error:[^\n]+/.exec(
+            rawBuffer.substring(errorStartIndex)
+          );
+          if (errorLineMatch) {
+            errorMessage = this.stripAnsiCodes(errorLineMatch[0]);
+            this.log(
+              `❌ [REAL ERROR DETECTED] CLI crashed (no stack trace captured):`
+            );
+            this.log(errorMessage);
+            return true;
+          }
+        }
+      }
       return false;
     };
 
@@ -392,7 +477,28 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         // Accumulate output for paste verification (only while waiting to submit)
         if (promptTextSent && !promptSubmitted) {
           pasteVerificationBuffer += cleanData;
+          rawPasteBuffer += data; // Also keep raw buffer for error detection
         }
+
+        // Check for CLI errors (TUI crash detection)
+        // NOTE: This may trigger on prompt echo if attached files contain error strings
+        // We'll log the raw data to identify patterns that distinguish real crashes
+        if (!errorDetected && detectCliError(data)) {
+          errorDetected = true;
+          this.log(
+            `❌ [ERROR ABORT] CLI error detected in output - aborting immediately`
+          );
+          this.log(
+            `❌ [ERROR TRIGGER] Full raw data chunk that triggered detection:`
+          );
+          this.log(data); // Log entire triggering chunk for analysis
+          // Abort the read stream immediately to stop processing
+          this.readAbortController?.abort();
+          break; // Exit the for-await loop
+        }
+
+        // Always log raw data to output channel for debugging
+        this.outputChannel?.append(data);
 
         // Extract complete screens from buffer using CLI-specific screen end pattern
         // If we get any complete screens, the TUI is ready (screen end pattern matched)
@@ -458,7 +564,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
               this.streamingChunkEmitter.fire(delta);
               // Also append filtered delta to output channel (not raw TUI data)
               if (this.shouldShowOutput()) {
-                this.outputChannel?.append(delta);
+                //this.outputChannel?.append(delta);
               }
             }
 
@@ -508,12 +614,55 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       }
       clearTimeout(timeoutId);
 
+      // Process any remaining content in the buffer (e.g., error messages without status bar)
+      if (promptSubmitted && screenBuffer.trim().length > 0) {
+        this.log(
+          `📺 [REMAINDER] Processing ${screenBuffer.length} chars remaining in buffer (may contain errors/incomplete output)`
+        );
+        const delta = this.extractNewContent(
+          screenBuffer,
+          lastEmittedContent,
+          this.lastSanitizedPrompt
+        );
+        if (delta.trim().length > 0) {
+          this.log(
+            `📺 [REMAINDER] Emitting ${delta.length} chars from remainder buffer`
+          );
+          this.streamingChunkEmitter.fire(delta);
+        }
+      }
+
       this.log(
         `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes | State: tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
       );
       this.log(
-        `📺 [PASTE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed}`
+        `📺 [PASTE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed} | Error detected? ${errorDetected}`
       );
+
+      // Handle CLI errors detected during execution
+      if (errorDetected) {
+        this.log(
+          `❌ CLI error detected - disposing terminal to stop paste, switching to dashboard`
+        );
+        // Emit full error message to dashboard FIRST (before disposing terminal)
+        this.streamingChunkEmitter.fire(
+          `\n❌ CLI Error Detected:\n\n${errorMessage}\n\n` +
+            "The CLI crashed during execution. Terminal disposed to prevent further paste operations.\n"
+        );
+        // Try to open/focus FlightPath panel so user sees the error
+        try {
+          await vscode.commands.executeCommand("flightpath.openPanel");
+        } catch (err) {
+          // Ignore if command fails - error is still logged to output channel
+          this.log(`⚠️ Could not focus FlightPath panel: ${err}`);
+        }
+        // Small delay to ensure dashboard message is visible before terminal closes
+        await this.delay(100);
+        // Dispose terminal to stop paste into crashed CLI
+        this.disposeTerminalIfExists();
+        this.responseCompleteEmitter.fire("CLI error");
+        return false;
+      }
 
       if (completed) {
         this.responseCompleteEmitter.fire("Response complete");
@@ -768,6 +917,19 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract getEscapeIndicator(): string;
 
   /**
+   * Get the TUI chrome pattern for error context detection.
+   * This pattern identifies the bottom border/status area of the TUI.
+   * Used to distinguish real CLI errors from error text in pasted content.
+   *
+   * Real errors appear AFTER the chrome with NO chrome following.
+   * False positives (errors in pasted content) have chrome BEFORE and AFTER.
+   *
+   * Copilot: "Ctrl+c Exit" in the status bar
+   * Claude: "? for shortcuts" or "ctrl-g to edit prompt" during paste
+   */
+  protected abstract getTuiChromePattern(): RegExp;
+
+  /**
    * Get the regex pattern that marks the end of a TUI screen.
    * Used to split the output buffer into complete screen frames.
    *
@@ -939,7 +1101,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   private async sendTextInChunks(
     terminal: vscode.Terminal,
     text: string,
-    chunkSize: number = 2000,
+    chunkSize: number = 200000,
     delayMs: number = 800
   ): Promise<void> {
     const totalLength = text.length;

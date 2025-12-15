@@ -84,6 +84,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return "Esc to cancel";
   }
 
+  protected getTuiChromePattern(): RegExp {
+    // Copilot's status bar at the bottom: "Ctrl+c Exit · Ctrl+r Expand recent"
+    return /Ctrl\+c Exit/i;
+  }
+
   protected getScreenEndPattern(): RegExp {
     return /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi;
   }
