@@ -152,6 +152,12 @@ body {
   color: var(--vscode-button-foreground);
 }
 
+.execution-state-cancelling {
+  background: var(--vscode-editorWarning-foreground, rgba(255, 140, 0, 0.8));
+  color: var(--vscode-button-foreground);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
 .execution-state-completed {
   background: var(--vscode-testing-iconPassed, rgba(115, 191, 105, 0.8));
   color: var(--vscode-button-foreground);

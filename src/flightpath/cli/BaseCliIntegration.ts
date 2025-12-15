@@ -87,6 +87,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // Track the sanitized prompt sent to terminal for filtering echo in response
   private lastSanitizedPrompt?: string;
 
+  // Track process termination for forceful kill escalation
+  private killTimeoutId?: NodeJS.Timeout;
+
   constructor(
     context: vscode.ExtensionContext,
     outputChannel?: vscode.OutputChannel
@@ -650,6 +653,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       // AbortError is expected on timeout/cancel
       if (error instanceof Error && error.name === "AbortError") {
+        // Check if this was user cancellation vs timeout
+        const wasCancelled = this.isCancelling;
+
+        if (wasCancelled) {
+          console.log("⏹️ Interactive TUI cancelled by user");
+          this.responseCompleteEmitter.fire("Interactive TUI cancelled");
+          return false;
+        }
+
+        // Timeout scenario
         if (promptSubmitted) {
           this.responseCompleteEmitter.fire("Timeout after prompt submitted");
           return true; // Treat as success if prompt was submitted
@@ -663,6 +676,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         `\n❌ Error capturing output: ${error}\n` +
           "   Please view the terminal window for the output.\n"
       );
+      this.responseCompleteEmitter.fire("Stream error");
       return false;
     } finally {
       this.readAbortController = undefined;
@@ -1209,7 +1223,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       // Store reference for cancellation
       this.currentProcess = child;
 
-      // Handle stdout
+      // Handle stdout - ALWAYS stream output, even during cancellation
+      // User needs to see what the process is doing if it doesn't stop cleanly
       child.stdout.on("data", (data) => {
         const chunk = data.toString();
         stdout += chunk;
@@ -1227,6 +1242,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       child.on("error", (error) => {
         this.log(`❌ Process error: ${error}`);
         this.currentProcess = undefined;
+        this.clearKillTimeout();
         reject(error);
       });
 
@@ -1235,7 +1251,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
+        this.clearKillTimeout();
         this.log(`✅ Process exited with code: ${code}`);
+
+        // Emit response complete so dashboard knows process actually stopped
+        if (code === null || code === 0) {
+          this.responseCompleteEmitter.fire("Process exited");
+        }
+
         resolve({
           stdout,
           stderr,
@@ -1247,8 +1270,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       if (options.timeout) {
         setTimeout(() => {
           if (this.currentProcess === child) {
-            child.kill();
-            this.currentProcess = undefined;
+            this.log(
+              "⏱️ Process timeout - sending SIGTERM, will escalate to SIGKILL if needed"
+            );
+            this.killProcessGracefully(child);
             reject(new Error(`Process timeout after ${options.timeout}ms`));
           }
         }, options.timeout);
@@ -1484,6 +1509,43 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // ============================================================
 
   /**
+   * Gracefully kill a process: SIGTERM first, escalate to SIGKILL after 3 seconds
+   * This is critical for CLI tools that might ignore SIGTERM when executing tool actions
+   * @param child The process to kill
+   */
+  private killProcessGracefully(child: ChildProcess): void {
+    // Clear any existing timeout first
+    this.clearKillTimeout();
+
+    // Send SIGTERM (graceful shutdown)
+    child.kill("SIGTERM");
+    this.log("📤 Sent SIGTERM to process (graceful shutdown requested)");
+
+    // Escalate to SIGKILL after 3 seconds if process hasn't exited
+    this.killTimeoutId = setTimeout(() => {
+      if (this.currentProcess === child) {
+        this.log(
+          "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL (forceful termination)"
+        );
+        child.kill("SIGKILL");
+        this.streamingChunkEmitter.fire(
+          "\n⚠️ Process did not stop gracefully - forceful termination applied\n"
+        );
+      }
+    }, 3000);
+  }
+
+  /**
+   * Clear the SIGKILL escalation timeout
+   */
+  private clearKillTimeout(): void {
+    if (this.killTimeoutId) {
+      clearTimeout(this.killTimeoutId);
+      this.killTimeoutId = undefined;
+    }
+  }
+
+  /**
    * Cancel the current CLI process
    */
   protected async cancelImplementation(): Promise<void> {
@@ -1503,10 +1565,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     // Handle headless process execution
     if (this.currentProcess) {
-      this.log("⏹️ Cancelling CLI process...");
-      this.currentProcess.kill();
-      this.currentProcess = undefined;
-      this.log("✅ CLI process cancelled");
+      this.log(
+        "⏹️ Stopping CLI process (SIGTERM, will escalate to SIGKILL if needed)..."
+      );
+      this.killProcessGracefully(this.currentProcess);
+      // Don't clear currentProcess here - let the 'close' handler do it
+      this.log(
+        "✅ CLI process kill signal sent (streaming output until process exits)"
+      );
     }
   }
 
@@ -1522,6 +1588,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.readAbortController.abort();
       this.readAbortController = undefined;
     }
+    this.clearKillTimeout();
     this.shellIntegration = undefined;
     this.currentExecution = undefined;
   }

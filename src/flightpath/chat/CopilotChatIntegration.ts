@@ -766,8 +766,14 @@ export class CopilotChatIntegration extends CopilotIntegration {
     try {
       await vscode.commands.executeCommand("workbench.action.chat.cancel");
       console.log("⏹️ Cancelled");
+
+      // Fire responseComplete so FlightPathManager knows cancellation finished
+      // This allows state transition from CANCELLING to IDLE
+      this.responseCompleteEmitter.fire("Chat cancelled");
     } catch (error) {
       console.warn("⚠️ Could not cancel chat:", error);
+      // Still fire completion even if cancel failed (chat might already be idle)
+      this.responseCompleteEmitter.fire("Chat cancel failed");
     }
   }
 

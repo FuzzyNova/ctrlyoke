@@ -499,6 +499,9 @@
       case EXECUTION_STATES.PAUSED:
         stateText = "Paused";
         break;
+      case EXECUTION_STATES.CANCELLING:
+        stateText = "Stopping...";
+        break;
       case EXECUTION_STATES.COMPLETED:
         stateText = "Completed";
         break;
@@ -658,6 +661,7 @@
   function updateControls() {
     const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
     const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+    const isCancelling = state.executionState === EXECUTION_STATES.CANCELLING;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
 
@@ -665,9 +669,10 @@
     elements.editFileBtn.disabled = !hasFile;
 
     // Enable Run button if: has file AND (not running OR is completed OR is paused)
+    // Disable during cancellation - must wait for process to fully stop
     // When paused, Run button acts as "Restart from beginning"
     elements.runBtn.disabled =
-      !hasFile || (isRunning && !isCompleted && !isPaused);
+      !hasFile || isCancelling || (isRunning && !isCompleted && !isPaused);
     // Change button text and class based on state
     // Show restart icon when paused or completed
     elements.runBtn.textContent = isCompleted || isPaused ? "↻" : "▶";
@@ -677,6 +682,7 @@
       isCompleted || isPaused ? "btn-rerun" : "btn-primary";
 
     // Pause button becomes resume button when paused
+    // Disable during cancellation
     if (isPaused) {
       elements.pauseBtn.textContent = "▶";
       elements.pauseBtn.title = "Resume";
@@ -684,11 +690,11 @@
     } else {
       elements.pauseBtn.textContent = "⏸";
       elements.pauseBtn.title = "Pause";
-      elements.pauseBtn.disabled = !isRunning;
+      elements.pauseBtn.disabled = !isRunning || isCancelling;
     }
 
-    // Stop button enabled when running or paused
-    elements.stopBtn.disabled = !isRunning && !isPaused;
+    // Stop button enabled when running, paused, or cancelling (allow re-pressing Stop to see status)
+    elements.stopBtn.disabled = !isRunning && !isPaused && !isCancelling;
   }
 
   function getStatusIcon(status) {

@@ -181,12 +181,12 @@ export class PromptQueue {
 
   /**
    * Stop and reset queue
+   * Sets state to CANCELLING - call confirmedStopped() once process actually exits
    */
   stop(): void {
     this.isPaused = false;
-    this.state.status = EXECUTION_STATES.IDLE;
-    this.state.currentIndex = 0;
-    this.state.stopped = true; // Set stopped flag
+    this.state.status = EXECUTION_STATES.CANCELLING; // Cancelling, not stopped yet
+    this.state.stopped = true; // Set stopped flag for executor loop
 
     // Mark sent prompts as cancelled (not just pending)
     this.state.results.forEach((result) => {
@@ -196,7 +196,22 @@ export class PromptQueue {
     });
 
     this.emitStateChange();
-    console.log("FlightPath: Queue execution stopped");
+    console.log(
+      "FlightPath: Queue cancellation requested (waiting for process to exit)"
+    );
+  }
+
+  /**
+   * Confirm that execution has fully stopped (process exited)
+   * Call this after the CLI process actually terminates
+   */
+  confirmedStopped(): void {
+    if (this.state.status === EXECUTION_STATES.CANCELLING) {
+      this.state.status = EXECUTION_STATES.IDLE;
+      this.state.currentIndex = 0;
+      this.emitStateChange();
+      console.log("FlightPath: Queue execution fully stopped (process exited)");
+    }
   }
 
   /**

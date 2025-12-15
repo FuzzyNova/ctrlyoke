@@ -563,14 +563,21 @@ export class FlightPathManager {
     // If no execution is active, use default integration
     const integration = this.activeIntegration || this.getDefaultIntegration();
 
-    // Cancel is now in base class, no need for type guards
+    // Stop the queue (sets state to CANCELLING)
+    this.promptQueue.stop();
+
+    // Listen for process to actually exit (responseComplete event)
+    const responseCompleteDisposable = integration.onResponseComplete(() => {
+      console.log("🔔 Process confirmed exited - setting queue state to IDLE");
+      this.promptQueue.confirmedStopped();
+      responseCompleteDisposable.dispose();
+    });
+
+    // Send cancel signal to integration
     await integration.cancel();
 
     // Clear any pending response state in the executor
     this.workflowExecutor.clearPendingState();
-
-    // Stop the queue
-    this.promptQueue.stop();
   }
 
   /**

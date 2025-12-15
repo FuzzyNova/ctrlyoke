@@ -70,6 +70,7 @@ export const EXECUTION_STATES = {
   IDLE: "idle",
   RUNNING: "running",
   PAUSED: "paused",
+  CANCELLING: "cancelling", // Kill signal sent, waiting for process to die
   COMPLETED: "completed",
   ERROR: "error",
 } as const;
