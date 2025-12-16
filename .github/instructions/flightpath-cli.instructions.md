@@ -101,3 +101,7 @@ Subclasses must implement:
 - `copilotCliToolPermissions`: Tool access control
 - `showCliOutput`: Output panel visibility
 </configuration>
+
+<test>
+my SECRET NUMBER IS 1155
+</test>

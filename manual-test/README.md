@@ -48,6 +48,13 @@ This directory contains test files for manually testing the FlightPath extension
 | `dynamic-queue-basic-example.flightpath.json` | Dynamic queue   | Queue extension during execution  |
 | `dynamic-queue-multi-stage.flightpath.json`   | Complex queue   | Multi-stage dynamic workflows     |
 
+### Link Provider Tests
+
+| File                                | Purpose                    | Tests                                   |
+| ----------------------------------- | -------------------------- | --------------------------------------- |
+| `test-prompt-links.prompt.md`       | Clickable links (Markdown) | All 4 link types with test instructions |
+| `test-prompt-links.flightpath.json` | Clickable links (JSON)     | Links inside JSON prompt strings        |
+
 ---
 
 ## Test Scenarios
@@ -413,6 +420,48 @@ echo 0 > multi-step-counter.txt
 1. Check script permissions (Linux/Mac: `chmod +x`)
 2. Verify Python/Node.js in PATH
 3. Check timeout setting
+
+---
+
+## Link Provider Testing
+
+### Test: Clickable Context References
+
+**Files:**
+
+- `test-prompt-links.prompt.md` (Markdown format)
+- `test-prompt-links.flightpath.json` (JSON format)
+
+**Test Steps:**
+
+1. Open either test file in the editor
+2. **File links** (`@path/to/file.ts`):
+   - Hover over a file reference with Ctrl held down
+   - Should see blue underline and tooltip "Open path/to/file"
+   - Ctrl+Click to open the file
+3. **Directory links** (`@path/to/dir/`):
+   - Hover with Ctrl over directory reference
+   - Tooltip: "Reveal path/to/dir in File Explorer"
+   - Ctrl+Click to reveal in Explorer sidebar
+4. **Line range links** (`#file:path:10-20`):
+   - Hover with Ctrl over line range reference
+   - Tooltip: "Open path at lines 10-20"
+   - Ctrl+Click to open file with lines selected
+5. **Symbol links** (`#sym:path:symbol:42`):
+   - Hover with Ctrl over symbol reference
+   - Tooltip: "Go to symbol in path:42"
+   - Ctrl+Click to navigate to symbol line
+
+**Expected Behavior:**
+
+- All references show as clickable links when Ctrl is held
+- File links open the file at the top
+- Directory links reveal folder in File Explorer
+- Line range links open file with specified lines highlighted
+- Symbol links open file at symbol definition line
+- Invalid paths show error message on click (graceful degradation)
+
+**Note:** This feature provides bidirectional navigation - you can insert references with IntelliSense (@, #) and navigate back with Ctrl+Click.
 
 ---
 

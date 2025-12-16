@@ -50,7 +50,8 @@ TypeScript strict mode, comprehensive error handling, no duplication.
 src/
 ├── extension.ts                  # Entry point
 ├── completions/                  # IntelliSense providers
-│   └── PromptCompletionProvider.ts  # File/selection completions for prompt files
+│   ├── PromptCompletionProvider.ts  # File/selection completions for prompt files
+│   └── PromptLinkProvider.ts     # Clickable links for context references
 ├── dev/                          # Development-only code (stripped in production)
 │   └── DevCommands.ts            # Dev commands (test functions, diagnostics)
 ├── flightpath/                   # Core logic
@@ -147,8 +148,18 @@ JSON schema validation with AJV. Validates both `.prompt.json` and `.flightpath.
 
 IntelliSense for FlightPath prompt files:
 
-- `#file:` references with workspace files and current selections
+- `@file` and `#file:` references with workspace files and current selections
 - Dynamic model completions (models queried from Copilot API at activation)
+
+## PromptLinkProvider
+
+Clickable links (Ctrl+Click) for context references in prompt files:
+
+- `@path/to/file.ts` → Opens file
+- `@path/to/dir/` → Reveals directory in Explorer
+- `#file:path:10-20` → Opens file with line selection
+- `#sym:path:symbol:42` → Opens file at symbol line
+- Bidirectional navigation between prompts and source code
 
 ## ModelRegistry
 

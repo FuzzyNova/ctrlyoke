@@ -1574,9 +1574,35 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected async cancelImplementation(): Promise<void> {
     // Handle interactive terminal execution
     if (this.currentExecution && this.terminal) {
-      this.log("⏹️ Sending Ctrl+C to terminal...");
+      this.log("⏹️ Sending Ctrl+C to terminal (twice for TUI cancellation)...");
+
+      // Most TUIs require Ctrl+C twice to actually stop
       this.terminal.sendText("\x03");
+
+      // Send second Ctrl+C after brief delay
+      setTimeout(() => {
+        if (this.terminal) {
+          this.terminal.sendText("\x03");
+          this.log("⏹️ Second Ctrl+C sent");
+        }
+      }, 100);
+
       this.currentExecution = undefined;
+
+      // Dispose the terminal after allowing time for both Ctrl+C to process
+      // Then fire responseComplete event so FlightPathManager knows we're done
+      setTimeout(() => {
+        if (this.terminal) {
+          this.log("🗑️ Disposing terminal after cancellation");
+          this.terminal.dispose();
+          this.terminal = undefined;
+          this.shellIntegration = undefined;
+
+          // Fire responseComplete so FlightPathManager can call confirmedStopped()
+          this.responseCompleteEmitter.fire("Terminal cancelled and disposed");
+        }
+      }, 800);
+
       this.log("✅ Terminal execution cancelled");
     }
 

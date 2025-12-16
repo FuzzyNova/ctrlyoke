@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
+import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
@@ -97,6 +98,16 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log(
       "FlightPath: Registered completion provider for prompt files (.json, .md, and prompt language) with @ and # triggers"
     );
+
+    // Register link provider for prompt files (enables Ctrl+Click navigation)
+    const promptLinkProvider = new PromptLinkProvider();
+    context.subscriptions.push(
+      vscode.languages.registerDocumentLinkProvider(
+        promptFilePatterns,
+        promptLinkProvider
+      )
+    );
+    console.log("FlightPath: Registered link provider for prompt files");
 
     // Register commands
     registerCommands(context);
@@ -393,6 +404,33 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Open File with Selection command (for clickable links in prompt files)
+  const openFileWithSelectionCommand = vscode.commands.registerCommand(
+    "flightpath.openFileWithSelection",
+    async (args: { uri: string; startLine: number; endLine: number }) => {
+      try {
+        const fileUri = vscode.Uri.parse(args.uri);
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        const editor = await vscode.window.showTextDocument(document);
+
+        // Select the line range (convert to 0-based)
+        const selection = new vscode.Range(
+          args.startLine - 1,
+          0,
+          args.endLine - 1,
+          Number.MAX_SAFE_INTEGER
+        );
+
+        editor.selection = new vscode.Selection(selection.start, selection.end);
+        editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to open file: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
   // Add all production commands to subscriptions
   context.subscriptions.push(
     takeOffCommand,
@@ -416,7 +454,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     editCurrentPromptFileCommand,
     runCommand,
     showOutputPanelCommand,
-    createDraftPromptCommand
+    createDraftPromptCommand,
+    openFileWithSelectionCommand
   );
 
   // Register development commands (only in dev mode)
