@@ -349,16 +349,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           responseCompleteEmitter: this.responseCompleteEmitter,
         };
 
-        const tuiProcessor = new TuiStreamProcessor(tuiConfig, (msg) =>
-          Log.debug(msg)
-        );
+        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
 
         // Process TUI stream until completion
         Log.info("⏳ Waiting for TUI to be ready (watching for output)...");
         const success = await tuiProcessor.processStream(
           execution,
           terminal,
-          promptText,
           fileReference,
           ConfigurationUtils.getCliExecutionTimeoutMs(),
           this.lastSanitizedPrompt,

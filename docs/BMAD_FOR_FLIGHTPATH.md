@@ -375,41 +375,257 @@ These are resolved at runtime by FlightPath before sending to Copilot.
 
 ## Appendix: BMAD Workflow Paths Reference
 
-### Quick Flow Brownfield (`quick-flow-brownfield.yaml`)
+BMAD provides 6 workflow tracks across 3 scale levels (Quick Flow, Method, Enterprise) and 2 field types (Greenfield vs Brownfield). Each track defines a complete path from planning through implementation.
+
+### Scale Levels
+
+- **Quick Flow**: Fast tech-spec based approach (1-15 stories) - minimal planning overhead
+- **BMad Method**: Full product + architecture planning (10-50+ stories) - complete methodology
+- **Enterprise**: Extended planning with security/devops/test (30+ stories) - enterprise-grade rigor
+
+### Field Types
+
+- **Greenfield**: New projects starting from scratch
+- **Brownfield**: Adding features to existing codebases
+
+---
+
+## 1. Quick Flow Brownfield (`quick-flow-brownfield.yaml`)
+
+**Best for**: Small to medium features in existing projects (1-15 stories)
+**Key characteristic**: Tech-spec driven, minimal ceremony
 
 ```yaml
 phases:
-  - prerequisite: document-project (if undocumented)
+  - prerequisite: document-project (if undocumented) ← Analyst
   - phase 0: Discovery (optional)
-      - brainstorm-project (optional)
-      - research (optional)
+      - brainstorm-project (optional) ← Analyst
+      - research (optional) ← Analyst
   - phase 1: Planning
       - tech-spec (required) ← PM agent
   - phase 2:
       Implementation
       - sprint-planning (required) ← SM agent
-      # Then: dev-story loop
+      # Then: dev-story loop (Dev agent)
 ```
 
-### BMad Method Brownfield (`method-brownfield.yaml`)
+**Workflow sequence**: document-project → tech-spec → sprint-planning → dev-story (×N)
+
+---
+
+## 2. Quick Flow Greenfield (`quick-flow-greenfield.yaml`)
+
+**Best for**: Small to medium greenfield projects (1-15 stories)
+**Key difference from brownfield**: No prerequisite documentation phase
 
 ```yaml
 phases:
-  - prerequisite: document-project (if undocumented)
   - phase 0: Discovery (optional)
-      - brainstorm-project, research, product-brief
+      - brainstorm-project (optional) ← Analyst
+      - research (optional) ← Analyst
+  - phase 1: Planning
+      - tech-spec (required) ← PM agent
+  - phase 2:
+      Implementation
+      - sprint-planning (required) ← SM agent
+      # Then: dev-story loop (Dev agent)
+```
+
+**Workflow sequence**: tech-spec → sprint-planning → dev-story (×N)
+
+---
+
+## 3. BMad Method Brownfield (`method-brownfield.yaml`)
+
+**Best for**: Medium to large features in existing projects (10-50+ stories)
+**Key characteristic**: Full PRD + architecture, optional UX design
+
+```yaml
+phases:
+  - prerequisite: document-project (if undocumented) ← Analyst
+  - phase 0: Discovery (optional)
+      - brainstorm-project (optional) ← Analyst
+      - research (optional) ← Analyst
+      - product-brief (optional) ← Analyst
   - phase 1: Planning
       - prd (required) ← PM agent
-      - validate-prd (optional)
-      - create-design (if UI) ← UX agent
+      - validate-prd (optional) ← PM agent
+      - create-design (conditional: if UI) ← UX Designer
   - phase 2: Solutioning
       - create-architecture (recommended) ← Architect
       - create-epics-and-stories (required) ← PM agent
       - test-design (recommended) ← TEA agent
-      - validate-architecture (optional)
+      - validate-architecture (optional) ← Architect
       - implementation-readiness (required) ← Architect
-  - phase 3:
-      Implementation
+  - phase 3: Implementation
       - sprint-planning (required) ← SM agent
       # Then: create-story → dev-story → code-review loop
 ```
+
+**Workflow sequence**: document-project → prd → [create-design] → create-architecture → create-epics-and-stories → [test-design] → implementation-readiness → sprint-planning → (create-story → dev-story → code-review) (×N)
+
+---
+
+## 4. BMad Method Greenfield (`method-greenfield.yaml`)
+
+**Best for**: Medium to large greenfield projects (10-50+ stories)
+**Key difference from brownfield**: Architecture is required (not recommended), product-brief recommended in Discovery
+
+```yaml
+phases:
+  - phase 0: Discovery (optional)
+      - brainstorm-project (optional) ← Analyst
+      - research (optional) ← Analyst
+      - product-brief (optional, recommended for greenfield) ← Analyst
+  - phase 1: Planning
+      - prd (required) ← PM agent
+      - validate-prd (optional) ← PM agent
+      - create-design (conditional: if UI) ← UX Designer
+  - phase 2: Solutioning
+      - create-architecture (required) ← Architect
+      - create-epics-and-stories (required) ← PM agent
+      - test-design (recommended) ← TEA agent
+      - validate-architecture (optional) ← Architect
+      - implementation-readiness (required) ← Architect
+  - phase 3: Implementation
+      - sprint-planning (required) ← SM agent
+      # Then: create-story → dev-story → code-review loop
+```
+
+**Workflow sequence**: prd → [create-design] → create-architecture → create-epics-and-stories → [test-design] → implementation-readiness → sprint-planning → (create-story → dev-story → code-review) (×N)
+
+---
+
+## 5. Enterprise BMad Method Brownfield (`enterprise-brownfield.yaml`)
+
+**Best for**: Complex enterprise features in existing systems (30+ stories)
+**Key characteristics**:
+
+- Discovery phase is required (not optional)
+- Test-design is required (not recommended)
+- Includes future security-architecture and devops-strategy workflows
+
+```yaml
+phases:
+  - prerequisite: document-project (nearly mandatory for enterprise) ← Analyst
+  - phase 0: Discovery (required)
+      - brainstorm-project (optional) ← Analyst
+      - research (recommended) ← Analyst
+      - product-brief (optional) ← Analyst
+  - phase 1: Planning
+      - prd (required) ← PM agent
+      - validate-prd (recommended) ← PM agent
+      - create-design (recommended) ← UX Designer
+  - phase 2: Solutioning
+      - create-architecture (required) ← Architect
+      - create-epics-and-stories (required) ← PM agent
+      - test-design (required) ← TEA agent
+      # Future: create-security-architecture (optional)
+      # Future: create-devops-strategy (optional)
+      - validate-architecture (recommended) ← Architect
+      - implementation-readiness (required) ← Architect
+  - phase 3: Implementation
+      - sprint-planning (required) ← SM agent
+      # Then: create-story → dev-story → code-review loop
+      # Note: Enterprise requires careful phasing and feature flags
+```
+
+**Workflow sequence**: document-project → [research] → prd → [create-design] → create-architecture → create-epics-and-stories → test-design → implementation-readiness → sprint-planning → (create-story → dev-story → code-review) (×N)
+
+---
+
+## 6. Enterprise BMad Method Greenfield (`enterprise-greenfield.yaml`)
+
+**Best for**: Large enterprise greenfield systems (30+ stories)
+**Key characteristics**:
+
+- Discovery phase is required (not optional)
+- Research and product-brief highly recommended
+- Create-design highly recommended (not conditional)
+- Test-design is required (not recommended)
+
+```yaml
+phases:
+  - phase 0: Discovery (required)
+      - brainstorm-project (optional) ← Analyst
+      - research (recommended) ← Analyst
+      - product-brief (recommended) ← Analyst
+  - phase 1: Planning
+      - prd (required) ← PM agent
+      - validate-prd (recommended) ← PM agent
+      - create-design (recommended) ← UX Designer
+  - phase 2: Solutioning
+      - create-architecture (required) ← Architect
+      - test-design (required) ← TEA agent
+      # Future: create-security-architecture (optional)
+      # Future: create-devops-strategy (optional)
+      - validate-architecture (recommended) ← Architect
+      - create-epics-and-stories (required) ← PM agent
+      - implementation-readiness (required) ← Architect
+  - phase 3: Implementation
+      - sprint-planning (required) ← SM agent
+      # Then: create-story → dev-story → code-review loop
+      # Note: May require phased rollout
+```
+
+**Workflow sequence**: [research] → [product-brief] → prd → [create-design] → create-architecture → test-design → create-epics-and-stories → implementation-readiness → sprint-planning → (create-story → dev-story → code-review) (×N)
+
+---
+
+## Available Workflows Summary
+
+### Phase 0: Discovery/Analysis
+
+- **brainstorm-project** (Analyst) - Initial ideation and problem definition
+- **research** (Analyst) - Domain, compliance, integration research
+- **product-brief** (Analyst) - Strategic alignment document
+- **document-project** (Analyst) - Brownfield prerequisite: understand existing codebase
+
+### Phase 1: Planning
+
+- **tech-spec** (PM) - Quick Flow: Implementation-focused technical specification
+- **prd** (PM) - Method/Enterprise: Full Product Requirements Document with FRs/NFRs
+- **validate-prd** (PM) - Quality check for PRD completeness
+- **create-design** (UX Designer) - UI/UX design and patterns
+
+### Phase 2: Solutioning
+
+- **create-architecture** (Architect) - System architecture document
+- **create-epics-and-stories** (PM) - Break down requirements into implementable units
+- **test-design** (TEA) - System-level testability assessment
+- **validate-architecture** (Architect) - Architecture quality check
+- **implementation-readiness** (Architect) - Gate check: validates all planning cohesion
+
+### Phase 3: Implementation
+
+- **sprint-planning** (SM) - Creates sprint plan with story assignments
+- **create-story** (SM) - Creates individual story from epic backlog
+- **dev-story** (Dev) - Implements story with strict AC adherence
+- **code-review** (Architect/Dev) - Reviews completed story implementation
+- **epic-tech-context** (Architect) - Adds technical context to epics
+- **story-context** (Architect) - Adds technical context to stories
+- **story-ready** (SM) - Marks story ready for development
+- **story-done** (SM) - Marks story complete
+- **retrospective** (SM) - Sprint retrospective
+- **correct-course** (Architect/PM) - Adjusts course based on learnings
+
+---
+
+## Track Selection Guide
+
+| Project Type                          | Story Count | Track Recommendation  |
+| ------------------------------------- | ----------- | --------------------- |
+| Small feature, existing codebase      | 1-15        | Quick Flow Brownfield |
+| Small greenfield project              | 1-15        | Quick Flow Greenfield |
+| Medium feature, needs architecture    | 10-50       | Method Brownfield     |
+| Medium greenfield, complex domain     | 10-50       | Method Greenfield     |
+| Enterprise feature, compliance needs  | 30+         | Enterprise Brownfield |
+| Large enterprise system, new platform | 30+         | Enterprise Greenfield |
+
+**Decision factors**:
+
+- **Story count**: Estimates drive scale level
+- **Architecture needs**: Complex domains → Method/Enterprise
+- **Compliance/security**: Enterprise requirements → Enterprise track
+- **UX complexity**: Significant UI → Method/Enterprise with create-design
+- **Testability**: Critical systems → Enterprise (required test-design)

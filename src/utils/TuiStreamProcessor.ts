@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { PromptItem } from "../types/FlightPathTypes";
-import { TempFileManager } from "./TempFileManager";
+import { Log } from "./Log";
 
 /**
  * Configuration for TUI stream processing
@@ -51,10 +51,7 @@ export class TuiStreamProcessor {
   private fileSilenceMs: number;
   private maxConsecutiveBlankLines: number;
 
-  constructor(
-    private config: TuiStreamConfig,
-    private logger?: (msg: string) => void
-  ) {
+  constructor(private config: TuiStreamConfig) {
     this.fileSilenceMs = config.fileSilenceMs || DEFAULT_FILE_SILENCE_MS;
     this.maxConsecutiveBlankLines =
       config.maxConsecutiveBlankLines || DEFAULT_MAX_BLANK_LINES;
@@ -80,7 +77,6 @@ export class TuiStreamProcessor {
   async processStream(
     execution: vscode.TerminalShellExecution,
     terminal: vscode.Terminal,
-    promptText: string,
     fileReference: string,
     timeoutMs: number,
     lastSanitizedPrompt?: string,
@@ -116,7 +112,7 @@ export class TuiStreamProcessor {
       const fileRefLower = fileReference.toLowerCase();
 
       if (bufferLower.includes(fileRefLower)) {
-        this.logger?.(
+        Log.debug(
           `🔍 File reference verified: found "${fileReference}" in terminal echo`
         );
         return true;
@@ -135,13 +131,13 @@ export class TuiStreamProcessor {
         if (promptTextSent && !promptSubmitted) {
           // Verify file reference was echoed before submitting
           if (isFileReferenceEchoed()) {
-            this.logger?.(
+            Log.info(
               `📤 ✅ File read verified (${this.fileSilenceMs / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
             );
             // Copilot CLI uses Ink TUI framework which expects raw terminal mode input
             terminal.sendText("\r", true);
             promptSubmitted = true;
-            this.logger?.(
+            Log.info(
               `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
             );
           }
@@ -154,15 +150,13 @@ export class TuiStreamProcessor {
 
     // Set up timeout
     const timeoutId = setTimeout(() => {
-      this.logger?.("⏱️ TUI execution timed out");
+      Log.error("⏱️ TUI execution timed out");
       abortController.abort();
     }, timeoutMs);
 
     try {
-      this.logger?.("📺 Starting terminal output streaming via read()...");
-      this.logger?.(
-        `🔍 Waiting for TUI ready (screen end pattern to appear)...`
-      );
+      Log.info("📺 Starting terminal output streaming via read()...");
+      Log.info(`🔍 Waiting for TUI ready (screen end pattern to appear)...`);
 
       for await (const data of execution.read()) {
         // Check for abort
@@ -187,7 +181,7 @@ export class TuiStreamProcessor {
         if (!errorDetected && this.detectCliError(data)) {
           errorDetected = true;
           errorMessage = this.extractErrorMessage(data);
-          this.logger?.(
+          Log.error(
             `❌ [ERROR ABORT] CLI error detected in output - aborting immediately`
           );
           abortController.abort();
@@ -205,19 +199,23 @@ export class TuiStreamProcessor {
 
           // Phase 1: First complete screen means TUI is ready - send file reference
           if (!tuiReady) {
-            this.logger?.("✅ TUI is ready (first complete screen detected)");
+            Log.info("✅ TUI is ready (first complete screen detected)");
             tuiReady = true;
 
             // Small delay to ensure TUI is fully interactive
             await this.delay(TUI_READY_DELAY_MS);
 
             // Send @file reference to CLI (instant, no chunking!)
-            this.logger?.(`📁 Sending file reference: ${fileReference}`);
+            Log.info(`📁 Sending file reference: ${fileReference}`);
             terminal.sendText(fileReference, false);
             promptTextSent = true;
 
-            this.logger?.(`📁 ✅ File reference sent. Waiting for CLI to read file...`);
-            this.logger?.(`⏳ Entering file read detection phase. Will submit after ${this.fileSilenceMs}ms of silence.`);
+            Log.info(
+              `📁 ✅ File reference sent. Waiting for CLI to read file...`
+            );
+            Log.debug(
+              `⏳ Entering file read detection phase. Will submit after ${this.fileSilenceMs}ms of silence.`
+            );
             startSubmissionTimer();
           }
 
@@ -236,8 +234,7 @@ export class TuiStreamProcessor {
             if (delta.trim().length > 0) {
               this.config.streamingEmitter.fire(delta);
               if (shouldShowOutput) {
-                const LoggingUtils = require("./LoggingUtils").LoggingUtils;
-                LoggingUtils.append(delta);
+                Log.append(delta);
               }
             }
 
@@ -246,7 +243,7 @@ export class TuiStreamProcessor {
 
             if (hasIndicator) {
               if (!indicatorEverSeen) {
-                this.logger?.(
+                Log.debug(
                   `🔍 [Screen] First indicator seen - CLI is now processing`
                 );
               }
@@ -254,13 +251,13 @@ export class TuiStreamProcessor {
               consecutiveNoIndicatorScreens = 0;
             } else if (indicatorEverSeen) {
               consecutiveNoIndicatorScreens++;
-              this.logger?.(
+              Log.debug(
                 `🔍 [Screen] No indicator, consecutiveNoIndicator=${consecutiveNoIndicatorScreens}`
               );
 
               // Require 2+ consecutive complete screens without indicator
               if (consecutiveNoIndicatorScreens >= 2) {
-                this.logger?.(
+                Log.info(
                   `✅ Response complete (no indicator for ${consecutiveNoIndicatorScreens} consecutive screens)`
                 );
                 completed = true;
@@ -293,7 +290,7 @@ export class TuiStreamProcessor {
         }
       }
 
-      this.logger?.(
+      Log.info(
         `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes | completed=${completed}, errorDetected=${errorDetected}`
       );
 
@@ -322,9 +319,7 @@ export class TuiStreamProcessor {
         return false;
       }
     } catch (error) {
-      this.logger?.(
-        `❌ Error during TUI streaming: ${error instanceof Error ? error.message : String(error)}`
-      );
+      Log.error(`Error during TUI streaming`, error);
       this.config.responseCompleteEmitter.fire("Error during streaming");
       return false;
     }
