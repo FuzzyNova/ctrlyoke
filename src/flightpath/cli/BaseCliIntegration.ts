@@ -10,7 +10,7 @@ import {
   TuiStreamProcessor,
   TuiStreamConfig,
 } from "../../utils/TuiStreamProcessor";
-import { LoggingUtils } from "../../utils/LoggingUtils";
+import { Log } from "../../utils/Log";
 
 /**
  * Execution mode for CLI integrations
@@ -70,7 +70,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     super(context);
     this.processManager = new CliProcessManager(
       this.getWorkspaceRoot() || "",
-      (msg) => LoggingUtils.debug(msg)
+      (msg) => Log.debug(msg)
     );
   }
 
@@ -90,7 +90,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * the user closes it or the new terminal opens.
    */
   protected disposeTerminalIfExists(): void {
-    LoggingUtils.debug("🗑️ Disposing existing terminal for fresh CLI session");
+    Log.debug("🗑️ Disposing existing terminal for fresh CLI session");
     this.processManager.disposeTerminal();
     this.currentExecution = undefined;
   }
@@ -275,24 +275,24 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const tuiCommand = this.buildInteractiveTuiCommand(args);
     const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
 
-    LoggingUtils.debug(`🎮 [TRACE] executeInTerminal called`);
-    LoggingUtils.debug(`🎮 [TRACE] tuiCommand: ${tuiCommand}`);
-    LoggingUtils.debug(
+    Log.debug(`🎮 [TRACE] executeInTerminal called`);
+    Log.debug(`🎮 [TRACE] tuiCommand: ${tuiCommand}`);
+    Log.debug(
       `🎮 [TRACE] promptText (first 50 chars): ${promptText.substring(0, 50)}`
     );
-    LoggingUtils.info(`📝 Prompt length: ${promptText.length} characters`);
+    Log.info(`📝 Prompt length: ${promptText.length} characters`);
 
     // Always create a fresh terminal to ensure clean CLI state
     // The old terminal may have a CLI process still running in interactive mode,
     // and sending a new command would paste into that session instead of starting fresh.
     // Session continuity is handled via --resume flag, not terminal reuse.
-    LoggingUtils.debug(`🎮 [TRACE] Creating fresh terminal...`);
+    Log.debug(`🎮 [TRACE] Creating fresh terminal...`);
     const terminal = await this.createFreshTerminal();
-    LoggingUtils.debug(`🎮 [TRACE] Got fresh terminal, showing it...`);
+    Log.debug(`🎮 [TRACE] Got fresh terminal, showing it...`);
     terminal.show();
 
     // Fire prompt ready event
-    LoggingUtils.debug(`🎮 [TRACE] Firing promptReadyEmitter...`);
+    Log.debug(`🎮 [TRACE] Firing promptReadyEmitter...`);
     this.promptReadyEmitter.fire({
       fullPrompt: promptText,
       cliCommand: displayCommand,
@@ -305,18 +305,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     try {
       // Wait for shell integration (needed for executeCommand and read())
-      LoggingUtils.debug(`🎮 [TRACE] Waiting for shell integration...`);
+      Log.debug(`🎮 [TRACE] Waiting for shell integration...`);
       const shellIntegration = await this.waitForShellIntegration(terminal);
-      LoggingUtils.debug(`🎮 [TRACE] Got shell integration`);
+      Log.debug(`🎮 [TRACE] Got shell integration`);
 
       // Use executeCommand to get an execution object for read() streaming
       // Note: executeCommand queues internally, so we wait for TUI output before sending prompt
-      LoggingUtils.debug(
+      Log.debug(
         `🎮 [TRACE] Calling shellIntegration.executeCommand("${tuiCommand}")`
       );
       const execution = shellIntegration.executeCommand(tuiCommand);
       this.currentExecution = execution;
-      LoggingUtils.debug(`🎮 [TRACE] executeCommand returned, got execution object`);
+      Log.debug(`🎮 [TRACE] executeCommand returned, got execution object`);
 
       // Create temp file for prompt passing
       const workspaceRoot = this.getWorkspaceRoot();
@@ -337,7 +337,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
         const fileReference = `@${relativeFilePath}`;
 
-        LoggingUtils.info(`📁 Temp file created: ${relativeFilePath}`);
+        Log.info(`📁 Temp file created: ${relativeFilePath}`);
         this.lastSanitizedPrompt = promptText;
 
         // Create TUI processor with CLI-specific configuration
@@ -350,11 +350,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         };
 
         const tuiProcessor = new TuiStreamProcessor(tuiConfig, (msg) =>
-          LoggingUtils.debug(msg)
+          Log.debug(msg)
         );
 
         // Process TUI stream until completion
-        LoggingUtils.info("⏳ Waiting for TUI to be ready (watching for output)...");
+        Log.info("⏳ Waiting for TUI to be ready (watching for output)...");
         const success = await tuiProcessor.processStream(
           execution,
           terminal,
@@ -370,11 +370,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         // Cleanup temp prompt file
         if (tempFilePath) {
           await tempMgr.deleteFile(tempFilePath);
-          LoggingUtils.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
         }
       }
     } catch (error) {
-      LoggingUtils.error(`❌ TUI execution error`, error);
+      Log.error(`❌ TUI execution error`, error);
       throw error;
     }
   }
@@ -438,14 +438,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         workflowContext ? workflowContext.promptIndex + 1 : undefined
       );
       const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-      LoggingUtils.info(`📝 Created temp file: ${relativeFilePath}`);
+      Log.info(`📝 Created temp file: ${relativeFilePath}`);
 
       // Build args with temp file reference
       const headlessArgs = this.buildHeadlessArgs(args, `@${relativeFilePath}`);
       const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
 
-      LoggingUtils.info(`🚀 Starting headless mode with file: ${displayCommand}`);
-      LoggingUtils.info(`📝 Prompt length: ${promptText.length} characters`);
+      Log.info(`🚀 Starting headless mode with file: ${displayCommand}`);
+      Log.info(`📝 Prompt length: ${promptText.length} characters`);
 
       // Store for debugging
       this.lastCliCommand = displayCommand;
@@ -474,20 +474,20 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       // Check for cancellation
       if (this.isCancelling) {
-        LoggingUtils.info("⏹️ Prompt execution cancelled by user");
+        Log.info("⏹️ Prompt execution cancelled by user");
         return false;
       }
 
       // Delegate result handling to subclass
       return await executeCallback(result);
     } catch (error) {
-      LoggingUtils.error(`❌ Headless execution error`, error);
+      Log.error(`❌ Headless execution error`, error);
       return false;
     } finally {
       // Cleanup temp file
       if (tempFilePath) {
         await tempMgr.deleteFile(tempFilePath);
-        LoggingUtils.debug(`🗑️ Cleaned up temp file`);
+        Log.debug(`🗑️ Cleaned up temp file`);
       }
     }
   }
@@ -546,21 +546,19 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected logPrompt(promptText: string): void {
     if (this.shouldShowOutput()) {
-      LoggingUtils.appendLine("");
-      LoggingUtils.appendLine(
+      Log.appendLine("");
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      LoggingUtils.appendLine(
-        `[PROMPT] ${new Date().toLocaleTimeString()}`
-      );
-      LoggingUtils.appendLine(
+      Log.appendLine(`[PROMPT] ${new Date().toLocaleTimeString()}`);
+      Log.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      LoggingUtils.appendLine(promptText);
-      LoggingUtils.appendLine(
+      Log.appendLine(promptText);
+      Log.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      LoggingUtils.appendLine("");
+      Log.appendLine("");
     }
   }
 
@@ -569,22 +567,20 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected logResponse(response: string, statistics?: string): void {
     if (this.shouldShowOutput()) {
-      LoggingUtils.appendLine(
-        `[RESPONSE] ${new Date().toLocaleTimeString()}`
-      );
-      LoggingUtils.appendLine(
+      Log.appendLine(`[RESPONSE] ${new Date().toLocaleTimeString()}`);
+      Log.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      LoggingUtils.appendLine(response);
+      Log.appendLine(response);
       if (statistics) {
-        LoggingUtils.appendLine("");
-        LoggingUtils.appendLine("[STATISTICS]");
-        LoggingUtils.appendLine(statistics);
+        Log.appendLine("");
+        Log.appendLine("[STATISTICS]");
+        Log.appendLine(statistics);
       }
-      LoggingUtils.appendLine(
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      LoggingUtils.appendLine("");
+      Log.appendLine("");
     }
   }
 
@@ -648,7 +644,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       if (result.exitCode === 0) {
         const version = result.stdout.trim();
-        LoggingUtils.info(`✅ ${this.getCliName()} CLI available: ${version}`);
+        Log.info(`✅ ${this.getCliName()} CLI available: ${version}`);
         this.isAvailable = true;
         this.initializationStatus = CopilotStatus.Ready;
         this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -672,7 +668,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     this.initializationStatus = CopilotStatus.Unavailable;
     this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
 
-    LoggingUtils.error(`❌ ${this.getCliName()} CLI not available`, error);
+    Log.error(`❌ ${this.getCliName()} CLI not available`, error);
   }
 
   /**
@@ -719,7 +715,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     // Fire responseComplete so FlightPathManager can call confirmedStopped()
     this.responseCompleteEmitter.fire("Execution cancelled");
-    LoggingUtils.info("✅ Execution cancelled");
+    Log.info("✅ Execution cancelled");
   }
 
   /**

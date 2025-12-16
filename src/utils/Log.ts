@@ -7,7 +7,7 @@ export enum LogLevel {
   ERROR = 3,
 }
 
-export class LoggingUtils {
+export class Log {
   private static outputChannel: vscode.OutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
 

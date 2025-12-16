@@ -5,7 +5,7 @@ import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { getClaudeModelName } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { LoggingUtils } from "../../utils/LoggingUtils";
+import { Log } from "../../utils/Log";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -337,7 +337,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       if (result.exitCode === 0) {
         this.cliVersion = result.stdout.trim();
-        LoggingUtils.info(`✅ Claude Code CLI available: ${this.cliVersion}`);
+        Log.info(`✅ Claude Code CLI available: ${this.cliVersion}`);
         this.isAvailable = true;
         this.initializationStatus = CopilotStatus.Ready;
         this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -366,8 +366,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       errorMessage.includes("not found") ||
       errorMessage.includes("not recognized")
     ) {
-      LoggingUtils.info("   💻 Install: npm install -g @anthropic-ai/claude-code");
-      LoggingUtils.info(
+      Log.info("   💻 Install: npm install -g @anthropic-ai/claude-code");
+      Log.info(
         "   📖 Documentation: https://docs.anthropic.com/en/docs/claude-code"
       );
     }
@@ -394,7 +394,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     }
   ): Promise<boolean> {
     if (!this.isAvailable) {
-      LoggingUtils.error(
+      Log.error(
         "❌ FlightPath: Cannot send prompt - Claude Code CLI not available"
       );
       vscode.window.showErrorMessage(
@@ -441,7 +441,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
     } catch (error) {
-      LoggingUtils.error("❌ Claude CLI execution error", error);
+      Log.error("❌ Claude CLI execution error", error);
       this.lastFailureReason =
         error instanceof Error ? error.message : "Failed to execute Claude CLI";
       vscode.window.showErrorMessage(
@@ -531,7 +531,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Note: In interactive mode, we can't easily extract session ID from JSON output
     // since the terminal output is mixed with ANSI codes. Session continuity may be limited.
     if (success) {
-      LoggingUtils.info("✅ Claude CLI completed successfully");
+      Log.info("✅ Claude CLI completed successfully");
     }
 
     return success;
@@ -567,7 +567,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
         // Check if this was a cancellation
         if (this.isCancelling) {
-          LoggingUtils.info("⏹️ Prompt execution cancelled by user");
+          Log.info("⏹️ Prompt execution cancelled by user");
           return false;
         }
 
@@ -577,7 +577,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         // Extract and store session ID
         if (cliResult.sessionId) {
           this.sessionId = cliResult.sessionId;
-          LoggingUtils.debug(`💾 Session ID: ${this.sessionId}`);
+          Log.debug(`💾 Session ID: ${this.sessionId}`);
         }
 
         if (cliResult.success) {
@@ -587,7 +587,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         } else {
           const errorMsg =
             cliResult.error || "Claude CLI returned non-zero exit code";
-          LoggingUtils.error("❌ Claude CLI execution failed", new Error(errorMsg));
+          Log.error("❌ Claude CLI execution failed", new Error(errorMsg));
           this.lastFailureReason = errorMsg;
           vscode.window.showErrorMessage(
             `FlightPath: Claude CLI failed: ${errorMsg}`
@@ -728,8 +728,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     const supportedFormats =
       "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
     const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
-    LoggingUtils.warn(`⚠️ ${message}`);
-    LoggingUtils.warn(`   Accepted formats: ${supportedFormats}`);
+    Log.warn(`⚠️ ${message}`);
+    Log.warn(`   Accepted formats: ${supportedFormats}`);
 
     vscode.window.showWarningMessage(`FlightPath: ${message}`);
 
@@ -789,9 +789,9 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       if (convertedAllowTools.length > 0) {
         const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
         args.push("--allowedTools", ...quotedTools);
-        LoggingUtils.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        Log.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       } else if (allowedTools.length > 0) {
-        LoggingUtils.warn(
+        Log.warn(
           "⚠️ Custom tool permissions mode enabled but no allowed tools specified. Claude will prompt for each tool."
         );
       }
@@ -811,7 +811,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     if (convertedDenyTools.length > 0) {
       const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
       args.push("--disallowedTools", ...quotedTools);
-      LoggingUtils.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+      Log.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 
     return args;

@@ -6,7 +6,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
 } from "../types/FlightPathTypes";
-import { LoggingUtils } from "../utils/LoggingUtils";
+import { Log } from "../utils/Log";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
@@ -507,10 +507,7 @@ export class PromptQueue {
       }
     } catch (error) {
       // Invalid JSON - log error and continue with current queue
-      LoggingUtils.error(
-        "Failed to reload queue - invalid JSON",
-        error as Error
-      );
+      Log.error("Failed to reload queue - invalid JSON", error as Error);
       vscode.window.showErrorMessage(
         "FlightPath: Queue file has invalid JSON. Continuing with current queue."
       );
@@ -553,14 +550,14 @@ export class PromptQueue {
     }
 
     if (newPrompts.length === 0) {
-      LoggingUtils.info("Queue reload: No new prompts found");
+      Log.info("Queue reload: No new prompts found");
       return 0;
     }
 
     // 3. Check queue size limit (if not unlimited)
     const newQueueSize = this.state.prompts.length + newPrompts.length;
     if (maxQueueSize > 0 && newQueueSize > maxQueueSize) {
-      LoggingUtils.warn(
+      Log.warn(
         `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
       );
       vscode.window.showWarningMessage(
@@ -586,7 +583,7 @@ export class PromptQueue {
 
     this.emitStateChange();
 
-    LoggingUtils.info(
+    Log.info(
       `Queue extended: +${newPrompts.length} prompts added (total: ${this.state.prompts.length})`
     );
 
