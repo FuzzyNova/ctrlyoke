@@ -246,12 +246,33 @@ export class EndConditionEvaluator {
       let stderr = "";
       let isResolved = false;
 
+      // Log what we're about to execute
+      console.log(
+        `FlightPath: Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
+      );
+      console.log(
+        `FlightPath: Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
+      );
+
+      // Clean VS Code-specific environment variables that interfere with nested VS Code instances
+      // When running from extension host, VSCODE_* env vars cause test runner issues
+      const cleanEnv = { ...process.env };
+      delete cleanEnv.VSCODE_INJECTION;
+      delete cleanEnv.VSCODE_HANDLES_UNCAUGHT_ERRORS;
+      delete cleanEnv.VSCODE_NLS_CONFIG;
+      delete cleanEnv.VSCODE_PID;
+      delete cleanEnv.ELECTRON_RUN_AS_NODE;
+      console.log(
+        `FlightPath: Cleaned ${5} VS Code env vars for isolated execution`
+      );
+
       const child = spawn(executable, args, {
         cwd:
           workingDirectory ||
           vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
         shell: true,
         stdio: ["pipe", "pipe", "pipe"],
+        env: cleanEnv,
       });
 
       this.runningProcesses.add(child);

@@ -88,7 +88,7 @@ export class EndConditionHandler {
     // Determine if this is an execution error or validation failure
     const isExecutionError =
       evaluationResult.timeout ||
-      (evaluationResult.error && !evaluationResult.exitCode) ||
+      (evaluationResult.error && evaluationResult.exitCode === undefined) ||
       (evaluationResult.exitCode !== undefined &&
         evaluationResult.exitCode !== 0);
 

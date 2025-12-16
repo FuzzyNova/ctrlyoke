@@ -177,15 +177,20 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("State Transitions - stop()", () => {
-    test("should transition to IDLE", async () => {
+    test("should transition to CANCELLING, then IDLE after confirmedStopped", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
       queue.stop();
-      const state = queue.getState();
+      let state = queue.getState();
+      assert.strictEqual(state.status, EXECUTION_STATES.CANCELLING);
+
+      // After confirmedStopped(), should transition to IDLE
+      queue.confirmedStopped();
+      state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     });
 
-    test("should reset currentIndex to 0", async () => {
+    test("should reset currentIndex to 0 after confirmedStopped", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
       // Simulate moving forward
@@ -193,6 +198,8 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getState().currentIndex, 1);
       queue.stop();
+      // confirmedStopped() resets currentIndex
+      queue.confirmedStopped();
       assert.strictEqual(queue.getState().currentIndex, 0);
     });
 
@@ -285,11 +292,11 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("clear()", () => {
-    test("should call stop()", async () => {
+    test("should call stop() and transition to CANCELLING", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
       queue.clear();
-      assert.strictEqual(queue.getState().status, EXECUTION_STATES.IDLE);
+      assert.strictEqual(queue.getState().status, EXECUTION_STATES.CANCELLING);
     });
 
     test("should empty prompts array", () => {
@@ -664,7 +671,7 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(samplePrompts);
       queue.start().then(() => {
         const disposable = queue.onDidChangeState((state) => {
-          if (state.status === EXECUTION_STATES.IDLE && state.stopped) {
+          if (state.status === EXECUTION_STATES.CANCELLING && state.stopped) {
             disposable.dispose();
             done();
           }

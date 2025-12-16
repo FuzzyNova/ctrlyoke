@@ -11,7 +11,8 @@
       "Bash(claude mcp --help:*)",
       "WebFetch(domain:platform.claude.com)",
       "Bash(npm run compile:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm test)"
     ],
     "deny": [],
     "ask": []
