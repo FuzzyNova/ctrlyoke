@@ -22,6 +22,19 @@ export class Log {
     this.info("FlightPath logging initialized");
   }
 
+  /**
+   * Get the output channel instance.
+   * Used by components that need direct access to the output channel.
+   */
+  static getOutputChannel(): vscode.OutputChannel {
+    if (!this.outputChannel) {
+      throw new Error(
+        "Log.initialize() must be called before accessing output channel"
+      );
+    }
+    return this.outputChannel;
+  }
+
   static debug(message: string, ...args: any[]): void {
     if (this.logLevel <= LogLevel.DEBUG) {
       this.writeLog("DEBUG", message, ...args);

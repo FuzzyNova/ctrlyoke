@@ -18,6 +18,7 @@ import {
 } from "../types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
+import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 export class FlightPathManager {
@@ -32,7 +33,6 @@ export class FlightPathManager {
   private context: vscode.ExtensionContext;
   private statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
-  private outputChannel: vscode.OutputChannel;
   private dashboardProvider?: FlightPathDashboardProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
@@ -46,10 +46,6 @@ export class FlightPathManager {
     this.dashboardProvider = dashboardProvider;
     this.promptFileParser = new PromptFileParser();
     this.promptQueue = new PromptQueue();
-
-    // Create output channel for FlightPath (used for dashboard/workflow logging)
-    this.outputChannel = vscode.window.createOutputChannel("FlightPath");
-    context.subscriptions.push(this.outputChannel);
 
     // Initialize ALL integrations so they're always ready to use
     this.cliIntegration = new CopilotCommandLineIntegration(context);
@@ -445,7 +441,6 @@ export class FlightPathManager {
       workspaceFolderPath: this.currentWorkspaceFolder?.uri.fsPath,
       currentPromptFilePath: this.currentPromptFile?.filePath,
       dashboardProvider: this.dashboardProvider,
-      outputChannel: this.outputChannel,
       shouldShowCliCommand: this.shouldShowCliCommand(),
       showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
       dynamicQueueConfig: this.getDynamicQueueConfig(),

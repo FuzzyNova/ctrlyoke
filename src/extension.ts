@@ -7,6 +7,7 @@ import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
+import { Log, LogLevel } from "./utils/Log";
 
 let flightPathManager: FlightPathManager;
 let dashboardProvider: FlightPathDashboardProvider;
@@ -19,6 +20,8 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   try {
+    // Initialize logging system early (creates output channel)
+    Log.initialize(context, LogLevel.INFO);
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {

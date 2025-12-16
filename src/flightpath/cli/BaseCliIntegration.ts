@@ -377,13 +377,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Simple delay helper
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
    * Execute a CLI command in headless mode using temp file for prompt passing.
    *
    * Strategy:

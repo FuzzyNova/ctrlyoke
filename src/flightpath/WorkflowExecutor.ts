@@ -14,6 +14,7 @@ import {
 } from "./EndConditionHandler";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
+import { Log } from "../utils/Log";
 
 /**
  * Context provided by FlightPathManager for workflow execution.
@@ -26,8 +27,6 @@ export interface WorkflowContext {
   currentPromptFilePath: string | undefined;
   /** Dashboard provider for UI updates */
   dashboardProvider?: FlightPathDashboardProvider;
-  /** Output channel for CLI logging */
-  outputChannel: vscode.OutputChannel;
   /** Whether to show CLI commands in output */
   shouldShowCliCommand: boolean;
   /** Whether to show CLI output in output panel */
@@ -95,27 +94,23 @@ export class WorkflowExecutor {
 
     // Log workflow start to output channel (only for CLI integration when output is enabled)
     if (context.showCliOutput && integration.isCli()) {
-      context.outputChannel.clear();
-      context.outputChannel.appendLine(
+      Log.getOutputChannel().clear();
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      context.outputChannel.appendLine("        FLIGHTPATH WORKFLOW STARTED");
-      context.outputChannel.appendLine(
+      Log.appendLine("        FLIGHTPATH WORKFLOW STARTED");
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      context.outputChannel.appendLine(
-        `Started: ${new Date().toLocaleString()}`
-      );
-      context.outputChannel.appendLine(
-        `Total prompts: ${state.prompts.length}`
-      );
-      context.outputChannel.appendLine(
+      Log.appendLine(`Started: ${new Date().toLocaleString()}`);
+      Log.appendLine(`Total prompts: ${state.prompts.length}`);
+      Log.appendLine(
         `Integration: ${integration.getStatus().strategy.toUpperCase()}`
       );
-      context.outputChannel.appendLine(
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      context.outputChannel.appendLine("");
+      Log.appendLine("");
     }
 
     // Start from currentIndex to support resume functionality
@@ -421,21 +416,19 @@ export class WorkflowExecutor {
 
     // Log workflow completion to output channel (only for CLI integration when output is enabled)
     if (context.showCliOutput && integration.isCli()) {
-      context.outputChannel.appendLine("");
-      context.outputChannel.appendLine(
+      Log.appendLine("");
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      context.outputChannel.appendLine("        WORKFLOW COMPLETE ✓");
-      context.outputChannel.appendLine(
+      Log.appendLine("        WORKFLOW COMPLETE ✓");
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      context.outputChannel.appendLine(
-        `Completed: ${new Date().toLocaleString()}`
-      );
-      context.outputChannel.appendLine(
+      Log.appendLine(`Completed: ${new Date().toLocaleString()}`);
+      Log.appendLine(
         `Prompts completed: ${state.prompts.length}/${state.prompts.length}`
       );
-      context.outputChannel.appendLine(
+      Log.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
     }
