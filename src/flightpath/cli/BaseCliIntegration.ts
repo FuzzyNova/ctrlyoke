@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { spawn, ChildProcess } from "child_process";
-import kill from "tree-kill";
+import { ChildProcess } from "child_process";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
+import { CliProcessManager } from "../../utils/CliProcessManager";
 
 /**
  * Execution mode for CLI integrations
@@ -14,7 +14,7 @@ import { TempFileManager } from "../../utils/TempFileManager";
 export type CliExecutionMode = "interactive" | "headless";
 
 /**
- * Execution mode constants - single source of truth
+ * Execution mode constants
  */
 export const CLI_EXECUTION_MODE = {
   INTERACTIVE: "interactive" as const,
@@ -22,7 +22,7 @@ export const CLI_EXECUTION_MODE = {
 };
 
 /**
- * Warning messages - single source of truth
+ * Warning messages
  */
 export const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
@@ -30,41 +30,19 @@ export const CLI_WARNING_MESSAGES = {
 } as const;
 
 /**
- * Base class for CLI integrations (Copilot CLI and Claude CLI)
+ * Base class for CLI integrations (Copilot CLI and Claude CLI).
  *
- * **Architecture:**
- * Two execution modes with distinct prompt passing mechanisms:
+ * Supports two execution modes:
+ * - **Interactive:** TUI in VS Code terminal with file-based prompt passing
+ * - **Headless:** Background process with temp file reference and streaming output
  *
- * **Headless Mode (background process):**
- * - Uses spawn + stdin.write() for prompt passing
- * - No shell escaping issues, works for any prompt size
- * - Process exit = completion signal
- * - Copilot: No -p flag (reads from stdin when not a TTY)
- * - Claude: Requires -p flag (Ink TUI crashes without it)
+ * All prompts are pre-expanded (context references resolved) before sending to CLI.
+ * Delegates to CliProcessManager (spawning/terminal/cancellation).
  *
- * **Interactive Mode (file-based prompt passing):**
- * - Starts CLI in interactive TUI mode (no prompt flags)
- * - Writes fully-expanded prompt to .flightpath/temp/prompt-{uuid}.txt
- * - Sends @file reference via terminal.sendText() (instant, no chunking!)
- * - Detects completion by watching for escape indicator to disappear
- * - Copilot: "(esc to cancel)" disappears when response complete
- * - Claude: "(esc to interrupt)" disappears when response complete
- * - Benefits: No React error #185, works for any prompt size, instant
+ * Subclasses provide CLI-specific: command building, output parsing, model validation,
+ * tool permissions, and TUI patterns (escape indicator, screen boundaries).
  *
- * **Context Expansion:**
- * All prompts are pre-processed to expand context references:
- * - @path/to/file → Full file content
- * - #file:path:line-line → Line range with header
- * - #sym:path:symbol → Symbol context
- * This ensures CLI @file references work correctly and fixes Copilot CLI bug
- * where @ references weren't expanded in paste mode.
- *
- * Subclasses implement CLI-specific logic:
- * - Command and argument building
- * - Output parsing (different formats)
- * - Model validation (different supported models)
- * - Tool permissions (different flag syntax)
- * - Escape indicator patterns
+ * See docs/COPILOT_CLI_DESIGN.md and docs/CLAUDE_CLI_DESIGN.md for details.
  */
 export abstract class BaseCliIntegration extends CopilotIntegration {
   protected sessionId?: string;
@@ -74,10 +52,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected lastCliCommand?: string;
   protected lastFullPrompt?: string;
   protected currentProcess?: ChildProcess;
+  protected processManager: CliProcessManager;
 
   // Interactive terminal mode properties
-  protected terminal?: vscode.Terminal;
-  protected shellIntegration?: vscode.TerminalShellIntegration;
   protected currentExecution?: vscode.TerminalShellExecution;
 
   // TUI completion detection - now using execution.read() instead of proposed API
@@ -88,15 +65,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // Track the sanitized prompt sent to terminal for filtering echo in response
   private lastSanitizedPrompt?: string;
 
-  // Track process termination for forceful kill escalation
-  private killTimeoutId?: NodeJS.Timeout;
-
   constructor(
     context: vscode.ExtensionContext,
     outputChannel?: vscode.OutputChannel
   ) {
     super(context);
     this.outputChannel = outputChannel;
+    this.processManager = new CliProcessManager(
+      this.getWorkspaceRoot() || "",
+      (msg) => this.log(msg)
+    );
   }
 
   // ============================================================
@@ -119,35 +97,24 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * the user closes it or the new terminal opens.
    */
   protected disposeTerminalIfExists(): void {
-    if (this.terminal) {
-      this.log("🗑️ Disposing existing terminal for fresh CLI session");
-      this.terminal.dispose();
-      this.terminal = undefined;
-      this.shellIntegration = undefined;
-      this.currentExecution = undefined;
-    }
+    this.log("🗑️ Disposing existing terminal for fresh CLI session");
+    this.processManager.disposeTerminal();
+    this.currentExecution = undefined;
   }
 
   /**
    * Create a fresh VS Code terminal for interactive execution.
    * Always creates a new terminal, disposing any existing one first.
-   *
-   * This ensures each CLI invocation starts fresh - the session resume flag
-   * handles context continuity at the CLI level, not the terminal level.
    */
   protected async createFreshTerminal(): Promise<vscode.Terminal> {
-    // Dispose any existing terminal first
     this.disposeTerminalIfExists();
-
-    this.terminal = vscode.window.createTerminal({
-      name: `FlightPath: ${this.getCliName()}`,
-      cwd: this.getWorkspaceRoot(),
-    });
-
-    return this.terminal;
+    return await this.processManager.createTerminal(
+      `FlightPath: ${this.getCliName()}`,
+      this.getWorkspaceRoot()
+    );
   }
 
-  /**
+  /** || ""
    * Wait for shell integration to become available on a terminal
    * @param terminal The terminal to wait for
    * @param timeoutMs Maximum time to wait (default 5 seconds)
@@ -156,28 +123,10 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     terminal: vscode.Terminal,
     timeoutMs: number = 5000
   ): Promise<vscode.TerminalShellIntegration> {
-    // If already available, return immediately
-    if (terminal.shellIntegration) {
-      return terminal.shellIntegration;
-    }
-
-    // Wait for shell integration to activate
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        disposable.dispose();
-        reject(new Error("Shell integration not available"));
-      }, timeoutMs);
-
-      const disposable = vscode.window.onDidChangeTerminalShellIntegration(
-        (event) => {
-          if (event.terminal === terminal) {
-            clearTimeout(timeout);
-            disposable.dispose();
-            resolve(event.shellIntegration);
-          }
-        }
-      );
-    });
+    return await this.processManager.waitForShellIntegration(
+      terminal,
+      timeoutMs
+    );
   }
 
   /**
@@ -1044,7 +993,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       // Wait for shell integration (needed for executeCommand and read())
       this.log(`🎮 [TRACE] Waiting for shell integration...`);
       const shellIntegration = await this.waitForShellIntegration(terminal);
-      this.shellIntegration = shellIntegration;
       this.log(`🎮 [TRACE] Got shell integration`);
 
       // Use executeCommand to get an execution object for read() streaming
@@ -1199,7 +1147,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * @param args Command arguments (including prompt file reference)
    * @param options Timeout and streaming options
    */
-  protected spawnProcess(
+  protected async spawnProcess(
     command: string,
     args: string[],
     options: {
@@ -1207,113 +1155,30 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       onStdout?: (chunk: string) => void;
     } = {}
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-
-      this.log(`📤 Spawning: ${command} ${args.join(" ")}`);
-
-      // Spawn WITH shell for PATH resolution (needed on Windows especially)
-      // tree-kill library handles process tree killing on all platforms
-      const child = spawn(command, args, {
-        cwd: this.getWorkspaceRoot(),
-        shell: true, // Required for PATH resolution of copilot/claude commands
-        stdio: ["ignore", "pipe", "pipe"], // No stdin needed, pipe stdout/stderr
-        env: { ...process.env },
-      });
-
-      // Store reference for cancellation
-      this.currentProcess = child;
-
-      // Handle stdout - ALWAYS stream output, even during cancellation
-      // User needs to see what the process is doing if it doesn't stop cleanly
-      child.stdout.on("data", (data) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        if (options.onStdout) {
-          options.onStdout(chunk);
-        }
-      });
-
-      // Handle stderr
-      child.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      // Handle errors
-      child.on("error", (error) => {
-        this.log(`❌ Process error: ${error}`);
-        this.currentProcess = undefined;
-        this.clearKillTimeout();
-        reject(error);
-      });
-
-      // Handle completion
-      child.on("close", (code) => {
-        if (this.currentProcess === child) {
-          this.currentProcess = undefined;
-        }
-        this.clearKillTimeout();
-        this.log(`✅ Process exited with code: ${code}`);
-
-        // Emit response complete so dashboard knows process actually stopped
-        if (code === null || code === 0) {
-          this.responseCompleteEmitter.fire("Process exited");
-        }
-
-        resolve({
-          stdout,
-          stderr,
-          exitCode: code ?? 1,
-        });
-      });
-
-      // Handle timeout
-      if (options.timeout) {
-        setTimeout(() => {
-          if (this.currentProcess === child) {
-            this.log(
-              "⏱️ Process timeout - sending SIGTERM, will escalate to SIGKILL if needed"
-            );
-            this.killProcessGracefully(child);
-            reject(new Error(`Process timeout after ${options.timeout}ms`));
-          }
-        }, options.timeout);
-      }
+    const result = await this.processManager.spawn(command, args, {
+      cwd: this.getWorkspaceRoot() || "",
+      timeout: options.timeout,
+      onStdout: options.onStdout,
     });
+
+    // Emit response complete so dashboard knows process actually stopped
+    if (result.exitCode === 0) {
+      this.responseCompleteEmitter.fire("Process exited");
+    }
+
+    return result;
   }
 
   /**
    * Spawn a simple command (like --version checks) without stdin.
    * Uses shell: true for PATH resolution.
    */
-  protected spawnSimpleCommand(
+  protected async spawnSimpleCommand(
     command: string,
     args: string[],
     timeoutMs: number = 5000
   ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    return new Promise((resolve, reject) => {
-      let stdout = "";
-      let stderr = "";
-
-      const child = spawn(command, args, {
-        cwd: this.getWorkspaceRoot(),
-        shell: true,
-        env: { ...process.env },
-      });
-
-      child.stdout.on("data", (data) => (stdout += data.toString()));
-      child.stderr.on("data", (data) => (stderr += data.toString()));
-      child.on("error", reject);
-      child.on("close", (code) =>
-        resolve({ stdout, stderr, exitCode: code ?? 1 })
-      );
-
-      setTimeout(() => {
-        child.kill();
-        reject(new Error(`Command timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
+    return await this.processManager.spawnSimple(command, args, timeoutMs);
   }
 
   // ============================================================
@@ -1511,134 +1376,33 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // ============================================================
 
   /**
-   * Gracefully kill a process: SIGTERM first, escalate to SIGKILL after 3 seconds
-   * This is critical for CLI tools that might ignore SIGTERM when executing tool actions
-   *
-   * Uses tree-kill library which handles cross-platform process tree killing:
-   * - Windows: taskkill /T /F
-   * - Linux: ps -o pid --ppid to find children
-   * - macOS: pgrep -P to find children
-   *
-   * @param child The process to kill
-   */
-  private killProcessGracefully(child: ChildProcess): void {
-    if (!child.pid) {
-      this.log("⚠️ No PID available to kill");
-      return;
-    }
-
-    // Clear any existing timeout first
-    this.clearKillTimeout();
-
-    // Kill the process tree (graceful attempt with SIGTERM)
-    this.log(
-      "📤 Sending SIGTERM to process tree (graceful shutdown requested)"
-    );
-    kill(child.pid, "SIGTERM", (err) => {
-      if (err) {
-        this.log(`⚠️ SIGTERM failed: ${err.message}`);
-      }
-    });
-
-    // Escalate to forceful kill after 3 seconds if process hasn't exited
-    this.killTimeoutId = setTimeout(() => {
-      if (this.currentProcess === child && child.pid) {
-        this.log(
-          "⚠️ Process did not respond to SIGTERM after 3s - escalating to SIGKILL"
-        );
-        kill(child.pid, "SIGKILL", (err) => {
-          if (err) {
-            this.log(`❌ SIGKILL failed: ${err.message}`);
-          }
-        });
-        this.streamingChunkEmitter.fire(
-          "\n⚠️ Process did not stop gracefully - forceful termination applied\n"
-        );
-      }
-    }, 3000);
-  }
-
-  /**
-   * Clear the SIGKILL escalation timeout
-   */
-  private clearKillTimeout(): void {
-    if (this.killTimeoutId) {
-      clearTimeout(this.killTimeoutId);
-      this.killTimeoutId = undefined;
-    }
-  }
-
-  /**
    * Cancel the current CLI process
    */
   protected async cancelImplementation(): Promise<void> {
-    // Handle interactive terminal execution
-    if (this.currentExecution && this.terminal) {
-      this.log("⏹️ Sending Ctrl+C to terminal (twice for TUI cancellation)...");
-
-      // Most TUIs require Ctrl+C twice to actually stop
-      this.terminal.sendText("\x03");
-
-      // Send second Ctrl+C after brief delay
-      setTimeout(() => {
-        if (this.terminal) {
-          this.terminal.sendText("\x03");
-          this.log("⏹️ Second Ctrl+C sent");
-        }
-      }, 100);
-
-      this.currentExecution = undefined;
-
-      // Dispose the terminal after allowing time for both Ctrl+C to process
-      // Then fire responseComplete event so FlightPathManager knows we're done
-      setTimeout(() => {
-        if (this.terminal) {
-          this.log("🗑️ Disposing terminal after cancellation");
-          this.terminal.dispose();
-          this.terminal = undefined;
-          this.shellIntegration = undefined;
-
-          // Fire responseComplete so FlightPathManager can call confirmedStopped()
-          this.responseCompleteEmitter.fire("Terminal cancelled and disposed");
-        }
-      }, 800);
-
-      this.log("✅ Terminal execution cancelled");
-    }
-
     // Abort any active read() streaming
     if (this.readAbortController) {
       this.readAbortController.abort();
       this.readAbortController = undefined;
     }
 
-    // Handle headless process execution
-    if (this.currentProcess) {
-      this.log(
-        "⏹️ Stopping CLI process (SIGTERM, will escalate to SIGKILL if needed)..."
-      );
-      this.killProcessGracefully(this.currentProcess);
-      // Don't clear currentProcess here - let the 'close' handler do it
-      this.log(
-        "✅ CLI process kill signal sent (streaming output until process exits)"
-      );
-    }
+    // Delegate to CliProcessManager for both terminal and process cancellation
+    await this.processManager.cancel(this.currentExecution);
+    this.currentExecution = undefined;
+
+    // Fire responseComplete so FlightPathManager can call confirmedStopped()
+    this.responseCompleteEmitter.fire("Execution cancelled");
+    this.log("✅ Execution cancelled");
   }
 
   /**
    * Dispose of resources
    */
   dispose(): void {
-    if (this.terminal) {
-      this.terminal.dispose();
-      this.terminal = undefined;
-    }
     if (this.readAbortController) {
       this.readAbortController.abort();
       this.readAbortController = undefined;
     }
-    this.clearKillTimeout();
-    this.shellIntegration = undefined;
+    this.processManager.dispose();
     this.currentExecution = undefined;
   }
 

@@ -3,6 +3,7 @@ import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
 import { EndCondition } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { CliProcessManager } from "../utils/CliProcessManager";
 
 export interface EvaluationResult {
   success: boolean;
@@ -16,11 +17,16 @@ export interface EvaluationResult {
 }
 
 export class EndConditionEvaluator {
-  private runningProcesses: Set<ChildProcess> = new Set();
   private context: vscode.ExtensionContext;
+  private processManager: CliProcessManager;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
+    this.processManager = new CliProcessManager(workspaceRoot, (msg) =>
+      console.log(msg)
+    );
   }
 
   /**
@@ -241,103 +247,54 @@ export class EndConditionEvaluator {
     stderr?: string;
     exitCode?: number;
   }> {
-    return new Promise((resolve) => {
-      let stdout = "";
-      let stderr = "";
-      let isResolved = false;
+    // Log what we're about to execute
+    console.log(
+      `FlightPath: Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
+    );
+    console.log(
+      `FlightPath: Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
+    );
 
-      // Log what we're about to execute
-      console.log(
-        `FlightPath: Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
-      );
-      console.log(
-        `FlightPath: Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
-      );
+    // Clean VS Code-specific environment variables that interfere with nested VS Code instances
+    const cleanEnv = { ...process.env };
+    delete cleanEnv.VSCODE_INJECTION;
+    delete cleanEnv.VSCODE_HANDLES_UNCAUGHT_ERRORS;
+    delete cleanEnv.VSCODE_NLS_CONFIG;
+    delete cleanEnv.VSCODE_PID;
+    delete cleanEnv.ELECTRON_RUN_AS_NODE;
+    console.log(
+      `FlightPath: Cleaned ${5} VS Code env vars for isolated execution`
+    );
 
-      // Clean VS Code-specific environment variables that interfere with nested VS Code instances
-      // When running from extension host, VSCODE_* env vars cause test runner issues
-      const cleanEnv = { ...process.env };
-      delete cleanEnv.VSCODE_INJECTION;
-      delete cleanEnv.VSCODE_HANDLES_UNCAUGHT_ERRORS;
-      delete cleanEnv.VSCODE_NLS_CONFIG;
-      delete cleanEnv.VSCODE_PID;
-      delete cleanEnv.ELECTRON_RUN_AS_NODE;
-      console.log(
-        `FlightPath: Cleaned ${5} VS Code env vars for isolated execution`
-      );
-
-      const child = spawn(executable, args, {
+    try {
+      const result = await this.processManager.spawn(executable, args, {
         cwd:
           workingDirectory ||
           vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-        shell: true,
-        stdio: ["pipe", "pipe", "pipe"],
+        timeout,
         env: cleanEnv,
       });
 
-      this.runningProcesses.add(child);
-
-      // Set up timeout
-      const timeoutHandle = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true;
-          child.kill("SIGKILL");
-          this.runningProcesses.delete(child);
-          resolve({
-            success: false,
-            result: stdout,
-            stdout: stdout,
-            stderr: stderr,
-            error: "Script execution timed out",
-            timeout: true,
-          });
-        }
-      }, timeout);
-
-      // Collect output
-      child.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
-
-      child.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      // Handle completion
-      child.on("close", (code) => {
-        clearTimeout(timeoutHandle);
-        this.runningProcesses.delete(child);
-
-        if (!isResolved) {
-          isResolved = true;
-          resolve({
-            success: code === 0,
-            result: stdout.trim(),
-            stdout: stdout.trim(),
-            stderr: stderr.trim(),
-            error: stderr.trim() || undefined,
-            exitCode: code ?? undefined,
-          });
-        }
-      });
-
-      // Handle errors
-      child.on("error", (error) => {
-        clearTimeout(timeoutHandle);
-        this.runningProcesses.delete(child);
-
-        if (!isResolved) {
-          isResolved = true;
-          resolve({
-            success: false,
-            result: "",
-            stdout: "",
-            stderr: "",
-            error: `Failed to execute script: ${error.message}`,
-          });
-        }
-      });
-    });
+      return {
+        success: result.exitCode === 0,
+        result: result.stdout.trim(),
+        stdout: result.stdout.trim(),
+        stderr: result.stderr.trim(),
+        error: result.stderr.trim() || undefined,
+        exitCode: result.exitCode,
+      };
+    } catch (error) {
+      const isTimeout =
+        error instanceof Error && error.message.includes("timeout");
+      return {
+        success: false,
+        result: "",
+        stdout: "",
+        stderr: "",
+        error: error instanceof Error ? error.message : String(error),
+        timeout: isTimeout,
+      };
+    }
   }
 
   /**
@@ -532,14 +489,7 @@ export class EndConditionEvaluator {
    * Kill all running processes
    */
   killAllProcesses(): void {
-    for (const process of this.runningProcesses) {
-      try {
-        process.kill("SIGKILL");
-      } catch {
-        // Ignore errors when killing processes
-      }
-    }
-    this.runningProcesses.clear();
+    this.processManager.dispose();
     console.log("FlightPath: Killed all running end condition processes");
   }
 
