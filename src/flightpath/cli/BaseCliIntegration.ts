@@ -7,6 +7,7 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
+import { TuiStreamProcessor, TuiStreamConfig } from "../../utils/TuiStreamProcessor";
 
 /**
  * Execution mode for CLI integrations
@@ -129,702 +130,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     );
   }
 
-  /**
-   * Wait for TUI to be ready, send prompt, then stream and detect completion.
-   *
-   * This method:
-   * 1. Reads from execution.read() waiting for TUI readiness indicators
-   * 2. Once TUI is ready, sends the prompt via sendText
-   * 3. Continues reading to detect completion (escape indicator disappearing)
-   *
-   * TUI readiness is detected by looking for CLI-specific patterns:
-   * - Copilot: "Welcome to GitHub Copilot" or the prompt input area
-   * - Claude: Similar welcome message or input indicator
-   *
-   * @param terminal The terminal to send the prompt to
-   * @param execution The shell execution to read from
-   * @param promptText The prompt text to send once TUI is ready
-   * @param timeoutMs Maximum time to wait for completion (defaults to configured CLI execution timeout)
-   * @param workflowContext Optional workflow context for temp file naming
-   */
-  private async waitForTuiAndExecute(
-    terminal: vscode.Terminal,
-    execution: vscode.TerminalShellExecution,
-    promptText: string,
-    timeoutMs: number = ConfigurationUtils.getCliExecutionTimeoutMs(),
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
-  ): Promise<boolean> {
-    const escapeIndicator = this.getEscapeIndicator().toLowerCase();
 
-    // File processing silence threshold - wait this long with no terminal activity
-    // before checking if the file has been read. We use a short timeout (1s) for
-    // responsiveness, but verify the file reference was echoed before submitting.
-    const FILE_PROCESSING_SILENCE_MS = 1000;
-
-    // File-based approach: Look for the file reference we sent in the terminal echo
-    // The file reference is short (@.flightpath/temp/...) and will appear quickly
-    let fileReferenceSent = ""; // Will be set after we send the @file reference
-
-    let tuiReady = false;
-    let promptTextSent = false; // True after sendText(@file reference) is called
-    let promptSubmitted = false; // True after carriage return is sent to submit
-    let completed = false;
-    let tempFilePath: string | undefined; // Track temp file for cleanup
-    let chunkCount = 0;
-    let totalBytes = 0;
-    let errorDetected = false; // True if CLI error detected in output
-    let errorMessage = ""; // Store the detected error message
-
-    // TUI screen buffer - chunks can contain multiple screens or partial screens
-    // We accumulate into a buffer and extract complete screens by detecting boundaries
-    let screenBuffer = "";
-    // Accumulator to track terminal output for file reference echo detection
-    let fileEchoBuffer = "";
-    let rawPasteBuffer = ""; // RAW buffer with ANSI codes for error detection
-    let lastEmittedContent = new Set<string>(); // Track what we've already sent to dashboard
-    let indicatorEverSeen = false; // Must see indicator before counting its absence
-    let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
-
-    // Check if file reference has been echoed back by the CLI
-    // This confirms the CLI received and is processing the @file reference
-    const isFileReferenceEchoed = (): boolean => {
-      if (!fileReferenceSent) {
-        return false;
-      }
-
-      const bufferLower = fileEchoBuffer.toLowerCase();
-      const fileRefLower = fileReferenceSent.toLowerCase();
-
-      if (bufferLower.includes(fileRefLower)) {
-        this.log(
-          `🔍 File reference verified: found "${fileReferenceSent}" in terminal echo`
-        );
-        return true;
-      }
-
-      return false;
-    };
-
-    // Check if CLI has crashed with an error in the output
-    // We check the RAW buffer (with ANSI codes) to ensure we capture complete error text
-    const detectCliError = (rawBuffer: string): boolean => {
-      // TUI chrome pattern - CLI-specific pattern that marks the bottom of the TUI
-      // Real errors appear AFTER this chrome with NO chrome following them
-      // False positives (errors in pasted text) have chrome BOTH before AND after
-      const tuiChromePattern = this.getTuiChromePattern();
-
-      // Error patterns that indicate CLI crash
-      const errorPatterns = [
-        /Error: Minified React error #\d+/i, // React errors (Claude CLI)
-        /Error:.*\n\s+at\s+/s, // Error with stack trace
-        /TypeError:.*\n\s+at\s+/s, // TypeError with stack trace
-        /ReferenceError:.*\n\s+at\s+/s, // ReferenceError with stack trace
-        /Uncaught Exception:/i, // Uncaught exceptions
-      ];
-
-      for (const pattern of errorPatterns) {
-        const errorMatch = rawBuffer.match(pattern);
-        if (errorMatch) {
-          const errorStartIndex = errorMatch.index!;
-
-          // Find the last occurrence of TUI chrome BEFORE the error
-          const beforeError = rawBuffer.substring(0, errorStartIndex);
-          const chromeBeforeMatch = beforeError.match(tuiChromePattern);
-
-          if (!chromeBeforeMatch) {
-            // No chrome before error - likely not a real CLI error (or very early in stream)
-            this.log(
-              `⚠️ [FALSE POSITIVE] Error pattern found but no TUI chrome before it - likely prompt echo`
-            );
-            continue;
-          }
-
-          // Check if there's TUI chrome AFTER the error
-          const afterError = rawBuffer.substring(
-            errorStartIndex + errorMatch[0].length
-          );
-          const chromeAfterMatch = afterError.match(tuiChromePattern);
-
-          if (chromeAfterMatch) {
-            // Chrome appears both before AND after - error is inside TUI (prompt echo)
-            this.log(
-              `⚠️ [FALSE POSITIVE] Error pattern surrounded by TUI chrome - this is pasted prompt content, not a real error`
-            );
-            continue;
-          }
-
-          // Real error: chrome before, no chrome after
-          // Extract full error with complete stack trace from RAW output
-          const errorWithStack = /Error:[^\n]+(?:\n\s+at\s+[^\n]+)*/i.exec(
-            rawBuffer.substring(errorStartIndex)
-          );
-
-          if (errorWithStack) {
-            // Strip ANSI codes from the captured error block for clean display
-            const rawError = errorWithStack[0];
-            errorMessage = this.stripAnsiCodes(rawError);
-            this.log(
-              `❌ [REAL ERROR DETECTED] CLI crashed after TUI chrome with no chrome following:`
-            );
-            this.log(errorMessage);
-            return true;
-          }
-
-          // Fallback: if regex didn't capture stack, just get the error line
-          const errorLineMatch = /Error:[^\n]+/.exec(
-            rawBuffer.substring(errorStartIndex)
-          );
-          if (errorLineMatch) {
-            errorMessage = this.stripAnsiCodes(errorLineMatch[0]);
-            this.log(
-              `❌ [REAL ERROR DETECTED] CLI crashed (no stack trace captured):`
-            );
-            this.log(errorMessage);
-            return true;
-          }
-        }
-      }
-      return false;
-    };
-
-    // Dynamic paste completion detection - submit prompt after terminal output settles
-    // AND we can verify the paste actually happened
-    let submissionTimeoutId: NodeJS.Timeout | undefined;
-    const startSubmissionTimer = () => {
-      if (submissionTimeoutId) {
-        this.log(
-          `⏳ [SUBMISSION TIMER] Clearing previous timer (new chunk received, restarting ${FILE_PROCESSING_SILENCE_MS}ms silence counter)`
-        );
-        clearTimeout(submissionTimeoutId);
-      } else {
-        this.log(
-          `⏳ [SUBMISSION TIMER] Starting new timer (${FILE_PROCESSING_SILENCE_MS}ms to submission)`
-        );
-      }
-      submissionTimeoutId = setTimeout(() => {
-        this.log(
-          `⏳ [SUBMISSION TIMER] Fired! Checking file echo (promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, echoBufferLen=${fileEchoBuffer.length})`
-        );
-        if (promptTextSent && !promptSubmitted) {
-          // Verify file reference was echoed before submitting
-          if (isFileReferenceEchoed()) {
-            this.log(
-              `📤 ✅ File read verified (${FILE_PROCESSING_SILENCE_MS / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
-            );
-            // Copilot CLI uses Ink TUI framework which expects raw terminal mode input.
-            // In raw mode, Enter key sends \r (carriage return), not \n (newline).
-            terminal.sendText("\r", true);
-            promptSubmitted = true;
-            this.log(
-              `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
-            );
-          } else {
-            // Silence detected but file reference echo not found yet - keep waiting
-            this.log(
-              `⏳ [FILE ECHO PENDING] Silence detected (${FILE_PROCESSING_SILENCE_MS}ms) but file reference not yet echoed. bufferLen=${fileEchoBuffer.length}`
-            );
-            this.log(
-              `⏳ [FILE ECHO DEBUG] Looking for: "${fileReferenceSent}"`
-            );
-            this.log(
-              `⏳ [FILE ECHO DEBUG] Last 150 chars: ${fileEchoBuffer.slice(-150).replace(/\n/g, "\\n")}`
-            );
-            this.log(
-              `⏳ [FILE ECHO DEBUG] Waiting for next chunk to restart timer...`
-            );
-            // Don't restart timer here - we'll restart when next chunk arrives
-          }
-        }
-      }, FILE_PROCESSING_SILENCE_MS);
-    };
-
-    // Create abort controller for timeout/cancellation
-    this.readAbortController = new AbortController();
-
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      this.log("⏱️ TUI execution timed out");
-      this.readAbortController?.abort();
-    }, timeoutMs);
-
-    try {
-      this.log("📺 Starting terminal output streaming via read()...");
-      this.log(`🔍 Waiting for TUI ready (screen end pattern to appear)...`);
-
-      for await (const data of execution.read()) {
-        // Check for abort
-        if (this.readAbortController?.signal.aborted) {
-          break;
-        }
-
-        chunkCount++;
-        totalBytes += data.length;
-
-        // Clean the ANSI codes and add to buffer
-        const cleanData = this.stripAnsiCodes(data);
-        screenBuffer += cleanData;
-
-        // Accumulate output for file reference echo detection (only while waiting to submit)
-        if (promptTextSent && !promptSubmitted) {
-          fileEchoBuffer += cleanData;
-          rawPasteBuffer += data; // Also keep raw buffer for error detection
-        }
-
-        // Check for CLI errors (TUI crash detection)
-        // NOTE: This may trigger on prompt echo if attached files contain error strings
-        // We'll log the raw data to identify patterns that distinguish real crashes
-        if (!errorDetected && detectCliError(data)) {
-          errorDetected = true;
-          this.log(
-            `❌ [ERROR ABORT] CLI error detected in output - aborting immediately`
-          );
-          this.log(
-            `❌ [ERROR TRIGGER] Full raw data chunk that triggered detection:`
-          );
-          this.log(data); // Log entire triggering chunk for analysis
-          // Abort the read stream immediately to stop processing
-          this.readAbortController?.abort();
-          break; // Exit the for-await loop
-        }
-
-        // Extract complete screens from buffer using CLI-specific screen end pattern
-        // If we get any complete screens, the TUI is ready (screen end pattern matched)
-        const { screens, remainder } =
-          this.extractScreensFromBuffer(screenBuffer);
-        screenBuffer = remainder;
-
-        // Process each complete screen
-        for (const screen of screens) {
-          const screenLower = screen.toLowerCase();
-
-          // Phase 1: First complete screen means TUI is ready - send prompt via @file reference
-          if (!tuiReady) {
-            this.log("✅ TUI is ready (first complete screen detected)");
-            tuiReady = true;
-
-            // Small delay to ensure TUI is fully interactive
-            await this.delay(500);
-
-            // File-based prompt passing - write to temp file and send @file reference
-            // This eliminates React error #185 issues and is instant (no chunking delays)
-            this.log(
-              `📁 Sending prompt via @file reference (${promptText.length} chars)...`
-            );
-
-            // Write prompt to temp file (will be cleaned up in finally block)
-            const workspaceRoot = this.getWorkspaceRoot();
-            if (!workspaceRoot) {
-              throw new Error("No workspace root available for temp file");
-            }
-
-            const tempMgr = new TempFileManager(workspaceRoot);
-            tempFilePath = await tempMgr.createPromptFile(
-              promptText,
-              workflowContext?.filePath,
-              workflowContext ? workflowContext.promptIndex + 1 : undefined
-            );
-            const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-
-            this.log(`📁 Temp file created: ${relativeFilePath}`);
-
-            // Send @file reference to CLI (instant, no chunking!)
-            const fileReference = `@${relativeFilePath}`;
-            terminal.sendText(fileReference, false);
-            promptTextSent = true;
-
-            // Store the file reference for verification
-            fileReferenceSent = fileReference;
-            this.lastFileReference = fileReference;
-            this.log(
-              `📁 ✅ File reference sent. Waiting for CLI to read file...`
-            );
-
-            // Start the submission timer to submit after file has been read
-            // The timer will be reset on each chunk received while CLI processes the file
-            this.log(
-              `⏳ Entering file read detection phase. Will submit after ${FILE_PROCESSING_SILENCE_MS}ms of silence.`
-            );
-            startSubmissionTimer();
-          }
-
-          // Reset submission timer on each chunk while waiting for file to be processed
-          // This ensures we don't submit until the terminal has been quiet for the threshold
-          if (promptTextSent && !promptSubmitted) {
-            this.log(
-              `⏳ [FILE FLOW] Screen processed, restarting silence timer (will fire if no more chunks for ${FILE_PROCESSING_SILENCE_MS}ms)`
-            );
-            startSubmissionTimer();
-          }
-
-          // Phase 2: After prompt submitted, detect completion and emit deltas
-          if (promptSubmitted) {
-            // Extract and emit new content (delta from this screen)
-            const delta = this.extractNewContent(
-              screen,
-              lastEmittedContent,
-              this.lastSanitizedPrompt
-            );
-            if (delta.trim().length > 0) {
-              this.streamingChunkEmitter.fire(delta);
-              // Also append filtered delta to output channel (not raw TUI data)
-              if (this.shouldShowOutput()) {
-                this.outputChannel?.append(delta);
-              }
-            }
-
-            // Check for escape indicator in this screen
-            const hasIndicator = screenLower.includes(escapeIndicator);
-
-            if (hasIndicator) {
-              // CLI is actively generating - reset counter and mark that we've seen it
-              if (!indicatorEverSeen) {
-                this.log(
-                  `🔍 [Screen] First indicator seen - CLI is now processing`
-                );
-              }
-              indicatorEverSeen = true;
-              consecutiveNoIndicatorScreens = 0;
-            } else if (indicatorEverSeen) {
-              // Only count absence after we've seen it at least once
-              consecutiveNoIndicatorScreens++;
-              this.log(
-                `🔍 [Screen] No indicator, consecutiveNoIndicator=${consecutiveNoIndicatorScreens}`
-              );
-
-              // Require 2+ consecutive complete screens without indicator
-              if (consecutiveNoIndicatorScreens >= 2) {
-                this.log(
-                  `✅ Response complete (no indicator for ${consecutiveNoIndicatorScreens} consecutive screens)`
-                );
-                completed = true;
-                break;
-              }
-            }
-            // If !indicatorEverSeen && !hasIndicator, we're still waiting for CLI to start processing
-          }
-        }
-
-        if (completed) {
-          break;
-        }
-      }
-
-      // Clear the submission timer if still pending
-      if (submissionTimeoutId) {
-        this.log(
-          `⏳ [CLEANUP] Clearing pending submission timer (stream ended)`
-        );
-        clearTimeout(submissionTimeoutId);
-      }
-      clearTimeout(timeoutId);
-
-      // Process any remaining content in the buffer (e.g., error messages without status bar)
-      if (promptSubmitted && screenBuffer.trim().length > 0) {
-        this.log(
-          `📺 [REMAINDER] Processing ${screenBuffer.length} chars remaining in buffer (may contain errors/incomplete output)`
-        );
-        const delta = this.extractNewContent(
-          screenBuffer,
-          lastEmittedContent,
-          this.lastSanitizedPrompt
-        );
-        if (delta.trim().length > 0) {
-          this.log(
-            `📺 [REMAINDER] Emitting ${delta.length} chars from remainder buffer`
-          );
-          this.streamingChunkEmitter.fire(delta);
-        }
-      }
-
-      this.log(
-        `📺 Streaming complete: ${chunkCount} chunks, ${totalBytes} bytes | State: tuiReady=${tuiReady}, promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, completed=${completed}`
-      );
-      this.log(
-        `📺 [FILE FLOW SUMMARY] Final state: Did we submit \\r? ${promptSubmitted} | Did response complete? ${completed} | Error detected? ${errorDetected}`
-      );
-
-      // Handle CLI errors detected during execution
-      if (errorDetected) {
-        this.log(
-          `❌ CLI error detected - disposing terminal to stop paste, switching to dashboard`
-        );
-        // Emit full error message to dashboard FIRST (before disposing terminal)
-        this.streamingChunkEmitter.fire(
-          `\n❌ CLI Error Detected:\n\n${errorMessage}\n\n` +
-            "The CLI crashed during execution. Terminal disposed to prevent further paste operations.\n"
-        );
-        // Try to open/focus FlightPath panel so user sees the error
-        try {
-          await vscode.commands.executeCommand("flightpath.openPanel");
-        } catch (err) {
-          // Ignore if command fails - error is still logged to output channel
-          this.log(`⚠️ Could not focus FlightPath panel: ${err}`);
-        }
-        // Small delay to ensure dashboard message is visible before terminal closes
-        await this.delay(100);
-        // Dispose terminal to stop paste into crashed CLI
-        this.disposeTerminalIfExists();
-        this.responseCompleteEmitter.fire("CLI error");
-        return false;
-      }
-
-      if (completed) {
-        this.responseCompleteEmitter.fire("Response complete");
-        return true;
-      } else if (promptSubmitted) {
-        // Stream ended after prompt was submitted - treat as success
-        this.log(
-          "⚠️ Stream ended after prompt submitted - treating as success"
-        );
-        this.responseCompleteEmitter.fire("Stream ended");
-        return true;
-      } else if (promptTextSent) {
-        // File reference was sent but not yet submitted (file still being processed?)
-        this.log("⚠️ Stream ended during file processing - may be incomplete");
-        this.responseCompleteEmitter.fire(
-          "Stream ended during file processing"
-        );
-        return false;
-      } else {
-        // TUI never became ready
-        this.log("❌ TUI never became ready");
-        this.responseCompleteEmitter.fire("TUI not ready");
-        return false;
-      }
-    } catch (error) {
-      if (submissionTimeoutId) {
-        clearTimeout(submissionTimeoutId);
-      }
-      clearTimeout(timeoutId);
-
-      // AbortError is expected on timeout/cancel
-      if (error instanceof Error && error.name === "AbortError") {
-        // Check if this was user cancellation vs timeout
-        const wasCancelled = this.isCancelling;
-
-        if (wasCancelled) {
-          console.log("⏹️ Interactive TUI cancelled by user");
-          this.responseCompleteEmitter.fire("Interactive TUI cancelled");
-          return false;
-        }
-
-        // Timeout scenario
-        if (promptSubmitted) {
-          this.responseCompleteEmitter.fire("Timeout after prompt submitted");
-          return true; // Treat as success if prompt was submitted
-        }
-        this.responseCompleteEmitter.fire("Timeout");
-        return false;
-      }
-
-      this.log(`❌ Stream error: ${error}`);
-      this.streamingChunkEmitter.fire(
-        `\n❌ Error capturing output: ${error}\n` +
-          "   Please view the terminal window for the output.\n"
-      );
-      this.responseCompleteEmitter.fire("Stream error");
-      return false;
-    } finally {
-      this.readAbortController = undefined;
-
-      // Cleanup temp prompt file if it was created
-      if (tempFilePath) {
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const tempMgr = new TempFileManager(workspaceRoot);
-          await tempMgr.deleteFile(tempFilePath);
-          this.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
-        }
-      }
-    }
-  }
-
-  /**
-   * Strip ANSI escape codes and terminal control sequences from output for clean display.
-   *
-   * This is surgical - only removes actual terminal control sequences, not content.
-   * Preserves all printable characters including markdown formatting (*, #, `, etc.)
-   */
-  protected stripAnsiCodes(text: string): string {
-    return (
-      text
-        // OSC sequences: \x1B] ... terminated by BEL (\x07) or ST (\x1B\\)
-        .replace(/\x1B\].*?(?:\x07|\x1B\\)/g, "")
-        // CSI sequences: \x1B[ followed by parameters and command letter
-        // This includes cursor movement, colors, etc. but NOT printable content
-        .replace(/\x1B\[[0-9;?]*[A-Za-z]/g, "")
-        // Other escape sequences: \x1B followed by single character (not [)
-        .replace(/\x1B[@-Z\\-_]/g, "")
-        // Standalone BEL character (used in some terminals)
-        .replace(/\x07/g, "")
-        // Clean up excessive newlines but preserve paragraph breaks
-        .replace(/\n{4,}/g, "\n\n\n")
-    );
-  }
-
-  /**
-   * Extract complete TUI screens from a buffer.
-   *
-   * TUI apps redraw the entire screen each frame. Chunks from execution.read()
-   * can contain multiple complete screens OR partial screens. We need to:
-   * 1. Accumulate chunks into a buffer
-   * 2. Detect screen boundaries (the status bar "Ctrl+c Exit" pattern marks end of screen)
-   * 3. Return complete screens and the remaining partial buffer
-   *
-   * @param buffer The accumulated buffer of TUI output
-   * @returns Object with array of complete screens and remaining buffer
-   */
-  private extractScreensFromBuffer(buffer: string): {
-    screens: string[];
-    remainder: string;
-  } {
-    const screens: string[] = [];
-
-    // Screen boundary marker - CLI-specific pattern that marks end of each TUI frame
-    const screenEndPattern = this.getScreenEndPattern();
-
-    let lastIndex = 0;
-    let match;
-
-    // Find all complete screens (ending with the status bar)
-    while ((match = screenEndPattern.exec(buffer)) !== null) {
-      // Extract the complete screen (from last boundary to this one, inclusive)
-      const screenEnd = match.index + match[0].length;
-      const screen = buffer.substring(lastIndex, screenEnd);
-
-      if (screen.trim().length > 0) {
-        screens.push(screen);
-      }
-
-      lastIndex = screenEnd;
-    }
-
-    // Everything after the last complete screen is the remainder (partial screen)
-    const remainder = buffer.substring(lastIndex);
-
-    return { screens, remainder };
-  }
-
-  /**
-   * Extract new content from a screen that hasn't been emitted yet.
-   *
-   * Uses a smarter approach to deduplication:
-   * - Preserves empty lines (important for code blocks and formatting)
-   * - Only filters TUI chrome, not content
-   * - Tracks content by trimmed line for dedup, but preserves original formatting
-   * - Filters out the prompt echo (already shown in Prompt section)
-   * - Collapses consecutive blank lines to maximum of 2
-   *
-   * @param screen The current screen content
-   * @param emittedContent Set of content lines already emitted (normalized)
-   * @param promptToFilter Optional prompt text to filter from the response (for echo removal)
-   * @returns New content to emit (modifies emittedContent set)
-   */
-  private extractNewContent(
-    screen: string,
-    emittedContent: Set<string>,
-    promptToFilter?: string
-  ): string {
-    const lines = screen.split(/\r?\n/);
-    const newLines: string[] = [];
-    let consecutiveBlankLines = 0;
-
-    // Build set of prompt lines for efficient filtering (normalize for comparison)
-    const promptLines = new Set<string>();
-    if (promptToFilter) {
-      promptToFilter.split(/\r?\n/).forEach((line) => {
-        const trimmed = line.trim();
-        if (trimmed.length > 0) {
-          promptLines.add(trimmed);
-        }
-      });
-    }
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-
-      // Skip TUI chrome (but not empty lines - they're important for formatting)
-      if (trimmed.length > 0 && this.isTuiChromeLine(line)) {
-        continue;
-      }
-
-      // Skip prompt echo lines (already shown in Prompt section)
-      if (trimmed.length > 0 && promptLines.has(trimmed)) {
-        continue;
-      }
-
-      // For deduplication, use normalized (trimmed) version
-      // But preserve original line formatting in output
-      const dedupKey = trimmed;
-
-      // Skip if we've already emitted this content line
-      // Empty lines are NOT deduplicated (always pass through, but limited)
-      if (dedupKey.length > 0 && emittedContent.has(dedupKey)) {
-        continue;
-      }
-
-      // Handle blank line collapsing (max 2 consecutive blank lines)
-      if (trimmed.length === 0) {
-        consecutiveBlankLines++;
-        if (consecutiveBlankLines <= 2) {
-          newLines.push(line);
-        }
-        // Skip blank lines beyond 2
-        continue;
-      } else {
-        // Reset counter on non-blank line
-        consecutiveBlankLines = 0;
-      }
-
-      // New content - track it and preserve original line (with indentation)
-      if (dedupKey.length > 0) {
-        emittedContent.add(dedupKey);
-      }
-      newLines.push(line);
-    }
-
-    if (newLines.length === 0) {
-      return "";
-    }
-
-    // Join with newlines and add trailing newline
-    return newLines.join("\n") + "\n";
-  }
-
-  /**
-   * Check if a line is TUI chrome (borders, prompts, status) that should be filtered.
-   *
-   * Patterns are specific to match complete TUI elements, not content fragments.
-   * Avoids matching markdown headers (#), code fences (```), or horizontal rules (---).
-   */
-  private isTuiChromeLine(line: string): boolean {
-    const trimmed = line.trim();
-
-    // Empty or whitespace-only lines - keep them (preserve formatting)
-    if (trimmed.length === 0) {
-      return false;
-    }
-
-    const chromPatterns = [
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only (8+ chars to avoid false positives)
-      /Ctrl\+[a-z]\s+\w+.*Ctrl\+/i, // Multiple keyboard shortcuts (status bar pattern)
-      /^Enter @ to mention/i, // Copilot prompt hint at start of line
-      /^\(Esc to cancel\)/i, // Exact thinking indicator
-      /^\(Esc to interrupt\)/i, // Exact Claude thinking indicator
-      /^>\s*$/, // Empty prompt only
-      /^[∙◉◎●]\s*$/, // Spinner alone
-      /^Thinking\s*\([^)]*\)\s*$/i, // Complete thinking status line
-      /^⎇\s+\w+\*?\s*[│|]\s*gpt-/i, // Git branch + model (status bar combo)
-      /^\d+x\)\s*$/, // Exact token multiplier pattern
-      /^Welcome to (GitHub Copilot|Claude)/i, // Welcome messages
-    ];
-
-    return chromPatterns.some((pattern) => pattern.test(trimmed));
-  }
 
   /**
    * Get the CLI name for terminal/logging (e.g., "copilot" or "claude")
@@ -1004,18 +310,63 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.currentExecution = execution;
       this.log(`🎮 [TRACE] executeCommand returned, got execution object`);
 
-      // Wait for TUI to be ready by watching for output that indicates Copilot has started
-      // Then send the prompt and continue streaming for completion detection
-      this.log("⏳ Waiting for TUI to be ready (watching for output)...");
-      const success = await this.waitForTuiAndExecute(
-        terminal,
-        execution,
-        promptText,
-        ConfigurationUtils.getCliExecutionTimeoutMs(),
-        workflowContext
-      );
+      // Create temp file for prompt passing
+      const workspaceRoot = this.getWorkspaceRoot();
+      if (!workspaceRoot) {
+        throw new Error("No workspace root available for temp file");
+      }
 
-      return success;
+      const tempMgr = new TempFileManager(workspaceRoot);
+      let tempFilePath: string | undefined;
+
+      try {
+        // Write prompt to temp file
+        tempFilePath = await tempMgr.createPromptFile(
+          promptText,
+          workflowContext?.filePath,
+          workflowContext ? workflowContext.promptIndex + 1 : undefined
+        );
+        const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
+        const fileReference = `@${relativeFilePath}`;
+
+        this.log(`📁 Temp file created: ${relativeFilePath}`);
+        this.lastFileReference = fileReference;
+        this.lastSanitizedPrompt = promptText;
+
+        // Create TUI processor with CLI-specific configuration
+        const tuiConfig: TuiStreamConfig = {
+          escapeIndicator: this.getEscapeIndicator(),
+          screenEndPattern: this.getScreenEndPattern(),
+          tuiChromePattern: this.getTuiChromePattern(),
+          streamingEmitter: this.streamingChunkEmitter,
+          responseCompleteEmitter: this.responseCompleteEmitter,
+        };
+
+        const tuiProcessor = new TuiStreamProcessor(tuiConfig, (msg) =>
+          this.log(msg)
+        );
+
+        // Process TUI stream until completion
+        this.log("⏳ Waiting for TUI to be ready (watching for output)...");
+        const success = await tuiProcessor.processStream(
+          execution,
+          terminal,
+          promptText,
+          fileReference,
+          ConfigurationUtils.getCliExecutionTimeoutMs(),
+          this.lastSanitizedPrompt,
+          this.shouldShowOutput(),
+          this.outputChannel
+        );
+
+        return success;
+      } finally {
+        // Cleanup temp prompt file
+        if (tempFilePath) {
+          await tempMgr.deleteFile(tempFilePath);
+          this.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+        }
+      }
     } catch (error) {
       this.log(`❌ TUI execution error: ${error}`);
       throw error;

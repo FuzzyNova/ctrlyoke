@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PromptItem } from "../types/FlightPathTypes";
+import { TempFileManager } from "./TempFileManager";
 
 /**
  * Configuration for TUI stream processing
@@ -73,14 +74,15 @@ export class TuiStreamProcessor {
    * - Escape indicator appears (CLI generating)
    * - Escape indicator disappears for 2+ screens (complete)
    *
+   * @param fileReference The @file reference to send when TUI is ready (e.g., "@.flightpath/temp/prompt-1.txt")
    * @returns true if completed successfully, false on timeout/error
    */
   async processStream(
     execution: vscode.TerminalShellExecution,
     terminal: vscode.Terminal,
     promptText: string,
+    fileReference: string,
     timeoutMs: number,
-    fileReferenceSent: string,
     lastSanitizedPrompt?: string,
     shouldShowOutput?: boolean,
     outputChannel?: vscode.OutputChannel
@@ -107,16 +109,16 @@ export class TuiStreamProcessor {
 
     // Check if file reference has been echoed back by the CLI
     const isFileReferenceEchoed = (): boolean => {
-      if (!fileReferenceSent) {
+      if (!fileReference) {
         return false;
       }
 
       const bufferLower = fileEchoBuffer.toLowerCase();
-      const fileRefLower = fileReferenceSent.toLowerCase();
+      const fileRefLower = fileReference.toLowerCase();
 
       if (bufferLower.includes(fileRefLower)) {
         this.logger?.(
-          `🔍 File reference verified: found "${fileReferenceSent}" in terminal echo`
+          `🔍 File reference verified: found "${fileReference}" in terminal echo`
         );
         return true;
       }
@@ -202,13 +204,21 @@ export class TuiStreamProcessor {
         for (const screen of screens) {
           const screenLower = screen.toLowerCase();
 
-          // Phase 1: First complete screen means TUI is ready - mark as ready
-          // (Caller is responsible for sending the file reference)
+          // Phase 1: First complete screen means TUI is ready - send file reference
           if (!tuiReady) {
             this.logger?.("✅ TUI is ready (first complete screen detected)");
             tuiReady = true;
+
+            // Small delay to ensure TUI is fully interactive
             await this.delay(TUI_READY_DELAY_MS);
+
+            // Send @file reference to CLI (instant, no chunking!)
+            this.logger?.(`📁 Sending file reference: ${fileReference}`);
+            terminal.sendText(fileReference, false);
             promptTextSent = true;
+
+            this.logger?.(`📁 ✅ File reference sent. Waiting for CLI to read file...`);
+            this.logger?.(`⏳ Entering file read detection phase. Will submit after ${this.fileSilenceMs}ms of silence.`);
             startSubmissionTimer();
           }
 
