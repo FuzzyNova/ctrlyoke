@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { ChildProcess } from "child_process";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { PromptItem } from "../../types/FlightPathTypes";
@@ -7,7 +6,11 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import { TuiStreamProcessor, TuiStreamConfig } from "../../utils/TuiStreamProcessor";
+import {
+  TuiStreamProcessor,
+  TuiStreamConfig,
+} from "../../utils/TuiStreamProcessor";
+import { LoggingUtils } from "../../utils/LoggingUtils";
 
 /**
  * Execution mode for CLI integrations
@@ -48,7 +51,6 @@ export const CLI_WARNING_MESSAGES = {
 export abstract class BaseCliIntegration extends CopilotIntegration {
   protected sessionId?: string;
   protected initializationStatus: CopilotStatus = CopilotStatus.Initializing;
-  protected outputChannel?: vscode.OutputChannel;
   protected lastResult?: CopilotCliResult;
   protected lastCliCommand?: string;
   protected lastFullPrompt?: string;
@@ -61,26 +63,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // TUI completion detection - now using execution.read() instead of proposed API
   private readAbortController?: AbortController;
 
-  // Track the file reference sent to terminal for paste detection
-  private lastFileReference?: string;
   // Track the sanitized prompt sent to terminal for filtering echo in response
   private lastSanitizedPrompt?: string;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    outputChannel?: vscode.OutputChannel
-  ) {
+  constructor(context: vscode.ExtensionContext) {
     super(context);
-    this.outputChannel = outputChannel;
     this.processManager = new CliProcessManager(
       this.getWorkspaceRoot() || "",
-      (msg) => this.log(msg)
+      (msg) => LoggingUtils.debug(msg)
     );
   }
-
-  // ============================================================
-  // EXECUTION MODE HELPERS
-  // ============================================================
 
   /**
    * Get the configured execution mode (interactive or headless)
@@ -98,7 +90,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * the user closes it or the new terminal opens.
    */
   protected disposeTerminalIfExists(): void {
-    this.log("🗑️ Disposing existing terminal for fresh CLI session");
+    LoggingUtils.debug("🗑️ Disposing existing terminal for fresh CLI session");
     this.processManager.disposeTerminal();
     this.currentExecution = undefined;
   }
@@ -130,7 +122,27 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     );
   }
 
+  /**
+   * Get the CLI-specific integration mode string (e.g., "copilot-cli")
+   */
+  protected abstract getIntegrationMode(): string;
 
+  /**
+   * Get display name for status messages (e.g., "Copilot CLI", "Claude Code CLI")
+   */
+  protected abstract getCliDisplayName(): string;
+
+  /**
+   * Get installation hint for unavailable CLI
+   */
+  protected abstract getInstallHint(): string;
+
+  /**
+   * Parse token counts from statistics string
+   */
+  abstract parseTokenCounts(
+    statistics: string
+  ): { prompt: number; completion: number } | undefined;
 
   /**
    * Get the CLI name for terminal/logging (e.g., "copilot" or "claude")
@@ -230,10 +242,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected abstract buildInteractiveTuiCommand(baseArgs: string[]): string;
 
-  // ============================================================
-  // INTERACTIVE TUI EXECUTION
-  // ============================================================
-
   /**
    * Execute a CLI command in interactive TUI mode.
    *
@@ -267,24 +275,24 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const tuiCommand = this.buildInteractiveTuiCommand(args);
     const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
 
-    this.log(`🎮 [TRACE] executeInTerminal called`);
-    this.log(`🎮 [TRACE] tuiCommand: ${tuiCommand}`);
-    this.log(
+    LoggingUtils.debug(`🎮 [TRACE] executeInTerminal called`);
+    LoggingUtils.debug(`🎮 [TRACE] tuiCommand: ${tuiCommand}`);
+    LoggingUtils.debug(
       `🎮 [TRACE] promptText (first 50 chars): ${promptText.substring(0, 50)}`
     );
-    this.log(`📝 Prompt length: ${promptText.length} characters`);
+    LoggingUtils.info(`📝 Prompt length: ${promptText.length} characters`);
 
     // Always create a fresh terminal to ensure clean CLI state
     // The old terminal may have a CLI process still running in interactive mode,
     // and sending a new command would paste into that session instead of starting fresh.
     // Session continuity is handled via --resume flag, not terminal reuse.
-    this.log(`🎮 [TRACE] Creating fresh terminal...`);
+    LoggingUtils.debug(`🎮 [TRACE] Creating fresh terminal...`);
     const terminal = await this.createFreshTerminal();
-    this.log(`🎮 [TRACE] Got fresh terminal, showing it...`);
+    LoggingUtils.debug(`🎮 [TRACE] Got fresh terminal, showing it...`);
     terminal.show();
 
     // Fire prompt ready event
-    this.log(`🎮 [TRACE] Firing promptReadyEmitter...`);
+    LoggingUtils.debug(`🎮 [TRACE] Firing promptReadyEmitter...`);
     this.promptReadyEmitter.fire({
       fullPrompt: promptText,
       cliCommand: displayCommand,
@@ -297,18 +305,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     try {
       // Wait for shell integration (needed for executeCommand and read())
-      this.log(`🎮 [TRACE] Waiting for shell integration...`);
+      LoggingUtils.debug(`🎮 [TRACE] Waiting for shell integration...`);
       const shellIntegration = await this.waitForShellIntegration(terminal);
-      this.log(`🎮 [TRACE] Got shell integration`);
+      LoggingUtils.debug(`🎮 [TRACE] Got shell integration`);
 
       // Use executeCommand to get an execution object for read() streaming
       // Note: executeCommand queues internally, so we wait for TUI output before sending prompt
-      this.log(
+      LoggingUtils.debug(
         `🎮 [TRACE] Calling shellIntegration.executeCommand("${tuiCommand}")`
       );
       const execution = shellIntegration.executeCommand(tuiCommand);
       this.currentExecution = execution;
-      this.log(`🎮 [TRACE] executeCommand returned, got execution object`);
+      LoggingUtils.debug(`🎮 [TRACE] executeCommand returned, got execution object`);
 
       // Create temp file for prompt passing
       const workspaceRoot = this.getWorkspaceRoot();
@@ -329,8 +337,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
         const fileReference = `@${relativeFilePath}`;
 
-        this.log(`📁 Temp file created: ${relativeFilePath}`);
-        this.lastFileReference = fileReference;
+        LoggingUtils.info(`📁 Temp file created: ${relativeFilePath}`);
         this.lastSanitizedPrompt = promptText;
 
         // Create TUI processor with CLI-specific configuration
@@ -343,11 +350,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         };
 
         const tuiProcessor = new TuiStreamProcessor(tuiConfig, (msg) =>
-          this.log(msg)
+          LoggingUtils.debug(msg)
         );
 
         // Process TUI stream until completion
-        this.log("⏳ Waiting for TUI to be ready (watching for output)...");
+        LoggingUtils.info("⏳ Waiting for TUI to be ready (watching for output)...");
         const success = await tuiProcessor.processStream(
           execution,
           terminal,
@@ -355,8 +362,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           fileReference,
           ConfigurationUtils.getCliExecutionTimeoutMs(),
           this.lastSanitizedPrompt,
-          this.shouldShowOutput(),
-          this.outputChannel
+          this.shouldShowOutput()
         );
 
         return success;
@@ -364,11 +370,11 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         // Cleanup temp prompt file
         if (tempFilePath) {
           await tempMgr.deleteFile(tempFilePath);
-          this.log(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          LoggingUtils.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
         }
       }
     } catch (error) {
-      this.log(`❌ TUI execution error: ${error}`);
+      LoggingUtils.error(`❌ TUI execution error`, error);
       throw error;
     }
   }
@@ -379,10 +385,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
-
-  // ============================================================
-  // HEADLESS PROCESS EXECUTION WITH STDIN
-  // ============================================================
 
   /**
    * Execute a CLI command in headless mode using temp file for prompt passing.
@@ -436,14 +438,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         workflowContext ? workflowContext.promptIndex + 1 : undefined
       );
       const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-      this.log(`📝 Created temp file: ${relativeFilePath}`);
+      LoggingUtils.info(`📝 Created temp file: ${relativeFilePath}`);
 
       // Build args with temp file reference
       const headlessArgs = this.buildHeadlessArgs(args, `@${relativeFilePath}`);
       const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
 
-      this.log(`🚀 Starting headless mode with file: ${displayCommand}`);
-      this.log(`📝 Prompt length: ${promptText.length} characters`);
+      LoggingUtils.info(`🚀 Starting headless mode with file: ${displayCommand}`);
+      LoggingUtils.info(`📝 Prompt length: ${promptText.length} characters`);
 
       // Store for debugging
       this.lastCliCommand = displayCommand;
@@ -472,20 +474,20 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       // Check for cancellation
       if (this.isCancelling) {
-        this.log("⏹️ Prompt execution cancelled by user");
+        LoggingUtils.info("⏹️ Prompt execution cancelled by user");
         return false;
       }
 
       // Delegate result handling to subclass
       return await executeCallback(result);
     } catch (error) {
-      this.log(`❌ Headless execution error: ${error}`);
+      LoggingUtils.error(`❌ Headless execution error`, error);
       return false;
     } finally {
       // Cleanup temp file
       if (tempFilePath) {
         await tempMgr.deleteFile(tempFilePath);
-        this.log(`🗑️ Cleaned up temp file`);
+        LoggingUtils.debug(`🗑️ Cleaned up temp file`);
       }
     }
   }
@@ -532,20 +534,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     return await this.processManager.spawnSimple(command, args, timeoutMs);
   }
 
-  // ============================================================
-  // LOGGING HELPERS
-  // ============================================================
-
-  /**
-   * Log message to both console and output channel (if enabled)
-   */
-  protected log(message: string): void {
-    console.log(message);
-    if (this.shouldShowOutput()) {
-      this.outputChannel?.appendLine(message);
-    }
-  }
-
   /**
    * Check if output should be shown in Output panel
    */
@@ -558,21 +546,21 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected logPrompt(promptText: string): void {
     if (this.shouldShowOutput()) {
-      this.outputChannel?.appendLine("");
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine("");
+      LoggingUtils.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(
         `[PROMPT] ${new Date().toLocaleTimeString()}`
       );
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      this.outputChannel?.appendLine(promptText);
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(promptText);
+      LoggingUtils.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      this.outputChannel?.appendLine("");
+      LoggingUtils.appendLine("");
     }
   }
 
@@ -581,22 +569,22 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected logResponse(response: string, statistics?: string): void {
     if (this.shouldShowOutput()) {
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(
         `[RESPONSE] ${new Date().toLocaleTimeString()}`
       );
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(
         "───────────────────────────────────────────────────────────"
       );
-      this.outputChannel?.appendLine(response);
+      LoggingUtils.appendLine(response);
       if (statistics) {
-        this.outputChannel?.appendLine("");
-        this.outputChannel?.appendLine("[STATISTICS]");
-        this.outputChannel?.appendLine(statistics);
+        LoggingUtils.appendLine("");
+        LoggingUtils.appendLine("[STATISTICS]");
+        LoggingUtils.appendLine(statistics);
       }
-      this.outputChannel?.appendLine(
+      LoggingUtils.appendLine(
         "═══════════════════════════════════════════════════════════"
       );
-      this.outputChannel?.appendLine("");
+      LoggingUtils.appendLine("");
     }
   }
 
@@ -660,8 +648,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       if (result.exitCode === 0) {
         const version = result.stdout.trim();
-        console.log(`✅ ${this.getCliName()} CLI available:`, version);
-        this.log(`✅ ${this.getCliName()} CLI available: ${version}`);
+        LoggingUtils.info(`✅ ${this.getCliName()} CLI available: ${version}`);
         this.isAvailable = true;
         this.initializationStatus = CopilotStatus.Ready;
         this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -685,9 +672,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     this.initializationStatus = CopilotStatus.Unavailable;
     this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
 
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(`❌ ${this.getCliName()} CLI not available:`, errorMessage);
-    this.log(`❌ ${this.getCliName()} CLI unavailable: ${errorMessage}`);
+    LoggingUtils.error(`❌ ${this.getCliName()} CLI not available`, error);
   }
 
   /**
@@ -701,10 +686,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       );
     }
   }
-
-  // ============================================================
-  // STATUS METHODS
-  // ============================================================
 
   isIntegrationAvailable(): boolean {
     return this.isAvailable;
@@ -722,10 +703,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     return true;
   }
 
-  // ============================================================
-  // CANCELLATION
-  // ============================================================
-
   /**
    * Cancel the current CLI process
    */
@@ -742,7 +719,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     // Fire responseComplete so FlightPathManager can call confirmedStopped()
     this.responseCompleteEmitter.fire("Execution cancelled");
-    this.log("✅ Execution cancelled");
+    LoggingUtils.info("✅ Execution cancelled");
   }
 
   /**
@@ -756,10 +733,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     this.processManager.dispose();
     this.currentExecution = undefined;
   }
-
-  // ============================================================
-  // STATUS METHODS (CONTINUED)
-  // ============================================================
 
   /**
    * Get integration status.
@@ -793,30 +766,4 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const [, toolName, args] = match;
     return args ? [toolName, args] : [toolName];
   }
-
-  // ============================================================
-  // ABSTRACT METHODS
-  // ============================================================
-
-  /**
-   * Get the CLI-specific integration mode string (e.g., "copilot-cli")
-   */
-  protected abstract getIntegrationMode(): string;
-
-  /**
-   * Get display name for status messages (e.g., "Copilot CLI", "Claude Code CLI")
-   */
-  protected abstract getCliDisplayName(): string;
-
-  /**
-   * Get installation hint for unavailable CLI
-   */
-  protected abstract getInstallHint(): string;
-
-  /**
-   * Parse token counts from statistics string
-   */
-  abstract parseTokenCounts(
-    statistics: string
-  ): { prompt: number; completion: number } | undefined;
 }

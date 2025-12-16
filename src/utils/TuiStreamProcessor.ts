@@ -84,8 +84,7 @@ export class TuiStreamProcessor {
     fileReference: string,
     timeoutMs: number,
     lastSanitizedPrompt?: string,
-    shouldShowOutput?: boolean,
-    outputChannel?: vscode.OutputChannel
+    shouldShowOutput?: boolean
   ): Promise<boolean> {
     let tuiReady = false;
     let promptTextSent = false;
@@ -237,7 +236,8 @@ export class TuiStreamProcessor {
             if (delta.trim().length > 0) {
               this.config.streamingEmitter.fire(delta);
               if (shouldShowOutput) {
-                outputChannel?.append(delta);
+                const LoggingUtils = require("./LoggingUtils").LoggingUtils;
+                LoggingUtils.append(delta);
               }
             }
 

@@ -4,24 +4,13 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
-import { CopilotStatus } from "../base/CopilotIntegration";
-import {
-  BaseCliIntegration,
-  CLI_EXECUTION_MODE,
-  CLI_WARNING_MESSAGES,
-} from "./BaseCliIntegration";
+import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import {
   getCliSupportedModelIds,
   isCliModelSupported,
 } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import {
-  parseFileReferences,
-  parseSymbolReferences,
-  parseDirectoryReferences,
-  FileReference,
-  convertToAtSyntax,
-} from "../../utils/FileReferenceParser";
+import { LoggingUtils } from "../../utils/LoggingUtils";
 
 /**
  * Maps Claude tool names to Copilot permission categories.
@@ -60,11 +49,8 @@ const CLAUDE_TO_COPILOT_TOOL_MAP: Record<string, string | null> = {
 export class CopilotCommandLineIntegration extends BaseCliIntegration {
   private logDirectory?: string;
 
-  constructor(
-    context: vscode.ExtensionContext,
-    outputChannel?: vscode.OutputChannel
-  ) {
-    super(context, outputChannel);
+  constructor(context: vscode.ExtensionContext) {
+    super(context);
     this.initializeLogDirectory();
     this.initialize();
   }
@@ -185,7 +171,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
       this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
     }
-    this.log(`📁 Log directory set to: ${this.logDirectory}`);
+    LoggingUtils.info(`📁 Log directory set to: ${this.logDirectory}`);
   }
 
   // Uses base class initialize() method
@@ -207,7 +193,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     }
   ): Promise<boolean> {
     if (!this.isAvailable) {
-      console.error(
+      LoggingUtils.error(
         "❌ FlightPath: Cannot send prompt - Copilot CLI not available"
       );
       vscode.window.showErrorMessage(
@@ -256,7 +242,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
     } catch (error) {
-      console.error("❌ CLI execution error:", error);
+      LoggingUtils.error("❌ CLI execution error", error);
       this.lastFailureReason =
         error instanceof Error
           ? error.message
@@ -315,7 +301,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
         ? prompt.agent
         : `${prompt.agent}.agent`;
       args.push("--agent", agentName);
-      this.log(`🤖 Using agent: ${agentName}`);
+      LoggingUtils.info(`🤖 Using agent: ${agentName}`);
     }
 
     // Session resumption
@@ -326,7 +312,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     // Note: Prompt is NOT included here - it's handled separately by the execution methods
     // This allows using temp file approach for interactive mode and direct args for headless mode
 
-    this.log(`🔧 CLI arguments: ${JSON.stringify(args)}`);
+    LoggingUtils.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);
 
     return args;
   }
@@ -356,7 +342,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       const sessionId = await this.extractSessionIdFromLogs();
       if (sessionId) {
         this.sessionId = sessionId;
-        this.log(`💾 Session ID extracted: ${sessionId}`);
+        LoggingUtils.debug(`💾 Session ID extracted: ${sessionId}`);
       }
       await this.updateWorkflowProgress();
     }
@@ -391,7 +377,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
         // Check if this was a cancellation
         if (this.isCancelling) {
-          console.log("⏹️ Prompt execution cancelled by user");
+          LoggingUtils.info("⏹️ Prompt execution cancelled by user");
           return false;
         }
 
@@ -402,7 +388,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
         const sessionId = await this.extractSessionIdFromLogs();
         if (sessionId) {
           this.sessionId = sessionId;
-          this.log(`💾 Session ID extracted: ${sessionId}`);
+          LoggingUtils.debug(`💾 Session ID extracted: ${sessionId}`);
         }
 
         if (cliResult.success) {
@@ -411,7 +397,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
           await this.updateWorkflowProgress();
           return true;
         } else {
-          console.error("❌ Copilot CLI failed:", cliResult.error);
+          LoggingUtils.error("❌ Copilot CLI failed", new Error(cliResult.error));
           this.lastFailureReason = `Copilot CLI error: ${cliResult.error}`;
           vscode.window.showErrorMessage(
             `FlightPath: Copilot CLI error: ${cliResult.error}`
@@ -481,7 +467,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     // Model not supported - warn user and fallback
     const supportedModels = getCliSupportedModelIds();
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
-    this.log(`⚠️ ${message}`);
+    LoggingUtils.warn(`⚠️ ${message}`);
 
     vscode.window.showWarningMessage(
       `FlightPath: ${message}\n\nCLI-supported models: ${supportedModels.join(", ")}`
@@ -568,10 +554,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       if (convertedAllowTools.length > 0) {
         const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
         args.push("--allow-tool", ...quotedTools);
-        this.log(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        LoggingUtils.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       } else if (allowedTools.length > 0) {
         // No valid allow patterns after conversion
-        this.log(
+        LoggingUtils.warn(
           "⚠️ Custom tool permissions mode enabled but no valid tools specified. Copilot will prompt for each tool."
         );
       }
@@ -597,13 +583,13 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       if (convertedDenyTools.length > 0) {
         const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
         args.push("--deny-tool", ...quotedTools);
-        this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+        LoggingUtils.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
 
     // Log filtered tools for visibility
     if (filteredTools.length > 0) {
-      this.log(
+      LoggingUtils.info(
         `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
       );
     }
@@ -680,7 +666,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
       return undefined;
     } catch (error) {
-      console.error("❌ Failed to extract session ID from logs:", error);
+      LoggingUtils.error("❌ Failed to extract session ID from logs", error);
       return undefined;
     }
   }

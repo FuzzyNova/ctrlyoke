@@ -2,16 +2,10 @@ import * as vscode from "vscode";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { CopilotStatus } from "../base/CopilotIntegration";
-import {
-  BaseCliIntegration,
-  CLI_EXECUTION_MODE,
-  CLI_WARNING_MESSAGES,
-} from "./BaseCliIntegration";
-import {
-  CLAUDE_CLI_DEFAULT_MODEL,
-  getClaudeModelName,
-} from "../../utils/ModelConstants";
+import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
+import { getClaudeModelName } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { LoggingUtils } from "../../utils/LoggingUtils";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -70,11 +64,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   private cliVersion?: string;
   private streamBuffer: string = ""; // Buffer for incomplete JSON lines in streaming mode
 
-  constructor(
-    context: vscode.ExtensionContext,
-    outputChannel?: vscode.OutputChannel
-  ) {
-    super(context, outputChannel);
+  constructor(context: vscode.ExtensionContext) {
+    super(context);
     this.initialize();
   }
 
@@ -346,8 +337,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       if (result.exitCode === 0) {
         this.cliVersion = result.stdout.trim();
-        console.log("✅ Claude Code CLI available:", this.cliVersion);
-        this.log(`✅ Claude Code CLI available: ${this.cliVersion}`);
+        LoggingUtils.info(`✅ Claude Code CLI available: ${this.cliVersion}`);
         this.isAvailable = true;
         this.initializationStatus = CopilotStatus.Ready;
         this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -376,8 +366,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       errorMessage.includes("not found") ||
       errorMessage.includes("not recognized")
     ) {
-      this.log("   💻 Install: npm install -g @anthropic-ai/claude-code");
-      this.log(
+      LoggingUtils.info("   💻 Install: npm install -g @anthropic-ai/claude-code");
+      LoggingUtils.info(
         "   📖 Documentation: https://docs.anthropic.com/en/docs/claude-code"
       );
     }
@@ -404,7 +394,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     }
   ): Promise<boolean> {
     if (!this.isAvailable) {
-      console.error(
+      LoggingUtils.error(
         "❌ FlightPath: Cannot send prompt - Claude Code CLI not available"
       );
       vscode.window.showErrorMessage(
@@ -451,7 +441,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
     } catch (error) {
-      console.error("❌ Claude CLI execution error:", error);
+      LoggingUtils.error("❌ Claude CLI execution error", error);
       this.lastFailureReason =
         error instanceof Error ? error.message : "Failed to execute Claude CLI";
       vscode.window.showErrorMessage(
@@ -541,7 +531,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Note: In interactive mode, we can't easily extract session ID from JSON output
     // since the terminal output is mixed with ANSI codes. Session continuity may be limited.
     if (success) {
-      this.log("✅ Claude CLI completed successfully");
+      LoggingUtils.info("✅ Claude CLI completed successfully");
     }
 
     return success;
@@ -577,7 +567,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
         // Check if this was a cancellation
         if (this.isCancelling) {
-          console.log("⏹️ Prompt execution cancelled by user");
+          LoggingUtils.info("⏹️ Prompt execution cancelled by user");
           return false;
         }
 
@@ -587,7 +577,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         // Extract and store session ID
         if (cliResult.sessionId) {
           this.sessionId = cliResult.sessionId;
-          this.log(`💾 Session ID: ${this.sessionId}`);
+          LoggingUtils.debug(`💾 Session ID: ${this.sessionId}`);
         }
 
         if (cliResult.success) {
@@ -597,7 +587,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
         } else {
           const errorMsg =
             cliResult.error || "Claude CLI returned non-zero exit code";
-          console.error("❌ Claude CLI execution failed:", errorMsg);
+          LoggingUtils.error("❌ Claude CLI execution failed", new Error(errorMsg));
           this.lastFailureReason = errorMsg;
           vscode.window.showErrorMessage(
             `FlightPath: Claude CLI failed: ${errorMsg}`
@@ -738,8 +728,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     const supportedFormats =
       "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
     const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
-    this.log(`⚠️ ${message}`);
-    this.log(`   Accepted formats: ${supportedFormats}`);
+    LoggingUtils.warn(`⚠️ ${message}`);
+    LoggingUtils.warn(`   Accepted formats: ${supportedFormats}`);
 
     vscode.window.showWarningMessage(`FlightPath: ${message}`);
 
@@ -799,9 +789,9 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       if (convertedAllowTools.length > 0) {
         const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
         args.push("--allowedTools", ...quotedTools);
-        this.log(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        LoggingUtils.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       } else if (allowedTools.length > 0) {
-        this.log(
+        LoggingUtils.warn(
           "⚠️ Custom tool permissions mode enabled but no allowed tools specified. Claude will prompt for each tool."
         );
       }
@@ -821,7 +811,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     if (convertedDenyTools.length > 0) {
       const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
       args.push("--disallowedTools", ...quotedTools);
-      this.log(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+      LoggingUtils.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 
     return args;

@@ -63,6 +63,26 @@ export class LoggingUtils {
     }
   }
 
+  /**
+   * Write directly to output channel (without console.log or timestamp).
+   * Use for formatted output like logPrompt/logResponse that need custom formatting.
+   */
+  static appendLine(message: string): void {
+    if (this.outputChannel) {
+      this.outputChannel.appendLine(message);
+    }
+  }
+
+  /**
+   * Write directly to output channel without newline (without console.log or timestamp).
+   * Use for streaming output that needs to preserve formatting.
+   */
+  static append(message: string): void {
+    if (this.outputChannel) {
+      this.outputChannel.append(message);
+    }
+  }
+
   private static writeLog(
     level: string,
     message: string,

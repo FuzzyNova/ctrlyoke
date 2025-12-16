@@ -47,20 +47,14 @@ export class FlightPathManager {
     this.promptFileParser = new PromptFileParser();
     this.promptQueue = new PromptQueue();
 
-    // Create output channel for CLI output
+    // Create output channel for FlightPath (used for dashboard/workflow logging)
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     context.subscriptions.push(this.outputChannel);
 
     // Initialize ALL integrations so they're always ready to use
-    this.cliIntegration = new CopilotCommandLineIntegration(
-      context,
-      this.outputChannel
-    );
+    this.cliIntegration = new CopilotCommandLineIntegration(context);
     this.chatIntegration = new CopilotChatIntegration(context);
-    this.claudeCliIntegration = new ClaudeCommandLineIntegration(
-      context,
-      this.outputChannel
-    );
+    this.claudeCliIntegration = new ClaudeCommandLineIntegration(context);
 
     this.endConditionEvaluator = new EndConditionEvaluator(context);
     this.endConditionHandler = new EndConditionHandler(
