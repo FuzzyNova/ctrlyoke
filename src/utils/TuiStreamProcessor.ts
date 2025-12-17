@@ -71,13 +71,13 @@ export class TuiStreamProcessor {
    * - Escape indicator appears (CLI generating)
    * - Escape indicator disappears for 2+ screens (complete)
    *
-   * @param fileReference The @file reference to send when TUI is ready (e.g., "@.flightpath/temp/prompt-1.txt")
+   * @param prompt The prompt with @file reference to send when TUI is ready (e.g., "Follow instructions in @.flightpath/temp/prompt-1.txt")
    * @returns true if completed successfully, false on timeout/error
    */
   async processStream(
     execution: vscode.TerminalShellExecution,
     terminal: vscode.Terminal,
-    fileReference: string,
+    prompt: string,
     timeoutMs: number,
     lastSanitizedPrompt?: string,
     shouldShowOutput?: boolean
@@ -104,16 +104,16 @@ export class TuiStreamProcessor {
 
     // Check if file reference has been echoed back by the CLI
     const isFileReferenceEchoed = (): boolean => {
-      if (!fileReference) {
+      if (!prompt) {
         return false;
       }
 
       const bufferLower = fileEchoBuffer.toLowerCase();
-      const fileRefLower = fileReference.toLowerCase();
+      const fileRefLower = prompt.toLowerCase();
 
       if (bufferLower.includes(fileRefLower)) {
         Log.debug(
-          `🔍 File reference verified: found "${fileReference}" in terminal echo`
+          `🔍 File reference verified: found "${prompt}" in terminal echo`
         );
         return true;
       }
@@ -206,8 +206,8 @@ export class TuiStreamProcessor {
             await this.delay(TUI_READY_DELAY_MS);
 
             // Send @file reference to CLI (instant, no chunking!)
-            Log.info(`📁 Sending file reference: ${fileReference}`);
-            terminal.sendText(fileReference, false);
+            Log.info(`📁 Sending file reference: ${prompt}`);
+            terminal.sendText(prompt, false);
             promptTextSent = true;
 
             Log.info(

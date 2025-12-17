@@ -243,6 +243,49 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract buildInteractiveTuiCommand(baseArgs: string[]): string;
 
   /**
+   * Create a temp file for the prompt and return file reference with instruction.
+   * Returns both the temp file path (for cleanup) and the instructional prompt text
+   * that tells the LLM to follow instructions in the file.
+   *
+   * Using "Follow instructions in" prefix helps LLMs (especially GPT-5) understand
+   * that the file reference contains prompt instructions, not just a file to read.
+   * This matches GitHub Copilot's /prompt.md syntax behavior.
+   *
+   * @param promptText The full prompt text to write to the file
+   * @param workflowContext Optional workflow context for meaningful filename
+   * @returns Object with tempFilePath for cleanup and promptWithInstruction for CLI
+   */
+  protected async createPromptFileWithReference(
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<{ tempFilePath: string; promptWithInstruction: string }> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace root available for temp file");
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const tempFilePath = await tempMgr.createPromptFile(
+      promptText,
+      workflowContext?.filePath,
+      workflowContext ? workflowContext.promptIndex + 1 : undefined
+    );
+    const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
+    const fileReference = `@${relativeFilePath}`;
+
+    // Prepend instruction so LLMs understand the file contains the prompt
+    const promptWithInstruction = `Follow instructions in ${fileReference}`;
+
+    Log.info(`📁 Temp file created: ${relativeFilePath}`);
+
+    return { tempFilePath, promptWithInstruction };
+  }
+
+  /**
    * Execute a CLI command in interactive TUI mode.
    *
    * Strategy:
@@ -318,26 +361,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       this.currentExecution = execution;
       Log.debug(`🎮 [TRACE] executeCommand returned, got execution object`);
 
-      // Create temp file for prompt passing
-      const workspaceRoot = this.getWorkspaceRoot();
-      if (!workspaceRoot) {
-        throw new Error("No workspace root available for temp file");
-      }
-
-      const tempMgr = new TempFileManager(workspaceRoot);
+      // Create temp file with instructional prompt
       let tempFilePath: string | undefined;
 
       try {
-        // Write prompt to temp file
-        tempFilePath = await tempMgr.createPromptFile(
-          promptText,
-          workflowContext?.filePath,
-          workflowContext ? workflowContext.promptIndex + 1 : undefined
-        );
-        const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-        const fileReference = `@${relativeFilePath}`;
+        const { tempFilePath: path, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePath = path;
 
-        Log.info(`📁 Temp file created: ${relativeFilePath}`);
         this.lastSanitizedPrompt = promptText;
 
         // Create TUI processor with CLI-specific configuration
@@ -356,7 +387,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const success = await tuiProcessor.processStream(
           execution,
           terminal,
-          fileReference,
+          promptWithInstruction,
           ConfigurationUtils.getCliExecutionTimeoutMs(),
           this.lastSanitizedPrompt,
           this.shouldShowOutput()
@@ -366,8 +397,12 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       } finally {
         // Cleanup temp prompt file
         if (tempFilePath) {
-          await tempMgr.deleteFile(tempFilePath);
-          Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const tempMgr = new TempFileManager(workspaceRoot);
+            await tempMgr.deleteFile(tempFilePath);
+            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          }
         }
       }
     } catch (error) {
@@ -413,25 +448,16 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean> {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("No workspace root available for temp file");
-    }
-    const tempMgr = new TempFileManager(workspaceRoot);
     let tempFilePath: string | undefined;
 
     try {
-      // Create temp file with workflow context for meaningful filename
-      tempFilePath = await tempMgr.createPromptFile(
-        promptText,
-        workflowContext?.filePath,
-        workflowContext ? workflowContext.promptIndex + 1 : undefined
-      );
-      const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-      Log.info(`📝 Created temp file: ${relativeFilePath}`);
+      // Create temp file with instructional prompt
+      const { tempFilePath: path, promptWithInstruction } =
+        await this.createPromptFileWithReference(promptText, workflowContext);
+      tempFilePath = path;
 
-      // Build args with temp file reference
-      const headlessArgs = this.buildHeadlessArgs(args, `@${relativeFilePath}`);
+      // Build args with instructional prompt
+      const headlessArgs = this.buildHeadlessArgs(args, promptWithInstruction);
       const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
 
       Log.info(`🚀 Starting headless mode with file: ${displayCommand}`);
@@ -476,8 +502,12 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     } finally {
       // Cleanup temp file
       if (tempFilePath) {
-        await tempMgr.deleteFile(tempFilePath);
-        Log.debug(`🗑️ Cleaned up temp file`);
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (workspaceRoot) {
+          const tempMgr = new TempFileManager(workspaceRoot);
+          await tempMgr.deleteFile(tempFilePath);
+          Log.debug(`🗑️ Cleaned up temp file`);
+        }
       }
     }
   }
