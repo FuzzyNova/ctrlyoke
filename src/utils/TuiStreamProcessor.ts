@@ -96,7 +96,7 @@ export class TuiStreamProcessor {
     let screenBuffer = "";
     let fileEchoBuffer = ""; // Track terminal output for file reference echo detection
     let rawPasteBuffer = ""; // RAW buffer with ANSI codes for error detection
-    let lastEmittedContent = new Set<string>(); // Track what we've already sent to dashboard
+    let lastEmittedContent = new Map<string, number>(); // Track line occurrence counts from previous screen
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
 
@@ -360,16 +360,23 @@ export class TuiStreamProcessor {
   /**
    * Extract new content from a screen that hasn't been emitted yet.
    *
-   * Features:
-   * - Filters TUI chrome (borders, status bars, prompts)
-   * - Deduplicates content lines (tracks by trimmed content)
-   * - Preserves formatting (indentation, empty lines)
-   * - Filters prompt echo
-   * - Collapses consecutive blank lines (max 2)
+   * Challenge: Claude progressively updates screens, not just appends.
+   * Example:
+   *   Screen 1: "● Read(file1.ts)"
+   *   Screen 2: "● Read(file1.ts)\n  ⎿ Read 10 lines"
+   *
+   * Strategy: Track line occurrence counts between screens.
+   * - If a line appears MORE times in current screen than previous → emit the delta
+   * - Preserves identical lines in different contexts (e.g., multiple "⎿ Read 10 lines")
+   * - Handles progressive updates where annotations get added under existing lines
+   *
+   * @param screen The current screen content
+   * @param emittedContent Map tracking line counts from previous screen
+   * @param promptToFilter Lines from the prompt to filter out
    */
   extractNewContent(
     screen: string,
-    emittedContent: Set<string>,
+    emittedContent: Map<string, number>,
     promptToFilter?: string
   ): string {
     const lines = screen.split(/\r?\n/);
@@ -387,6 +394,25 @@ export class TuiStreamProcessor {
       });
     }
 
+    // Track line counts in CURRENT screen (Map<content, count>)
+    const currentScreenCounts = new Map<string, number>();
+
+    // First pass: count occurrences in current screen
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.length > 0) {
+        currentScreenCounts.set(
+          trimmed,
+          (currentScreenCounts.get(trimmed) || 0) + 1
+        );
+      }
+    }
+
+    // Previous screen's line counts (already a Map)
+    const prevScreenCounts = new Map(emittedContent);
+
+    // Second pass: emit lines that are NEW or appear MORE times than before
+    const emittedInCurrentPass = new Map<string, number>();
     for (const line of lines) {
       const trimmed = line.trim();
 
@@ -397,14 +423,6 @@ export class TuiStreamProcessor {
 
       // Skip prompt echo lines
       if (trimmed.length > 0 && promptLines.has(trimmed)) {
-        continue;
-      }
-
-      // For deduplication, use normalized (trimmed) version
-      const dedupKey = trimmed;
-
-      // Skip if we've already emitted this content line
-      if (dedupKey.length > 0 && emittedContent.has(dedupKey)) {
         continue;
       }
 
@@ -419,23 +437,71 @@ export class TuiStreamProcessor {
         consecutiveBlankLines = 0;
       }
 
-      // New content - track it and preserve original line (with indentation)
-      if (dedupKey.length > 0) {
-        emittedContent.add(dedupKey);
+      // Check if we've already emitted this line in this pass
+      const emittedCount = emittedInCurrentPass.get(trimmed) || 0;
+      const prevCount = prevScreenCounts.get(trimmed) || 0;
+
+      // Emit if: this is a NEW occurrence beyond what was in previous screen
+      if (
+        emittedCount < currentScreenCounts.get(trimmed)! &&
+        emittedCount >= prevCount
+      ) {
+        newLines.push(line);
+        emittedInCurrentPass.set(trimmed, emittedCount + 1);
       }
-      newLines.push(line);
     }
+
+    // Update emittedContent for next screen comparison
+    // Replace with current screen's line counts
+    emittedContent.clear();
+    currentScreenCounts.forEach((count, line) => {
+      emittedContent.set(line, count);
+    });
 
     if (newLines.length === 0) {
       return "";
     }
 
-    return newLines.join("\n") + "\n";
+    // Trim leading/trailing blank lines to prevent accumulation across screens
+    // But preserve ONE trailing blank line if it existed (for natural paragraph breaks)
+    let startIdx = 0;
+    let endIdx = newLines.length - 1;
+    let hadTrailingBlank = false;
+
+    // Trim all leading blank lines
+    while (
+      startIdx < newLines.length &&
+      newLines[startIdx].trim().length === 0
+    ) {
+      startIdx++;
+    }
+
+    // Trim trailing blank lines but remember if we had any
+    while (endIdx >= startIdx && newLines[endIdx].trim().length === 0) {
+      hadTrailingBlank = true;
+      endIdx--;
+    }
+
+    if (startIdx > endIdx) {
+      return ""; // All blank lines
+    }
+
+    const trimmedLines = newLines.slice(startIdx, endIdx + 1);
+    const result = trimmedLines.join("\n") + "\n";
+
+    // Add back one blank line if there was trailing whitespace
+    return hadTrailingBlank ? result + "\n" : result;
   }
 
   /**
    * Check if a line is TUI chrome that should be filtered.
    * Matches specific TUI patterns without catching content.
+   *
+   * Strategy:
+   * - Filter lines ending with "(Esc to cancel)" or "(esc to interrupt)" - these are status indicators
+   * - Filter spinner-only lines or lines that are pure UI chrome
+   * - Use SYMBOLS to identify loading indicators, not words (LLMs choose different words each time)
+   * - Preserve output lines even if they contain spinners (e.g., "● Read(file.ts)" is content, not chrome)
    */
   isTuiChromeLine(line: string): boolean {
     const trimmed = line.trim();
@@ -446,16 +512,21 @@ export class TuiStreamProcessor {
 
     const chromPatterns = [
       /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only
+      /^[─═]{20,}$/, // Long horizontal separators (lenient)
       /Ctrl\+[a-z]\s+\w+.*Ctrl\+/i, // Multiple keyboard shortcuts
       /^Enter @ to mention/i, // Copilot prompt hint
-      /^\(Esc to cancel\)/i, // Copilot thinking indicator
-      /^\(Esc to interrupt\)/i, // Claude thinking indicator
+      /^\(Esc to cancel\)\s*$/i, // Copilot thinking indicator (standalone, line-end)
+      /^\(Esc to interrupt\)\s*$/i, // Claude thinking indicator (standalone, line-end)
       /^>\s*$/, // Empty prompt only
-      /^[∙◉◎●]\s*$/, // Spinner alone
+      /^>\s+.+[↵⧉⎆⏎]\s+\w+\s*$/i, // Prompt lines ending with directional arrow + command (e.g., "↵ send", "⧉ In")
+      /^[✻✽✢✶·◉◎●]\s*$/, // Spinner alone (no other content)
       /^Thinking\s*\([^)]*\)\s*$/i, // Complete thinking status line
       /^⎇\s+\w+\*?\s*[│|]\s*gpt-/i, // Git branch + model
       /^\d+x\)\s*$/, // Token multiplier pattern
       /^Welcome to (GitHub Copilot|Claude)/i, // Welcome messages
+      /\(Esc to cancel\)\s*$/i, // Any line ENDING with "(Esc to cancel)" (catches all loading spinners too)
+      /\(esc to interrupt[^)]*\)\s*$/i, // Any line ENDING with "(esc to interrupt...)" (catches all loading spinners too)
+      /^⏵⏵/, // Edit mode indicator (double chevron prefix)
     ];
 
     return chromPatterns.some((pattern) => pattern.test(trimmed));
