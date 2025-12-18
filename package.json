@@ -322,16 +322,18 @@
           "enum": [
             "copilot-cli",
             "copilot-chat",
-            "claude-cli"
+            "claude-cli",
+            "codex-cli"
           ],
           "enumDescriptions": [
             "Use Copilot CLI (command-line automation - DEFAULT, better reliability & control)",
             "Use Copilot Chat window (UI automation - less reliable than CLI modes)",
-            "Use Claude Code CLI (Anthropic's Claude AI via command line)"
+            "Use Claude Code CLI (Anthropic's Claude AI via command line)",
+            "Use Codex CLI (OpenAI's code-specialized CLI)"
           ],
           "default": "copilot-cli",
           "description": "Choose which AI provider integration to use",
-          "markdownDescription": "Choose which AI provider integration to use.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
+          "markdownDescription": "Choose which AI provider integration to use.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
         },
         "flightpath.promptsDirectory": {
           "order": 10,
@@ -661,6 +663,73 @@
           "default": "sonnet",
           "description": "[Claude CLI] Default AI model",
           "markdownDescription": "**Claude CLI Only.** Default AI model for Claude Code CLI. **Sonnet** (default) provides the best balance of speed and capability. Prompts can override this with `\"model\": \"opus\"` or `\"model\": \"haiku\"`."
+        },
+        "flightpath.codexCliModel": {
+          "order": 410,
+          "type": "string",
+          "enum": [
+            "gpt-5.1-codex-max",
+            "gpt-5.1-codex",
+            "gpt-5.1-codex-mini",
+            "gpt-5.2",
+            "gpt-5.1"
+          ],
+          "enumDescriptions": [
+            "GPT-5.1 Codex Max - Most capable for deep reasoning",
+            "GPT-5.1 Codex - Recommended, optimized for code (default)",
+            "GPT-5.1 Codex Mini - Faster and cheaper, less capable",
+            "GPT-5.2 - Latest frontier model",
+            "GPT-5.1 - Broad world knowledge"
+          ],
+          "default": "gpt-5.1-codex",
+          "description": "[Codex CLI] Default AI model",
+          "markdownDescription": "**Codex CLI Only.** Default AI model for Codex CLI. **gpt-5.1-codex** (default) is optimized for coding tasks. Prompts can override this with `\"model\": \"gpt-5.2\"` or other supported models."
+        },
+        "flightpath.codexSandboxMode": {
+          "order": 411,
+          "type": "string",
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "danger-full-access"
+          ],
+          "enumDescriptions": [
+            "Read-only file access",
+            "Write to workspace + allowed directories (recommended)",
+            "Unrestricted filesystem access (dangerous)"
+          ],
+          "default": "workspace-write",
+          "description": "[Codex CLI] Sandbox mode for custom permission mode",
+          "markdownDescription": "**Codex CLI Only.** Sandbox mode when `cliToolPermissions` is set to **custom**. **workspace-write** (default) allows writing to workspace and directories specified in `codexAllowedDirs`. Only applies when `cliToolPermissions` is **custom**."
+        },
+        "flightpath.codexApprovalPolicy": {
+          "order": 412,
+          "type": "string",
+          "enum": [
+            "untrusted",
+            "on-failure",
+            "on-request",
+            "never"
+          ],
+          "enumDescriptions": [
+            "Ask for non-trusted commands (safe list: ls, cat, sed, etc.)",
+            "Run all, ask only if command fails",
+            "Model decides when to ask (recommended)",
+            "Never ask, fully automated (dangerous)"
+          ],
+          "default": "on-request",
+          "description": "[Codex CLI] Approval policy for custom permission mode",
+          "markdownDescription": "**Codex CLI Only.** Approval policy when `cliToolPermissions` is set to **custom**. **on-request** (default) lets the model decide when to ask for approval. Only applies when `cliToolPermissions` is **custom**."
+        },
+        "flightpath.codexAllowedDirs": {
+          "order": 413,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "[Codex CLI] Additional writable directories",
+          "markdownDescription": "**Codex CLI Only.** Additional directories Codex can write to when `codexSandboxMode` is **workspace-write**. Only applies when `cliToolPermissions` is **custom** and `codexSandboxMode` is **workspace-write**."
         },
         "flightpath.defaultMaxRetries": {
           "order": 500,

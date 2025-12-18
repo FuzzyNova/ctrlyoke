@@ -278,7 +278,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     const fileReference = `@${relativeFilePath}`;
 
     // Prepend instruction so LLMs understand the file contains the prompt
-    const promptWithInstruction = `Follow instructions in ${fileReference}`;
+    // Add trailing space to prevent TUI file picker from activating when cursor is on the file path
+    const promptWithInstruction = `Follow instructions in ${fileReference} `;
 
     Log.info(`📁 Temp file created: ${relativeFilePath}`);
 
@@ -384,7 +385,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
         // Process TUI stream until completion
         Log.info("⏳ Waiting for TUI to be ready (watching for output)...");
-        const success = await tuiProcessor.processStream(
+        const result = await tuiProcessor.processStream(
           execution,
           terminal,
           promptWithInstruction,
@@ -393,7 +394,12 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           this.shouldShowOutput()
         );
 
-        return success;
+        // Store failure reason if execution failed
+        if (!result.success && result.errorMessage) {
+          this.lastFailureReason = result.errorMessage;
+        }
+
+        return result.success;
       } finally {
         // Cleanup temp prompt file
         if (tempFilePath) {

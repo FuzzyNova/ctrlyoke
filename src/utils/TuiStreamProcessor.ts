@@ -3,6 +3,14 @@ import { PromptItem } from "../types/FlightPathTypes";
 import { Log } from "./Log";
 
 /**
+ * Result from TUI stream processing
+ */
+export interface TuiProcessResult {
+  success: boolean;
+  errorMessage?: string;
+}
+
+/**
  * Configuration for TUI stream processing
  */
 export interface TuiStreamConfig {
@@ -72,7 +80,7 @@ export class TuiStreamProcessor {
    * - Escape indicator disappears for 2+ screens (complete)
    *
    * @param prompt The prompt with @file reference to send when TUI is ready (e.g., "Follow instructions in @.flightpath/temp/prompt-1.txt")
-   * @returns true if completed successfully, false on timeout/error
+   * @returns Object with success flag and optional error message
    */
   async processStream(
     execution: vscode.TerminalShellExecution,
@@ -81,7 +89,7 @@ export class TuiStreamProcessor {
     timeoutMs: number,
     lastSanitizedPrompt?: string,
     shouldShowOutput?: boolean
-  ): Promise<boolean> {
+  ): Promise<TuiProcessResult> {
     let tuiReady = false;
     let promptTextSent = false;
     let promptSubmitted = false;
@@ -109,15 +117,43 @@ export class TuiStreamProcessor {
       }
 
       const bufferLower = fileEchoBuffer.toLowerCase();
-      const fileRefLower = prompt.toLowerCase();
 
-      if (bufferLower.includes(fileRefLower)) {
+      // Extract the file path from the prompt (everything after the @ symbol)
+      // This handles cases where CLIs echo the prompt with different spacing
+      const atIndex = prompt.indexOf("@");
+      if (atIndex === -1) {
+        // No @ symbol, just check for the whole prompt
+        if (bufferLower.includes(prompt.toLowerCase())) {
+          Log.debug(
+            `🔍 File reference verified: found "${prompt}" in terminal echo`
+          );
+          return true;
+        }
+        return false;
+      }
+
+      // Extract just the file path part (after @) and trim whitespace
+      // CLIs may trim the prompt when echoing, so we search for the path without leading/trailing spaces
+      const filePath = prompt
+        .substring(atIndex + 1)
+        .trim()
+        .toLowerCase();
+
+      Log.debug(
+        `[File Echo Check] Looking for: "${filePath}" (${filePath.length} chars) in buffer (${bufferLower.length} chars)`
+      );
+      Log.debug(
+        `[File Echo Check] Buffer content: "${bufferLower.substring(0, 200)}${bufferLower.length > 200 ? "..." : ""}"`
+      );
+
+      if (bufferLower.includes(filePath)) {
         Log.debug(
-          `🔍 File reference verified: found "${prompt}" in terminal echo`
+          `🔍 File reference verified: found file path "${filePath}" in terminal echo`
         );
         return true;
       }
 
+      Log.debug(`[File Echo Check] NOT FOUND - file reference not yet echoed`);
       return false;
     };
 
@@ -128,6 +164,9 @@ export class TuiStreamProcessor {
         clearTimeout(submissionTimeoutId);
       }
       submissionTimeoutId = setTimeout(() => {
+        Log.debug(
+          `[Submission Timer] Timer fired! promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}`
+        );
         if (promptTextSent && !promptSubmitted) {
           // Verify file reference was echoed before submitting
           if (isFileReferenceEchoed()) {
@@ -139,6 +178,10 @@ export class TuiStreamProcessor {
             promptSubmitted = true;
             Log.info(
               `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
+            );
+          } else {
+            Log.debug(
+              `[Submission Timer] File reference not yet echoed - will try again on next chunk`
             );
           }
         }
@@ -171,10 +214,24 @@ export class TuiStreamProcessor {
         const cleanData = this.stripAnsiCodes(data);
         screenBuffer += cleanData;
 
+        // Debug: Log chunk info for first few chunks or when stuck waiting
+
+        Log.debug(
+          `[Chunk #${chunkCount}] Raw bytes: ${data.length}, Clean chars: ${cleanData.length}, Total buffer: ${screenBuffer.length}`
+        );
+        Log.debug(`[Chunk #${chunkCount}] Raw data: "${data}"`);
+        Log.debug(`[Chunk #${chunkCount}] Clean data: "${cleanData}"`);
+
         // Accumulate output for file reference echo detection (only while waiting to submit)
         if (promptTextSent && !promptSubmitted) {
           fileEchoBuffer += cleanData;
           rawPasteBuffer += data; // Also keep raw buffer for error detection
+          Log.debug(
+            `[File Echo Buffer] Added ${cleanData.length} chars, total: ${fileEchoBuffer.length} chars`
+          );
+          if (cleanData.length > 0 && cleanData.length < 200) {
+            Log.debug(`[File Echo Buffer] Content: "${cleanData}"`);
+          }
         }
 
         // Check for CLI errors (TUI crash detection)
@@ -193,8 +250,24 @@ export class TuiStreamProcessor {
           this.extractScreensFromBuffer(screenBuffer);
         screenBuffer = remainder;
 
+        // Debug: Log screen extraction results when waiting for TUI
+        if (!tuiReady) {
+          Log.debug(
+            `[Screen Extract] Found ${screens.length} complete screens, remainder: ${remainder.length} chars`
+          );
+          if (screens.length > 0) {
+            Log.debug(
+              `[Screen Extract] First screen length: ${screens[0].length} chars`
+            );
+          }
+        }
+
         // Process each complete screen
         for (const screen of screens) {
+          Log.debug(
+            `[Screen Processing] Processing screen, tuiReady=${tuiReady}`
+          );
+
           const screenLower = screen.toLowerCase();
 
           // Phase 1: First complete screen means TUI is ready - send file reference
@@ -234,7 +307,7 @@ export class TuiStreamProcessor {
             if (delta.trim().length > 0) {
               this.config.streamingEmitter.fire(delta);
               if (shouldShowOutput) {
-                Log.append(delta);
+                //Log.append(delta);
               }
             }
 
@@ -296,32 +369,60 @@ export class TuiStreamProcessor {
 
       // Handle CLI errors
       if (errorDetected) {
+        const fullError = `CLI Error: ${errorMessage}`;
         this.config.streamingEmitter.fire(
-          `\n❌ CLI Error Detected:\n\n${errorMessage}\n\n` +
-            "The CLI crashed during execution.\n"
+          `\n❌ ${fullError}\n\n` + "The CLI crashed during execution.\n"
         );
         this.config.responseCompleteEmitter.fire("CLI error");
-        return false;
+        return { success: false, errorMessage: fullError };
       }
 
       if (completed) {
         this.config.responseCompleteEmitter.fire("Response complete");
-        return true;
+        return { success: true };
       } else if (promptSubmitted) {
         this.config.responseCompleteEmitter.fire(
           "Stream ended (treated as success)"
         );
-        return true;
+        return { success: true };
       } else {
+        // Command failed before TUI started or prompt never sent
+        // Include actual terminal output to help diagnose the issue
+        const terminalOutput = screenBuffer.trim() || fileEchoBuffer.trim();
+        const baseMsg = tuiReady
+          ? "TUI started but prompt was never submitted (CLI may have crashed)"
+          : "CLI command failed to start TUI";
+
+        let errorMsg = baseMsg;
+        if (terminalOutput) {
+          // Truncate output if too long (keep first 500 chars)
+          const truncatedOutput =
+            terminalOutput.length > 500
+              ? terminalOutput.substring(0, 500) + "..."
+              : terminalOutput;
+          errorMsg = `${baseMsg}. Terminal output:\n${truncatedOutput}`;
+
+          // Also emit the full terminal output to dashboard for visibility
+          this.config.streamingEmitter.fire(
+            `\n❌ ${baseMsg}\n\n📋 Terminal output:\n${terminalOutput}\n`
+          );
+        } else {
+          errorMsg = `${baseMsg} (no output captured)`;
+          this.config.streamingEmitter.fire(`\n❌ ${errorMsg}\n`);
+        }
+
+        Log.error(errorMsg);
         this.config.responseCompleteEmitter.fire(
           "Stream ended (no prompt submission)"
         );
-        return false;
+        return { success: false, errorMessage: errorMsg };
       }
     } catch (error) {
-      Log.error(`Error during TUI streaming`, error);
+      const errorMsg = `Error during TUI streaming: ${error instanceof Error ? error.message : String(error)}`;
+      Log.error(errorMsg, error);
+      this.config.streamingEmitter.fire(`\n❌ ${errorMsg}\n`);
       this.config.responseCompleteEmitter.fire("Error during streaming");
-      return false;
+      return { success: false, errorMessage: errorMsg };
     }
   }
 
@@ -336,6 +437,11 @@ export class TuiStreamProcessor {
     const screens: string[] = [];
     const screenEndPattern = this.config.screenEndPattern;
 
+    // Debug: Log buffer content periodically to help diagnose pattern matching issues
+    Log.debug(`[TUI Buffer] Length: ${buffer.length} characters`);
+    Log.debug(`[TUI Buffer] Last 200 chars: ${buffer.slice(-200)}`);
+    Log.debug(`[TUI Buffer] Pattern: ${screenEndPattern.toString()}`);
+
     let lastIndex = 0;
     let match;
 
@@ -346,6 +452,11 @@ export class TuiStreamProcessor {
 
       if (screen.trim().length > 0) {
         screens.push(screen);
+        Log.debug(
+          `[TUI Screen] Found complete screen, match: "${match[0]}", screen length: ${screen.length}`
+        );
+      } else {
+        Log.debug(`[TUI Screen] Skipped empty screen, match: "${match[0]}"`);
       }
 
       lastIndex = screenEnd;
@@ -353,6 +464,10 @@ export class TuiStreamProcessor {
 
     // Everything after the last complete screen is the remainder
     const remainder = buffer.substring(lastIndex);
+
+    Log.debug(
+      `[TUI Buffer] Extraction complete: ${screens.length} screens, ${remainder.length} chars remainder`
+    );
 
     return { screens, remainder };
   }

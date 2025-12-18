@@ -41,7 +41,7 @@ export const ConfigurationUtils = {
 
   /**
    * Get the default Copilot integration mode from settings
-   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
+   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   getIntegrationMode(): Provider {
     const mode = getConfig().get<string>("provider", Provider.CopilotCli);
@@ -53,6 +53,9 @@ export const ConfigurationUtils = {
       case "claude-cli":
       case Provider.ClaudeCli:
         return Provider.ClaudeCli;
+      case "codex-cli":
+      case Provider.CodexCli:
+        return Provider.CodexCli;
       case "copilot-cli":
       case Provider.CopilotCli:
       default:
@@ -220,6 +223,40 @@ export const ConfigurationUtils = {
    */
   getClaudeCliModel(): string {
     return getConfig().get<string>("claudeCliModel", "sonnet");
+  },
+
+  // ============================================================
+  // CODEX CLI SETTINGS
+  // ============================================================
+
+  /**
+   * Get Codex CLI model
+   */
+  getCodexCliModel(): string {
+    return getConfig().get<string>("codexCliModel", "gpt-5.1-codex");
+  },
+
+  /**
+   * Get Codex CLI sandbox mode
+   * Options: read-only, workspace-write, danger-full-access
+   */
+  getCodexSandboxMode(): string {
+    return getConfig().get<string>("codexSandboxMode", "workspace-write");
+  },
+
+  /**
+   * Get Codex CLI approval policy
+   * Options: untrusted, on-failure, on-request, never
+   */
+  getCodexApprovalPolicy(): string {
+    return getConfig().get<string>("codexApprovalPolicy", "on-request");
+  },
+
+  /**
+   * Get allowed directories for Codex CLI
+   */
+  getCodexAllowedDirs(): string[] {
+    return getConfig().get<string[]>("codexAllowedDirs", []);
   },
 
   // ============================================================

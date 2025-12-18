@@ -7,10 +7,11 @@
  *
  * package.json enums are synced via: `npm run sync-models`
  *
- * IMPORTANT: There are THREE different model sets:
+ * IMPORTANT: There are FOUR different model sets:
  * 1. COPILOT_MODELS - All models available via Copilot Chat (superset)
  * 2. COPILOT_CLI_MODEL_IDS - Models supported by `copilot` CLI (subset of above)
  * 3. CLAUDE_CLI_MODELS - Models for Anthropic's `claude` CLI (separate)
+ * 4. CODEX_CLI_MODELS - Models for OpenAI's `codex` CLI (separate)
  *
  * To add a new model:
  * 1. Add entry to COPILOT_MODELS (display names)
@@ -125,6 +126,38 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
   haiku: "Haiku (Fastest)",
 };
 
+/**
+ * Codex CLI models (OpenAI's code-specialized CLI)
+ *
+ * These are the primary models supported by the `codex` CLI.
+ * List sourced from `codex /model` command output.
+ *
+ * See: https://docs.openai.com/codex
+ */
+export const CODEX_CLI_MODELS = [
+  "gpt-5.1-codex-max",
+  "gpt-5.1-codex",
+  "gpt-5.1-codex-mini",
+  "gpt-5.2",
+  "gpt-5.1",
+] as const;
+
+/**
+ * Default model for Codex CLI
+ */
+export const CODEX_CLI_DEFAULT_MODEL = "gpt-5.1-codex" as const;
+
+/**
+ * Codex CLI model display names
+ */
+export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
+  "gpt-5.1-codex-max": "GPT-5.1 Codex Max (Most Capable)",
+  "gpt-5.1-codex": "GPT-5.1 Codex (Recommended)",
+  "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini (Fastest)",
+  "gpt-5.2": "GPT-5.2 (Latest Frontier)",
+  "gpt-5.1": "GPT-5.1",
+};
+
 // Derived exports for convenience
 
 /**
@@ -198,3 +231,6 @@ export function getClaudeModelName(
 
 // Type exports for Claude CLI
 export type ClaudeCliModelAlias = (typeof CLAUDE_CLI_MODELS)[number];
+
+// Type exports for Codex CLI
+export type CodexCliModel = (typeof CODEX_CLI_MODELS)[number];

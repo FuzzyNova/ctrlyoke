@@ -9,6 +9,7 @@
     PROVIDER_INFO,
     DEFAULT_MODELS,
     CLAUDE_CLI_MODELS,
+    CODEX_CLI_MODELS,
     PROVIDER_STATUS_STRINGS,
     UI_STRINGS,
   } = window.FlightPathConstants;
@@ -17,10 +18,12 @@
   // Chat models come from VS Code LM API (full list)
   // CLI models come from `copilot help config` (subset)
   // Claude CLI models are static (no programmatic way to query)
+  // Codex CLI models are static (from codex /model command)
   let modelOptions = {
     [PROVIDER_IDS.COPILOT_CLI]: [],
     [PROVIDER_IDS.COPILOT_CHAT]: [],
     [PROVIDER_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
+    [PROVIDER_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
   };
 
   // Provider availability status
@@ -34,6 +37,10 @@
       status: PROVIDER_STATUS_STRINGS.AVAILABLE,
     },
     [PROVIDER_IDS.CLAUDE_CLI]: {
+      available: false,
+      status: PROVIDER_STATUS_STRINGS.CHECKING,
+    },
+    [PROVIDER_IDS.CODEX_CLI]: {
       available: false,
       status: PROVIDER_STATUS_STRINGS.CHECKING,
     },
@@ -181,6 +188,7 @@
       PROVIDER_IDS.COPILOT_CLI,
       PROVIDER_IDS.COPILOT_CHAT,
       PROVIDER_IDS.CLAUDE_CLI,
+      PROVIDER_IDS.CODEX_CLI,
     ];
 
     elements.providerDropdown.innerHTML = providers
@@ -234,12 +242,13 @@
 
   /**
    * Show/hide execution mode dropdown based on provider
-   * Only CLI providers (copilot-cli, claude-cli) support execution mode
+   * Only CLI providers (copilot-cli, claude-cli, codex-cli) support execution mode
    */
   function updateExecutionModeVisibility(provider) {
     const isCli =
       provider === PROVIDER_IDS.COPILOT_CLI ||
-      provider === PROVIDER_IDS.CLAUDE_CLI;
+      provider === PROVIDER_IDS.CLAUDE_CLI ||
+      provider === PROVIDER_IDS.CODEX_CLI;
     elements.executionModeGroup.style.display = isCli ? "block" : "none";
   }
 

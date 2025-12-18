@@ -3,7 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import { MESSAGE_TYPES, PROVIDER_IDS } from "../types/DashboardConstants";
 import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
@@ -13,8 +13,10 @@ import {
 import {
   getModelDisplayName,
   CLAUDE_CLI_MODEL_LABELS,
+  CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { Provider } from "../types/FlightPathTypes";
 
 const execAsync = promisify(exec);
 
@@ -38,9 +40,10 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   // Provider availability status
   private providerStatus: Record<string, ProviderStatus> = {
-    "copilot-cli": { available: false, status: "checking" },
-    "copilot-chat": { available: false, status: "checking" }, // Check for Copilot extension
-    "claude-cli": { available: false, status: "checking" },
+    [PROVIDER_IDS.COPILOT_CLI]: { available: false, status: "checking" },
+    [PROVIDER_IDS.COPILOT_CHAT]: { available: false, status: "checking" }, // Check for Copilot extension
+    [PROVIDER_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
+    [PROVIDER_IDS.CODEX_CLI]: { available: false, status: "checking" },
   };
 
   // Webview path segments (same as dashboard)
@@ -48,16 +51,18 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   // Setting keys for each provider's model
   private static readonly MODEL_SETTING_MAP: Record<string, string> = {
-    "copilot-cli": "copilotCliModel",
-    "copilot-chat": "copilotChatModel",
-    "claude-cli": "claudeCliModel",
+    [PROVIDER_IDS.COPILOT_CLI]: "copilotCliModel",
+    [PROVIDER_IDS.COPILOT_CHAT]: "copilotChatModel",
+    [PROVIDER_IDS.CLAUDE_CLI]: "claudeCliModel",
+    [PROVIDER_IDS.CODEX_CLI]: "codexCliModel",
   };
 
   // Default models per provider
   private static readonly DEFAULT_MODELS: Record<string, string> = {
-    "copilot-cli": "claude-sonnet-4.5",
-    "copilot-chat": "claude-sonnet-4.5",
-    "claude-cli": "sonnet",
+    [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
+    [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
+    [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
+    [PROVIDER_IDS.CODEX_CLI]: "gpt-5.1-codex",
   };
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -213,47 +218,43 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Helper function to check CLI command availability
+   * @param providerId The provider ID from PROVIDER_IDS
+   * @param command The CLI command to check (e.g., "copilot", "claude", "codex")
+   */
+  private async checkCliAvailability(
+    providerId: string,
+    command: string
+  ): Promise<void> {
+    try {
+      const { stdout } = await execAsync(`${command} --version`, {
+        timeout: 5000,
+      });
+      this.providerStatus[providerId] = {
+        available: true,
+        status: "available",
+        message: stdout.trim(),
+      };
+      console.log(`FlightPath: ${command} CLI available:`, stdout.trim());
+    } catch {
+      this.providerStatus[providerId] = {
+        available: false,
+        status: "unavailable",
+        message: "Not installed or not in PATH",
+      };
+      console.log(`FlightPath: ${command} CLI not available`);
+    }
+  }
+
+  /**
    * Check availability of CLI providers in background
    * Updates providerStatus and notifies webview
    */
   private async checkProviderAvailability(): Promise<void> {
-    // Check Copilot CLI
-    try {
-      const { stdout } = await execAsync("copilot --version", {
-        timeout: 5000,
-      });
-      this.providerStatus["copilot-cli"] = {
-        available: true,
-        status: "available",
-        message: stdout.trim(),
-      };
-      console.log("FlightPath: Copilot CLI available:", stdout.trim());
-    } catch {
-      this.providerStatus["copilot-cli"] = {
-        available: false,
-        status: "unavailable",
-        message: "Not installed or not in PATH",
-      };
-      console.log("FlightPath: Copilot CLI not available");
-    }
-
-    // Check Claude CLI
-    try {
-      const { stdout } = await execAsync("claude --version", { timeout: 5000 });
-      this.providerStatus["claude-cli"] = {
-        available: true,
-        status: "available",
-        message: stdout.trim(),
-      };
-      console.log("FlightPath: Claude CLI available:", stdout.trim());
-    } catch {
-      this.providerStatus["claude-cli"] = {
-        available: false,
-        status: "unavailable",
-        message: "Not installed or not in PATH",
-      };
-      console.log("FlightPath: Claude CLI not available");
-    }
+    // Check CLI providers using helper function
+    await this.checkCliAvailability(PROVIDER_IDS.COPILOT_CLI, "copilot");
+    await this.checkCliAvailability(PROVIDER_IDS.CLAUDE_CLI, "claude");
+    await this.checkCliAvailability(PROVIDER_IDS.CODEX_CLI, "codex");
 
     // Check Copilot Chat extension availability
     await this.checkCopilotChatAvailability();
@@ -277,7 +278,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       const hasExtension = !!(copilotExtension || copilotChatExtension);
 
       if (!hasExtension) {
-        this.providerStatus["copilot-chat"] = {
+        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "GitHub Copilot extension not installed",
@@ -296,14 +297,14 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       );
 
       if (hasChatSubmit && hasChatPanel) {
-        this.providerStatus["copilot-chat"] = {
+        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
           available: true,
           status: "available",
           message: "GitHub Copilot Chat",
         };
         console.log("FlightPath: Copilot Chat available");
       } else {
-        this.providerStatus["copilot-chat"] = {
+        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "Copilot Chat commands not available",
@@ -313,7 +314,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         );
       }
     } catch (error) {
-      this.providerStatus["copilot-chat"] = {
+      this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
         available: false,
         status: "unavailable",
         message: "Error checking Copilot Chat availability",
@@ -362,30 +363,43 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       ([value, label]) => ({ value, label })
     );
 
+    // Codex CLI uses static list with friendly labels from ModelConstants
+    const codexCliOptions = Object.entries(CODEX_CLI_MODEL_LABELS).map(
+      ([value, label]) => ({ value, label })
+    );
+
     return {
-      "copilot-cli": copilotCliOptions,
-      "copilot-chat": copilotChatOptions,
-      "claude-cli": claudeCliOptions,
+      [PROVIDER_IDS.COPILOT_CLI]: copilotCliOptions,
+      [PROVIDER_IDS.COPILOT_CHAT]: copilotChatOptions,
+      [PROVIDER_IDS.CLAUDE_CLI]: claudeCliOptions,
+      [PROVIDER_IDS.CODEX_CLI]: codexCliOptions,
     };
   }
 
-  private getModelForProvider(provider: string): string {
+  private getModelForProvider(provider: Provider): string {
     // Return the appropriate model based on provider
     switch (provider) {
-      case "copilot-cli":
+      case Provider.CopilotCli:
         return ConfigurationUtils.getCliModel();
-      case "copilot-chat":
+      case Provider.CopilotChat:
         // Chat model uses same setting as CLI model for now
         return ConfigurationUtils.getCliModel();
-      case "claude-cli":
+      case Provider.ClaudeCli:
         return ConfigurationUtils.getClaudeCliModel();
+      case Provider.CodexCli:
+        return ConfigurationUtils.getCodexCliModel();
       default:
         return ConfigurationUtils.getCliModel();
     }
   }
 
   private async handleProviderChange(provider: string): Promise<void> {
-    const validProviders = ["copilot-cli", "copilot-chat", "claude-cli"];
+    const validProviders: string[] = [
+      PROVIDER_IDS.COPILOT_CLI,
+      PROVIDER_IDS.COPILOT_CHAT,
+      PROVIDER_IDS.CLAUDE_CLI,
+      PROVIDER_IDS.CODEX_CLI,
+    ];
     if (!validProviders.includes(provider)) {
       console.error(`Invalid provider: ${provider}`);
       return;

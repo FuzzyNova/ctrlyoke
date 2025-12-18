@@ -6,6 +6,7 @@ import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
 import { ClaudeCommandLineIntegration } from "./cli/ClaudeCommandLineIntegration";
+import { CodexCommandLineIntegration } from "./cli/CodexCommandLineIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
 import { WorkflowExecutor, WorkflowContext } from "./WorkflowExecutor";
@@ -27,6 +28,7 @@ export class FlightPathManager {
   private cliIntegration: CopilotCommandLineIntegration;
   private chatIntegration: CopilotChatIntegration;
   private claudeCliIntegration: ClaudeCommandLineIntegration;
+  private codexCliIntegration: CodexCommandLineIntegration;
   private endConditionEvaluator: EndConditionEvaluator;
   private endConditionHandler: EndConditionHandler;
   private workflowExecutor: WorkflowExecutor;
@@ -51,6 +53,7 @@ export class FlightPathManager {
     this.cliIntegration = new CopilotCommandLineIntegration(context);
     this.chatIntegration = new CopilotChatIntegration(context);
     this.claudeCliIntegration = new ClaudeCommandLineIntegration(context);
+    this.codexCliIntegration = new CodexCommandLineIntegration(context);
 
     this.endConditionEvaluator = new EndConditionEvaluator(context);
     this.endConditionHandler = new EndConditionHandler(
@@ -123,7 +126,7 @@ export class FlightPathManager {
 
   /**
    * Get the default Copilot integration based on user settings
-   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI)
+   * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   private getDefaultIntegration(): CopilotIntegration {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
@@ -135,6 +138,9 @@ export class FlightPathManager {
       case Provider.ClaudeCli:
         console.log("🔄 FlightPath: Using Claude Code CLI integration");
         return this.claudeCliIntegration;
+      case Provider.CodexCli:
+        console.log("🔄 FlightPath: Using Codex CLI integration");
+        return this.codexCliIntegration;
       case Provider.CopilotCli:
       default:
         console.log("🔄 FlightPath: Using Copilot CLI integration");
@@ -164,6 +170,8 @@ export class FlightPathManager {
           return this.chatIntegration;
         case Provider.ClaudeCli:
           return this.claudeCliIntegration;
+        case Provider.CodexCli:
+          return this.codexCliIntegration;
         case Provider.CopilotCli:
         default:
           return this.cliIntegration;

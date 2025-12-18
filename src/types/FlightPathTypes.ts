@@ -12,6 +12,7 @@ export enum Provider {
   CopilotCli = "copilot-cli", // Copilot CLI
   CopilotChat = "copilot-chat", // Copilot Chat
   ClaudeCli = "claude-cli", // Claude Code CLI
+  CodexCli = "codex-cli", // Codex CLI
 }
 
 /**

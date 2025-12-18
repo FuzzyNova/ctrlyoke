@@ -94,6 +94,7 @@ export const PROVIDER_IDS = {
   COPILOT_CLI: "copilot-cli",
   COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
+  CODEX_CLI: "codex-cli",
 } as const;
 
 // ============================================================================
@@ -106,6 +107,7 @@ export const PROVIDER_INFO = {
     shortName: "Copilot Chat",
   },
   [PROVIDER_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
+  [PROVIDER_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
 } as const;
 
 // ============================================================================
@@ -115,6 +117,7 @@ export const DEFAULT_MODELS = {
   [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
   [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
   [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
+  [PROVIDER_IDS.CODEX_CLI]: "gpt-5.1-codex",
 } as const;
 
 // ============================================================================
@@ -124,6 +127,20 @@ export const CLAUDE_CLI_MODELS = [
   { value: "sonnet", label: "Sonnet (Recommended)" },
   { value: "opus", label: "Opus (Most Capable)" },
   { value: "haiku", label: "Haiku (Fastest)" },
+] as const;
+
+// ============================================================================
+// CODEX CLI MODELS - Static options (from codex /model command)
+// ============================================================================
+export const CODEX_CLI_MODELS = [
+  {
+    value: "gpt-5.1-codex-max",
+    label: "GPT-5.1 Codex Max (Most Capable)",
+  },
+  { value: "gpt-5.1-codex", label: "GPT-5.1 Codex (Recommended)" },
+  { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini (Fastest)" },
+  { value: "gpt-5.2", label: "GPT-5.2 (Latest Frontier)" },
+  { value: "gpt-5.1", label: "GPT-5.1" },
 ] as const;
 
 // ============================================================================

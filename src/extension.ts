@@ -21,7 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   try {
     // Initialize logging system early (creates output channel)
-    Log.initialize(context, LogLevel.INFO);
+    Log.initialize(context, LogLevel.DEBUG);
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
