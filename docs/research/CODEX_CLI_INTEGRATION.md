@@ -1,9 +1,10 @@
 # Codex CLI Integration Research & Implementation Plan
 
-**Status:** Research Complete - Ready for Implementation  
-**Target:** FlightPath v1.0+  
-**CLI Version:** codex-cli 0.73.0  
+**Status:** ✅ **IMPLEMENTATION COMPLETE** - Time-Based TUI Detection & Log Monitoring
+**Target:** FlightPath v1.0+
+**CLI Version:** codex-cli 0.73.0
 **Research Date:** December 17, 2025
+**Implementation Date:** December 18, 2025
 
 ## Executive Summary
 
@@ -1111,8 +1112,8 @@ if (this.cliType === "codex") {
 **Completion Indicators (Dec 18, 2025 - VERIFIED):**
 
 ```bash
-# Success indicator (appears when turn completes)
-2025-12-18T18:38:14.436826Z INFO ... otel.name="completed" time.busy=0.00ns time.idle=14.4ms
+# Success indicator (appears once at end of turn)
+2025-12-18T20:02:48.715428Z INFO run_task: close time.busy=41.6ms time.idle=12.9s
 
 # Error patterns
 WARN Unknown model test is used
@@ -1137,8 +1138,8 @@ private async monitorLogFileForCompletion(
     const newContent = await this.readLogEntriesSince(logPath, lastPosition);
     lastPosition += newContent.length;
 
-    // Check for completion indicator
-    if (/otel\.name="completed"/.test(newContent)) {
+    // Check for completion indicator: "run_task: close" marks end of turn
+    if (/INFO\s+run_task:\s+close\s+time\.busy=/i.test(newContent)) {
       return { completed: true };
     }
 
@@ -1162,7 +1163,7 @@ private async monitorLogFileForCompletion(
 **Advantages:**
 
 - ✅ **Deterministic** - Log entries are definitive, not heuristic
-- ✅ **No false positives** - `otel.name="completed"` only appears once per turn
+- ✅ **No false positives** - `run_task: close` appears exactly once per turn
 - ✅ **Error detection** - Captures failures that TUI might not show clearly
 - ✅ **Works with cursor rendering** - Independent of terminal output quirks
 
@@ -1345,7 +1346,7 @@ private async processScreenBasedChunk(data: string): Promise<void> {
 
 - ✅ **More reliable** - Log file is authoritative source
 - ✅ **Error handling** - Distinguishes completion from errors
-- ✅ **No false positives** - `otel.name="completed"` only appears once
+- ✅ **No false positives** - `run_task: close` appears exactly once per turn
 
 **Preserves Existing Functionality:**
 
@@ -1556,70 +1557,87 @@ parseTokenCounts(statistics: string): { prompt: number; completion: number } | u
 
 ### Phase 2: TUI Support with Time-Based Extraction (Milestone 2)
 
-**2.1 Refactor TuiStreamProcessor for Provider-Specific Handling**
+**2.1 Extend TuiStreamConfig for Time-Based Extraction**
 
-Add CLI type detection and provider-specific processing paths:
+Add configuration flag to enable time-based extraction mode (CLI-agnostic):
 
 ```typescript
 // In TuiStreamProcessor.ts
-export class TuiStreamProcessor extends EventEmitter {
-  private cliType: "copilot" | "claude" | "codex";
+export interface TuiStreamConfig {
+  // Processing mode (NEW)
+  useTimeBasedExtraction?: boolean; // Default: false (screen-based mode)
+
+  // CLI-specific patterns (used in screen-based mode)
+  escapeIndicator: string; // e.g., "(esc to cancel)"
+  screenEndPattern: RegExp; // e.g., /Ctrl\+c Exit/
+  tuiChromePattern: RegExp; // e.g., /Ctrl\+c Exit/
+
+  // Event emitters for communication
+  streamingEmitter: vscode.EventEmitter<string>;
+  responseCompleteEmitter: vscode.EventEmitter<string>;
+
+  // Optional configuration
+  fileSilenceMs?: number; // Default: 1000ms
+  maxConsecutiveBlankLines?: number; // Default: 2
+}
+
+export class TuiStreamProcessor {
   private recentLinesBuffer: Set<string> = new Set();
 
-  constructor(
-    terminal: vscode.Terminal,
-    cliType: "copilot" | "claude" | "codex", // NEW parameter
-    onDelta: (text: string) => void
-  ) {
-    super();
-    this.cliType = cliType;
+  constructor(private config: TuiStreamConfig) {
     // ... existing initialization
   }
 
-  async processStream(execution: vscode.TerminalShellExecution): Promise<void> {
+  async processStream(...): Promise<TuiProcessResult> {
     // ... existing setup ...
 
     for await (const data of execution.read()) {
-      // Route to provider-specific processing
-      if (this.cliType === "codex") {
-        await this.processCodexTimeBasedChunk(data);
+      // Route based on processing mode (CLI-agnostic)
+      if (this.config.useTimeBasedExtraction) {
+        await this.processTimeBasedChunk(data);
       } else {
-        await this.processScreenBasedChunk(data); // Existing Claude/Copilot logic
+        await this.processScreenBasedChunk(data); // Existing logic
       }
     }
   }
 }
 ```
 
-**2.2 Implement Codex Time-Based Processing**
+**2.2 Implement Time-Based Processing (Generic)**
 
 ```typescript
 // In TuiStreamProcessor.ts
-private async processCodexTimeBasedChunk(data: string): Promise<void> {
-  // Phase 1: Filter TUI chrome
-  const cleaned = this.filterCodexTuiChrome(data);
+private async processTimeBasedChunk(data: string): Promise<void> {
+  // Phase 1: Strip ANSI codes
+  const cleaned = this.stripAnsiCodes(data);
 
-  // Phase 2: Deduplicate content (avoid repeated animation frames)
-  const newContent = this.deduplicateCodexContent(cleaned);
+  // Phase 2: Filter TUI chrome using existing patterns
+  const filtered = this.filterTuiChromeFromChunk(cleaned);
 
-  // Phase 3: Emit deltas
+  // Phase 3: Deduplicate content (avoid repeated animation frames)
+  const newContent = this.deduplicateContent(filtered);
+
+  // Phase 4: Emit deltas
   if (newContent.trim()) {
-    this.emit("delta", newContent);
+    this.config.streamingEmitter.fire(newContent);
   }
 }
 
-private filterCodexTuiChrome(text: string): string {
-  return text
-    .replace(/╭─+╮|╰─+╯/g, "") // Box borders
-    .replace(/>\s+OpenAI Codex[^\n]*/gi, "") // Header
-    .replace(/•\s+Working\s+\([^)]+\)/g, "") // Animation indicator
-    .replace(/\d+%\s+context\s+left[^\n]*/gi, "") // Status bar
-    .replace(/›\s*$/gm, "") // Empty prompt lines
-    .replace(/Tip: Type.*?$/gmi, "") // Help tips
-    .trim();
+private filterTuiChromeFromChunk(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const filteredLines: string[] = [];
+
+  for (const line of lines) {
+    // Use existing isTuiChromeLine() method
+    if (!this.isTuiChromeLine(line)) {
+      filteredLines.push(line);
+    }
+  }
+
+  return filteredLines.join("\n");
 }
 
-private deduplicateCodexContent(text: string): string {
+private deduplicateContent(text: string): string {
   const lines = text.split("\n");
   const newLines: string[] = [];
 
@@ -1703,9 +1721,9 @@ private async monitorLogFileForCompletion(
 
         lastPosition = stats.size;
 
-        // Check for completion indicator
-        if (/otel\.name="completed"/i.test(newContent)) {
-          Log.debug("Codex completion detected via log file: otel.name=\"completed\"");
+        // Check for completion indicator: "run_task: close" marks end of turn
+        if (/INFO\s+run_task:\s+close\s+time\.busy=/i.test(newContent)) {
+          Log.debug("Codex completion detected via log file: run_task: close");
           return { completed: true };
         }
 
@@ -1736,7 +1754,7 @@ private async monitorLogFileForCompletion(
 
 **2.4 Interactive Execution Flow with Dual Monitoring**
 
-```typescript
+````typescript
 // In CodexCommandLineIntegration.ts
 protected async executeInTerminal(
   args: string[],
@@ -1746,12 +1764,17 @@ protected async executeInTerminal(
   // Create fresh terminal
   const terminal = await this.createFreshTerminal();
 
-  // Start TUI stream processor with Codex-specific handling
-  const processor = new TuiStreamProcessor(
-    terminal,
-    "codex",  // Enable time-based extraction
-    (delta) => this.handleDelta(delta, workflowContext)
-  );
+  // Create TUI config with time-based extraction enabled
+  const tuiConfig: TuiStreamConfig = {
+    useTimeBasedExtraction: true,  // NEW: Enable time-based mode
+    escapeIndicator: this.getEscapeIndicator(),
+    screenEndPattern: this.getScreenEndPattern(),
+    tuiChromePattern: this.getTuiChromePattern(),
+    streamingEmitter: this.streamingEmitter,
+    responseCompleteEmitter: this.responseCompleteEmitter,
+  };
+
+  const processor = new TuiStreamProcessor(tuiConfig);
 
   // Start Codex interactive mode
   const command = this.buildInteractiveTuiCommand(args);
@@ -1774,26 +1797,17 @@ protected async executeInTerminal(
   await terminal.sendText(promptText);
 
   // Process TUI output (time-based extraction)
-  const streamPromise = processor.processStream(execution);
+  const streamPromise = processor.processStream(
+    execution,
+    terminal,
+    promptText,
+    this.getTimeoutMs()
+  );
 
   // Wait for log file to indicate completion
   const logResult = await logMonitorPromise;
 
   if (!logResult.completed) {
-    // Stop TUI processing
-    processor.stop();
-    throw new Error(logResult.error || "Codex execution did not complete successfully");
-  }
-
-  // Allow TUI stream to finish processing remaining output
-  await streamPromise;
-
-  return true;
-}
-```
-
-### Phase 3: Model Discovery (Milestone 3)
-
 **3.1 Config File Parsing**
 
 ```typescript
@@ -1813,7 +1827,7 @@ private getConfigPath(): string {
   const home = process.env.HOME || process.env.USERPROFILE;
   return path.join(home, '.codex', 'config.toml');
 }
-```
+````
 
 **3.2 Model Registry Integration**
 
@@ -2084,24 +2098,35 @@ suite("CodexCommandLineIntegration", () => {
 **TUI Chrome Investigation:**
 
 - [x] Investigate TUI chrome patterns (VERIFIED from live capture - Dec 17, 2025)
-- [x] Identify completion indicators (otel.name="completed" in log file - Dec 18, 2025)
+- [x] Identify completion indicators (run_task: close in log file - Dec 18, 2025)
 - [x] Document cursor-based rendering behavior (uses ANSI positioning, not line-appending)
 
 **TuiStreamProcessor Refactoring:**
 
-- [ ] Add `cliType` parameter to constructor ("copilot" | "claude" | "codex")
-- [ ] Implement provider-specific routing in `processStream()` method
-- [ ] Implement `processCodexTimeBasedChunk()` for time-based extraction
-- [ ] Implement `filterCodexTuiChrome()` to remove TUI elements:
-  - [ ] Filter box borders (`╭─+╮`, `╰─+╯`)
-  - [ ] Filter header lines (`>_ OpenAI Codex`)
-  - [ ] Filter working indicators (`• Working (Xs • esc to interrupt)`)
-  - [ ] Filter status bars (`100% context left`)
-  - [ ] Filter prompt lines (`› ` when empty)
-  - [ ] Filter help tips
-- [ ] Implement `deduplicateCodexContent()` with circular buffer (last 100 lines)
-- [ ] Preserve `processScreenBasedChunk()` for Claude/Copilot (existing logic)
-- [ ] Add `recentLinesBuffer: Set<string>` for deduplication tracking
+- [ ] Add `useTimeBasedExtraction?: boolean` to `TuiStreamConfig` interface (default: false)
+- [ ] Implement mode-based routing in `processStream()` method:
+  - [ ] Check `config.useTimeBasedExtraction` flag (NOT CLI type)
+  - [ ] Route to `processTimeBasedChunk()` if true, else `processScreenBasedChunk()`
+- [ ] Implement `processTimeBasedChunk()` for time-based extraction:
+  - [ ] Strip ANSI codes using existing `stripAnsiCodes()` method
+  - [ ] Filter TUI chrome using new `filterTuiChromeFromChunk()` helper
+  - [ ] Deduplicate content with new `deduplicateContent()` method
+  - [ ] Emit deltas via `config.streamingEmitter`
+- [ ] Implement `filterTuiChromeFromChunk()` helper:
+  - [ ] Split text into lines
+  - [ ] Filter each line using existing `isTuiChromeLine()` method
+  - [ ] Return filtered lines joined with newlines
+- [ ] Implement `deduplicateContent()` with circular buffer:
+  - [ ] Track last 100 unique lines in `recentLinesBuffer: Set<string>`
+  - [ ] Only emit lines not in recent history
+  - [ ] Maintain buffer size limit (remove oldest when > 100)
+- [ ] Preserve `processScreenBasedChunk()` for screen-based mode (existing logic)
+- [ ] Update `isTuiChromeLine()` with Codex-specific patterns:
+  - [ ] Add box border pattern: `/^[╭╰]─+[╮╯]$/`
+  - [ ] Add OpenAI Codex header: `/^>\s+OpenAI Codex/i`
+  - [ ] Add working indicator: `/^•\s+Working\s+\(/i`
+  - [ ] Add context status: `/\d+%\s+context\s+left/i`
+  - [ ] Add tip pattern: `/^Tip:/i`
 
 **Log File Completion Detection:**
 
@@ -2109,7 +2134,7 @@ suite("CodexCommandLineIntegration", () => {
 - [ ] Implement `monitorLogFileForCompletion()` with file polling:
   - [ ] Track file size/position to read only new entries
   - [ ] Poll every 500ms for new log content
-  - [ ] Detect success pattern: `/otel\.name="completed"/i`
+  - [ ] Detect success pattern: `/INFO\s+run_task:\s+close\s+time\.busy=/i`
   - [ ] Detect error pattern: `/Turn error:/i` with error detail extraction
   - [ ] Detect warning patterns: `/stream disconnected|didn't complete gracefully/i`
   - [ ] Return `{ completed: boolean, error?: string }`
@@ -2119,10 +2144,12 @@ suite("CodexCommandLineIntegration", () => {
 **Interactive Execution Flow:**
 
 - [ ] Update `executeInTerminal()` to use dual monitoring:
-  - [ ] Create TuiStreamProcessor with "codex" type
+  - [ ] Create `TuiStreamConfig` with `useTimeBasedExtraction: true`
+  - [ ] Pass Codex-specific patterns (escapeIndicator, screenEndPattern, tuiChromePattern)
+  - [ ] Create TuiStreamProcessor with this config
   - [ ] Start log file monitoring BEFORE sending prompt
   - [ ] Send prompt to terminal
-  - [ ] Process TUI output stream (time-based extraction)
+  - [ ] Process TUI output stream (time-based extraction via config flag)
   - [ ] Await log file completion indicator
   - [ ] Handle completion vs error results
 - [ ] Test terminal-based execution (handle TTY requirement)

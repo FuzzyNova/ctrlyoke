@@ -5,6 +5,8 @@ import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import { TuiStreamProcessor } from "../../utils/TuiStreamProcessor";
+import { TempFileManager } from "../../utils/TempFileManager";
 
 /**
  * Codex CLI JSON response structure (JSONL events format)
@@ -51,8 +53,9 @@ interface CodexCliJsonEvent {
  */
 export class CodexCommandLineIntegration extends BaseCliIntegration {
   private cliVersion?: string;
-  private streamBuffer: string = ""; // Buffer for incomplete JSON lines in streaming mode
-  private accumulatedResponse: string = ""; // Accumulated response text
+  private streamBuffer: string = "";
+  private accumulatedResponse: string = "";
+  private logFilePath?: string;
 
   constructor(context: vscode.ExtensionContext) {
     super(context);
@@ -632,6 +635,282 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
       default:
         return ["--full-auto"];
+    }
+  }
+
+  // ============================================================
+  // CODEX-SPECIFIC: LOG FILE MONITORING
+  // ============================================================
+
+  /**
+   * Get path to Codex TUI log file.
+   * Location: %USERPROFILE%\.codex\log\codex-tui.log (Windows)
+   *           ~/.codex/log/codex-tui.log (macOS/Linux)
+   */
+  private getCodexLogPath(): string {
+    const home = process.env.USERPROFILE || process.env.HOME;
+    if (!home) {
+      throw new Error("Cannot determine home directory for Codex log path");
+    }
+
+    const path = require("path");
+    return path.join(home, ".codex", "log", "codex-tui.log");
+  }
+
+  /**
+   * Simple delay utility
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Monitor Codex log file for completion indicators.
+   *
+   * Completion Indicators:
+   * - Success: "INFO run_task: close time.busy=..."
+   * - Error: "Turn error:" or "stream disconnected" or "didn't complete gracefully"
+   *
+   * @param startTime Execution start time (for timeout calculation)
+   * @param timeoutMs Maximum time to wait for completion
+   * @returns Object with completed flag and optional error message
+   */
+  private async monitorLogFileForCompletion(
+    startTime: Date,
+    timeoutMs: number
+  ): Promise<{ completed: boolean; error?: string }> {
+    const fs = require("fs");
+    const logPath = this.getCodexLogPath();
+
+    // Get initial file size to track new entries
+    let lastPosition = 0;
+    try {
+      const stats = await fs.promises.stat(logPath);
+      lastPosition = stats.size;
+      Log.debug(`📋 Starting log monitoring from position ${lastPosition}`);
+    } catch (error) {
+      Log.warn(
+        `Codex log file not found at ${logPath}, starting from position 0`
+      );
+    }
+
+    // Poll log file for completion indicators
+    while (Date.now() - startTime.getTime() < timeoutMs) {
+      try {
+        const stats = await fs.promises.stat(logPath);
+
+        // Only read new content since last check
+        if (stats.size > lastPosition) {
+          const stream = fs.createReadStream(logPath, {
+            start: lastPosition,
+            encoding: "utf8",
+          });
+
+          let newContent = "";
+          for await (const chunk of stream) {
+            newContent += chunk;
+          }
+
+          lastPosition = stats.size;
+          Log.debug(`📋 Read ${newContent.length} new bytes from log file`);
+
+          // Check for completion indicator: "run_task: close" marks end of turn
+          if (/INFO\s+run_task:\s+close\s+time\.busy=/i.test(newContent)) {
+            Log.info("✅ Codex completion detected from log file");
+            return { completed: true };
+          }
+
+          // Check for error patterns
+          const errorMatch = newContent.match(/Turn error:\s*({.*?})/);
+          if (errorMatch) {
+            Log.error(`❌ Codex error detected in log: ${errorMatch[1]}`);
+            return {
+              completed: false,
+              error: `Turn error: ${errorMatch[1]}`,
+            };
+          }
+
+          // Check for warning patterns that indicate failures
+          if (/stream disconnected|didn't complete gracefully/i.test(newContent)) {
+            const warningMatch = newContent.match(
+              /(stream disconnected[^\n]*|didn't complete gracefully[^\n]*)/i
+            );
+            const warningMsg = warningMatch
+              ? warningMatch[1]
+              : "Codex CLI warning detected";
+            Log.warn(`⚠️ Codex warning in log: ${warningMsg}`);
+            return {
+              completed: false,
+              error: warningMsg,
+            };
+          }
+        }
+      } catch (error) {
+        // Log file may not exist yet, continue polling
+        Log.debug(`Log file polling error (may not exist yet): ${error}`);
+      }
+
+      // Poll every 500ms
+      await this.delay(500);
+    }
+
+    // Timeout reached
+    Log.warn(
+      `⏱️ Timeout waiting for Codex completion indicator in log file`
+    );
+    return {
+      completed: false,
+      error: "Timeout waiting for completion indicator",
+    };
+  }
+
+  /**
+   * Execute Codex CLI in interactive terminal with dual monitoring:
+   * - Time-based TUI output extraction
+   * - Log file completion detection
+   *
+   * This overrides BaseCliIntegration's executeInTerminal to handle
+   * Codex's unique cursor-based rendering and log-based completion.
+   */
+  protected async executeInTerminal(
+    args: string[],
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<boolean> {
+    const tuiCommand = this.buildInteractiveTuiCommand(args);
+    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
+
+    Log.debug(`🎮 executeInTerminal called for Codex`);
+    Log.debug(`🎮 tuiCommand: ${tuiCommand}`);
+    Log.info(`📝 Prompt length: ${promptText.length} characters`);
+
+    // Create fresh terminal
+    const terminal = await this.createFreshTerminal();
+    terminal.show();
+
+    // Fire prompt ready event
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptText,
+      cliCommand: displayCommand,
+    });
+
+    this.streamingChunkEmitter.fire(
+      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
+        "   View the terminal for real-time output.\n\n"
+    );
+
+    try {
+      // Wait for shell integration
+      const shellIntegration = await this.waitForShellIntegration(terminal);
+
+      // Execute command
+      const execution = shellIntegration.executeCommand(tuiCommand);
+      this.currentExecution = execution;
+
+      // Create temp file with instructional prompt
+      let tempFilePath: string | undefined;
+
+      try {
+        const { tempFilePath: path, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePath = path;
+
+        this.lastSanitizedPrompt = promptText;
+
+        // Create TUI processor with Codex-specific configuration
+        const tuiConfig = {
+          useTimeBasedExtraction: true,
+          escapeIndicator: this.getEscapeIndicator(),
+          screenEndPattern: this.getScreenEndPattern(),
+          tuiChromePattern: this.getTuiChromePattern(),
+          streamingEmitter: this.streamingChunkEmitter,
+          responseCompleteEmitter: this.responseCompleteEmitter,
+        };
+
+        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
+
+        // Create abort controller to stop TUI processing when log detects completion
+        const tuiAbortController = new AbortController();
+
+        // Start log monitoring BEFORE sending prompt
+        const startTime = new Date();
+
+        // Process TUI stream (time-based extraction) with abort controller
+        Log.info("⏳ Starting Codex TUI processing with log monitoring...");
+        const tuiPromise = tuiProcessor.processStream(
+          execution,
+          terminal,
+          promptWithInstruction,
+          ConfigurationUtils.getCliExecutionTimeoutMs(),
+          this.lastSanitizedPrompt,
+          this.shouldShowOutput(),
+          tuiAbortController
+        );
+
+        // Monitor log file for completion (authoritative source)
+        const logPromise = this.monitorLogFileForCompletion(
+          startTime,
+          ConfigurationUtils.getCliExecutionTimeoutMs()
+        );
+
+        // Race the promises - log file wins
+        const logResult = await Promise.race([
+          logPromise,
+          // If TUI completes first (error), return a failure result
+          tuiPromise.then((tuiResult) => ({
+            completed: tuiResult.success,
+            error: tuiResult.errorMessage,
+          })),
+        ]);
+
+        // Log file detected completion - abort TUI processing immediately
+        if (logResult.completed) {
+          Log.debug("🛑 Log file detected completion - aborting TUI stream");
+          tuiAbortController.abort();
+        }
+
+        // Wait for TUI to finish cleaning up (should be fast after abort)
+        const tuiResult = await tuiPromise;
+
+        // Check results
+        if (!logResult.completed) {
+          this.lastFailureReason =
+            logResult.error || "Completion detection failed";
+          Log.error(`❌ Codex execution failed: ${this.lastFailureReason}`);
+          return false;
+        }
+
+        // Check TUI result for any errors it may have caught
+        if (!tuiResult.success && tuiResult.errorMessage) {
+          this.lastFailureReason = tuiResult.errorMessage;
+          Log.warn(
+            `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+          );
+          // Don't return false here - log file said success, trust it
+        }
+
+        Log.info("✅ Codex execution completed successfully");
+        return true;
+      } finally {
+        // Clean up temp file if created
+        if (tempFilePath) {
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const tempMgr = new TempFileManager(workspaceRoot);
+            await tempMgr.deleteFile(tempFilePath);
+            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          }
+        }
+      }
+    } catch (error) {
+      this.lastFailureReason =
+        error instanceof Error ? error.message : String(error);
+      Log.error(`❌ Codex execution error: ${this.lastFailureReason}`);
+      return false;
     }
   }
 }

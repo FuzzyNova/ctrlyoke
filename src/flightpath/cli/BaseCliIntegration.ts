@@ -64,7 +64,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   private readAbortController?: AbortController;
 
   // Track the sanitized prompt sent to terminal for filtering echo in response
-  private lastSanitizedPrompt?: string;
+  protected lastSanitizedPrompt?: string;
 
   constructor(context: vscode.ExtensionContext) {
     super(context);

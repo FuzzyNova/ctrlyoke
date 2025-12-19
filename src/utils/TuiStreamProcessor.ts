@@ -14,6 +14,9 @@ export interface TuiProcessResult {
  * Configuration for TUI stream processing
  */
 export interface TuiStreamConfig {
+  // Processing mode: time-based (Codex) vs screen-based (Claude/Copilot)
+  useTimeBasedExtraction?: boolean; // Default: false (screen-based mode)
+
   // CLI-specific patterns (from abstract methods)
   escapeIndicator: string; // e.g., "(esc to cancel)"
   screenEndPattern: RegExp; // e.g., /Ctrl\+c Exit/
@@ -58,6 +61,7 @@ const TUI_READY_DELAY_MS = 500;
 export class TuiStreamProcessor {
   private fileSilenceMs: number;
   private maxConsecutiveBlankLines: number;
+  private recentLinesBuffer: Set<string> = new Set();
 
   constructor(private config: TuiStreamConfig) {
     this.fileSilenceMs = config.fileSilenceMs || DEFAULT_FILE_SILENCE_MS;
@@ -80,6 +84,7 @@ export class TuiStreamProcessor {
    * - Escape indicator disappears for 2+ screens (complete)
    *
    * @param prompt The prompt with @file reference to send when TUI is ready (e.g., "Follow instructions in @.flightpath/temp/prompt-1.txt")
+   * @param abortController Optional external abort controller for cancellation (e.g., when log file detects completion)
    * @returns Object with success flag and optional error message
    */
   async processStream(
@@ -88,7 +93,8 @@ export class TuiStreamProcessor {
     prompt: string,
     timeoutMs: number,
     lastSanitizedPrompt?: string,
-    shouldShowOutput?: boolean
+    shouldShowOutput?: boolean,
+    abortController?: AbortController
   ): Promise<TuiProcessResult> {
     let tuiReady = false;
     let promptTextSent = false;
@@ -96,6 +102,7 @@ export class TuiStreamProcessor {
     let completed = false;
     let errorDetected = false;
     let errorMessage = "";
+    let fileEchoDetected = false; // Track when we first see the file echo
 
     let chunkCount = 0;
     let totalBytes = 0;
@@ -116,14 +123,13 @@ export class TuiStreamProcessor {
         return false;
       }
 
-      const bufferLower = fileEchoBuffer.toLowerCase();
-
       // Extract the file path from the prompt (everything after the @ symbol)
-      // This handles cases where CLIs echo the prompt with different spacing
       const atIndex = prompt.indexOf("@");
       if (atIndex === -1) {
-        // No @ symbol, just check for the whole prompt
-        if (bufferLower.includes(prompt.toLowerCase())) {
+        // No @ symbol, just check for the whole prompt (normalize whitespace)
+        const normalizedPrompt = prompt.toLowerCase().replace(/\s+/g, " ").trim();
+        const normalizedBuffer = fileEchoBuffer.toLowerCase().replace(/\s+/g, " ");
+        if (normalizedBuffer.includes(normalizedPrompt)) {
           Log.debug(
             `🔍 File reference verified: found "${prompt}" in terminal echo`
           );
@@ -132,21 +138,26 @@ export class TuiStreamProcessor {
         return false;
       }
 
-      // Extract just the file path part (after @) and trim whitespace
-      // CLIs may trim the prompt when echoing, so we search for the path without leading/trailing spaces
-      const filePath = prompt
-        .substring(atIndex + 1)
-        .trim()
-        .toLowerCase();
+      // Extract just the file path part (after @)
+      const filePath = prompt.substring(atIndex + 1).trim();
+      
+      // For file path matching, REMOVE all whitespace from both sides
+      // TUIs line-wrap paths which inserts spaces where they shouldn't be
+      // Example: "path/to/file.txt" may appear as "path/to/file.   \n  txt"
+      const filePathNoSpaces = filePath.toLowerCase().replace(/\s+/g, "");
+      const bufferNoSpaces = fileEchoBuffer.toLowerCase().replace(/\s+/g, "");
 
       Log.debug(
-        `[File Echo Check] Looking for: "${filePath}" (${filePath.length} chars) in buffer (${bufferLower.length} chars)`
+        `[File Echo Check] Looking for: "${filePath}" (${filePath.length} chars) in buffer (${fileEchoBuffer.length} chars)`
       );
       Log.debug(
-        `[File Echo Check] Buffer content: "${bufferLower.substring(0, 200)}${bufferLower.length > 200 ? "..." : ""}"`
+        `[File Echo Check] Normalized search: "${filePathNoSpaces}" (${filePathNoSpaces.length} chars no-space)`
+      );
+      Log.debug(
+        `[File Echo Check] Buffer content: "${fileEchoBuffer.substring(0, 200)}${fileEchoBuffer.length > 200 ? "..." : ""}"`
       );
 
-      if (bufferLower.includes(filePath)) {
+      if (bufferNoSpaces.includes(filePathNoSpaces)) {
         Log.debug(
           `🔍 File reference verified: found file path "${filePath}" in terminal echo`
         );
@@ -165,47 +176,63 @@ export class TuiStreamProcessor {
       }
       submissionTimeoutId = setTimeout(() => {
         Log.debug(
-          `[Submission Timer] Timer fired! promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}`
+          `[Submission Timer] Silence timeout reached (${this.fileSilenceMs}ms). promptTextSent=${promptTextSent}, promptSubmitted=${promptSubmitted}, fileEchoDetected=${fileEchoDetected}`
         );
-        if (promptTextSent && !promptSubmitted) {
-          // Verify file reference was echoed before submitting
-          if (isFileReferenceEchoed()) {
-            Log.info(
-              `📤 ✅ File read verified (${this.fileSilenceMs / 1000}s silence + verified). Sending carriage return (\\r) to submit...`
-            );
-            // Copilot CLI uses Ink TUI framework which expects raw terminal mode input
-            terminal.sendText("\r", true);
-            promptSubmitted = true;
-            Log.info(
-              `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
-            );
-          } else {
-            Log.debug(
-              `[Submission Timer] File reference not yet echoed - will try again on next chunk`
-            );
-          }
+        if (promptTextSent && !promptSubmitted && fileEchoDetected) {
+          // Timer only starts after echo detected, so we can submit immediately
+          Log.info(
+            `📤 ✅ File read complete (${this.fileSilenceMs}ms silence after echo). Sending carriage return (\\r) to submit...`
+          );
+          // CLI uses Ink TUI framework which expects raw terminal mode input
+          terminal.sendText("\r", true);
+          promptSubmitted = true;
+          Log.info(
+            `📤 ✅ Carriage return (\\r) sent to terminal. Waiting for response...`
+          );
         }
       }, this.fileSilenceMs);
     };
 
-    // Create abort controller for timeout/cancellation
-    const abortController = new AbortController();
+    // Use provided abort controller or create new one for timeout/cancellation
+    const controller = abortController || new AbortController();
 
     // Set up timeout
     const timeoutId = setTimeout(() => {
       Log.error("⏱️ TUI execution timed out");
-      abortController.abort();
+      controller.abort();
     }, timeoutMs);
 
     try {
       Log.info("📺 Starting terminal output streaming via read()...");
       Log.info(`🔍 Waiting for TUI ready (screen end pattern to appear)...`);
 
-      for await (const data of execution.read()) {
-        // Check for abort
-        if (abortController.signal.aborted) {
+      // Create an async iterator wrapper that checks abort signal
+      const iterator = execution.read()[Symbol.asyncIterator]();
+      
+      while (true) {
+        // Race between reading next chunk and abort signal
+        const abortPromise = new Promise<{ done: true; value: undefined }>((resolve) => {
+          if (controller.signal.aborted) {
+            resolve({ done: true, value: undefined });
+          } else {
+            controller.signal.addEventListener('abort', () => {
+              resolve({ done: true, value: undefined });
+            }, { once: true });
+          }
+        });
+
+        const nextPromise = iterator.next();
+        const result = await Promise.race([nextPromise, abortPromise]);
+
+        // Check if aborted or iterator finished
+        if (result.done || controller.signal.aborted) {
+          if (controller.signal.aborted) {
+            Log.info("🛑 TUI stream aborted by external controller");
+          }
           break;
         }
+
+        const data = result.value;
 
         chunkCount++;
         totalBytes += data.length;
@@ -241,7 +268,7 @@ export class TuiStreamProcessor {
           Log.error(
             `❌ [ERROR ABORT] CLI error detected in output - aborting immediately`
           );
-          abortController.abort();
+          controller.abort();
           break;
         }
 
@@ -262,79 +289,127 @@ export class TuiStreamProcessor {
           }
         }
 
-        // Process each complete screen
-        for (const screen of screens) {
-          Log.debug(
-            `[Screen Processing] Processing screen, tuiReady=${tuiReady}`
-          );
-
-          const screenLower = screen.toLowerCase();
-
-          // Phase 1: First complete screen means TUI is ready - send file reference
-          if (!tuiReady) {
-            Log.info("✅ TUI is ready (first complete screen detected)");
-            tuiReady = true;
-
-            // Small delay to ensure TUI is fully interactive
-            await this.delay(TUI_READY_DELAY_MS);
-
-            // Send @file reference to CLI (instant, no chunking!)
-            Log.info(`📁 Sending file reference: ${prompt}`);
-            terminal.sendText(prompt, false);
-            promptTextSent = true;
-
+        // Detect file echo and start/reset submission timer (check on EVERY chunk, not just complete screens)
+        if (promptTextSent && !promptSubmitted) {
+          if (!fileEchoDetected && isFileReferenceEchoed()) {
+            // First time seeing the echo - start the silence timer
+            fileEchoDetected = true;
             Log.info(
-              `📁 ✅ File reference sent. Waiting for CLI to read file...`
-            );
-            Log.debug(
-              `⏳ Entering file read detection phase. Will submit after ${this.fileSilenceMs}ms of silence.`
+              `🔍 ✅ File reference echo detected! Starting ${this.fileSilenceMs}ms silence timer...`
             );
             startSubmissionTimer();
-          }
-
-          // Reset submission timer on each chunk while waiting for file to be processed
-          if (promptTextSent && !promptSubmitted) {
+          } else if (fileEchoDetected) {
+            // Echo already detected, just reset the timer on each new chunk
             startSubmissionTimer();
           }
+        }
 
-          // Phase 2: After prompt submitted, detect completion and emit deltas
+        // Mode-based processing: time-based (Codex) vs screen-based (Claude/Copilot)
+        if (this.config.useTimeBasedExtraction) {
+          // TIME-BASED EXTRACTION (Codex)
+          // Process data chunks directly without screen parsing
           if (promptSubmitted) {
-            const delta = this.extractNewContent(
-              screen,
-              lastEmittedContent,
-              lastSanitizedPrompt
-            );
-            if (delta.trim().length > 0) {
-              this.config.streamingEmitter.fire(delta);
-              if (shouldShowOutput) {
-                //Log.append(delta);
-              }
+            this.processTimeBasedChunk(data, lastEmittedContent);
+          }
+
+          // For TUI readiness and prompt submission, still use screen detection
+          for (const screen of screens) {
+            const screenLower = screen.toLowerCase();
+
+            // Phase 1: First complete screen means TUI is ready - send file reference
+            if (!tuiReady) {
+              Log.info("✅ TUI is ready (first complete screen detected)");
+              tuiReady = true;
+
+              // Small delay to ensure TUI is fully interactive
+              await this.delay(TUI_READY_DELAY_MS);
+
+              // Send @file reference to CLI (instant, no chunking!)
+              Log.info(`📁 Sending file reference: ${prompt}`);
+              terminal.sendText(prompt, false);
+              promptTextSent = true;
+
+              Log.info(
+                `📁 ✅ File reference sent. Waiting for CLI to read and echo file reference...`
+              );
+              Log.debug(
+                `⏳ Entering file read detection phase. Will start silence timer after echo detected.`
+              );
             }
 
-            // Check for escape indicator in this screen
-            const hasIndicator = screenLower.includes(escapeIndicator);
+            // For time-based mode, we rely on log file for completion detection
+            // No indicator-based completion checking here
+          }
+        } else {
+          // SCREEN-BASED EXTRACTION (Claude/Copilot)
+          // Process each complete screen
+          for (const screen of screens) {
+            Log.debug(
+              `[Screen Processing] Processing screen, tuiReady=${tuiReady}`
+            );
 
-            if (hasIndicator) {
-              if (!indicatorEverSeen) {
-                Log.debug(
-                  `🔍 [Screen] First indicator seen - CLI is now processing`
-                );
-              }
-              indicatorEverSeen = true;
-              consecutiveNoIndicatorScreens = 0;
-            } else if (indicatorEverSeen) {
-              consecutiveNoIndicatorScreens++;
-              Log.debug(
-                `🔍 [Screen] No indicator, consecutiveNoIndicator=${consecutiveNoIndicatorScreens}`
+            const screenLower = screen.toLowerCase();
+
+            // Phase 1: First complete screen means TUI is ready - send file reference
+            if (!tuiReady) {
+              Log.info("✅ TUI is ready (first complete screen detected)");
+              tuiReady = true;
+
+              // Small delay to ensure TUI is fully interactive
+              await this.delay(TUI_READY_DELAY_MS);
+
+              // Send @file reference to CLI (instant, no chunking!)
+              Log.info(`📁 Sending file reference: ${prompt}`);
+              terminal.sendText(prompt, false);
+              promptTextSent = true;
+
+              Log.info(
+                `📁 ✅ File reference sent. Waiting for CLI to read and echo file reference...`
               );
+              Log.debug(
+                `⏳ Entering file read detection phase. Will start silence timer after echo detected.`
+              );
+            }
 
-              // Require 2+ consecutive complete screens without indicator
-              if (consecutiveNoIndicatorScreens >= 2) {
-                Log.info(
-                  `✅ Response complete (no indicator for ${consecutiveNoIndicatorScreens} consecutive screens)`
+            // Phase 2: After prompt submitted, detect completion and emit deltas
+            if (promptSubmitted) {
+              const delta = this.extractNewContent(
+                screen,
+                lastEmittedContent,
+                lastSanitizedPrompt
+              );
+              if (delta.trim().length > 0) {
+                this.config.streamingEmitter.fire(delta);
+                if (shouldShowOutput) {
+                  //Log.append(delta);
+                }
+              }
+
+              // Check for escape indicator in this screen
+              const hasIndicator = screenLower.includes(escapeIndicator);
+
+              if (hasIndicator) {
+                if (!indicatorEverSeen) {
+                  Log.debug(
+                    `🔍 [Screen] First indicator seen - CLI is now processing`
+                  );
+                }
+                indicatorEverSeen = true;
+                consecutiveNoIndicatorScreens = 0;
+              } else if (indicatorEverSeen) {
+                consecutiveNoIndicatorScreens++;
+                Log.debug(
+                  `🔍 [Screen] No indicator, consecutiveNoIndicator=${consecutiveNoIndicatorScreens}`
                 );
-                completed = true;
-                break;
+
+                // Require 2+ consecutive complete screens without indicator
+                if (consecutiveNoIndicatorScreens >= 2) {
+                  Log.info(
+                    `✅ Response complete (no indicator for ${consecutiveNoIndicatorScreens} consecutive screens)`
+                  );
+                  completed = true;
+                  break;
+                }
               }
             }
           }
@@ -626,6 +701,14 @@ export class TuiStreamProcessor {
     }
 
     const chromPatterns = [
+      // Codex-specific patterns
+      /^[╭╰]─+[╮╯]$/, // Box borders (Codex uses these for UI elements)
+      /^>\s+OpenAI Codex/i, // Header
+      /^•\s+Working\s+\(/i, // Working indicator
+      /\d+%\s+context\s+left/i, // Context status
+      /^Tip:/i, // Tips
+
+      // Existing patterns for Claude/Copilot
       /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only
       /^[─═]{20,}$/, // Long horizontal separators (lenient)
       /Ctrl\+[a-z]\s+\w+.*Ctrl\+/i, // Multiple keyboard shortcuts
@@ -734,6 +817,132 @@ export class TuiStreamProcessor {
     }
 
     return "Unknown error";
+  }
+
+  /**
+   * Deduplicate content using circular buffer tracking.
+   *
+   * Strategy:
+   * - Track last 100 unique lines in recentLinesBuffer
+   * - Only emit lines not in recent history
+   * - Maintain buffer size limit (remove oldest when > 100)
+   *
+   * This filters repeated animation frames while preserving
+   * actual response text.
+   */
+  private deduplicateContent(text: string): string {
+    const lines = text.split(/\r?\n/);
+    const newLines: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        // Keep empty lines for formatting
+        newLines.push(line);
+        continue;
+      }
+
+      // Check if line already seen in recent history
+      if (!this.recentLinesBuffer.has(trimmed)) {
+        newLines.push(line);
+        this.recentLinesBuffer.add(trimmed);
+
+        // Keep buffer size limited (last 100 lines)
+        if (this.recentLinesBuffer.size > 100) {
+          // Remove oldest line (first in set)
+          const firstLine = this.recentLinesBuffer.values().next().value;
+          if (firstLine !== undefined) {
+            this.recentLinesBuffer.delete(firstLine);
+          }
+        }
+      }
+    }
+
+    return newLines.join("\n");
+  }
+
+  /**
+   * Filter TUI chrome from a chunk of text.
+   * Uses existing isTuiChromeLine() method for pattern detection.
+   */
+  private filterTuiChromeFromChunk(text: string): string {
+    const lines = text.split(/\r?\n/);
+    const filteredLines: string[] = [];
+
+    for (const line of lines) {
+      // Use existing isTuiChromeLine() method
+      if (!this.isTuiChromeLine(line)) {
+        filteredLines.push(line);
+      }
+    }
+
+    return filteredLines.join("\n");
+  }
+
+  /**
+   * Process TUI chunk using time-based extraction (for Codex).
+   *
+   * Strategy:
+   * - Strip ANSI codes
+   * - Filter TUI chrome using existing patterns
+   * - Deduplicate content (avoid repeated animation frames)
+   * - Emit deltas
+   *
+   * This approach works with cursor-based rendering where chunks
+   * arrive in large bursts after delays, rather than incrementally.
+   */
+  private processTimeBasedChunk(
+    data: string,
+    emittedContent: Map<string, number>
+  ): void {
+    // Phase 1: Strip ANSI codes
+    const cleaned = this.stripAnsiCodes(data);
+
+    // Phase 2: Filter TUI chrome
+    const filtered = this.filterTuiChromeFromChunk(cleaned);
+
+    // Phase 3: Deduplicate content
+    const newContent = this.deduplicateContent(filtered);
+
+    // Phase 4: Emit deltas
+    if (newContent.trim()) {
+      this.config.streamingEmitter.fire(newContent);
+
+      // Track emitted content (for consistency with screen-based approach)
+      const lines = newContent.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+          emittedContent.set(trimmed, (emittedContent.get(trimmed) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  /**
+   * Process TUI chunk using screen-based extraction (for Claude/Copilot).
+   *
+   * This is the existing approach that works for line-based TUI output.
+   */
+  private processScreenBasedChunk(
+    screens: string[],
+    lastEmittedContent: Map<string, number>,
+    lastSanitizedPrompt?: string,
+    shouldShowOutput?: boolean
+  ): void {
+    for (const screen of screens) {
+      const delta = this.extractNewContent(
+        screen,
+        lastEmittedContent,
+        lastSanitizedPrompt
+      );
+      if (delta.trim().length > 0) {
+        this.config.streamingEmitter.fire(delta);
+        if (shouldShowOutput) {
+          //Log.append(delta);
+        }
+      }
+    }
   }
 
   /**
