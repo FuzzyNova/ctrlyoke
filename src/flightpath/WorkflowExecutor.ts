@@ -213,6 +213,9 @@ export class WorkflowExecutor {
           console.log(
             `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
           );
+          // Log to Output channel - centralized logging for all streaming content
+          Log.append(chunk);
+          // Update dashboard
           context.dashboardProvider?.updateCliStreamingChunk(i, chunk);
         });
       }

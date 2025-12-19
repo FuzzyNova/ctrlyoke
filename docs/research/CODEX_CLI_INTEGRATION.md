@@ -362,6 +362,12 @@ Codex CLI has three primary execution modes:
 - **When complete:** This indicator disappears from output
 - **Pattern to watch:** `esc to interrupt` presence = still working
 
+**Output Processing:**
+
+- **TUI chrome filtering:** Box borders, status bars, and UI elements are removed
+- **Whitespace trimming:** Consecutive blank lines are limited to max 2 lines (configurable)
+- **Deduplication:** Repeated animation frames are filtered using circular buffer tracking
+
 #### Headless JSON Mode
 
 ```jsonl

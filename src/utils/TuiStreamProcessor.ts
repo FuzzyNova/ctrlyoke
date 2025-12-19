@@ -62,6 +62,7 @@ export class TuiStreamProcessor {
   private fileSilenceMs: number;
   private maxConsecutiveBlankLines: number;
   private recentLinesBuffer: Set<string> = new Set();
+  private consecutiveBlankLines: number = 0; // Persistent counter across chunks
 
   constructor(private config: TuiStreamConfig) {
     this.fileSilenceMs = config.fileSilenceMs || DEFAULT_FILE_SILENCE_MS;
@@ -115,6 +116,9 @@ export class TuiStreamProcessor {
     let indicatorEverSeen = false; // Must see indicator before counting its absence
     let consecutiveNoIndicatorScreens = 0; // Require 2+ screens without indicator
 
+    // Reset blank line counter for new stream
+    this.consecutiveBlankLines = 0;
+
     const escapeIndicator = this.config.escapeIndicator.toLowerCase();
 
     // Check if file reference has been echoed back by the CLI
@@ -127,8 +131,13 @@ export class TuiStreamProcessor {
       const atIndex = prompt.indexOf("@");
       if (atIndex === -1) {
         // No @ symbol, just check for the whole prompt (normalize whitespace)
-        const normalizedPrompt = prompt.toLowerCase().replace(/\s+/g, " ").trim();
-        const normalizedBuffer = fileEchoBuffer.toLowerCase().replace(/\s+/g, " ");
+        const normalizedPrompt = prompt
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim();
+        const normalizedBuffer = fileEchoBuffer
+          .toLowerCase()
+          .replace(/\s+/g, " ");
         if (normalizedBuffer.includes(normalizedPrompt)) {
           Log.debug(
             `🔍 File reference verified: found "${prompt}" in terminal echo`
@@ -140,7 +149,7 @@ export class TuiStreamProcessor {
 
       // Extract just the file path part (after @)
       const filePath = prompt.substring(atIndex + 1).trim();
-      
+
       // For file path matching, REMOVE all whitespace from both sides
       // TUIs line-wrap paths which inserts spaces where they shouldn't be
       // Example: "path/to/file.txt" may appear as "path/to/file.   \n  txt"
@@ -208,18 +217,24 @@ export class TuiStreamProcessor {
 
       // Create an async iterator wrapper that checks abort signal
       const iterator = execution.read()[Symbol.asyncIterator]();
-      
+
       while (true) {
         // Race between reading next chunk and abort signal
-        const abortPromise = new Promise<{ done: true; value: undefined }>((resolve) => {
-          if (controller.signal.aborted) {
-            resolve({ done: true, value: undefined });
-          } else {
-            controller.signal.addEventListener('abort', () => {
+        const abortPromise = new Promise<{ done: true; value: undefined }>(
+          (resolve) => {
+            if (controller.signal.aborted) {
               resolve({ done: true, value: undefined });
-            }, { once: true });
+            } else {
+              controller.signal.addEventListener(
+                "abort",
+                () => {
+                  resolve({ done: true, value: undefined });
+                },
+                { once: true }
+              );
+            }
           }
-        });
+        );
 
         const nextPromise = iterator.next();
         const result = await Promise.race([nextPromise, abortPromise]);
@@ -240,14 +255,6 @@ export class TuiStreamProcessor {
         // Clean the ANSI codes and add to buffer
         const cleanData = this.stripAnsiCodes(data);
         screenBuffer += cleanData;
-
-        // Debug: Log chunk info for first few chunks or when stuck waiting
-
-        Log.debug(
-          `[Chunk #${chunkCount}] Raw bytes: ${data.length}, Clean chars: ${cleanData.length}, Total buffer: ${screenBuffer.length}`
-        );
-        Log.debug(`[Chunk #${chunkCount}] Raw data: "${data}"`);
-        Log.debug(`[Chunk #${chunkCount}] Clean data: "${cleanData}"`);
 
         // Accumulate output for file reference echo detection (only while waiting to submit)
         if (promptTextSent && !promptSubmitted) {
@@ -276,18 +283,6 @@ export class TuiStreamProcessor {
         const { screens, remainder } =
           this.extractScreensFromBuffer(screenBuffer);
         screenBuffer = remainder;
-
-        // Debug: Log screen extraction results when waiting for TUI
-        if (!tuiReady) {
-          Log.debug(
-            `[Screen Extract] Found ${screens.length} complete screens, remainder: ${remainder.length} chars`
-          );
-          if (screens.length > 0) {
-            Log.debug(
-              `[Screen Extract] First screen length: ${screens[0].length} chars`
-            );
-          }
-        }
 
         // Detect file echo and start/reset submission timer (check on EVERY chunk, not just complete screens)
         if (promptTextSent && !promptSubmitted) {
@@ -380,9 +375,6 @@ export class TuiStreamProcessor {
               );
               if (delta.trim().length > 0) {
                 this.config.streamingEmitter.fire(delta);
-                if (shouldShowOutput) {
-                  //Log.append(delta);
-                }
               }
 
               // Check for escape indicator in this screen
@@ -512,11 +504,6 @@ export class TuiStreamProcessor {
     const screens: string[] = [];
     const screenEndPattern = this.config.screenEndPattern;
 
-    // Debug: Log buffer content periodically to help diagnose pattern matching issues
-    Log.debug(`[TUI Buffer] Length: ${buffer.length} characters`);
-    Log.debug(`[TUI Buffer] Last 200 chars: ${buffer.slice(-200)}`);
-    Log.debug(`[TUI Buffer] Pattern: ${screenEndPattern.toString()}`);
-
     let lastIndex = 0;
     let match;
 
@@ -527,11 +514,6 @@ export class TuiStreamProcessor {
 
       if (screen.trim().length > 0) {
         screens.push(screen);
-        Log.debug(
-          `[TUI Screen] Found complete screen, match: "${match[0]}", screen length: ${screen.length}`
-        );
-      } else {
-        Log.debug(`[TUI Screen] Skipped empty screen, match: "${match[0]}"`);
       }
 
       lastIndex = screenEnd;
@@ -539,10 +521,6 @@ export class TuiStreamProcessor {
 
     // Everything after the last complete screen is the remainder
     const remainder = buffer.substring(lastIndex);
-
-    Log.debug(
-      `[TUI Buffer] Extraction complete: ${screens.length} screens, ${remainder.length} chars remainder`
-    );
 
     return { screens, remainder };
   }
@@ -705,8 +683,11 @@ export class TuiStreamProcessor {
       /^[╭╰]─+[╮╯]$/, // Box borders (Codex uses these for UI elements)
       /^>\s+OpenAI Codex/i, // Header
       /^•\s+Working\s+\(/i, // Working indicator
-      /\d+%\s+context\s+left/i, // Context status
+      /\d+%\s+context\s+left/i, // Context status (also catches "› prompt\n  99% context left")
+      /^›\s+.*\n.*\d+%\s+context\s+left/i, // Codex prompt + status bar combo
+      /^›\s+[^›]*$/i, // Codex prompt indicator lines (but allow › inside content)
       /^Tip:/i, // Tips
+      /^─\s+Worked for \d+s\s+─+$/i, // Worked for Xs separator
 
       // Existing patterns for Claude/Copilot
       /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only
@@ -733,6 +714,7 @@ export class TuiStreamProcessor {
   /**
    * Strip ANSI escape codes and terminal control sequences.
    * Preserves all printable characters including markdown.
+   * Note: Whitespace collapsing is handled in deduplicateContent()
    */
   stripAnsiCodes(text: string): string {
     return (
@@ -745,8 +727,7 @@ export class TuiStreamProcessor {
         .replace(/\x1B[@-Z\\-_]/g, "")
         // Standalone BEL character
         .replace(/\x07/g, "")
-        // Clean up excessive newlines but preserve paragraph breaks
-        .replace(/\n{4,}/g, "\n\n\n")
+      // Note: Excessive whitespace is collapsed in deduplicateContent() instead
     );
   }
 
@@ -823,27 +804,56 @@ export class TuiStreamProcessor {
    * Deduplicate content using circular buffer tracking.
    *
    * Strategy:
+   * - Collapse excessive whitespace within chunks (3+ blank lines → 2)
    * - Track last 100 unique lines in recentLinesBuffer
    * - Only emit lines not in recent history
    * - Maintain buffer size limit (remove oldest when > 100)
+   * - Limit consecutive blank lines across chunks using instance variable
    *
    * This filters repeated animation frames while preserving
-   * actual response text.
+   * actual response text and natural formatting.
    */
   private deduplicateContent(text: string): string {
-    const lines = text.split(/\r?\n/);
+    // First, collapse runs of 3+ blank lines within the chunk to 2 blank lines
+    // After trimEnd(), blank lines are truly empty, so just match consecutive newlines
+    // Handle both \n and \r\n line endings
+
+    const inputNewlineCount = (text.match(/\n/g) || []).length;
+
+    // Normalize line endings to \n first
+    const normalized = text.replace(/\r\n/g, "\n");
+
+    // Check what the regex WOULD match before replacing
+    const blankRunMatches = normalized.match(/\n\n\n+/g);
+    if (blankRunMatches && blankRunMatches.length > 0) {
+      Log.debug(
+        `[deduplicateContent] 🔍 Collapsing ${blankRunMatches.length} runs of 3+ newlines (input: ${inputNewlineCount} newlines)`
+      );
+    }
+
+    // Now actually collapse
+    const collapsedText = normalized.replace(/\n\n\n+/g, "\n\n");
+
+    const lines = collapsedText.split(/\r?\n/);
     const newLines: string[] = [];
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) {
-        // Keep empty lines for formatting
-        newLines.push(line);
+        // Keep empty lines for formatting, but limit consecutive blank lines
+        this.consecutiveBlankLines++;
+        if (this.consecutiveBlankLines <= this.maxConsecutiveBlankLines) {
+          newLines.push(line);
+        }
         continue;
       }
 
       // Check if line already seen in recent history
       if (!this.recentLinesBuffer.has(trimmed)) {
+        // Reset blank line counter ONLY when we EMIT a non-blank line
+        // (not when we skip a duplicate non-blank line)
+        this.consecutiveBlankLines = 0;
+
         newLines.push(line);
         this.recentLinesBuffer.add(trimmed);
 
@@ -856,9 +866,33 @@ export class TuiStreamProcessor {
           }
         }
       }
+      // If line is a duplicate, DON'T reset the counter
+      // This prevents blank lines from accumulating between duplicate content
     }
 
-    return newLines.join("\n");
+    const result = newLines.join("\n");
+    const finalNewlineCount = (result.match(/\n/g) || []).length;
+
+    // Check if output STILL has 3+ newlines (would indicate collapse failed)
+    const outputBlankRuns = result.match(/\n\n\n+/g);
+    if (outputBlankRuns && outputBlankRuns.length > 0) {
+      Log.debug(
+        `[deduplicateContent] ⚠️ WARNING: Output STILL has ${outputBlankRuns.length} runs of 3+ newlines after collapse!`
+      );
+      outputBlankRuns.forEach((match, idx) => {
+        Log.debug(`  Output run ${idx + 1}: ${match.length} newlines`);
+      });
+      // Show preview when validation fails
+      Log.debug(
+        `[deduplicateContent] Output preview:\n"${result.substring(0, 500)}"`
+      );
+    }
+
+    Log.debug(
+      `[deduplicateContent] 🔄 Final: ${finalNewlineCount} newlines, ${newLines.length} lines, blank counter: ${this.consecutiveBlankLines}`
+    );
+
+    return result;
   }
 
   /**
@@ -868,12 +902,21 @@ export class TuiStreamProcessor {
   private filterTuiChromeFromChunk(text: string): string {
     const lines = text.split(/\r?\n/);
     const filteredLines: string[] = [];
+    const removedLines: string[] = [];
 
     for (const line of lines) {
       // Use existing isTuiChromeLine() method
       if (!this.isTuiChromeLine(line)) {
         filteredLines.push(line);
+      } else {
+        removedLines.push(line);
       }
+    }
+
+    if (removedLines.length > 0) {
+      Log.debug(
+        `[filterTuiChrome] Removed ${removedLines.length} TUI chrome lines`
+      );
     }
 
     return filteredLines.join("\n");
@@ -898,8 +941,14 @@ export class TuiStreamProcessor {
     // Phase 1: Strip ANSI codes
     const cleaned = this.stripAnsiCodes(data);
 
+    // Phase 1.5: Strip trailing whitespace from each line (TUI adds padding to terminal width)
+    const trimmedLines = cleaned
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .join("\n");
+
     // Phase 2: Filter TUI chrome
-    const filtered = this.filterTuiChromeFromChunk(cleaned);
+    const filtered = this.filterTuiChromeFromChunk(trimmedLines);
 
     // Phase 3: Deduplicate content
     const newContent = this.deduplicateContent(filtered);
@@ -938,9 +987,6 @@ export class TuiStreamProcessor {
       );
       if (delta.trim().length > 0) {
         this.config.streamingEmitter.fire(delta);
-        if (shouldShowOutput) {
-          //Log.append(delta);
-        }
       }
     }
   }
