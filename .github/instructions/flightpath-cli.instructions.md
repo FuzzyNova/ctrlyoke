@@ -102,6 +102,24 @@ Subclasses must implement:
 - `showCliOutput`: Output panel visibility
 </configuration>
 
+<codexCompletion>
+**Codex CLI Completion Detection** (CodexCommandLineIntegration):
+
+**Headless Mode**: Uses JSONL events (`{"type":"turn.completed"}`) - deterministic, no special handling needed.
+
+**Interactive TUI Mode**: Uses Codex's **notify hook** for reliable completion detection:
+
+- Configures: `--config notify='["node","<script-path>"]'`
+- Script: `out/scripts/flightpath-codex-notify.js` writes completion event to file
+- Monitors: `~/.flightpath/codex-notifications/{thread-id}.json`
+- Fallback: If no thread ID, monitors directory for any new `.json` files
+- Benefits: Future-proof (official API), won't break with log format changes
+
+**Previous approach** (deprecated): Parsed `~/.codex/log/codex-tui.log` for patterns like `INFO run_task: close`. Broke when Codex changed log format.
+
+See: `docs/CODEX_COMPLETION_DETECTION.md` for full implementation details.
+</codexCompletion>
+
 <test>
 my SECRET NUMBER IS 1155
 </test>

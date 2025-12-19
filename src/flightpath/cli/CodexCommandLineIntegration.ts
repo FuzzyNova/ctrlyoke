@@ -111,7 +111,18 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       (arg, i, arr) =>
         arg !== "--json" && arg !== "exec" && arr[i - 1] !== "--output-format"
     );
-    return `${this.getCliName()} ${interactiveArgs.join(" ")}`;
+
+    // Quote arguments that contain special characters (brackets, quotes, etc.)
+    const quotedArgs = interactiveArgs.map((arg) => {
+      // If arg contains special chars like brackets, spaces, or quotes, wrap in double quotes
+      // But escape any internal double quotes first
+      if (/[\[\]\s"]/.test(arg)) {
+        return `"${arg.replace(/"/g, '\\"')}"`;
+      }
+      return arg;
+    });
+
+    return `${this.getCliName()} ${quotedArgs.join(" ")}`;
   }
 
   protected getIntegrationMode(): string {
@@ -372,6 +383,15 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           args.push("--add-dir", dir);
         });
       }
+    } else {
+      // Interactive mode: Configure notify hook for completion detection
+      const notifyScript = this.getNotificationScriptPath();
+      // Convert to forward slashes (works on Windows and avoids escaping issues)
+      const normalizedPath = notifyScript.replace(/\\/g, "/");
+      // TOML array format with single quotes (avoids escaping complexity)
+      // Format: notify=['node','path']
+      args.push("--config", `notify=['node','${normalizedPath}']`);
+      Log.debug(`🔔 Configured notify hook: ${normalizedPath}`);
     }
 
     // Session management
@@ -639,22 +659,61 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   // ============================================================
-  // CODEX-SPECIFIC: LOG FILE MONITORING
+  // CODEX-SPECIFIC: NOTIFY HOOK COMPLETION DETECTION
   // ============================================================
 
   /**
-   * Get path to Codex TUI log file.
-   * Location: %USERPROFILE%\.codex\log\codex-tui.log (Windows)
-   *           ~/.codex/log/codex-tui.log (macOS/Linux)
+   * Get path to FlightPath's Codex notification handler script.
+   * This script is called by Codex CLI when agent-turn-complete events occur.
    */
-  private getCodexLogPath(): string {
-    const home = process.env.USERPROFILE || process.env.HOME;
-    if (!home) {
-      throw new Error("Cannot determine home directory for Codex log path");
+  private getNotificationScriptPath(): string {
+    const path = require("path");
+    return path.join(
+      this.context.extensionPath,
+      "out",
+      "scripts",
+      "flightpath-codex-notify.js"
+    );
+  }
+
+  /**
+   * Get directory where Codex notifications are written.
+   * Location: {workspace}/.flightpath/temp/codex-notifications/
+   *
+   * Uses workspace-specific directory to prevent conflicts when multiple
+   * VS Code instances are running FlightPath simultaneously.
+   */
+  private getNotificationDirectory(): string {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("Cannot determine workspace root for notification path");
     }
 
     const path = require("path");
-    return path.join(home, ".codex", "log", "codex-tui.log");
+    return path.join(
+      workspaceRoot,
+      ".flightpath",
+      "temp",
+      "codex-notifications"
+    );
+  }
+
+  /**
+   * Extract thread ID from Codex CLI output.
+   * Codex emits: {"type":"thread.started","thread":{"id":"..."}}
+   *
+   * @param output Terminal or process output
+   * @returns Thread ID if found, undefined otherwise
+   */
+  private extractThreadId(output: string): string | undefined {
+    // Look for JSONL thread.started event
+    const threadMatch = output.match(
+      /"type"\s*:\s*"thread\.started"[^}]*"thread"\s*:\s*{[^}]*"id"\s*:\s*"([^"]+)"/i
+    );
+    if (threadMatch) {
+      return threadMatch[1];
+    }
+    return undefined;
   }
 
   /**
@@ -665,89 +724,136 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Monitor Codex log file for completion indicators.
+   * Monitor notification file for completion.
    *
-   * Completion Indicators:
-   * - Success: "INFO run_task: close time.busy=..."
-   * - Error: "Turn error:" or "stream disconnected" or "didn't complete gracefully"
+   * Uses Codex's notify hook to get agent-turn-complete events.
+   * The notification handler script writes a JSON file that we monitor.
    *
+   * If thread ID is not available, monitors the entire notification directory
+   * for any new notification files (since we're the only process running).
+   *
+   * @param threadId Thread ID to monitor (from Codex output), undefined to monitor all files
    * @param startTime Execution start time (for timeout calculation)
    * @param timeoutMs Maximum time to wait for completion
    * @returns Object with completed flag and optional error message
    */
-  private async monitorLogFileForCompletion(
+  private async monitorNotificationFile(
+    threadId: string | undefined,
     startTime: Date,
     timeoutMs: number
   ): Promise<{ completed: boolean; error?: string }> {
     const fs = require("fs");
-    const logPath = this.getCodexLogPath();
+    const path = require("path");
 
-    // Get initial file size to track new entries
-    let lastPosition = 0;
+    const notifyDir = this.getNotificationDirectory();
+
+    // Ensure notification directory exists
+    if (!fs.existsSync(notifyDir)) {
+      fs.mkdirSync(notifyDir, { recursive: true });
+    }
+
+    // Get initial file list to detect new files
+    let initialFiles = new Set<string>();
     try {
-      const stats = await fs.promises.stat(logPath);
-      lastPosition = stats.size;
-      Log.debug(`📋 Starting log monitoring from position ${lastPosition}`);
+      const files = fs.readdirSync(notifyDir);
+      initialFiles = new Set(files);
+      Log.debug(`📋 Initial notification files: ${files.length}`);
     } catch (error) {
-      Log.warn(
-        `Codex log file not found at ${logPath}, starting from position 0`
+      Log.debug(`Could not read notification directory: ${error}`);
+    }
+
+    if (threadId) {
+      Log.debug(`📋 Monitoring notification file for thread: ${threadId}`);
+    } else {
+      Log.debug(
+        `📋 Monitoring notification directory for any new completion file`
       );
     }
 
-    // Poll log file for completion indicators
+    // Poll for notification file
     while (Date.now() - startTime.getTime() < timeoutMs) {
       try {
-        const stats = await fs.promises.stat(logPath);
+        if (threadId) {
+          // Monitor specific thread ID file
+          const notifyFile = path.join(notifyDir, `${threadId}.json`);
 
-        // Only read new content since last check
-        if (stats.size > lastPosition) {
-          const stream = fs.createReadStream(logPath, {
-            start: lastPosition,
-            encoding: "utf8",
-          });
+          if (fs.existsSync(notifyFile)) {
+            // Read notification data
+            const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
 
-          let newContent = "";
-          for await (const chunk of stream) {
-            newContent += chunk;
-          }
+            Log.info(
+              `✅ Codex completion detected via notify hook (turn: ${notifyData.turnId})`
+            );
 
-          lastPosition = stats.size;
-          Log.debug(`📋 Read ${newContent.length} new bytes from log file`);
+            // Log the final assistant message if available
+            if (notifyData.lastMessage) {
+              Log.debug(`📝 Last message: ${notifyData.lastMessage}`);
+            }
 
-          // Check for completion indicator: "run_task: close" marks end of turn
-          if (/INFO\s+run_task:\s+close\s+time\.busy=/i.test(newContent)) {
-            Log.info("✅ Codex completion detected from log file");
+            // Clean up notification file
+            try {
+              fs.unlinkSync(notifyFile);
+              Log.debug(`🗑️ Cleaned up notification file`);
+            } catch (cleanupError) {
+              Log.debug(
+                `Failed to clean up notification file: ${cleanupError}`
+              );
+            }
+
             return { completed: true };
           }
+        } else {
+          // Monitor for any new notification file
+          const currentFiles = fs.readdirSync(notifyDir);
 
-          // Check for error patterns
-          const errorMatch = newContent.match(/Turn error:\s*({.*?})/);
-          if (errorMatch) {
-            Log.error(`❌ Codex error detected in log: ${errorMatch[1]}`);
-            return {
-              completed: false,
-              error: `Turn error: ${errorMatch[1]}`,
-            };
-          }
+          for (const file of currentFiles) {
+            if (!initialFiles.has(file) && file.endsWith(".json")) {
+              const notifyFile = path.join(notifyDir, file);
 
-          // Check for warning patterns that indicate failures
-          if (/stream disconnected|didn't complete gracefully/i.test(newContent)) {
-            const warningMatch = newContent.match(
-              /(stream disconnected[^\n]*|didn't complete gracefully[^\n]*)/i
-            );
-            const warningMsg = warningMatch
-              ? warningMatch[1]
-              : "Codex CLI warning detected";
-            Log.warn(`⚠️ Codex warning in log: ${warningMsg}`);
-            return {
-              completed: false,
-              error: warningMsg,
-            };
+              try {
+                const notifyData = JSON.parse(
+                  fs.readFileSync(notifyFile, "utf8")
+                );
+
+                Log.info(
+                  `✅ Codex completion detected via notify hook (thread: ${notifyData.threadId}, turn: ${notifyData.turnId})`
+                );
+
+                // Log the final assistant message if available
+                if (notifyData.lastMessage) {
+                  Log.debug(`📝 Last message: ${notifyData.lastMessage}`);
+                }
+
+                // Clean up notification file
+                try {
+                  fs.unlinkSync(notifyFile);
+                  Log.debug(`🗑️ Cleaned up notification file: ${file}`);
+                } catch (cleanupError) {
+                  Log.debug(
+                    `Failed to clean up notification file: ${cleanupError}`
+                  );
+                }
+
+                return { completed: true };
+              } catch (parseError) {
+                Log.debug(
+                  `Failed to parse notification file ${file}: ${parseError}`
+                );
+              }
+            }
           }
         }
       } catch (error) {
-        // Log file may not exist yet, continue polling
-        Log.debug(`Log file polling error (may not exist yet): ${error}`);
+        Log.debug(`Notification file check error: ${error}`);
+      }
+
+      // Check if user cancelled
+      if (this.isCancelling) {
+        Log.info("🛑 User cancelled - stopping notification monitoring");
+        return {
+          completed: false,
+          error: "User cancelled execution",
+        };
       }
 
       // Poll every 500ms
@@ -756,11 +862,11 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
     // Timeout reached
     Log.warn(
-      `⏱️ Timeout waiting for Codex completion indicator in log file`
+      `⏱️ Timeout waiting for Codex completion notification${threadId ? ` (thread: ${threadId})` : ""}`
     );
     return {
       completed: false,
-      error: "Timeout waiting for completion indicator",
+      error: "Timeout waiting for completion notification",
     };
   }
 
@@ -833,14 +939,21 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
         const tuiProcessor = new TuiStreamProcessor(tuiConfig);
 
-        // Create abort controller to stop TUI processing when log detects completion
+        // Create abort controller to stop TUI processing when notification detects completion
         const tuiAbortController = new AbortController();
 
-        // Start log monitoring BEFORE sending prompt
+        // Start notification monitoring BEFORE sending prompt
         const startTime = new Date();
 
+        // Note: Thread ID extraction from TUI output is complex since it's in ANSI-formatted stream.
+        // We'll use a fallback approach: monitor without thread ID initially, and rely on
+        // timeout-based completion if notification file doesn't appear.
+        let threadId: string | undefined;
+
         // Process TUI stream (time-based extraction) with abort controller
-        Log.info("⏳ Starting Codex TUI processing with log monitoring...");
+        Log.info(
+          "⏳ Starting Codex TUI processing with notify hook monitoring..."
+        );
         const tuiPromise = tuiProcessor.processStream(
           execution,
           terminal,
@@ -851,15 +964,16 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           tuiAbortController
         );
 
-        // Monitor log file for completion (authoritative source)
-        const logPromise = this.monitorLogFileForCompletion(
+        // Monitor notification file for completion (authoritative source)
+        const notifyPromise = this.monitorNotificationFile(
+          threadId,
           startTime,
           ConfigurationUtils.getCliExecutionTimeoutMs()
         );
 
-        // Race the promises - log file wins
-        const logResult = await Promise.race([
-          logPromise,
+        // Race the promises - notification file wins
+        const notifyResult = await Promise.race([
+          notifyPromise,
           // If TUI completes first (error), return a failure result
           tuiPromise.then((tuiResult) => ({
             completed: tuiResult.success,
@@ -867,9 +981,9 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           })),
         ]);
 
-        // Log file detected completion - abort TUI processing immediately
-        if (logResult.completed) {
-          Log.debug("🛑 Log file detected completion - aborting TUI stream");
+        // Notification detected completion - abort TUI processing immediately
+        if (notifyResult.completed) {
+          Log.debug("🛑 Notify hook detected completion - aborting TUI stream");
           tuiAbortController.abort();
         }
 
@@ -877,9 +991,9 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
         const tuiResult = await tuiPromise;
 
         // Check results
-        if (!logResult.completed) {
+        if (!notifyResult.completed) {
           this.lastFailureReason =
-            logResult.error || "Completion detection failed";
+            notifyResult.error || "Completion detection failed";
           Log.error(`❌ Codex execution failed: ${this.lastFailureReason}`);
           return false;
         }
@@ -890,7 +1004,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           Log.warn(
             `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
           );
-          // Don't return false here - log file said success, trust it
+          // Don't return false here - notify hook said success, trust it
         }
 
         Log.info("✅ Codex execution completed successfully");

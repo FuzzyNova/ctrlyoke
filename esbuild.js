@@ -170,6 +170,37 @@ const copyWebviewPlugin = {
   },
 };
 
+/**
+ * Plugin to copy script files to output directory
+ * @type {import('esbuild').Plugin}
+ */
+const copyScriptsPlugin = {
+  name: "copy-scripts",
+
+  setup(build) {
+    build.onEnd(() => {
+      const srcScripts = path.join(__dirname, "src", "scripts");
+      const outScripts = path.join(__dirname, "out", "scripts");
+
+      // Create output scripts directory if it doesn't exist
+      if (!fs.existsSync(outScripts)) {
+        fs.mkdirSync(outScripts, { recursive: true });
+      }
+
+      // Copy all script files
+      if (fs.existsSync(srcScripts)) {
+        const files = fs.readdirSync(srcScripts);
+        files.forEach((file) => {
+          const srcFile = path.join(srcScripts, file);
+          const outFile = path.join(outScripts, file);
+          fs.copyFileSync(srcFile, outFile);
+          console.log(`[copy] ${file} -> out/scripts/${file}`);
+        });
+      }
+    });
+  },
+};
+
 async function main() {
   // Build main extension
   const ctx = await esbuild.context({
@@ -190,6 +221,7 @@ async function main() {
       copyTemplatesPlugin,
       copySchemasPlugin,
       copyWebviewPlugin,
+      copyScriptsPlugin,
     ],
   });
 
