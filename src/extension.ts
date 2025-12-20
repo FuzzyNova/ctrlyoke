@@ -116,7 +116,6 @@ export async function activate(context: vscode.ExtensionContext) {
     registerCommands(context);
 
     console.log("FlightPath: Extension activated successfully!");
-    vscode.window.showInformationMessage("FlightPath is ready for takeoff! 🚀");
   } catch (error) {
     console.error("FlightPath: Failed to activate extension:", error);
     vscode.window.showErrorMessage(`FlightPath: Activation failed: ${error}`);
@@ -304,7 +303,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       try {
         // executePromptFile without provider override uses the current settings provider
         await flightPathManager.executePromptFile(uri.fsPath);
-        vscode.window.showInformationMessage("FlightPath workflow started");
+        vscode.window.showInformationMessage("FlightPath workflow completed");
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to execute FlightPath workflow: ${error}`

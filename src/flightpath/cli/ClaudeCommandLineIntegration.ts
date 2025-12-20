@@ -114,8 +114,9 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       /^Added .* tool for/i, // Tool announcements
       /Claude Pro ·.*Organization/i, // Status line with model and account
 
-      // Claude spinner/thinking indicator (UI chrome - just the spinner character alone)
-      /^[✻✽✢✶·]\s*$/, // Spinner alone (any Claude spinner character)
+      // Claude spinner/thinking indicator (UI chrome)
+      /^[✻✽✢✶·*]\s*$/, // Spinner alone (any Claude spinner character including *)
+      /^[✻✽✢✶·*]\s+.*\(esc to interrupt.*\)/, // Spinner + text + (esc to interrupt)
 
       // Claude approval prompts (UI chrome)
       /^Do you want to proceed\?/i, // Approval question
@@ -124,9 +125,12 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       /^\s*\d+\.\s+Yes, and don't ask again/i, // Option 2
       /^\s*\d+\.\s+Type here to tell Claude/i, // Option 3
 
-      // Claude UI hints
+      // Claude UI hints and mode indicators
       /ctrl\+b to run in background/i, // Background hint
       /^>\s*$/, // Empty prompt line
+      /⏵⏵.*\(shift\+tab to cycle\)/, // Mode indicator (accept edits, etc.)
+      /⏸.*\(shift\+tab to cycle\)/, // Pause/plan mode indicator
+      /^\s*\?\s+for shortcuts/i, // Shortcuts hint
     ];
   }
 
