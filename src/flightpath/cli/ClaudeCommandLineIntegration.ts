@@ -6,6 +6,11 @@ import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { getClaudeModelName } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import {
+  TuiStreamProcessor,
+  TuiProcessResult,
+} from "../../utils/TuiStreamProcessor";
+import { TempFileManager } from "../../utils/TempFileManager";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -520,6 +525,12 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     if (!isInteractive) {
       const toolPermissionArgs = this.getToolPermissionArgs();
       args.push(...toolPermissionArgs);
+    } else {
+      // Interactive mode: Configure stop hook for completion detection
+      const hookSettings = this.buildStopHookSettings();
+      // Wrap JSON in single quotes for shell safety (PowerShell/bash)
+      args.push("--settings", `'${hookSettings}'`);
+      Log.debug(`🔔 Configured stop hook for completion detection`);
     }
 
     // Session management
@@ -533,6 +544,162 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // handled by the execution methods
 
     return args;
+  }
+
+  /**
+   * Execute Claude CLI in interactive terminal with dual monitoring:
+   * - Screen-based TUI output extraction
+   * - Stop hook completion detection
+   *
+   * This overrides BaseCliIntegration's executeInTerminal to add
+   * Claude's stop hook notification monitoring for reliable completion.
+   */
+  protected async executeInTerminal(
+    args: string[],
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<boolean> {
+    const tuiCommand = this.buildInteractiveTuiCommand(args);
+    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
+
+    Log.debug(`🎮 executeInTerminal called for Claude`);
+    Log.debug(`🎮 tuiCommand: ${tuiCommand}`);
+    Log.info(`📝 Prompt length: ${promptText.length} characters`);
+
+    // Create fresh terminal
+    const terminal = await this.createFreshTerminal();
+    terminal.show();
+
+    // Fire prompt ready event
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptText,
+      cliCommand: displayCommand,
+    });
+
+    this.streamingChunkEmitter.fire(
+      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
+        "   View the terminal for real-time output.\n\n"
+    );
+
+    try {
+      // Wait for shell integration
+      const shellIntegration = await this.waitForShellIntegration(terminal);
+
+      // Execute command
+      const execution = shellIntegration.executeCommand(tuiCommand);
+      this.currentExecution = execution;
+
+      // Create temp file with instructional prompt
+      let tempFilePath: string | undefined;
+
+      try {
+        const { tempFilePath: path, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePath = path;
+
+        this.lastSanitizedPrompt = promptText;
+
+        // Create TUI processor with Claude-specific configuration
+        const tuiConfig = {
+          escapeIndicator: this.getEscapeIndicator(),
+          screenEndPattern: this.getScreenEndPattern(),
+          tuiChromePatterns: this.getTuiChromePatterns(),
+          streamingEmitter: this.streamingChunkEmitter,
+          responseCompleteEmitter: this.responseCompleteEmitter,
+        };
+
+        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
+
+        // Create abort controller to stop TUI processing when stop hook detects completion
+        const tuiAbortController = new AbortController();
+
+        // Start stop hook notification monitoring
+        const startTime = new Date();
+
+        // Try to extract session ID from initial output, but don't wait
+        // We'll use fallback directory monitoring if session ID not available
+        let sessionId: string | undefined;
+
+        // Process TUI stream with abort controller
+        Log.info(
+          "⏳ Starting Claude TUI processing with stop hook monitoring..."
+        );
+        const tuiPromise = tuiProcessor.processStream(
+          execution,
+          terminal,
+          promptWithInstruction,
+          ConfigurationUtils.getCliExecutionTimeoutMs(),
+          this.lastSanitizedPrompt,
+          this.shouldShowOutput(),
+          tuiAbortController
+        );
+
+        // Monitor notification file for completion (authoritative source)
+        const notifyPromise = this.monitorNotificationFile(
+          sessionId,
+          startTime,
+          ConfigurationUtils.getCliExecutionTimeoutMs()
+        );
+
+        // Race the promises - notification file wins
+        const notifyResult = await Promise.race([
+          notifyPromise,
+          // If TUI completes first (error or fallback completion), return result
+          tuiPromise.then((tuiResult: TuiProcessResult) => ({
+            completed: tuiResult.success,
+            error: tuiResult.errorMessage,
+          })),
+        ]);
+
+        // Notification detected completion - abort TUI processing immediately
+        if (notifyResult.completed) {
+          Log.debug("🛑 Stop hook detected completion - aborting TUI stream");
+          tuiAbortController.abort();
+        }
+
+        // Wait for TUI to finish cleaning up (should be fast after abort)
+        const tuiResult = await tuiPromise;
+
+        // Check results
+        if (!notifyResult.completed) {
+          this.lastFailureReason =
+            notifyResult.error || "Completion detection failed";
+          Log.error(`❌ Claude execution failed: ${this.lastFailureReason}`);
+          return false;
+        }
+
+        // Check TUI result for any errors it may have caught
+        if (!tuiResult.success && tuiResult.errorMessage) {
+          this.lastFailureReason = tuiResult.errorMessage;
+          Log.warn(
+            `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+          );
+          // Don't return false here - stop hook said success, trust it
+        }
+
+        Log.info("✅ Claude execution completed successfully");
+        return true;
+      } finally {
+        // Clean up temp file if created
+        if (tempFilePath) {
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const tempMgr = new TempFileManager(workspaceRoot);
+            await tempMgr.deleteFile(tempFilePath);
+            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          }
+        }
+      }
+    } catch (error) {
+      this.lastFailureReason =
+        error instanceof Error ? error.message : String(error);
+      Log.error(`❌ Claude execution error: ${this.lastFailureReason}`);
+      return false;
+    }
   }
 
   /**
@@ -842,6 +1009,235 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     }
 
     return args;
+  }
+
+  // ============================================================
+  // CLAUDE-SPECIFIC: STOP HOOK COMPLETION DETECTION
+  // ============================================================
+
+  /**
+   * Get path to FlightPath's Claude stop hook handler script.
+   * This script is called by Claude CLI when Stop events occur.
+   */
+  private getStopHookScriptPath(): string {
+    const path = require("path");
+    return path.join(
+      this.context.extensionPath,
+      "out",
+      "scripts",
+      "flightpath-claude-stop-hook.js"
+    );
+  }
+
+  /**
+   * Get directory where Claude stop notifications are written.
+   * Location: {workspace}/.flightpath/temp/claude-notifications/
+   *
+   * Uses workspace-specific directory to prevent conflicts when multiple
+   * VS Code instances are running FlightPath simultaneously.
+   */
+  private getNotificationDirectory(): string {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("Cannot determine workspace root for notification path");
+    }
+
+    const path = require("path");
+    return path.join(
+      workspaceRoot,
+      ".flightpath",
+      "temp",
+      "claude-notifications"
+    );
+  }
+
+  /**
+   * Build settings JSON string with Stop hook configuration.
+   * This is passed via --settings flag to Claude CLI.
+   *
+   * @returns JSON string with hook configuration
+   */
+  private buildStopHookSettings(): string {
+    const scriptPath = this.getStopHookScriptPath();
+    const notifyDir = this.getNotificationDirectory();
+
+    // Convert paths to forward slashes (works on Windows and avoids escaping issues)
+    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
+    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
+
+    const settings = {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    return JSON.stringify(settings);
+  }
+
+  /**
+   * Extract session ID from Claude CLI output.
+   * Claude emits session info in various formats - try to parse it.
+   *
+   * @param output Terminal or process output
+   * @returns Session ID if found, undefined otherwise
+   */
+  private extractSessionId(output: string): string | undefined {
+    // Try to find session_id in JSON output (stream-json format)
+    const sessionMatch = output.match(/"session_id"\s*:\s*"([^"]+)"/i);
+    if (sessionMatch) {
+      return sessionMatch[1];
+    }
+
+    // Try to find session ID in log-like output
+    const sessionLogMatch = output.match(/session[_\s-]id[:\s]+([a-f0-9-]+)/i);
+    if (sessionLogMatch) {
+      return sessionLogMatch[1];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Simple delay utility
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Monitor notification file for completion.
+   *
+   * Uses Claude's Stop hook to get completion events.
+   * The stop hook handler script writes a JSON file that we monitor.
+   *
+   * If session ID is not available, monitors the entire notification directory
+   * for any new notification files (since we're the only process running).
+   *
+   * @param sessionId Session ID to monitor (from Claude output), undefined to monitor all files
+   * @param startTime Execution start time (for timeout calculation)
+   * @param timeoutMs Maximum time to wait for completion
+   * @returns Object with completed flag and optional error message
+   */
+  private async monitorNotificationFile(
+    sessionId: string | undefined,
+    startTime: Date,
+    timeoutMs: number
+  ): Promise<{ completed: boolean; error?: string }> {
+    const fs = require("fs");
+    const path = require("path");
+
+    const notifyDir = this.getNotificationDirectory();
+
+    // Ensure notification directory exists
+    if (!fs.existsSync(notifyDir)) {
+      fs.mkdirSync(notifyDir, { recursive: true });
+    }
+
+    // Get initial file list to detect new files
+    let initialFiles = new Set<string>();
+    try {
+      const files = fs.readdirSync(notifyDir);
+      initialFiles = new Set(files);
+      Log.debug(`📋 Initial notification files: ${files.length}`);
+    } catch (error) {
+      Log.debug(`Could not read notification directory: ${error}`);
+    }
+
+    if (sessionId) {
+      Log.debug(`📋 Monitoring notification file for session: ${sessionId}`);
+    } else {
+      Log.debug(
+        `📋 Monitoring notification directory for any new completion file`
+      );
+    }
+
+    // Poll for notification file
+    while (Date.now() - startTime.getTime() < timeoutMs) {
+      try {
+        if (sessionId) {
+          // Monitor specific session ID file
+          const notifyFile = path.join(notifyDir, `${sessionId}.json`);
+
+          if (fs.existsSync(notifyFile)) {
+            // Read notification data
+            const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
+
+            Log.info(
+              `✅ Claude completion detected via stop hook (session: ${notifyData.sessionId})`
+            );
+
+            // Clean up notification file
+            try {
+              fs.unlinkSync(notifyFile);
+              Log.debug(`🗑️ Cleaned up notification file`);
+            } catch (cleanupError) {
+              Log.debug(
+                `Failed to clean up notification file: ${cleanupError}`
+              );
+            }
+
+            return { completed: true };
+          }
+        } else {
+          // Monitor for any new notification file
+          const currentFiles = fs.readdirSync(notifyDir);
+
+          for (const file of currentFiles) {
+            if (!initialFiles.has(file) && file.endsWith(".json")) {
+              const notifyFile = path.join(notifyDir, file);
+
+              try {
+                const notifyData = JSON.parse(
+                  fs.readFileSync(notifyFile, "utf8")
+                );
+
+                Log.info(
+                  `✅ Claude completion detected via stop hook (session: ${notifyData.sessionId})`
+                );
+
+                // Clean up notification file
+                try {
+                  fs.unlinkSync(notifyFile);
+                  Log.debug(`🗑️ Cleaned up notification file: ${file}`);
+                } catch (cleanupError) {
+                  Log.debug(
+                    `Failed to clean up notification file: ${cleanupError}`
+                  );
+                }
+
+                return { completed: true };
+              } catch (parseError) {
+                Log.debug(
+                  `Failed to parse notification file ${file}: ${parseError}`
+                );
+                // Continue checking other files
+              }
+            }
+          }
+        }
+      } catch (error) {
+        Log.debug(`Notification file check error: ${error}`);
+      }
+
+      // Wait before next check
+      await this.delay(500);
+    }
+
+    // Timeout reached
+    Log.warn(`⏱️ Notification file monitoring timed out`);
+    return {
+      completed: false,
+      error: "Timeout waiting for stop hook notification",
+    };
   }
 
   // ============================================================

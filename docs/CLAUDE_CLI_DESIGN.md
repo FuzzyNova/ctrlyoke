@@ -16,6 +16,40 @@ npm install -g @anthropic-ai/claude-code
 
 **Documentation:** https://docs.anthropic.com/en/docs/claude-code
 
+## Completion Detection
+
+FlightPath uses Claude's **Stop hook** for reliable completion detection in interactive TUI mode. This approach mirrors the Codex notify hook implementation and is future-proof.
+
+### Stop Hook Architecture
+
+**How it works:**
+
+1. FlightPath passes `--settings` with Stop hook configuration
+2. Hook script receives completion notification via stdin when Claude finishes
+3. Script writes notification file to `.flightpath/temp/claude-notifications/{session_id}.json`
+4. FlightPath monitors this file in parallel with TUI streaming
+5. File detection (authoritative) races against screen-based parsing (fallback)
+
+**Benefits:**
+
+- **Future-proof**: Uses official Claude hook API, not TUI screen patterns
+- **Reliable**: Structured JSON notifications, not regex matching
+- **Clean**: Automatic file cleanup after reading
+- **Non-invasive**: No modification of user's global Claude settings
+
+**Implementation:**
+
+- Script: `src/scripts/flightpath-claude-stop-hook.js`
+- Settings injection: `ClaudeCommandLineIntegration.buildStopHookSettings()`
+- Monitoring: `ClaudeCommandLineIntegration.monitorNotificationFile()`
+
+### Execution Modes
+
+| Mode                  | Completion Detection               | Session ID Required?                           |
+| --------------------- | ---------------------------------- | ---------------------------------------------- |
+| **Headless** (`-p`)   | JSONL events (`{"type":"result"}`) | ✅ Automatic from stream-json                  |
+| **Interactive** (TUI) | Stop hook → notification file      | ⚠️ Optional (fallback to directory monitoring) |
+
 ## Key Differences from Copilot CLI
 
 | Aspect               | Copilot CLI                         | Claude CLI                                   |
@@ -31,6 +65,7 @@ npm install -g @anthropic-ai/claude-code
 | File attachment      | `@path` (no auto-content)           | `@path` (auto-attaches content)              |
 | Thinking mode        | Not applicable                      | **NOT AVAILABLE** via CLI (model-controlled) |
 | Structured output    | Not available                       | `--json-schema` (validates response format)  |
+| Completion detection | Log file monitoring (notify hook)   | Stop hook → notification file                |
 
 ## Current Implementation Status
 
@@ -48,6 +83,7 @@ npm install -g @anthropic-ai/claude-code
 | `--verbose`                      | Auto-added for stream-json                           | Full support - required for stream-json format                                               |
 | `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID          | Full support                                                                                 |
 | `-c`                             | `prompt.newChatSession: false` (no session ID)       | Full support - continues most recent session                                                 |
+| `--settings <json-string>`       | Auto-injected for stop hook (interactive mode)       | Full support - passes Stop hook configuration                                                |
 | Prompt via stdin                 | Prompt text passed to process                        | Full support - current implementation sends via stdin                                        |
 
 ### ❌ Not Implemented Flags
@@ -76,7 +112,6 @@ npm install -g @anthropic-ai/claude-code
 | `--include-partial-messages`      | LOW      | Include partial chunks (requires --print + stream-json) |
 | `--session-id <uuid>`             | LOW      | Use specific session ID (must be valid UUID)            |
 | `--agents <json>`                 | LOW      | Define custom agents via JSON object                    |
-| `--settings <file-or-json>`       | LOW      | Load settings from file path or JSON string             |
 | `--ide`                           | LOW      | Auto-connect to IDE if exactly one valid IDE available  |
 | `--strict-mcp-config`             | LOW      | Only use MCP servers from --mcp-config                  |
 | `--plugin-dir <paths...>`         | LOW      | Load plugins from directories (repeatable)              |
@@ -795,6 +830,7 @@ Read the relevant instruction file(s) based on which files you're working with:
 Those referenced files can in turn reference others:
 
 `.github/copilot-instructions.md`:
+
 ```markdown
 # FlightPath VS Code Extension
 
