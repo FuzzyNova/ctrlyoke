@@ -19,8 +19,7 @@ export interface TuiStreamConfig {
 
   // CLI-specific patterns (from abstract methods)
   escapeIndicator: string; // e.g., "(esc to cancel)"
-  screenEndPattern: RegExp; // e.g., /Ctrl\+c Exit/
-  tuiChromePattern: RegExp; // e.g., /Ctrl\+c Exit/
+  screenEndPattern: RegExp; // e.g., /Ctrl\+c Exit/ - also used for error detection
   tuiChromePatterns: RegExp[]; // CLI-specific chrome filtering patterns
 
   // Event emitters for communication
@@ -682,7 +681,9 @@ export class TuiStreamProcessor {
     }
 
     // Use CLI-specific patterns from config
-    return this.config.tuiChromePatterns.some((pattern) => pattern.test(trimmed));
+    return this.config.tuiChromePatterns.some((pattern) =>
+      pattern.test(trimmed)
+    );
   }
 
   /**
@@ -714,7 +715,7 @@ export class TuiStreamProcessor {
    * - False positives: TUI chrome BEFORE and AFTER (pasted content)
    */
   private detectCliError(rawBuffer: string): boolean {
-    const tuiChromePattern = this.config.tuiChromePattern;
+    const tuiChromePattern = this.config.screenEndPattern;
 
     const errorPatterns = [
       /Error: Minified React error #\d+/i, // React errors

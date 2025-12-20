@@ -83,13 +83,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return "esc to interrupt";
   }
 
-  protected getTuiChromePattern(): RegExp {
-    // Codex's TUI chrome: status bar that shows context percentage
-    // Example: "98% context left · ? for shortcuts"
-    // This is unique to TUI mode and won't appear in regular output
-    return /\d+%\s+context\s+left/;
-  }
-
   protected getScreenEndPattern(): RegExp {
     // Codex prompt indicator: "› " (unicode right-pointing angle quotation mark U+203A)
     // Also matches status bar: "98% context left · ? for shortcuts"
@@ -194,9 +187,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     statistics: string
   ): { prompt: number; completion: number } | undefined {
     // Statistics should be in format: "Usage: {input} input + {output} output = {total} tokens"
-    const match = statistics.match(
-      /(\d+)\s+input\s+\+\s+(\d+)\s+output/
-    );
+    const match = statistics.match(/(\d+)\s+input\s+\+\s+(\d+)\s+output/);
     if (match) {
       return {
         prompt: parseInt(match[1], 10),
@@ -204,6 +195,68 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       };
     }
     return undefined;
+  }
+
+  // ============================================================
+  // JSONL PARSING HELPERS
+  // ============================================================
+
+  /**
+   * Format command execution output for display
+   */
+  private formatCommandExecution(
+    cmd: string,
+    status: string,
+    exitCode: number | null | undefined,
+    output: string
+  ): string {
+    let formatted = `\n\n🔧 Tool: ${cmd}\n`;
+    formatted += `   Status: ${status}`;
+    if (exitCode !== null && exitCode !== undefined) {
+      formatted += ` (exit code: ${exitCode})`;
+    }
+    if (output.trim()) {
+      const firstLine = output.split("\n")[0].substring(0, 100);
+      formatted += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
+    }
+    formatted += `\n\n`;
+    return formatted;
+  }
+
+  /**
+   * Extract response text from a single JSONL event
+   * Returns the text to add to the response, or empty string if no content
+   */
+  private extractResponseFromEvent(json: CodexCliJsonEvent): string {
+    let content = "";
+
+    // Handle different item types
+    if (json.type === "item.completed" && json.item) {
+      // Agent message (text response)
+      if (json.item.type === "agent_message" && json.item.text) {
+        content += json.item.text;
+      }
+
+      // Command execution (tool call)
+      if (json.item.type === "command_execution") {
+        const cmd = json.item.command || "unknown";
+        const status = json.item.status || "unknown";
+        const exitCode = json.item.exit_code;
+        const output = json.item.aggregated_output || "";
+        content += this.formatCommandExecution(cmd, status, exitCode, output);
+      }
+    }
+
+    // Legacy tool_calls format (kept for compatibility)
+    if (json.item?.tool_calls) {
+      for (const toolCall of json.item.tool_calls) {
+        if (toolCall.function?.name) {
+          content += `\n\n[Tool: ${toolCall.function.name}]\n\n`;
+        }
+      }
+    }
+
+    return content;
   }
 
   /**
@@ -231,44 +284,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
       try {
         const json: CodexCliJsonEvent = JSON.parse(line);
-
-        // Handle different item types
-        if (json.type === "item.completed" && json.item) {
-          // Agent message (text response)
-          if (json.item.type === "agent_message" && json.item.text) {
-            contentToEmit += json.item.text;
-          }
-
-          // Command execution (tool call)
-          if (json.item.type === "command_execution") {
-            const cmd = json.item.command || "unknown";
-            const status = json.item.status || "unknown";
-            const exitCode = json.item.exit_code;
-            const output = json.item.aggregated_output || "";
-
-            // Display tool execution summary
-            contentToEmit += `\n\n🔧 Tool: ${cmd}\n`;
-            contentToEmit += `   Status: ${status}`;
-            if (exitCode !== null && exitCode !== undefined) {
-              contentToEmit += ` (exit code: ${exitCode})`;
-            }
-            if (output.trim()) {
-              // Show first line of output if available
-              const firstLine = output.split("\n")[0].substring(0, 100);
-              contentToEmit += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
-            }
-            contentToEmit += `\n\n`;
-          }
-        }
-
-        // Legacy tool_calls format (kept for compatibility)
-        if (json.item?.tool_calls) {
-          for (const toolCall of json.item.tool_calls) {
-            if (toolCall.function?.name) {
-              contentToEmit += `\n\n[Tool: ${toolCall.function.name}]\n\n`;
-            }
-          }
-        }
+        contentToEmit += this.extractResponseFromEvent(json);
       } catch (parseError) {
         // Log parse errors but continue processing
         Log.debug(`Failed to parse JSONL event: ${line.substring(0, 100)}`);
@@ -588,32 +604,8 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       try {
         const json: CodexCliJsonEvent = JSON.parse(line);
 
-        // Handle different item types
-        if (json.type === "item.completed" && json.item) {
-          // Agent message (text response)
-          if (json.item.type === "agent_message" && json.item.text) {
-            fullResponse += json.item.text;
-          }
-
-          // Command execution (tool call) - add summary to response
-          if (json.item.type === "command_execution") {
-            const cmd = json.item.command || "unknown";
-            const status = json.item.status || "unknown";
-            const exitCode = json.item.exit_code;
-            const output = json.item.aggregated_output || "";
-
-            fullResponse += `\n\n🔧 Tool: ${cmd}\n`;
-            fullResponse += `   Status: ${status}`;
-            if (exitCode !== null && exitCode !== undefined) {
-              fullResponse += ` (exit code: ${exitCode})`;
-            }
-            if (output.trim()) {
-              const firstLine = output.split("\n")[0].substring(0, 100);
-              fullResponse += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
-            }
-            fullResponse += `\n\n`;
-          }
-        }
+        // Extract response content from event
+        fullResponse += this.extractResponseFromEvent(json);
 
         // Extract session ID from thread.started events
         if (json.type === "thread.started" && json.thread_id) {
@@ -1018,7 +1010,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           useTimeBasedExtraction: true,
           escapeIndicator: this.getEscapeIndicator(),
           screenEndPattern: this.getScreenEndPattern(),
-          tuiChromePattern: this.getTuiChromePattern(),
           tuiChromePatterns: this.getTuiChromePatterns(),
           streamingEmitter: this.streamingChunkEmitter,
           responseCompleteEmitter: this.responseCompleteEmitter,

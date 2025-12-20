@@ -166,19 +166,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract getEscapeIndicator(): string;
 
   /**
-   * Get the TUI chrome pattern for error context detection.
-   * This pattern identifies the bottom border/status area of the TUI.
-   * Used to distinguish real CLI errors from error text in pasted content.
-   *
-   * Real errors appear AFTER the chrome with NO chrome following.
-   * False positives (errors in pasted content) have chrome BEFORE and AFTER.
-   *
-   * Copilot: "Ctrl+c Exit" in the status bar
-   * Claude: "? for shortcuts" or "ctrl-g to edit prompt" during paste
-   */
-  protected abstract getTuiChromePattern(): RegExp;
-
-  /**
    * Get the regex pattern that marks the end of a TUI screen.
    * Used to split the output buffer into complete screen frames.
    *
@@ -391,7 +378,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         const tuiConfig: TuiStreamConfig = {
           escapeIndicator: this.getEscapeIndicator(),
           screenEndPattern: this.getScreenEndPattern(),
-          tuiChromePattern: this.getTuiChromePattern(),
           tuiChromePatterns: this.getTuiChromePatterns(),
           streamingEmitter: this.streamingChunkEmitter,
           responseCompleteEmitter: this.responseCompleteEmitter,
