@@ -121,6 +121,12 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
       // Codex separators (UI chrome)
       /^─\s+Worked for \d+s\s+─/i, // Worked for Xs separator
+
+      // Codex spinner/thinking indicator (UI chrome)
+      /^•?\s*W(o(r(k(i(n(g)?)?)?)?)?)?\d*\s*$/i, // Working prefixes (W, Wo, Wor, Work, Worki, Workin, Working + numbers)
+      /^•?\s*(orking|rking|king|ing|ng|g)\s*$/i, // Working suffixes (fragments from right side)
+      /^•?\s*\d+\s*$/i, // Standalone numbers (spinner frame counters)
+      /\(.*esc to interrupt.*\)/i, // Lines with "(esc to interrupt)" or "(Xs • esc to interrupt)"
     ];
   }
 
