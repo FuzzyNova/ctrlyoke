@@ -1,7 +1,7 @@
 # FlightPath VS Code Extension
 
 <projectPurpose>
-Automate GitHub Copilot Chat through structured JSON-based prompt workflows with automated execution, response detection, and context awareness.
+Automate GitHub Copilot Chat through structured YAML/JSON-based prompt workflows with automated execution, response detection, and context awareness.
 </projectPurpose>
 
 <technicalStack>
@@ -9,7 +9,7 @@ Automate GitHub Copilot Chat through structured JSON-based prompt workflows with
 - Node.js 22.17.0
 - esbuild (bundling)
 - VS Code Extension API (Language Model Tool API, Chat integration)
-- JSON Schema validation (AJV)
+- YAML parsing (js-yaml) and JSON Schema validation (AJV)
 - Mocha (testing)
 </technicalStack>
 
@@ -34,7 +34,7 @@ SOLID principles with strict separation of concerns:
 - CopilotIntegration (abstract base): Defines integration contract
   - CopilotChatIntegration: Chat window automation with UI interactions
   - CopilotCommandLineIntegration: CLI-based automation (default)
-- PromptFileParser: JSON validation and parsing
+- PromptFileParser: YAML/JSON parsing and validation
 - EndConditionEvaluator: Script execution and validation
   </solidPrinciples>
 
@@ -73,7 +73,10 @@ src/
 │   │   └── flightpath-orchestrator.agent.md  # Plan→Implement→Review workflow creator
 │   ├── workflows/                # Workflow templates with {placeholder} variables
 │   │   ├── manifest.json         # Workflow metadata and descriptions
-│   │   ├── simple-feature.flightpath.json
+│   │   ├── simple-feature.flightpath.yaml
+│   │   ├── fix-tests.flightpath.yaml
+│   │   ├── full-feature.flightpath.yaml
+│   │   ├── simple-feature.flightpath.json  # JSON versions also available
 │   │   ├── fix-tests.flightpath.json
 │   │   └── full-feature.flightpath.json
 │   ├── check_condition.py        # Python script template
@@ -96,10 +99,12 @@ src/
 │   ├── ModelConstants.ts         # Model definitions (single source of truth)
 │   └── ModelRegistry.ts          # Runtime model discovery
 └── test/                         # Tests
-schemas/                          # JSON schemas (source)
-└── prompt-schema.json            # Unified schema for both file types
+schemas/                          # Schemas (source)
+├── prompt-schema.json            # Unified JSON schema (source of truth)
+└── prompt-schema.yaml            # Auto-generated YAML version
 scripts/
-└── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json
+├── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json
+└── generate-yaml-schema.mjs      # Generate YAML schema from JSON
 ```
 
 **Workspace Folder Structure** (`.flightpath/`):
@@ -109,13 +114,14 @@ scripts/
 ├── scripts/       # Validation scripts (end conditions)
 ├── prompts/       # Draft prompts (*.prompt.md)
 ├── templates/     # Workflow templates with {placeholder} variables
-└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
+└── workflows/     # Ready-to-run workflows (*.flightpath.yaml, *.flightpath.json, *.prompt.md)
 ```
 
 **Build Output**:
 
 - Templates copied from `src/templates/` to `out/templates/` during build
 - Schemas copied from `schemas/` to `out/schemas/` during build
+- YAML schema auto-generated from JSON schema via `npm run generate-schema`
 - Single source of truth: `/schemas/prompt-schema.json` used for both VS Code IntelliSense and runtime validation
 - **Dev code stripped**: In production builds, `IS_DEV_MODE=false` enables dead code elimination
 
@@ -142,7 +148,7 @@ Both support automatic file attachment for `#file:path` references.
 
 ## PromptFileParser
 
-JSON schema validation with AJV. Validates both `.prompt.json` and `.flightpath.json` formats using unified schema.
+JSON schema validation with AJV. Validates both `.flightpath.yaml`, `.flightpath.yml`, `.flightpath.json`, and `.prompt.md` formats using unified schema.
 
 ## PromptCompletionProvider
 
@@ -179,11 +185,78 @@ Executes validation scripts with timeout and process isolation. Template system 
 
 **Important: Prompts are stored in final-form format** - All context variables (@workspace, #file:path, slash commands) are included directly in the prompt text.
 
-**Schema: Both file types use the same unified schema (prompt-schema.json)**
+**Schema: All file types use the same unified schema (prompt-schema.json)**
 
-Both `.prompt.json` and `.flightpath.json` files support the same two formats:
+FlightPath supports three file formats:
 
-### Single Prompt Format
+| Format       | Use Case                           | Extension                    |
+| ------------ | ---------------------------------- | ---------------------------- |
+| **Markdown** | Single prompts, simplest option    | `.prompt.md`                 |
+| **YAML**     | Multi-step workflows, human-edited | `.flightpath.yaml` (DEFAULT) |
+| **JSON**     | Programmatic generation, CI/CD     | `.flightpath.json`           |
+
+### YAML Format (Recommended for Manual Editing)
+
+YAML is the **default format** for user-created workflows. Use `|` (literal block scalar) for multi-line prompts to preserve line breaks exactly.
+
+**Single Prompt Format:**
+
+```yaml
+prompt: |
+  Analyze this codebase for potential bugs and code quality issues.
+
+  Focus on:
+  - Error handling
+  - Type safety
+  - Security concerns
+
+model: claude-sonnet-4.5
+endCondition:
+  script: validate_improvements.py
+  returns: "true"
+  timeout: 30000
+```
+
+**Multi-Prompt Workflow Format:**
+
+```yaml
+prompts:
+  - id: analyze
+    prompt: |
+      Analyze the FlightPath extension architecture.
+
+      Focus on:
+      - Separation of concerns
+      - SOLID principles
+      - Code maintainability
+    model: claude-sonnet-4.5
+
+  - id: implement
+    prompt: |
+      Based on the analysis, implement improvements.
+
+      Follow SOLID principles and maintain consistency.
+    newChatSession: false
+    endCondition:
+      script: verify_changes.py
+      returns: "true"
+      maxRetries: 2
+      retryPrompt: |
+        Validation failed: {error}
+
+        Please fix the issues.
+```
+
+**File Path Reference (YAML):**
+
+```yaml
+prompt: ./prompts/analyze-code.prompt.md
+model: claude-sonnet-4.5
+```
+
+### JSON Format (For Automation/CI/CD)
+
+**Single Prompt Format:**
 
 ```json
 {
@@ -197,33 +270,7 @@ Both `.prompt.json` and `.flightpath.json` files support the same two formats:
 }
 ```
 
-### File Path Reference Format
-
-The `prompt` field can also be a path to an external file containing the prompt:
-
-```json
-{
-  "prompt": "./prompts/analyze-code.prompt.md",
-  "model": "claude-sonnet-4.5"
-}
-```
-
-**File path resolution order:**
-
-1. Absolute paths (used as-is)
-2. Relative to the prompt file's directory
-3. Relative to workspace root
-4. Relative to `.flightpath` directory
-
-**Supported file extensions:** `.prompt.md`, `.md`, `.txt`
-
-This is useful for:
-
-- Reusing prompts across multiple workflows
-- Keeping complex prompts in separate, well-organized files
-- Editing prompts with full editor support (syntax highlighting, etc.)
-
-### Multiple Prompts Format
+**Multiple Prompts Format:**
 
 ```json
 {
@@ -243,7 +290,7 @@ This is useful for:
 
 ### Markdown Prompt Format
 
-For simple single prompts, use `.prompt.md` files (no JSON needed):
+For simple single prompts, use `.prompt.md` files (no YAML/JSON needed):
 
 ```markdown
 Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
@@ -252,10 +299,19 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 **Markdown file handling**:
 
 - `.prompt.md` files are read as plain text (entire file content becomes the prompt)
-- No JSON parsing or schema validation needed
+- No YAML/JSON parsing or schema validation needed
 - Cannot include `model` override or `endCondition` (single prompt execution only)
 - Supports same context variables: `@workspace`, `#file:path`, slash commands
 - Use context menu (right-click) to execute: **Run with FlightPath** (or use the play icon in the editor title bar)
+
+**File path resolution order** (for `prompt: path/to/file` references):
+
+1. Absolute paths (used as-is)
+2. Relative to the prompt file's directory
+3. Relative to workspace root
+4. Relative to `.flightpath` directory
+
+**Supported file extensions:** `.prompt.md`, `.md`, `.txt`
 
 **Optional Fields:**
 
@@ -270,11 +326,11 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 
 **File naming conventions:**
 
-- `.prompt.md` - Single markdown-based prompts (no JSON, simplest format)
-- `.prompt.json` - Typically for single prompts or simple workflows
-- `.flightpath.json` - Typically for complex multi-step workflows
+- `.prompt.md` - Single markdown-based prompts (no YAML/JSON, simplest format)
+- `.flightpath.yaml` / `.flightpath.yml` - Multi-step workflows (YAML format, recommended for manual editing)
+- `.flightpath.json` - Multi-step workflows (JSON format, best for automation/CI/CD)
 
-All three formats support context menu execution (Run with FlightPath / Load in FlightPath).
+All formats support context menu execution (Run with FlightPath / Load in FlightPath).
 
 ## Commands
 
@@ -320,6 +376,10 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
 
 - flightpath.promptsDirectory (string, default: ".flightpath")
 - flightpath.scriptTimeout (number, default: 30) - End condition script timeout in seconds
+- flightpath.defaultWorkflowFormat (enum: "yaml" | "json", default: "yaml")
+  - **yaml**: YAML format (recommended for human editing with multi-line strings)
+  - **json**: JSON format (best for programmatic generation and CI/CD)
+  - **Usage**: Controls default file extension in createPromptFile command
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
 - flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli", default: "copilot-cli")
   - **cli**: Copilot CLI (default, best reliability)
@@ -473,12 +533,12 @@ Code review focus:
 
 FlightPath bridges manual AI assistance and full automation through:
 
-- Structured automation via JSON configuration
+- Structured automation via YAML/JSON configuration
 - Script-based validation of AI outputs
 - Fine-grained control over AI interaction sequences
 - Seamless VS Code integration with context awareness
 - Secure script execution with clear boundaries
-- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.flightpath.json` files during execution
+- **Dynamic queue extension**: Copilot can autonomously extend workflows by modifying `.flightpath.yaml` or `.flightpath.json` files during execution
 
 ## Dynamic Queue Architecture
 
@@ -494,7 +554,7 @@ FlightPath bridges manual AI assistance and full automation through:
    - `shouldInjectExtensionInstructions()`: Determines if prompt gets extension instructions
 
 2. **PromptQueue.reloadAndMergeQueue()**: Reloads prompt file and merges new prompts
-   - Validates JSON with PromptFileParser
+   - Validates YAML/JSON with PromptFileParser
    - Filters out completed prompts using identity system
    - Enforces queue size limits (unless unlimited mode)
    - Appends new prompts to current queue
@@ -525,7 +585,7 @@ shouldInject =
 - **maxExecutionTime**: Default 5 hours (18000s), range 5min-24hrs, prevents runaway execution
 - **unlimitedMode**: Ignores both limits when `true` (may be gated in paid tier)
 - **Pause-aware timing**: Excludes paused duration from execution time
-- **Invalid JSON recovery**: Logs error and continues with current queue
+- **Invalid YAML/JSON recovery**: Logs error and continues with current queue
 
 ### Settings
 

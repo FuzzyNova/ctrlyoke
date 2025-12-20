@@ -1,0 +1,10 @@
+# Single prompt test fixture
+prompt: |
+  Explain this code and suggest improvements
+
+model: claude-sonnet-4.5
+
+endCondition:
+  script: check_explanation.py
+  returns: "true"
+  timeout: 30000

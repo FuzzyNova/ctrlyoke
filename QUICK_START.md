@@ -66,14 +66,18 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 
 Then right-click the file and select **FlightPath: Run with FlightPath** (or press the play icon in the editor title bar).
 
-### Simple Single Prompt (JSON)
+### Simple Single Prompt (Markdown)
 
-Create: `analyze-code.prompt.json`
+Create: `analyze-code.prompt.md`
 
-```json
-{
-  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements"
-}
+```markdown
+Analyze #file:src/extension.ts for potential improvements.
+
+Focus on:
+
+- Code organization
+- Type safety
+- Error handling
 ```
 
 ### Multi-Step Workflow
@@ -241,9 +245,10 @@ FlightPath looks for prompt files in:
 
 ```
 your-workspace/
-  .flightpath/          ← Recommended location
-    *.prompt.json       ← Single prompts
-    *.flightpath.json   ← Multi-prompt workflows
+  .flightpath/             ← Recommended location
+    *.prompt.md            ← Simple single prompts
+    *.flightpath.yaml      ← Multi-step workflows (recommended)
+    *.flightpath.json      ← Multi-step workflows (automation/CI/CD)
 ```
 
 You can also store them anywhere in your workspace!

@@ -303,10 +303,12 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position
   ): boolean {
-    // For Markdown and Prompt files (*.prompt.md, *.md), always provide completions
+    // For Markdown, YAML, and Prompt files, always provide completions
     if (
       document.languageId === "markdown" ||
-      document.languageId === "prompt"
+      document.languageId === "prompt" ||
+      document.languageId === "yaml" ||
+      document.languageId === "yml"
     ) {
       return true;
     }

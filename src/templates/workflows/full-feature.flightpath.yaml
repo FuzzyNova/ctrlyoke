@@ -1,0 +1,37 @@
+# Full Feature Development Workflow
+# Comprehensive workflow: Plan → Implement → Review → Docs → Commit
+
+prompts:
+  - id: plan
+    prompt: |
+      {featureDescription}
+
+      Analyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called {planDocument}
+    endCondition:
+      script: "test -f {planDocument}"
+      returns: "true"
+      maxRetries: 2
+      retryPrompt: |
+        The plan document was not created. Please create {planDocument} with the implementation plan.
+
+  - id: implement
+    prompt: |
+      Implement the feature according to the plan in @{planDocument}. Make all necessary code changes.
+
+  - id: review
+    prompt: |
+      Review the implementation for:
+      - Code quality
+      - Type safety
+      - Error handling
+      - Security issues
+
+      Fix any problems found.
+
+  - id: update-docs
+    prompt: |
+      Update relevant documentation to explain the new feature.
+
+  - id: commit-message
+    prompt: |
+      Generate a conventional commit message. Format: feat(scope): description

@@ -113,6 +113,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get default workflow format (yaml or json)
+   */
+  getDefaultWorkflowFormat(): "yaml" | "json" {
+    return getConfig().get<"yaml" | "json">("defaultWorkflowFormat", "yaml");
+  },
+
+  /**
    * Check if files should be auto-attached
    */
   shouldAutoAttachFiles(): boolean {

@@ -23,8 +23,10 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "workspaceContains:**/*.prompt.json",
-    "workspaceContains:**/*.flightpath.json"
+    "workspaceContains:**/*.flightpath.yaml",
+    "workspaceContains:**/*.flightpath.yml",
+    "workspaceContains:**/*.flightpath.json",
+    "workspaceContains:**/*.prompt.md"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -259,31 +261,31 @@
         },
         {
           "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@1"
         },
         {
           "command": "flightpath.loadFromContext",
-          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
         }
       ],
       "editor/title": [
         {
           "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation"
         }
       ],
       "editor/title/context": [
         {
           "command": "flightpath.runFromContext",
-          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@1"
         },
         {
           "command": "flightpath.loadFromContext",
-          "when": "resourceFilename =~ /\\.(prompt\\.json|flightpath\\.json|prompt\\.md)$/ && resourceScheme == file",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
         }
       ]
@@ -357,8 +359,23 @@
           "description": "Directory for generated workflow files (relative to workspace root)",
           "markdownDescription": "Directory where workflows created from templates are saved. Relative to workspace root. Default: `.flightpath/workflows`"
         },
-        "flightpath.defaultWorkflowTemplate": {
+        "flightpath.defaultWorkflowFormat": {
           "order": 13,
+          "type": "string",
+          "enum": [
+            "yaml",
+            "json"
+          ],
+          "enumDescriptions": [
+            "YAML format - Recommended for human editing (multi-line strings, readable structure)",
+            "JSON format - Best for programmatic generation and CI/CD automation"
+          ],
+          "default": "yaml",
+          "description": "Default file format for new workflows",
+          "markdownDescription": "Default file format when creating new workflow files. **YAML** (default) is recommended for manual editing with natural multi-line prompts. **JSON** is best for automated generation and scripting."
+        },
+        "flightpath.defaultWorkflowTemplate": {
+          "order": 14,
           "type": "string",
           "default": "blank",
           "description": "Default template selected in 'New Workflow' dialog",
@@ -377,20 +394,20 @@
           ]
         },
         "flightpath.enableContextAwareness": {
-          "order": 14,
+          "order": 15,
           "type": "boolean",
           "default": true,
           "description": "Enable context-aware prompt generation"
         },
         "flightpath.autoAttachFiles": {
-          "order": 15,
+          "order": 16,
           "type": "boolean",
           "default": true,
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
         },
         "flightpath.openPromptsInSecondGroup": {
-          "order": 16,
+          "order": 17,
           "type": "boolean",
           "default": false,
           "description": "Open prompt files in a separate editor group (right side)",
@@ -805,14 +822,24 @@
     "jsonValidation": [
       {
         "fileMatch": [
-          "**/*.prompt.json",
           "**/*.flightpath.json"
+        ],
+        "url": "./schemas/prompt-schema.json"
+      }
+    ],
+    "yamlValidation": [
+      {
+        "fileMatch": [
+          "**/*.flightpath.yaml",
+          "**/*.flightpath.yml"
         ],
         "url": "./schemas/prompt-schema.json"
       }
     ]
   },
   "scripts": {
+    "generate-schema": "node scripts/generate-yaml-schema.mjs",
+    "precompile": "npm run generate-schema",
     "compile": "npm run check-types && node esbuild.js",
     "compile-tests": "tsc -p .",
     "check-types": "tsc --noEmit",
@@ -854,8 +881,10 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@types/js-yaml": "^4.0.9",
     "ajv": "^8.17.1",
     "chokidar": "^4.0.3",
+    "js-yaml": "^4.1.1",
     "jsonschema": "^1.5.0",
     "tree-kill": "^1.2.2"
   }

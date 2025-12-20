@@ -1,0 +1,14 @@
+# Test YAML Workflow - Basic Example
+# Tests basic YAML parsing and execution
+
+prompts:
+  - id: test-yaml-parsing
+    prompt: |
+      Explain how YAML multi-line strings work in FlightPath workflows.
+
+      Provide examples showing the difference between:
+      - Literal block scalars (|)
+      - Folded scalars (>)
+      - Plain strings
+
+      Keep your response brief and focused.

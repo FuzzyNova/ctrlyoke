@@ -1,0 +1,11 @@
+# Multi-step test fixture
+prompts:
+  - prompt: |
+      Step 1: Analyze code structure
+    model: claude-sonnet-4.5
+
+  - prompt: |
+      Step 2: Implement improvements
+    endCondition:
+      script: verify_changes.py
+      returns: "true"

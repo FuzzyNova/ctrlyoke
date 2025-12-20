@@ -1,8 +1,0 @@
-{
-  "prompt": "Generate a simple TypeScript function that adds two numbers. The function should be called 'add' and take two parameters.",
-  "endCondition": {
-    "script": "scripts/check_has_add_function.py",
-    "returns": "true",
-    "timeout": 30000
-  }
-}

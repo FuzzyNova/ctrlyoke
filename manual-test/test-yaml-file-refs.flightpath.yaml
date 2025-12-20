@@ -1,0 +1,15 @@
+# Test YAML Workflow - File References
+# Tests YAML with #file: references and context awareness
+
+prompts:
+  - id: review-yaml-support
+    prompt: |
+      Review the YAML workflow format implementation in FlightPath.
+
+      Examine #file:src/flightpath/PromptFileParser.ts and check:
+      - How YAML files are parsed
+      - Error handling for invalid YAML syntax
+      - Schema validation with AJV
+
+      Provide specific feedback on code quality and potential improvements.
+    model: claude-sonnet-4.5

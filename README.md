@@ -2,7 +2,7 @@
 
 **Automate GitHub Copilot with structured prompt workflows**
 
-FlightPath is a VS Code extension that enables developers to create automated, sequential workflows using GitHub Copilot through JSON-based prompt files with programmable end conditions.
+FlightPath is a VS Code extension that enables developers to create automated, sequential workflows using GitHub Copilot through YAML/JSON-based prompt files with programmable end conditions.
 
 ## 🎯 Zero-Interaction Automation
 
@@ -20,7 +20,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 ### Core Functionality
 
 - **🤖 Zero-Interaction Automation**: True "set-and-forget" Copilot Chat integration
-- **📝 Structured Prompt Sequences**: Define multi-step workflows using JSON files
+- **📝 Structured Prompt Sequences**: Define multi-step workflows using YAML/JSON files
 - **🎯 Final-Form Prompts**: Store prompts with context variables (@workspace, #file, slash commands) ready to send
 - **🔄 Dynamic Queue Extension**: Let Copilot autonomously extend workflows by adding prompts during execution ([docs](./docs/DYNAMIC_QUEUE_USAGE.md))
 - **✨ Intelligent Autocomplete**: File and selection completions for prompt files ([docs](./docs/ENHANCED_PROMPT_EDITING.md))
@@ -40,12 +40,12 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 
 ### File Format Support
 
-- **`.prompt.json`**: Single prompt files for simple tasks
-- **`.flightpath.json`**: Multi-prompt workflows for complex automation
-- **`.prompt.md`**: Markdown-based single prompts (no JSON needed)
+- **`.prompt.md`**: Markdown-based single prompts (simplest format, no YAML/JSON needed)
+- **`.flightpath.yaml` / `.flightpath.yml`**: Multi-step workflows (YAML format, recommended for manual editing)
+- **`.flightpath.json`**: Multi-step workflows (JSON format, best for automation/CI/CD)
 - **Context Menu Integration**: Right-click any prompt file → **Run with FlightPath** or **Load in FlightPath**
-- **JSON Schema Validation**: IntelliSense and validation in VS Code
-- **Example Files**: Ready-to-use templates in `.flightpath/examples/`
+- **JSON Schema Validation**: IntelliSense and validation in VS Code for both YAML and JSON
+- **Example Files**: Ready-to-use YAML and JSON templates in `.flightpath/examples/`
 
 ### Safety & Control
 
@@ -103,34 +103,43 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 Analyze the FlightPath extension architecture and suggest improvements for better code organization. Focus on the separation of concerns between components.
 ```
 
-**Simple JSON Analysis** (`.prompt.json`):
+**Simple YAML Analysis** (`.flightpath.yaml`):
 
-```json
-{
-  "prompt": "/explain #file:src/extension.ts Analyze this code for potential improvements",
-  "model": "claude-haiku-4.5"
-}
+```yaml
+prompt: |
+  Analyze #file:src/extension.ts for potential improvements.
+
+  Focus on:
+  - Code organization
+  - Type safety
+  - Error handling
+
+model: claude-sonnet-4.5
 ```
 
-**Multi-Step Workflow** (`.flightpath.json`):
+**Multi-Step Workflow** (`.flightpath.yaml`):
 
-```json
-{
-  "prompts": [
-    {
-      "prompt": "/explain #file:src/extension.ts Identify code smells in this file",
-      "model": "claude-sonnet-4.5"
-    },
-    {
-      "prompt": "/explain #file:src/extension.ts Suggest refactoring strategies"
-    },
-    {
-      "prompt": "/new #file:src/extension.ts Show example implementation",
-      "model": "gpt-5"
-    }
-  ]
-}
+```yaml
+prompts:
+  - id: analyze
+    prompt: |
+      Analyze @workspace for security vulnerabilities.
+
+      Focus on input validation and authentication.
+    model: claude-sonnet-4.5
+
+  - id: fix
+    prompt: |
+      Fix the issues identified in the analysis.
+    endCondition:
+      script: npm test
+      returns: "true"
 ```
+
+]
+}
+
+````
 
 **Optional Fields**:
 
@@ -149,7 +158,7 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
 **Via Command Palette**:
 
 - **Command Palette**: `FlightPath: Take Off`
-- **Select File**: Choose your `.prompt.json`, `.flightpath.json`, or `.prompt.md`
+- **Select File**: Choose your `.flightpath.yaml`, `.flightpath.json`, or `.prompt.md`
 - **Click "Take Off"**: Workflow executes automatically!
 
 **Via Context Menu** (Right-click on any prompt file):
@@ -203,7 +212,7 @@ Alternatively, edit your `settings.json`:
 {
   "flightpath.chatWindowLocation": "chatPanel"
 }
-```
+````
 
 ## 🎯 How Automation Works
 

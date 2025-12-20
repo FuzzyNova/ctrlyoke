@@ -33,7 +33,7 @@ suite("PromptFileParser Tests", () => {
 
   suite("parsePromptFile - JSON Format", () => {
     test("should parse single prompt format", async () => {
-      const filePath = path.join(fixturesPath, "single.prompt.json");
+      const filePath = path.join(fixturesPath, "single.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result, "Result should not be null");
@@ -64,16 +64,14 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should return null for invalid JSON", async () => {
-      // Rename the file extension expectation - parser only handles .prompt.json and .flightpath.json
-      // For invalid JSON, we need to test with a .prompt.json file that has invalid JSON
-      // Since we can't easily create that dynamically, we'll test error handling indirectly
-      const filePath = path.join(fixturesPath, "nonexistent.prompt.json");
+      // Test error handling for non-existent files
+      const filePath = path.join(fixturesPath, "nonexistent.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
       assert.strictEqual(result, null);
     });
 
     test("should normalize single prompt to prompts array", async () => {
-      const filePath = path.join(fixturesPath, "single.prompt.json");
+      const filePath = path.join(fixturesPath, "single.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assert.ok(result);
@@ -82,7 +80,7 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should preserve endCondition in parsed result", async () => {
-      const filePath = path.join(fixturesPath, "single.prompt.json");
+      const filePath = path.join(fixturesPath, "single.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
@@ -166,8 +164,8 @@ suite("PromptFileParser Tests", () => {
     });
 
     test("should preserve prompt text as-is when not a file path", async () => {
-      // The single.prompt.json contains a regular prompt - it should be preserved
-      const filePath = path.join(fixturesPath, "single.prompt.json");
+      // The single.flightpath.json contains a regular prompt - it should be preserved
+      const filePath = path.join(fixturesPath, "single.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
@@ -283,16 +281,16 @@ suite("PromptFileParser Tests", () => {
 
   suite("isPromptFile Detection", () => {
     // Test the isPromptFile method indirectly through expected behavior
-    test("should accept .prompt.json files", async () => {
-      const filePath = path.join(fixturesPath, "single.prompt.json");
-      const result = await parser.parsePromptFile(filePath);
-      assert.ok(result, "Should parse .prompt.json files");
-    });
-
     test("should accept .flightpath.json files", async () => {
-      const filePath = path.join(fixturesPath, "multi.flightpath.json");
+      const filePath = path.join(fixturesPath, "single.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
       assert.ok(result, "Should parse .flightpath.json files");
+    });
+
+    test("should accept .flightpath.yaml files", async () => {
+      const filePath = path.join(fixturesPath, "single.flightpath.yaml");
+      const result = await parser.parsePromptFile(filePath);
+      assert.ok(result, "Should parse .flightpath.yaml files");
     });
 
     test("should accept .prompt.md files", async () => {

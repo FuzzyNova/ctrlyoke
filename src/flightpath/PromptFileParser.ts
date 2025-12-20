@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
+import * as yaml from "js-yaml";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
@@ -49,19 +50,44 @@ export class PromptFileParser {
 
   /**
    * Parse and validate a prompt file
-   * Supports .prompt.json, .flightpath.json, and .prompt.md files
+   * Supports .flightpath.yaml/.yml, .flightpath.json, and .prompt.md files
    */
   async parsePromptFile(filePath: string): Promise<PromptFile | null> {
     try {
+      const ext = path.extname(filePath).toLowerCase();
+
       // Handle markdown prompt files differently
-      if (filePath.endsWith(".prompt.md")) {
+      if (ext === ".md") {
         return this.parseMarkdownPromptFile(filePath);
       }
 
       const content = await fs.readFile(filePath, "utf8");
-      const parsed = JSON.parse(content);
+      let parsed: any;
 
-      // Use the same schema for both .prompt.json and .flightpath.json files
+      // Parse based on file extension
+      if (ext === ".yaml" || ext === ".yml") {
+        // Parse YAML
+        try {
+          parsed = yaml.load(content, {
+            filename: filePath,
+            schema: yaml.DEFAULT_SCHEMA,
+            json: false, // Use YAML semantics, not JSON compatibility mode
+          });
+        } catch (yamlError: any) {
+          throw new Error(
+            `YAML parsing error: ${yamlError.message || yamlError}`
+          );
+        }
+      } else if (ext === ".json") {
+        // Parse JSON (.flightpath.json only, .prompt.json removed)
+        parsed = JSON.parse(content);
+      } else {
+        throw new Error(
+          `Unsupported file extension: ${ext}. Supported: .yaml, .yml, .json, .md`
+        );
+      }
+
+      // Validate against schema (same for both JSON and YAML)
       if (this.promptSchema && !this.ajv.validate(this.promptSchema, parsed)) {
         const errors = this.ajv.errors
           ?.map((err) => `${err.instancePath}: ${err.message}`)
@@ -421,8 +447,9 @@ export class PromptFileParser {
    */
   private isPromptFile(filename: string): boolean {
     return (
-      filename.endsWith(".prompt.json") ||
       filename.endsWith(".flightpath.json") ||
+      filename.endsWith(".flightpath.yaml") ||
+      filename.endsWith(".flightpath.yml") ||
       filename.endsWith(".prompt.md")
     );
   }

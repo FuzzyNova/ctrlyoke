@@ -1,0 +1,113 @@
+$schema: http://json-schema.org/draft-07/schema#
+title: FlightPath Prompt Schema
+type: object
+description: >-
+  Schema for FlightPath prompts. Prompts should be in final-form format with all context variables
+  (e.g., @workspace, #file:path, #selection) and slash commands (e.g., /fix, /explain) included
+  directly in the prompt text.
+oneOf:
+  - title: Single Prompt
+    $ref: '#/definitions/promptItem'
+  - title: Multiple Prompts
+    properties:
+      prompts:
+        type: array
+        items:
+          $ref: '#/definitions/promptItem'
+    required:
+      - prompts
+    additionalProperties: false
+definitions:
+  promptItem:
+    type: object
+    properties:
+      id:
+        type: string
+        description: >-
+          Optional unique identifier for this prompt. Used for tracking completion across queue
+          reloads. If omitted, a content hash is used automatically.
+        pattern: ^[a-zA-Z0-9-_]+$
+        maxLength: 50
+      prompt:
+        type: string
+        description: >-
+          The prompt to send to GitHub Copilot. Can be either: (1) Final-form prompt text with
+          context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix,
+          /explain, etc.) directly in the text, OR (2) A file path to a .prompt.md, .md, or .txt
+          file containing the prompt. File paths are resolved relative to the prompt file's
+          directory, then workspace root, then .flightpath directory. Absolute paths are also
+          supported.
+      model:
+        type: string
+        description: >-
+          AI model to use for this prompt. Available models are queried dynamically from your
+          Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode
+          supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) -
+          others will fallback to default with warning. Optional - defaults to
+          flightpath.copilotCliModel setting.
+        examples:
+          - claude-sonnet-4.5
+          - claude-sonnet-4
+          - claude-haiku-4.5
+          - gpt-5
+          - gpt-4o
+          - gemini-2.5-pro
+      agent:
+        type: string
+        description: >-
+          Custom agent to use for this prompt (CLI mode only). Specify ONLY the agent name without
+          file extensions (e.g., 'flightpath-orchestrator' for file
+          'flightpath-orchestrator.agent.md'). The '.agent' suffix is automatically added. Agents
+          are discovered from .github/agents/ or ~/.copilot/agents/. Chat mode cannot
+          programmatically select agents - users must manually select from dropdown. See
+          docs/CHAT_MODE_LIMITATIONS.md for details.
+        pattern: ^[a-zA-Z0-9-_]+$
+      newChatSession:
+        type: boolean
+        description: >-
+          Whether to start a new chat session for this prompt. When omitted, defaults to the
+          flightpath.newChatSessionPerPrompt setting (default: true). Set to false to continue in
+          the existing session for context continuity. Retries always use the same session
+          regardless of this setting.
+      allowDynamicExtension:
+        type: boolean
+        description: >-
+          If true, inject instructions for extending the queue. If false, never inject. If omitted,
+          defaults to true for last prompt only (when no other prompts have explicit flags).
+      endCondition:
+        $ref: '#/definitions/endCondition'
+    required:
+      - prompt
+  endCondition:
+    type: object
+    properties:
+      script:
+        type: string
+        description: >-
+          Path to script file to execute, or direct shell command (e.g., 'npm test', 'python
+          script.py'). File paths are resolved relative to workspace root or .flightpath directory.
+      returns:
+        type: string
+        description: >-
+          Expected output from script (stdout). Matching rules: (1) Exact match (case-insensitive),
+          (2) Boolean: 'true' matches true/1/yes/pass/passed, 'false' matches
+          false/0/no/fail/failed, (3) Numeric: compared as >= (e.g., '90' matches if script outputs
+          90 or higher), (4) Substring: matches if output contains this string
+      timeout:
+        type: number
+        description: Timeout in milliseconds
+      maxRetries:
+        type: number
+        description: >-
+          Maximum number of retry attempts when validation fails. Use -1 for unlimited retries (use
+          with caution), 0 for no retries (default), or 1-100 for a specific limit.
+        minimum: -1
+        maximum: 100
+      retryPrompt:
+        type: string
+        description: >-
+          Template for retry prompt with placeholders: {scriptOutput}, {errorOutput},
+          {expectedValue}, {actualValue}, {retryCount}, {maxRetries}
+    required:
+      - script
+      - returns

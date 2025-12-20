@@ -1,0 +1,26 @@
+# Test YAML Workflow - Multi-Step with End Conditions
+# Tests YAML with validation scripts and retry logic
+
+prompts:
+  - id: analyze
+    prompt: |
+      Analyze the FlightPath extension's PromptFileParser.ts file.
+
+      Focus on:
+      - YAML parsing implementation
+      - Error handling for invalid YAML
+      - Schema validation logic
+
+      Provide a brief summary of the key components.
+
+  - id: suggest-improvements
+    prompt: |
+      Based on the analysis, suggest specific improvements to the YAML parsing logic.
+
+      Consider:
+      - Better error messages for YAML syntax errors
+      - Performance optimizations
+      - Additional validation checks
+
+      Keep suggestions actionable and specific.
+    newChatSession: false

@@ -587,19 +587,29 @@ export class FlightPathManager {
         return;
       }
 
+      // Get user's preferred workflow format
+      const defaultFormat = ConfigurationUtils.getDefaultWorkflowFormat();
+
       // Get file name from user
       const fileName = await vscode.window.showInputBox({
         prompt: "Enter prompt file name",
-        placeHolder: "my-workflow.prompt.json",
+        placeHolder:
+          defaultFormat === "yaml"
+            ? "my-workflow.flightpath.yaml"
+            : "my-workflow.flightpath.json",
         validateInput: (value) => {
           if (!value) {
             return "File name is required";
           }
-          if (
-            !value.endsWith(".prompt.json") &&
-            !value.endsWith(".flightpath.json")
-          ) {
-            return "File must end with .prompt.json or .flightpath.json";
+          const validExtensions = [
+            ".flightpath.yaml",
+            ".flightpath.yml",
+            ".flightpath.json",
+            ".prompt.md",
+          ];
+          const isValid = validExtensions.some((ext) => value.endsWith(ext));
+          if (!isValid) {
+            return "File must end with .flightpath.yaml, .flightpath.yml, .flightpath.json, or .prompt.md";
           }
           return null;
         },
@@ -627,10 +637,17 @@ export class FlightPathManager {
 
       const filePath = path.join(promptsDirPath, fileName);
 
-      // Create example content
-      const exampleContent = fileName.endsWith(".flightpath.json")
-        ? this.createExampleFlightPathContent()
-        : this.createExamplePromptContent();
+      // Create example content based on file extension
+      let exampleContent: string;
+      if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
+        exampleContent = this.createExampleFlightPathYAML();
+      } else if (fileName.endsWith(".json")) {
+        exampleContent = this.createExampleFlightPathJSON();
+      } else if (fileName.endsWith(".md")) {
+        exampleContent = this.createExampleMarkdownPrompt();
+      } else {
+        throw new Error("Unsupported file extension");
+      }
 
       // Write file
       const uri = vscode.Uri.file(filePath);
@@ -833,7 +850,7 @@ export class FlightPathManager {
   /**
    * Create example FlightPath content
    */
-  private createExampleFlightPathContent(): string {
+  private createExampleFlightPathJSON(): string {
     return JSON.stringify(
       {
         prompts: [
@@ -855,6 +872,48 @@ export class FlightPathManager {
       null,
       2
     );
+  }
+
+  private createExampleFlightPathYAML(): string {
+    return `# FlightPath Workflow
+# Multi-step AI automation with validation
+
+prompts:
+  - id: analyze
+    prompt: |
+      Analyze this codebase for potential bugs and code quality issues.
+      
+      Focus on:
+      - Error handling
+      - Type safety
+      - Security concerns
+      
+      Provide specific recommendations with examples.
+
+  - id: fix
+    prompt: |
+      Fix any issues found in the previous analysis.
+      
+      Follow best practices and maintain code consistency.
+    newChatSession: false
+    endCondition:
+      script: run_tests.py
+      returns: "all_passed"
+      timeout: 30000
+`;
+  }
+
+  private createExampleMarkdownPrompt(): string {
+    return `Analyze this codebase and provide recommendations for improvements.
+
+Focus on:
+- Code organization and structure
+- Error handling patterns
+- Type safety
+- Security best practices
+
+Provide specific examples and actionable suggestions.
+`;
   }
 
   /**
