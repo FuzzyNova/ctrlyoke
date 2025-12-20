@@ -79,6 +79,44 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi;
   }
 
+  protected getTuiChromePatterns(): RegExp[] {
+    return [
+      // Copilot-specific box drawing and separators (UI chrome only)
+      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing characters (8+ in a row = UI chrome)
+      /^[─═]{50,}$/, // Very long horizontal separators (50+ = UI chrome)
+      /^│\s*│$/, // Empty box sides
+
+      // Copilot welcome and version info (UI chrome)
+      /^Welcome to GitHub Copilot CLI/i, // Welcome header
+      /Version.*·.*Commit/i, // Version line (distinctive parts)
+      /check for mistakes/i, // Description line (distinctive ending)
+
+      // Copilot status bullets (UI chrome, very specific text)
+      /^●\s+Logged in as user:/i, // Login status
+      /^●\s+Connected to.*MCP Server/i, // Connection status
+      /^●\s+Model changed to:/i, // Model change notification
+
+      // Copilot spinner/thinking indicator (UI chrome - just the spinner character alone)
+      /^[·◉◎●]\s*$/, // Spinner alone (any Copilot spinner character)
+
+      // Copilot status bar (UI chrome - path + branch + model display)
+      /\[⎇\s+\w+\*?\].*gpt-.*\(\d+x\)/i, // Look for distinctive parts: branch indicator, model, and multiplier
+
+      // Copilot bottom navigation bar (already in screenEndPattern, but keep for safety)
+      /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand/i, // Bottom status bar
+
+      // Copilot prompt hints (UI chrome)
+      /Enter @ to mention files/i, // Prompt hint (distinctive part)
+      /^>\s*$/, // Empty prompt line
+
+      // Copilot approval prompts (UI chrome)
+      /^Do you want to run this command\?/i, // Approval question
+      /Confirm with number keys.*Cancel with Esc/i, // Confirmation hint
+      /^❯\s*\d+\./, // Selected option indicator (any option)
+      /No, and tell Copilot what to do differently/i, // Option text
+    ];
+  }
+
   protected buildHeadlessArgs(
     baseArgs: string[],
     promptFileRef: string

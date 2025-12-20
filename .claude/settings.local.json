@@ -18,7 +18,8 @@
       "Bash(move \"C:\\dev\\FlightPath\\docs\\FLIGHTPATH_CLI_DESIGN.md\" \"C:\\dev\\FlightPath\\docs\\research\\FLIGHTPATH_CLI_DESIGN.md\")",
       "Bash(git mv:*)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(timeout /t 10 /nobreak)"
     ],
     "deny": [],
     "ask": []

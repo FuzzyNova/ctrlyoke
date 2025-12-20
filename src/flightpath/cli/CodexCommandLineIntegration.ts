@@ -16,8 +16,13 @@ interface CodexCliJsonEvent {
   subtype?: string;
   item?: {
     id?: string;
+    type?: string; // "agent_message" or "command_execution"
     role?: string;
     text?: string;
+    command?: string; // For command_execution type
+    aggregated_output?: string; // For command_execution type
+    exit_code?: number | null; // For command_execution type
+    status?: string; // "in_progress", "completed", "failed"
     tool_calls?: Array<{
       type: string;
       function?: {
@@ -33,6 +38,7 @@ interface CodexCliJsonEvent {
   thread?: {
     id?: string;
   };
+  thread_id?: string; // Actual field name in Codex output
   usage?: {
     input_tokens: number;
     output_tokens: number;
@@ -89,6 +95,40 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     // Also matches status bar: "98% context left · ? for shortcuts"
     // Note: Global flag (g) is required for exec() to maintain position in while loop
     return /›\s|\d+%\s+context\s+left/g;
+  }
+
+  protected getTuiChromePatterns(): RegExp[] {
+    return [
+      // Codex-specific box borders (UI chrome only)
+      /^[╭╰]─+[╮╯]$/, // Box top/bottom borders
+      />_\s+OpenAI Codex/i, // Header (distinctive marker)
+      /^│\s*│$/, // Empty box lines
+      /model:.*\/model to change/i, // Model info line (distinctive parts)
+      /directory:.*│$/i, // Directory line in box
+
+      // Codex informational messages (UI chrome)
+      /^Tip:/i, // Tips (any tip)
+      /is deprecated.*Use \[features\]/i, // Deprecation warnings (distinctive parts)
+      /^Enable it with/i, // Configuration hints
+      /github\.com\/openai\/codex/i, // Documentation links
+
+      // Codex status bar (UI chrome - context percentage and shortcuts)
+      /\d+%\s+context\s+left.*\?\s+for shortcuts/i, // Status bar (distinctive parts)
+
+      // Codex prompt indicator when empty (UI chrome)
+      /^›\s*$/, // Empty prompt line only
+
+      // Codex approval prompts (UI chrome)
+      /Would you like to run the following command\?/i, // Approval question
+      /^\s*Reason:/i, // Reason line prefix
+      /^›\s+\d+\.\s+Yes, proceed/i, // Option 1 (distinctive part)
+      /Yes, and don't ask again for commands that start with/i, // Option 2 (distinctive part)
+      /No, and tell Codex what to do differently/i, // Option 3
+      /Press enter to confirm or esc to cancel/i, // Confirmation hint
+
+      // Codex separators (UI chrome)
+      /^─\s+Worked for \d+s\s+─/i, // Worked for Xs separator
+    ];
   }
 
   protected buildHeadlessArgs(
@@ -155,7 +195,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   ): { prompt: number; completion: number } | undefined {
     // Statistics should be in format: "Usage: {input} input + {output} output = {total} tokens"
     const match = statistics.match(
-      /(\\d+)\\s+input\\s+\\+\\s+(\\d+)\\s+output/
+      /(\d+)\s+input\s+\+\s+(\d+)\s+output/
     );
     if (match) {
       return {
@@ -170,10 +210,10 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
    * Process stdout chunks for JSONL format.
    *
    * JSONL format outputs newline-delimited JSON events:
-   * 1. {"type":"thread.started","thread":{"id":"..."}} - Thread init
-   * 2. {"type":"turn.started","turn":{"id":"..."}} - Turn started
+   * 1. {"type":"thread.started","thread_id":"..."} - Thread init
+   * 2. {"type":"turn.started"} - Turn started
    * 3. {"type":"item.completed","item":{"text":"...","role":"assistant"}} - Response chunks
-   * 4. {"type":"turn.completed","turn":{"status":"completed"}} - Turn complete
+   * 4. {"type":"turn.completed","usage":{"input_tokens":X,"output_tokens":Y}} - Turn complete
    *
    * We extract and stream response text from item.completed events.
    */
@@ -181,7 +221,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     // Accumulate into buffer
     this.streamBuffer += chunk;
 
-    const lines = this.streamBuffer.split("\\n");
+    const lines = this.streamBuffer.split("\n");
     this.streamBuffer = lines.pop() || ""; // Keep incomplete line in buffer
 
     let contentToEmit = "";
@@ -192,16 +232,40 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       try {
         const json: CodexCliJsonEvent = JSON.parse(line);
 
-        // Extract response text from item.completed events
-        if (json.type === "item.completed" && json.item?.text) {
-          contentToEmit += json.item.text;
+        // Handle different item types
+        if (json.type === "item.completed" && json.item) {
+          // Agent message (text response)
+          if (json.item.type === "agent_message" && json.item.text) {
+            contentToEmit += json.item.text;
+          }
+
+          // Command execution (tool call)
+          if (json.item.type === "command_execution") {
+            const cmd = json.item.command || "unknown";
+            const status = json.item.status || "unknown";
+            const exitCode = json.item.exit_code;
+            const output = json.item.aggregated_output || "";
+
+            // Display tool execution summary
+            contentToEmit += `\n\n🔧 Tool: ${cmd}\n`;
+            contentToEmit += `   Status: ${status}`;
+            if (exitCode !== null && exitCode !== undefined) {
+              contentToEmit += ` (exit code: ${exitCode})`;
+            }
+            if (output.trim()) {
+              // Show first line of output if available
+              const firstLine = output.split("\n")[0].substring(0, 100);
+              contentToEmit += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
+            }
+            contentToEmit += `\n\n`;
+          }
         }
 
-        // Tool calls can be shown as summaries
+        // Legacy tool_calls format (kept for compatibility)
         if (json.item?.tool_calls) {
           for (const toolCall of json.item.tool_calls) {
             if (toolCall.function?.name) {
-              contentToEmit += `\\n\\n[Tool: ${toolCall.function.name}]\\n\\n`;
+              contentToEmit += `\n\n[Tool: ${toolCall.function.name}]\n\n`;
             }
           }
         }
@@ -498,10 +562,10 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
    * Parse JSONL output from Codex CLI (newline-delimited JSON events)
    *
    * JSONL format outputs events:
-   * 1. {"type":"thread.started","thread":{"id":"..."}}
-   * 2. {"type":"turn.started","turn":{"id":"..."}}
+   * 1. {"type":"thread.started","thread_id":"..."}
+   * 2. {"type":"turn.started"}
    * 3. {"type":"item.completed","item":{"text":"...","role":"assistant"}}
-   * 4. {"type":"turn.completed","turn":{"status":"completed"}}
+   * 4. {"type":"turn.completed","usage":{"input_tokens":X,"output_tokens":Y}}
    */
   private parseJsonLinesOutput(
     stdout: string,
@@ -516,7 +580,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     let isError = false;
     let errorMessage: string | undefined;
 
-    const lines = stdout.split("\\n");
+    const lines = stdout.split("\n");
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -524,14 +588,36 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       try {
         const json: CodexCliJsonEvent = JSON.parse(line);
 
-        // Extract response from item.completed events
-        if (json.type === "item.completed" && json.item?.text) {
-          fullResponse += json.item.text;
+        // Handle different item types
+        if (json.type === "item.completed" && json.item) {
+          // Agent message (text response)
+          if (json.item.type === "agent_message" && json.item.text) {
+            fullResponse += json.item.text;
+          }
+
+          // Command execution (tool call) - add summary to response
+          if (json.item.type === "command_execution") {
+            const cmd = json.item.command || "unknown";
+            const status = json.item.status || "unknown";
+            const exitCode = json.item.exit_code;
+            const output = json.item.aggregated_output || "";
+
+            fullResponse += `\n\n🔧 Tool: ${cmd}\n`;
+            fullResponse += `   Status: ${status}`;
+            if (exitCode !== null && exitCode !== undefined) {
+              fullResponse += ` (exit code: ${exitCode})`;
+            }
+            if (output.trim()) {
+              const firstLine = output.split("\n")[0].substring(0, 100);
+              fullResponse += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
+            }
+            fullResponse += `\n\n`;
+          }
         }
 
         // Extract session ID from thread.started events
-        if (json.type === "thread.started" && json.thread?.id) {
-          sessionId = json.thread.id;
+        if (json.type === "thread.started" && json.thread_id) {
+          sessionId = json.thread_id;
         }
 
         // Extract usage from turn.completed events
@@ -700,15 +786,15 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Extract thread ID from Codex CLI output.
-   * Codex emits: {"type":"thread.started","thread":{"id":"..."}}
+   * Codex emits: {"type":"thread.started","thread_id":"..."}
    *
    * @param output Terminal or process output
    * @returns Thread ID if found, undefined otherwise
    */
   private extractThreadId(output: string): string | undefined {
-    // Look for JSONL thread.started event
+    // Look for JSONL thread.started event with thread_id field
     const threadMatch = output.match(
-      /"type"\s*:\s*"thread\.started"[^}]*"thread"\s*:\s*{[^}]*"id"\s*:\s*"([^"]+)"/i
+      /"type"\s*:\s*"thread\.started"[^}]*"thread_id"\s*:\s*"([^"]+)"/i
     );
     if (threadMatch) {
       return threadMatch[1];
@@ -933,6 +1019,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           escapeIndicator: this.getEscapeIndicator(),
           screenEndPattern: this.getScreenEndPattern(),
           tuiChromePattern: this.getTuiChromePattern(),
+          tuiChromePatterns: this.getTuiChromePatterns(),
           streamingEmitter: this.streamingChunkEmitter,
           responseCompleteEmitter: this.responseCompleteEmitter,
         };

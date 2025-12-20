@@ -194,6 +194,21 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract getScreenEndPattern(): RegExp;
 
   /**
+   * Get the CLI-specific TUI chrome patterns for filtering.
+   * Chrome refers to UI elements that should be filtered out from responses:
+   * - Box borders and separators
+   * - Status bars and keyboard shortcuts
+   * - Thinking indicators and prompts
+   * - Welcome messages and tips
+   *
+   * Each CLI has unique TUI chrome that varies by platform and version.
+   * This method returns the complete set of patterns for this CLI.
+   *
+   * @returns Array of RegExp patterns to test against trimmed lines
+   */
+  protected abstract getTuiChromePatterns(): RegExp[];
+
+  /**
    * Build headless CLI arguments with temp file reference.
    * The prompt has been written to a temp file, and this method
    * should add the appropriate flag to reference it.
@@ -377,6 +392,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           escapeIndicator: this.getEscapeIndicator(),
           screenEndPattern: this.getScreenEndPattern(),
           tuiChromePattern: this.getTuiChromePattern(),
+          tuiChromePatterns: this.getTuiChromePatterns(),
           streamingEmitter: this.streamingChunkEmitter,
           responseCompleteEmitter: this.responseCompleteEmitter,
         };

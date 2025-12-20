@@ -21,6 +21,7 @@ export interface TuiStreamConfig {
   escapeIndicator: string; // e.g., "(esc to cancel)"
   screenEndPattern: RegExp; // e.g., /Ctrl\+c Exit/
   tuiChromePattern: RegExp; // e.g., /Ctrl\+c Exit/
+  tuiChromePatterns: RegExp[]; // CLI-specific chrome filtering patterns
 
   // Event emitters for communication
   streamingEmitter: vscode.EventEmitter<string>;
@@ -670,6 +671,8 @@ export class TuiStreamProcessor {
    * - Filter spinner-only lines or lines that are pure UI chrome
    * - Use SYMBOLS to identify loading indicators, not words (LLMs choose different words each time)
    * - Preserve output lines even if they contain spinners (e.g., "● Read(file.ts)" is content, not chrome)
+   *
+   * Uses CLI-specific patterns provided via config (getTuiChromePatterns() from each integration).
    */
   isTuiChromeLine(line: string): boolean {
     const trimmed = line.trim();
@@ -678,37 +681,8 @@ export class TuiStreamProcessor {
       return false;
     }
 
-    const chromPatterns = [
-      // Codex-specific patterns
-      /^[╭╰]─+[╮╯]$/, // Box borders (Codex uses these for UI elements)
-      /^>\s+OpenAI Codex/i, // Header
-      /^•\s+Working\s+\(/i, // Working indicator
-      /\d+%\s+context\s+left/i, // Context status (also catches "› prompt\n  99% context left")
-      /^›\s+.*\n.*\d+%\s+context\s+left/i, // Codex prompt + status bar combo
-      /^›\s+[^›]*$/i, // Codex prompt indicator lines (but allow › inside content)
-      /^Tip:/i, // Tips
-      /^─\s+Worked for \d+s\s+─+$/i, // Worked for Xs separator
-
-      // Existing patterns for Claude/Copilot
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing only
-      /^[─═]{20,}$/, // Long horizontal separators (lenient)
-      /Ctrl\+[a-z]\s+\w+.*Ctrl\+/i, // Multiple keyboard shortcuts
-      /^Enter @ to mention/i, // Copilot prompt hint
-      /^\(Esc to cancel\)\s*$/i, // Copilot thinking indicator (standalone, line-end)
-      /^\(Esc to interrupt\)\s*$/i, // Claude thinking indicator (standalone, line-end)
-      /^>\s*$/, // Empty prompt only
-      /^>\s+.+[↵⧉⎆⏎]\s+\w+\s*$/i, // Prompt lines ending with directional arrow + command (e.g., "↵ send", "⧉ In")
-      /^[✻✽✢✶·◉◎●]\s*$/, // Spinner alone (no other content)
-      /^Thinking\s*\([^)]*\)\s*$/i, // Complete thinking status line
-      /^⎇\s+\w+\*?\s*[│|]\s*gpt-/i, // Git branch + model
-      /^\d+x\)\s*$/, // Token multiplier pattern
-      /^Welcome to (GitHub Copilot|Claude)/i, // Welcome messages
-      /\(Esc to cancel\)\s*$/i, // Any line ENDING with "(Esc to cancel)" (catches all loading spinners too)
-      /\(esc to interrupt[^)]*\)\s*$/i, // Any line ENDING with "(esc to interrupt...)" (catches all loading spinners too)
-      /^⏵⏵/, // Edit mode indicator (double chevron prefix)
-    ];
-
-    return chromPatterns.some((pattern) => pattern.test(trimmed));
+    // Use CLI-specific patterns from config
+    return this.config.tuiChromePatterns.some((pattern) => pattern.test(trimmed));
   }
 
   /**

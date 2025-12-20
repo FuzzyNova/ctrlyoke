@@ -98,6 +98,43 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return /─{20,}\r?\n>\s*/g;
   }
 
+  protected getTuiChromePatterns(): RegExp[] {
+    return [
+      // Claude-specific box drawing and separators
+      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing characters (8+ in a row = UI chrome)
+      /^[─═]{20,}$/, // Long horizontal separators
+      /Claude Code v[\d.]+/i, // Header with version
+
+      // Claude ASCII logo (distinctive characters)
+      /▐▛███▜▌/, // Logo line 1
+      /▝▜█████▛▘/, // Logo line 2
+
+      // Claude welcome and info sections (UI chrome)
+      /^Welcome back/i, // Welcome message
+      /^Recent activity/i, // Activity header
+      /^No recent activity/i, // Empty activity
+      /^What's new/i, // Release notes header
+      /\/release-notes for more/i, // Navigation hint
+      /^Added .* support for/i, // Feature announcements
+      /^Added .* tool for/i, // Tool announcements
+      /Claude Pro ·.*Organization/i, // Status line with model and account
+
+      // Claude spinner/thinking indicator (UI chrome - just the spinner character alone)
+      /^[✻✽✢✶·]\s*$/, // Spinner alone (any Claude spinner character)
+
+      // Claude approval prompts (UI chrome)
+      /^Do you want to proceed\?/i, // Approval question
+      /^Esc to cancel$/i, // Cancel hint (exact match - distinctive)
+      /^❯\s*\d+\./, // Selected option indicator
+      /^\s*\d+\.\s+Yes, and don't ask again/i, // Option 2
+      /^\s*\d+\.\s+Type here to tell Claude/i, // Option 3
+
+      // Claude UI hints
+      /ctrl\+b to run in background/i, // Background hint
+      /^>\s*$/, // Empty prompt line
+    ];
+  }
+
   protected buildHeadlessArgs(
     baseArgs: string[],
     promptFileRef: string
