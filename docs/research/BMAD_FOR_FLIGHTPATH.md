@@ -629,3 +629,52 @@ phases:
 - **Compliance/security**: Enterprise requirements → Enterprise track
 - **UX complexity**: Significant UI → Method/Enterprise with create-design
 - **Testability**: Critical systems → Enterprise (required test-design)
+
+---
+
+## Reference Materials Extracted from BMAD
+
+Before removing BMAD from this project, the following valuable reference materials were extracted to `docs/reference/`:
+
+### Elicitation Methods (`docs/reference/elicitation-methods.csv`)
+
+38 structured thinking techniques organized by category for use in analysis and planning prompts:
+
+**High-Priority Methods for FlightPath Prompts:**
+
+- **Pre-mortem Analysis** (Risk) - Imagine future failure, work backwards to prevent it
+- **First Principles Analysis** (Core) - Strip assumptions, rebuild from fundamentals
+- **Dependency Mapping** (Structural) - Visualize interconnections to understand impacts
+- **5 Whys Deep Dive** (Core) - Drill down to root causes
+- **Tree of Thoughts** (Advanced) - Explore multiple reasoning paths simultaneously
+- **Failure Mode Analysis** (Risk) - Systematically explore how components could fail
+- **Self-Consistency Validation** (Advanced) - Generate multiple approaches, compare for consensus
+
+**Future Work:** Create FlightPath prompt templates that apply these methods to:
+
+- Architecture review workflows
+- PRD validation
+- Risk assessment for complex features
+- Root cause analysis for test failures
+- Alternative solution exploration
+
+### Test Architecture Patterns (`docs/reference/test-patterns/`)
+
+21 reusable test engineering knowledge fragments covering:
+
+- **Fixture architecture** - Composable fixture patterns and reuse rules
+- **Network-first safeguards** - Intercept-before-navigate, HAR capture, deterministic waits
+- **Contract testing** - Pact publishing, provider verification
+- **CI burn-in strategy** - Staged jobs, shard orchestration, flakiness mitigation
+- **Risk governance** - Scoring matrix, category ownership, gate decisions
+- **Selector resilience** - Robust selector strategies and debugging
+- **Feature flag governance** - Enum management, targeting helpers, cleanup
+
+**Future Work:** Use these patterns to:
+
+- Inform end condition validation scripts
+- Create test quality assessment workflows
+- Build test architecture review prompts
+- Define FlightPath-specific testing best practices templates
+
+See `docs/reference/test-patterns/test-patterns-index.csv` for the complete catalog.
