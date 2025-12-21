@@ -121,6 +121,26 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       // Insert just the path (@ is already typed)
       fileItem.insertText = relativePath;
 
+      // CRITICAL: Set range to fix VS Code YAML bug where completions don't show
+      // The range tells VS Code exactly what text to replace (the filter text after @)
+      // Without this, YAML completions are suppressed by the RedHat YAML extension
+      const currentPos = vscode.window.activeTextEditor?.selection.active;
+      if (currentPos) {
+        const line = vscode.window.activeTextEditor!.document.lineAt(
+          currentPos.line
+        ).text;
+        const textBeforeCursor = line.substring(0, currentPos.character);
+        const atIndex = textBeforeCursor.lastIndexOf("@");
+        if (atIndex !== -1) {
+          const replaceStart = new vscode.Position(
+            currentPos.line,
+            atIndex + 1
+          );
+          const replaceEnd = currentPos;
+          fileItem.range = new vscode.Range(replaceStart, replaceEnd);
+        }
+      }
+
       // Show directory in detail
       fileItem.detail = dirName === "." ? "Root directory" : dirName;
 
@@ -169,6 +189,27 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       // Insert directory path WITH trailing slash
       dirItem.insertText = dirPath + "/";
 
+      // Set range for YAML compatibility (same as files)
+      const currentPosDirs = vscode.window.activeTextEditor?.selection.active;
+      if (currentPosDirs) {
+        const lineDirs = vscode.window.activeTextEditor!.document.lineAt(
+          currentPosDirs.line
+        ).text;
+        const textBeforeCursorDirs = lineDirs.substring(
+          0,
+          currentPosDirs.character
+        );
+        const atIndexDirs = textBeforeCursorDirs.lastIndexOf("@");
+        if (atIndexDirs !== -1) {
+          const replaceStartDirs = new vscode.Position(
+            currentPosDirs.line,
+            atIndexDirs + 1
+          );
+          const replaceEndDirs = currentPosDirs;
+          dirItem.range = new vscode.Range(replaceStartDirs, replaceEndDirs);
+        }
+      }
+
       // Show parent directory
       dirItem.detail = parentDir === "." ? "Root directory" : parentDir;
 
@@ -189,7 +230,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       items.push(dirItem);
     }
 
-    return new vscode.CompletionList(items, false);
+    return new vscode.CompletionList(items, true);
   }
 
   /**
@@ -268,6 +309,24 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
         // - Same symbol name appears multiple times in same file
         item.insertText = `sym:${relativePath}:${symbol.name}:${line}`;
 
+        // Set range for YAML compatibility
+        const currentPos = vscode.window.activeTextEditor?.selection.active;
+        if (currentPos) {
+          const lineText = vscode.window.activeTextEditor!.document.lineAt(
+            currentPos.line
+          ).text;
+          const textBeforeCursor = lineText.substring(0, currentPos.character);
+          const hashIndex = textBeforeCursor.lastIndexOf("#");
+          if (hashIndex !== -1) {
+            const replaceStart = new vscode.Position(
+              currentPos.line,
+              hashIndex + 1
+            );
+            const replaceEnd = currentPos;
+            item.range = new vscode.Range(replaceStart, replaceEnd);
+          }
+        }
+
         // Show symbol kind and location
         const symbolKindName = vscode.SymbolKind[symbol.kind];
         item.detail = `${symbolKindName} in ${relativePath}:${line}`;
@@ -303,14 +362,17 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     document: vscode.TextDocument,
     position: vscode.Position
   ): boolean {
-    // For Markdown, YAML, and Prompt files, always provide completions
+    // For Markdown and Prompt files, always provide completions
     if (
       document.languageId === "markdown" ||
-      document.languageId === "prompt" ||
-      document.languageId === "yaml" ||
-      document.languageId === "yml"
+      document.languageId === "prompt"
     ) {
       return true;
+    }
+
+    // For YAML files, only provide completions inside "prompt:" values
+    if (document.languageId === "yaml" || document.languageId === "yml") {
+      return this.isInsideYamlPromptValue(document, position);
     }
 
     // For JSON files, only provide completions inside "prompt" string values
@@ -319,6 +381,98 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     }
 
     // For other file types, don't provide completions
+    return false;
+  }
+
+  /**
+   * Check if cursor position is inside a YAML prompt value
+   */
+  private isInsideYamlPromptValue(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): boolean {
+    const currentLine = position.line;
+    const currentLineText = document.lineAt(currentLine).text;
+
+    // Get current line indentation (handle empty/whitespace-only lines)
+    const currentIndent = currentLineText.search(/\S/);
+    const currentIndentActual =
+      currentIndent === -1 ? currentLineText.length : currentIndent;
+
+    console.log(
+      `[isInsideYamlPromptValue] Checking line ${currentLine}: "${currentLineText}" (indent=${currentIndentActual})`
+    );
+
+    // Search backwards for "prompt:" key (up to 50 lines)
+    for (let i = currentLine; i >= Math.max(0, currentLine - 50); i--) {
+      const lineText = document.lineAt(i).text;
+
+      // Check for "prompt:" (with optional leading spaces/dashes for list items)
+      const promptMatch = lineText.match(/^\s*-?\s*prompt:\s*(.*)$/);
+
+      if (promptMatch) {
+        const afterColon = promptMatch[1].trim();
+        const promptIndent = lineText.search(/\S/);
+
+        // Case 1: prompt: | or prompt: > (multi-line block scalar)
+        if (afterColon === "|" || afterColon === ">") {
+          if (i < currentLine) {
+            // We're on a line after the prompt: line
+            // For block scalars, content must be indented more than the key
+            // Empty lines are OK (stay in block)
+            if (currentLineText.trim() === "") {
+              return true;
+            }
+            // Non-empty lines must be indented more than prompt key
+            if (currentIndentActual > promptIndent) {
+              return true;
+            }
+            // Equal/less indentation = out of block
+            return false;
+          }
+          // We're on the prompt: line itself, after the | or >
+          // Allow completions here too (user typing on same line)
+          return (
+            position.character >
+            lineText.indexOf(afterColon) + afterColon.length
+          );
+        }
+
+        // Case 2: prompt: "inline string" or prompt: 'inline string'
+        if (afterColon.startsWith('"') || afterColon.startsWith("'")) {
+          return i === currentLine;
+        }
+
+        // Case 3: prompt: inline text without quotes
+        if (afterColon !== "") {
+          return i === currentLine;
+        }
+
+        // prompt: with nothing after (value on next line)
+        if (i < currentLine) {
+          // Check indentation - must be more indented
+          if (
+            currentLineText.trim() === "" ||
+            currentIndentActual > promptIndent
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      }
+
+      // Stop if we hit another YAML key at same/less indentation
+      // (we've moved out of the prompt block into another field)
+      if (i < currentLine && lineText.match(/^\s*-?\s*\w+:\s*/)) {
+        const lineIndent = lineText.search(/\S/);
+        if (lineIndent !== -1 && lineIndent <= currentIndentActual) {
+          return false;
+        }
+      }
+    }
+
+    console.log(`[isInsideYamlPromptValue] No prompt: found, returning false`);
     return false;
   }
 
@@ -513,6 +667,24 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
 
       item.insertText = completionText;
       item.detail = `Lines ${startLine}-${endLine} in ${relativePath}`;
+
+      // Set range for YAML compatibility
+      const currentPos = vscode.window.activeTextEditor?.selection.active;
+      if (currentPos) {
+        const lineText = vscode.window.activeTextEditor!.document.lineAt(
+          currentPos.line
+        ).text;
+        const textBeforeCursor = lineText.substring(0, currentPos.character);
+        const hashIndex = textBeforeCursor.lastIndexOf("#");
+        if (hashIndex !== -1) {
+          const replaceStart = new vscode.Position(
+            currentPos.line,
+            hashIndex + 1
+          );
+          const replaceEnd = currentPos;
+          item.range = new vscode.Range(replaceStart, replaceEnd);
+        }
+      }
 
       // Get preview of selected text (first 100 chars)
       const selectedText = document.getText(selection);

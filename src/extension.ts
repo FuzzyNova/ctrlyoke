@@ -72,11 +72,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
     await flightPathManager.initialize();
 
-    // Register completion provider for prompt JSON and Markdown files
+    // Register completion provider for prompt files (JSON, YAML, and Markdown)
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
     const promptCompletionProvider = new PromptCompletionProvider();
     const promptFilePatterns = [
       { pattern: "**/*.{prompt,flightpath}.json" },
+      { pattern: "**/*.flightpath.{yaml,yml}" },
       { pattern: "**/*.prompt.md" },
       { language: "prompt" }, // VS Code's prompt language (used by Copilot)
     ];
@@ -99,7 +100,7 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     console.log(
-      "FlightPath: Registered completion provider for prompt files (.json, .md, and prompt language) with @ and # triggers"
+      "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @ and # triggers"
     );
 
     // Register link provider for prompt files (enables Ctrl+Click navigation)

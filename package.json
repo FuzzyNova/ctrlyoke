@@ -833,7 +833,7 @@
           "**/*.flightpath.yaml",
           "**/*.flightpath.yml"
         ],
-        "url": "./schemas/prompt-schema.json"
+        "url": "./schemas/prompt-schema.yaml"
       }
     ]
   },

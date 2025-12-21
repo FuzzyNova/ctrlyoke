@@ -6,7 +6,7 @@ prompts:
     prompt: |
       Review the YAML workflow format implementation in FlightPath.
 
-      Examine #file:src/flightpath/PromptFileParser.ts and check:
+      Examine @src/flightpath/PromptFileParser.ts and check:
       - How YAML files are parsed
       - Error handling for invalid YAML syntax
       - Schema validation with AJV
