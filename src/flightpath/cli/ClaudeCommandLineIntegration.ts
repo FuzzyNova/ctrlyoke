@@ -6,11 +6,7 @@ import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { getClaudeModelName } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-import {
-  TuiStreamProcessor,
-  TuiProcessResult,
-} from "../../utils/TuiStreamProcessor";
-import { TempFileManager } from "../../utils/TempFileManager";
+import type { TuiProcessResult } from "../../utils/TuiStreamProcessor";
 
 /**
  * Maps Copilot permission patterns to Claude tool names.
@@ -351,10 +347,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
   // Context expansion now handled by ContextExpander utility (no override needed)
 
-  // ============================================================
-  // INITIALIZATION (Epic 2: Story 2.1, 2.2)
-  // ============================================================
-
   /**
    * Initialize CLI integration by checking if Claude CLI is available
    * Fires status change events during lifecycle
@@ -408,10 +400,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       );
     }
   }
-
-  // ============================================================
-  // PROMPT EXECUTION (Epic 3: Story 3.1, 3.2, 3.3)
-  // ============================================================
 
   /**
    * Send prompt to Claude via CLI
@@ -567,137 +555,75 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       filePath?: string;
     }
   ): Promise<boolean> {
-    const tuiCommand = this.buildInteractiveTuiCommand(args);
-    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
-
-    Log.debug(`🎮 executeInTerminal called for Claude`);
-    Log.debug(`🎮 tuiCommand: ${tuiCommand}`);
-    Log.info(`📝 Prompt length: ${promptText.length} characters`);
-
-    // Create fresh terminal
-    const terminal = await this.createFreshTerminal();
-    terminal.show();
-
-    // Fire prompt ready event
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: displayCommand,
-    });
-
-    this.streamingChunkEmitter.fire(
-      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
-        "   View the terminal for real-time output.\n\n"
-    );
-
     try {
-      // Wait for shell integration
-      const shellIntegration = await this.waitForShellIntegration(terminal);
-
-      // Execute command
-      const execution = shellIntegration.executeCommand(tuiCommand);
-      this.currentExecution = execution;
-
-      // Create temp file with instructional prompt
-      let tempFilePath: string | undefined;
-
-      try {
-        const { tempFilePath: path, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePath = path;
-
-        this.lastSanitizedPrompt = promptText;
-
-        // Create TUI processor with Claude-specific configuration
-        const tuiConfig = {
-          escapeIndicator: this.getEscapeIndicator(),
-          screenEndPattern: this.getScreenEndPattern(),
-          tuiChromePatterns: this.getTuiChromePatterns(),
-          streamingEmitter: this.streamingChunkEmitter,
-          responseCompleteEmitter: this.responseCompleteEmitter,
-        };
-
-        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
-
-        // Create abort controller to stop TUI processing when stop hook detects completion
-        const tuiAbortController = new AbortController();
-
-        // Start stop hook notification monitoring
-        const startTime = new Date();
-
-        // Try to extract session ID from initial output, but don't wait
-        // We'll use fallback directory monitoring if session ID not available
-        let sessionId: string | undefined;
-
-        // Process TUI stream with abort controller
-        Log.info(
-          "⏳ Starting Claude TUI processing with stop hook monitoring..."
-        );
-        const tuiPromise = tuiProcessor.processStream(
-          execution,
+      const result = await this.withInteractiveTuiExecution(
+        args,
+        promptText,
+        workflowContext,
+        async ({
           terminal,
+          execution,
           promptWithInstruction,
-          ConfigurationUtils.getCliExecutionTimeoutMs(),
-          this.lastSanitizedPrompt,
-          this.shouldShowOutput(),
-          tuiAbortController
-        );
+          tuiProcessor,
+          timeoutMs,
+          shouldShowOutput,
+          lastSanitizedPrompt,
+        }) => {
+          const tuiAbortController = new AbortController();
+          const startTime = new Date();
+          let sessionId: string | undefined;
 
-        // Monitor notification file for completion (authoritative source)
-        const notifyPromise = this.monitorNotificationFile(
-          sessionId,
-          startTime,
-          ConfigurationUtils.getCliExecutionTimeoutMs()
-        );
-
-        // Race the promises - notification file wins
-        const notifyResult = await Promise.race([
-          notifyPromise,
-          // If TUI completes first (error or fallback completion), return result
-          tuiPromise.then((tuiResult: TuiProcessResult) => ({
-            completed: tuiResult.success,
-            error: tuiResult.errorMessage,
-          })),
-        ]);
-
-        // Notification detected completion - abort TUI processing immediately
-        if (notifyResult.completed) {
-          Log.debug("🛑 Stop hook detected completion - aborting TUI stream");
-          tuiAbortController.abort();
-        }
-
-        // Wait for TUI to finish cleaning up (should be fast after abort)
-        const tuiResult = await tuiPromise;
-
-        // Check results
-        if (!notifyResult.completed) {
-          this.lastFailureReason =
-            notifyResult.error || "Completion detection failed";
-          Log.error(`❌ Claude execution failed: ${this.lastFailureReason}`);
-          return false;
-        }
-
-        // Check TUI result for any errors it may have caught
-        if (!tuiResult.success && tuiResult.errorMessage) {
-          this.lastFailureReason = tuiResult.errorMessage;
-          Log.warn(
-            `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+          Log.info("⏳ Starting Claude TUI processing with stop hook monitoring...");
+          const tuiPromise = tuiProcessor.processStream(
+            execution,
+            terminal,
+            promptWithInstruction,
+            timeoutMs,
+            lastSanitizedPrompt,
+            shouldShowOutput,
+            tuiAbortController
           );
-          // Don't return false here - stop hook said success, trust it
-        }
 
-        Log.info("✅ Claude execution completed successfully");
-        return true;
-      } finally {
-        // Clean up temp file if created
-        if (tempFilePath) {
-          const workspaceRoot = this.getWorkspaceRoot();
-          if (workspaceRoot) {
-            const tempMgr = new TempFileManager(workspaceRoot);
-            await tempMgr.deleteFile(tempFilePath);
-            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          const notifyPromise = this.monitorNotificationFile(
+            sessionId,
+            startTime,
+            timeoutMs
+          );
+
+          const notifyResult = await Promise.race([
+            notifyPromise,
+            tuiPromise.then((tuiResult: TuiProcessResult) => ({
+              completed: tuiResult.success,
+              error: tuiResult.errorMessage,
+            })),
+          ]);
+
+          if (notifyResult.completed) {
+            Log.debug("🛑 Stop hook detected completion - aborting TUI stream");
+            tuiAbortController.abort();
           }
+
+          const tuiResult = await tuiPromise;
+
+          if (!notifyResult.completed) {
+            this.lastFailureReason =
+              notifyResult.error || "Completion detection failed";
+            Log.error(`❌ Claude execution failed: ${this.lastFailureReason}`);
+            return { success: false, errorMessage: this.lastFailureReason };
+          }
+
+          if (!tuiResult.success && tuiResult.errorMessage) {
+            this.lastFailureReason = tuiResult.errorMessage;
+            Log.warn(
+              `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+            );
+          }
+
+          return { success: true };
         }
-      }
+      );
+
+      return result.success;
     } catch (error) {
       this.lastFailureReason =
         error instanceof Error ? error.message : String(error);
@@ -899,10 +825,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       sessionId,
     };
   }
-
-  // ============================================================
-  // CONFIGURATION HELPERS
-  // ============================================================
 
   /**
    * Validate model is supported by Claude CLI, fallback to default if not
@@ -1243,10 +1165,4 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       error: "Timeout waiting for stop hook notification",
     };
   }
-
-  // ============================================================
-  // STATUS METHODS (Story 2.4)
-  // ============================================================
-
-  // Uses base class getStatus() method
 }

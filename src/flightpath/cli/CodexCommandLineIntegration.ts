@@ -5,8 +5,6 @@ import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-import { TuiStreamProcessor } from "../../utils/TuiStreamProcessor";
-import { TempFileManager } from "../../utils/TempFileManager";
 
 /**
  * Codex CLI JSON response structure (JSONL events format)
@@ -67,10 +65,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     super(context);
     this.initialize();
   }
-
-  // ============================================================
-  // ABSTRACT METHOD IMPLEMENTATIONS
-  // ============================================================
 
   /**
    * Get the CLI name for terminal/logging
@@ -300,10 +294,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return contentToEmit || undefined;
   }
 
-  // ============================================================
-  // INITIALIZATION
-  // ============================================================
-
   /**
    * Initialize CLI integration by checking if Codex CLI is available
    * Fires status change events during lifecycle
@@ -355,10 +345,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       Log.info("   📖 Documentation: https://docs.openai.com/codex");
     }
   }
-
-  // ============================================================
-  // PROMPT EXECUTION
-  // ============================================================
 
   /**
    * Send prompt to Codex via CLI
@@ -971,139 +957,76 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       filePath?: string;
     }
   ): Promise<boolean> {
-    const tuiCommand = this.buildInteractiveTuiCommand(args);
-    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
-
-    Log.debug(`🎮 executeInTerminal called for Codex`);
-    Log.debug(`🎮 tuiCommand: ${tuiCommand}`);
-    Log.info(`📝 Prompt length: ${promptText.length} characters`);
-
-    // Create fresh terminal
-    const terminal = await this.createFreshTerminal();
-    terminal.show();
-
-    // Fire prompt ready event
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: displayCommand,
-    });
-
-    this.streamingChunkEmitter.fire(
-      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
-        "   View the terminal for real-time output.\n\n"
-    );
-
     try {
-      // Wait for shell integration
-      const shellIntegration = await this.waitForShellIntegration(terminal);
-
-      // Execute command
-      const execution = shellIntegration.executeCommand(tuiCommand);
-      this.currentExecution = execution;
-
-      // Create temp file with instructional prompt
-      let tempFilePath: string | undefined;
-
-      try {
-        const { tempFilePath: path, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePath = path;
-
-        this.lastSanitizedPrompt = promptText;
-
-        // Create TUI processor with Codex-specific configuration
-        const tuiConfig = {
-          useTimeBasedExtraction: true,
-          escapeIndicator: this.getEscapeIndicator(),
-          screenEndPattern: this.getScreenEndPattern(),
-          tuiChromePatterns: this.getTuiChromePatterns(),
-          streamingEmitter: this.streamingChunkEmitter,
-          responseCompleteEmitter: this.responseCompleteEmitter,
-        };
-
-        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
-
-        // Create abort controller to stop TUI processing when notification detects completion
-        const tuiAbortController = new AbortController();
-
-        // Start notification monitoring BEFORE sending prompt
-        const startTime = new Date();
-
-        // Note: Thread ID extraction from TUI output is complex since it's in ANSI-formatted stream.
-        // We'll use a fallback approach: monitor without thread ID initially, and rely on
-        // timeout-based completion if notification file doesn't appear.
-        let threadId: string | undefined;
-
-        // Process TUI stream (time-based extraction) with abort controller
-        Log.info(
-          "⏳ Starting Codex TUI processing with notify hook monitoring..."
-        );
-        const tuiPromise = tuiProcessor.processStream(
-          execution,
+      const result = await this.withInteractiveTuiExecution(
+        args,
+        promptText,
+        workflowContext,
+        async ({
           terminal,
+          execution,
           promptWithInstruction,
-          ConfigurationUtils.getCliExecutionTimeoutMs(),
-          this.lastSanitizedPrompt,
-          this.shouldShowOutput(),
-          tuiAbortController
-        );
+          tuiProcessor,
+          timeoutMs,
+          shouldShowOutput,
+          lastSanitizedPrompt,
+        }) => {
+          const tuiAbortController = new AbortController();
+          const startTime = new Date();
+          let threadId: string | undefined;
 
-        // Monitor notification file for completion (authoritative source)
-        const notifyPromise = this.monitorNotificationFile(
-          threadId,
-          startTime,
-          ConfigurationUtils.getCliExecutionTimeoutMs()
-        );
-
-        // Race the promises - notification file wins
-        const notifyResult = await Promise.race([
-          notifyPromise,
-          // If TUI completes first (error), return a failure result
-          tuiPromise.then((tuiResult) => ({
-            completed: tuiResult.success,
-            error: tuiResult.errorMessage,
-          })),
-        ]);
-
-        // Notification detected completion - abort TUI processing immediately
-        if (notifyResult.completed) {
-          Log.debug("🛑 Notify hook detected completion - aborting TUI stream");
-          tuiAbortController.abort();
-        }
-
-        // Wait for TUI to finish cleaning up (should be fast after abort)
-        const tuiResult = await tuiPromise;
-
-        // Check results
-        if (!notifyResult.completed) {
-          this.lastFailureReason =
-            notifyResult.error || "Completion detection failed";
-          Log.error(`❌ Codex execution failed: ${this.lastFailureReason}`);
-          return false;
-        }
-
-        // Check TUI result for any errors it may have caught
-        if (!tuiResult.success && tuiResult.errorMessage) {
-          this.lastFailureReason = tuiResult.errorMessage;
-          Log.warn(
-            `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+          Log.info("⏳ Starting Codex TUI processing with notify hook monitoring...");
+          const tuiPromise = tuiProcessor.processStream(
+            execution,
+            terminal,
+            promptWithInstruction,
+            timeoutMs,
+            lastSanitizedPrompt,
+            shouldShowOutput,
+            tuiAbortController
           );
-          // Don't return false here - notify hook said success, trust it
-        }
 
-        Log.info("✅ Codex execution completed successfully");
-        return true;
-      } finally {
-        // Clean up temp file if created
-        if (tempFilePath) {
-          const workspaceRoot = this.getWorkspaceRoot();
-          if (workspaceRoot) {
-            const tempMgr = new TempFileManager(workspaceRoot);
-            await tempMgr.deleteFile(tempFilePath);
-            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          const notifyPromise = this.monitorNotificationFile(
+            threadId,
+            startTime,
+            timeoutMs
+          );
+
+          const notifyResult = await Promise.race([
+            notifyPromise,
+            tuiPromise.then((tuiResult) => ({
+              completed: tuiResult.success,
+              error: tuiResult.errorMessage,
+            })),
+          ]);
+
+          if (notifyResult.completed) {
+            Log.debug("🛑 Notify hook detected completion - aborting TUI stream");
+            tuiAbortController.abort();
           }
-        }
-      }
+
+          const tuiResult = await tuiPromise;
+
+          if (!notifyResult.completed) {
+            this.lastFailureReason =
+              notifyResult.error || "Completion detection failed";
+            Log.error(`❌ Codex execution failed: ${this.lastFailureReason}`);
+            return { success: false, errorMessage: this.lastFailureReason };
+          }
+
+          if (!tuiResult.success && tuiResult.errorMessage) {
+            this.lastFailureReason = tuiResult.errorMessage;
+            Log.warn(
+              `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+            );
+          }
+
+          return { success: true };
+        },
+        { useTimeBasedExtraction: true }
+      );
+
+      return result.success;
     } catch (error) {
       this.lastFailureReason =
         error instanceof Error ? error.message : String(error);

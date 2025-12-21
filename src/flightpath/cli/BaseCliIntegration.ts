@@ -9,6 +9,7 @@ import { CliProcessManager } from "../../utils/CliProcessManager";
 import {
   TuiStreamProcessor,
   TuiStreamConfig,
+  WorkflowContext,
 } from "../../utils/TuiStreamProcessor";
 import { Log } from "../../utils/Log";
 
@@ -259,11 +260,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected async createPromptFileWithReference(
     promptText: string,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
+    workflowContext?: WorkflowContext
   ): Promise<{ tempFilePath: string; promptWithInstruction: string }> {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
@@ -286,6 +283,85 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     Log.info(`📁 Temp file created: ${relativeFilePath}`);
 
     return { tempFilePath, promptWithInstruction };
+  }
+
+  protected async withInteractiveTuiExecution(
+    args: string[],
+    promptText: string,
+    workflowContext: WorkflowContext | undefined,
+    execute: (context: {
+      terminal: vscode.Terminal;
+      execution: vscode.TerminalShellExecution;
+      promptWithInstruction: string;
+      tuiProcessor: TuiStreamProcessor;
+      timeoutMs: number;
+      shouldShowOutput: boolean;
+      lastSanitizedPrompt?: string;
+    }) => Promise<{ success: boolean; errorMessage?: string }>,
+    tuiConfigOverrides?: Partial<TuiStreamConfig>
+  ): Promise<{ success: boolean; errorMessage?: string }> {
+    const tuiCommand = this.buildInteractiveTuiCommand(args);
+    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
+
+    const terminal = await this.createFreshTerminal();
+    terminal.show();
+
+    this.promptReadyEmitter.fire({
+      fullPrompt: promptText,
+      cliCommand: displayCommand,
+    });
+
+    this.streamingChunkEmitter.fire(
+      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
+        "   View the terminal for real-time output.\n\n"
+    );
+
+    const shellIntegration = await this.waitForShellIntegration(terminal);
+    const execution = shellIntegration.executeCommand(tuiCommand);
+    this.currentExecution = execution;
+
+    let tempFilePath: string | undefined;
+
+    try {
+      const { tempFilePath: path, promptWithInstruction } =
+        await this.createPromptFileWithReference(promptText, workflowContext);
+      tempFilePath = path;
+
+      this.lastSanitizedPrompt = promptText;
+
+      const timeoutMs = ConfigurationUtils.getCliExecutionTimeoutMs();
+      const shouldShowOutput = this.shouldShowOutput();
+
+      const tuiConfig: TuiStreamConfig = {
+        escapeIndicator: this.getEscapeIndicator(),
+        screenEndPattern: this.getScreenEndPattern(),
+        tuiChromePatterns: this.getTuiChromePatterns(),
+        streamingEmitter: this.streamingChunkEmitter,
+        responseCompleteEmitter: this.responseCompleteEmitter,
+        ...tuiConfigOverrides,
+      };
+
+      const tuiProcessor = new TuiStreamProcessor(tuiConfig);
+
+      return execute({
+        terminal,
+        execution,
+        promptWithInstruction,
+        tuiProcessor,
+        timeoutMs,
+        shouldShowOutput,
+        lastSanitizedPrompt: this.lastSanitizedPrompt,
+      });
+    } finally {
+      if (tempFilePath) {
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (workspaceRoot) {
+          const tempMgr = new TempFileManager(workspaceRoot);
+          await tempMgr.deleteFile(tempFilePath);
+          Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+        }
+      }
+    }
   }
 
   /**
@@ -312,107 +388,37 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected async executeInTerminal(
     args: string[],
     promptText: string,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
+    workflowContext?: WorkflowContext
   ): Promise<boolean> {
-    const tuiCommand = this.buildInteractiveTuiCommand(args);
-    const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
-
-    Log.debug(`🎮 [TRACE] executeInTerminal called`);
-    Log.debug(`🎮 [TRACE] tuiCommand: ${tuiCommand}`);
-    Log.debug(
-      `🎮 [TRACE] promptText (first 50 chars): ${promptText.substring(0, 50)}`
-    );
-    Log.info(`📝 Prompt length: ${promptText.length} characters`);
-
-    // Always create a fresh terminal to ensure clean CLI state
-    // The old terminal may have a CLI process still running in interactive mode,
-    // and sending a new command would paste into that session instead of starting fresh.
-    // Session continuity is handled via --resume flag, not terminal reuse.
-    Log.debug(`🎮 [TRACE] Creating fresh terminal...`);
-    const terminal = await this.createFreshTerminal();
-    Log.debug(`🎮 [TRACE] Got fresh terminal, showing it...`);
-    terminal.show();
-
-    // Fire prompt ready event
-    Log.debug(`🎮 [TRACE] Firing promptReadyEmitter...`);
-    this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
-      cliCommand: displayCommand,
-    });
-
-    this.streamingChunkEmitter.fire(
-      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
-        "   View the terminal for real-time output.\n\n"
-    );
-
     try {
-      // Wait for shell integration (needed for executeCommand and read())
-      Log.debug(`🎮 [TRACE] Waiting for shell integration...`);
-      const shellIntegration = await this.waitForShellIntegration(terminal);
-      Log.debug(`🎮 [TRACE] Got shell integration`);
-
-      // Use executeCommand to get an execution object for read() streaming
-      // Note: executeCommand queues internally, so we wait for TUI output before sending prompt
-      Log.debug(
-        `🎮 [TRACE] Calling shellIntegration.executeCommand("${tuiCommand}")`
-      );
-      const execution = shellIntegration.executeCommand(tuiCommand);
-      this.currentExecution = execution;
-      Log.debug(`🎮 [TRACE] executeCommand returned, got execution object`);
-
-      // Create temp file with instructional prompt
-      let tempFilePath: string | undefined;
-
-      try {
-        const { tempFilePath: path, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePath = path;
-
-        this.lastSanitizedPrompt = promptText;
-
-        // Create TUI processor with CLI-specific configuration
-        const tuiConfig: TuiStreamConfig = {
-          escapeIndicator: this.getEscapeIndicator(),
-          screenEndPattern: this.getScreenEndPattern(),
-          tuiChromePatterns: this.getTuiChromePatterns(),
-          streamingEmitter: this.streamingChunkEmitter,
-          responseCompleteEmitter: this.responseCompleteEmitter,
-        };
-
-        const tuiProcessor = new TuiStreamProcessor(tuiConfig);
-
-        // Process TUI stream until completion
-        Log.info("⏳ Waiting for TUI to be ready (watching for output)...");
-        const result = await tuiProcessor.processStream(
-          execution,
+      const result = await this.withInteractiveTuiExecution(
+        args,
+        promptText,
+        workflowContext,
+        async ({
           terminal,
+          execution,
           promptWithInstruction,
-          ConfigurationUtils.getCliExecutionTimeoutMs(),
-          this.lastSanitizedPrompt,
-          this.shouldShowOutput()
-        );
+          tuiProcessor,
+          timeoutMs,
+          shouldShowOutput,
+          lastSanitizedPrompt,
+        }) =>
+          tuiProcessor.processStream(
+            execution,
+            terminal,
+            promptWithInstruction,
+            timeoutMs,
+            lastSanitizedPrompt,
+            shouldShowOutput
+          )
+      );
 
-        // Store failure reason if execution failed
-        if (!result.success && result.errorMessage) {
-          this.lastFailureReason = result.errorMessage;
-        }
-
-        return result.success;
-      } finally {
-        // Cleanup temp prompt file
-        if (tempFilePath) {
-          const workspaceRoot = this.getWorkspaceRoot();
-          if (workspaceRoot) {
-            const tempMgr = new TempFileManager(workspaceRoot);
-            await tempMgr.deleteFile(tempFilePath);
-            Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
-          }
-        }
+      if (!result.success && result.errorMessage) {
+        this.lastFailureReason = result.errorMessage;
       }
+
+      return result.success;
     } catch (error) {
       Log.error(`❌ TUI execution error`, error);
       throw error;
