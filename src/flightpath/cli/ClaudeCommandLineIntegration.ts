@@ -567,19 +567,20 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
           tuiProcessor,
           timeoutMs,
           shouldShowOutput,
-          lastSanitizedPrompt,
         }) => {
           const tuiAbortController = new AbortController();
           const startTime = new Date();
           let sessionId: string | undefined;
 
-          Log.info("⏳ Starting Claude TUI processing with stop hook monitoring...");
+          Log.info(
+            "⏳ Starting Claude TUI processing with stop hook monitoring..."
+          );
           const tuiPromise = tuiProcessor.processStream(
             execution,
             terminal,
             promptWithInstruction,
             timeoutMs,
-            lastSanitizedPrompt,
+            this.lastSanitizedPrompt,
             shouldShowOutput,
             tuiAbortController
           );

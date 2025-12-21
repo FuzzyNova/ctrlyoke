@@ -296,7 +296,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       tuiProcessor: TuiStreamProcessor;
       timeoutMs: number;
       shouldShowOutput: boolean;
-      lastSanitizedPrompt?: string;
     }) => Promise<{ success: boolean; errorMessage?: string }>,
     tuiConfigOverrides?: Partial<TuiStreamConfig>
   ): Promise<{ success: boolean; errorMessage?: string }> {
@@ -350,7 +349,6 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
         tuiProcessor,
         timeoutMs,
         shouldShowOutput,
-        lastSanitizedPrompt: this.lastSanitizedPrompt,
       });
     } finally {
       if (tempFilePath) {
@@ -402,14 +400,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
           tuiProcessor,
           timeoutMs,
           shouldShowOutput,
-          lastSanitizedPrompt,
         }) =>
           tuiProcessor.processStream(
             execution,
             terminal,
             promptWithInstruction,
             timeoutMs,
-            lastSanitizedPrompt,
+            this.lastSanitizedPrompt,
             shouldShowOutput
           )
       );

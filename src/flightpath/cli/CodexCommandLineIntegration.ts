@@ -969,19 +969,20 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           tuiProcessor,
           timeoutMs,
           shouldShowOutput,
-          lastSanitizedPrompt,
         }) => {
           const tuiAbortController = new AbortController();
           const startTime = new Date();
           let threadId: string | undefined;
 
-          Log.info("⏳ Starting Codex TUI processing with notify hook monitoring...");
+          Log.info(
+            "⏳ Starting Codex TUI processing with notify hook monitoring..."
+          );
           const tuiPromise = tuiProcessor.processStream(
             execution,
             terminal,
             promptWithInstruction,
             timeoutMs,
-            lastSanitizedPrompt,
+            this.lastSanitizedPrompt,
             shouldShowOutput,
             tuiAbortController
           );
@@ -1001,7 +1002,9 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           ]);
 
           if (notifyResult.completed) {
-            Log.debug("🛑 Notify hook detected completion - aborting TUI stream");
+            Log.debug(
+              "🛑 Notify hook detected completion - aborting TUI stream"
+            );
             tuiAbortController.abort();
           }
 
