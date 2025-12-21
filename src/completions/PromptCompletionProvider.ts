@@ -124,22 +124,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       // CRITICAL: Set range to fix VS Code YAML bug where completions don't show
       // The range tells VS Code exactly what text to replace (the filter text after @)
       // Without this, YAML completions are suppressed by the RedHat YAML extension
-      const currentPos = vscode.window.activeTextEditor?.selection.active;
-      if (currentPos) {
-        const line = vscode.window.activeTextEditor!.document.lineAt(
-          currentPos.line
-        ).text;
-        const textBeforeCursor = line.substring(0, currentPos.character);
-        const atIndex = textBeforeCursor.lastIndexOf("@");
-        if (atIndex !== -1) {
-          const replaceStart = new vscode.Position(
-            currentPos.line,
-            atIndex + 1
-          );
-          const replaceEnd = currentPos;
-          fileItem.range = new vscode.Range(replaceStart, replaceEnd);
-        }
-      }
+      fileItem.range = this.calculateCompletionRange("@");
 
       // Show directory in detail
       fileItem.detail = dirName === "." ? "Root directory" : dirName;
@@ -190,25 +175,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       dirItem.insertText = dirPath + "/";
 
       // Set range for YAML compatibility (same as files)
-      const currentPosDirs = vscode.window.activeTextEditor?.selection.active;
-      if (currentPosDirs) {
-        const lineDirs = vscode.window.activeTextEditor!.document.lineAt(
-          currentPosDirs.line
-        ).text;
-        const textBeforeCursorDirs = lineDirs.substring(
-          0,
-          currentPosDirs.character
-        );
-        const atIndexDirs = textBeforeCursorDirs.lastIndexOf("@");
-        if (atIndexDirs !== -1) {
-          const replaceStartDirs = new vscode.Position(
-            currentPosDirs.line,
-            atIndexDirs + 1
-          );
-          const replaceEndDirs = currentPosDirs;
-          dirItem.range = new vscode.Range(replaceStartDirs, replaceEndDirs);
-        }
-      }
+      dirItem.range = this.calculateCompletionRange("@");
 
       // Show parent directory
       dirItem.detail = parentDir === "." ? "Root directory" : parentDir;
@@ -310,22 +277,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
         item.insertText = `sym:${relativePath}:${symbol.name}:${line}`;
 
         // Set range for YAML compatibility
-        const currentPos = vscode.window.activeTextEditor?.selection.active;
-        if (currentPos) {
-          const lineText = vscode.window.activeTextEditor!.document.lineAt(
-            currentPos.line
-          ).text;
-          const textBeforeCursor = lineText.substring(0, currentPos.character);
-          const hashIndex = textBeforeCursor.lastIndexOf("#");
-          if (hashIndex !== -1) {
-            const replaceStart = new vscode.Position(
-              currentPos.line,
-              hashIndex + 1
-            );
-            const replaceEnd = currentPos;
-            item.range = new vscode.Range(replaceStart, replaceEnd);
-          }
-        }
+        item.range = this.calculateCompletionRange("#");
 
         // Show symbol kind and location
         const symbolKindName = vscode.SymbolKind[symbol.kind];
@@ -669,22 +621,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       item.detail = `Lines ${startLine}-${endLine} in ${relativePath}`;
 
       // Set range for YAML compatibility
-      const currentPos = vscode.window.activeTextEditor?.selection.active;
-      if (currentPos) {
-        const lineText = vscode.window.activeTextEditor!.document.lineAt(
-          currentPos.line
-        ).text;
-        const textBeforeCursor = lineText.substring(0, currentPos.character);
-        const hashIndex = textBeforeCursor.lastIndexOf("#");
-        if (hashIndex !== -1) {
-          const replaceStart = new vscode.Position(
-            currentPos.line,
-            hashIndex + 1
-          );
-          const replaceEnd = currentPos;
-          item.range = new vscode.Range(replaceStart, replaceEnd);
-        }
-      }
+      item.range = this.calculateCompletionRange("#");
 
       // Get preview of selected text (first 100 chars)
       const selectedText = document.getText(selection);
@@ -746,5 +683,37 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   public clearCache(): void {
     this.filesCache = [];
     this.filesCacheTimestamp = 0;
+  }
+
+  /**
+   * Calculate completion range for YAML compatibility
+   *
+   * CRITICAL: VS Code YAML extension suppresses completions without explicit range.
+   * This calculates the range from the trigger character to cursor position.
+   *
+   * @param triggerChar The trigger character ("@" or "#")
+   * @returns Range to replace, or undefined if no active editor or trigger not found
+   */
+  private calculateCompletionRange(
+    triggerChar: string
+  ): vscode.Range | undefined {
+    const currentPos = vscode.window.activeTextEditor?.selection.active;
+    if (!currentPos) {
+      return undefined;
+    }
+
+    const line = vscode.window.activeTextEditor!.document.lineAt(
+      currentPos.line
+    ).text;
+    const textBeforeCursor = line.substring(0, currentPos.character);
+    const triggerIndex = textBeforeCursor.lastIndexOf(triggerChar);
+
+    if (triggerIndex === -1) {
+      return undefined;
+    }
+
+    const replaceStart = new vscode.Position(currentPos.line, triggerIndex + 1);
+    const replaceEnd = currentPos;
+    return new vscode.Range(replaceStart, replaceEnd);
   }
 }
