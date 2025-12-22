@@ -4,7 +4,46 @@
 
 Enable users to append prompts, prompt files, or workflows to the current FlightPath queue without clearing the dashboard. This allows continuous workflow execution and follow-up questions while preserving all output history.
 
-**Status**: Planning Phase
+**Status**: Planning Phase - MVP Scope
+
+**MVP Scope**:
+
+- Single command: `flightpath.queueFromContext`
+- Context menu item: "Queue with FlightPath"
+- Editor title bar button (icon next to existing "Run" button)
+- No dashboard UI changes (appended prompts appear as regular queue items)
+- No new settings required (reuses Dynamic Queue settings)
+- **Working file system**: On-disk queue state for crash recovery (`.flightpath/.queue/<workflow>-<timestamp>.flightpath.json`)
+- **Single schema**: Working files use same schema as user-created files, with optional `_runtime` object for execution state
+- **MCP-compatible backend**: Position control (`"next" | "end"`) built-in from day one
+
+**Working File as Source of Truth**:
+
+- ✅ Queue state persisted to `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json` on every change
+- ✅ Crash recovery: Resume workflows after VS Code restarts (can run working file directly)
+- ✅ Same schema as user-created files, extended with optional `_runtime` object for execution state
+- ✅ Same file used by both user actions (Queue Append) and AI actions (MCP)
+- ✅ Atomic writes (temp file + rename) prevent corruption
+
+**Unexpanded Prompts Explained**:
+
+- **Unexpanded**: Raw prompt text from `.flightpath.json` file (no `<attachment>` XML blocks)
+- **Expanded**: Prompt with `<attachment>` XML added by `processPromptAttachments()` before sending to AI
+- **Working file stores**: Unexpanded prompts only (cleaner, smaller file size)
+- **Runtime expansion**: Attachments added dynamically when prompts are executed
+
+**MCP Compatibility** (Key Design Decision):
+
+- ✅ `PromptQueue.appendPrompts(prompts, position)` supports both "next" and "end" positions
+- ✅ Same backend used by user commands AND future MCP `flightpath_append_queue` tool
+- ✅ MVP only exposes "end" position via UI, but backend ready for MCP "next" position
+- ✅ Zero refactoring needed when MCP is implemented later
+
+**Future Enhancements**:
+
+- Visual segmentation of appended prompt groups
+- Additional commands for queueing text input
+- Advanced append analytics
 
 ## Business Context
 
@@ -54,52 +93,46 @@ Enable users to append prompts, prompt files, or workflows to the current Flight
 - ✅ Preserve scroll position (or scroll to new prompts)
 - ✅ Show visual indicator of append operation
 
-### 2. User Interface
+### 2. User Interface (MVP)
 
 **Commands**:
 
-- `flightpath.queuePrompt` - Append single prompt (text input)
-- `flightpath.queuePromptFile` - Append prompt file (file picker)
-- `flightpath.queueWorkflow` - Append workflow (file picker)
-- `flightpath.appendToCurrentWorkflow` - Generic append command
+- `flightpath.queueFromContext` - Append prompt/workflow file to current queue
 
 **Context Menu**:
 
 - Right-click on `.prompt.md`, `.flightpath.yaml`, `.flightpath.json`
 - New option: "**Queue with FlightPath**" (existing: "Run with FlightPath")
-- Shows notification: "Queued {count} prompts (+{totalInQueue})"
+- Shows notification: "Queued {count} prompts to active workflow"
 
-**Dashboard UI**:
+**Editor Title Bar**:
 
-- "**+ Queue Prompt**" button (always visible)
-- "**+ Queue Workflow**" button (always visible)
-- Visual separator showing original vs appended prompts
-- Counter: "Prompts: {completed}/{total} (+ {appended} queued)"
+- Add "Queue" icon button next to existing "Run" button
+- Only visible when workflow file is open
 
 **Status Bar**:
 
-- Show queue status: "FlightPath: Running (3/5 +2 queued)"
+- Update existing status to show: "FlightPath: Running (3/8)" when prompts appended
+- No new UI elements needed
 
 ### 3. Queue Management
 
-**Queue State Extensions**:
+**Queue State Extensions (MVP)**:
 
 ```typescript
 interface QueueState {
   // ... existing fields
-
-  // New fields for append tracking
-  appendSegments: AppendSegment[]; // Track append operations
-  totalAppendedPrompts: number; // Running count
+  // No new fields needed for MVP - just append to existing prompts array
 }
 
+// AppendSegment tracks each queue append operation for audit and visual separation
 interface AppendSegment {
-  segmentId: string; // Unique ID for this append
-  appendedAt: Date; // When appended
-  startIndex: number; // First prompt index in segment
-  endIndex: number; // Last prompt index in segment
-  source: string; // Source file/description
-  sourceType: "prompt" | "file" | "workflow";
+  id: string; // Unique segment identifier (UUID)
+  timestamp: number; // When the append occurred (ms since epoch)
+  source: string; // "user-command" | "mcp-tool" | "copilot-cli" | "claude-cli" | "codex-cli"
+  reason?: string; // Optional explanation for the append
+  position: "next" | "end"; // Where prompts were inserted
+  promptIndices: number[]; // Which prompts in the queue belong to this segment
 }
 ```
 
@@ -108,68 +141,132 @@ interface AppendSegment {
 ```typescript
 class PromptQueue {
   // New public methods
-  appendPrompts(prompts: PromptItem[], source: string, sourceType: string): AppendSegment;
-  canAppend(): boolean;  // Check if append is allowed
-  isCompleted(): boolean;  // Check if queue finished
+  appendPrompts(prompts: PromptItem[]): void;
+  canAppend(): boolean; // Check if append is allowed
 
-  // Internal helpers
-  private createAppendSegment(...): AppendSegment;
-  private updateAppendStats(): void;
+  // Future: Add segment tracking for visual separation
 }
 ```
 
-**Append Logic**:
+**Append Logic (MVP - MCP Compatible with Concurrency Control)**:
 
 ```typescript
-async function appendPrompts(
-  newPrompts: PromptItem[],
-  source: string,
-  sourceType: "prompt" | "file" | "workflow"
-): Promise<AppendSegment> {
-  // 1. Validate state (can append?)
-  if (!this.canAppend()) {
-    throw new Error("Cannot append: Queue is in invalid state");
-  }
+class PromptQueue {
+  private operationQueue: Promise<void> = Promise.resolve();
+  private operationLock = false;
 
-  // 2. Create segment metadata
-  const startIndex = this.state.prompts.length;
-  const segment: AppendSegment = {
-    segmentId: generateId(),
-    appendedAt: new Date(),
-    startIndex,
-    endIndex: startIndex + newPrompts.length - 1,
-    source,
-    sourceType,
-  };
-
-  // 3. Append prompts to queue
-  this.state.prompts.push(...newPrompts);
-
-  // 4. Extend results array with pending entries
-  newPrompts.forEach((prompt) => {
-    this.state.results.push({
-      prompt: prompt.prompt,
-      status: STEP_STATUS.PENDING,
-      timestamp: new Date(),
-      appendSegmentId: segment.segmentId, // Link to segment
+  /**
+   * Append prompts to queue (thread-safe, queues operations)
+   * Multiple simultaneous calls are serialized automatically
+   */
+  async appendPrompts(
+    newPrompts: PromptItem[],
+    position: "next" | "end" = "end",
+    source: string = "user"
+  ): Promise<void> {
+    // Queue this operation to prevent race conditions
+    return this.queueOperation(async () => {
+      await this.appendPromptsInternal(newPrompts, position, source);
     });
-  });
-
-  // 5. Track segment
-  this.state.appendSegments.push(segment);
-  this.state.totalAppendedPrompts += newPrompts.length;
-
-  // 6. If queue is completed/idle, restart execution
-  if (this.isCompleted()) {
-    await this.resume(); // Or trigger via FlightPathManager
   }
 
-  // 7. Emit state change
-  this.emitStateChange();
+  /**
+   * Internal implementation (called by queued operation)
+   */
+  private async appendPromptsInternal(
+    newPrompts: PromptItem[],
+    position: "next" | "end",
+    source: string
+  ): Promise<void> {
+    // 1. Validate state (can append?)
+    if (!this.canAppend()) {
+      throw new Error("Cannot append: Queue is in invalid state");
+    }
 
-  return segment;
+    // 2. Read current working file state (fresh read for concurrency)
+    const currentState = await this.workingFileManager.readWorkingFile();
+
+    // 3. Calculate insert index based on position
+    const insertIndex =
+      position === "next"
+        ? currentState.currentIndex + 1 // Insert after current
+        : currentState.prompts.length; // Append to end (default)
+
+    // 4. Insert prompts at calculated position
+    currentState.prompts.splice(insertIndex, 0, ...newPrompts);
+
+    // 5. Track segment metadata
+    const segment: AppendSegment = {
+      segmentId: generateId(),
+      appendedAt: new Date(),
+      startIndex: insertIndex,
+      endIndex: insertIndex + newPrompts.length - 1,
+      source,
+      sourceType: "prompt",
+      insertionType: position,
+    };
+    currentState.appendSegments.push(segment);
+
+    // 6. Write back atomically (temp + rename)
+    await this.workingFileManager.writeWorkingFile(currentState);
+
+    // 7. Update in-memory state (after successful write)
+    this.state = currentState;
+
+    // 8. If queue is completed/idle, restart execution
+    if (this.isCompleted()) {
+      await this.resume();
+    }
+
+    // 9. Emit state change
+    this.emitStateChange();
+  }
+
+  /**
+   * Queue an operation to prevent concurrent file writes
+   * All append/modify operations go through this
+   */
+  private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    // Chain operation after previous operation completes
+    const previousOperation = this.operationQueue;
+
+    // Create new promise for this operation
+    let resolveOperation: (value: T) => void;
+    let rejectOperation: (error: any) => void;
+
+    const operationPromise = new Promise<T>((resolve, reject) => {
+      resolveOperation = resolve;
+      rejectOperation = reject;
+    });
+
+    // Queue this operation
+    this.operationQueue = previousOperation
+      .then(async () => {
+        try {
+          const result = await operation();
+          resolveOperation!(result);
+        } catch (err) {
+          rejectOperation!(err);
+        }
+      })
+      .catch(() => {
+        // Ignore errors from previous operations
+        // (already handled by their own promise)
+      });
+
+    return operationPromise;
+  }
 }
 ```
+
+**Concurrency Guarantees**:
+
+- ✅ **Serialized operations**: Multiple `appendPrompts()` calls execute sequentially
+- ✅ **Atomic file writes**: Temp file + rename ensures no corruption
+- ✅ **Fresh reads**: Each operation reads current file state before modifying
+- ✅ **Order preserved**: Operations execute in call order (FIFO queue)
+- ✅ **Error isolation**: One operation's error doesn't block subsequent operations
+- ✅ **No lost updates**: All appends are guaranteed to persist
 
 ### 4. Execution Behavior
 
@@ -201,26 +298,16 @@ async function appendPrompts(
 3. Dashboard shows new workflow
 4. Show notification: "Started workflow with {count} prompts"
 
-### 5. Dashboard Changes
+### 5. Dashboard Changes (MVP - Minimal)
 
-**Visual Segmentation**:
+**No Visual Changes Required**:
 
-```
-┌─ Original Workflow (3 prompts) ────────────────┐
-│ ✓ Step 1: Analyze code                        │
-│ ✓ Step 2: Implement feature                   │
-│ ✓ Step 3: Write tests                         │
-├─ Queued: follow-up.prompt.md (2 prompts) ─────┤
-│ ⏳ Step 4: Review implementation               │
-│ ⏸ Step 5: Optimize performance                │
-└────────────────────────────────────────────────┘
-```
+- Appended prompts appear as regular steps in the existing queue
+- Step counter automatically updates: "Step 4/8" (was "3/5")
+- No special visual segmentation in MVP
+- Dashboard continues to work exactly as it does now
 
-**New Dashboard Elements**:
-
-- **Segment Headers**: Show append operations with timestamp
-- **Visual Separators**: Horizontal line or subtle background color
-- **Queue Stats**: "Total: 5 prompts (3 original + 2 queued)"
+**Future Enhancement**: Visual segmentation with segment headers can be added later
 
 **Message Types** (add to `DashboardConstants.ts`):
 
@@ -228,8 +315,6 @@ async function appendPrompts(
 export const MESSAGE_TYPES = {
   // ... existing types ...
   PROMPTS_APPENDED: "prompts_appended",
-  APPEND_SEGMENT_ADDED: "append_segment_added",
-  QUEUE_CONTINUED: "queue_continued",
 } as const;
 ```
 
@@ -266,112 +351,144 @@ export const MESSAGE_TYPES = {
 | Append to cancelled queue | Reject (must clear first) |
 | Append to errored queue | Reject (must clear first) |
 
-### 7. API Design
+### 7. API Design (MVP)
 
 **FlightPathManager Methods**:
 
 ```typescript
 class FlightPathManager {
-  // New public methods
-  async appendPromptsToQueue(
-    prompts: PromptItem[],
-    source: string,
-    sourceType: "prompt" | "file" | "workflow"
-  ): Promise<void>;
+  // New public method
+  async appendFromFile(
+    filePath: string,
+    position: "next" | "end" = "end" // Future: expose via command parameter
+  ): Promise<void> {
+    // 1. Parse file (same as loadPrompt - reuse PromptFileParser)
+    const parsed = await this.promptParser.parseFile(filePath);
 
-  async appendPromptFile(filePath: string): Promise<void>;
+    // 2. Validate queue state
+    if (!this.queue.canAppend()) {
+      throw new Error("Cannot append to queue in current state");
+    }
 
-  async appendWorkflow(filePath: string): Promise<void>;
+    // 3. Append prompts with position control
+    await this.queue.appendPrompts(parsed.prompts, position);
 
-  // Internal helpers
-  private async continueExecution(): Promise<void>; // Resume if completed
-  private validateAppendOperation(): boolean;
+    // 4. Show notification
+    vscode.window.showInformationMessage(
+      `Queued ${parsed.prompts.length} prompts to active workflow`
+    );
+  }
 }
 ```
 
 **Command Handlers**:
 
 ```typescript
-// Command: flightpath.queuePrompt
-async function queuePromptCommand() {
-  const promptText = await vscode.window.showInputBox({
-    prompt: "Enter prompt to queue",
-    placeHolder: "Analyze the authentication module",
+// Command: flightpath.queueFromContext
+async function queueFromContextCommand(uri: vscode.Uri) {
+  await manager.appendFromFile(uri.fsPath);
+}
+```
+
+**MCP Integration Point**:
+
+MCP tools will call `PromptQueue.appendPrompts()` with position control:
+
+```typescript
+// MCP tool handler (matches flightpath_append_queue tool signature)
+async function handleMcpAppendQueue(args: {
+  prompts: PromptItem[];
+  position: "next" | "end"; // Insert after current or append to end
+  source: string; // e.g., "copilot-cli", "claude-cli", "codex-cli"
+  reason?: string; // Optional explanation for the append
+}) {
+  const queue = flightPathManager.getQueue();
+  if (!queue) {
+    throw new Error("No active workflow queue");
+  }
+
+  // Use the same backend as user-driven queue append
+  await queue.appendPrompts(args.prompts, args.position, {
+    source: args.source,
+    reason: args.reason || "MCP tool invocation",
   });
 
-  if (!promptText) return;
-
-  const prompt: PromptItem = { prompt: promptText };
-  await manager.appendPromptsToQueue([prompt], "Manual input", "prompt");
-}
-
-// Command: flightpath.queuePromptFile
-async function queuePromptFileCommand(uri?: vscode.Uri) {
-  const filePath =
-    uri?.fsPath || (await showFilePicker([".prompt.md", ".flightpath.yaml"]));
-  if (!filePath) return;
-
-  await manager.appendPromptFile(filePath);
-}
-
-// Command: flightpath.queueWorkflow
-async function queueWorkflowCommand(uri?: vscode.Uri) {
-  const filePath = uri?.fsPath || (await showFilePicker([".flightpath.json"]));
-  if (!filePath) return;
-
-  await manager.appendWorkflow(filePath);
-}
-
-// Context menu: "Queue with FlightPath"
-async function queueWithFlightPathCommand(uri: vscode.Uri) {
-  const ext = path.extname(uri.fsPath);
-
-  if (ext === ".flightpath.json") {
-    await manager.appendWorkflow(uri.fsPath);
-  } else {
-    await manager.appendPromptFile(uri.fsPath);
-  }
+  return {
+    success: true,
+    promptsAdded: args.prompts.length,
+    newQueueSize: queue.getState().prompts.length,
+  };
 }
 ```
 
-### 8. Settings
+### 8. MCP Compatibility
 
-**New Settings** (add to `package.json`):
+**Design Alignment**: This user-driven queue append feature shares the same backend logic with MCP-driven queue extension:
 
+**Shared Implementation**:
+
+- `PromptQueue.appendPrompts()` - Core append logic used by both user commands and MCP tools
+- `PromptQueue.canAppend()` - State validation used by both
+- **Operation queue** - Serializes concurrent append calls (no race conditions)
+- **Working file system** - `.flightpath/.queue/<workflow>.flightpath.json` is THE source of truth
+- **Atomic writes** - Temp file + rename prevents corruption
+- Same safety limits: `maxQueueSize`, `maxExecutionTime`, `unlimitedMode`
+
+**User-Driven Flow** (this feature):
+
+```
+User → Context Menu → flightpath.queueFromContext → FlightPathManager.appendFromFile() →
+  PromptQueue.appendPrompts() → Update working file (.flightpath.json + _runtime) → Dashboard reloads
+```
+
+**MCP-Driven Flow** (future):
+
+````
+AI Agent → MCP Tool → flightpath_append_queue → Read working file (.flightpath.json) →
+  Modify prompts array → Update _runtime.completedPrompts → Write working file → FlightPath detects change → Queue reloads
 ```json
 {
-  "flightpath.autoExecuteAppendedPrompts": {
-    "order": 606,
-    "type": "boolean",
-    "default": true,
-    "description": "Automatically execute appended prompts when queue is completed",
-    "markdownDescription": "When enabled (default), appended prompts automatically start execution if the queue is completed or idle. When disabled, you must manually start execution after appending."
+  "originalFile": "c:/dev/project/bugfix.flightpath.json",
+  "prompts": [
+    { "prompt": "Analyze auth module" },
+    { "prompt": "Fix OAuth bug" },
+    { "prompt": "Write tests" }
+  ],
+  "_runtime": {
+    "startTime": 1703185200000,
+    "currentIndex": 2,
+    "completedPrompts": [0, 1],
+    "state": "running"
   },
-  "flightpath.showAppendSegments": {
-    "order": 607,
-    "type": "boolean",
-    "default": true,
-    "description": "Show visual separators for appended prompt segments in dashboard",
-    "markdownDescription": "When enabled (default), the dashboard shows visual separators and headers for each append operation, making it clear which prompts were added later."
-  },
-  "flightpath.notifyOnQueue": {
-    "order": 608,
-    "type": "boolean",
-    "default": true,
-    "description": "Show notification when prompts are queued",
-    "markdownDescription": "Show notification when prompts are appended to the queue."
-  }
+  "appendSegments": []
 }
-```
+````
 
-**Reuse Existing Settings**:
+**Why Working Files?**
 
-- `maxQueueSize` - Maximum total queue size (including appended)
+- ✅ **Crash recovery**: Resume after VS Code restarts (working files are valid `.flightpath.json`)
+- ✅ **Single schema**: No separate format to maintain (just add optional `_runtime` object)
+- ✅ **Single source of truth**: Both user and AI modify same file
+- ✅ **No race conditions**: Atomic file writes
+- ✅ **Debuggable**: Users can inspect queue state and run working files directly
+- ✅ **MCP-compatible**: AI can read current state, append, and write back
+
+**Future Enhancement**: Add MCP tool `flightpath_append_queue` that wraps `PromptQueue.appendPrompts()` with JSON-RPC interface.
+
+### 9. Settings (MVP)
+
+**No New Settings Required** - Reuse existing Dynamic Queue settings:
+
+**No New Settings Required** - Reuse existing Dynamic Queue settings:
+
+- `maxQueueSize` - Maximum total queue size (includes appended prompts)
 - `maxExecutionTime` - Total execution time limit (not reset on append)
 - `unlimitedMode` - Bypass size/time limits
-- `enableDynamicQueue` - Independent feature (both can be enabled)
+- `enableDynamicQueue` - Independent feature (both can be enabled simultaneously)
 
-### 9. Headless CI Mode Support
+**Behavior**: Appended prompts automatically execute when queue is completed. No configuration needed.
+
+### 10. Headless CI Mode Support
 
 **Critical Requirements**:
 
@@ -433,6 +550,8 @@ flightpath output
 - Append to paused queue (verify stays paused)
 - Append to idle queue (verify treats as load)
 - Test size limit enforcement
+- **Concurrency test**: Call appendPrompts() 10 times rapidly, verify all 10 operations complete and all prompts appear in queue
+- **Race condition test**: Simulate user append + AI append simultaneously, verify no lost updates
 
 #### Phase 2: Dashboard Integration (3-4 hours)
 
@@ -813,41 +932,36 @@ class QueueWorkingFileManager {
   }
 
   /**
-   * Append prompts to working file (user or AI)
+   * Read working file (fresh read for concurrency safety)
    */
-  async appendToWorkingFile(
-    prompts: PromptItem[],
-    position: "next" | "end",
-    source: string
-  ): Promise<void> {
+  async readWorkingFile(): Promise<WorkingQueueFile> {
     if (!this.workingFilePath) {
       throw new Error("Working file not initialized");
     }
 
-    // Read current state
-    const state = await this.readWorkingFile();
+    const content = await fs.promises.readFile(this.workingFilePath, "utf8");
+    return JSON.parse(content) as WorkingQueueFile;
+  }
 
-    // Calculate insertion index
-    const insertIndex =
-      position === "next" ? state.currentIndex + 1 : state.prompts.length;
+  /**
+   * Write working file atomically (temp + rename)
+   * Prevents corruption from concurrent writes
+   */
+  async writeWorkingFile(state: WorkingQueueFile): Promise<void> {
+    if (!this.workingFilePath) {
+      throw new Error("Working file not initialized");
+    }
 
-    // Insert prompts
-    state.prompts.splice(insertIndex, 0, ...prompts);
+    // Write to temp file first
+    const tempPath = `${this.workingFilePath}.tmp`;
+    await fs.promises.writeFile(
+      tempPath,
+      JSON.stringify(state, null, 2),
+      "utf8"
+    );
 
-    // Track segment
-    const segment: AppendSegment = {
-      segmentId: generateId(),
-      appendedAt: new Date(),
-      startIndex: insertIndex,
-      endIndex: insertIndex + prompts.length - 1,
-      source,
-      sourceType: "prompt",
-      insertionType: position,
-    };
-    state.appendSegments.push(segment);
-
-    // Write back
-    await fs.writeFile(this.workingFilePath, JSON.stringify(state, null, 2));
+    // Atomic rename (overwrites existing file)
+    await fs.promises.rename(tempPath, this.workingFilePath);
 
     // File watcher will trigger queue reload
   }

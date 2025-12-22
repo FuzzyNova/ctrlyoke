@@ -14,6 +14,7 @@ This document provides a complete implementation guide for FlightPath's Model Co
 - **Copilot CLI supports session-specific MCP configuration** via `--additional-mcp-config` flag, enabling programmatic setup without modifying user's global config.
 - **Codex CLI supports session-specific MCP configuration** via `-c` flag with inline TOML, enabling zero-configuration workflow extension.
 - **Built-in GitHub MCP server** is pre-configured in Copilot CLI, providing GitHub integration out-of-the-box.
+- **Simplified MVP**: Two core tools only - `flightpath_append_queue` (write) and `flightpath_queue_status` (read)
 
 ---
 
@@ -145,27 +146,33 @@ MCP supports three transport types:
 
 ```
 ┌─────────────────────────────────────────────┐
-│         FlightPath MCP Server               │
+│         FlightPath MCP Server (MVP)         │
 │         (Node.js stdio process)             │
 ├─────────────────────────────────────────────┤
 │  MCP SDK (@modelcontextprotocol/sdk)       │
 │  ├─ StdioServerTransport                    │
 │  └─ JSON-RPC message handling               │
 ├─────────────────────────────────────────────┤
-│  Tool Handlers:                             │
-│  ├─ flightpath_append_queue()               │
-│  ├─ flightpath_get_queue_status()           │
-│  └─ flightpath_list_queue()                 │
+│  Tool Handlers (2 core tools):              │
+│  ├─ flightpath_append_queue() [WRITE]       │
+│  └─ flightpath_queue_status() [READ]        │
 ├─────────────────────────────────────────────┤
 │  Queue Operations:                          │
 │  ├─ Read working file (.queue.json)         │
 │  ├─ Validate & merge prompts                │
 │  ├─ Atomic write (temp + rename)            │
-│  └─ Return result                           │
+│  └─ Return combined status + prompts        │
 └─────────────────────────────────────────────┘
 ```
 
 ### Tool Definitions
+
+**Important Notes**:
+
+- **Unexpanded prompts**: Tools return/accept raw prompt text WITHOUT `<attachment>` XML blocks
+- **Working file**: `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json` is the source of truth
+- **Single schema**: Working files use same schema as user-created files, with optional `_runtime` object
+- **Crash recovery**: Working file persists across VS Code sessions (can be run directly)
 
 #### 1. `flightpath_append_queue`
 
@@ -197,7 +204,12 @@ MCP supports three transport types:
     },
     "source": {
       "type": "string",
-      "description": "Source identifier (e.g., 'AI Agent - Testing Tasks')"
+      "description": "Source identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli')"
+    },
+    "reason": {
+      "type": "string",
+      "optional": true,
+      "description": "Optional explanation for why these prompts are being added"
     }
   },
   "required": ["prompts", "position"]
@@ -212,41 +224,34 @@ MCP supports three transport types:
   "promptsAdded": 2,
   "newQueueSize": 8,
   "insertIndex": 3,
-  "workingFile": ".flightpath/.queue/bugfix-123.queue.json"
+  "workingFile": ".flightpath/.queue/bugfix-auth-20241221-100000.flightpath.json"
 }
 ```
 
+**Note**: `workingFile` path is relative to workspace root. Working file uses standard `.flightpath.json` schema with optional `_runtime` object. Prompts stored in unexpanded format (raw text without `<attachment>` XML blocks).
+
 ---
 
-#### 2. `flightpath_get_queue_status`
+#### 2. `flightpath_queue_status`
 
-**Description**: Get current queue execution status
+**Description**: Get comprehensive queue status including metadata and all prompts with their execution state
+
+**Input**: None (reads current active queue)
 
 **Output**:
 
 ```json
 {
-  "workflowName": "bugfix-authentication",
-  "currentIndex": 2,
-  "totalPrompts": 6,
-  "completedPrompts": 2,
-  "state": "running",
-  "maxQueueSize": 100,
-  "remainingSlots": 94,
-  "workingFile": ".flightpath/.queue/bugfix-123.queue.json"
-}
-```
-
----
-
-#### 3. `flightpath_list_queue`
-
-**Description**: List all prompts in queue with their status
-
-**Output**:
-
-```json
-{
+  "metadata": {
+    "workflowName": "bugfix-authentication",
+    "currentIndex": 2,
+    "totalPrompts": 6,
+    "completedPrompts": 2,
+    "executionState": "running",
+    "maxQueueSize": 100,
+    "remainingSlots": 94,
+    "workingFile": ".flightpath/.queue/bugfix-auth-20241221-100000.flightpath.json"
+  },
   "prompts": [
     {
       "index": 0,
@@ -268,10 +273,22 @@ MCP supports three transport types:
       "index": 3,
       "prompt": "Write unit tests",
       "status": "pending"
+    },
+    {
+      "index": 4,
+      "prompt": "Deploy to staging",
+      "status": "pending"
+    },
+    {
+      "index": 5,
+      "prompt": "Verify fix",
+      "status": "pending"
     }
   ]
 }
 ```
+
+**Note**: Returns unexpanded prompts (raw text before `processPromptAttachments()` adds `<attachment>` XML blocks). This keeps the response clean and allows AI agents to understand queue structure without parsing XML attachments.
 
 ---
 
@@ -369,18 +386,20 @@ copilot --additional-mcp-config @/path/to/flightpath-mcp-config.json
 User: "Analyze the auth module and extend the workflow with testing tasks"
 
 Copilot (internal):
-1. Analyzes auth module
-2. Decides to extend queue
-3. Requests approval: "May I use flightpath_append_queue to add tasks?"
-4. User approves (Yes / Yes for session / No)
-5. Invokes tool: flightpath_append_queue({
+1. Checks queue: flightpath_queue_status()
+   → Gets current state: 3 prompts, index 2, "running"
+2. Analyzes auth module
+3. Decides to extend queue
+4. Requests approval: "May I use flightpath_append_queue to add tasks?"
+5. User approves (Yes / Yes for session / No)
+6. Invokes tool: flightpath_append_queue({
      prompts: [{prompt: "Write unit tests for auth module"}],
      position: "next",
      source: "AI-generated follow-up"
    })
-6. Server reads working file, appends prompt, writes atomically
-7. Returns success
-8. Copilot reports: "I've added testing tasks to your FlightPath queue"
+7. Server reads working file, appends prompt, writes atomically
+8. Returns success
+9. Copilot reports: "I've added testing tasks to your FlightPath queue"
 ```
 
 **Tool Permission Patterns**:
@@ -627,18 +646,20 @@ enabled_tools = ["flightpath_append_queue"]  # Optional: whitelist specific tool
 User: "Analyze the auth module and extend the workflow with testing tasks"
 
 Codex (internal):
-1. Analyzes auth module
-2. Decides to extend queue
-3. Requests approval: "May I use flightpath_append_queue to add tasks?"
-4. User approves (based on approval_policy setting)
-5. Invokes tool: flightpath_append_queue({
+1. Checks queue: flightpath_queue_status()
+   → Gets current state: 3 prompts, index 2, "running"
+2. Analyzes auth module
+3. Decides to extend queue
+4. Requests approval: "May I use flightpath_append_queue to add tasks?"
+5. User approves (based on approval_policy setting)
+6. Invokes tool: flightpath_append_queue({
      prompts: [{prompt: "Write unit tests for auth module"}],
      position: "next",
      source: "AI-generated follow-up"
    })
-6. Server reads working file, appends prompt, writes atomically
-7. Returns success
-8. Codex reports: "I've added testing tasks to your FlightPath queue"
+7. Server reads working file, appends prompt, writes atomically
+8. Returns success
+9. Codex reports: "I've added testing tasks to your FlightPath queue"
 ```
 
 **Approval Policy Configuration**:
@@ -740,7 +761,45 @@ export async function activate(context: vscode.ExtensionContext) {
 import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
-  // Register tool directly with Language Model API
+  // Register queue status tool (read)
+  const queueStatusTool = vscode.lm.registerTool(
+    "flightpath-queue-status",
+    {
+      name: "flightpath-queue-status",
+      description:
+        "Get comprehensive queue status including metadata and all prompts",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+    },
+    async (input, token) => {
+      const manager = getFlightPathManager();
+      const state = manager.getQueue().getState();
+
+      return {
+        metadata: {
+          workflowName: state.workflowName,
+          currentIndex: state.currentIndex,
+          totalPrompts: state.prompts.length,
+          completedPrompts: state.results.filter(
+            (r) => r.status === "completed"
+          ).length,
+          executionState: state.executionState,
+          maxQueueSize: 100, // From config
+          remainingSlots: 100 - state.prompts.length,
+        },
+        prompts: state.prompts.map((p, i) => ({
+          index: i,
+          prompt: p.prompt,
+          status: state.results[i]?.status || "pending",
+          model: p.model,
+        })),
+      };
+    }
+  );
+
+  // Register queue append tool (write)
   const queueAppendTool = vscode.lm.registerTool(
     "flightpath-append-queue",
     {
@@ -767,24 +826,19 @@ export function activate(context: vscode.ExtensionContext) {
       },
     },
     async (input, token) => {
-      // Direct integration with FlightPathManager
-      const manager = getFlightPathManager(); // Get singleton
-      const result = await manager.appendPromptsToQueue(
-        input.prompts,
-        "AI Agent",
-        "tool-invocation",
-        input.position
-      );
+      const manager = getFlightPathManager();
+      await manager.appendFromPrompts(input.prompts, input.position);
 
+      const state = manager.getQueue().getState();
       return {
         success: true,
-        promptsAdded: result.count,
-        newQueueSize: result.queueSize,
+        promptsAdded: input.prompts.length,
+        newQueueSize: state.prompts.length,
       };
     }
   );
 
-  context.subscriptions.push(queueAppendTool);
+  context.subscriptions.push(queueStatusTool, queueAppendTool);
 }
 ```
 
@@ -867,15 +921,25 @@ interface PromptItem {
   endCondition?: any;
 }
 
+interface AppendSegment {
+  id: string;
+  timestamp: number;
+  source: string;
+  reason?: string;
+  position: "next" | "end";
+  promptIndices: number[];
+}
+
 interface WorkingQueueFile {
   originalFile: string;
-  workflowName: string;
-  sessionId: string;
-  startTime: Date;
   prompts: PromptItem[];
-  completed: number[];
-  currentIndex: number;
-  appendSegments: any[];
+  _runtime?: {
+    startTime: number;
+    currentIndex: number;
+    completedPrompts: number[];
+    state: "idle" | "running" | "paused" | "completed" | "cancelled" | "error";
+  };
+  appendSegments: AppendSegment[];
 }
 
 class FlightPathMCPServer {
@@ -904,6 +968,7 @@ class FlightPathMCPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
+        // Tool 1: Append to queue (write operation)
         {
           name: "flightpath_append_queue",
           description:
@@ -1417,10 +1482,9 @@ if (!mcpConfigured && (usingCopilotCLI || usingClaudeCLI || usingCodexCLI)) {
 
 1. Install MCP SDK: `npm install @modelcontextprotocol/sdk`
 2. Create `src/mcp-server.ts` with stdio transport
-3. Implement three tools:
-   - `flightpath_append_queue`
-   - `flightpath_get_queue_status`
-   - `flightpath_list_queue`
+3. Implement two core tools:
+   - `flightpath_append_queue` (write operation)
+   - `flightpath_queue_status` (read operation - combines metadata + prompts)
 4. Add file operations (read/write working queue file)
 5. Compile to `out/mcp-server.js`
 6. Test manually: `node out/mcp-server.js`
@@ -1429,7 +1493,18 @@ if (!mcpConfigured && (usingCopilotCLI || usingClaudeCLI || usingCodexCLI)) {
 
 - Manual invocation with test JSON-RPC messages
 - Verify tool discovery (list tools request)
+- Test queue status read
 - Test queue append with sample working file
+
+**MVP Refinements**:
+
+- ✅ **Simplified API**: 2 tools instead of 3 reduces complexity
+- ✅ **Combined read**: Single `queue_status` call gets all info AI needs
+- ✅ **Position control**: `next` vs `end` gives AI insertion flexibility
+- ✅ **Unexpanded prompts**: Return raw prompts (without `<attachment>` XML blocks added by `processPromptAttachments()`)
+- ✅ **Single schema**: Working files use `.flightpath.json` schema with optional `_runtime` object (no separate format)
+- ✅ **Concurrency safe**: Operation queue handles simultaneous append calls correctly
+- ⏸ **Future**: Add `flightpath_clear_queue` if needed (destructive operation)
 
 ---
 
@@ -1439,7 +1514,9 @@ if (!mcpConfigured && (usingCopilotCLI || usingClaudeCLI || usingCodexCLI)) {
 
 **Tasks**:
 
-1. Register tools with `vscode.lm.registerTool()`
+1. Register 2 tools with `vscode.lm.registerTool()`:
+   - `flightpath-queue-status` (read)
+   - `flightpath-append-queue` (write)
 2. Reuse FlightPathManager queue logic
 3. Handle tool invocations directly (no MCP server needed)
 4. Update dashboard when tools are invoked
@@ -1447,8 +1524,11 @@ if (!mcpConfigured && (usingCopilotCLI || usingClaudeCLI || usingCodexCLI)) {
 **Testing**:
 
 - Test in VS Code Chat with Copilot
-- Verify tool shows in Chat tool list
-- Confirm queue extends correctly
+- Verify both tools show in Chat tool list
+- Test status read returns metadata + prompts
+- Confirm queue extends correctly with position control
+
+**MVP Decision**: VS Code Chat is **optional** for MVP. Focus on CLI MCP server first (Copilot CLI/Claude CLI/Codex CLI are primary targets).
 
 ---
 
@@ -1569,23 +1649,186 @@ Copilot: "I've added follow-up testing tasks to your FlightPath queue."
 
 ---
 
+## MVP Recommendations
+
+### Core Design Principles
+
+**1. Simplicity First**
+
+- ✅ **2 tools only**: `flightpath_append_queue` (write) + `flightpath_queue_status` (read)
+- ✅ **No destructive operations**: No delete/clear commands in MVP (safety first)
+- ✅ **Unexpanded prompts**: Return raw prompt text before variable substitution
+- ✅ **Position control**: Simple `next` vs `end` insertion points
+
+**2. Focus on CLI Integration**
+
+- 🎯 **Primary target**: Copilot CLI, Claude CLI, Codex CLI
+- ⏸ **Defer VS Code Chat**: Language Model Tools API is nice-to-have, not critical path
+- 🎯 **Session-specific config**: No global config modification (Copilot: temp file, Codex: inline TOML)
+
+**3. Working File Strategy**
+
+- ✅ **Single source of truth**: `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json` is authoritative
+- ✅ **Single schema**: Uses standard `.flightpath.json` schema with optional `_runtime` object for execution state
+- ✅ **Crash recovery**: Working file persists across VS Code sessions (can run working file directly)
+- ✅ **Both features use same file**: User actions (Queue Append) and AI actions (MCP) modify same working file
+- ✅ **Operation queue**: Serializes concurrent append operations (prevents race conditions)
+- ✅ **Atomic writes**: Temp file + rename prevents corruption
+- ✅ **Unexpanded storage**: Prompts stored WITHOUT `<attachment>` XML blocks (cleaner, smaller files)
+- ⚠️ **Runtime expansion**: `<attachment>` blocks added by `processPromptAttachments()` only when sending to AI
+
+**Concurrency Model**:
+
+```typescript
+// All append operations go through PromptQueue.appendPrompts()
+// which uses internal operation queue for serialization:
+
+// User calls (Queue Append feature):
+User → flightpath.queueFromContext → FlightPathManager.appendFromFile() →
+  PromptQueue.appendPrompts() → [QUEUED] → Execute sequentially
+
+// MCP tool calls (AI-driven):
+AI → flightpath_append_queue → PromptQueue.appendPrompts() → [QUEUED] → Execute sequentially
+
+// Multiple simultaneous calls:
+Call 1: appendPrompts([A, B], "end")    → Queued at T0, executes T0-T1
+Call 2: appendPrompts([C], "next")     → Queued at T0, executes T1-T2 (after Call 1)
+Call 3: appendPrompts([D, E], "end")   → Queued at T0, executes T2-T3 (after Call 2)
+
+// Result: All operations execute in order, no race conditions
+Final queue: [existing, A, B, C, D, E] (or similar based on positions)
+```
+
+**Working File Example**:
+
+```json
+{
+  "prompts": [{ "prompt": "Step 1" }, { "prompt": "Step 2" }],
+  "_runtime": {
+    "originalFile": "c:/dev/project/feature.flightpath.json",
+    "sessionId": "1703185200000",
+    "startTime": "2024-12-21T10:00:00.000Z",
+    "currentIndex": 1,
+    "completed": [0]
+  }
+}
+```
+
+**4. Security & Validation**
+
+- ✅ **User approval required**: All CLI clients prompt before tool invocation
+- ✅ **Workspace scoping**: MCP server only accesses `.flightpath/.queue/` directory
+- ✅ **Input validation**: Validate prompt structure, file paths, position values
+- ✅ **Queue size limits**: Respect `maxQueueSize` setting
+
+### MVP Scope
+
+**Phase 1: Core MCP Server** (Week 1 - HIGH PRIORITY)
+
+| Feature                        | Status      | Notes                                  |
+| ------------------------------ | ----------- | -------------------------------------- |
+| Schema extension               | ✅ Required | Add `_runtime` object to prompt-schema |
+| MCP SDK integration            | ✅ Required | Install `@modelcontextprotocol/sdk`    |
+| `flightpath_queue_status` tool | ✅ Required | Combined metadata + prompts read       |
+| `flightpath_append_queue` tool | ✅ Required | Append with position control           |
+| Working file read/write        | ✅ Required | Atomic operations (temp + rename)      |
+| Manual testing                 | ✅ Required | JSON-RPC message validation            |
+
+**Phase 2: Auto-Configuration** (Week 2 - NICE-TO-HAVE)
+
+| Feature                       | Status         | Notes                           |
+| ----------------------------- | -------------- | ------------------------------- |
+| Copilot CLI config generation | ⭐ Recommended | Generate temp JSON file         |
+| Codex CLI inline TOML         | ⭐ Recommended | Generate TOML string (no file!) |
+| Claude CLI config generation  | ⏸ Optional    | Similar to Copilot              |
+| Setup UI prompts              | ⏸ Optional    | Notify user on first use        |
+
+**Phase 3: VS Code Chat Integration** (Future)
+
+| Feature                  | Status    | Notes                        |
+| ------------------------ | --------- | ---------------------------- |
+| Language Model Tools API | ⏸ Future | Better than MCP for VS Code  |
+| Tool registration        | ⏸ Future | Direct extension integration |
+
+### What to Defer
+
+**Not in MVP**:
+
+- ❌ `flightpath_clear_queue` - Destructive operation (defer until needed)
+- ❌ `flightpath_modify_prompt` - Complex, risky (defer)
+- ❌ `flightpath_reorder_prompts` - Complex state management (defer)
+- ❌ Expanded prompt resolution - Return raw prompts only
+- ❌ VS Code Chat integration - Focus on CLI first
+- ❌ Persistent global config - Session-specific only
+- ❌ Multi-workspace support - Single workspace only
+- ❌ MCP Resources API - Tools only, no resources/prompts/sampling
+
+### Implementation Priorities
+
+**Week 1 Focus**:
+
+1. Implement `src/mcp-server.ts` with 2 tools
+2. Test manually with JSON-RPC messages
+3. Compile to `out/mcp-server.js`
+4. Document manual setup for Copilot CLI
+
+**Week 2 Focus**:
+
+1. Auto-generate Copilot CLI config (temp file)
+2. Auto-generate Codex CLI config (inline TOML)
+3. Add error messages for missing MCP setup
+4. Write user documentation
+
+**Future Enhancements**:
+
+- VS Code Language Model Tools API integration
+- Claude CLI auto-configuration
+- Additional read-only tools (workflow templates, prompt library)
+- MCP Resources for prompt templates
+
+### Success Criteria
+
+**MVP is successful if**:
+
+✅ AI agent can read current queue status (metadata + all prompts)
+✅ AI agent can append prompts to queue (next or end position)
+✅ Copilot CLI users can set up MCP with provided config
+✅ Codex CLI users can use inline TOML (zero config file)
+✅ Queue state remains consistent (no corruption)
+✅ All operations respect queue size limits
+✅ User approval required for all tool invocations
+✅ **Crash recovery works** (can resume workflows after VS Code restart)
+✅ **Working file persists** queue state across sessions
+
+**MVP is NOT required to**:
+
+❌ Automatically configure global CLI settings
+❌ Support VS Code Chat (Language Model Tools)
+❌ Provide destructive operations (clear, delete)
+❌ Expand file references or variables
+❌ Support multiple simultaneous workflows
+❌ Provide real-time queue notifications
+
+---
+
 ## Conclusion
 
 **Key Takeaways**:
 
 1. ✅ **No persistent service**: MCP servers are spawned on-demand by CLI clients
 2. ✅ **Simple stdio transport**: Just a Node.js script, no network, no ports
-3. ✅ **VS Code is different**: Use Language Model Tools API for Chat (better integration)
-4. ✅ **Session-specific config**: Copilot CLI's `--additional-mcp-config` enables zero-config experience
-5. ✅ **Auto-configuration is possible**: Extension can write MCP config files
-6. ✅ **Universal solution**: Same server works for Copilot CLI and Claude CLI
-7. ⚠️ **Copilot CLI ≠ Copilot Coding Agent**: Different systems with different configuration approaches
+3. ✅ **2 tools for MVP**: queue_status (read) + append_queue (write)
+4. ✅ **VS Code is different**: Use Language Model Tools API for Chat (better integration)
+5. ✅ **Session-specific config**: Copilot CLI's `--additional-mcp-config` enables zero-config experience
+6. ✅ **Auto-configuration is possible**: Extension can write MCP config files
+7. ✅ **Universal solution**: Same server works for Copilot CLI and Claude CLI
+8. ⚠️ **Copilot CLI ≠ Copilot Coding Agent**: Different systems with different configuration approaches
 
 **Implementation Recommendation**:
 
-- **Week 1**: Implement MCP server + VS Code Language Model Tools
-- **Week 2**: Add auto-configuration and docs
-- **Week 3**: Polish and test across all platforms
+- **Week 1**: Implement MCP server with 2 core tools (CLI focus)
+- **Week 2**: Add auto-configuration for Copilot/Codex CLI + docs
+- **Week 3+**: Polish, VS Code Chat integration, additional tools
 
 The MCP approach provides **predictable, standardized tool invocation** with **automatic error handling** and **type safety**, making it superior to custom scripts for AI-driven queue extension.
 
