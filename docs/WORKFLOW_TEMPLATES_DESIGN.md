@@ -11,15 +11,15 @@ FlightPath organizes user files in a structured `.flightpath/` directory:
 ├── scripts/       # Validation scripts (end conditions)
 ├── prompts/       # Draft prompts (*.prompt.md)
 ├── templates/     # Workflow templates with {placeholder} variables
-└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
+└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.flightpath.yaml)
 ```
 
-| Folder       | Purpose                              | File Types                          |
-| ------------ | ------------------------------------ | ----------------------------------- |
-| `scripts/`   | End condition validation scripts     | `.js`, `.py`, `.sh`, `.ps1`, `.bat` |
-| `prompts/`   | Single-prompt drafts for quick tasks | `.prompt.md`                        |
-| `templates/` | Parameterized workflow templates     | `.flightpath.json`                  |
-| `workflows/` | Executable workflow files            | `.flightpath.json`, `.prompt.json`  |
+| Folder       | Purpose                              | File Types                             |
+| ------------ | ------------------------------------ | -------------------------------------- |
+| `scripts/`   | End condition validation scripts     | `.js`, `.py`, `.sh`, `.ps1`, `.bat`    |
+| `prompts/`   | Single-prompt drafts for quick tasks | `.prompt.md`                           |
+| `templates/` | Parameterized workflow templates     | `.flightpath.json`                     |
+| `workflows/` | Executable workflow files            | `.flightpath.json`, `.flightpath.yaml` |
 
 ## Template Detection
 

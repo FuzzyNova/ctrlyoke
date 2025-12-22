@@ -88,7 +88,7 @@ CLI Flags > Environment Variables > Config File > Defaults
 
 ### In Scope ✅
 
-1. **Execute prompt files**: `.flightpath.json`, `.prompt.json`, `.prompt.md`
+1. **Execute prompt files**: `.flightpath.json`, `.flightpath.yaml`, `.prompt.md`
 2. **CLI integrations**: Copilot CLI and Claude CLI (shared code with extension)
 3. **Execution modes**:
    - **Interactive mode** (default): Full PTY for tool approvals and user interaction
@@ -158,7 +158,7 @@ Global Options:
 flightpath run <file> [options]
 
 Positional:
-  file             Path to .flightpath.json, .prompt.json, or .prompt.md
+  file             Path to .flightpath.json, .flightpath.yaml, or .prompt.md
 
 Options:
   --provider, -p   AI provider: 'copilot' or 'claude' (default: copilot)
@@ -853,7 +853,7 @@ Error: Prompt file not found
   Path: /path/to/workflow.flightpath.json
 
   Did you mean one of these?
-    ./workflow.prompt.json
+    ./workflow.flightpath.yaml
     ./my-workflow.flightpath.json
 ```
 

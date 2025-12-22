@@ -381,7 +381,7 @@ You are the **FlightPath Orchestrator**, a specialized AI agent with deep expert
 
 FlightPath automates GitHub Copilot through structured JSON-based workflows:
 
-- **Prompt Files**: `.flightpath.json` or `.prompt.json` in `.flightpath/` directory
+- **Prompt Files**: `.flightpath.json` or `.flightpath.yaml` in `.flightpath/` directory
 - **Execution Modes**: CLI (default) or Chat window automation
 - **Model Selection**: Per-prompt or global configuration
 - **Session Management**: Multi-turn conversations with `newChatSession: false`

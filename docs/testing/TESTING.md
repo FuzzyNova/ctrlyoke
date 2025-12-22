@@ -94,9 +94,9 @@ We use **real integration tests** instead of mocks because:
 **Prompts (`.flightpath/` directory):**
 
 - `simple.prompt.md` - Basic markdown prompt
-- `with-file.prompt.json` - Prompt with file attachment
+- `with-file.flightpath.yaml` - Prompt with file attachment
 - `multi-step.flightpath.json` - Three-step workflow
-- `with-end-condition.prompt.json` - Prompt with end condition validation
+- `with-end-condition.flightpath.yaml` - Prompt with end condition validation
 
 **End Condition Scripts (`.flightpath/scripts/`):**
 
@@ -123,9 +123,9 @@ We use **real integration tests** instead of mocks because:
 ### Common Test Scenarios
 
 1. **Basic execution:** `simple.prompt.md` → Run with FlightPath
-2. **File attachment:** `with-file.prompt.json` → Run with FlightPath
+2. **File attachment:** `with-file.flightpath.yaml` → Run with FlightPath
 3. **Multi-step workflow:** `multi-step.flightpath.json` → Run with FlightPath
-4. **End condition success:** `with-end-condition.prompt.json` → Run with FlightPath
+4. **End condition success:** `with-end-condition.flightpath.yaml` → Run with FlightPath
 5. **Chat mode:** Set provider to "copilot-chat" in settings, then any prompt → Run with FlightPath
 
 ### Monitoring

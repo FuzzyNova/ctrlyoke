@@ -528,5 +528,4 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 4. ✅ Added `resolveWorkspacePath()` path resolver (now protected method)
 5. ✅ Integrated into `buildPromptText()` workflow
 6. ✅ Added `flightpath.autoAttachFiles` setting to disable feature
-7. ✅ Created test prompt file: `.flightpath/test-file-attachments.prompt.json`
-8. ⏭️ **Ready for testing** - Use the test prompt to verify attachments work correctly
+7. ⏭️ **Ready for testing** - Use the test prompt to verify attachments work correctly

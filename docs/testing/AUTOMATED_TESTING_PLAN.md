@@ -246,7 +246,7 @@ suite("PromptFileParser Tests", () => {
 
 ```
 src/test/fixtures/prompts/
-├── single.prompt.json          (existing)
+├── single.flightpath.yaml          (existing)
 ├── multi.flightpath.json       (existing)
 ├── simple.prompt.md            (new - markdown format)
 ├── empty.prompt.md             (new - empty file)
@@ -580,7 +580,7 @@ const fixturesPath = path.join(__dirname, "fixtures", "prompts");
 
 test("should parse single prompt format", async () => {
   const result = await parser.parsePromptFile(
-    path.join(fixturesPath, "single.prompt.json")
+    path.join(fixturesPath, "single.flightpath.yaml")
   );
 
   assert.ok(result);

@@ -5,6 +5,7 @@ This document describes the FlightPath Settings Panel architecture - a dedicated
 ## Overview
 
 FlightPath uses a multi-view panel architecture with two webview views in the same container:
+
 - **Dashboard**: Workflow execution, prompts list, output streaming, controls
 - **Settings**: Provider selection, model selection, dynamic queue toggle
 
@@ -81,6 +82,7 @@ Views display side-by-side in the bottom panel with native VS Code collapsible h
 ### Provider Dropdown
 
 Selects the AI provider for prompt execution:
+
 - **Copilot CLI** (default): Uses GitHub Copilot CLI
 - **Copilot Chat**: Uses VS Code's Copilot Chat window
 - **Claude Code**: Uses Anthropic's Claude Code CLI
@@ -91,11 +93,11 @@ Updates the `flightpath.provider` setting.
 
 Dynamic options based on selected provider:
 
-| Provider | Models | Setting |
-|----------|--------|---------|
-| Copilot CLI | claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5, claude-sonnet-4, gpt-5, gpt-5.1, gpt-5.1-codex-mini, gpt-5.1-codex, gpt-5-mini, gpt-4.1, gemini-3-pro-preview | `flightpath.copilotCliModel` |
-| Copilot Chat | (same as Copilot CLI) | `flightpath.copilotChatModel` |
-| Claude CLI | sonnet, opus, haiku | `flightpath.claudeCliModel` |
+| Provider     | Models                                                                                                                                                              | Setting                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Copilot CLI  | claude-sonnet-4.5, claude-haiku-4.5, claude-opus-4.5, claude-sonnet-4, gpt-5, gpt-5.1, gpt-5.1-codex-mini, gpt-5.1-codex, gpt-5-mini, gpt-4.1, gemini-3-pro-preview | `flightpath.copilotCliModel`  |
+| Copilot Chat | (same as Copilot CLI)                                                                                                                                               | `flightpath.copilotChatModel` |
+| Claude CLI   | sonnet, opus, haiku                                                                                                                                                 | `flightpath.claudeCliModel`   |
 
 ### Dynamic Queue Checkbox
 
@@ -107,7 +109,7 @@ Enables dynamic queue extension feature. Updates `flightpath.enableDynamicQueue`
 
 **Highest to Lowest:**
 
-1. `model` field in `.prompt.json` or `.flightpath.json` file
+1. `model` field in `.flightpath.yaml` or `.flightpath.json` file
 2. Settings panel model selection (backed by VS Code setting)
 
 ---
@@ -127,6 +129,7 @@ context.subscriptions.push(
 ```
 
 This approach:
+
 - Leverages VS Code's built-in config change events
 - No direct message passing between views needed
 - Settings made in VS Code Settings UI also sync to both views
@@ -138,6 +141,7 @@ This approach:
 ### CLI Modes (Copilot CLI, Claude CLI)
 
 Always pass `--model` parameter to CLI command. Model comes from:
+
 1. `prompt.model` field in prompt file
 2. Provider-specific setting (`copilotCliModel` or `claudeCliModel`)
 
@@ -160,6 +164,7 @@ private async switchModelIfNeeded(model?: string): Promise<void> {
 ### Graceful Degradation
 
 When model switch fails:
+
 1. Log error to console
 2. Show warning message with suggestion to change settings
 3. Continue workflow with current model (don't block execution)
@@ -178,13 +183,13 @@ catch (error) {
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `src/ui/FlightPathSettingsProvider.ts` | Settings WebviewViewProvider |
-| `src/ui/webview/settings.html` | Settings view HTML template |
-| `src/ui/webview/settings.css` | Settings view styles |
-| `src/ui/webview/settings.js` | Settings view logic |
-| `src/types/DashboardConstants.ts` | Shared message types (CHANGE_MODEL, CHANGE_DYNAMIC_QUEUE, etc.) |
+| File                                   | Purpose                                                         |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `src/ui/FlightPathSettingsProvider.ts` | Settings WebviewViewProvider                                    |
+| `src/ui/webview/settings.html`         | Settings view HTML template                                     |
+| `src/ui/webview/settings.css`          | Settings view styles                                            |
+| `src/ui/webview/settings.js`           | Settings view logic                                             |
+| `src/types/DashboardConstants.ts`      | Shared message types (CHANGE_MODEL, CHANGE_DYNAMIC_QUEUE, etc.) |
 
 ---
 

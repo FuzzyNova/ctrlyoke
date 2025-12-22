@@ -340,7 +340,7 @@ Planned features (post-MVP):
 A: Yes! Dynamic queue works with both CLI and Chat integration modes.
 
 **Q: Can I use this with single-prompt `.prompt.md` files?**
-A: No. Dynamic queue only works with `.prompt.json` and `.flightpath.json` files (which support the `prompts` array).
+A: No. Dynamic queue only works with `.flightpath.yaml` and `.flightpath.json` files (which support the `prompts` array).
 
 **Q: Will this use a lot of tokens?**
 A: Instructions are only injected on prompts that need them (explicit flag or last prompt). Each instruction adds ~200 tokens.

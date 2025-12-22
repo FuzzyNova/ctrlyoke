@@ -255,7 +255,7 @@ Please structure your response as:
 - **User-facing messages**: VS Code notifications, status bar text, error messages shown to users should remain plain strings
 - **Console logs**: Keep logs simple and readable (unless logging structured data)
 - **File names and paths**: Never wrap file paths in XML tags
-- **JSON files**: Prompt files (`.prompt.json`, `.flightpath.json`) remain valid JSON - users can put XML in the prompt string value if they want, but the file structure is JSON
+- **JSON files**: Prompt files (`.flightpath.yaml`, `.flightpath.json`) remain valid JSON - users can put XML in the prompt string value if they want, but the file structure is JSON
 
 ## Migrating Existing Prompts
 

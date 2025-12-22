@@ -18,8 +18,8 @@
 ### Core Tests (`.flightpath/` directory)
 
 - `simple.prompt.md` - Basic markdown prompt
-- `with-file.prompt.json` - Prompt with file attachment
-- `with-end-condition.prompt.json` - End condition validation
+- `with-file.flightpath.yaml` - Prompt with file attachment
+- `with-end-condition.flightpath.yaml` - End condition validation
 - `multi-step.flightpath.json` - Model switching test
 
 ### Retry Tests (root directory)
@@ -77,8 +77,8 @@
 ## Common Test Scenarios
 
 1. **Basic execution:** `simple.prompt.md` → Run with FlightPath
-2. **File attachment:** `with-file.prompt.json` → Run with FlightPath
-3. **End condition:** `with-end-condition.prompt.json` → Run with FlightPath
+2. **File attachment:** `with-file.flightpath.yaml` → Run with FlightPath
+3. **End condition:** `with-end-condition.flightpath.yaml` → Run with FlightPath
 4. **Model switching:** `multi-step.flightpath.json` → Run with FlightPath
 5. **Retry mechanism:** `retry-counter-test.flightpath.json` → Run with FlightPath
 6. **Chat mode:** Set provider to "copilot-chat" in settings, then any prompt → Run with FlightPath
@@ -94,7 +94,7 @@ echo 0 > manual-test\multi-step-counter.txt
 
 Create files in `manual-test/.flightpath/`:
 
-- New prompts: `.prompt.md` or `.prompt.json`
+- New prompts: `.prompt.md` or `.flightpath.yaml`
 - New workflows: `.flightpath.json`
 - New scripts: `.flightpath/scripts/yourscript.py`
 - New code: `sample-code/yourfile.ts`

@@ -11,7 +11,7 @@ FlightPath organizes user files in a structured `.flightpath/` directory:
 ├── scripts/       # Validation scripts (end conditions)
 ├── prompts/       # Draft prompts (*.prompt.md)
 ├── templates/     # Workflow templates with {placeholder} variables
-└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.prompt.json)
+└── workflows/     # Ready-to-run workflows (*.flightpath.json, *.flightpath.yaml)
 ```
 
 ## Overview

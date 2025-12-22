@@ -38,7 +38,7 @@ Enable users to append prompts, prompt files, or workflows to the current Flight
 **Append Operations**:
 
 - **Single Prompt**: Append raw prompt text to queue
-- **Prompt File** (`.prompt.md`, `.prompt.json`): Parse and append prompts
+- **Prompt File** (`.prompt.md`, `.flightpath.yaml`): Parse and append prompts
 - **Workflow** (`.flightpath.json`): Parse and append all prompts
 
 **Append Modes**:
@@ -65,7 +65,7 @@ Enable users to append prompts, prompt files, or workflows to the current Flight
 
 **Context Menu**:
 
-- Right-click on `.prompt.md`, `.prompt.json`, `.flightpath.json`
+- Right-click on `.prompt.md`, `.flightpath.yaml`, `.flightpath.json`
 - New option: "**Queue with FlightPath**" (existing: "Run with FlightPath")
 - Shows notification: "Queued {count} prompts (+{totalInQueue})"
 
@@ -308,7 +308,7 @@ async function queuePromptCommand() {
 // Command: flightpath.queuePromptFile
 async function queuePromptFileCommand(uri?: vscode.Uri) {
   const filePath =
-    uri?.fsPath || (await showFilePicker([".prompt.md", ".prompt.json"]));
+    uri?.fsPath || (await showFilePicker([".prompt.md", ".flightpath.yaml"]));
   if (!filePath) return;
 
   await manager.appendPromptFile(filePath);

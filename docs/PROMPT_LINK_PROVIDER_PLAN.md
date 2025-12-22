@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add clickable links to FlightPath prompt files (.prompt.md, .prompt.json, .flightpath.json) that allow users to navigate back to referenced code, directories, symbols, and selections. This complements the existing `PromptCompletionProvider` by making context references bidirectional - not just insert, but also navigate.
+Add clickable links to FlightPath prompt files (.prompt.md, .flightpath.yaml, .flightpath.json) that allow users to navigate back to referenced code, directories, symbols, and selections. This complements the existing `PromptCompletionProvider` by making context references bidirectional - not just insert, but also navigate.
 
 ## Research Summary
 
@@ -236,7 +236,7 @@ export class PromptLinkProvider implements vscode.DocumentLinkProvider {
   private isPromptFile(document: vscode.TextDocument): boolean {
     const fileName = path.basename(document.fileName);
     return (
-      fileName.endsWith(".prompt.json") ||
+      fileName.endsWith(".flightpath.yaml") ||
       fileName.endsWith(".flightpath.json") ||
       fileName.endsWith(".prompt.md") ||
       document.languageId === "prompt" ||
@@ -450,7 +450,7 @@ Test all 4 link types:
 Should all be Ctrl+Clickable!
 ```
 
-**test-links.prompt.json:**
+**test-links.flightpath.yaml:**
 
 ```json
 {

@@ -1,8 +1,8 @@
 # Queue Extension Options Analysis: MCP, Skills, and Custom Scripts
 
 **Date**: December 17, 2025  
-**Status**: Research & Decision Document  
-**Related**: [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md)
+**Status**: Implementation Decision  
+**Related**: [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md), [FLIGHTPATH_MCP_IMPLEMENTATION.md](FLIGHTPATH_MCP_IMPLEMENTATION.md)
 
 ## Executive Summary
 
@@ -12,7 +12,7 @@ This document investigates **how AI agents can extend FlightPath's workflow queu
 2. **Claude Skills** - Markdown instructions + helper scripts
 3. **Custom Scripts** - FlightPath-specific queue management scripts
 
-**Key Finding**: MCPs and Skills have limited CLI support, but **custom scripts invoked via shell commands** offer the most practical solution for both Copilot CLI and Claude CLI.
+**Key Finding**: MCP is **fully supported** across all CLI providers (Copilot CLI, Claude CLI, Codex CLI). **MCP implementation is our primary approach** for enabling dynamic queue extension, with custom scripts as an optional fallback for users who don't configure MCP servers.
 
 ---
 
@@ -545,52 +545,38 @@ See "Custom Script Approach" section above for full implementation.
 
 ---
 
-## Hybrid Approach: Scripts + Skills + MCP
+## Implementation Approach: MCP with Optional Fallbacks
 
-**Recommendation**: Implement **Custom Scripts as the foundation**, with optional Skills and MCP wrappers.
+**Recommendation**: Implement **MCP Server as the primary mechanism**, with optional custom scripts as fallback.
 
 ### Implementation Strategy
 
-**1. Core: Custom Queue Management Scripts** (always present)
+**1. Primary: FlightPath MCP Server** (recommended for all users)
 
-- Install to `.flightpath/scripts/` on workflow start
+- Stdio-based MCP server using `@modelcontextprotocol/sdk`
+- Standardized tool interface with automatic discovery
+- Works with Copilot CLI, Claude CLI, and Codex CLI
+- Session-specific configuration (no permanent config modification)
+- Structured error handling via MCP protocol
+
+**MCP Tools Exposed**:
+
+- `flightpath_queue_append(prompts, position)` - Add prompts to queue
+- `flightpath_queue_status()` - Get current queue state
+- `flightpath_queue_list()` - List all prompts in queue
+
+**2. Fallback: Custom Queue Management Scripts** (optional)
+
+- Install to `.flightpath/scripts/` for users who don't configure MCP
 - JSON interface (stdin/stdout)
 - Node.js implementation (cross-platform)
-- Works with both CLIs via shell commands
+- Invoked via shell/bash tools when MCP not available
 
-**2. Claude Skill Wrapper** (optional, auto-installed for Claude CLI)
+**3. Claude Skills** (optional, future enhancement)
 
-```
-.claude/skills/flightpath-queue/
-├── SKILL.md          # Instructions + triggers
-└── queue_helper.js   # Thin wrapper around core script
-```
-
-**SKILL.md** references core scripts:
-
-````markdown
-# FlightPath Queue Management
-
-Use this skill to extend the current FlightPath workflow.
-
-**How to use**:
-
-```bash
-node .flightpath/scripts/queue-append.js <<EOF
-{"action":"append","position":"next","prompts":[...]}
-EOF
-```
-````
-
-See `.flightpath/scripts/README.md` for full API.
-
-````
-
-**3. MCP Server Wrapper** (optional, future enhancement)
-
-- Thin MCP server that wraps core scripts
-- Provides standardized tool interface
-- Only for advanced users who want MCP benefits
+- Wrapper around MCP tools for enhanced Claude CLI experience
+- Provides contextual triggering via SKILL.md
+- Auto-installed when Claude CLI detected
 
 ---
 
@@ -628,7 +614,7 @@ private setupFileWatcher(): void {
     });
   });
 }
-````
+```
 
 **How it works**:
 
@@ -714,26 +700,29 @@ private setupFileWatcher(): void {
 
 ---
 
-## Decision: Hybrid Approach (MCP + Scripts Fallback)
+## Decision: MCP-First Approach
 
-**Updated Recommendation**: Implement **MCP as primary mechanism** with **Custom Scripts as fallback**.
+**Final Recommendation**: Implement **MCP as the primary and recommended mechanism** with **Custom Scripts as optional fallback**.
 
-**Rationale for Change**:
+**Rationale**:
 
-1. ✅ **Both CLIs support MCP** - Copilot CLI has `/mcp add`, Claude CLI has `claude mcp add-json`
-2. ✅ **Standardized protocol** - Well-defined tool interface with automatic discovery
-3. ✅ **Better error handling** - MCP protocol includes structured error responses
-4. ✅ **Automatic invocation** - AI automatically discovers and uses tools
-5. ✅ **Extensible** - Easy to add more queue operations as MCP tools
-6. ✅ **Fallback available** - Custom scripts work when MCP not configured
+1. ✅ **Universal CLI Support** - Copilot CLI, Claude CLI, and Codex CLI all fully support MCP
+2. ✅ **Standardized Protocol** - Well-defined tool interface with automatic discovery
+3. ✅ **Superior Error Handling** - MCP protocol includes structured error responses
+4. ✅ **Automatic Tool Discovery** - AI automatically sees and invokes MCP tools
+5. ✅ **Highly Extensible** - Easy to add more queue operations as MCP tools
+6. ✅ **Session-Specific Config** - All CLIs support session-specific MCP configuration via flags (no permanent config modification required)
+7. ✅ **Type Safety** - JSON Schema validation for tool parameters
+8. ✅ **Better UX** - AI can use standardized tools instead of shell command workarounds
 
 **Implementation Strategy**:
 
-- **Primary**: FlightPath MCP server (stdio-based)
-- **Fallback**: Custom scripts (for users who don't configure MCP)
-- **Auto-detection**: FlightPath checks if MCP server is configured, guides setup if not
+- **Primary**: FlightPath MCP server (stdio-based, session-specific configuration)
+- **Fallback**: Custom scripts (only for users who explicitly disable MCP)
+- **Auto-setup**: FlightPath generates session-specific MCP config for CLI commands
+- **Documentation**: Complete MCP implementation guide in FLIGHTPATH_MCP_IMPLEMENTATION.md
 
-**AI will be instructed to use scripts like this**:
+**AI will use MCP tools automatically when available. For fallback script usage**:
 
 ````xml
 <criticalInstruction>
@@ -833,16 +822,26 @@ FlightPath will automatically detect the queue extension and continue execution.
 
 ## Conclusion
 
-**Custom Scripts** provide the most practical and universal solution for AI-driven queue extension in FlightPath. By leveraging the built-in shell tools available in both Copilot CLI and Claude CLI, we can implement a reliable, predictable, and debuggable queue management system without the complexity of MCP servers or the platform limitations of Claude Skills.
+**MCP (Model Context Protocol)** provides the best solution for AI-driven queue extension in FlightPath. With full support across all major CLI providers (Copilot CLI, Claude CLI, Codex CLI), MCP offers a standardized, reliable, and extensible tool interface that enables AI agents to autonomously extend workflows.
 
-The file-based communication pattern with FileSystemWatcher enables seamless integration between the FlightPath extension and CLI processes, supporting the unified working file architecture described in QUEUE_APPEND_FEATURE.md.
+Key advantages of MCP implementation:
+- ✅ **Standardized protocol** reduces implementation complexity
+- ✅ **Automatic tool discovery** improves AI agent reliability
+- ✅ **Session-specific configuration** eliminates setup friction
+- ✅ **Type-safe tool invocation** prevents runtime errors
+- ✅ **Structured error handling** enables better debugging
+
+The file-based working file architecture with FileSystemWatcher enables seamless integration between the FlightPath extension and MCP server processes, supporting the unified queue management design described in QUEUE_APPEND_FEATURE.md.
+
+**Implementation Status**: See [FLIGHTPATH_MCP_IMPLEMENTATION.md](FLIGHTPATH_MCP_IMPLEMENTATION.md) for complete implementation guide.
 
 **Next Steps**:
-1. Implement core queue management scripts
-2. Add FileSystemWatcher for auto-reload
-3. Update Dynamic Queue instructions to reference scripts
-4. Test with both Copilot CLI and Claude CLI
-5. Consider Claude Skills wrapper as UX enhancement
+1. ✅ Research complete - MCP confirmed as optimal approach
+2. 🚧 Implement FlightPath MCP server with stdio transport
+3. 🚧 Add session-specific MCP configuration generation
+4. 🚧 Implement FileSystemWatcher for queue auto-reload
+5. 🚧 Create MCP setup guide and CLI command templates
+6. 🔮 Optional: Custom scripts as fallback for non-MCP users
 
 ---
 
