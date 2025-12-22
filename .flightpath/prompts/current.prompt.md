@@ -1,1 +1,1 @@
-why did we have to define the workflow context class in line here #file:src/flightpath/cli/BaseCliIntegration.ts:294-299 ? Is this type defined somewhere else that we could import it from instead of redefining it here?
+run git --no-pager diff and see what's changed, when write a commit message in markdown

@@ -65,8 +65,8 @@ export interface DynamicQueueConfig {
   enabled: boolean;
   dynamicExtensionOnLastPrompt: boolean;
   maxQueueSize: number; // 1-1000 (default: 100)
-  maxExecutionTime: number; // In seconds (300-86400, default: 18000)
-  unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxExecutionTime
+  maxWorkflowExecutionTime: number; // In seconds (-1 or 3600-604800, default: 86400)
+  unlimitedMode: boolean; // If true, ignore maxQueueSize AND maxWorkflowExecutionTime
   notifyOnExtension: boolean;
 }
 

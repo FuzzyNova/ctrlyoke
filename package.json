@@ -413,6 +413,24 @@
           "description": "Open prompt files in a separate editor group (right side)",
           "markdownDescription": "When enabled, prompt files open in the second editor group (right side) instead of the active editor. This keeps your main code files visible for `#selection` references while editing prompts."
         },
+        "flightpath.maxPromptExecutionTime": {
+          "order": 18,
+          "type": "number",
+          "default": 10800,
+          "minimum": -1,
+          "maximum": 86400,
+          "description": "Maximum time in seconds for a single prompt (default: 3 hours, -1 for unlimited)",
+          "markdownDescription": "Maximum time in seconds to wait for a single prompt to complete. Default is **3 hours** (10800s). Use **-1** for unlimited timeout. Range: **-1** (unlimited) or **5 minutes** (300) to **24 hours** (86400). This catches hung prompts while allowing long-running operations."
+        },
+        "flightpath.maxWorkflowExecutionTime": {
+          "order": 19,
+          "type": "number",
+          "default": 86400,
+          "minimum": -1,
+          "maximum": 604800,
+          "description": "Maximum workflow execution time in seconds (default: 24 hours, -1 for unlimited)",
+          "markdownDescription": "Maximum total execution time for the entire workflow in seconds. Default is **24 hours** (86400s). Use **-1** for unlimited timeout. Range: **-1** (unlimited) or **1 hour** (3600) to **7 days** (604800). Ignored if `unlimitedMode` is enabled. This catches runaway workflows, especially with dynamic queues."
+        },
         "flightpath.chatWindowLocation": {
           "order": 100,
           "type": "string",
@@ -505,31 +523,22 @@
           "description": "[CLI Modes] Where CLI commands execute",
           "markdownDescription": "**CLI Modes Only.** Where CLI commands execute.\n\n- **Interactive** (default): Opens a VS Code terminal for visibility and immediate abort via Ctrl+C\n- **Headless**: Runs silently in background process\n\n**Note:** Headless mode without full permissions will auto-deny tool prompts, preventing the agent from acting."
         },
-        "flightpath.cliExecutionTimeout": {
-          "order": 201,
-          "type": "number",
-          "default": 300,
-          "minimum": 30,
-          "maximum": 3600,
-          "description": "[CLI Modes] Maximum time in seconds to wait for CLI execution",
-          "markdownDescription": "**CLI Modes Only.** Maximum time in seconds to wait for a CLI prompt to complete. Default is 5 minutes (300s). Increase for complex operations that take longer. Range: 30 seconds to 1 hour."
-        },
         "flightpath.showCliOutput": {
-          "order": 202,
+          "order": 201,
           "type": "boolean",
           "default": true,
           "description": "[CLI Modes] Show CLI output in the Output panel",
           "markdownDescription": "**CLI Modes Only.** Show CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
         },
         "flightpath.showCliCommand": {
-          "order": 203,
+          "order": 202,
           "type": "boolean",
           "default": false,
           "description": "[CLI Modes] Show the full CLI command with all arguments in the dashboard",
           "markdownDescription": "**CLI Modes Only.** When enabled, displays the complete CLI command with all arguments and flags in the dashboard output. Useful for debugging CLI integration."
         },
         "flightpath.cliAllowedTools": {
-          "order": 204,
+          "order": 203,
           "type": "array",
           "items": {
             "type": "string"
@@ -551,7 +560,7 @@
           "markdownDescription": "**CLI Modes Only.** Tool patterns to allow when using **custom** tool permissions. Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Default allows:** File writing, safe Git operations (status/diff/add/commit/log), package managers (npm/yarn/pnpm), Node.js execution.\n\n**Copilot patterns:** `shell(git:*)`, `write`, `github`\n\n**Claude equivalents:** `shell` → `Bash`, `write` → `Write`\n\n**Note:** Claude has more granular tools (`Read`, `Edit`, `MultiEdit`, `Glob`, `Grep`, `LS`, `WebFetch`). You can use these directly in lowercase. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax."
         },
         "flightpath.cliDeniedTools": {
-          "order": 205,
+          "order": 204,
           "type": "array",
           "items": {
             "type": "string"
@@ -577,7 +586,7 @@
           "markdownDescription": "**CLI Modes Only.** Tool patterns to deny (takes precedence over allows). Uses Copilot CLI format - automatically converted for Claude CLI.\n\n**Default denies:** File deletion (rm/del/Remove-Item/rd/rmdir), privilege escalation (sudo), permission changes (chmod/chown), destructive Git operations (push/reset/checkout/clean), destructive container operations.\n\n**Includes both Unix and Windows commands** for cross-platform protection.\n\n**Examples:** `shell(git push)`, `shell(rm:*)`. See [CLI docs](docs/COPILOT_CLI_DESIGN.md) for pattern syntax.\n\n**Note:** For Claude CLI, deny lists have known reliability issues. Consider using `allowAll` mode or rely on filesystem permissions for critical protection."
         },
         "flightpath.cliToolPermissions": {
-          "order": 206,
+          "order": 205,
           "type": "string",
           "enum": [
             "dangerouslyAllowAll",
@@ -794,24 +803,15 @@
           "description": "[Dynamic Queue] Maximum prompts allowed (prevents infinite loops)",
           "markdownDescription": "Maximum number of prompts allowed in a dynamic queue (prevents infinite loops). Range: **1** to **1000**. Default: **100**. Ignored if `unlimitedMode` is enabled."
         },
-        "flightpath.maxExecutionTime": {
-          "order": 603,
-          "type": "number",
-          "default": 18000,
-          "minimum": 300,
-          "maximum": 86400,
-          "description": "[Dynamic Queue] Maximum execution time in seconds (default: 5 hours)",
-          "markdownDescription": "Maximum total execution time for a workflow in seconds. Range: **5 minutes** (300) to **24 hours** (86400). Default: **5 hours** (18000). Ignored if `unlimitedMode` is enabled."
-        },
         "flightpath.unlimitedMode": {
-          "order": 604,
+          "order": 603,
           "type": "boolean",
           "default": false,
-          "description": "[Dynamic Queue] Enable unlimited mode (no queue size or time limits)",
-          "markdownDescription": "Enable unlimited mode: removes all queue size and execution time limits. When enabled, both `maxQueueSize` and `maxExecutionTime` are ignored. **Note:** This feature may be restricted to paid tier in future releases."
+          "description": "[Dynamic Queue] Enable unlimited mode (no queue size or workflow time limits)",
+          "markdownDescription": "Enable unlimited mode: removes queue size and workflow execution time limits. When enabled, both `maxQueueSize` and `maxWorkflowExecutionTime` are ignored. **Note:** Individual prompts still respect `maxPromptExecutionTime` to catch hung processes (set it to -1 if you want truly unlimited). This feature may be restricted to paid tier in future releases."
         },
         "flightpath.notifyOnQueueExtension": {
-          "order": 605,
+          "order": 604,
           "type": "boolean",
           "default": true,
           "description": "[Dynamic Queue] Show notification when AI extends the prompt queue",

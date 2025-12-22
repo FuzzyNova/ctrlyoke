@@ -126,11 +126,14 @@ export class WorkflowExecutor {
         break;
       }
 
-      // Check execution time limit (if not unlimited)
-      if (dynamicConfig.enabled && !dynamicConfig.unlimitedMode) {
+      // Check workflow execution time limit (unless unlimited mode or timeout disabled)
+      const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
+      const unlimitedWorkflow =
+        dynamicConfig.unlimitedMode || maxTimeSec === -1;
+
+      if (!unlimitedWorkflow) {
         const elapsedMs = this.promptQueue.getActiveExecutionTime();
         const elapsedSec = Math.floor(elapsedMs / 1000);
-        const maxTimeSec = dynamicConfig.maxExecutionTime;
 
         if (elapsedSec >= maxTimeSec) {
           const completedCount = this.promptQueue.getCompletedCount();

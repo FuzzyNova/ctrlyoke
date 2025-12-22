@@ -328,7 +328,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       this.lastSanitizedPrompt = promptText;
 
-      const timeoutMs = ConfigurationUtils.getCliExecutionTimeoutMs();
+      const timeoutMs =
+        ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000; // 12 hours default if unlimited
       const shouldShowOutput = this.shouldShowOutput();
 
       const tuiConfig: TuiStreamConfig = {
@@ -342,7 +343,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       const tuiProcessor = new TuiStreamProcessor(tuiConfig);
 
-      return execute({
+      // CRITICAL: Must await execute() before finally block runs
+      // Otherwise temp file gets deleted while TUI is still reading it
+      return await execute({
         terminal,
         execution,
         promptWithInstruction,
@@ -488,7 +491,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
       // Spawn and execute (no stdin needed)
       const result = await this.spawnProcess(this.getCliName(), headlessArgs, {
-        timeout: ConfigurationUtils.getCliExecutionTimeoutMs(),
+        timeout:
+          ConfigurationUtils.getMaxPromptExecutionTimeMs() ||
+          12 * 60 * 60 * 1000, // 12 hours default if unlimited
         onStdout: shouldStream
           ? (chunk) => {
               const processedChunk = this.processStreamingChunk(chunk);

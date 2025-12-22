@@ -76,7 +76,10 @@ export const ConfigurationUtils = {
         true
       ),
       maxQueueSize: config.get<number>("maxQueueSize", 100),
-      maxExecutionTime: config.get<number>("maxExecutionTime", 18000),
+      maxWorkflowExecutionTime: config.get<number>(
+        "maxWorkflowExecutionTime",
+        86400
+      ),
       unlimitedMode: config.get<boolean>("unlimitedMode", false),
       notifyOnExtension: config.get<boolean>("notifyOnQueueExtension", true),
     };
@@ -192,12 +195,16 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get CLI execution timeout in milliseconds
+   * Get maximum prompt execution timeout in milliseconds
    * User configures in seconds, this returns milliseconds
+   * Returns undefined if set to -1 (unlimited)
    */
-  getCliExecutionTimeoutMs(): number {
-    const timeoutSeconds = getConfig().get<number>("cliExecutionTimeout", 300);
-    return timeoutSeconds * 1000;
+  getMaxPromptExecutionTimeMs(): number | undefined {
+    const timeoutSeconds = getConfig().get<number>(
+      "maxPromptExecutionTime",
+      10800
+    );
+    return timeoutSeconds === -1 ? undefined : timeoutSeconds * 1000;
   },
 
   /**

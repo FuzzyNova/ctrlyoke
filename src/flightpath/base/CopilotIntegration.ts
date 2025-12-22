@@ -164,7 +164,7 @@ export abstract class CopilotIntegration {
     }
 
     // Get dynamic queue config for instruction template
-    const { maxQueueSize, maxExecutionTime, unlimitedMode } =
+    const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
       dynamicQueueConfig;
 
     // Calculate current stats (approximations for instruction template)
@@ -182,7 +182,10 @@ export abstract class CopilotIntegration {
     const maxSizeDisplay = unlimitedMode
       ? "unlimited"
       : maxQueueSize.toString();
-    const maxTimeDisplay = unlimitedMode ? "unlimited" : `${maxExecutionTime}s`;
+    const maxTimeDisplay =
+      unlimitedMode || maxWorkflowExecutionTime === -1
+        ? "unlimited"
+        : `${maxWorkflowExecutionTime}s`;
 
     const instructions = `<criticalInstruction>
 You are executing prompt ${currentIndex} of ${totalPrompts} in a FlightPath workflow.
