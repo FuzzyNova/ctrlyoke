@@ -268,7 +268,10 @@ export class FlightPathManager {
    * Execute the currently loaded prompt file
    * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */
-  async executeLoadedPromptFile(modeOverride?: Provider): Promise<void> {
+  async executeLoadedPromptFile(
+    modeOverride?: Provider,
+    continueFromCurrent: boolean = false
+  ): Promise<void> {
     if (!this.currentPromptFile) {
       vscode.window.showWarningMessage(
         "FlightPath: No prompt file loaded. Use 'Change' button to select a file first."
@@ -308,7 +311,11 @@ export class FlightPathManager {
 
         if (action === "Retry") {
           // Try again after a short delay
-          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 1000);
+          setTimeout(
+            () =>
+              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
+            1000
+          );
         }
         return;
       }
@@ -323,7 +330,11 @@ export class FlightPathManager {
 
         if (action === "Retry") {
           // Try again after a short delay
-          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 2000);
+          setTimeout(
+            () =>
+              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
+            2000
+          );
         }
         return;
       }
@@ -340,7 +351,11 @@ export class FlightPathManager {
         if (action === "Retry Detection") {
           await this.retryCopilotDetection();
           // Try executing again after retry starts
-          setTimeout(() => this.executeLoadedPromptFile(modeOverride), 2000);
+          setTimeout(
+            () =>
+              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
+            2000
+          );
         } else if (action === "View Requirements") {
           // Test automation now available on all integrations via base class
           await integration.testAutomation();
@@ -349,29 +364,45 @@ export class FlightPathManager {
       }
 
       // Check if queue needs to be restarted (completed, paused, or error state)
+      // Skip restart if we're continuing from append operation
       const queueState = this.promptQueue.getState();
-      if (
-        queueState.status === EXECUTION_STATES.COMPLETED ||
-        queueState.status === EXECUTION_STATES.PAUSED ||
-        queueState.status === EXECUTION_STATES.ERROR
-      ) {
+      if (!continueFromCurrent) {
+        if (
+          queueState.status === EXECUTION_STATES.COMPLETED ||
+          queueState.status === EXECUTION_STATES.PAUSED ||
+          queueState.status === EXECUTION_STATES.ERROR
+        ) {
+          console.log(
+            `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
+          );
+          this.promptQueue.restart();
+        }
+      } else {
         console.log(
-          `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
-        );
-        this.promptQueue.restart();
-      }
-
-      // Notify dashboard about execution start
-      if (this.dashboardProvider && promptFile.prompts) {
-        this.dashboardProvider.updateExecutionStarted(
-          fileName,
-          promptFile.prompts.length
+          `FlightPath: Continuing from current position (append mode), preserving history`
         );
       }
 
-      // Set workflow progress in Copilot integration
-      if (promptFile.prompts) {
-        integration.setWorkflowProgress(1, promptFile.prompts.length);
+      // Notify dashboard about execution start or continuation
+      // Use queue state for accurate count (handles appended prompts)
+      const currentQueueState = this.promptQueue.getState();
+      const totalPrompts = currentQueueState.prompts.length;
+
+      if (this.dashboardProvider && totalPrompts > 0) {
+        if (!continueFromCurrent) {
+          // Fresh start - send EXECUTION_STARTED message
+          this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
+        } else {
+          // Continuing from append - just update progress, don't reset state
+          const currentIndex = currentQueueState.currentIndex;
+          this.dashboardProvider.updateProgress(currentIndex, totalPrompts);
+        }
+      }
+
+      // Set workflow progress in Copilot integration (use queue count, not file count)
+      if (totalPrompts > 0) {
+        const currentIndex = currentQueueState.currentIndex;
+        integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
       }
       await this.startWorkflowExecution(integration);
     } catch (error) {
@@ -400,6 +431,90 @@ export class FlightPathManager {
     await this.loadPromptFile(filePath);
     // Then execute it immediately (for backwards compatibility with context menu)
     await this.executeLoadedPromptFile(modeOverride);
+  }
+
+  /**
+   * Append prompts from a file to the current queue
+   * @param filePath - Path to prompt file (.prompt.md, .flightpath.yaml, .flightpath.json)
+   */
+  public async appendFromFile(filePath: string): Promise<void> {
+    try {
+      // 1. Parse file (reuse existing parser)
+      const parsed = await this.promptFileParser.parsePromptFile(filePath);
+
+      if (!parsed || !parsed.prompts || parsed.prompts.length === 0) {
+        vscode.window.showErrorMessage("FlightPath: No prompts found in file");
+        return;
+      }
+
+      // 2. Check queue state
+      const queueState = this.promptQueue.getState();
+      const currentSize = queueState.prompts.length;
+      const isCompleted = queueState.status === EXECUTION_STATES.COMPLETED;
+
+      // If no workflow is loaded (truly empty queue), treat as "Run with FlightPath"
+      if (currentSize === 0) {
+        console.log("FlightPath: No workflow loaded, treating queue as run");
+        await this.executePromptFile(filePath);
+        return;
+      }
+
+      // 3. Validate queue state
+      if (!this.promptQueue.canAppend()) {
+        vscode.window.showErrorMessage(
+          "Cannot queue prompts: Workflow must be cleared first"
+        );
+        return;
+      }
+
+      // 4. Check queue size limit
+      const config = vscode.workspace.getConfiguration("flightpath");
+      const maxQueueSize = config.get<number>("maxQueueSize", 100);
+      const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+      const newSize = currentSize + parsed.prompts.length;
+
+      if (!unlimitedMode && newSize > maxQueueSize) {
+        vscode.window.showWarningMessage(
+          `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
+            `Enable unlimitedMode or increase maxQueueSize to proceed.`
+        );
+        return;
+      }
+
+      // 5. Append prompts
+      this.promptQueue.appendPrompts(parsed.prompts);
+
+      // 6. If queue was completed, trigger execution to continue (preserves history)
+      if (isCompleted) {
+        console.log(
+          "FlightPath: Queue was completed, resuming execution with appended prompts"
+        );
+
+        // If no prompt file is loaded, update context WITHOUT clearing dashboard
+        if (!this.currentPromptFile) {
+          console.log(
+            "FlightPath: No prompt file loaded, updating context (append mode)"
+          );
+          // Store the loaded file without calling loadPromptFile (which clears dashboard)
+          this.currentPromptFile = { filePath, promptFile: parsed };
+          // Set up file watcher for live reload
+          this.setupPromptFileWatcher(filePath);
+        }
+
+        // Continue execution from current position (preserves history)
+        await this.executeLoadedPromptFile(undefined, true);
+      }
+
+      // 7. Show notification
+      vscode.window.showInformationMessage(
+        `Queued ${parsed.prompts.length} prompts to active workflow`
+      );
+    } catch (error) {
+      console.error("FlightPath: Failed to queue prompts:", error);
+      vscode.window.showErrorMessage(
+        `Failed to queue prompts: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   /**

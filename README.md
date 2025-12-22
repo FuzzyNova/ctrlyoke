@@ -23,6 +23,7 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **📝 Structured Prompt Sequences**: Define multi-step workflows using YAML/JSON files
 - **🎯 Final-Form Prompts**: Store prompts with context variables (@workspace, #file, slash commands) ready to send
 - **🔄 Dynamic Queue Extension**: Let Copilot autonomously extend workflows by adding prompts during execution ([docs](./docs/DYNAMIC_QUEUE_USAGE.md))
+- **➕ Queue Append**: Add prompts to running workflows without clearing dashboard - right-click any prompt file and select "Queue with FlightPath"
 - **✨ Intelligent Autocomplete**: File and selection completions for prompt files ([docs](./docs/ENHANCED_PROMPT_EDITING.md))
 - **⏯️ Queue Management**: Pause, resume, and monitor execution progress
 - **📊 WebView Dashboard**: Real-time visual tracking of workflow execution with live CLI output ([docs](./docs/DASHBOARD_TESTING.md))

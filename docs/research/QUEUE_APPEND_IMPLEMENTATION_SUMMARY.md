@@ -206,7 +206,7 @@ context.subscriptions.push(
 ```typescript
 export const MESSAGE_TYPES = {
   // ... existing types ...
-  PROMPTS_APPENDED: "prompts_appended",
+  PROMPTS_APPENDED: "promptsAppended",
 } as const;
 ```
 

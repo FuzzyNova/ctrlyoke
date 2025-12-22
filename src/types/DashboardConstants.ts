@@ -22,6 +22,7 @@ export const MESSAGE_TYPES = {
   EXECUTION_COMPLETED: "executionCompleted",
   QUEUE_EXTENDED: "queueExtended",
   PROMPTS_EXTENDED: "promptsExtended", // Send updated prompt list after queue extension
+  PROMPTS_APPENDED: "promptsAppended",
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
   DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",

@@ -195,6 +195,12 @@
         "title": "New Draft Prompt",
         "category": "FlightPath",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "flightpath.queueFromContext",
+        "title": "Queue with FlightPath",
+        "category": "FlightPath",
+        "icon": "$(add)"
       }
     ],
     "menus": {
@@ -251,6 +257,10 @@
         {
           "command": "flightpath.loadFromContext",
           "when": "false"
+        },
+        {
+          "command": "flightpath.queueFromContext",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -268,6 +278,11 @@
           "command": "flightpath.loadFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
+        },
+        {
+          "command": "flightpath.queueFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@3"
         }
       ],
       "editor/title": [
@@ -275,6 +290,11 @@
           "command": "flightpath.runFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation"
+        },
+        {
+          "command": "flightpath.queueFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "navigation@2"
         }
       ],
       "editor/title/context": [
@@ -287,6 +307,11 @@
           "command": "flightpath.loadFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@2"
+        },
+        {
+          "command": "flightpath.queueFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@3"
         }
       ]
     },

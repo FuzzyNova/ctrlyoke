@@ -189,6 +189,31 @@ Example:
 }
 ```
 
+### 4. Queue Append - Extend Running Workflows
+
+**Add follow-up prompts without clearing the dashboard:**
+
+1. **Start a workflow** (e.g., `initial-analysis.flightpath.json`)
+2. **While it's running** (or after completion), right-click another prompt file
+3. **Select "Queue with FlightPath"**
+4. **New prompts are appended** to the current queue
+5. **All output preserved** - dashboard shows continuous history
+
+**Example Use Cases:**
+
+- **Follow-up questions**: Ask clarifying questions after initial analysis
+- **Sequential workflows**: Run workflow A, then automatically queue workflow B
+- **Interactive debugging**: Add investigation prompts during active debugging
+
+**Keyboard Shortcut:** Open a prompt file and click the "Queue" icon (➕) in the editor title bar.
+
+**Tips:**
+
+- Works with running, paused, and completed queues
+- Respects queue size limits (`maxQueueSize` setting)
+- Auto-executes when appending to completed queues
+- Blocked when queue is cancelled or errored (must clear first)
+
 ---
 
 ## 🛠️ Troubleshooting

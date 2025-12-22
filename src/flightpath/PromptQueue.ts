@@ -606,6 +606,61 @@ export class PromptQueue {
   }
 
   /**
+   * Append prompts to the current queue without clearing state
+   * @param prompts - Prompts to append
+   * @throws Error if queue is in invalid state for appending
+   */
+  public appendPrompts(prompts: PromptItem[]): void {
+    if (!this.canAppend()) {
+      throw new Error("Cannot append: Queue is in cancelled or error state");
+    }
+
+    // Append to queue
+    this.state.prompts.push(...prompts);
+
+    // Extend results array
+    prompts.forEach((prompt) => {
+      this.state.results.push({
+        prompt: prompt.prompt,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      });
+    });
+
+    // If queue completed/idle, set to running state (will be picked up by workflow executor)
+    if (this.isCompleted()) {
+      this.state.status = EXECUTION_STATES.RUNNING;
+      this.isPaused = false;
+      this.state.stopped = false;
+    }
+
+    this.emitStateChange();
+  }
+
+  /**
+   * Check if queue can accept appended prompts
+   * @returns true if queue state allows appending
+   */
+  public canAppend(): boolean {
+    const invalidStates: string[] = [
+      EXECUTION_STATES.CANCELLING,
+      EXECUTION_STATES.ERROR,
+    ];
+    return !invalidStates.includes(this.state.status);
+  }
+
+  /**
+   * Check if queue has completed all prompts
+   * @returns true if all prompts completed
+   */
+  public isCompleted(): boolean {
+    return (
+      this.state.status === EXECUTION_STATES.COMPLETED ||
+      this.state.status === EXECUTION_STATES.IDLE
+    );
+  }
+
+  /**
    * Emit state change event
    */
   private emitStateChange(): void {

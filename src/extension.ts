@@ -290,6 +290,18 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Queue with FlightPath command (context menu) - appends prompts to current queue
+  const queueFromContextCommand = vscode.commands.registerCommand(
+    "flightpath.queueFromContext",
+    async (uri: vscode.Uri) => {
+      if (!uri) {
+        vscode.window.showErrorMessage("No file selected");
+        return;
+      }
+      await flightPathManager.appendFromFile(uri.fsPath);
+    }
+  );
+
   // Run with FlightPath command (context menu) - runs using current provider
   const runFromContextCommand = vscode.commands.registerCommand(
     "flightpath.runFromContext",
@@ -452,6 +464,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     newWorkflowCommand,
     createNewTemplateCommand,
     runFromContextCommand,
+    queueFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,
     editCurrentPromptFileCommand,
