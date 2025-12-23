@@ -158,6 +158,19 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return `${this.getCliName()} ${quotedArgs.join(" ")}`;
   }
 
+  /**
+   * Format a file path reference for Codex CLI.
+   * Codex does NOT support @ symbol file references - it interprets them literally.
+   * Returns the file path without the @ prefix.
+   *
+   * @param relativeFilePath The relative file path (e.g., ".flightpath/temp/prompt.md")
+   * @returns File path without @ prefix (e.g., ".flightpath/temp/prompt.md")
+   */
+  protected formatFileReference(relativeFilePath: string): string {
+    // Codex CLI doesn't support @ prefix - just return the path as-is
+    return relativeFilePath;
+  }
+
   protected getIntegrationMode(): string {
     return Provider.CodexCli;
   }

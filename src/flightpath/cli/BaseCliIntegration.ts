@@ -246,6 +246,18 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   protected abstract buildInteractiveTuiCommand(baseArgs: string[]): string;
 
   /**
+   * Format a file path reference for the CLI.
+   * By default, prepends @ symbol for standard CLI file reference syntax.
+   * Subclasses can override to use different syntax (e.g., Codex doesn't support @).
+   *
+   * @param relativeFilePath The relative file path (e.g., ".flightpath/temp/prompt.md")
+   * @returns Formatted file reference (e.g., "@.flightpath/temp/prompt.md")
+   */
+  protected formatFileReference(relativeFilePath: string): string {
+    return `@${relativeFilePath}`;
+  }
+
+  /**
    * Create a temp file for the prompt and return file reference with instruction.
    * Returns both the temp file path (for cleanup) and the instructional prompt text
    * that tells the LLM to follow instructions in the file.
@@ -274,7 +286,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       workflowContext ? workflowContext.promptIndex + 1 : undefined
     );
     const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-    const fileReference = `@${relativeFilePath}`;
+    const fileReference = this.formatFileReference(relativeFilePath);
 
     // Prepend instruction so LLMs understand the file contains the prompt
     // Add trailing space to prevent TUI file picker from activating when cursor is on the file path
