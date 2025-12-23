@@ -1,10 +1,14 @@
 import * as vscode from "vscode";
+import * as fs from "fs/promises";
+import * as path from "path";
 import {
   PromptItem,
   QueueState,
   PromptResult,
   EXECUTION_STATES,
   STEP_STATUS,
+  WorkingFile,
+  AppendSegment,
 } from "../types/FlightPathTypes";
 import { Log } from "../utils/Log";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
@@ -72,6 +76,7 @@ export class PromptQueue {
     new vscode.EventEmitter<QueueState>();
   private isPaused: boolean = false;
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
+  private operationQueue: Promise<void> = Promise.resolve(); // Serialize all file operations
 
   // Public event for state changes
   public readonly onDidChangeState: vscode.Event<QueueState> =
@@ -88,13 +93,16 @@ export class PromptQueue {
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
+      appendSegments: [],
     };
   }
 
   /**
    * Load prompts into the queue
+   * @param prompts Prompts to load
+   * @param workingFilePath Optional path to working file (source of truth)
    */
-  loadPrompts(prompts: PromptItem[]): void {
+  loadPrompts(prompts: PromptItem[], workingFilePath?: string): void {
     this.state = {
       currentIndex: 0,
       status: EXECUTION_STATES.IDLE,
@@ -109,6 +117,8 @@ export class PromptQueue {
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
+      appendSegments: [],
+      workingFilePath,
     };
 
     this.emitStateChange();
@@ -493,15 +503,32 @@ export class PromptQueue {
    * @param maxQueueSize Maximum allowed queue size (0 = unlimited)
    * @returns Number of new prompts added, or -1 if reload failed
    */
+  /**
+   * Reload and merge queue from working file (for Dynamic Queue feature)
+   * This method reads the working file, identifies new prompts, and appends them
+   * @param parser PromptFileParser instance (no longer needed, kept for compatibility)
+   * @param maxQueueSize Maximum queue size (0 = unlimited)
+   * @returns Number of new prompts added (-1 if error)
+   */
   async reloadAndMergeQueue(
-    filePath: string,
-    parser: any, // PromptFileParser instance
+    filePath: string, // This is now ignored - we always use working file
+    parser: any, // PromptFileParser instance (kept for compatibility)
     maxQueueSize: number = 0
   ): Promise<number> {
+    // Use working file if available, otherwise fall back to provided filePath
+    const targetPath = this.state.workingFilePath || filePath;
+
     // 1. Reload file with validation
     let reloadedFile;
     try {
-      reloadedFile = await parser.parsePromptFile(filePath);
+      if (this.state.workingFilePath) {
+        // Read working file directly (already in JSON format)
+        reloadedFile = await this.readWorkingFile(targetPath);
+      } else {
+        // Fall back to parsing original file (legacy path)
+        reloadedFile = await parser.parsePromptFile(targetPath);
+      }
+
       if (!reloadedFile || !reloadedFile.prompts) {
         throw new Error("Invalid prompt file structure");
       }
@@ -583,6 +610,9 @@ export class PromptQueue {
 
     this.emitStateChange();
 
+    // 6. Update working file with merged queue (if exists)
+    await this.updateWorkingFile();
+
     Log.info(
       `Queue extended: +${newPrompts.length} prompts added (total: ${this.state.prompts.length})`
     );
@@ -607,34 +637,64 @@ export class PromptQueue {
 
   /**
    * Append prompts to the current queue without clearing state
+   * This method now uses working file operations for persistence
    * @param prompts - Prompts to append
+   * @param source - Description of append source (e.g., filename or "MCP")
    * @throws Error if queue is in invalid state for appending
    */
-  public appendPrompts(prompts: PromptItem[]): void {
+  public async appendPrompts(
+    prompts: PromptItem[],
+    source: string = "User append"
+  ): Promise<void> {
     if (!this.canAppend()) {
       throw new Error("Cannot append: Queue is in cancelled or error state");
     }
 
-    // Append to queue
-    this.state.prompts.push(...prompts);
+    // Serialize operation to prevent race conditions
+    this.operationQueue = this.operationQueue.then(async () => {
+      // Generate append segment for tracking
+      const segment: AppendSegment = {
+        id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        timestamp: Date.now(),
+        source,
+        promptCount: prompts.length,
+        promptIndices: Array.from(
+          { length: prompts.length },
+          (_, i) => this.state.prompts.length + i
+        ),
+      };
 
-    // Extend results array
-    prompts.forEach((prompt) => {
-      this.state.results.push({
-        prompt: prompt.prompt,
-        status: STEP_STATUS.PENDING,
-        timestamp: new Date(),
+      // Append to queue
+      this.state.prompts.push(...prompts);
+      this.state.appendSegments.push(segment);
+
+      // Extend results array
+      prompts.forEach((prompt) => {
+        this.state.results.push({
+          prompt: prompt.prompt,
+          status: STEP_STATUS.PENDING,
+          timestamp: new Date(),
+        });
       });
+
+      // If queue completed/idle, set to running state (will be picked up by workflow executor)
+      if (this.isCompleted()) {
+        this.state.status = EXECUTION_STATES.RUNNING;
+        this.isPaused = false;
+        this.state.stopped = false;
+      }
+
+      this.emitStateChange();
+
+      // Update working file if it exists
+      await this.updateWorkingFile();
+
+      console.log(
+        `FlightPath: Appended ${prompts.length} prompts from: ${source}`
+      );
     });
 
-    // If queue completed/idle, set to running state (will be picked up by workflow executor)
-    if (this.isCompleted()) {
-      this.state.status = EXECUTION_STATES.RUNNING;
-      this.isPaused = false;
-      this.state.stopped = false;
-    }
-
-    this.emitStateChange();
+    await this.operationQueue;
   }
 
   /**
@@ -658,6 +718,167 @@ export class PromptQueue {
       this.state.status === EXECUTION_STATES.COMPLETED ||
       this.state.status === EXECUTION_STATES.IDLE
     );
+  }
+
+  // ==================== Working File Operations ====================
+
+  /**
+   * Generate working file path in .flightpath/.queue/ directory
+   */
+  private async generateWorkingFilePath(
+    originalFilePath: string,
+    workspaceFolder: vscode.WorkspaceFolder
+  ): Promise<string> {
+    const fileName = path.basename(
+      originalFilePath,
+      path.extname(originalFilePath)
+    );
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .substring(0, 19);
+    const queueDir = path.join(
+      workspaceFolder.uri.fsPath,
+      ".flightpath",
+      ".queue"
+    );
+
+    // Ensure directory exists
+    await fs.mkdir(queueDir, { recursive: true });
+
+    return path.join(queueDir, `${fileName}-${timestamp}.flightpath.json`);
+  }
+
+  /**
+   * Create working file from original prompt file
+   * @param originalFilePath Path to original prompt file
+   * @param prompts Prompts to store in working file
+   * @param workspaceFolder Current workspace folder
+   * @returns Path to created working file
+   */
+  public async createWorkingFile(
+    originalFilePath: string,
+    prompts: PromptItem[],
+    workspaceFolder: vscode.WorkspaceFolder
+  ): Promise<string> {
+    const workingFilePath = await this.generateWorkingFilePath(
+      originalFilePath,
+      workspaceFolder
+    );
+
+    const workingFile: WorkingFile = {
+      originalFile: originalFilePath,
+      workflowName: path.basename(
+        originalFilePath,
+        path.extname(originalFilePath)
+      ),
+      startedAt: Date.now(),
+      prompts: prompts,
+      _runtime: {
+        currentIndex: 0,
+        completedPrompts: [],
+        executionState: EXECUTION_STATES.IDLE,
+        appendSegments: [],
+      },
+    };
+
+    // Write atomically (temp + rename)
+    await this.writeWorkingFileAtomic(workingFilePath, workingFile);
+
+    // Update queue state with working file path
+    this.state.workingFilePath = workingFilePath;
+    this.emitStateChange();
+
+    console.log(`FlightPath: Created working file: ${workingFilePath}`);
+    return workingFilePath;
+  }
+
+  /**
+   * Read working file
+   * @param workingFilePath Path to working file
+   * @returns Parsed working file
+   */
+  public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
+    try {
+      const content = await fs.readFile(workingFilePath, "utf-8");
+      const parsed = JSON.parse(content) as WorkingFile;
+      return parsed;
+    } catch (error) {
+      throw new Error(
+        `Failed to read working file: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Write working file atomically (temp + rename)
+   * @param workingFilePath Path to working file
+   * @param workingFile Working file data
+   */
+  private async writeWorkingFileAtomic(
+    workingFilePath: string,
+    workingFile: WorkingFile
+  ): Promise<void> {
+    const tempPath = `${workingFilePath}.tmp`;
+
+    try {
+      // Write to temp file
+      await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
+
+      // Atomic rename
+      await fs.rename(tempPath, workingFilePath);
+    } catch (error) {
+      // Clean up temp file on error
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+
+      throw new Error(
+        `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Update working file with current queue state
+   * This is called after prompt completion, append, or any queue modification
+   */
+  public async updateWorkingFile(): Promise<void> {
+    if (!this.state.workingFilePath) {
+      return; // No working file to update
+    }
+
+    // Serialize operation to prevent race conditions
+    this.operationQueue = this.operationQueue.then(async () => {
+      try {
+        // Read current working file
+        const workingFile = await this.readWorkingFile(
+          this.state.workingFilePath!
+        );
+
+        // Update prompts array
+        workingFile.prompts = this.state.prompts;
+
+        // Update runtime state
+        workingFile._runtime = {
+          currentIndex: this.state.currentIndex,
+          completedPrompts: Array.from(this.state.completedIds),
+          executionState: this.state.status,
+          appendSegments: this.state.appendSegments,
+        };
+
+        // Write atomically
+        await this.writeWorkingFileAtomic(
+          this.state.workingFilePath!,
+          workingFile
+        );
+      } catch (error) {
+        console.error("FlightPath: Failed to update working file:", error);
+        // Don't throw - this is a background operation
+      }
+    });
+
+    await this.operationQueue;
   }
 
   /**

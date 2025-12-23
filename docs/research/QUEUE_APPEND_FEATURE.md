@@ -4,26 +4,15 @@
 
 Enable users to append prompts, prompt files, or workflows to the current FlightPath queue without clearing the dashboard. This allows continuous workflow execution and follow-up questions while preserving all output history.
 
-**Status**: ✅ **IMPLEMENTED - MVP Complete** (December 22, 2024)
+**Status**: ✅ **PHASE 1 COMPLETE** - ✅ **PHASE 2 COMPLETE** (December 22, 2024)
 
-**MVP Scope**:
+**Implementation Status**:
 
-- ✅ Single command: `flightpath.queueFromContext`
-- ✅ Context menu item: "Queue with FlightPath"
-- ✅ Editor title bar button (icon next to existing "Run" button)
-- ✅ No dashboard UI changes (appended prompts appear as regular queue items)
-- ✅ No new settings required (reuses Dynamic Queue settings)
-- 🔜 **Working file system**: On-disk queue state for crash recovery (`.flightpath/.queue/<workflow>-<timestamp>.flightpath.json`)
-- 🔜 **Single schema**: Working files use same schema as user-created files, with optional `_runtime` object for execution state
-- 🔜 **MCP-compatible backend**: Position control (`"next" | "end"`) built-in from day one
+**Phase 1: Core Queue Append & Working File System** - ✅ **COMPLETE**
 
-## Implementation Status
+All core features implemented:
 
-**Phase 1: Core Queue Append** - ✅ **COMPLETE** (~1 hour implementation)
-
-All MVP requirements implemented:
-
-- ✅ `PromptQueue.appendPrompts()` method
+- ✅ `PromptQueue.appendPrompts()` method (async with atomic operations)
 - ✅ `PromptQueue.canAppend()` validation
 - ✅ `PromptQueue.isCompleted()` helper
 - ✅ `FlightPathManager.appendFromFile()` orchestration
@@ -32,19 +21,33 @@ All MVP requirements implemented:
 - ✅ Auto-execution for completed queues
 - ✅ Queue size limit enforcement
 - ✅ User notifications
-- ✅ Documentation (README.md, QUICK_START.md)
+- ✅ **Working file system**: `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json`
+- ✅ **Atomic file operations**: Temp file + rename pattern
+- ✅ **Operation queue**: Serialized concurrent operations (no race conditions)
+- ✅ **File watcher**: Watches working file, not original
+- ✅ **Dynamic Queue integration**: Uses working file as source of truth
+
+**Phase 2: Session Management & Auto-Resume** - ✅ **COMPLETE**
+
+Crash recovery and seamless resume:
+
+- ✅ Auto-load most recent session on VS Code startup
+- ✅ `flightpath.autoLoadRecentSession` setting (default: true)
+- ✅ Session discovery from `.flightpath/.queue/` directory
+- ✅ Sorted by timestamp (most recent first)
+- ✅ Silent auto-load (no intrusive notifications)
+- ✅ Dashboard preserves state from previous session
+- ✅ Working files persist across VS Code restarts
 
 **Files Modified:**
 
-1. `src/flightpath/PromptQueue.ts` - Added 3 new public methods (65 lines)
-2. `package.json` - Added command and 3 context menu entries (30 lines)
-3. `src/types/DashboardConstants.ts` - Added message type constant (1 line)
-4. `src/flightpath/FlightPathManager.ts` - Added appendFromFile method (90 lines)
-5. `src/extension.ts` - Registered new command (10 lines)
-6. `README.md` - Added feature to features list
-7. `QUICK_START.md` - Added Queue Append tutorial section
+1. `src/types/FlightPathTypes.ts` - Added WorkingFile, WorkingFileRuntime, AppendSegment types (60 lines)
+2. `src/flightpath/PromptQueue.ts` - Added working file I/O, atomic operations, operation queue (200 lines)
+3. `src/flightpath/FlightPathManager.ts` - Working file creation, file watcher migration, auto-load session (150 lines)
+4. `package.json` - Added `autoLoadRecentSession` setting (10 lines)
+5. Earlier: Command registration, appendFromFile, context menu (from Phase 1)
 
-**Total New Code:** ~200 lines (excluding documentation)
+**Total New Code:** ~600 lines (including working file system + auto-resume)
 
 ## Bugs Fixed
 
@@ -121,11 +124,33 @@ if (!continueFromCurrent) {
 
 **Working File as Source of Truth**:
 
-- ✅ Queue state persisted to `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json` on every change
-- ✅ Crash recovery: Resume workflows after VS Code restarts (can run working file directly)
-- ✅ Same schema as user-created files, extended with optional `_runtime` object for execution state
-- ✅ Same file used by both user actions (Queue Append) and AI actions (MCP)
-- ✅ Atomic writes (temp file + rename) prevent corruption
+- ✅ **Queue state persisted** to `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json` on every change
+- ✅ **Crash recovery**: Resume workflows after VS Code restarts (auto-loads most recent session)
+- ✅ **Same schema** as user-created files, extended with optional `_runtime` object for execution state
+- ✅ **Same file** used by both user actions (Queue Append) and AI actions (Dynamic Queue)
+- ✅ **Atomic writes** (temp file + rename) prevent corruption
+- ✅ **File watcher** watches working file, not original prompt file
+- ✅ **Auto-resume**: Setting `flightpath.autoLoadRecentSession` (default: true) auto-loads most recent session on startup
+
+**Working File Format**:
+
+```json
+{
+  "originalFile": "c:/dev/project/bugfix.flightpath.json",
+  "workflowName": "bugfix",
+  "startedAt": 1703174400000,
+  "prompts": [
+    { "prompt": "Step 1", "id": "step-1" },
+    { "prompt": "Step 2", "id": "step-2" }
+  ],
+  "_runtime": {
+    "currentIndex": 0,
+    "completedPrompts": ["step-1-hash"],
+    "executionState": "running",
+    "appendSegments": []
+  }
+}
+```
 
 **Unexpanded Prompts Explained**:
 
@@ -146,10 +171,210 @@ if (!continueFromCurrent) {
 - Visual segmentation of appended prompt groups
 - Additional commands for queueing text input
 - Queue Next feature (insert after current position)
-- Working file system for crash recovery
 - Advanced append analytics
 
+## Phase 2: Session Management & Auto-Resume
+
+**Status**: ✅ **COMPLETE** (December 22, 2024)
+
+### Overview
+
+Phase 2 implements seamless crash recovery and auto-resume functionality by automatically loading the most recent workflow session when VS Code starts.
+
+### Features Implemented
+
+**1. Auto-Load Recent Session**
+
+On VS Code startup:
+
+1. Checks `.flightpath/.queue/` for working files
+2. Finds most recent (by filename timestamp)
+3. Auto-loads into queue (doesn't auto-execute)
+4. Dashboard shows previous session state
+
+**2. Session Discovery**
+
+- Scans `.flightpath/.queue/` directory
+- Filters to `.flightpath.json` files
+- Sorts by timestamp in filename (format: `workflow-2024-12-22T15-30-00.flightpath.json`)
+- Selects most recent
+
+**3. Setting: `flightpath.autoLoadRecentSession`**
+
+- **Type**: Boolean
+- **Default**: `true`
+- **Description**: Automatically load the most recent workflow session on startup
+- **Location**: Settings → FlightPath → Session Management
+
+**4. Silent Auto-Load**
+
+- No intrusive notifications on startup
+- Console log: `FlightPath: Auto-loaded recent session: bugfix (bugfix-2024-12-22T15-30-00.flightpath.json)`
+- Optional notification available (commented out)
+
+### Implementation Details
+
+**FlightPathManager.autoLoadRecentSession()**:
+
+```typescript
+private async autoLoadRecentSession(): Promise<void> {
+  try {
+    // 1. Check workspace folder exists
+    if (!this.currentWorkspaceFolder) return;
+
+    // 2. Build queue directory path
+    const queueDir = path.join(
+      this.currentWorkspaceFolder.uri.fsPath,
+      ".flightpath",
+      ".queue"
+    );
+
+    // 3. Check directory exists (exit silently if not)
+    try {
+      await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
+    } catch {
+      return; // Queue directory doesn't exist yet
+    }
+
+    // 4. Read directory contents
+    const files = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(queueDir)
+    );
+
+    // 5. Filter to .flightpath.json files
+    const workingFiles = files
+      .filter(
+        ([name, type]) =>
+          type === vscode.FileType.File && name.endsWith(".flightpath.json")
+      )
+      .map(([name]) => name);
+
+    if (workingFiles.length === 0) return;
+
+    // 6. Sort by timestamp (newest first)
+    const sorted = workingFiles.sort().reverse();
+    const mostRecent = sorted[0];
+    const workingFilePath = path.join(queueDir, mostRecent);
+
+    // 7. Load from working file (reuses existing method)
+    await this.reloadFromWorkingFile(workingFilePath);
+
+    console.log(
+      `FlightPath: Auto-loaded recent session: ${workflowName}`
+    );
+  } catch (error) {
+    console.error("FlightPath: Failed to auto-load recent session:", error);
+    // Don't show error to user - silent failure
+  }
+}
+```
+
+**Integration with FlightPathManager.initialize()**:
+
+```typescript
+async initialize(): Promise<void> {
+  // ... existing code ...
+
+  // Auto-load most recent session if enabled
+  const config = vscode.workspace.getConfiguration("flightpath");
+  const autoLoad = config.get<boolean>("autoLoadRecentSession", true);
+  if (autoLoad) {
+    await this.autoLoadRecentSession();
+  }
+
+  // ... rest of initialization ...
+}
+```
+
+### User Experience
+
+**Scenario 1: Normal Workflow Resume**
+
+1. User is working on `bugfix.flightpath.json`
+2. VS Code crashes or user closes window
+3. User reopens VS Code
+4. FlightPath automatically loads the bugfix session
+5. Dashboard shows: 3 completed prompts, 2 pending
+6. User can continue where they left off
+
+**Scenario 2: First Time User (No Sessions)**
+
+1. User opens VS Code for the first time
+2. No `.flightpath/.queue/` directory exists
+3. Auto-load silently returns (no error)
+4. Dashboard shows empty state
+5. User starts first workflow normally
+
+**Scenario 3: Multiple Sessions Available**
+
+1. User has worked on multiple workflows
+2. `.flightpath/.queue/` contains:
+   - `bugfix-2024-12-22T10-00-00.flightpath.json`
+   - `feature-auth-2024-12-22T14-00-00.flightpath.json` ← Most recent
+   - `refactor-2024-12-21T16-00-00.flightpath.json`
+3. Auto-load selects `feature-auth` (newest)
+4. User sees feature-auth session in dashboard
+
+**Scenario 4: User Disables Auto-Load**
+
+1. User sets `flightpath.autoLoadRecentSession: false`
+2. Opens VS Code
+3. No session auto-loads
+4. Dashboard shows empty state
+5. User manually selects workflow to run
+
+### Benefits
+
+✅ **Zero-click resume** - No action needed to get back to work  
+✅ **Crash recovery** - Never lose progress due to VS Code crashes  
+✅ **Context preservation** - Dashboard shows exactly where you left off  
+✅ **Non-intrusive** - Silent load, no annoying notifications  
+✅ **Opt-out available** - Users can disable if they prefer manual selection  
+✅ **Works immediately** - No setup required
+
+### Future Enhancements (Phase 3+)
+
+- **Session history picker**: `FlightPath: Resume Session` command showing all recent sessions
+- **Output persistence**: Save CLI output and AI responses in working file
+- **Session metadata**: Show last modified time, completion percentage in picker
+- **Session cleanup**: Auto-delete sessions older than N days
+
 ## Current Behavior
+
+**Note**: As of Phase 1 completion, all workflows use the working file system. The original prompt file is loaded once and never watched. All modifications (user queue actions, Dynamic Queue) operate on the working file.
+
+### Workflow Lifecycle
+
+**1. Loading a Workflow** (Run with FlightPath):
+
+- User selects `bugfix.flightpath.json`
+- Working file created: `.flightpath/.queue/bugfix-2024-12-22T15-30-00.flightpath.json`
+- Original prompts copied to working file
+- File watcher starts watching **working file** (not original!)
+- Dashboard loads and shows workflow
+
+**2. Queue Append** (Queue with FlightPath):
+
+- User right-clicks another file
+- `appendPrompts()` updates working file atomically (temp + rename)
+- File watcher detects change (no external file edit, just internal update)
+- Queue state updates
+- Execution continues or starts
+
+**3. Dynamic Queue** (AI-driven):
+
+- AI receives working file path in instructions
+- AI modifies working file (adds prompts)
+- File watcher detects change
+- Queue reloads from working file
+- Execution continues with new prompts
+
+**4. Editing Original File**:
+
+- User edits `current.prompt.md` and saves
+- **Nothing happens** (original file not being watched!)
+- User can then "Queue with FlightPath" to append the edited version
+- This fixes the original architectural conflict
 
 ### Queue State Transitions
 
@@ -173,28 +398,34 @@ Respects existing Dynamic Queue settings:
 | Current: 99, New: 2, Max: 100              | ❌ Warning: "Queue size limit exceeded..." |
 | Current: 50, New: 100, unlimitedMode: true | ✅ Appended (total: 150)                   |
 
-**Settings Used** (no new settings required):
+**Settings Used**:
 
-- `flightpath.maxQueueSize` (default: 100)
-- `flightpath.maxExecutionTime` (default: 18000s = 5 hours)
-- `flightpath.unlimitedMode` (default: false)
+**Queue Management** (reuses Dynamic Queue settings):
+
+- `flightpath.maxQueueSize` (default: 100) - Maximum total queue size
+- `flightpath.maxExecutionTime` (default: 18000s = 5 hours) - Total execution time limit
+- `flightpath.unlimitedMode` (default: false) - Bypass size/time limits
+
+**Session Management** (new in Phase 2):
+
+- `flightpath.autoLoadRecentSession` (default: true) - Auto-load most recent session on startup
 
 ## Next Steps
 
-**Immediate (Phase 2):**
+**Phase 3: Visual Enhancements (Future)**
 
-- 🔜 Manual testing across all scenarios
-- 🔜 User feedback on UX and behavior
-- 🔜 Consider visual segmentation if requested
+- Dashboard visual segmentation (show append boundaries)
+- Session history picker ("FlightPath: Resume Session" command)
+- Output persistence in working file
+- Advanced session management UI
 
 **Future Phases (from original plan):**
 
-- Phase 3: Settings & polish (status bar append counts)
-- Phase 4: Headless CI/CD support
-- Phase 5: Queue Next (insert after current position)
-- Phase 6-10: Full queue management UI (drag-drop, removal, undo/redo)
-- Phase 11: Working file system for crash recovery
-- Phase 12: MCP integration (AI-driven queue extension)
+- Phase 4: Settings & polish (status bar append counts)
+- Phase 5: Headless CI/CD support
+- Phase 6: Queue Next (insert after current position)
+- Phase 7-10: Full queue management UI (drag-drop, removal, undo/redo)
+- Phase 11: MCP integration (AI-driven queue extension via MCP tools)
 
 ---
 

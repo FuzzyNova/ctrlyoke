@@ -25,6 +25,38 @@ export interface PromptFile {
   prompts?: PromptItem[];
 }
 
+/**
+ * Runtime metadata for working files (optional, not required for user-created files)
+ */
+export interface WorkingFileRuntime {
+  currentIndex: number;
+  completedPrompts: string[]; // IDs and hashes of completed prompts
+  executionState: ExecutionState;
+  appendSegments?: AppendSegment[];
+}
+
+/**
+ * Tracks each queue append operation for audit and visual separation
+ */
+export interface AppendSegment {
+  id: string; // Unique segment identifier (UUID)
+  timestamp: number;
+  source: string; // File path or description (e.g., "User append: fix-tests.prompt.md")
+  promptCount: number;
+  promptIndices: number[]; // Which prompts in the queue belong to this segment
+}
+
+/**
+ * Working file format - same schema as PromptFile with optional runtime metadata
+ * Stored in .flightpath/.queue/ directory
+ */
+export interface WorkingFile extends PromptFile {
+  originalFile: string; // Path to original prompt file
+  workflowName: string; // Derived from original filename
+  startedAt: number; // Timestamp when workflow started
+  _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
+}
+
 export interface PromptItem {
   id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
@@ -56,6 +88,8 @@ export interface QueueState {
   startTime?: number; // When execution started (for time tracking)
   pausedTime?: number; // When queue was paused (for pause duration calculation)
   totalPausedDuration: number; // Total time spent paused (milliseconds)
+  workingFilePath?: string; // Path to working file (source of truth)
+  appendSegments: AppendSegment[]; // Track all append operations
 }
 
 /**

@@ -192,6 +192,13 @@ export class FlightPathManager {
       // Discover existing prompt files
       await this.discoverPromptFiles();
 
+      // Auto-load most recent session if enabled
+      const config = vscode.workspace.getConfiguration("flightpath");
+      const autoLoad = config.get<boolean>("autoLoadRecentSession", true);
+      if (autoLoad) {
+        await this.autoLoadRecentSession();
+      }
+
       // Note: Copilot integration starts background polling automatically in constructor
       // Status bar will update via onDidChangeStatus event listener
 
@@ -201,6 +208,75 @@ export class FlightPathManager {
       vscode.window.showErrorMessage(
         `FlightPath: Initialization failed: ${error}`
       );
+    }
+  }
+
+  /**
+   * Auto-load the most recent workflow session from .flightpath/.queue/
+   * This enables seamless resume after VS Code restarts or crashes
+   */
+  private async autoLoadRecentSession(): Promise<void> {
+    try {
+      if (!this.currentWorkspaceFolder) {
+        return; // No workspace, nothing to load
+      }
+
+      const queueDir = path.join(
+        this.currentWorkspaceFolder.uri.fsPath,
+        ".flightpath",
+        ".queue"
+      );
+
+      // Check if queue directory exists
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
+      } catch {
+        // Queue directory doesn't exist yet
+        return;
+      }
+
+      // Read directory contents
+      const files = await vscode.workspace.fs.readDirectory(
+        vscode.Uri.file(queueDir)
+      );
+
+      // Filter to .flightpath.json files
+      const workingFiles = files
+        .filter(
+          ([name, type]) =>
+            type === vscode.FileType.File && name.endsWith(".flightpath.json")
+        )
+        .map(([name]) => name);
+
+      if (workingFiles.length === 0) {
+        return; // No sessions to load
+      }
+
+      // Sort by timestamp in filename (newest first)
+      // Format: workflow-2024-12-22T15-30-00.flightpath.json
+      const sorted = workingFiles.sort().reverse();
+      const mostRecent = sorted[0];
+      const workingFilePath = path.join(queueDir, mostRecent);
+
+      // Load from working file
+      await this.reloadFromWorkingFile(workingFilePath);
+
+      // Extract workflow name from filename for logging
+      const workflowName = mostRecent
+        .replace(/\.flightpath\.json$/, "")
+        .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
+
+      console.log(
+        `FlightPath: Auto-loaded recent session: ${workflowName} (${mostRecent})`
+      );
+
+      // Optional: Show subtle notification (not intrusive)
+      // vscode.window.showInformationMessage(
+      //   `FlightPath: Resumed session: ${workflowName}`
+      // );
+    } catch (error) {
+      console.error("FlightPath: Failed to auto-load recent session:", error);
+      // Don't show error to user - just log and continue
     }
   }
 
@@ -239,11 +315,35 @@ export class FlightPathManager {
       // Store the loaded file
       this.currentPromptFile = { filePath, promptFile };
 
-      // Set up file watcher for live reload
-      this.setupPromptFileWatcher(filePath);
+      // Create working file in .flightpath/.queue/ directory
+      const workspaceFolder = this.currentWorkspaceFolder;
+      if (!workspaceFolder) {
+        console.warn(
+          "FlightPath: No workspace folder, skipping working file creation"
+        );
+      }
 
-      // Load prompts into queue (but don't start execution)
-      this.promptQueue.loadPrompts(promptFile.prompts);
+      let workingFilePath: string | undefined;
+      if (workspaceFolder) {
+        try {
+          workingFilePath = await this.promptQueue.createWorkingFile(
+            filePath,
+            promptFile.prompts,
+            workspaceFolder
+          );
+        } catch (error) {
+          console.error("FlightPath: Failed to create working file:", error);
+          // Continue without working file (fallback to in-memory queue)
+        }
+      }
+
+      // Set up file watcher for working file (not original file!)
+      if (workingFilePath) {
+        this.setupPromptFileWatcher(workingFilePath);
+      }
+
+      // Load prompts into queue with working file path
+      this.promptQueue.loadPrompts(promptFile.prompts, workingFilePath);
 
       // Notify dashboard about file selection
       if (this.dashboardProvider) {
@@ -482,7 +582,8 @@ export class FlightPathManager {
       }
 
       // 5. Append prompts
-      this.promptQueue.appendPrompts(parsed.prompts);
+      const source = `User append: ${path.basename(filePath)}`;
+      await this.promptQueue.appendPrompts(parsed.prompts, source);
 
       // 6. If queue was completed, trigger execution to continue (preserves history)
       if (isCompleted) {
@@ -1451,14 +1552,15 @@ Provide specific examples and actionable suggestions.
   }
 
   /**
-   * Set up file watcher for the currently loaded prompt file
-   * Reloads prompt content when file changes (only when not executing)
+   * Set up file watcher for the working file (not the original prompt file!)
+   * Reloads queue when working file changes (from Queue Append, Dynamic Queue, or MCP)
+   * Note: This now watches the working file in .flightpath/.queue/, not the original file
    */
   private setupPromptFileWatcher(filePath: string): void {
     // Dispose existing watcher
     this.promptFileWatcher?.dispose();
 
-    // Create watcher for this specific file
+    // Create watcher for this specific file (working file)
     const pattern = new vscode.RelativePattern(
       path.dirname(filePath),
       path.basename(filePath)
@@ -1475,15 +1577,15 @@ Provide specific examples and actionable suggestions.
         state.status === EXECUTION_STATES.ERROR
       ) {
         console.log(
-          `FlightPath: Prompt file changed, reloading: ${uri.fsPath}`
+          `FlightPath: Working file changed, reloading queue: ${uri.fsPath}`
         );
-        await this.reloadCurrentPromptFile();
+        await this.reloadFromWorkingFile(uri.fsPath);
       }
     });
 
     // Also watch for deletion
     this.promptFileWatcher.onDidDelete((uri) => {
-      console.log(`FlightPath: Prompt file deleted: ${uri.fsPath}`);
+      console.log(`FlightPath: Working file deleted: ${uri.fsPath}`);
       this.currentPromptFile = undefined;
       this.promptFileWatcher?.dispose();
       this.promptFileWatcher = undefined;
@@ -1494,7 +1596,56 @@ Provide specific examples and actionable suggestions.
   }
 
   /**
-   * Reload the currently loaded prompt file
+   * Reload queue from working file (used by Dynamic Queue and file watcher)
+   * @param workingFilePath Path to working file
+   */
+  private async reloadFromWorkingFile(workingFilePath: string): Promise<void> {
+    try {
+      // Read working file
+      const workingFile =
+        await this.promptQueue.readWorkingFile(workingFilePath);
+
+      // Check if prompts exist
+      if (!workingFile.prompts || workingFile.prompts.length === 0) {
+        console.error("FlightPath: Working file has no prompts");
+        return;
+      }
+
+      // Validate prompts
+      const validation = this.promptFileParser.validatePromptItems(
+        workingFile.prompts
+      );
+      if (!validation.valid) {
+        console.error(
+          "FlightPath: Working file validation failed:",
+          validation.errors
+        );
+        return;
+      }
+
+      // Reload queue with new prompts (preserves working file path)
+      this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
+
+      // Update dashboard
+      if (this.dashboardProvider) {
+        const fileName = path.basename(workingFile.originalFile);
+        this.dashboardProvider.updateFileSelected(
+          fileName,
+          workingFile.prompts.map((p) => ({ prompt: p.prompt }))
+        );
+      }
+
+      console.log(
+        `FlightPath: Reloaded ${workingFile.prompts.length} prompts from working file`
+      );
+    } catch (error) {
+      console.error("FlightPath: Failed to reload working file:", error);
+    }
+  }
+
+  /**
+   * Reload the currently loaded prompt file (LEGACY - used for non-working-file scenarios)
+   * @deprecated This method is kept for backward compatibility but should be replaced with reloadFromWorkingFile
    */
   private async reloadCurrentPromptFile(): Promise<void> {
     if (!this.currentPromptFile) return;

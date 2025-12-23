@@ -841,6 +841,13 @@
           "default": true,
           "description": "[Dynamic Queue] Show notification when AI extends the prompt queue",
           "markdownDescription": "Show notification when the AI extends the prompt queue during workflow execution."
+        },
+        "flightpath.autoLoadRecentSession": {
+          "order": 700,
+          "type": "boolean",
+          "default": true,
+          "description": "[Session Management] Automatically load the most recent workflow session on startup",
+          "markdownDescription": "When enabled (default), FlightPath automatically loads the most recent workflow from `.flightpath/.queue/` when VS Code starts. This enables seamless resume after crashes or restarts. Disable if you prefer to manually select workflows."
         }
       }
     },
