@@ -108,6 +108,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     if (commandId) {
       if (message.type === MESSAGE_TYPES.READY) {
         this.sendInitialState();
+        // Notify FlightPathManager that dashboard is ready
+        if (this.flightPathManager) {
+          this.flightPathManager.setDashboardReady();
+        }
       } else {
         vscode.commands.executeCommand(commandId);
       }
@@ -202,6 +206,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   public updatePromptsExtended(prompts: any[]): void {
+    console.log(
+      `📊 DashboardProvider.updatePromptsExtended: Sending ${prompts.length} prompts`,
+      prompts.map((p) => p.prompt?.substring(0, 50))
+    );
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
       prompts: prompts.map((p) => ({ prompt: p.prompt })),

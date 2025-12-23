@@ -92,7 +92,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       /^●\s+Model changed to:/i, // Model change notification
 
       // Copilot spinner/thinking indicator (UI chrome - just the spinner character alone)
-      /^[·◉◎●]\s*$/, // Spinner alone (any Copilot spinner character)
+      /^[·∙◉◎●]\s*$/, // Spinner alone (U+00B7 middle dot, U+2219 bullet operator, or filled circles)
+
+      // Copilot spinner with status text and cancel hint (UI chrome)
+      /^[·∙◉◎●]\s+.*\(Esc to cancel/i, // Spinner with status text (e.g., "Thinking (Esc to cancel)")
 
       // Copilot status bar (UI chrome - path + branch + model display)
       /\[⎇\s+\w+\*?\].*gpt-.*\(\d+x\)/i, // Look for distinctive parts: branch indicator, model, and multiplier

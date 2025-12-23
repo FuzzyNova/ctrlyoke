@@ -39,6 +39,7 @@ export class FlightPathManager {
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
   private promptFileWatcher?: vscode.FileSystemWatcher; // Watch for changes to current prompt file
+  private dashboardReady: boolean = false; // Track dashboard initialization state
 
   constructor(
     context: vscode.ExtensionContext,
@@ -398,7 +399,26 @@ export class FlightPathManager {
       // Create integration for this execution (either override or default)
       const integration = this.createIntegrationForMode(modeOverride);
 
-      // Check Copilot readiness FIRST
+      // Check dashboard readiness FIRST (if dashboard exists)
+      if (this.dashboardProvider && !this.dashboardReady) {
+        const action = await vscode.window.showWarningMessage(
+          `FlightPath dashboard is still initializing. Please wait a moment and try again.`,
+          "Retry",
+          "Cancel"
+        );
+
+        if (action === "Retry") {
+          // Try again after a short delay
+          setTimeout(
+            () =>
+              this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
+            500
+          );
+        }
+        return;
+      }
+
+      // Check Copilot readiness
       const detailedStatus = integration.getDetailedStatus();
 
       // Block execution if still initializing
@@ -973,6 +993,14 @@ export class FlightPathManager {
         `FlightPath: Failed to open file: ${error}`
       );
     }
+  }
+
+  /**
+   * Set dashboard ready flag (called by DashboardProvider when webview signals READY)
+   */
+  setDashboardReady(): void {
+    console.log("✅ FlightPath: Dashboard is ready");
+    this.dashboardReady = true;
   }
 
   /**
@@ -1579,17 +1607,19 @@ Provide specific examples and actionable suggestions.
     this.promptFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.promptFileWatcher.onDidChange(async (uri) => {
-      // Only reload if not currently executing
+      // Only reload if state is IDLE (workflow hasn't started or was cleared)
+      // Do NOT reload when COMPLETED or ERROR - those states should preserve the dashboard view
+      // (reloading would reset the view and clear all outputs)
       const state = this.promptQueue.getState();
-      if (
-        state.status === EXECUTION_STATES.IDLE ||
-        state.status === EXECUTION_STATES.COMPLETED ||
-        state.status === EXECUTION_STATES.ERROR
-      ) {
+      if (state.status === EXECUTION_STATES.IDLE) {
         console.log(
           `FlightPath: Working file changed, reloading queue: ${uri.fsPath}`
         );
         await this.reloadFromWorkingFile(uri.fsPath);
+      } else {
+        console.log(
+          `FlightPath: Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
+        );
       }
     });
 

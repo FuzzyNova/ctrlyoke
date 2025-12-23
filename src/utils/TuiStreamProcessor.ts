@@ -339,10 +339,6 @@ export class TuiStreamProcessor {
           // SCREEN-BASED EXTRACTION (Claude/Copilot)
           // Process each complete screen
           for (const screen of screens) {
-            Log.debug(
-              `[Screen Processing] Processing screen, tuiReady=${tuiReady}`
-            );
-
             const screenLower = screen.toLowerCase();
 
             // Phase 1: First complete screen means TUI is ready - send file reference
