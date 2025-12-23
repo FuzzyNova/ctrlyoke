@@ -42,12 +42,17 @@ Crash recovery and seamless resume:
 **Files Modified:**
 
 1. `src/types/FlightPathTypes.ts` - Added WorkingFile, WorkingFileRuntime, AppendSegment types (60 lines)
-2. `src/flightpath/PromptQueue.ts` - Added working file I/O, atomic operations, operation queue (200 lines)
-3. `src/flightpath/FlightPathManager.ts` - Working file creation, file watcher migration, auto-load session (150 lines)
-4. `package.json` - Added `autoLoadRecentSession` setting (10 lines)
-5. Earlier: Command registration, appendFromFile, context menu (from Phase 1)
+2. `src/flightpath/PromptQueue.ts` - Added working file I/O, atomic operations, operation queue, runtime state persistence (250 lines)
+3. `src/flightpath/FlightPathManager.ts` - Working file creation, file watcher migration, auto-load session, dashboard notifications (160 lines)
+4. `src/flightpath/WorkflowExecutor.ts` - Updated markCompleted/markErrored calls to await (4 lines)
+5. `package.json` - Added `autoLoadRecentSession` setting (10 lines)
+6. Earlier: Command registration, appendFromFile, context menu (from Phase 1)
 
-**Total New Code:** ~600 lines (including working file system + auto-resume)
+**Total New Code:** ~650 lines (including working file system + auto-resume + bug fixes)
+
+**Bug Fixes:** 4 critical bugs resolved (December 23, 2024):
+- Bug 3: Operation queue deadlock preventing working file updates
+- Bug 4: Runtime state not persisting to working file during execution
 
 ## Bugs Fixed
 
@@ -106,6 +111,120 @@ if (!continueFromCurrent) {
 - Dashboard preserves all previous prompts, statuses, and CLI outputs
 - Step counter shows correct values (e.g., "1 of 2" when starting appended prompt)
 - No output clearing on append
+
+### Bug 3: Operation Queue Deadlock (December 23, 2024)
+
+**Problem**: When using "Queue with FlightPath", the dashboard prompt list doesn't update and the working file isn't saved with new prompts.
+
+**Root Cause**: Deadlock in `updateWorkingFile()` method:
+
+1. `appendPrompts()` runs in operation queue: `this.operationQueue.then(async () => { await updateWorkingFile(); })`
+2. `updateWorkingFile()` tries to queue itself: `this.operationQueue.then(async () => { ... })`
+3. **Deadlock**: Outer operation waits for `updateWorkingFile()`, but `updateWorkingFile()` waits to queue on the same `operationQueue`
+
+**Symptoms**:
+
+- Console logs "About to update working file..." but never "Successfully wrote working file"
+- Working file only contains first prompt
+- Dashboard shows correct progress counter but missing prompts in list
+
+**Fix**: Created internal `_updateWorkingFileInternal()` method without operation queue wrapper:
+
+```typescript
+// Public method (uses operation queue for external callers)
+public async updateWorkingFile(): Promise<void> {
+  this.operationQueue = this.operationQueue.then(async () => {
+    await this._updateWorkingFileInternal();
+  });
+  await this.operationQueue;
+}
+
+// Internal method (no operation queue - safe to call from within queued operations)
+private async _updateWorkingFileInternal(): Promise<void> {
+  // ... actual file update logic ...
+}
+
+// appendPrompts calls internal version to avoid deadlock
+public async appendPrompts(prompts: PromptItem[], source: string): Promise<void> {
+  this.operationQueue = this.operationQueue.then(async () => {
+    // ... append logic ...
+    await this._updateWorkingFileInternal(); // Direct call, no nested queue
+  });
+}
+```
+
+**Additional Fix**: Added dashboard notifications in `FlightPathManager.appendFromFile()`:
+
+```typescript
+if (this.dashboardProvider) {
+  const updatedState = this.promptQueue.getState();
+  this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+  this.dashboardProvider.updateProgress(
+    updatedState.currentIndex,
+    updatedState.prompts.length
+  );
+}
+```
+
+**Behavior Now:**
+
+- Working file correctly saves all appended prompts
+- Dashboard prompt list updates immediately
+- No deadlock in operation queue
+
+### Bug 4: Runtime State Not Persisting (December 23, 2024)
+
+**Problem**: Working file's `_runtime` section wasn't updating during workflow execution. After completing prompts, the working file still showed:
+
+- `currentIndex: 0` (should increment as prompts complete)
+- `completedPrompts: []` (should track completed prompt hashes)
+- `executionState: "running"` (should change to "completed")
+
+**Root Cause**: `updateWorkingFile()` was only called during queue extension operations, not after individual prompt completions or workflow state changes.
+
+**Fix**: Added `updateWorkingFile()` calls to all state mutation methods:
+
+```typescript
+// 1. After completing each prompt
+async completeCurrentAndMoveNext(): Promise<void> {
+  // ... update state ...
+  this.state.currentIndex++;
+  this.emitStateChange();
+  await this.updateWorkingFile(); // Persist progress
+}
+
+// 2. When marking workflow as completed
+async markCompleted(): Promise<void> {
+  this.state.status = EXECUTION_STATES.COMPLETED;
+  this.emitStateChange();
+  await this.updateWorkingFile(); // Persist completion
+}
+
+// 3. When marking workflow as errored
+async markErrored(): Promise<void> {
+  this.state.status = EXECUTION_STATES.ERROR;
+  this.emitStateChange();
+  await this.updateWorkingFile(); // Persist error state
+}
+
+// 4. When marking current prompt as failed
+markCurrentAsFailed(error: string): void {
+  // ... update state ...
+  this.updateWorkingFile().catch((err) =>
+    console.error("Failed to update working file after error:", err)
+  );
+}
+```
+
+**All Callers Updated**: Changed `markCompleted()` and `markErrored()` to `async` and updated all callers in FlightPathManager and WorkflowExecutor to `await` them.
+
+**Behavior Now:**
+
+- ✅ Working file `_runtime.currentIndex` increments as prompts complete
+- ✅ Working file `_runtime.completedPrompts` tracks all completed prompt hashes
+- ✅ Working file `_runtime.executionState` reflects current state (running/completed/error/paused)
+- ✅ Working file `_runtime.appendSegments` records all queue extensions
+- ✅ Complete crash recovery - restart VS Code mid-workflow and resume exactly where you left off
 
 ## How to Use
 

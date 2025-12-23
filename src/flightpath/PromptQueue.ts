@@ -122,7 +122,7 @@ export class PromptQueue {
     };
 
     this.emitStateChange();
-    console.log(`FlightPath: Loaded ${prompts.length} prompts into queue`);
+    Log.info(`Loaded ${prompts.length} prompts into queue`);
   }
 
   /**
@@ -132,7 +132,7 @@ export class PromptQueue {
    */
   async start(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.RUNNING) {
-      console.log("FlightPath: Queue is already running");
+      Log.info("Queue is already running");
       return;
     }
 
@@ -146,7 +146,7 @@ export class PromptQueue {
     this.state.stopped = false; // Clear stopped flag when starting
     this.emitStateChange();
 
-    console.log("FlightPath: Queue state set to running");
+    Log.info("Queue state set to running");
   }
 
   /**
@@ -162,7 +162,7 @@ export class PromptQueue {
     this.state.pausedTime = Date.now(); // Record when paused
 
     this.emitStateChange();
-    console.log("FlightPath: Queue execution paused");
+    Log.info("Queue execution paused");
   }
 
   /**
@@ -186,7 +186,7 @@ export class PromptQueue {
     this.state.status = EXECUTION_STATES.RUNNING;
     this.emitStateChange();
 
-    console.log("FlightPath: Queue state set to running (resumed)");
+    Log.info("Queue state set to running (resumed)");
   }
 
   /**
@@ -206,9 +206,7 @@ export class PromptQueue {
     });
 
     this.emitStateChange();
-    console.log(
-      "FlightPath: Queue cancellation requested (waiting for process to exit)"
-    );
+    Log.info("Queue cancellation requested (waiting for process to exit)");
   }
 
   /**
@@ -220,7 +218,7 @@ export class PromptQueue {
       this.state.status = EXECUTION_STATES.IDLE;
       this.state.currentIndex = 0;
       this.emitStateChange();
-      console.log("FlightPath: Queue execution fully stopped (process exited)");
+      Log.info("Queue execution fully stopped (process exited)");
     }
   }
 
@@ -250,7 +248,7 @@ export class PromptQueue {
     this.state.pausedTime = undefined;
 
     this.emitStateChange();
-    console.log("FlightPath: Queue restarted from beginning");
+    Log.info("Queue restarted from beginning");
   }
 
   /**
@@ -261,7 +259,7 @@ export class PromptQueue {
     this.state.prompts = [];
     this.state.results = [];
     this.emitStateChange();
-    console.log("FlightPath: Queue cleared");
+    Log.info("Queue cleared");
   }
 
   /**
@@ -331,6 +329,9 @@ export class PromptQueue {
 
     this.state.currentIndex++;
     this.emitStateChange();
+
+    // Update working file with new currentIndex and completedPrompts
+    await this.updateWorkingFile();
   }
 
   /**
@@ -348,6 +349,11 @@ export class PromptQueue {
 
     this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
+
+    // Update working file with failed status
+    this.updateWorkingFile().catch((err) =>
+      console.error("Failed to update working file after error:", err)
+    );
 
     console.error(
       `FlightPath: Prompt ${this.state.currentIndex + 1} failed:`,
@@ -449,17 +455,23 @@ export class PromptQueue {
   /**
    * Mark workflow as completed (for manual completion by FlightPathManager)
    */
-  markCompleted(): void {
+  async markCompleted(): Promise<void> {
     this.state.status = EXECUTION_STATES.COMPLETED;
     this.emitStateChange();
+    
+    // Update working file with completed status
+    await this.updateWorkingFile();
   }
 
   /**
    * Mark workflow as errored (for manual error handling by FlightPathManager)
    */
-  markErrored(): void {
+  async markErrored(): Promise<void> {
     this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
+    
+    // Update working file with error status
+    await this.updateWorkingFile();
   }
 
   /**
@@ -686,11 +698,13 @@ export class PromptQueue {
 
       this.emitStateChange();
 
-      // Update working file if it exists
-      await this.updateWorkingFile();
-
-      console.log(
-        `FlightPath: Appended ${prompts.length} prompts from: ${source}`
+      // Update working file if it exists (call internal method to avoid nested operation queue)
+      Log.info(
+        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}`
+      );
+      await this._updateWorkingFileInternal();
+      Log.info(
+        `Working file updated. Appended ${prompts.length} prompts from: ${source}`
       );
     });
 
@@ -789,7 +803,7 @@ export class PromptQueue {
     this.state.workingFilePath = workingFilePath;
     this.emitStateChange();
 
-    console.log(`FlightPath: Created working file: ${workingFilePath}`);
+    Log.info(` Created working file: ${workingFilePath}`);
     return workingFilePath;
   }
 
@@ -850,35 +864,51 @@ export class PromptQueue {
 
     // Serialize operation to prevent race conditions
     this.operationQueue = this.operationQueue.then(async () => {
-      try {
-        // Read current working file
-        const workingFile = await this.readWorkingFile(
-          this.state.workingFilePath!
-        );
-
-        // Update prompts array
-        workingFile.prompts = this.state.prompts;
-
-        // Update runtime state
-        workingFile._runtime = {
-          currentIndex: this.state.currentIndex,
-          completedPrompts: Array.from(this.state.completedIds),
-          executionState: this.state.status,
-          appendSegments: this.state.appendSegments,
-        };
-
-        // Write atomically
-        await this.writeWorkingFileAtomic(
-          this.state.workingFilePath!,
-          workingFile
-        );
-      } catch (error) {
-        console.error("FlightPath: Failed to update working file:", error);
-        // Don't throw - this is a background operation
-      }
+      await this._updateWorkingFileInternal();
     });
 
     await this.operationQueue;
+  }
+
+  /**
+   * Internal method to update working file (does not use operation queue)
+   * This can be called from within an existing operation queue context
+   */
+  private async _updateWorkingFileInternal(): Promise<void> {
+    if (!this.state.workingFilePath) {
+      return; // No working file to update
+    }
+
+    try {
+      // Read current working file
+      const workingFile = await this.readWorkingFile(
+        this.state.workingFilePath!
+      );
+
+      // Update prompts array
+      workingFile.prompts = this.state.prompts;
+      Log.info(
+        `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
+      );
+
+      // Update runtime state
+      workingFile._runtime = {
+        currentIndex: this.state.currentIndex,
+        completedPrompts: Array.from(this.state.completedIds),
+        executionState: this.state.status,
+        appendSegments: this.state.appendSegments,
+      };
+
+      // Write atomically
+      await this.writeWorkingFileAtomic(
+        this.state.workingFilePath!,
+        workingFile
+      );
+      Log.info(`updateWorkingFile - Successfully wrote working file`);
+    } catch (error) {
+      console.error("FlightPath: Failed to update working file:", error);
+      // Don't throw - this is a background operation
+    }
   }
 
   /**

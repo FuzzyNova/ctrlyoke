@@ -509,7 +509,7 @@ export class FlightPathManager {
       console.error("FlightPath: Failed to execute prompt file:", error);
 
       // Mark queue as errored
-      this.promptQueue.markErrored();
+      await this.promptQueue.markErrored();
 
       vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
     }
@@ -584,6 +584,16 @@ export class FlightPathManager {
       // 5. Append prompts
       const source = `User append: ${path.basename(filePath)}`;
       await this.promptQueue.appendPrompts(parsed.prompts, source);
+
+      // 5.1. Notify dashboard about extended prompts
+      if (this.dashboardProvider) {
+        const updatedState = this.promptQueue.getState();
+        this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+        this.dashboardProvider.updateProgress(
+          updatedState.currentIndex,
+          updatedState.prompts.length
+        );
+      }
 
       // 6. If queue was completed, trigger execution to continue (preserves history)
       if (isCompleted) {

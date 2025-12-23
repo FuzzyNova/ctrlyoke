@@ -145,7 +145,7 @@ export class WorkflowExecutor {
           vscode.window.showWarningMessage(message);
           console.log(`⏱️ ${message}`);
 
-          this.promptQueue.markErrored();
+          await this.promptQueue.markErrored();
           break;
         }
       }
@@ -261,7 +261,7 @@ export class WorkflowExecutor {
         );
 
         // Mark queue as errored
-        this.promptQueue.markErrored();
+        await this.promptQueue.markErrored();
 
         // Update dashboard with the specific failure reason
         if (context.dashboardProvider) {
@@ -330,7 +330,7 @@ export class WorkflowExecutor {
           console.log(
             "❌ FlightPath: Workflow stopped due to end condition failure"
           );
-          this.promptQueue.markErrored();
+          await this.promptQueue.markErrored();
           break;
         }
 
@@ -412,7 +412,7 @@ export class WorkflowExecutor {
       finalState.status !== EXECUTION_STATES.PAUSED &&
       finalState.status !== EXECUTION_STATES.ERROR
     ) {
-      this.promptQueue.markCompleted();
+      await this.promptQueue.markCompleted();
     }
 
     // Notify dashboard about execution completion
