@@ -353,6 +353,7 @@ export class PromptFileParser {
       return {
         prompts: [
           {
+            id: parsed.id,
             prompt: resolvedPrompt,
             model: parsed.model,
             agent: parsed.agent,
@@ -361,6 +362,7 @@ export class PromptFileParser {
               parsed.newChatSession !== undefined
                 ? parsed.newChatSession
                 : defaultNewChatSession,
+            allowDynamicExtension: parsed.allowDynamicExtension,
             endCondition: parsed.endCondition,
           },
         ],
@@ -376,6 +378,7 @@ export class PromptFileParser {
             promptFilePath
           );
           return {
+            id: item.id,
             prompt: resolvedPrompt,
             model: item.model,
             agent: item.agent,
@@ -384,6 +387,7 @@ export class PromptFileParser {
               item.newChatSession !== undefined
                 ? item.newChatSession
                 : defaultNewChatSession,
+            allowDynamicExtension: item.allowDynamicExtension,
             endCondition: item.endCondition,
           };
         })

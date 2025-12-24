@@ -1,13 +1,13 @@
 {
   "prompts": [
     {
-      "id": "hello",
-      "prompt": "We are about to test the dynamic prompt queue for FlightPath, for now, just say hello!"
+      "id": "extend-queue",
+      "prompt": "We are testing FlightPath queue-append via VS Code Chat Language Model Tools.\n\nCall the tool \"flightpath_append_queue\" to append TWO simple prompts:\n1) Append a prompt at the NEXT position (position=\"next\").\n2) Append another prompt at the END (position=\"end\").\n\nUse parameters shaped like:\n{\n  \"position\": \"next\" | \"end\",\n  \"prompts\": [ { \"prompt\": \"...\" } ],\n  \"source\": \"manual-test\",\n  \"reason\": \"manual test of append tool\"\n}\n\nMake the two appended prompt texts very simple, e.g. \"APPENDED NEXT: say hello\" and \"APPENDED END: say goodbye\".\n\nAfter appending, do not edit any files; just proceed.",
+      "allowDynamicExtension": true
     },
     {
-      "id": "extend-queue",
-      "prompt": "Look in the sample-code directory. For each file in sample-code add an additional prompt to this file (manual-test/dynamic-queue-basic-example.flightpath.json) that instruct copilot to summarize just that single file.",
-      "allowDynamicExtension": true
+      "id": "status",
+      "prompt": "Now call the tool \"flightpath_queue_status\" (no parameters needed) and output the returned JSON status."
     }
   ]
 }
