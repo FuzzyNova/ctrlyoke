@@ -237,14 +237,34 @@ async function main() {
     logLevel: "silent",
   });
 
+  // Build MCP server (separate executable for CLI tools)
+  const mcpCtx = await esbuild.context({
+    entryPoints: ["src/mcp-server.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    outfile: "out/mcp-server.js",
+    external: [], // Bundle all dependencies for standalone execution
+    logLevel: "silent",
+    banner: {
+      js: "#!/usr/bin/env node\n", // Add shebang for executable
+    },
+  });
+
   if (watch) {
     await ctx.watch();
     await constantsCtx.watch();
+    await mcpCtx.watch();
   } else {
     await ctx.rebuild();
     await constantsCtx.rebuild();
+    await mcpCtx.rebuild();
     await ctx.dispose();
     await constantsCtx.dispose();
+    await mcpCtx.dispose();
   }
 }
 

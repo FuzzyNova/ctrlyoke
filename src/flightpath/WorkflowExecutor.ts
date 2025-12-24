@@ -357,45 +357,9 @@ export class WorkflowExecutor {
       // Mark current prompt as completed and move to next
       await this.promptQueue.completeCurrentAndMoveNext();
 
-      // Dynamic queue reload
-      if (dynamicConfig.enabled && context.currentPromptFilePath) {
-        const maxSize = dynamicConfig.unlimitedMode
-          ? 0
-          : dynamicConfig.maxQueueSize;
-        const addedCount = await this.promptQueue.reloadAndMergeQueue(
-          context.currentPromptFilePath,
-          this.promptFileParser,
-          maxSize
-        );
-
-        if (addedCount > 0) {
-          state = this.promptQueue.getState();
-
-          if (dynamicConfig.notifyOnExtension) {
-            const currentSize = state.prompts.length;
-            const message = dynamicConfig.unlimitedMode
-              ? `FlightPath: Queue extended (+${addedCount} prompts, total: ${currentSize})`
-              : `FlightPath: Queue extended (+${addedCount} prompts, ${currentSize}/${dynamicConfig.maxQueueSize})`;
-
-            vscode.window.showInformationMessage(message);
-          }
-
-          if (context.dashboardProvider) {
-            context.dashboardProvider.notifyQueueExtended(
-              addedCount,
-              state.prompts.length,
-              dynamicConfig.unlimitedMode
-                ? undefined
-                : dynamicConfig.maxQueueSize
-            );
-            context.dashboardProvider.updatePromptsExtended(state.prompts);
-            context.dashboardProvider.updateProgress(
-              i + 1,
-              state.prompts.length
-            );
-          }
-        }
-      }
+      // Note: Queue extension now handled via MCP tools (flightpath_append_queue)
+      // or user commands (Queue with FlightPath). The working file watcher in
+      // FlightPathManager will detect changes and reload the queue automatically.
 
       // Check if workflow was paused
       if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {

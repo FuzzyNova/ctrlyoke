@@ -29,6 +29,9 @@
     "workspaceContains:**/*.prompt.md"
   ],
   "main": "./out/extension.js",
+  "bin": {
+    "flightpath-mcp": "./out/mcp-server.js"
+  },
   "contributes": {
     "commands": [
       {
@@ -201,6 +204,12 @@
         "title": "Queue with FlightPath",
         "category": "FlightPath",
         "icon": "$(add)"
+      },
+      {
+        "command": "flightpath.queueNextFromContext",
+        "title": "Queue Next with FlightPath",
+        "category": "FlightPath",
+        "icon": "$(insert)"
       }
     ],
     "menus": {
@@ -261,6 +270,10 @@
         {
           "command": "flightpath.queueFromContext",
           "when": "false"
+        },
+        {
+          "command": "flightpath.queueNextFromContext",
+          "when": "false"
         }
       ],
       "explorer/context": [
@@ -283,6 +296,11 @@
           "command": "flightpath.queueFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@3"
+        },
+        {
+          "command": "flightpath.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@4"
         }
       ],
       "editor/title": [
@@ -295,6 +313,11 @@
           "command": "flightpath.queueFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "navigation@2"
+        },
+        {
+          "command": "flightpath.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "navigation@3"
         }
       ],
       "editor/title/context": [
@@ -312,6 +335,11 @@
           "command": "flightpath.queueFromContext",
           "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
           "group": "flightpath@3"
+        },
+        {
+          "command": "flightpath.queueNextFromContext",
+          "when": "resourceFilename =~ /\\.(flightpath\\.(yaml|yml|json)|prompt\\.md)$/ && resourceScheme == file",
+          "group": "flightpath@4"
         }
       ]
     },
@@ -913,6 +941,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@types/js-yaml": "^4.0.9",
     "ajv": "^8.17.1",
     "chokidar": "^4.0.3",

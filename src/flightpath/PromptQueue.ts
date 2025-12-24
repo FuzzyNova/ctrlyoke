@@ -652,11 +652,13 @@ export class PromptQueue {
    * This method now uses working file operations for persistence
    * @param prompts - Prompts to append
    * @param source - Description of append source (e.g., filename or "MCP")
+   * @param position - Where to insert prompts: "next" (after current) or "end" (at end of queue)
    * @throws Error if queue is in invalid state for appending
    */
   public async appendPrompts(
     prompts: PromptItem[],
-    source: string = "User append"
+    source: string = "User append",
+    position: "next" | "end" = "end"
   ): Promise<void> {
     if (!this.canAppend()) {
       throw new Error("Cannot append: Queue is in cancelled or error state");
@@ -664,6 +666,11 @@ export class PromptQueue {
 
     // Serialize operation to prevent race conditions
     this.operationQueue = this.operationQueue.then(async () => {
+      // Calculate insert index based on position
+      const insertIndex = position === "next"
+        ? this.state.currentIndex + 1
+        : this.state.prompts.length;
+
       // Generate append segment for tracking
       const segment: AppendSegment = {
         id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
@@ -672,22 +679,23 @@ export class PromptQueue {
         promptCount: prompts.length,
         promptIndices: Array.from(
           { length: prompts.length },
-          (_, i) => this.state.prompts.length + i
+          (_, i) => insertIndex + i
         ),
       };
 
-      // Append to queue
-      this.state.prompts.push(...prompts);
+      // Insert prompts at the specified position
+      this.state.prompts.splice(insertIndex, 0, ...prompts);
       this.state.appendSegments.push(segment);
 
-      // Extend results array
-      prompts.forEach((prompt) => {
-        this.state.results.push({
-          prompt: prompt.prompt,
-          status: STEP_STATUS.PENDING,
-          timestamp: new Date(),
-        });
-      });
+      // Create new results for the inserted prompts
+      const newResults: PromptResult[] = prompts.map((prompt) => ({
+        prompt: prompt.prompt,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      }));
+
+      // Insert results at the same position
+      this.state.results.splice(insertIndex, 0, ...newResults);
 
       // If queue completed/idle, set to running state (will be picked up by workflow executor)
       if (this.isCompleted()) {
@@ -700,11 +708,11 @@ export class PromptQueue {
 
       // Update working file if it exists (call internal method to avoid nested operation queue)
       Log.info(
-        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}`
+        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}, Insert position: ${position} (index: ${insertIndex})`
       );
       await this._updateWorkingFileInternal();
       Log.info(
-        `Working file updated. Appended ${prompts.length} prompts from: ${source}`
+        `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
       );
     });
 

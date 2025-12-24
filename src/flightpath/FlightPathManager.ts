@@ -556,8 +556,12 @@ export class FlightPathManager {
   /**
    * Append prompts from a file to the current queue
    * @param filePath - Path to prompt file (.prompt.md, .flightpath.yaml, .flightpath.json)
+   * @param position - Where to insert prompts: "next" (after current) or "end" (at end of queue)
    */
-  public async appendFromFile(filePath: string): Promise<void> {
+  public async appendFromFile(
+    filePath: string,
+    position: "next" | "end" = "end"
+  ): Promise<void> {
     try {
       // 1. Parse file (reuse existing parser)
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
@@ -601,9 +605,10 @@ export class FlightPathManager {
         return;
       }
 
-      // 5. Append prompts
-      const source = `User append: ${path.basename(filePath)}`;
-      await this.promptQueue.appendPrompts(parsed.prompts, source);
+      // 5. Append prompts with specified position
+      const positionLabel = position === "next" ? "next" : "end";
+      const source = `User append (${positionLabel}): ${path.basename(filePath)}`;
+      await this.promptQueue.appendPrompts(parsed.prompts, source, position);
 
       // 5.1. Notify dashboard about extended prompts
       if (this.dashboardProvider) {
@@ -637,8 +642,9 @@ export class FlightPathManager {
       }
 
       // 7. Show notification
+      const positionText = position === "next" ? "after current prompt" : "at end of queue";
       vscode.window.showInformationMessage(
-        `Queued ${parsed.prompts.length} prompts to active workflow`
+        `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
       );
     } catch (error) {
       console.error("FlightPath: Failed to queue prompts:", error);

@@ -9,13 +9,28 @@
       "$ref": "#/definitions/promptItem"
     },
     {
-      "title": "Multiple Prompts",
+      "title": "Multiple Prompts (or Working File)",
       "properties": {
         "prompts": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/promptItem"
           }
+        },
+        "originalFile": {
+          "type": "string",
+          "description": "Path to original prompt file (working files only)"
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Derived workflow name (working files only)"
+        },
+        "startedAt": {
+          "type": "number",
+          "description": "Timestamp when workflow started (working files only)"
+        },
+        "_runtime": {
+          "$ref": "#/definitions/runtimeMetadata"
         }
       },
       "required": ["prompts"],
@@ -94,6 +109,68 @@
         }
       },
       "required": ["script", "returns"]
+    },
+    "runtimeMetadata": {
+      "type": "object",
+      "description": "Runtime execution state for working files (optional, added automatically by FlightPath during execution)",
+      "properties": {
+        "currentIndex": {
+          "type": "number",
+          "description": "Index of currently executing prompt (0-based)"
+        },
+        "completedPrompts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of completed prompt IDs and hashes"
+        },
+        "executionState": {
+          "type": "string",
+          "enum": ["idle", "running", "paused", "completed", "cancelled", "error"],
+          "description": "Current execution state"
+        },
+        "appendSegments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/appendSegment"
+          },
+          "description": "Track all queue append operations"
+        }
+      },
+      "required": ["currentIndex", "completedPrompts", "executionState"],
+      "additionalProperties": false
+    },
+    "appendSegment": {
+      "type": "object",
+      "description": "Metadata about a queue append operation",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique segment identifier"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "When the append occurred (ms since epoch)"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source of the append (e.g., 'User append', 'MCP tool', 'copilot-cli')"
+        },
+        "promptCount": {
+          "type": "number",
+          "description": "Number of prompts added in this segment"
+        },
+        "promptIndices": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Indices of prompts in this segment"
+        }
+      },
+      "required": ["id", "timestamp", "source", "promptCount", "promptIndices"],
+      "additionalProperties": false
     }
   }
 }

@@ -13,6 +13,130 @@ let flightPathManager: FlightPathManager;
 let dashboardProvider: FlightPathDashboardProvider;
 let settingsProvider: FlightPathSettingsProvider;
 
+/**
+ * Register Language Model Tools for VS Code Chat integration
+ * These tools allow AI agents in VS Code Chat to read queue status and append prompts
+ */
+function registerLanguageModelTools(context: vscode.ExtensionContext) {
+  try {
+    // Import shared queue operations
+    const {
+      getQueueStatus,
+      appendToQueue,
+    } = require("./flightpath/QueueOperations");
+
+    // Tool 1: flightpath-queue-status (read operation)
+    const queueStatusTool = vscode.lm.registerTool("flightpath-queue-status", {
+      prepareInvocation: async (
+        _parameters: unknown,
+        token: vscode.CancellationToken
+      ) => {
+        return {
+          invocationMessage: "Getting FlightPath queue status...",
+        };
+      },
+      invoke: async (
+        _parameters: unknown,
+        token: vscode.CancellationToken
+      ) => {
+        try {
+          const queue = flightPathManager.getQueueState();
+          const promptQueue = (flightPathManager as any).promptQueue;
+
+          if (!promptQueue) {
+            throw new Error("FlightPath queue not initialized");
+          }
+
+          const status = getQueueStatus(
+            promptQueue,
+            queue.workingFilePath
+          );
+
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(JSON.stringify(status, null, 2)),
+          ]);
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
+          ]);
+        }
+      },
+    });
+
+    // Tool 2: flightpath-append-queue (write operation)
+    const queueAppendTool = vscode.lm.registerTool("flightpath-append-queue", {
+      prepareInvocation: async (
+        _parameters: unknown,
+        token: vscode.CancellationToken
+      ) => {
+        return {
+          invocationMessage: "Appending prompts to FlightPath queue...",
+        };
+      },
+      invoke: async (
+        parameters: any,
+        token: vscode.CancellationToken
+      ) => {
+        try {
+          const promptQueue = (flightPathManager as any).promptQueue;
+
+          if (!promptQueue) {
+            throw new Error("FlightPath queue not initialized");
+          }
+
+          const request = {
+            prompts: parameters.prompts || [],
+            position: parameters.position || "end",
+            source: parameters.source || "VS Code Chat",
+            reason: parameters.reason,
+          };
+
+          const result = await appendToQueue(promptQueue, request);
+
+          // Update dashboard with extended prompts
+          if (dashboardProvider) {
+            const updatedState = promptQueue.getState();
+            dashboardProvider.updatePromptsExtended(updatedState.prompts);
+            dashboardProvider.updateProgress(
+              updatedState.currentIndex,
+              updatedState.prompts.length
+            );
+          }
+
+          // If queue was completed, resume execution
+          const queueState = promptQueue.getState();
+          if (queueState.status === "completed") {
+            await flightPathManager.executeLoadedPromptFile(undefined, true);
+          }
+
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(JSON.stringify(result, null, 2)),
+          ]);
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          return new vscode.LanguageModelToolResult([
+            new vscode.LanguageModelTextPart(`Error: ${errorMsg}`),
+          ]);
+        }
+      },
+    });
+
+    context.subscriptions.push(queueStatusTool, queueAppendTool);
+    console.log(
+      "FlightPath: Registered Language Model Tools (flightpath-queue-status, flightpath-append-queue)"
+    );
+  } catch (error) {
+    console.warn(
+      "FlightPath: Failed to register Language Model Tools (VS Code API may not be available):",
+      error
+    );
+    // Don't throw - this is optional functionality
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   console.log("FlightPath: Extension activating...");
   if (IS_DEV_MODE) {
@@ -112,6 +236,9 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     console.log("FlightPath: Registered link provider for prompt files");
+
+    // Register Language Model Tools (for VS Code Chat integration)
+    registerLanguageModelTools(context);
 
     // Register commands
     registerCommands(context);
@@ -290,7 +417,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
-  // Queue with FlightPath command (context menu) - appends prompts to current queue
+  // Queue with FlightPath command (context menu) - appends prompts to end of queue
   const queueFromContextCommand = vscode.commands.registerCommand(
     "flightpath.queueFromContext",
     async (uri: vscode.Uri) => {
@@ -298,7 +425,19 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
         vscode.window.showErrorMessage("No file selected");
         return;
       }
-      await flightPathManager.appendFromFile(uri.fsPath);
+      await flightPathManager.appendFromFile(uri.fsPath, "end");
+    }
+  );
+
+  // Queue Next With FlightPath command (context menu) - appends prompts after current position
+  const queueNextFromContextCommand = vscode.commands.registerCommand(
+    "flightpath.queueNextFromContext",
+    async (uri: vscode.Uri) => {
+      if (!uri) {
+        vscode.window.showErrorMessage("No file selected");
+        return;
+      }
+      await flightPathManager.appendFromFile(uri.fsPath, "next");
     }
   );
 
@@ -465,6 +604,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     createNewTemplateCommand,
     runFromContextCommand,
     queueFromContextCommand,
+    queueNextFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,
     editCurrentPromptFileCommand,
