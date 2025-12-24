@@ -7,7 +7,8 @@
     },
     {
       "id": "status",
-      "prompt": "Now call the tool \"flightpath_queue_status\" (no parameters needed) and output the returned JSON status."
+      "prompt": "Now call the tool \"flightpath_queue_status\" (no parameters needed) and output the returned JSON status.",
+      "allowDynamicExtension": true
     }
   ]
 }

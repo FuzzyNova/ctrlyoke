@@ -352,10 +352,28 @@ copilot  # Start CLI session
 
 ```bash
 # Using JSON string
-copilot --additional-mcp-config '{"mcpServers":{"flightpath":{"command":"node","args":["path/to/mcp-server.js"]}}}'
+copilot --additional-mcp-config '{"mcpServers":{"flightpath":{"type":"local","command":"node","tools":["*"],"args":["path/to/mcp-server.js"],"env":{"FLIGHTPATH_WORKSPACE":"."}}}}'
 
 # Using config file (recommended)
 copilot --additional-mcp-config @/path/to/flightpath-mcp-config.json
+```
+
+**Config file format** (`flightpath-mcp-config.json`):
+
+```json
+{
+  "mcpServers": {
+    "flightpath": {
+      "type": "local",
+      "command": "node",
+      "tools": ["*"],
+      "args": ["/absolute/path/to/mcp-server.js"],
+      "env": {
+        "FLIGHTPATH_WORKSPACE": "/workspace/root"
+      }
+    }
+  }
+}
 ```
 
 > **FlightPath Implementation**: The extension automatically generates the config file and provides the complete command to users. No manual editing required.
@@ -366,7 +384,9 @@ copilot --additional-mcp-config @/path/to/flightpath-mcp-config.json
 {
   "mcpServers": {
     "flightpath": {
+      "type": "local",
       "command": "node",
+      "tools": ["*"],
       "args": [
         "C:\\Users\\Nathan\\.vscode\\extensions\\nathanfriemel.flightpath-<ver>\\out\\mcp-server.js"
       ],

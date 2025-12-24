@@ -248,8 +248,14 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       },
     };
 
+    // Add type field based on CLI requirements
     if (includeTypeField) {
+      // Claude CLI: uses "stdio" for stdio servers
       serverConfig.type = "stdio";
+    } else {
+      // Copilot CLI: uses "local" for stdio servers + requires "tools" field
+      serverConfig.type = "local";
+      serverConfig.tools = ["*"]; // Allow all tools from this MCP server
     }
 
     const mcpConfig = {
