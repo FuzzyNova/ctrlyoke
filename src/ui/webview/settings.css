@@ -25,6 +25,7 @@ body {
 }
 
 .setting-group select {
+  width: 100%;
   max-width: 200px;
 }
 

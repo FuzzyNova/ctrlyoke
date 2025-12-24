@@ -249,7 +249,13 @@
       provider === PROVIDER_IDS.COPILOT_CLI ||
       provider === PROVIDER_IDS.CLAUDE_CLI ||
       provider === PROVIDER_IDS.CODEX_CLI;
-    elements.executionModeGroup.style.display = isCli ? "block" : "none";
+
+    if (isCli) {
+      // Remove inline override so `.setting-group` flex layout applies
+      elements.executionModeGroup.style.removeProperty("display");
+    } else {
+      elements.executionModeGroup.style.display = "none";
+    }
   }
 
   // Request initial state
