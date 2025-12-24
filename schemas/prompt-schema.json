@@ -74,7 +74,7 @@
         },
         "allowDynamicExtension": {
           "type": "boolean",
-          "description": "If true, inject instructions for extending the queue. If false, never inject. If omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
+          "description": "Enable dynamic queue extension for this prompt. When true: CLI modes (copilot-cli, claude-cli, codex-cli) pass MCP server configuration to enable flightpath_append_queue and flightpath_queue_status tools. Chat mode injects instructions to use these tools via Language Model Tools API. When false, no MCP config or instructions are provided. When omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
         },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
@@ -127,7 +127,14 @@
         },
         "executionState": {
           "type": "string",
-          "enum": ["idle", "running", "paused", "completed", "cancelled", "error"],
+          "enum": [
+            "idle",
+            "running",
+            "paused",
+            "completed",
+            "cancelled",
+            "error"
+          ],
           "description": "Current execution state"
         },
         "appendSegments": {

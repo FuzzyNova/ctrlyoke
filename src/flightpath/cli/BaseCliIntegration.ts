@@ -67,6 +67,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   // Track the sanitized prompt sent to terminal for filtering echo in response
   protected lastSanitizedPrompt?: string;
 
+  // Cached MCP config file path (generated once per session, reused for all prompts)
+  private cachedMcpConfigPath?: string;
+
   constructor(context: vscode.ExtensionContext) {
     super(context);
     this.processManager = new CliProcessManager(
@@ -126,7 +129,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   /**
    * Get the CLI-specific integration mode string (e.g., "copilot-cli")
    */
-  protected abstract getIntegrationMode(): string;
+  public abstract getIntegrationMode(): string;
 
   /**
    * Get display name for status messages (e.g., "Copilot CLI", "Claude Code CLI")
@@ -195,6 +198,79 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * @returns Array of RegExp patterns to test against trimmed lines
    */
   protected abstract getTuiChromePatterns(): RegExp[];
+
+  /**
+   * Generate MCP server configuration arguments for dynamic queue extension.
+   * Returns CLI-specific arguments to pass MCP server config.
+   *
+   * Only called when:
+   * 1. Dynamic queue is enabled (flightpath.enableDynamicQueue)
+   * 2. Current prompt has allowDynamicExtension enabled
+   *
+   * @param mcpServerPath Absolute path to the MCP server executable
+   * @param workspaceRoot Workspace root directory (for FLIGHTPATH_WORKSPACE env var)
+   * @returns Array of arguments to append to CLI command, or null if not supported
+   */
+  protected abstract getMcpConfigArgs(
+    mcpServerPath: string,
+    workspaceRoot: string
+  ): Promise<string[] | null>;
+
+  /**
+   * Generate MCP config file (shared implementation for JSON-based CLIs).
+   * Creates the file once and caches the path for reuse across all prompts.
+   * The config content is static per session (server path and workspace root don't change).
+   *
+   * @param mcpServerPath Absolute path to the MCP server executable
+   * @param workspaceRoot Absolute path to the workspace root
+   * @param includeTypeField Whether to include "type": "stdio" (Claude needs it, Copilot doesn't)
+   * @returns Absolute path to the generated config file
+   */
+  protected async generateMcpConfigFile(
+    mcpServerPath: string,
+    workspaceRoot: string,
+    includeTypeField: boolean = false
+  ): Promise<string> {
+    // Return cached path if already generated
+    if (this.cachedMcpConfigPath) {
+      return this.cachedMcpConfigPath;
+    }
+
+    const fs = require("fs/promises");
+    const path = require("path");
+
+    // Generate MCP config JSON
+    const serverConfig: any = {
+      command: "node",
+      args: [mcpServerPath],
+      env: {
+        FLIGHTPATH_WORKSPACE: workspaceRoot,
+      },
+    };
+
+    if (includeTypeField) {
+      serverConfig.type = "stdio";
+    }
+
+    const mcpConfig = {
+      mcpServers: {
+        flightpath: serverConfig,
+      },
+    };
+
+    // Write to temp directory (reused for all prompts in this session)
+    const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
+    await fs.mkdir(tempDir, { recursive: true });
+
+    const configPath = path.join(tempDir, "mcp-config.json");
+    await fs.writeFile(configPath, JSON.stringify(mcpConfig, null, 2), "utf-8");
+
+    // Cache the path for reuse
+    this.cachedMcpConfigPath = configPath;
+    Log.debug(`📝 Generated MCP config file: ${configPath}`);
+
+    return configPath;
+  }
 
   /**
    * Build headless CLI arguments with temp file reference.

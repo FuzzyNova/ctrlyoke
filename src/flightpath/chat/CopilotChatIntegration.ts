@@ -676,7 +676,10 @@ export class CopilotChatIntegration extends CopilotIntegration {
   isIntegrationAvailable(): boolean {
     return this.isAvailable;
   }
-
+  /** Get integration mode identifier */
+  getIntegrationMode(): string {
+    return Provider.CopilotChat;
+  }
   /** Get initialization status */
   getInitializationStatus(): CopilotStatus {
     return this.initializationStatus;

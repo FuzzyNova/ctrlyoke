@@ -368,6 +368,82 @@
         }
       ]
     },
+    "languageModelTools": [
+      {
+        "name": "flightpath_queue_status",
+        "toolReferenceName": "flightpath_queue_status",
+        "displayName": "FlightPath Queue Status",
+        "modelDescription": "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
+        "canBeReferencedInPrompt": true,
+        "tags": [
+          "queue",
+          "status",
+          "workflow"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "flightpath_append_queue",
+        "toolReferenceName": "flightpath_append_queue",
+        "displayName": "FlightPath Append Queue",
+        "modelDescription": "Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
+        "canBeReferencedInPrompt": true,
+        "tags": [
+          "queue",
+          "append",
+          "workflow",
+          "extend"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "prompts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "description": "The prompt text to add to the queue"
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "Optional model override (e.g., 'claude-sonnet-4.5', 'gpt-5')"
+                  }
+                },
+                "required": [
+                  "prompt"
+                ]
+              },
+              "description": "Array of prompts to add to the queue"
+            },
+            "position": {
+              "type": "string",
+              "enum": [
+                "next",
+                "end"
+              ],
+              "description": "Where to insert prompts: 'next' (after current) or 'end' (at end of queue)"
+            },
+            "source": {
+              "type": "string",
+              "description": "Source identifier (e.g., 'copilot-chat', 'AI-generated tasks')"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Optional explanation for why these prompts are being added"
+            }
+          },
+          "required": [
+            "prompts",
+            "position"
+          ]
+        }
+      }
+    ],
     "configuration": {
       "title": "FlightPath",
       "properties": {

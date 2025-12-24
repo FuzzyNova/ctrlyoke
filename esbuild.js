@@ -247,11 +247,8 @@ async function main() {
     sourcesContent: false,
     platform: "node",
     outfile: "out/mcp-server.js",
-    external: [], // Bundle all dependencies for standalone execution
+    external: ["@modelcontextprotocol/sdk"], // External dependency - used at runtime via node_modules
     logLevel: "silent",
-    banner: {
-      js: "#!/usr/bin/env node\n", // Add shebang for executable
-    },
   });
 
   if (watch) {

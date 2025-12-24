@@ -25,8 +25,8 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       appendToQueue,
     } = require("./flightpath/QueueOperations");
 
-    // Tool 1: flightpath-queue-status (read operation)
-    const queueStatusTool = vscode.lm.registerTool("flightpath-queue-status", {
+    // Tool 1: flightpath_queue_status (read operation)
+    const queueStatusTool = vscode.lm.registerTool("flightpath_queue_status", {
       prepareInvocation: async (
         _parameters: unknown,
         token: vscode.CancellationToken
@@ -35,10 +35,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           invocationMessage: "Getting FlightPath queue status...",
         };
       },
-      invoke: async (
-        _parameters: unknown,
-        token: vscode.CancellationToken
-      ) => {
+      invoke: async (_parameters: unknown, token: vscode.CancellationToken) => {
         try {
           const queue = flightPathManager.getQueueState();
           const promptQueue = (flightPathManager as any).promptQueue;
@@ -47,10 +44,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
             throw new Error("FlightPath queue not initialized");
           }
 
-          const status = getQueueStatus(
-            promptQueue,
-            queue.workingFilePath
-          );
+          const status = getQueueStatus(promptQueue, queue.workingFilePath);
 
           return new vscode.LanguageModelToolResult([
             new vscode.LanguageModelTextPart(JSON.stringify(status, null, 2)),
@@ -65,8 +59,8 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
     });
 
-    // Tool 2: flightpath-append-queue (write operation)
-    const queueAppendTool = vscode.lm.registerTool("flightpath-append-queue", {
+    // Tool 2: flightpath_append_queue (write operation)
+    const queueAppendTool = vscode.lm.registerTool("flightpath_append_queue", {
       prepareInvocation: async (
         _parameters: unknown,
         token: vscode.CancellationToken
@@ -75,10 +69,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           invocationMessage: "Appending prompts to FlightPath queue...",
         };
       },
-      invoke: async (
-        parameters: any,
-        token: vscode.CancellationToken
-      ) => {
+      invoke: async (parameters: any, token: vscode.CancellationToken) => {
         try {
           const promptQueue = (flightPathManager as any).promptQueue;
 
@@ -126,7 +117,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(queueStatusTool, queueAppendTool);
     console.log(
-      "FlightPath: Registered Language Model Tools (flightpath-queue-status, flightpath-append-queue)"
+      "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue)"
     );
   } catch (error) {
     console.warn(

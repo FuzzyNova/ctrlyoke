@@ -129,7 +129,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return `${this.getCliName()} ${baseArgs.join(" ")}`;
   }
 
-  protected getIntegrationMode(): string {
+  public getIntegrationMode(): string {
     return Provider.CopilotCli;
   }
 
@@ -263,7 +263,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
 
       // Build CLI arguments (without prompt - handled by execution methods)
-      const args = this.buildCliArgs(prompt, isInteractive);
+      const args = await this.buildCliArgs(
+        prompt,
+        isInteractive,
+        workflowContext
+      );
 
       // Store full command for debugging (will be updated by execution methods)
       this.lastCliCommand = `${this.getCliName()} -p "<prompt>" ${args.join(" ")}`;
@@ -291,15 +295,80 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Generate MCP server configuration for Copilot CLI.
+   * Returns --additional-mcp-config @<tempfile> argument.
+   * Config file is generated once and cached for reuse across all prompts.
+   */
+  protected async getMcpConfigArgs(
+    mcpServerPath: string,
+    workspaceRoot: string
+  ): Promise<string[] | null> {
+    try {
+      // Use shared file generation (cached after first call)
+      const configPath = await this.generateMcpConfigFile(
+        mcpServerPath,
+        workspaceRoot,
+        false // Copilot doesn't need "type": "stdio"
+      );
+
+      // Return --additional-mcp-config @file argument
+      return ["--additional-mcp-config", `@${configPath}`];
+    } catch (error) {
+      Log.error("Failed to generate MCP config for Copilot CLI", error);
+      return null;
+    }
+  }
+
+  /**
    * Build CLI arguments for Copilot command (without prompt - handled separately)
    * @param prompt The prompt item
    * @param isInteractive Whether this is interactive mode (skips tool permissions)
+   * @param workflowContext Optional workflow context for MCP config generation
    */
-  private buildCliArgs(
+  private async buildCliArgs(
     prompt: PromptItem,
-    isInteractive: boolean = false
-  ): string[] {
+    isInteractive: boolean = false,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
     const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath =
+            this.context.asAbsolutePath("out/mcp-server.js");
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const mcpArgs = await this.getMcpConfigArgs(
+              mcpServerPath,
+              workspaceRoot
+            );
+            if (mcpArgs) {
+              args.push(...mcpArgs);
+              Log.info(
+                "🔧 MCP server config added for dynamic queue extension"
+              );
+            }
+          }
+        }
+      }
+    }
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
     if (!isInteractive) {

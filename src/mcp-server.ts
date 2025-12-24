@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * FlightPath MCP Server
  *
@@ -12,12 +11,15 @@
  *   FLIGHTPATH_WORKSPACE - Workspace root directory (defaults to cwd)
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
+// Use require with CJS paths - package.json has wildcard export "./*" mapping to "./dist/cjs/*"
+const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
+const {
+  StdioServerTransport,
+} = require("@modelcontextprotocol/sdk/server/stdio.js");
+const {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+} = require("@modelcontextprotocol/sdk/types.js");
 import * as fs from "fs/promises";
 import * as path from "path";
 import type {
@@ -33,7 +35,7 @@ import { EXECUTION_STATES } from "./types/DashboardConstants";
  * Provides tools for AI agents to read and extend workflow queues
  */
 class FlightPathMCPServer {
-  private server: Server;
+  private server: typeof Server;
   private workspaceRoot: string;
 
   constructor() {
@@ -117,30 +119,33 @@ class FlightPathMCPServer {
     }));
 
     // Handle tool invocations
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+    this.server.setRequestHandler(
+      CallToolRequestSchema,
+      async (request: any) => {
+        const { name, arguments: args } = request.params;
 
-      try {
-        switch (name) {
-          case "flightpath_queue_status":
-            return await this.handleQueueStatus();
-          case "flightpath_append_queue":
-            return await this.handleQueueAppend(args);
-          default:
-            throw new Error(`Unknown tool: ${name}`);
+        try {
+          switch (name) {
+            case "flightpath_queue_status":
+              return await this.handleQueueStatus();
+            case "flightpath_append_queue":
+              return await this.handleQueueAppend(args);
+            default:
+              throw new Error(`Unknown tool: ${name}`);
+          }
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error: ${error.message}`,
+              },
+            ],
+            isError: true,
+          };
         }
-      } catch (error: any) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Error: ${error.message}`,
-            },
-          ],
-          isError: true,
-        };
       }
-    });
+    );
   }
 
   /**
@@ -317,11 +322,7 @@ class FlightPathMCPServer {
    * Find the most recently modified working file in .flightpath/.queue/
    */
   private async findActiveWorkingFile(): Promise<string | null> {
-    const queueDir = path.join(
-      this.workspaceRoot,
-      ".flightpath",
-      ".queue"
-    );
+    const queueDir = path.join(this.workspaceRoot, ".flightpath", ".queue");
 
     try {
       const files = await fs.readdir(queueDir);
@@ -353,10 +354,7 @@ class FlightPathMCPServer {
   /**
    * Determine prompt status based on runtime state
    */
-  private getPromptStatus(
-    index: number,
-    runtime: WorkingFileRuntime
-  ): string {
+  private getPromptStatus(index: number, runtime: WorkingFileRuntime): string {
     if (runtime.completedPrompts.includes(String(index))) {
       return "completed";
     }

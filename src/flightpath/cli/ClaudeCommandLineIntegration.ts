@@ -156,7 +156,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return `${this.getCliName()} ${interactiveArgs.join(" ")}`;
   }
 
-  protected getIntegrationMode(): string {
+  public getIntegrationMode(): string {
     return Provider.ClaudeCli;
   }
 
@@ -450,7 +450,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       // Build CLI arguments (mode-specific: interactive mode skips -p flag)
       const mode = this.getExecutionMode();
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
-      const args = this.buildCliArgs(prompt, isInteractive);
+      const args = await this.buildCliArgs(
+        prompt,
+        isInteractive,
+        workflowContext
+      );
 
       // Store full command for debugging (will be updated by execution methods)
       this.lastCliCommand = `${this.getCliName()} ${args.join(" ")} "<prompt>"`;
@@ -476,6 +480,35 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Generate MCP server configuration for Claude CLI.
+   * Returns --mcp-config <tempfile> argument.
+   */
+  /**
+   * Generate MCP server configuration for Claude CLI.
+   * Returns --mcp-config <tempfile> argument.
+   * Config file is generated once and cached for reuse across all prompts.
+   */
+  protected async getMcpConfigArgs(
+    mcpServerPath: string,
+    workspaceRoot: string
+  ): Promise<string[] | null> {
+    try {
+      // Use shared file generation (cached after first call)
+      const configPath = await this.generateMcpConfigFile(
+        mcpServerPath,
+        workspaceRoot,
+        true // Claude requires "type": "stdio"
+      );
+
+      // Return --mcp-config file argument
+      return ["--mcp-config", configPath];
+    } catch (error) {
+      Log.error("Failed to generate MCP config for Claude CLI", error);
+      return null;
+    }
+  }
+
+  /**
    * Build CLI arguments for Claude command (without prompt - handled separately)
    *
    * Note: In Claude CLI:
@@ -486,12 +519,52 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
    *
    * @param prompt The prompt item
    * @param isInteractive Whether this is interactive mode (skips -p flag)
+   * @param workflowContext Optional workflow context for MCP config generation
    */
-  private buildCliArgs(
+  private async buildCliArgs(
     prompt: PromptItem,
-    isInteractive: boolean = false
-  ): string[] {
+    isInteractive: boolean = false,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
     const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath =
+            this.context.asAbsolutePath("out/mcp-server.js");
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const mcpArgs = await this.getMcpConfigArgs(
+              mcpServerPath,
+              workspaceRoot
+            );
+            if (mcpArgs) {
+              args.push(...mcpArgs);
+              Log.info(
+                "🔧 MCP server config added for dynamic queue extension"
+              );
+            }
+          }
+        }
+      }
+    }
 
     // Only add print mode for headless (non-interactive) execution
     // Interactive mode should allow user input, so we skip -p

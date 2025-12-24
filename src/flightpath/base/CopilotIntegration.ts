@@ -98,6 +98,13 @@ export abstract class CopilotIntegration {
   abstract isIntegrationAvailable(): boolean;
 
   /**
+   * Get integration mode (e.g., "copilot-cli", "claude-cli", "chat")
+   * Used to customize dynamic queue instructions for each integration type
+   * Must be implemented by subclasses
+   */
+  abstract getIntegrationMode(): string;
+
+  /**
    * Build prompt text from prompt item
    * Common logic for extracting prompt text and expanding context references
    */
@@ -124,14 +131,12 @@ export abstract class CopilotIntegration {
   }
 
   /**
-   * Build prompt with attachments
-   * Note: Queue extension is now handled via MCP tools (CLI modes) or Language Model Tools (VS Code Chat).
-   * The AI will automatically see available tools through the respective protocols.
+   * Build prompt with dynamic queue instructions if needed
    * @param prompt The prompt item
-   * @param promptIndex Current prompt index (unused, kept for compatibility)
-   * @param allPrompts All prompts in the workflow (unused, kept for compatibility)
+   * @param promptIndex Current prompt index
+   * @param allPrompts All prompts in the workflow
    * @param filePath Path to the .flightpath.json file (unused, kept for compatibility)
-   * @returns Prompt text with attachments
+   * @returns Prompt text with optional MCP tool instructions
    */
   protected async buildPromptWithInstructions(
     prompt: PromptItem,
@@ -140,10 +145,62 @@ export abstract class CopilotIntegration {
     filePath?: string
   ): Promise<string> {
     // Build base prompt text (with attachments)
-    // Note: MCP tools (flightpath_append_queue, flightpath_queue_status) are automatically
-    // advertised by the MCP protocol in CLI modes, or via Language Model Tools API in VS Code Chat.
-    // No manual instruction injection needed.
-    return await this.buildPromptText(prompt);
+    let promptText = await this.buildPromptText(prompt);
+
+    // Check if we should inject dynamic queue instructions
+    const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+
+    if (!dynamicQueueConfig.enabled) {
+      return promptText; // Dynamic queue disabled
+    }
+
+    // Check if this prompt should get extension instructions
+    const {
+      shouldInjectExtensionInstructions,
+    } = require("../../utils/PromptIdentity");
+
+    const shouldInject = shouldInjectExtensionInstructions(
+      prompt,
+      promptIndex,
+      allPrompts,
+      dynamicQueueConfig.dynamicExtensionOnLastPrompt
+    );
+
+    if (!shouldInject) {
+      return promptText; // No instructions for this prompt
+    }
+
+    // Get integration mode to determine instruction format
+    const integrationMode = this.getIntegrationMode();
+
+    // Get dynamic queue config for instruction template
+    const { maxQueueSize, maxWorkflowExecutionTime, unlimitedMode } =
+      dynamicQueueConfig;
+
+    // Calculate current stats
+    const currentSize = allPrompts.length;
+    const currentIndex = promptIndex + 1; // 1-based for display
+    const totalPrompts = allPrompts.length;
+
+    // Build concise instruction (tool schemas provide usage details)
+    const maxSizeDisplay = unlimitedMode
+      ? "unlimited"
+      : maxQueueSize.toString();
+    const maxTimeDisplay =
+      unlimitedMode || maxWorkflowExecutionTime === -1
+        ? "unlimited"
+        : `${maxWorkflowExecutionTime}s`;
+
+    const instructions = `<criticalInstruction>
+FlightPath workflow: Step ${currentIndex}/${totalPrompts} (${currentSize}/${maxSizeDisplay} prompts, ${maxTimeDisplay} max time)
+
+You have access to flightpath_queue_status and flightpath_append_queue tools. Use them if you need additional steps to complete this task. Only extend the queue if truly necessary.
+</criticalInstruction>
+
+`;
+
+    // Prepend instructions to prompt
+    return instructions + promptText;
   }
 
   /**

@@ -171,7 +171,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return relativeFilePath;
   }
 
-  protected getIntegrationMode(): string {
+  public getIntegrationMode(): string {
     return Provider.CodexCli;
   }
 
@@ -406,7 +406,11 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       // Build CLI arguments (mode-specific: interactive mode skips exec/--json flags)
       const mode = this.getExecutionMode();
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
-      const args = this.buildCliArgs(prompt, isInteractive);
+      const args = await this.buildCliArgs(
+        prompt,
+        isInteractive,
+        workflowContext
+      );
 
       // Store full command for debugging (will be updated by execution methods)
       this.lastCliCommand = `${this.getCliName()} ${args.join(" ")} "<prompt>"`;
@@ -432,16 +436,84 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
+   * Generate MCP server configuration for Codex CLI.
+   * Returns -c 'mcp_servers.flightpath={...}' inline TOML argument.
+   */
+  protected async getMcpConfigArgs(
+    mcpServerPath: string,
+    workspaceRoot: string
+  ): Promise<string[] | null> {
+    try {
+      // Generate inline TOML config (no file needed for Codex!)
+      // Format: -c 'mcp_servers.flightpath={command="node",args=["path"],env={FLIGHTPATH_WORKSPACE="dir"}}'
+      // Note: Backslashes in Windows paths must be escaped for TOML
+      const escapedServerPath = mcpServerPath.replace(/\\/g, "/");
+      const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
+
+      const tomlConfig =
+        `mcp_servers.flightpath={command="node",` +
+        `args=["${escapedServerPath}"],` +
+        `env={FLIGHTPATH_WORKSPACE="${escapedWorkspaceRoot}"}}`;
+
+      // Return -c flag with inline TOML
+      return ["-c", tomlConfig];
+    } catch (error) {
+      Log.error("Failed to generate MCP config for Codex CLI", error);
+      return null;
+    }
+  }
+
+  /**
    * Build CLI arguments for Codex command (without prompt - handled separately)
    *
    * @param prompt The prompt item
    * @param isInteractive Whether this is interactive mode (skips exec/--json flags)
+   * @param workflowContext Optional workflow context for MCP config generation
    */
-  private buildCliArgs(
+  private async buildCliArgs(
     prompt: PromptItem,
-    isInteractive: boolean = false
-  ): string[] {
+    isInteractive: boolean = false,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
     const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath =
+            this.context.asAbsolutePath("out/mcp-server.js");
+          const workspaceRoot = this.getWorkspaceRoot();
+          if (workspaceRoot) {
+            const mcpArgs = await this.getMcpConfigArgs(
+              mcpServerPath,
+              workspaceRoot
+            );
+            if (mcpArgs) {
+              args.push(...mcpArgs);
+              Log.info(
+                "🔧 MCP server config added for dynamic queue extension"
+              );
+            }
+          }
+        }
+      }
+    }
 
     // Only add exec subcommand and --json flag for headless mode
     if (!isInteractive) {
