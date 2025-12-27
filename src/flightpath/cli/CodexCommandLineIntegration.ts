@@ -445,15 +445,15 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   ): Promise<string[] | null> {
     try {
       // Generate inline TOML config (no file needed for Codex!)
-      // Format: -c 'mcp_servers.flightpath={command="node",args=["path"],env={FLIGHTPATH_WORKSPACE="dir"}}'
-      // Note: Backslashes in Windows paths must be escaped for TOML
+      // Format: -c "mcp_servers.flightpath={command='node',args=['path'],env={FLIGHTPATH_WORKSPACE='dir'}}"
+      // Note: Use single quotes inside TOML to avoid PowerShell escaping issues with double quotes
       const escapedServerPath = mcpServerPath.replace(/\\/g, "/");
       const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
       const tomlConfig =
-        `mcp_servers.flightpath={command="node",` +
-        `args=["${escapedServerPath}"],` +
-        `env={FLIGHTPATH_WORKSPACE="${escapedWorkspaceRoot}"}}`;
+        `mcp_servers.flightpath={command='node',` +
+        `args=['${escapedServerPath}'],` +
+        `env={FLIGHTPATH_WORKSPACE='${escapedWorkspaceRoot}'}}`;
 
       // Return -c flag with inline TOML
       return ["-c", tomlConfig];

@@ -734,6 +734,21 @@ codex -c 'mcp_servers.flightpath={command="node",args=["path/to/mcp-server.js"],
 codex -c 'mcp_servers.flightpath={command="node",args=["path/to/mcp-server.js"],startup_timeout_sec=20,tool_timeout_sec=60}'
 ```
 
+**PowerShell Syntax** (escape single quotes with single quotes for nested quotes):
+
+```powershell
+# Using inline TOML in PowerShell
+codex -c "mcp_servers.flightpath={command='node',args=['path/to/mcp-server.js']}"
+
+# With environment variables
+codex -c "mcp_servers.flightpath={command='node',args=['path/to/mcp-server.js'],env={FLIGHTPATH_WORKSPACE='.'}}"
+
+# With additional options
+codex -c "mcp_servers.flightpath={command='node',args=['path/to/mcp-server.js'],startup_timeout_sec=20,tool_timeout_sec=60}"
+```
+
+**Note**: PowerShell does not interpret backslash escapes (`\"`) in double-quoted strings. Instead, use single quotes (`'`) inside the outer double quotes for nested string literals.
+
 **TOML Configuration Details**:
 
 - **Key syntax**: Use dotted paths like `mcp_servers.flightpath.command`
