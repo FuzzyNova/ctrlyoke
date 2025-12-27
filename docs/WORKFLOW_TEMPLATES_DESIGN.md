@@ -528,7 +528,7 @@ The existing `copyTemplatesPlugin` in `esbuild.js` handles subdirectory copying.
 
 - [Custom Templates](./FLIGHTPATH_CUSTOM_TEMPLATES.md) - Agent templates and end condition scripts
 - [End Conditions](./END_CONDITIONS.md) - Validation script documentation
-- [Dynamic Queue](./DYNAMIC_QUEUE_USAGE.md) - How workflows can extend during execution
+- [Queue Extension](./QUEUE_APPEND_FEATURE.md) - How workflows can extend during execution
 
 ## Implementation Architecture
 

@@ -301,4 +301,4 @@ Use **CLI mode** for:
 
 - `AGENT_SUPPORT_IMPLEMENTATION.md` - Agent support implementation (CLI mode)
 - `ARCHITECTURE.md` - System architecture overview
-- `DYNAMIC_QUEUE_USAGE.md` - Dynamic queue user guide
+- `QUEUE_APPEND_FEATURE.md` - Queue append and dynamic extension guide

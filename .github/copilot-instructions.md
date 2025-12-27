@@ -600,6 +600,5 @@ All in `package.json`:
 
 ### Documentation
 
-- **User guide**: `docs/DYNAMIC_QUEUE_USAGE.md`
-- **Implementation plan**: `docs/DYNAMIC_QUEUE_IMPLEMENTATION.md`
+- **User guide & implementation**: `docs/QUEUE_APPEND_FEATURE.md`
 - **Examples**: `manual-test/dynamic-queue-*.flightpath.json`

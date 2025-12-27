@@ -367,7 +367,7 @@ These are resolved at runtime by FlightPath before sending to Copilot.
 
 ## Related Documentation
 
-- [FlightPath Dynamic Queue](./DYNAMIC_QUEUE_USAGE.md) - Queue extension during execution
+- [FlightPath Queue Extension](../QUEUE_APPEND_FEATURE.md) - Queue append and dynamic extension
 - [BMAD Quick Start](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/src/modules/bmm/docs/quick-start.md)
 - [BMAD Scale Adaptive System](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/src/modules/bmm/docs/scale-adaptive-system.md)
 

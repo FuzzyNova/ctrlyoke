@@ -1,4 +1,5 @@
 #Here is copilot's tui
+
 ```
  Welcome to GitHub Copilot CLI
  Version 0.0.367 · Commit 9b421b4
@@ -15,14 +16,15 @@
 
  ◎ Thinking (Esc to cancel)
 
- C:\dev\FlightPath[⎇ main*]                                                                                                                                                                                                                                                                 gpt-5-mini (0x)  
- ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+ C:\dev\FlightPath[⎇ main*]                                                                                                                                                                                                                                                                 gpt-5-mini (0x)
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  >  Enter @ to mention files or / for commands
- ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  Ctrl+c Exit · Ctrl+r Expand recent
 ```
 
 #Here's another copilot TUI with approval window:
+
 ```
  Welcome to GitHub Copilot CLI
  Version 0.0.367 · Commit 9b421b4
@@ -38,25 +40,25 @@
  ● Running a quick create→list→delete sequence in the Windows temp folder to verify file create/delete permissions. I'll report intent and run a PowerShell command that creates a temp file, shows its info, deletes it, and reports the final status.
 
    Create, list, and delete a temp file to test permissions
-   $ $p=Join-Path $env:TEMP 'flightpath_temp_test.txt'; Set-Content -Path $p -Value 'temporary file content'; Write-Output "Created:$p"; Get-Item $p | Select-Object FullName,Length | ConvertTo-Json; Remove-Item $p -Force; Write-Output "Removed:$p"; if (Test-Path $p){ Write-Output "ExistsAfterDelete" 
+   $ $p=Join-Path $env:TEMP 'flightpath_temp_test.txt'; Set-Content -Path $p -Value 'temporary file content'; Write-Output "Created:$p"; Get-Item $p | Select-Object FullName,Length | ConvertTo-Json; Remove-Item $p -Force; Write-Output "Removed:$p"; if (Test-Path $p){ Write-Output "ExistsAfterDelete"
    } else { Write-Output "DeletedOK" }
 
 
- ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ 
- │ Create, list, and delete a temp file to test permissions                                                                                                                                                                                                                                                │ 
- │                                                                                                                                                                                                                                                                                                         │ 
- │ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │ 
- │ │ $p=Join-Path $env:TEMP 'flightpath_temp_test.txt'; Set-Content -Path $p -Value 'temporary file content'; Write-Output "Created:$p"; Get-Item $p | Select-Object FullName,Length | ConvertTo-Json; Remove-Item $p -Force; Write-Output "Removed:$p"; if (Test-Path $p){ Write-Output                 │ │ 
- │ │ "ExistsAfterDelete" } else { Write-Output "DeletedOK" }                                                                                                                                                                                                                                             │ │ 
- │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │ 
- │                                                                                                                                                                                                                                                                                                         │ 
- │ Do you want to run this command?                                                                                                                                                                                                                                                                        │ 
- │                                                                                                                                                                                                                                                                                                         │ 
- │ ❯ 1. Yes                                                                                                                                                                                                                                                                                                │ 
- │   2. No, and tell Copilot what to do differently (Esc)                                                                                                                                                                                                                                                  │ 
- │                                                                                                                                                                                                                                                                                                         │ 
- │ Confirm with number keys or ↑↓ keys and Enter, Cancel with Esc                                                                                                                                                                                                                                          │ 
- ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ 
+ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ Create, list, and delete a temp file to test permissions                                                                                                                                                                                                                                                │
+ │                                                                                                                                                                                                                                                                                                         │
+ │ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+ │ │ $p=Join-Path $env:TEMP 'flightpath_temp_test.txt'; Set-Content -Path $p -Value 'temporary file content'; Write-Output "Created:$p"; Get-Item $p | Select-Object FullName,Length | ConvertTo-Json; Remove-Item $p -Force; Write-Output "Removed:$p"; if (Test-Path $p){ Write-Output                 │ │
+ │ │ "ExistsAfterDelete" } else { Write-Output "DeletedOK" }                                                                                                                                                                                                                                             │ │
+ │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+ │                                                                                                                                                                                                                                                                                                         │
+ │ Do you want to run this command?                                                                                                                                                                                                                                                                        │
+ │                                                                                                                                                                                                                                                                                                         │
+ │ ❯ 1. Yes                                                                                                                                                                                                                                                                                                │
+ │   2. No, and tell Copilot what to do differently (Esc)                                                                                                                                                                                                                                                  │
+ │                                                                                                                                                                                                                                                                                                         │
+ │ Confirm with number keys or ↑↓ keys and Enter, Cancel with Esc                                                                                                                                                                                                                                          │
+ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
 
@@ -74,12 +76,12 @@
 
 ⚠ `enable_experimental_windows_sandbox` is deprecated. Use `[features].experimental_windows_sandbox` instead.
 Enable it with `--enable experimental_windows_sandbox` or `[features].experimental_windows_sandbox` in config.toml. See https://github.com/openai/codex/blob/main/docs/config.md#feature-flags for details.
-                                                                                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                                                                             
-› this is a test, just say hi                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                                                                             
-• Hi!                                                                                                                                                                                                                                                                                                        
+
+
+› this is a test, just say hi
+
+
+• Hi!
 
 
 › Improve documentation in @filename
@@ -88,6 +90,7 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
 ```
 
 #Codex TUI with approval window open:
+
 ```
 ╭─────────────────────────────────────────────────────────╮
 │ >_ OpenAI Codex (v0.75.0)                               │
@@ -104,7 +107,7 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
   └ # FlightPath VS Code Extension
 
     … +541 lines
-    - **Implementation plan**: `docs/DYNAMIC_QUEUE_IMPLEMENTATION.md`
+    - **Implementation guide**: `docs/QUEUE_APPEND_FEATURE.md`
     - **Examples**: `manual-test/dynamic-queue-*.flightpath.json`
 
 • Ran New-Item -Path temp_permissions_test.tmp -ItemType File -Force -Value "permission test"
@@ -130,10 +133,11 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
   2. Yes, and don't ask again for commands that start with `Remove-Item -Path temp_permissions_test.tmp` (p)
   3. No, and tell Codex what to do differently (esc)
 
-  Press enter to confirm or esc to cancel   
+  Press enter to confirm or esc to cancel
 ```
 
 #Claude's tui in normal mode:
+
 ```
 ╭─── Claude Code v2.0.73 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │                                                    │ Recent activity                                                                                                                          │
@@ -165,7 +169,7 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
 · Booping… (esc to interrupt · thinking)
 
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
->  
+>
 ─────────────────────────────────────────────
 ```
 
@@ -176,7 +180,7 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
 * ▝▜█████▛▘ *  Haiku 4.5 · Claude Pro
  *  ▘▘ ▝▝  *   C:\dev\FlightPath
 
-> try removing a file for me, I want to see how your permissions are set up, just create a temp file and remove it. 
+> try removing a file for me, I want to see how your permissions are set up, just create a temp file and remove it.
 
 ● Write(.test-temp-file)
   ⎿  Wrote 1 lines to .test-temp-file
@@ -197,5 +201,4 @@ Enable it with `--enable experimental_windows_sandbox` or `[features].experiment
    3. Type here to tell Claude what to do differently
 
  Esc to cancel
- ```
- 
+```
