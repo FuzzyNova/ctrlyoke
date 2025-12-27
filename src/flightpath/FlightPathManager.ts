@@ -1069,6 +1069,13 @@ export class FlightPathManager {
 
   /**
    * Handle queue state changes
+   *
+   * This method provides a single execution path for state management:
+   * - Normal start: User action → startWorkflowExecution() → WorkflowExecutor → start() → RUNNING state → here
+   *   (activeIntegration is set, so no auto-start)
+   * - Append to COMPLETED: appendPrompts() → RUNNING state → here → auto-start
+   *   (activeIntegration is undefined, so we start execution)
+   * - Append to IDLE/PAUSED: appendPrompts() → stays IDLE/PAUSED → here → no auto-start
    */
   private onQueueStateChanged(state: QueueState): void {
     console.log(`FlightPath: Queue state changed to ${state.status}`);
@@ -1077,6 +1084,21 @@ export class FlightPathManager {
     // Send execution state to dashboard
     if (this.dashboardProvider) {
       this.dashboardProvider.updateExecutionState(state.status);
+    }
+
+    // Auto-start execution if state is RUNNING but no execution is active
+    // This handles the case where appendPrompts() set COMPLETED → RUNNING
+    if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
+      console.log(
+        "FlightPath: Queue state is RUNNING but no active execution detected. Auto-starting workflow..."
+      );
+      // Start execution asynchronously (don't block state change handler)
+      this.startWorkflowExecution().catch((error) => {
+        console.error("FlightPath: Auto-start failed:", error);
+        vscode.window.showErrorMessage(
+          `FlightPath: Failed to auto-start workflow: ${error}`
+        );
+      });
     }
   }
 

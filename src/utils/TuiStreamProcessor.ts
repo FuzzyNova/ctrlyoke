@@ -130,14 +130,14 @@ export class TuiStreamProcessor {
       // Extract the file path from the prompt (everything after the @ symbol)
       const atIndex = prompt.indexOf("@");
       if (atIndex === -1) {
-        // No @ symbol, just check for the whole prompt (normalize whitespace)
+        // No @ symbol, just check for the whole prompt (remove all whitespace for comparison)
+        // TUIs may remove spaces in output, so we compare without any whitespace
         const normalizedPrompt = prompt
           .toLowerCase()
-          .replace(/\s+/g, " ")
-          .trim();
+          .replace(/\s+/g, "");
         const normalizedBuffer = fileEchoBuffer
           .toLowerCase()
-          .replace(/\s+/g, " ");
+          .replace(/\s+/g, "");
         if (normalizedBuffer.includes(normalizedPrompt)) {
           Log.debug(
             `🔍 File reference verified: found "${prompt}" in terminal echo`

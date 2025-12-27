@@ -125,4 +125,44 @@ const validator = ajv.compile<PromptItem>(promptItemSchema);
 - `../flightpath/PromptFileParser.ts` - Uses similar validation patterns
 - `../flightpath/EndConditionEvaluator.ts` - Uses file system utilities
 - `../extension.ts` - Initializes LoggingUtils with context
+- `PromptIdentity.ts` - Hash-based prompt identity tracking for queue deduplication
+- `docs/QUEUE_APPEND_FEATURE.md` - Working file system documentation
 </relatedFiles>
+
+<promptIdentity>
+**Responsibilities:**
+- Hash-based prompt identity tracking
+- Deduplication of prompts in queue
+- Completion tracking across queue extensions
+
+**Key functions:**
+
+- `hashPromptContent(prompt: string)` - SHA-256 hash of normalized prompt text (16 chars)
+- `isPromptCompleted(prompt: PromptItem, completedIds: Set<string>)` - Check if prompt already executed
+- `shouldInjectExtensionInstructions(prompt: PromptItem, ...)` - Determines if Dynamic Queue instructions needed
+
+**Hash normalization:**
+
+- Trims whitespace
+- Converts to lowercase
+- Ensures consistent hashing across edits
+
+**Identity strategy:**
+
+- Explicit ID (optional): User or AI provides `id` field
+- Content hash (automatic): Fallback when no explicit ID
+- Prevents duplicate execution when MCP or user appends same prompt
+
+**Usage:**
+
+```typescript
+const hash = hashPromptContent(prompt.prompt);
+if (completedIds.has(hash)) {
+  // Skip - already executed
+}
+```
+
+**See also:**
+
+- `docs/QUEUE_APPEND_FEATURE.md` - Deduplication architecture
+  </promptIdentity>

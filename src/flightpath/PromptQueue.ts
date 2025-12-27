@@ -127,8 +127,8 @@ export class PromptQueue {
 
   /**
    * Start queue execution
-   * Note: This only sets the queue state to running. Actual execution
-   * is handled by FlightPathManager's startWorkflowExecution method.
+   * Note: This only sets the queue state to running. The state change event
+   * triggers FlightPathManager.onQueueStateChanged() which starts actual execution.
    */
   async start(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.RUNNING) {
@@ -803,8 +803,12 @@ export class PromptQueue {
       // Insert results at the same position
       this.state.results.splice(insertIndex, 0, ...newResults);
 
-      // If queue completed/idle, set to running state (will be picked up by workflow executor)
-      if (this.isCompleted()) {
+      // Auto-start behavior based on current state:
+      // - COMPLETED: Set to RUNNING (user already started workflow, treat as continuation)
+      // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
+      // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
+      // - RUNNING: Already running, no change needed
+      if (this.state.status === EXECUTION_STATES.COMPLETED) {
         this.state.status = EXECUTION_STATES.RUNNING;
         this.isPaused = false;
         this.state.stopped = false;

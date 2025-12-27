@@ -13,10 +13,13 @@ Core data structures. TypeScript strict mode enforced.
 - `EndCondition` - Validation script configuration
 - `QueueState` - Execution state machine with progress tracking
 - `PromptResult` - Per-prompt execution result with status and timestamp
+- `WorkingFile` - Persistent queue state for crash recovery (extends PromptFile)
+- `WorkingFileRuntime` - Runtime execution state (`_runtime` object in working files)
+- `AppendSegment` - Tracks queue append operations (user or MCP)
 
 **Enums:**
 
-- `Provider` - "copilot-cli" | "copilot-chat"
+- `Provider` - "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
 
 **Important patterns:**
 
@@ -24,6 +27,8 @@ Core data structures. TypeScript strict mode enforced.
 - EndCondition is optional (prompts can execute without validation)
 - QueueState.status is discriminated union ("idle" | "running" | "paused" | "completed" | "error")
 - PromptResult.status transitions: pending → sent → completed/failed
+- WorkingFile extends PromptFile with `originalFile`, `workflowName`, `startedAt`, `_runtime`
+- AppendSegment tracks source, timestamp, prompt count, and indices for each append operation
   </flightPathTypes>
 
 <copilotTypes>
@@ -83,4 +88,6 @@ private isChatIntegration(integration: CopilotIntegration): integration is Copil
 - `../flightpath/PromptQueue.ts` - Uses QueueState and PromptResult
 - `../flightpath/cli/CopilotCommandLineIntegration.ts` - Uses CopilotCliOptions/Result
 - `/schemas/prompt-schema.json` - JSON Schema mirrors TypeScript types
+- `../utils/PromptIdentity.ts` - Hash-based prompt identity for deduplication
+- `docs/QUEUE_APPEND_FEATURE.md` - Working file system documentation
 </relatedFiles>

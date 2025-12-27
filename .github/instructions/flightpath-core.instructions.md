@@ -28,9 +28,21 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - `loadPromptFile(filePath)` - Loads file into dashboard WITHOUT executing (validates, parses, notifies dashboard)
 - `executeLoadedPromptFile(mode?)` - Executes the currently loaded file (checks Copilot readiness, starts workflow)
 - `executePromptFile(filePath, mode?)` - Legacy method (loads then immediately executes for backwards compatibility)
+- `appendFromFile(filePath, position)` - Queue append feature (adds prompts without clearing dashboard)
 - Dashboard "Change" button → calls `loadPromptFile()` → user can review prompts before clicking "Run"
 - Dashboard "Run" button → calls `executeLoadedPromptFile()` → starts execution immediately (no confirmation dialog)
 - Context menu "Run with FlightPath" → calls `executePromptFile()` → loads and executes immediately
+- Context menu "Queue with FlightPath" → calls `appendFromFile(filePath, "end")` → appends to queue
+- Context menu "Queue Next" → calls `appendFromFile(filePath, "next")` → inserts after current
+
+**Queue append behavior:**
+
+- Validates queue state (cannot append to cancelled/error queues)
+- Enforces queue size limits (`maxQueueSize` setting)
+- Auto-resumes execution if queue was completed
+- Preserves dashboard history (no clearing)
+- Creates working file if needed (`.flightpath/.queue/<workflow>.flightpath.json`)
+- See `docs/QUEUE_APPEND_FEATURE.md` for full details
 
 **Mode override:**
 
@@ -54,6 +66,9 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - Sequential state management (idle → running → paused/completed/error)
 - Progress tracking, retry counting, and result storage
 - State change events for UI updates
+- Working file persistence for crash recovery
+- Queue append operations (user-driven and MCP-driven)
+- Atomic file operations to prevent race conditions
 
 **Architecture decision: Direct execution, not event-driven**
 
@@ -61,6 +76,18 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - PromptQueue is a state container that emits change events
 - This design supports complex retry logic where execution "stays" on a step during retries
 - Event-driven model would require complex state machines to handle retry pauses
+
+**Queue Append & Working Files:**
+
+- See `docs/QUEUE_APPEND_FEATURE.md` for complete implementation details
+- Working files: `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json`
+- `appendPrompts(prompts, source, position)` - Add prompts to queue ("next" or "end")
+- `updateWorkingFile()` - Persist queue state after every modification
+- `_updateWorkingFileInternal()` - Internal version to prevent operation queue deadlock
+- Operation queue serializes all file writes (prevents concurrent write corruption)
+- File watcher detects external changes (e.g., MCP appends) and triggers reload
+- Hash-based prompt deduplication prevents duplicate execution
+- Auto-resume on VS Code startup via `autoLoadRecentSession` setting
 
 **State management methods:**
 
@@ -210,6 +237,9 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 
 **Future enhancement:**
 
+- `../utils/PromptIdentity.ts` - Hash-based prompt identity tracking
+- `docs/QUEUE_APPEND_FEATURE.md` - Queue append and working file documentation
+- `docs/FLIGHTPATH_MCP_IMPLEMENTATION.md` - MCP-based queue extension
 - Pass Copilot response text to scripts (CLI only)
 - Enable response content validation (not yet implemented)
   </endConditionEvaluator>
