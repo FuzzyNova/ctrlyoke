@@ -21,6 +21,7 @@ const {
   ListToolsRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 import * as fs from "fs/promises";
+import * as fsSync from "fs";
 import * as path from "path";
 import type {
   PromptItem,
@@ -29,6 +30,37 @@ import type {
   WorkingFileRuntime,
 } from "./types/FlightPathTypes";
 import { EXECUTION_STATES } from "./types/DashboardConstants";
+
+// Initialize log file
+const workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
+const logDir = path.join(workspaceRoot, ".flightpath", "logs");
+const logFile = path.join(logDir, `mcp-server-${Date.now()}.log`);
+
+// Ensure log directory exists
+try {
+  fsSync.mkdirSync(logDir, { recursive: true });
+} catch (error) {
+  // Ignore errors, will fail on first log write if directory can't be created
+}
+
+/**
+ * Log to file (TUI captures stderr, so we write to .flightpath/logs/)
+ */
+function log(...args: any[]) {
+  const timestamp = new Date().toISOString();
+  const message = `[${timestamp}] ${args
+    .map((arg) =>
+      typeof arg === "object" ? JSON.stringify(arg, null, 2) : String(arg)
+    )
+    .join(" ")}\n`;
+
+  try {
+    fsSync.appendFileSync(logFile, message, "utf8");
+  } catch (error) {
+    // Fallback to stderr if file write fails
+    console.error(message.trim());
+  }
+}
 
 /**
  * FlightPath MCP Server
@@ -40,6 +72,12 @@ class FlightPathMCPServer {
 
   constructor() {
     this.workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
+    log("MCP Server initializing...");
+    log("Workspace root:", this.workspaceRoot);
+    log("Environment variables:", {
+      FLIGHTPATH_WORKSPACE: process.env.FLIGHTPATH_WORKSPACE,
+      NODE_ENV: process.env.NODE_ENV,
+    });
 
     this.server = new Server(
       {
@@ -54,86 +92,103 @@ class FlightPathMCPServer {
     );
 
     this.setupHandlers();
+    log("MCP Server handlers registered");
   }
 
   private setupHandlers() {
     // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [
-        {
-          name: "flightpath_queue_status",
-          description:
-            "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
-        {
-          name: "flightpath_append_queue",
-          description:
-            "Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
-          inputSchema: {
-            type: "object",
-            properties: {
-              prompts: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    prompt: {
-                      type: "string",
-                      description: "The prompt text to add to the queue",
-                    },
-                    model: {
-                      type: "string",
-                      description:
-                        "Optional model override (e.g., 'claude-sonnet-4.5', 'gpt-5')",
-                    },
-                  },
-                  required: ["prompt"],
-                },
-                description: "Array of prompts to add to the queue",
-              },
-              position: {
-                type: "string",
-                enum: ["next", "end"],
-                description:
-                  "Where to insert prompts: 'next' (after current) or 'end' (at end of queue)",
-              },
-              source: {
-                type: "string",
-                description:
-                  'Source identifier (e.g., "copilot-cli", "claude-cli", "AI-generated testing tasks")',
-              },
-              reason: {
-                type: "string",
-                description:
-                  "Optional explanation for why these prompts are being added",
-              },
+    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      log("ListTools request received");
+      return {
+        tools: [
+          {
+            name: "flightpath_queue_status",
+            description:
+              "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
+            inputSchema: {
+              type: "object",
+              properties: {},
             },
-            required: ["prompts", "position"],
           },
-        },
-      ],
-    }));
+          {
+            name: "flightpath_append_queue",
+            description:
+              "Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
+            inputSchema: {
+              type: "object",
+              properties: {
+                prompts: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      prompt: {
+                        type: "string",
+                        description: "The prompt text to add to the queue",
+                      },
+                      model: {
+                        type: "string",
+                        description:
+                          "Optional model override (e.g., 'claude-sonnet-4.5', 'gpt-5')",
+                      },
+                    },
+                    required: ["prompt"],
+                  },
+                  description: "Array of prompts to add to the queue",
+                },
+                position: {
+                  type: "string",
+                  enum: ["next", "end"],
+                  description:
+                    "Where to insert prompts: 'next' (after current) or 'end' (at end of queue)",
+                },
+                source: {
+                  type: "string",
+                  description:
+                    'Source identifier (e.g., "copilot-cli", "claude-cli", "AI-generated testing tasks")',
+                },
+                reason: {
+                  type: "string",
+                  description:
+                    "Optional explanation for why these prompts are being added",
+                },
+              },
+              required: ["prompts", "position"],
+            },
+          },
+        ],
+      };
+    });
 
     // Handle tool invocations
     this.server.setRequestHandler(
       CallToolRequestSchema,
       async (request: any) => {
         const { name, arguments: args } = request.params;
+        log("\n=== Tool Invocation ===");
+        log("Tool name:", name);
+        log("Arguments:", JSON.stringify(args, null, 2));
 
         try {
+          let result;
           switch (name) {
             case "flightpath_queue_status":
-              return await this.handleQueueStatus();
+              log("Handling queue_status...");
+              result = await this.handleQueueStatus();
+              log("queue_status completed successfully");
+              return result;
             case "flightpath_append_queue":
-              return await this.handleQueueAppend(args);
+              log("Handling append_queue...");
+              result = await this.handleQueueAppend(args);
+              log("append_queue completed successfully");
+              log("Result:", JSON.stringify(result, null, 2));
+              return result;
             default:
               throw new Error(`Unknown tool: ${name}`);
           }
         } catch (error: any) {
+          log("ERROR in tool invocation:", error);
+          log("Error stack:", error.stack);
           return {
             content: [
               {
@@ -153,7 +208,10 @@ class FlightPathMCPServer {
    * Returns comprehensive queue state including metadata and all prompts
    */
   private async handleQueueStatus() {
+    log("Finding active working file...");
     const workingFile = await this.findActiveWorkingFile();
+    log("Working file:", workingFile || "(none found)");
+
     if (!workingFile) {
       throw new Error(
         "No active FlightPath workflow found. Start a workflow in VS Code first."
@@ -206,6 +264,7 @@ class FlightPathMCPServer {
    * Appends prompts to the queue with position control
    */
   private async handleQueueAppend(args: any) {
+    log("Processing append_queue request...");
     const {
       prompts,
       position,
@@ -218,17 +277,29 @@ class FlightPathMCPServer {
       reason?: string;
     };
 
+    log("Parsed arguments:", {
+      promptCount: prompts?.length || 0,
+      position,
+      source,
+      reason,
+    });
+
     // Validate inputs
     if (!Array.isArray(prompts) || prompts.length === 0) {
+      log("ERROR: Invalid prompts array", prompts);
       throw new Error("prompts must be a non-empty array");
     }
 
     if (position !== "next" && position !== "end") {
+      log("ERROR: Invalid position:", position);
       throw new Error("position must be 'next' or 'end'");
     }
 
     // Find active working file
+    log("Finding active working file...");
     const workingFile = await this.findActiveWorkingFile();
+    log("Working file:", workingFile || "(none found)");
+
     if (!workingFile) {
       throw new Error(
         "No active FlightPath workflow found. Start a workflow in VS Code first."
@@ -236,8 +307,10 @@ class FlightPathMCPServer {
     }
 
     // Read current queue state
+    log("Reading current queue state...");
     const fileContent = await fs.readFile(workingFile, "utf8");
     const queueData: WorkingFile = JSON.parse(fileContent);
+    log("Current queue size:", queueData.prompts?.length || 0);
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
@@ -245,16 +318,29 @@ class FlightPathMCPServer {
       executionState: EXECUTION_STATES.IDLE,
       appendSegments: [],
     };
+    log("Current runtime state:", {
+      currentIndex: runtime.currentIndex,
+      executionState: runtime.executionState,
+      completedCount: runtime.completedPrompts?.length || 0,
+    });
 
     // Calculate insert index
     const insertIndex =
       position === "next"
         ? runtime.currentIndex + 1
         : (queueData.prompts || []).length;
+    log("Insert index calculated:", insertIndex);
 
     // Validate queue size limit
     const maxQueueSize = 100; // TODO: Read from config
     const newTotalSize = (queueData.prompts || []).length + prompts.length;
+    log("Queue size check:", {
+      current: (queueData.prompts || []).length,
+      adding: prompts.length,
+      newTotal: newTotalSize,
+      max: maxQueueSize,
+    });
+
     if (newTotalSize > maxQueueSize) {
       throw new Error(
         `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${prompts.length}, Max: ${maxQueueSize}`
@@ -263,9 +349,12 @@ class FlightPathMCPServer {
 
     // Insert prompts at calculated position
     if (!queueData.prompts) {
+      log("Initializing empty prompts array");
       queueData.prompts = [];
     }
+    log("Inserting", prompts.length, "prompts at index", insertIndex);
     queueData.prompts.splice(insertIndex, 0, ...prompts);
+    log("New queue size:", queueData.prompts.length);
 
     // Track segment metadata
     const segment: AppendSegment = {
@@ -278,11 +367,13 @@ class FlightPathMCPServer {
         (_, i) => insertIndex + i
       ),
     };
+    log("Created append segment:", segment);
 
     if (!runtime.appendSegments) {
       runtime.appendSegments = [];
     }
     runtime.appendSegments.push(segment);
+    log("Total append segments:", runtime.appendSegments.length);
 
     // Update runtime metadata
     queueData._runtime = runtime;
@@ -292,13 +383,22 @@ class FlightPathMCPServer {
       runtime.executionState === EXECUTION_STATES.COMPLETED ||
       runtime.executionState === EXECUTION_STATES.IDLE
     ) {
+      log(
+        "Updating execution state from",
+        runtime.executionState,
+        "to",
+        EXECUTION_STATES.RUNNING
+      );
       runtime.executionState = EXECUTION_STATES.RUNNING;
     }
 
     // Write atomically (temp file + rename)
     const tempFile = workingFile + ".tmp";
+    log("Writing to temp file:", tempFile);
     await fs.writeFile(tempFile, JSON.stringify(queueData, null, 2), "utf8");
+    log("Renaming temp file to working file...");
     await fs.rename(tempFile, workingFile);
+    log("File write completed successfully");
 
     const response = {
       success: true,
@@ -323,12 +423,16 @@ class FlightPathMCPServer {
    */
   private async findActiveWorkingFile(): Promise<string | null> {
     const queueDir = path.join(this.workspaceRoot, ".flightpath", ".queue");
+    log("Searching for working files in:", queueDir);
 
     try {
       const files = await fs.readdir(queueDir);
+      log("Files found:", files.length);
       const queueFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+      log("Queue files found:", queueFiles.length, queueFiles);
 
       if (queueFiles.length === 0) {
+        log("No active working files found");
         return null;
       }
 
@@ -345,8 +449,11 @@ class FlightPathMCPServer {
       );
 
       fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+      log("Selected most recent file:", fileStats[0].path);
       return fileStats[0].path;
-    } catch (error) {
+    } catch (error: any) {
+      log("ERROR finding active working file:", error.message);
+      log("Error stack:", error.stack);
       return null;
     }
   }
@@ -378,18 +485,28 @@ class FlightPathMCPServer {
    * Start the MCP server with stdio transport
    */
   async start() {
+    log("===================================");
+    log("FlightPath MCP Server Starting");
+    log("Log file:", logFile);
+    log("Workspace:", this.workspaceRoot);
+    log("===================================");
+    log("Creating stdio transport...");
     const transport = new StdioServerTransport();
+    log("Connecting server to transport...");
     await this.server.connect(transport);
-    // Log to stderr (stdout is reserved for JSON-RPC)
-    console.error(
-      `FlightPath MCP Server started (workspace: ${this.workspaceRoot})`
-    );
+    log("===================================");
+    log("FlightPath MCP Server STARTED");
+    log("Listening for tool requests...");
+    log("===================================");
   }
 }
 
 // Start server
+log("Initializing FlightPath MCP Server...");
 const server = new FlightPathMCPServer();
 server.start().catch((error) => {
-  console.error("Failed to start MCP server:", error);
+  log("FATAL ERROR: Failed to start MCP server");
+  log("Error:", error);
+  log("Stack:", error.stack);
   process.exit(1);
 });

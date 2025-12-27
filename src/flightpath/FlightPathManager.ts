@@ -642,7 +642,8 @@ export class FlightPathManager {
       }
 
       // 7. Show notification
-      const positionText = position === "next" ? "after current prompt" : "at end of queue";
+      const positionText =
+        position === "next" ? "after current prompt" : "at end of queue";
       vscode.window.showInformationMessage(
         `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
       );
@@ -1613,13 +1614,17 @@ Provide specific examples and actionable suggestions.
     this.promptFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     this.promptFileWatcher.onDidChange(async (uri) => {
-      // Only reload if state is IDLE (workflow hasn't started or was cleared)
-      // Do NOT reload when COMPLETED or ERROR - those states should preserve the dashboard view
-      // (reloading would reset the view and clear all outputs)
+      // Reload during active execution states (RUNNING, PAUSED, CANCELLING) to support MCP appends
+      // Do NOT reload when IDLE (not started), COMPLETED, or ERROR (preserve final dashboard view)
       const state = this.promptQueue.getState();
-      if (state.status === EXECUTION_STATES.IDLE) {
+      const shouldReload =
+        state.status === EXECUTION_STATES.RUNNING ||
+        state.status === EXECUTION_STATES.PAUSED ||
+        state.status === EXECUTION_STATES.CANCELLING;
+
+      if (shouldReload) {
         console.log(
-          `FlightPath: Working file changed, reloading queue: ${uri.fsPath}`
+          `FlightPath: Working file changed during execution, reloading queue: ${uri.fsPath}`
         );
         await this.reloadFromWorkingFile(uri.fsPath);
       } else {
@@ -1643,6 +1648,9 @@ Provide specific examples and actionable suggestions.
 
   /**
    * Reload queue from working file (used by Dynamic Queue and file watcher)
+   * Handles two scenarios:
+   * - IDLE: User selecting new file → Reset everything, send FILE_SELECTED
+   * - EXECUTING: MCP/append during execution → Merge prompts, send QUEUE_EXTENDED
    * @param workingFilePath Path to working file
    */
   private async reloadFromWorkingFile(workingFilePath: string): Promise<void> {
@@ -1669,16 +1677,46 @@ Provide specific examples and actionable suggestions.
         return;
       }
 
-      // Reload queue with new prompts (preserves working file path)
-      this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
+      const queueState = this.promptQueue.getState();
+      const isIdle = queueState.status === EXECUTION_STATES.IDLE;
 
-      // Update dashboard
-      if (this.dashboardProvider) {
-        const fileName = path.basename(workingFile.originalFile);
-        this.dashboardProvider.updateFileSelected(
-          fileName,
-          workingFile.prompts.map((p) => ({ prompt: p.prompt }))
+      if (isIdle) {
+        // Scenario 1: User selecting new file (IDLE state)
+        // Reset everything and send FILE_SELECTED
+        console.log(
+          `FlightPath: Loading new file in IDLE state (${workingFile.prompts.length} prompts)`
         );
+        this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
+
+        if (this.dashboardProvider) {
+          const fileName = path.basename(workingFile.originalFile);
+          this.dashboardProvider.updateFileSelected(
+            fileName,
+            workingFile.prompts.map((p) => ({ prompt: p.prompt }))
+          );
+        }
+      } else {
+        // Scenario 2: Queue extended during execution (RUNNING/PAUSED/CANCELLING)
+        // Merge new prompts preserving state and send QUEUE_EXTENDED
+        console.log(
+          `FlightPath: Merging prompts during execution (state: ${queueState.status})`
+        );
+        const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
+
+        if (newPromptsCount > 0 && this.dashboardProvider) {
+          // Get updated state after merge
+          const updatedState = this.promptQueue.getState();
+          console.log(
+            `FlightPath: Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
+          );
+
+          // Send PROMPTS_EXTENDED message with updated prompt list
+          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+        } else if (newPromptsCount === 0) {
+          console.log(
+            "FlightPath: Working file changed but no new prompts detected"
+          );
+        }
       }
 
       console.log(

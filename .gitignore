@@ -8,3 +8,4 @@ logs
 # FlightPath temp files (prompt files for CLI execution)
 .flightpath/temp/
 .flightpath/.queue/
+.flightpath/logs/

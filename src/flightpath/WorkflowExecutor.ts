@@ -114,7 +114,11 @@ export class WorkflowExecutor {
     }
 
     // Start from currentIndex to support resume functionality
-    for (let i = state.currentIndex; i < state.prompts.length; i++) {
+    // Note: Use queue.hasNext() instead of state.prompts.length to support dynamic queue extension
+    while (this.promptQueue.hasNext()) {
+      // Get fresh state on each iteration (supports queue extension during execution)
+      state = this.promptQueue.getState();
+      const i = state.currentIndex;
       const prompt = state.prompts[i];
       const dynamicConfig = context.dynamicQueueConfig;
 

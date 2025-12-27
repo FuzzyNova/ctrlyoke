@@ -247,6 +247,10 @@
   }
 
   function handleFileSelected(fileName, prompts) {
+    // This handler is ONLY for IDLE state (user selects new file via Select button)
+    // Queue extension during execution uses handleQueueExtended()
+    console.log(`Dashboard: New file selected (${fileName}), resetting state`);
+
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => ({
       index: i,
@@ -254,6 +258,7 @@
       status: STEP_STATUS.PENDING,
       details: {},
     }));
+
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
     state.currentStep = 0;
@@ -261,11 +266,14 @@
     state.cliOutputs = {}; // Reset outputs
     state.retryStates = {}; // Reset retry states
     state.statusMessages = {}; // Reset status messages
+
     // Reset prompt counter
     elements.promptCounter.textContent = "";
+
     // Clear CLI output and show empty state
     elements.outputContent.innerHTML =
       '<p class="empty-state">CLI output will appear here during execution</p>';
+
     render();
   }
 
@@ -452,21 +460,39 @@
   }
 
   function handlePromptsExtended(prompts) {
-    // Merge new prompts with existing ones, preserving status of existing prompts
-    const existingCount = state.prompts.length;
+    // Replace entire prompts array with new disk order (preserves MCP insertion positions)
+    // Map existing prompts by text to preserve their status/details
+    console.log(
+      `Dashboard: Prompts extended, replacing with ${prompts.length} prompts in disk order`
+    );
 
-    // Add new prompts (starting from existingCount index)
-    const newPrompts = prompts.slice(existingCount).map((p, i) => ({
-      index: existingCount + i,
-      text: p.prompt || p,
-      status: STEP_STATUS.PENDING,
-      details: {},
-    }));
+    const existingStatusMap = new Map();
+    state.prompts.forEach((p) => {
+      // Use prompt text as key (trim for consistency)
+      const key = p.text.trim();
+      existingStatusMap.set(key, {
+        status: p.status,
+        details: p.details,
+      });
+    });
 
-    state.prompts.push(...newPrompts);
+    // Replace entire array, preserving statuses for matching prompts
+    state.prompts = prompts.map((p, i) => {
+      const text = p.prompt || p;
+      const key = text.trim();
+      const existing = existingStatusMap.get(key);
+
+      return {
+        index: i,
+        text: text,
+        status: existing ? existing.status : STEP_STATUS.PENDING,
+        details: existing ? existing.details : {},
+      };
+    });
+
     state.totalSteps = state.prompts.length;
 
-    // Re-render the prompts list to show all prompts
+    // Re-render the prompts list to show all prompts in correct order
     renderPromptsList();
     updatePromptCounter();
   }

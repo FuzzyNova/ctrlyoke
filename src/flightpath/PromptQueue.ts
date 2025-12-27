@@ -458,7 +458,7 @@ export class PromptQueue {
   async markCompleted(): Promise<void> {
     this.state.status = EXECUTION_STATES.COMPLETED;
     this.emitStateChange();
-    
+
     // Update working file with completed status
     await this.updateWorkingFile();
   }
@@ -469,7 +469,7 @@ export class PromptQueue {
   async markErrored(): Promise<void> {
     this.state.status = EXECUTION_STATES.ERROR;
     this.emitStateChange();
-    
+
     // Update working file with error status
     await this.updateWorkingFile();
   }
@@ -648,6 +648,111 @@ export class PromptQueue {
   }
 
   /**
+   * Merge prompts from working file disk into current queue (for MCP appends during execution)
+   * This preserves execution state (currentIndex, status, results) while adding new prompts
+   * @returns Number of new prompts merged (-1 if error)
+   */
+  public async mergePromptsFromDisk(): Promise<number> {
+    if (!this.state.workingFilePath) {
+      Log.warn("mergePromptsFromDisk: No working file path set");
+      return -1;
+    }
+
+    try {
+      // Read working file from disk
+      const workingFile = await this.readWorkingFile(
+        this.state.workingFilePath
+      );
+      const diskPrompts = workingFile.prompts || [];
+
+      Log.info(
+        `mergePromptsFromDisk: Disk has ${diskPrompts.length} prompts, memory has ${this.state.prompts.length} prompts`
+      );
+
+      // Build map of prompts we have in memory (by ID and hash)
+      const memoryPromptMap = new Map<string, PromptItem>();
+      for (const prompt of this.state.prompts) {
+        const hash = hashPromptContent(prompt.prompt);
+        memoryPromptMap.set(hash, prompt);
+        if (prompt.id) {
+          memoryPromptMap.set(prompt.id, prompt);
+        }
+      }
+
+      // Check if disk has prompts we don't have in memory
+      const newPromptsFromDisk: PromptItem[] = [];
+      for (const diskPrompt of diskPrompts) {
+        const hash = hashPromptContent(diskPrompt.prompt);
+        const existsInMemory =
+          memoryPromptMap.has(hash) ||
+          (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
+
+        if (!existsInMemory) {
+          newPromptsFromDisk.push(diskPrompt);
+        }
+      }
+
+      if (newPromptsFromDisk.length === 0) {
+        Log.info("mergePromptsFromDisk: No new prompts found");
+        return 0;
+      }
+
+      Log.info(
+        `mergePromptsFromDisk: Found ${newPromptsFromDisk.length} new prompts from disk (MCP append), merging into queue`
+      );
+
+      // CRITICAL: Use disk order as source of truth
+      // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
+      this.state.prompts = diskPrompts;
+
+      // Rebuild results array to match new prompt order
+      // Preserve existing results where we have them, add pending for new prompts
+      const newResults: PromptResult[] = diskPrompts.map((prompt, index) => {
+        const hash = hashPromptContent(prompt.prompt);
+
+        // Find existing result for this prompt
+        const existingResultIndex = this.state.results.findIndex((r) => {
+          const resultHash = hashPromptContent(r.prompt);
+          return resultHash === hash || r.prompt === prompt.prompt;
+        });
+
+        if (existingResultIndex >= 0) {
+          // Use existing result (preserves completion status)
+          return this.state.results[existingResultIndex];
+        } else {
+          // New prompt - create pending result
+          return {
+            prompt: prompt.prompt,
+            status: STEP_STATUS.PENDING,
+            timestamp: new Date(),
+          };
+        }
+      });
+
+      this.state.results = newResults;
+
+      // Update queue extension tracking
+      this.state.queueExtensions++;
+      this.state.lastReloadTime = Date.now();
+
+      // Emit state change so dashboard updates
+      this.emitStateChange();
+
+      Log.info(
+        `mergePromptsFromDisk: Successfully merged. New queue size: ${this.state.prompts.length}`
+      );
+
+      return newPromptsFromDisk.length;
+    } catch (error) {
+      Log.error(
+        "mergePromptsFromDisk: Failed to read working file",
+        error as Error
+      );
+      return -1;
+    }
+  }
+
+  /**
    * Append prompts to the current queue without clearing state
    * This method now uses working file operations for persistence
    * @param prompts - Prompts to append
@@ -667,9 +772,10 @@ export class PromptQueue {
     // Serialize operation to prevent race conditions
     this.operationQueue = this.operationQueue.then(async () => {
       // Calculate insert index based on position
-      const insertIndex = position === "next"
-        ? this.state.currentIndex + 1
-        : this.state.prompts.length;
+      const insertIndex =
+        position === "next"
+          ? this.state.currentIndex + 1
+          : this.state.prompts.length;
 
       // Generate append segment for tracking
       const segment: AppendSegment = {
@@ -888,12 +994,82 @@ export class PromptQueue {
     }
 
     try {
-      // Read current working file
+      // Read current working file from disk to pick up any external changes (e.g., MCP appends)
       const workingFile = await this.readWorkingFile(
         this.state.workingFilePath!
       );
 
-      // Update prompts array
+      // CRITICAL FIX: Merge prompts from disk instead of blindly overwriting
+      // This preserves MCP-appended prompts that may have been added while we were running
+      const diskPrompts = workingFile.prompts || [];
+      const memoryPrompts = this.state.prompts;
+
+      // Build a map of prompts we have in memory (by ID and hash)
+      const memoryPromptMap = new Map<string, PromptItem>();
+      for (const prompt of memoryPrompts) {
+        const hash = hashPromptContent(prompt.prompt);
+        memoryPromptMap.set(hash, prompt);
+        if (prompt.id) {
+          memoryPromptMap.set(prompt.id, prompt);
+        }
+      }
+
+      // Check if disk has prompts we don't have in memory
+      const newPromptsFromDisk: PromptItem[] = [];
+      for (const diskPrompt of diskPrompts) {
+        const hash = hashPromptContent(diskPrompt.prompt);
+        const existsInMemory =
+          memoryPromptMap.has(hash) ||
+          (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
+
+        if (!existsInMemory) {
+          // This prompt exists on disk but not in memory (MCP must have added it)
+          newPromptsFromDisk.push(diskPrompt);
+        }
+      }
+
+      // If disk has new prompts, merge them PRESERVING DISK ORDER
+      if (newPromptsFromDisk.length > 0) {
+        Log.info(
+          `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
+        );
+
+        // CRITICAL: Use disk order as source of truth, not memory order
+        // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
+        this.state.prompts = diskPrompts;
+
+        // Rebuild results array to match new prompt order
+        // Preserve existing results where we have them, add pending for new prompts
+        const newResults: PromptResult[] = diskPrompts.map((prompt, index) => {
+          const hash = hashPromptContent(prompt.prompt);
+          const promptId = prompt.id || hash;
+
+          // Find existing result for this prompt
+          const existingResultIndex = this.state.results.findIndex((r) => {
+            const resultHash = hashPromptContent(r.prompt);
+            return resultHash === hash || r.prompt === prompt.prompt;
+          });
+
+          if (existingResultIndex >= 0) {
+            // Use existing result (preserves completion status)
+            return this.state.results[existingResultIndex];
+          } else {
+            // New prompt - create pending result
+            return {
+              prompt: prompt.prompt,
+              status: STEP_STATUS.PENDING,
+              timestamp: new Date(),
+            };
+          }
+        });
+
+        this.state.results = newResults;
+
+        // Emit state change so dashboard updates
+        this.emitStateChange();
+      }
+
+      // Now write back the merged prompts array
       workingFile.prompts = this.state.prompts;
       Log.info(
         `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
