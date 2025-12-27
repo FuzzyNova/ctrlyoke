@@ -557,8 +557,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
             );
             if (mcpArgs) {
               args.push(...mcpArgs);
+              // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+              // Claude uses mcp__servername pattern to match all tools from a server
+              args.push("--allowed-tools", "mcp__flightpath");
               Log.info(
-                "🔧 MCP server config added for dynamic queue extension"
+                "🔧 MCP server config added for dynamic queue extension (FlightPath tools auto-approved)"
               );
             }
           }

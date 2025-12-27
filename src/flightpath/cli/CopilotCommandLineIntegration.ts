@@ -361,8 +361,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
             );
             if (mcpArgs) {
               args.push(...mcpArgs);
+              // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+              args.push("--allow-tool", "flightpath");
               Log.info(
-                "🔧 MCP server config added for dynamic queue extension"
+                "🔧 MCP server config added for dynamic queue extension (FlightPath tools auto-approved)"
               );
             }
           }

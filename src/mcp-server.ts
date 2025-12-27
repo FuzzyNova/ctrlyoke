@@ -69,6 +69,7 @@ function log(...args: any[]) {
 class FlightPathMCPServer {
   private server: typeof Server;
   private workspaceRoot: string;
+  private operationQueue: Promise<any> = Promise.resolve();
 
   constructor() {
     this.workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
@@ -179,7 +180,10 @@ class FlightPathMCPServer {
               return result;
             case "flightpath_append_queue":
               log("Handling append_queue...");
-              result = await this.handleQueueAppend(args);
+              // Queue the operation to prevent race conditions
+              result = await this.queueOperation(() =>
+                this.handleQueueAppend(args)
+              );
               log("append_queue completed successfully");
               log("Result:", JSON.stringify(result, null, 2));
               return result;
@@ -201,6 +205,36 @@ class FlightPathMCPServer {
         }
       }
     );
+  }
+
+  /**
+   * Queue an operation to prevent race conditions
+   * All append operations are serialized through this queue
+   */
+  private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    const previousOperation = this.operationQueue;
+    let resolver: (value: T) => void;
+    let rejecter: (error: any) => void;
+
+    // Create a new promise that will be the next item in the queue
+    this.operationQueue = new Promise((resolve, reject) => {
+      resolver = resolve;
+      rejecter = reject;
+    });
+
+    try {
+      // Wait for the previous operation to complete
+      await previousOperation;
+      log("Operation started (previous operations completed)");
+
+      // Execute the current operation
+      const result = await operation();
+      resolver!(result);
+      return result;
+    } catch (error) {
+      rejecter!(error);
+      throw error;
+    }
   }
 
   /**
