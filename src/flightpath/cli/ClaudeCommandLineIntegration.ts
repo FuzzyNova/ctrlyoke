@@ -7,51 +7,10 @@ import { getClaudeModelName } from "../../utils/ModelConstants";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import type { TuiProcessResult } from "../../utils/TuiStreamProcessor";
-
-/**
- * Maps Copilot permission patterns to Claude tool names.
- * Copilot uses categories (shell, write), Claude uses granular tools (Bash, Write, Edit, Read, etc.).
- */
-const COPILOT_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
-  // Shell commands
-  shell: "Bash",
-
-  // File operations (Copilot "write" = create/modify files)
-  // Note: Claude separates Write (create) from Edit (modify)
-  write: "Write",
-
-  // Additional mappings if users specify Claude-like names in lowercase
-  bash: "Bash",
-  read: "Read",
-  edit: "Edit",
-  multiedit: "MultiEdit",
-  glob: "Glob",
-  grep: "Grep",
-  ls: "LS",
-  webfetch: "WebFetch",
-  todowrite: "TodoWrite",
-};
-
-/**
- * Claude CLI Response structure (JSON output format)
- */
-interface ClaudeCliJsonResponse {
-  type?: string;
-  subtype?: string;
-  is_error?: boolean;
-  result?: string;
-  response?: string;
-  content?: string;
-  usage?: {
-    input_tokens: number;
-    output_tokens: number;
-    total_tokens?: number;
-  };
-  session_id?: string;
-  model?: string;
-  error?: string;
-  duration_ms?: number;
-}
+import { CliResponseParser } from "./shared/CliResponseParser";
+import { CliNotificationMonitor } from "./shared/CliNotificationMonitor";
+import { CliMcpConfigGenerator } from "./shared/CliMcpConfigGenerator";
+import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
 
 /**
  * Claude Code CLI Integration
@@ -223,82 +182,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return undefined;
   }
 
-  private extractJsonObjectsFromStream(data: string): {
-    objects: any[];
-    remainder: string;
-  } {
-    const objects: any[] = [];
-    let cursor = 0;
-
-    while (cursor < data.length) {
-      const objStart = data.indexOf("{", cursor);
-      if (objStart === -1) {
-        cursor = data.length;
-        break;
-      }
-
-      let depth = 0;
-      let inString = false;
-      let escape = false;
-      let objEnd = -1;
-
-      for (let i = objStart; i < data.length; i++) {
-        const char = data[i];
-
-        if (escape) {
-          escape = false;
-          continue;
-        }
-
-        if (char === "\\") {
-          escape = true;
-          continue;
-        }
-
-        if (char === '"') {
-          inString = !inString;
-          continue;
-        }
-
-        if (!inString) {
-          if (char === "{") {
-            depth++;
-          } else if (char === "}") {
-            depth--;
-            if (depth === 0) {
-              objEnd = i + 1;
-              break;
-            }
-          }
-        }
-      }
-
-      if (objEnd !== -1) {
-        const objStr = data.substring(objStart, objEnd);
-        try {
-          const json = JSON.parse(objStr);
-          objects.push(json);
-        } catch (parseError) {
-          console.warn(
-            "Failed to parse stream-json object:",
-            objStr.substring(0, 100),
-            parseError
-          );
-        }
-        cursor = objEnd;
-        continue;
-      }
-
-      cursor = objStart;
-      break;
-    }
-
-    return {
-      objects,
-      remainder: data.substring(cursor),
-    };
-  }
-
   /**
    * Process stdout chunks for stream-json format.
    *
@@ -313,7 +196,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Accumulate into buffer
     this.streamBuffer += chunk;
 
-    const { objects, remainder } = this.extractJsonObjectsFromStream(
+    const { objects, remainder } = CliResponseParser.extractJsonObjectsFromStream(
       this.streamBuffer
     );
     this.streamBuffer = remainder;
@@ -464,7 +347,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       // Route based on execution mode
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
-        return await this.executeInteractive(args, promptText, workflowContext);
+        return await this.executeInTerminal(args, promptText, workflowContext);
       } else {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
@@ -494,10 +377,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   ): Promise<string[] | null> {
     try {
       // Use shared file generation (cached after first call)
+      // Claude CLI requires "type": "stdio"
       const configPath = await this.generateMcpConfigFile(
         mcpServerPath,
         workspaceRoot,
-        true // Claude requires "type": "stdio"
+        { type: "stdio" }
       );
 
       // Return --mcp-config file argument
@@ -709,34 +593,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     }
   }
 
-  /**
-   * Execute in interactive terminal mode
-   * Uses temp file approach via base class to avoid shell escaping issues
-   */
-  private async executeInteractive(
-    args: string[],
-    promptText: string,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
-  ): Promise<boolean> {
-    // Use base class executeInTerminal (passes workflow context for temp file naming)
-    const success = await this.executeInTerminal(
-      args,
-      promptText,
-      workflowContext
-    );
-
-    // Note: In interactive mode, we can't easily extract session ID from JSON output
-    // since the terminal output is mixed with ANSI codes. Session continuity may be limited.
-    if (success) {
-      Log.info("✅ Claude CLI completed successfully");
-    }
-
-    return success;
-  }
 
   /**
    * Execute in headless mode (background process)
@@ -800,107 +656,14 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Parse stream-json output from Claude CLI (concatenated JSON objects)
-   *
-   * Stream-json format outputs 3 concatenated JSON objects:
-   * 1. {"type":"system","subtype":"init",...} - Session metadata
-   * 2. {"type":"assistant","message":{...}} - Response at message.content[0].text
-   * 3. {"type":"result",...} - Usage stats, session_id, costs
-   *
-   * We extract the response and metadata from these objects.
+   * Parse stream-json output from Claude CLI (delegated to shared utility)
    */
   private parseStreamJsonOutput(
     stdout: string,
     stderr: string,
     exitCode: number
   ): CopilotCliResult & { sessionId?: string } {
-    let fullResponse = "";
-    let sessionId: string | undefined;
-    let usage:
-      | { input_tokens: number; output_tokens: number; total_tokens?: number }
-      | undefined;
-    let model: string | undefined;
-    let isError = false;
-    let errorMessage: string | undefined;
-
-    const { objects } = this.extractJsonObjectsFromStream(stdout);
-
-    // Extract data from parsed objects
-    for (const json of objects) {
-      // Extract response from assistant message
-      // Assistant messages contain an array of content items:
-      // - { type: "text", text: "..." } - Claude's text responses
-      // - { type: "tool_use", id: "...", name: "Bash", input: {...} } - Tool calls
-      if (json.type === "assistant" && json.message?.content) {
-        // Check for text content
-        const textContent = json.message.content.find(
-          (item: any) => item.type === "text"
-        );
-        if (textContent?.text) {
-          fullResponse += textContent.text;
-        }
-
-        // Check for tool use (and format as summary for user visibility)
-        const toolUse = json.message.content.find(
-          (item: any) => item.type === "tool_use"
-        );
-        if (toolUse) {
-          const toolSummary = this.formatToolCallSummary(
-            toolUse.name,
-            toolUse.input
-          );
-          fullResponse += toolSummary;
-        }
-      }
-
-      // Extract metadata from result object
-      if (json.type === "result") {
-        sessionId = json.session_id;
-        if (json.usage) {
-          usage = {
-            input_tokens: json.usage.input_tokens,
-            output_tokens: json.usage.output_tokens,
-            total_tokens: json.usage.input_tokens + json.usage.output_tokens,
-          };
-        }
-        model = json.model;
-        if (json.is_error) {
-          isError = true;
-          errorMessage = json.result || "Unknown error";
-        }
-      }
-    }
-
-    // Build statistics string
-    let statistics = "";
-    if (usage) {
-      const { input_tokens, output_tokens, total_tokens } = usage;
-      const total = total_tokens || input_tokens + output_tokens;
-      statistics = `Usage: ${input_tokens} input + ${output_tokens} output = ${total} tokens`;
-      if (model) {
-        statistics += ` | Model: ${model}`;
-      }
-    }
-
-    if (isError) {
-      return {
-        success: false,
-        response: "",
-        statistics,
-        error: errorMessage || stderr || "Stream contained error",
-        exitCode: exitCode !== 0 ? exitCode : 1,
-        sessionId,
-      };
-    }
-
-    return {
-      success: exitCode === 0,
-      response: fullResponse.trim(),
-      statistics,
-      error: exitCode !== 0 ? stderr : undefined,
-      exitCode,
-      sessionId,
-    };
+    return CliResponseParser.parseClaudeStreamJson(stdout, stderr, exitCode);
   }
 
   /**
@@ -934,84 +697,19 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return defaultFullName || defaultModel;
   }
 
-  private convertToolPatternToClaudeFormat(copilotPattern: string): string {
-    const parsed = this.parseToolPattern(copilotPattern);
-    if (!parsed) {
-      return copilotPattern; // Keep as-is if pattern doesn't match expected format
-    }
-
-    const [toolName, args] = parsed;
-    const claudeToolName =
-      COPILOT_TO_CLAUDE_TOOL_MAP[toolName.toLowerCase()] || toolName;
-    return args ? claudeToolName + args : claudeToolName;
-  }
-
   /**
-   * Get tool permission arguments based on configuration
-   * Supports three modes:
-   * - "dangerouslyAllowAll": --dangerously-skip-permissions (bypasses ALL checks, ignores deny list)
-   * - "allowAll": --permission-mode bypassPermissions + --tools "default" with deny patterns (safe automation, respects deny list)
-   * - "custom": --permission-mode bypassPermissions with specific allow/deny patterns
-   *
-   * Reads from shared cliAllowedTools/cliDeniedTools and converts to Claude format
+   * Get tool permission arguments based on configuration (delegated to shared utility)
    */
   private getToolPermissionArgs(): string[] {
     const mode = ConfigurationUtils.getCliToolPermissions();
-
-    if (mode === "dangerouslyAllowAll") {
-      return ["--dangerously-skip-permissions"];
-    }
-
-    // Both allowAll and custom modes use --permission-mode bypassPermissions
-    const args: string[] = ["--permission-mode", "bypassPermissions"];
+    const allowedTools = ConfigurationUtils.getCliAllowedTools();
     const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
-    if (mode === "allowAll") {
-      // Allow all tools (--tools "default") but still apply deny list
-      args.push("--tools", "default");
-    } else {
-      // Custom mode - read specific allow patterns
-      const allowedTools = ConfigurationUtils.getCliAllowedTools();
-      const convertedAllowTools: string[] = [];
-
-      allowedTools.forEach((tool) => {
-        const claudeTool = this.convertToolPatternToClaudeFormat(tool);
-        if (!convertedAllowTools.includes(claudeTool)) {
-          convertedAllowTools.push(claudeTool);
-        }
-      });
-
-      // Add all allowed tools as variadic arguments to single flag
-      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
-      if (convertedAllowTools.length > 0) {
-        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
-        args.push("--allowedTools", ...quotedTools);
-        Log.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
-      } else if (allowedTools.length > 0) {
-        Log.warn(
-          "⚠️ Custom tool permissions mode enabled but no allowed tools specified. Claude will prompt for each tool."
-        );
-      }
-    }
-
-    // Add disallowed tool patterns (for both allowAll and custom modes)
-    // Quote each pattern to handle spaces and special characters (shell: true in spawn)
-    const convertedDenyTools: string[] = [];
-
-    deniedTools.forEach((tool) => {
-      const claudeTool = this.convertToolPatternToClaudeFormat(tool);
-      if (!convertedDenyTools.includes(claudeTool)) {
-        convertedDenyTools.push(claudeTool);
-      }
+    return CliToolPermissionMapper.buildClaudeArgs({
+      mode,
+      allowedTools,
+      deniedTools,
     });
-
-    if (convertedDenyTools.length > 0) {
-      const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
-      args.push("--disallowedTools", ...quotedTools);
-      Log.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
-    }
-
-    return args;
   }
 
   // ============================================================
@@ -1033,213 +731,50 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Get directory where Claude stop notifications are written.
-   * Location: {workspace}/.flightpath/temp/claude-notifications/
-   *
-   * Uses workspace-specific directory to prevent conflicts when multiple
-   * VS Code instances are running FlightPath simultaneously.
+   * Build settings JSON string with Stop hook configuration (delegated to shared utility)
    */
-  private getNotificationDirectory(): string {
+  private buildStopHookSettings(): string {
+    const scriptPath = this.getStopHookScriptPath();
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       throw new Error("Cannot determine workspace root for notification path");
     }
-
-    const path = require("path");
-    return path.join(
+    const notifyDir = CliNotificationMonitor.getNotificationDirectory(
       workspaceRoot,
-      ".flightpath",
-      "temp",
-      "claude-notifications"
+      "claude"
+    );
+    return CliNotificationMonitor.buildClaudeStopHookSettings(
+      scriptPath,
+      notifyDir
     );
   }
 
   /**
-   * Build settings JSON string with Stop hook configuration.
-   * This is passed via --settings flag to Claude CLI.
-   *
-   * @returns JSON string with hook configuration
-   */
-  private buildStopHookSettings(): string {
-    const scriptPath = this.getStopHookScriptPath();
-    const notifyDir = this.getNotificationDirectory();
-
-    // Convert paths to forward slashes (works on Windows and avoids escaping issues)
-    const normalizedScriptPath = scriptPath.replace(/\\/g, "/");
-    const normalizedNotifyDir = notifyDir.replace(/\\/g, "/");
-
-    const settings = {
-      hooks: {
-        Stop: [
-          {
-            hooks: [
-              {
-                type: "command",
-                command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
-              },
-            ],
-          },
-        ],
-      },
-    };
-
-    return JSON.stringify(settings);
-  }
-
-  /**
-   * Extract session ID from Claude CLI output.
-   * Claude emits session info in various formats - try to parse it.
-   *
-   * @param output Terminal or process output
-   * @returns Session ID if found, undefined otherwise
-   */
-  private extractSessionId(output: string): string | undefined {
-    // Try to find session_id in JSON output (stream-json format)
-    const sessionMatch = output.match(/"session_id"\s*:\s*"([^"]+)"/i);
-    if (sessionMatch) {
-      return sessionMatch[1];
-    }
-
-    // Try to find session ID in log-like output
-    const sessionLogMatch = output.match(/session[_\s-]id[:\s]+([a-f0-9-]+)/i);
-    if (sessionLogMatch) {
-      return sessionLogMatch[1];
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Simple delay utility
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Monitor notification file for completion.
-   *
-   * Uses Claude's Stop hook to get completion events.
-   * The stop hook handler script writes a JSON file that we monitor.
-   *
-   * If session ID is not available, monitors the entire notification directory
-   * for any new notification files (since we're the only process running).
-   *
-   * @param sessionId Session ID to monitor (from Claude output), undefined to monitor all files
-   * @param startTime Execution start time (for timeout calculation)
-   * @param timeoutMs Maximum time to wait for completion
-   * @returns Object with completed flag and optional error message
+   * Monitor notification file for completion (delegated to shared utility)
    */
   private async monitorNotificationFile(
     sessionId: string | undefined,
     startTime: Date,
     timeoutMs: number
   ): Promise<{ completed: boolean; error?: string }> {
-    const fs = require("fs");
-    const path = require("path");
-
-    const notifyDir = this.getNotificationDirectory();
-
-    // Ensure notification directory exists
-    if (!fs.existsSync(notifyDir)) {
-      fs.mkdirSync(notifyDir, { recursive: true });
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return {
+        completed: false,
+        error: "Cannot determine workspace root for notification monitoring",
+      };
     }
 
-    // Get initial file list to detect new files
-    let initialFiles = new Set<string>();
-    try {
-      const files = fs.readdirSync(notifyDir);
-      initialFiles = new Set(files);
-      Log.debug(`📋 Initial notification files: ${files.length}`);
-    } catch (error) {
-      Log.debug(`Could not read notification directory: ${error}`);
-    }
+    const notifyDir = CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "claude"
+    );
 
-    if (sessionId) {
-      Log.debug(`📋 Monitoring notification file for session: ${sessionId}`);
-    } else {
-      Log.debug(
-        `📋 Monitoring notification directory for any new completion file`
-      );
-    }
-
-    // Poll for notification file
-    while (Date.now() - startTime.getTime() < timeoutMs) {
-      try {
-        if (sessionId) {
-          // Monitor specific session ID file
-          const notifyFile = path.join(notifyDir, `${sessionId}.json`);
-
-          if (fs.existsSync(notifyFile)) {
-            // Read notification data
-            const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
-
-            Log.info(
-              `✅ Claude completion detected via stop hook (session: ${notifyData.sessionId})`
-            );
-
-            // Clean up notification file
-            try {
-              fs.unlinkSync(notifyFile);
-              Log.debug(`🗑️ Cleaned up notification file`);
-            } catch (cleanupError) {
-              Log.debug(
-                `Failed to clean up notification file: ${cleanupError}`
-              );
-            }
-
-            return { completed: true };
-          }
-        } else {
-          // Monitor for any new notification file
-          const currentFiles = fs.readdirSync(notifyDir);
-
-          for (const file of currentFiles) {
-            if (!initialFiles.has(file) && file.endsWith(".json")) {
-              const notifyFile = path.join(notifyDir, file);
-
-              try {
-                const notifyData = JSON.parse(
-                  fs.readFileSync(notifyFile, "utf8")
-                );
-
-                Log.info(
-                  `✅ Claude completion detected via stop hook (session: ${notifyData.sessionId})`
-                );
-
-                // Clean up notification file
-                try {
-                  fs.unlinkSync(notifyFile);
-                  Log.debug(`🗑️ Cleaned up notification file: ${file}`);
-                } catch (cleanupError) {
-                  Log.debug(
-                    `Failed to clean up notification file: ${cleanupError}`
-                  );
-                }
-
-                return { completed: true };
-              } catch (parseError) {
-                Log.debug(
-                  `Failed to parse notification file ${file}: ${parseError}`
-                );
-                // Continue checking other files
-              }
-            }
-          }
-        }
-      } catch (error) {
-        Log.debug(`Notification file check error: ${error}`);
-      }
-
-      // Wait before next check
-      await this.delay(500);
-    }
-
-    // Timeout reached
-    Log.warn(`⏱️ Notification file monitoring timed out`);
-    return {
-      completed: false,
-      error: "Timeout waiting for stop hook notification",
-    };
+    return CliNotificationMonitor.monitorForCompletion(
+      { directory: notifyDir, timeoutMs },
+      sessionId,
+      startTime,
+      () => this.isCancelling
+    );
   }
 }

@@ -11,32 +11,8 @@ import {
 } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
-
-/**
- * Maps Claude tool names to Copilot permission categories.
- * Copilot uses permission KINDS (shell, write, <mcp-server>) not individual tools.
- * Read-only tools (read, glob, grep, ls) map to null (always allowed in Copilot).
- */
-const CLAUDE_TO_COPILOT_TOOL_MAP: Record<string, string | null> = {
-  // Shell commands - Bash maps to shell category
-  bash: "shell",
-
-  // File modification tools - these map to "write" permission category
-  write: "write",
-  edit: "write",
-  multiedit: "write",
-
-  // Read-only tools - no Copilot permission needed (always allowed)
-  // These are filtered out because Copilot doesn't restrict read operations
-  read: null,
-  glob: null,
-  grep: null,
-  ls: null,
-
-  // Claude-specific tools with no Copilot equivalent
-  webfetch: null,
-  todowrite: null,
-};
+import { CliResponseParser } from "./shared/CliResponseParser";
+import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
 
 /**
  * GitHub Copilot CLI Integration
@@ -277,7 +253,23 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
       // Execute based on mode
       if (isInteractive) {
-        return await this.executeInteractive(args, promptText, workflowContext);
+        const success = await this.executeInTerminal(
+          args,
+          promptText,
+          workflowContext
+        );
+
+        if (success) {
+          // Extract session ID for future resumption
+          const sessionId = await this.extractSessionIdFromLogs();
+          if (sessionId) {
+            this.sessionId = sessionId;
+            Log.debug(`💾 Session ID extracted: ${sessionId}`);
+          }
+          await this.updateWorkflowProgress();
+        }
+
+        return success;
       } else {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
@@ -305,10 +297,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   ): Promise<string[] | null> {
     try {
       // Use shared file generation (cached after first call)
+      // Copilot CLI uses "type": "local" and requires "tools" field
       const configPath = await this.generateMcpConfigFile(
         mcpServerPath,
         workspaceRoot,
-        false // Copilot doesn't need "type": "stdio"
+        { type: "local", tools: ["*"] }
       );
 
       // Return --additional-mcp-config @file argument
@@ -424,38 +417,6 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return args;
   }
 
-  /**
-   * Execute in interactive terminal mode
-   * Uses temp file approach via base class to avoid shell escaping issues
-   */
-  private async executeInteractive(
-    args: string[],
-    promptText: string,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
-  ): Promise<boolean> {
-    // Use base class executeInTerminal (passes workflow context for temp file naming)
-    const success = await this.executeInTerminal(
-      args,
-      promptText,
-      workflowContext
-    );
-
-    if (success) {
-      // Extract session ID for future resumption
-      const sessionId = await this.extractSessionIdFromLogs();
-      if (sessionId) {
-        this.sessionId = sessionId;
-        Log.debug(`💾 Session ID extracted: ${sessionId}`);
-      }
-      await this.updateWorkflowProgress();
-    }
-
-    return success;
-  }
 
   /**
    * Execute in headless mode (background process)
@@ -516,44 +477,14 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Parse CLI output into a structured result
+   * Parse CLI output into a structured result (delegated to shared utility)
    */
   private parseCliOutput(
     stdout: string,
     stderr: string,
     exitCode: number
   ): CopilotCliResult {
-    // Handle agent-specific errors with helpful messages
-    // Note: We don't have direct access to args here, so we can't check for agent
-    // This will be handled by the caller if needed
-
-    // Parse output to separate response from statistics
-    const { response, statistics } = this.parseCliOutputParts(stdout);
-
-    return {
-      success: exitCode === 0,
-      response,
-      statistics,
-      error: exitCode !== 0 ? stderr || undefined : undefined,
-      exitCode,
-    };
-  }
-
-  /**
-   * Parse CLI output to separate response from statistics
-   */
-  private parseCliOutputParts(output: string): {
-    response: string;
-    statistics: string;
-  } {
-    // Split on statistics section (starts with "Total usage est:")
-    // Use lookbehind to preserve the statistics marker
-    const parts = output.split(/\n\n(?=Total usage est:)/);
-
-    return {
-      response: parts[0]?.trim() || "",
-      statistics: parts[1]?.trim() || "",
-    };
+    return CliResponseParser.parseCopilotText(stdout, stderr, exitCode);
   }
 
   /**
@@ -584,124 +515,18 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Convert a tool pattern from Claude format to Copilot format
-   * Returns the converted pattern, or null if the tool should be filtered out
-   *
-   * Examples:
-   * - "Bash(git:*)" → "shell(git:*)"
-   * - "bash" → "shell"
-   * - "Write" → "write"
-   * - "Edit" → "write" (closest equivalent)
-   * - "Read" → null (no Copilot equivalent, filter out)
-   * - "github(search)" → "github(search)" (MCP tools pass through)
-   */
-  private convertToolPatternToCopilotFormat(pattern: string): string | null {
-    const parsed = this.parseToolPattern(pattern);
-    if (!parsed) {
-      return pattern; // Return as-is (e.g., MCP tools)
-    }
-
-    const [toolName, args] = parsed;
-    const lowerToolName = toolName.toLowerCase();
-
-    // Check if this is a Claude tool that needs conversion
-    if (lowerToolName in CLAUDE_TO_COPILOT_TOOL_MAP) {
-      const copilotTool = CLAUDE_TO_COPILOT_TOOL_MAP[lowerToolName];
-      if (copilotTool === null) {
-        // Tool has no Copilot equivalent, filter it out
-        return null;
-      }
-      return args ? copilotTool + args : copilotTool;
-    }
-
-    // Not a Claude tool, pass through as-is (could be shell, write, or MCP tool)
-    return pattern;
-  }
-
-  /**
-   * Get tool permission arguments based on configuration
-   * Supports three modes:
-   * - "dangerouslyAllowAll": --allow-all-tools with NO deny patterns (bypasses all restrictions)
-   * - "allowAll": --allow-all-tools with deny patterns (safe automation, recommended)
-   * - "custom": Specific allow patterns with deny patterns
-   *
-   * Pattern syntax:
-   * - shell(command:*?) - Match shell commands (e.g., shell(git:*), shell(npm test))
-   * - write - Match file creation/modification tools
-   * - <mcp-server>(tool?) - Match MCP server tools (e.g., github, github(search_repositories))
-   *
-   * Claude tools are automatically converted or filtered:
-   * - Bash → shell, Write/Edit/MultiEdit → write
-   * - Read/Glob/Grep/LS/WebFetch → filtered out (no Copilot equivalent)
+   * Get tool permission arguments based on configuration (delegated to shared utility)
    */
   private getToolPermissionArgs(): string[] {
     const mode = ConfigurationUtils.getCliToolPermissions();
-    const args: string[] = [];
-    const filteredTools: string[] = [];
+    const allowedTools = ConfigurationUtils.getCliAllowedTools();
+    const deniedTools = ConfigurationUtils.getCliDeniedTools();
 
-    // Add allow mode first
-    if (mode === "dangerouslyAllowAll" || mode === "allowAll") {
-      args.push("--allow-all-tools");
-    } else {
-      // Custom mode - use specific allow patterns
-      const allowedTools = ConfigurationUtils.getCliAllowedTools();
-      const convertedAllowTools: string[] = [];
-
-      allowedTools.forEach((tool) => {
-        const converted = this.convertToolPatternToCopilotFormat(tool);
-        if (converted === null) {
-          filteredTools.push(tool);
-        } else if (!convertedAllowTools.includes(converted)) {
-          convertedAllowTools.push(converted);
-        }
-      });
-
-      // Add all allowed tools as variadic arguments to single --allow-tool flag
-      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
-      if (convertedAllowTools.length > 0) {
-        const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
-        args.push("--allow-tool", ...quotedTools);
-        Log.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
-      } else if (allowedTools.length > 0) {
-        // No valid allow patterns after conversion
-        Log.warn(
-          "⚠️ Custom tool permissions mode enabled but no valid tools specified. Copilot will prompt for each tool."
-        );
-      }
-    }
-
-    // Add denied tool patterns (unless dangerouslyAllowAll mode)
-    // In dangerouslyAllowAll mode, we skip deny patterns entirely
-    if (mode !== "dangerouslyAllowAll") {
-      const deniedTools = ConfigurationUtils.getCliDeniedTools();
-      const convertedDenyTools: string[] = [];
-
-      deniedTools.forEach((tool) => {
-        const converted = this.convertToolPatternToCopilotFormat(tool);
-        if (converted === null) {
-          filteredTools.push(tool);
-        } else if (!convertedDenyTools.includes(converted)) {
-          convertedDenyTools.push(converted);
-        }
-      });
-
-      // Add all denied tools as variadic arguments to single --deny-tool flag
-      // Quote each pattern to handle spaces and special characters (shell: true in spawn)
-      if (convertedDenyTools.length > 0) {
-        const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
-        args.push("--deny-tool", ...quotedTools);
-        Log.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
-      }
-    }
-
-    // Log filtered tools for visibility
-    if (filteredTools.length > 0) {
-      Log.info(
-        `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
-      );
-    }
-
-    return args;
+    return CliToolPermissionMapper.buildCopilotArgs({
+      mode,
+      allowedTools,
+      deniedTools,
+    });
   }
 
   /**

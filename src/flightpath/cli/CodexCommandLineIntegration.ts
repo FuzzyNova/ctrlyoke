@@ -5,6 +5,10 @@ import { CopilotStatus } from "../base/CopilotIntegration";
 import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
+import { CliResponseParser } from "./shared/CliResponseParser";
+import { CliNotificationMonitor } from "./shared/CliNotificationMonitor";
+import { CliMcpConfigGenerator } from "./shared/CliMcpConfigGenerator";
+import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
 
 /**
  * Codex CLI JSON response structure (JSONL events format)
@@ -420,7 +424,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
       // Route based on execution mode
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
-        return await this.executeInteractive(args, promptText, workflowContext);
+        return await this.executeInTerminal(args, promptText, workflowContext);
       } else {
         return await this.executeHeadless(args, promptText, workflowContext);
       }
@@ -436,7 +440,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Generate MCP server configuration for Codex CLI.
+   * Generate MCP server configuration for Codex CLI (delegated to shared utility)
    * Returns -c 'mcp_servers.flightpath={...}' inline TOML argument.
    */
   protected async getMcpConfigArgs(
@@ -444,18 +448,11 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     workspaceRoot: string
   ): Promise<string[] | null> {
     try {
-      // Generate inline TOML config (no file needed for Codex!)
-      // Format: -c "mcp_servers.flightpath={command='node',args=['path'],env={FLIGHTPATH_WORKSPACE='dir'}}"
-      // Note: Use single quotes inside TOML to avoid PowerShell escaping issues with double quotes
-      const escapedServerPath = mcpServerPath.replace(/\\/g, "/");
-      const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
-
-      const tomlConfig =
-        `mcp_servers.flightpath={command='node',` +
-        `args=['${escapedServerPath}'],` +
-        `env={FLIGHTPATH_WORKSPACE='${escapedWorkspaceRoot}'}}`;
-
-      // Return -c flag with inline TOML
+      const tomlConfig = CliMcpConfigGenerator.generateInlineTomlConfig(
+        "flightpath",
+        mcpServerPath,
+        workspaceRoot
+      );
       return ["-c", tomlConfig];
     } catch (error) {
       Log.error("Failed to generate MCP config for Codex CLI", error);
@@ -543,12 +540,9 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     } else {
       // Interactive mode: Configure notify hook for completion detection
       const notifyScript = this.getNotificationScriptPath();
-      // Convert to forward slashes (works on Windows and avoids escaping issues)
-      const normalizedPath = notifyScript.replace(/\\/g, "/");
-      // TOML array format with single quotes (avoids escaping complexity)
-      // Format: notify=['node','path']
-      args.push("--config", `notify=['node','${normalizedPath}']`);
-      Log.debug(`🔔 Configured notify hook: ${normalizedPath}`);
+      const notifyConfig = CliNotificationMonitor.buildCodexNotifyConfig(notifyScript);
+      args.push("--config", notifyConfig);
+      Log.debug(`🔔 Configured notify hook for completion detection`);
     }
 
     // Session management
@@ -562,32 +556,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return args;
   }
 
-  /**
-   * Execute in interactive terminal mode
-   * Uses temp file approach via base class to avoid shell escaping issues
-   */
-  private async executeInteractive(
-    args: string[],
-    promptText: string,
-    workflowContext?: {
-      promptIndex: number;
-      allPrompts: PromptItem[];
-      filePath?: string;
-    }
-  ): Promise<boolean> {
-    // Use base class executeInTerminal (passes workflow context for temp file naming)
-    const success = await this.executeInTerminal(
-      args,
-      promptText,
-      workflowContext
-    );
-
-    if (success) {
-      Log.info("✅ Codex CLI completed successfully");
-    }
-
-    return success;
-  }
 
   /**
    * Execute in headless mode (background process)
@@ -652,90 +620,14 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Parse JSONL output from Codex CLI (newline-delimited JSON events)
-   *
-   * JSONL format outputs events:
-   * 1. {"type":"thread.started","thread_id":"..."}
-   * 2. {"type":"turn.started"}
-   * 3. {"type":"item.completed","item":{"text":"...","role":"assistant"}}
-   * 4. {"type":"turn.completed","usage":{"input_tokens":X,"output_tokens":Y}}
+   * Parse JSONL output from Codex CLI (delegated to shared utility)
    */
   private parseJsonLinesOutput(
     stdout: string,
     stderr: string,
     exitCode: number
   ): CopilotCliResult & { sessionId?: string } {
-    let fullResponse = "";
-    let sessionId: string | undefined;
-    let usage:
-      | { input_tokens: number; output_tokens: number; total_tokens?: number }
-      | undefined;
-    let isError = false;
-    let errorMessage: string | undefined;
-
-    const lines = stdout.split("\n");
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      try {
-        const json: CodexCliJsonEvent = JSON.parse(line);
-
-        // Extract response content from event
-        fullResponse += this.extractResponseFromEvent(json);
-
-        // Extract session ID from thread.started events
-        if (json.type === "thread.started" && json.thread_id) {
-          sessionId = json.thread_id;
-        }
-
-        // Extract usage from turn.completed events
-        if (json.type === "turn.completed" && json.usage) {
-          usage = {
-            input_tokens: json.usage.input_tokens,
-            output_tokens: json.usage.output_tokens,
-            total_tokens: json.usage.input_tokens + json.usage.output_tokens,
-          };
-        }
-
-        // Check for error
-        if (json.error) {
-          isError = true;
-          errorMessage = json.error;
-        }
-      } catch (parseError) {
-        // Ignore parse errors for non-JSON lines
-        Log.debug(`Skipping non-JSON line: ${line.substring(0, 100)}`);
-      }
-    }
-
-    // Build statistics string
-    let statistics = "";
-    if (usage) {
-      const { input_tokens, output_tokens, total_tokens } = usage;
-      const total = total_tokens || input_tokens + output_tokens;
-      statistics = `Usage: ${input_tokens} input + ${output_tokens} output = ${total} tokens`;
-    }
-
-    if (isError) {
-      return {
-        success: false,
-        response: "",
-        statistics,
-        error: errorMessage || stderr || "Stream contained error",
-        exitCode: exitCode !== 0 ? exitCode : 1,
-        sessionId,
-      };
-    }
-
-    return {
-      success: exitCode === 0,
-      response: fullResponse.trim(),
-      statistics,
-      error: exitCode !== 0 ? stderr : undefined,
-      exitCode,
-      sessionId,
-    };
+    return CliResponseParser.parseCodexJsonLines(stdout, stderr, exitCode);
   }
 
   // ============================================================
@@ -776,41 +668,21 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Get permission arguments based on configuration
+   * Get permission arguments based on configuration (delegated to shared utility)
    * CRITICAL: Codex does NOT support granular tool patterns
-   * Uses simplified mode-based mapping only
    */
   private getPermissionArgs(): string[] {
-    const toolMode = ConfigurationUtils.getCliToolPermissions();
-
-    // Warn if tool patterns are configured (unsupported by Codex)
+    const mode = ConfigurationUtils.getCliToolPermissions();
     const allowedTools = ConfigurationUtils.getCliAllowedTools();
     const deniedTools = ConfigurationUtils.getCliDeniedTools();
-    if (allowedTools.length > 0 || deniedTools.length > 0) {
-      Log.warn(
-        "⚠️ Codex CLI does not support granular tool patterns (cliAllowedTools/cliDeniedTools). Use Codex-specific sandbox/approval settings for custom control."
-      );
-    }
+    const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
+    const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
 
-    switch (toolMode) {
-      case "dangerouslyAllowAll":
-        // Bypass ALL checks (dangerous!)
-        return ["--dangerously-bypass-approvals-and-sandbox"];
-
-      case "allowAll":
-        // Safe automation: auto-grant all but respect deny list (use --full-auto)
-        return ["--full-auto"];
-
-      case "custom":
-        // Use Codex-specific sandbox and approval settings
-        const sandbox = ConfigurationUtils.getCodexSandboxMode();
-        const approval = ConfigurationUtils.getCodexApprovalPolicy();
-        // Note: --add-dir is handled in buildCliArgs(), not here
-        return ["-s", sandbox, "-a", approval];
-
-      default:
-        return ["--full-auto"];
-    }
+    return CliToolPermissionMapper.buildCodexArgs(
+      { mode, allowedTools, deniedTools },
+      sandboxMode,
+      approvalPolicy
+    );
   }
 
   // ============================================================
@@ -832,197 +704,32 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
   }
 
   /**
-   * Get directory where Codex notifications are written.
-   * Location: {workspace}/.flightpath/temp/codex-notifications/
-   *
-   * Uses workspace-specific directory to prevent conflicts when multiple
-   * VS Code instances are running FlightPath simultaneously.
-   */
-  private getNotificationDirectory(): string {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("Cannot determine workspace root for notification path");
-    }
-
-    const path = require("path");
-    return path.join(
-      workspaceRoot,
-      ".flightpath",
-      "temp",
-      "codex-notifications"
-    );
-  }
-
-  /**
-   * Extract thread ID from Codex CLI output.
-   * Codex emits: {"type":"thread.started","thread_id":"..."}
-   *
-   * @param output Terminal or process output
-   * @returns Thread ID if found, undefined otherwise
-   */
-  private extractThreadId(output: string): string | undefined {
-    // Look for JSONL thread.started event with thread_id field
-    const threadMatch = output.match(
-      /"type"\s*:\s*"thread\.started"[^}]*"thread_id"\s*:\s*"([^"]+)"/i
-    );
-    if (threadMatch) {
-      return threadMatch[1];
-    }
-    return undefined;
-  }
-
-  /**
-   * Simple delay utility
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Monitor notification file for completion.
-   *
-   * Uses Codex's notify hook to get agent-turn-complete events.
-   * The notification handler script writes a JSON file that we monitor.
-   *
-   * If thread ID is not available, monitors the entire notification directory
-   * for any new notification files (since we're the only process running).
-   *
-   * @param threadId Thread ID to monitor (from Codex output), undefined to monitor all files
-   * @param startTime Execution start time (for timeout calculation)
-   * @param timeoutMs Maximum time to wait for completion
-   * @returns Object with completed flag and optional error message
+   * Monitor notification file for completion (delegated to shared utility).
    */
   private async monitorNotificationFile(
     threadId: string | undefined,
     startTime: Date,
     timeoutMs: number
   ): Promise<{ completed: boolean; error?: string }> {
-    const fs = require("fs");
-    const path = require("path");
-
-    const notifyDir = this.getNotificationDirectory();
-
-    // Ensure notification directory exists
-    if (!fs.existsSync(notifyDir)) {
-      fs.mkdirSync(notifyDir, { recursive: true });
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return {
+        completed: false,
+        error: "Cannot determine workspace root for notification monitoring",
+      };
     }
 
-    // Get initial file list to detect new files
-    let initialFiles = new Set<string>();
-    try {
-      const files = fs.readdirSync(notifyDir);
-      initialFiles = new Set(files);
-      Log.debug(`📋 Initial notification files: ${files.length}`);
-    } catch (error) {
-      Log.debug(`Could not read notification directory: ${error}`);
-    }
-
-    if (threadId) {
-      Log.debug(`📋 Monitoring notification file for thread: ${threadId}`);
-    } else {
-      Log.debug(
-        `📋 Monitoring notification directory for any new completion file`
-      );
-    }
-
-    // Poll for notification file
-    while (Date.now() - startTime.getTime() < timeoutMs) {
-      try {
-        if (threadId) {
-          // Monitor specific thread ID file
-          const notifyFile = path.join(notifyDir, `${threadId}.json`);
-
-          if (fs.existsSync(notifyFile)) {
-            // Read notification data
-            const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
-
-            Log.info(
-              `✅ Codex completion detected via notify hook (turn: ${notifyData.turnId})`
-            );
-
-            // Log the final assistant message if available
-            if (notifyData.lastMessage) {
-              Log.debug(`📝 Last message: ${notifyData.lastMessage}`);
-            }
-
-            // Clean up notification file
-            try {
-              fs.unlinkSync(notifyFile);
-              Log.debug(`🗑️ Cleaned up notification file`);
-            } catch (cleanupError) {
-              Log.debug(
-                `Failed to clean up notification file: ${cleanupError}`
-              );
-            }
-
-            return { completed: true };
-          }
-        } else {
-          // Monitor for any new notification file
-          const currentFiles = fs.readdirSync(notifyDir);
-
-          for (const file of currentFiles) {
-            if (!initialFiles.has(file) && file.endsWith(".json")) {
-              const notifyFile = path.join(notifyDir, file);
-
-              try {
-                const notifyData = JSON.parse(
-                  fs.readFileSync(notifyFile, "utf8")
-                );
-
-                Log.info(
-                  `✅ Codex completion detected via notify hook (thread: ${notifyData.threadId}, turn: ${notifyData.turnId})`
-                );
-
-                // Log the final assistant message if available
-                if (notifyData.lastMessage) {
-                  Log.debug(`📝 Last message: ${notifyData.lastMessage}`);
-                }
-
-                // Clean up notification file
-                try {
-                  fs.unlinkSync(notifyFile);
-                  Log.debug(`🗑️ Cleaned up notification file: ${file}`);
-                } catch (cleanupError) {
-                  Log.debug(
-                    `Failed to clean up notification file: ${cleanupError}`
-                  );
-                }
-
-                return { completed: true };
-              } catch (parseError) {
-                Log.debug(
-                  `Failed to parse notification file ${file}: ${parseError}`
-                );
-              }
-            }
-          }
-        }
-      } catch (error) {
-        Log.debug(`Notification file check error: ${error}`);
-      }
-
-      // Check if user cancelled
-      if (this.isCancelling) {
-        Log.info("🛑 User cancelled - stopping notification monitoring");
-        return {
-          completed: false,
-          error: "User cancelled execution",
-        };
-      }
-
-      // Poll every 500ms
-      await this.delay(500);
-    }
-
-    // Timeout reached
-    Log.warn(
-      `⏱️ Timeout waiting for Codex completion notification${threadId ? ` (thread: ${threadId})` : ""}`
+    const notifyDir = CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "codex"
     );
-    return {
-      completed: false,
-      error: "Timeout waiting for completion notification",
-    };
+
+    return CliNotificationMonitor.monitorForCompletion(
+      { directory: notifyDir, timeoutMs },
+      threadId,
+      startTime,
+      () => this.isCancelling
+    );
   }
 
   /**

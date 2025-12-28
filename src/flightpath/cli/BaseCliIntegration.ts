@@ -223,13 +223,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    *
    * @param mcpServerPath Absolute path to the MCP server executable
    * @param workspaceRoot Absolute path to the workspace root
-   * @param includeTypeField Whether to include "type": "stdio" (Claude needs it, Copilot doesn't)
+   * @param serverConfig Optional server configuration fields (type, tools, etc.)
    * @returns Absolute path to the generated config file
    */
   protected async generateMcpConfigFile(
     mcpServerPath: string,
     workspaceRoot: string,
-    includeTypeField: boolean = false
+    serverConfig?: { type?: string; tools?: string[] }
   ): Promise<string> {
     // Return cached path if already generated
     if (this.cachedMcpConfigPath) {
@@ -238,38 +238,21 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
 
     const fs = require("fs/promises");
     const path = require("path");
+    const { CliMcpConfigGenerator } = require("./shared/CliMcpConfigGenerator");
 
-    // Generate MCP config JSON
-    const serverConfig: any = {
-      command: "node",
-      args: [mcpServerPath],
-      env: {
-        FLIGHTPATH_WORKSPACE: workspaceRoot,
-      },
-    };
-
-    // Add type field based on CLI requirements
-    if (includeTypeField) {
-      // Claude CLI: uses "stdio" for stdio servers
-      serverConfig.type = "stdio";
-    } else {
-      // Copilot CLI: uses "local" for stdio servers + requires "tools" field
-      serverConfig.type = "local";
-      serverConfig.tools = ["*"]; // Allow all tools from this MCP server
-    }
-
-    const mcpConfig = {
-      mcpServers: {
-        flightpath: serverConfig,
-      },
-    };
+    // Generate MCP config JSON using shared utility
+    const configJson = CliMcpConfigGenerator.generateJsonConfig(
+      mcpServerPath,
+      workspaceRoot,
+      serverConfig
+    );
 
     // Write to temp directory (reused for all prompts in this session)
     const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
     await fs.mkdir(tempDir, { recursive: true });
 
     const configPath = path.join(tempDir, "mcp-config.json");
-    await fs.writeFile(configPath, JSON.stringify(mcpConfig, null, 2), "utf-8");
+    await fs.writeFile(configPath, configJson, "utf-8");
 
     // Cache the path for reuse
     this.cachedMcpConfigPath = configPath;
