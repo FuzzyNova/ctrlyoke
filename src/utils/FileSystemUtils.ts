@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as chokidar from "chokidar";
+import { Log } from "./Log";
 
 export class FileSystemUtils {
   private watchers: Map<string, chokidar.FSWatcher> = new Map();
@@ -20,7 +21,7 @@ export class FileSystemUtils {
       await fs.access(dirPath);
     } catch {
       await fs.mkdir(dirPath, { recursive: true });
-      console.log(`FlightPath: Created directory ${dirPath}`);
+      Log.info(`Created directory ${dirPath}`);
     }
   }
 
@@ -32,7 +33,7 @@ export class FileSystemUtils {
       const content = await fs.readFile(filePath, "utf8");
       return content;
     } catch (error) {
-      console.error(`FlightPath: Failed to read file ${filePath}:`, error);
+      Log.error(`Failed to read file ${filePath}:`, error);
       return null;
     }
   }
@@ -45,10 +46,10 @@ export class FileSystemUtils {
       const dir = path.dirname(filePath);
       await this.ensureDirectory(dir);
       await fs.writeFile(filePath, content, "utf8");
-      console.log(`FlightPath: Wrote file ${filePath}`);
+      Log.info(`Wrote file ${filePath}`);
       return true;
     } catch (error) {
-      console.error(`FlightPath: Failed to write file ${filePath}:`, error);
+      Log.error(`Failed to write file ${filePath}:`, error);
       return false;
     }
   }
@@ -78,7 +79,7 @@ export class FileSystemUtils {
     try {
       await this.findFilesRecursive(rootDir, pattern, files, 0, maxDepth);
     } catch (error) {
-      console.error(`FlightPath: Error finding files in ${rootDir}:`, error);
+      Log.error(`Error finding files in ${rootDir}:`, error);
     }
 
     return files;
@@ -168,25 +169,25 @@ export class FileSystemUtils {
 
       watcher
         .on("add", (filePath) => {
-          console.log(`FlightPath: File added: ${filePath}`);
+          Log.info(`File added: ${filePath}`);
           this.onFileChanged.fire(filePath);
         })
         .on("change", (filePath) => {
-          console.log(`FlightPath: File changed: ${filePath}`);
+          Log.info(`File changed: ${filePath}`);
           this.onFileChanged.fire(filePath);
         })
         .on("unlink", (filePath) => {
-          console.log(`FlightPath: File removed: ${filePath}`);
+          Log.info(`File removed: ${filePath}`);
           this.onFileChanged.fire(filePath);
         })
         .on("error", (error) => {
-          console.error(`FlightPath: Watcher error for ${dirPath}:`, error);
+          Log.error(`Watcher error for ${dirPath}:`, error);
         });
 
       this.watchers.set(watchId, watcher);
-      console.log(`FlightPath: Started watching ${dirPath} with ID ${watchId}`);
+      Log.info(`Started watching ${dirPath} with ID ${watchId}`);
     } catch (error) {
-      console.error(`FlightPath: Failed to start watching ${dirPath}:`, error);
+      Log.error(`Failed to start watching ${dirPath}:`, error);
     }
 
     return watchId;
@@ -200,7 +201,7 @@ export class FileSystemUtils {
     if (watcher) {
       watcher.close();
       this.watchers.delete(watchId);
-      console.log(`FlightPath: Stopped watching ${watchId}`);
+      Log.info(`Stopped watching ${watchId}`);
     }
   }
 
@@ -210,7 +211,7 @@ export class FileSystemUtils {
   stopAllWatchers(): void {
     for (const [watchId, watcher] of this.watchers) {
       watcher.close();
-      console.log(`FlightPath: Stopped watching ${watchId}`);
+      Log.info(`Stopped watching ${watchId}`);
     }
     this.watchers.clear();
   }
@@ -235,7 +236,7 @@ export class FileSystemUtils {
         isDirectory: stats.isDirectory(),
       };
     } catch (error) {
-      console.error(`FlightPath: Failed to get stats for ${filePath}:`, error);
+      Log.error(`Failed to get stats for ${filePath}:`, error);
       return null;
     }
   }
@@ -252,13 +253,10 @@ export class FileSystemUtils {
       const content = await fs.readFile(filePath);
       await fs.writeFile(backupPath, content);
 
-      console.log(`FlightPath: Created backup ${backupPath}`);
+      Log.info(`Created backup ${backupPath}`);
       return backupPath;
     } catch (error) {
-      console.error(
-        `FlightPath: Failed to create backup of ${filePath}:`,
-        error
-      );
+      Log.error(`Failed to create backup of ${filePath}:`, error);
       return null;
     }
   }
@@ -340,6 +338,6 @@ export class FileSystemUtils {
   dispose(): void {
     this.stopAllWatchers();
     this.onFileChanged.dispose();
-    console.log("FlightPath: FileSystemUtils disposed");
+    Log.info("FileSystemUtils disposed");
   }
 }

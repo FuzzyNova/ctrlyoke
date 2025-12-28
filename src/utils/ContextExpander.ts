@@ -5,6 +5,7 @@ import {
   resolveSymbol,
   buildDirectoryAttachmentXml,
 } from "./AttachmentBuilders";
+import { Log } from "./Log";
 
 /**
  * ContextExpander - Unified context expansion utility
@@ -61,7 +62,7 @@ export class ContextExpander {
       const attachmentPromises = resolvedRefs.map((ref) =>
         this.buildAttachmentForReference(ref).catch((err) => {
           const refDesc = this.getRefDescription(ref);
-          console.error(`Failed to attach ${refDesc}:`, err);
+          Log.error(`Failed to attach ${refDesc}:`, err);
           return null; // Skip failed attachments
         })
       );
@@ -79,7 +80,7 @@ export class ContextExpander {
       const attachmentsSection = validAttachments.join("\n\n");
       return `${attachmentsSection}\n\n${promptText}`;
     } catch (error) {
-      console.error("Error expanding context:", error);
+      Log.error("Error expanding context:", error);
       // Return original prompt on error
       return promptText;
     }
@@ -120,7 +121,7 @@ export class ContextExpander {
         if (resolved) {
           resolvedRefs.push(resolved);
         } else {
-          console.warn(`Could not resolve symbol: ${symbolRef}`);
+          Log.warn(`Could not resolve symbol: ${symbolRef}`);
         }
       } else {
         // Regular file/directory reference

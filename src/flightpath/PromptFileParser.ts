@@ -5,6 +5,7 @@ import Ajv from "ajv";
 import * as yaml from "js-yaml";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { Log } from "../utils/Log";
 
 /**
  * Extensions that indicate a prompt value might be a file path
@@ -39,9 +40,9 @@ export class PromptFileParser {
 
       this.promptSchema = JSON.parse(promptSchemaContent);
 
-      console.log("FlightPath: JSON schema loaded successfully");
+      Log.info("JSON schema loaded successfully");
     } catch (error) {
-      console.error("FlightPath: Failed to load JSON schema:", error);
+      Log.error("Failed to load JSON schema:", error);
       vscode.window.showErrorMessage(
         "FlightPath: Failed to load validation schema"
       );
@@ -97,7 +98,7 @@ export class PromptFileParser {
 
       return await this.normalizePromptFile(parsed, filePath);
     } catch (error) {
-      console.error(`FlightPath: Failed to parse file ${filePath}:`, error);
+      Log.error(`Failed to parse file ${filePath}:`, error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
       );
@@ -137,10 +138,7 @@ export class PromptFileParser {
         ],
       };
     } catch (error) {
-      console.error(
-        `FlightPath: Failed to read markdown prompt file ${filePath}:`,
-        error
-      );
+      Log.error(`Failed to read markdown prompt file ${filePath}:`, error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
       );
@@ -224,8 +222,8 @@ export class PromptFileParser {
       );
 
       if (looksIntentional) {
-        console.warn(
-          `FlightPath: Prompt file reference not found, using as literal text: "${trimmedPath}"`
+        Log.warn(
+          `Prompt file reference not found, using as literal text: "${trimmedPath}"`
         );
         vscode.window.showWarningMessage(
           `FlightPath: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
@@ -241,21 +239,14 @@ export class PromptFileParser {
       const trimmedContent = content.trim();
 
       if (!trimmedContent) {
-        console.warn(
-          `FlightPath: Referenced prompt file is empty: ${trimmedPath}`
-        );
+        Log.warn(`Referenced prompt file is empty: ${trimmedPath}`);
         return promptValue; // Return original if file is empty
       }
 
-      console.log(
-        `FlightPath: Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`
-      );
+      Log.info(`Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`);
       return trimmedContent;
     } catch (error) {
-      console.error(
-        `FlightPath: Failed to read prompt file ${resolvedPath}:`,
-        error
-      );
+      Log.error(`Failed to read prompt file ${resolvedPath}:`, error);
       return promptValue; // Return original on read error
     }
   }
@@ -413,7 +404,7 @@ export class PromptFileParser {
       const files = await this.findPromptFilesRecursive(promptsDirPath);
       return files;
     } catch (error) {
-      console.log(
+      Log.info(
         `FlightPath: Prompts directory ${promptsDirPath} not found or inaccessible`
       );
       return [];

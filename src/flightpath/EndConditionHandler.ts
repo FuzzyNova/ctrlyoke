@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { PromptItem } from "../types/FlightPathTypes";
 import { STEP_STATUS } from "../types/DashboardConstants";
+import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
   EvaluationResult,
@@ -71,7 +72,7 @@ export class EndConditionHandler {
   ): Promise<EndConditionHandlerResult> {
     // Success case - continue to next prompt
     if (evaluationResult.success) {
-      console.log("✅ FlightPath: End condition passed");
+      Log.info("✅ End condition passed");
       this.promptQueue.resetRetryCount();
 
       // Update result with script output
@@ -122,7 +123,7 @@ export class EndConditionHandler {
       errorMessage = `End condition script error: ${evaluationResult.error}`;
     }
 
-    console.error(`❌ FlightPath: ${errorMessage}`);
+    Log.error(`❌ ${errorMessage}`);
 
     const action = await vscode.window.showErrorMessage(
       `FlightPath: ${errorMessage}`,
@@ -132,7 +133,7 @@ export class EndConditionHandler {
     );
 
     if (action === "Skip Condition") {
-      console.log("⏭️ FlightPath: Skipping end condition and continuing");
+      Log.info("⏭️ Skipping end condition and continuing");
       return { shouldContinue: true };
     } else if (action === "Open Script") {
       // Try to open the script file
@@ -164,7 +165,7 @@ export class EndConditionHandler {
   ): Promise<EndConditionHandlerResult> {
     // Check if workflow was stopped by user
     if (this.promptQueue.getState().stopped) {
-      console.log("⚠️ FlightPath: Workflow stopped, aborting retry");
+      Log.info("⚠️ Workflow stopped, aborting retry");
       return {
         shouldContinue: false,
         failureReason: "Workflow stopped by user",
@@ -180,8 +181,8 @@ export class EndConditionHandler {
       const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
       const currentIndex = this.promptQueue.getState().currentIndex;
 
-      console.log(
-        `🔄 FlightPath: Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
+      Log.info(
+        `🔄 Validation failed, retrying (attempt ${currentRetry}/${maxRetries})...`
       );
 
       // Update dashboard with retry state
@@ -242,7 +243,7 @@ export class EndConditionHandler {
 
       // Check if workflow was stopped during retry
       if (this.promptQueue.getState().stopped) {
-        console.log("⚠️ FlightPath: Workflow stopped during retry");
+        Log.info("⚠️ Workflow stopped during retry");
         return {
           shouldContinue: false,
           failureReason: "Workflow stopped during retry",
@@ -280,8 +281,8 @@ export class EndConditionHandler {
     const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
     const retryCount = this.promptQueue.getCurrentRetryCount();
 
-    console.error(
-      `❌ FlightPath: End condition failed after ${retryCount} retries (max: ${maxRetries})`
+    Log.error(
+      `❌ End condition failed after ${retryCount} retries (max: ${maxRetries})`
     );
 
     const message =
@@ -297,12 +298,12 @@ export class EndConditionHandler {
     );
 
     if (action === "Continue Anyway") {
-      console.log("⏭️ FlightPath: Continuing despite validation failure");
+      Log.info("⏭️ Continuing despite validation failure");
       this.promptQueue.resetRetryCount();
       return { shouldContinue: true };
     } else if (action === "Retry Once More") {
       // Allow one more retry even if max reached
-      console.log("🔄 FlightPath: Manual retry requested");
+      Log.info("🔄 Manual retry requested");
       // Don't increment retry count, just return false to re-evaluate
       // The calling code will handle this case
       return { shouldContinue: false, failureReason: message };

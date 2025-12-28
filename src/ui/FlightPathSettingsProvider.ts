@@ -17,6 +17,7 @@ import {
 } from "../utils/ModelConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Provider } from "../types/FlightPathTypes";
+import { Log } from "../utils/Log";
 
 const execAsync = promisify(exec);
 
@@ -78,9 +79,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     // Subscribe to model registry loaded event
     this.modelsLoadedDisposable = onModelsLoaded(() => {
-      console.log(
-        "FlightPath: Model registry loaded, refreshing settings view"
-      );
+      Log.info("Model registry loaded, refreshing settings view");
       this.sendModelOptionsUpdate();
     });
     context.subscriptions.push(this.modelsLoadedDisposable);
@@ -235,14 +234,14 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         status: "available",
         message: stdout.trim(),
       };
-      console.log(`FlightPath: ${command} CLI available:`, stdout.trim());
+      Log.info(`${command} CLI available:`, stdout.trim());
     } catch {
       this.providerStatus[providerId] = {
         available: false,
         status: "unavailable",
         message: "Not installed or not in PATH",
       };
-      console.log(`FlightPath: ${command} CLI not available`);
+      Log.info(`${command} CLI not available`);
     }
   }
 
@@ -283,9 +282,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
           status: "unavailable",
           message: "GitHub Copilot extension not installed",
         };
-        console.log(
-          "FlightPath: Copilot Chat not available - extension not installed"
-        );
+        Log.info("Copilot Chat not available - extension not installed");
         return;
       }
 
@@ -302,16 +299,14 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
           status: "available",
           message: "GitHub Copilot Chat",
         };
-        console.log("FlightPath: Copilot Chat available");
+        Log.info("Copilot Chat available");
       } else {
         this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "Copilot Chat commands not available",
         };
-        console.log(
-          "FlightPath: Copilot Chat not available - required commands missing"
-        );
+        Log.info("Copilot Chat not available - required commands missing");
       }
     } catch (error) {
       this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
@@ -319,7 +314,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         status: "unavailable",
         message: "Error checking Copilot Chat availability",
       };
-      console.error("FlightPath: Error checking Copilot Chat:", error);
+      Log.error("Error checking Copilot Chat:", error);
     }
   }
 
@@ -401,15 +396,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       PROVIDER_IDS.CODEX_CLI,
     ];
     if (!validProviders.includes(provider)) {
-      console.error(`Invalid provider: ${provider}`);
+      Log.error(`Invalid provider: ${provider}`);
       return;
     }
 
     try {
       await ConfigurationUtils.updateSetting("provider", provider);
-      console.log(`✅ Provider changed to: ${provider}`);
+      Log.info(`✅ Provider changed to: ${provider}`);
     } catch (error) {
-      console.error("Failed to update provider setting:", error);
+      Log.error("Failed to update provider setting:", error);
     }
   }
 
@@ -419,15 +414,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   ): Promise<void> {
     const settingKey = FlightPathSettingsProvider.MODEL_SETTING_MAP[provider];
     if (!settingKey) {
-      console.error(`Unknown provider for model change: ${provider}`);
+      Log.error(`Unknown provider for model change: ${provider}`);
       return;
     }
 
     try {
       await ConfigurationUtils.updateSetting(settingKey, model);
-      console.log(`✅ Model changed to: ${model} (for ${provider})`);
+      Log.info(`✅ Model changed to: ${model} (for ${provider})`);
     } catch (error) {
-      console.error("Failed to update model setting:", error);
+      Log.error("Failed to update model setting:", error);
     }
   }
 
@@ -436,15 +431,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   ): Promise<void> {
     const validModes = ["interactive", "headless"];
     if (!validModes.includes(executionMode)) {
-      console.error(`Invalid execution mode: ${executionMode}`);
+      Log.error(`Invalid execution mode: ${executionMode}`);
       return;
     }
 
     try {
       await ConfigurationUtils.updateSetting("cliExecutionMode", executionMode);
-      console.log(`✅ Execution mode changed to: ${executionMode}`);
+      Log.info(`✅ Execution mode changed to: ${executionMode}`);
     } catch (error) {
-      console.error("Failed to update cliExecutionMode setting:", error);
+      Log.error("Failed to update cliExecutionMode setting:", error);
     }
   }
 
@@ -454,20 +449,20 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         "newChatSessionPerPrompt",
         enabled
       );
-      console.log(
+      Log.info(
         `✅ New chat session per prompt ${enabled ? "enabled" : "disabled"}`
       );
     } catch (error) {
-      console.error("Failed to update newChatSessionPerPrompt setting:", error);
+      Log.error("Failed to update newChatSessionPerPrompt setting:", error);
     }
   }
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
     try {
       await ConfigurationUtils.updateSetting("enableDynamicQueue", enabled);
-      console.log(`✅ Dynamic queue ${enabled ? "enabled" : "disabled"}`);
+      Log.info(`✅ Dynamic queue ${enabled ? "enabled" : "disabled"}`);
     } catch (error) {
-      console.error("Failed to update enableDynamicQueue setting:", error);
+      Log.error("Failed to update enableDynamicQueue setting:", error);
     }
   }
 
@@ -488,7 +483,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     try {
       html = fs.readFileSync(htmlPath, "utf8");
     } catch (error) {
-      console.error("Failed to load settings.html template:", error);
+      Log.error("Failed to load settings.html template:", error);
       // Fallback to minimal HTML
       return `<!DOCTYPE html>
 <html>

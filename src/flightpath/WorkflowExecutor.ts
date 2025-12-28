@@ -89,7 +89,7 @@ export class WorkflowExecutor {
     try {
       await vscode.commands.executeCommand("flightpath.dashboard.focus");
     } catch (error) {
-      console.log("FlightPath: Could not focus dashboard panel:", error);
+      Log.error("Could not focus dashboard panel:", error);
     }
 
     // Log workflow start to output channel (only for CLI integration when output is enabled)
@@ -124,9 +124,7 @@ export class WorkflowExecutor {
 
       // Check if paused before starting new prompt
       if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
-        console.log(
-          "⏸️ FlightPath: Workflow paused before executing next prompt"
-        );
+        Log.info("⏸️ Workflow paused before executing next prompt");
         break;
       }
 
@@ -144,10 +142,10 @@ export class WorkflowExecutor {
           const totalCount = state.prompts.length;
           const remainingCount = totalCount - i;
 
-          const message = `FlightPath: Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalCount} prompts. ${remainingCount} prompts remaining in queue.`;
+          const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalCount} prompts. ${remainingCount} prompts remaining in queue.`;
 
           vscode.window.showWarningMessage(message);
-          console.log(`⏱️ ${message}`);
+          Log.info(`⏱️ ${message}`);
 
           await this.promptQueue.markErrored();
           break;
@@ -172,9 +170,7 @@ export class WorkflowExecutor {
       // Update progress
       integration.setWorkflowProgress(i + 1, state.prompts.length);
 
-      console.log(
-        `🚀 FlightPath: Executing prompt ${i + 1}/${state.prompts.length}`
-      );
+      Log.info(`🚀 Executing prompt ${i + 1}/${state.prompts.length}`);
 
       // Record start time for this prompt
       const startTime = Date.now();
@@ -217,7 +213,7 @@ export class WorkflowExecutor {
         });
 
         streamingDisposable = integration.onStreamingChunk((chunk) => {
-          console.log(
+          Log.info(
             `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
           );
           // Log to Output channel - centralized logging for all streaming content
@@ -246,14 +242,14 @@ export class WorkflowExecutor {
         // Check if this was a user-initiated stop (not a real error)
         const queueState = this.promptQueue.getState();
         if (queueState.stopped) {
-          console.log("⏹️ Execution stopped by user");
+          Log.info("⏹️ Execution stopped by user");
           break; // Exit loop without error
         }
 
         // Check if this was a user cancellation in chat UI
         // wasLastFailureUserCancellation() returns false by default (CLI)
         if (integration.wasLastFailureUserCancellation()) {
-          console.log("⏹️ User cancelled in Copilot Chat - stopping workflow");
+          Log.info("⏹️ User cancelled in Copilot Chat - stopping workflow");
           this.promptQueue.stop();
           break;
         }
@@ -261,7 +257,7 @@ export class WorkflowExecutor {
         // Real error - get the specific failure reason and show message
         const failureReason = integration.getLastFailureReason();
         vscode.window.showErrorMessage(
-          `FlightPath: Failed to execute prompt ${i + 1}: ${failureReason}`
+          `Failed to execute prompt ${i + 1}: ${failureReason}`
         );
 
         // Mark queue as errored
@@ -284,11 +280,11 @@ export class WorkflowExecutor {
       this.isWaitingForResponse = true;
 
       // Wait for Copilot to finish responding before proceeding
-      console.log(
-        `⏳ FlightPath: Waiting for Copilot to finish responding to prompt ${i + 1}...`
+      Log.info(
+        `⏳ Waiting for Copilot to finish responding to prompt ${i + 1}...`
       );
       const responseText = await responsePromise;
-      console.log(`✅ FlightPath: Prompt ${i + 1} completed`);
+      Log.info(`✅ Prompt ${i + 1} completed`);
 
       // Calculate duration
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -331,9 +327,7 @@ export class WorkflowExecutor {
         );
 
         if (!shouldContinue) {
-          console.log(
-            "❌ FlightPath: Workflow stopped due to end condition failure"
-          );
+          Log.info("❌ Workflow stopped due to end condition failure");
           await this.promptQueue.markErrored();
           break;
         }
@@ -367,12 +361,12 @@ export class WorkflowExecutor {
 
       // Check if workflow was paused
       if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
-        console.log("⏸️ FlightPath: Workflow paused");
+        Log.info("⏸️ Workflow paused");
         break;
       }
     }
 
-    console.log("🎉 FlightPath: Workflow execution complete");
+    Log.info("🎉 Workflow execution complete");
 
     // Set queue state to completed
     const finalState = this.promptQueue.getState();
@@ -421,9 +415,7 @@ export class WorkflowExecutor {
     currentIndex: number,
     duration: number
   ): Promise<boolean> {
-    console.log(
-      `🔍 FlightPath: Evaluating end condition for prompt ${currentIndex + 1}...`
-    );
+    Log.info(`🔍 Evaluating end condition for prompt ${currentIndex + 1}...`);
 
     // Send status message: Evaluating end condition
     if (context.dashboardProvider) {
@@ -507,9 +499,7 @@ export class WorkflowExecutor {
       const disposable = integration.onResponseComplete(
         async (responseText: string) => {
           if (responseHandled) {
-            console.log(
-              "⚠️ FlightPath: Duplicate response complete event ignored"
-            );
+            Log.info("⚠️ Duplicate response complete event ignored");
             return;
           }
           responseHandled = true;
@@ -518,8 +508,8 @@ export class WorkflowExecutor {
           // Check if workflow is paused - hold response until resume
           const currentState = this.promptQueue.getState();
           if (currentState.status === EXECUTION_STATES.PAUSED) {
-            console.log(
-              "⏸️ FlightPath: Response complete but workflow is paused - holding until resume"
+            Log.info(
+              "⏸️ Response complete but workflow is paused - holding until resume"
             );
             this.pendingResponseResolver = resolve;
             this.pendingResponseText = responseText;
@@ -570,9 +560,9 @@ export class WorkflowExecutor {
         return null;
       }
 
-      console.log("⏳ FlightPath: Waiting for retry response...");
+      Log.info("⏳ Waiting for retry response...");
       const retryResponseText = await responsePromise;
-      console.log("✅ FlightPath: Retry response complete");
+      Log.info("✅ Retry response complete");
 
       const retryDuration = ((Date.now() - retryStartTime) / 1000).toFixed(1);
 
@@ -637,7 +627,7 @@ export class WorkflowExecutor {
    */
   resumePendingResponse(): void {
     if (this.pendingResponseResolver && this.pendingResponseText !== null) {
-      console.log("▶️ FlightPath: Resuming with pending response");
+      Log.info("▶️ Resuming with pending response");
       const resolver = this.pendingResponseResolver;
       const responseText = this.pendingResponseText;
 

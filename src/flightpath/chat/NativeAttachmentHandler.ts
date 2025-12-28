@@ -3,6 +3,7 @@ import {
   FileReference,
   parseAllFileReferences,
 } from "../../utils/FileReferenceParser";
+import { Log } from "../../utils/Log";
 import { resolveSymbol } from "../../utils/AttachmentBuilders";
 
 /** Function type for resolving workspace-relative paths */
@@ -48,15 +49,15 @@ export class NativeAttachmentHandler {
         if (ref.symbolName) {
           // Symbol reference - resolve to file location
           const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-          console.log(`🔍 Resolving symbol: ${symbolRef}`);
+          Log.info(`🔍 Resolving symbol: ${symbolRef}`);
           const resolved = await resolveSymbol(symbolRef);
           if (resolved) {
             resolvedRefs.push(resolved);
-            console.log(
+            Log.info(
               `✓ Resolved to: ${resolved.path}:${resolved.startLine}-${resolved.endLine}`
             );
           } else {
-            console.warn(`Could not resolve symbol: ${symbolRef}`);
+            Log.warn(`Could not resolve symbol: ${symbolRef}`);
           }
         } else {
           // Regular file/directory reference
@@ -68,7 +69,7 @@ export class NativeAttachmentHandler {
         return prompt;
       }
 
-      console.log(`📎 Attaching ${resolvedRefs.length} file(s)...`);
+      Log.info(`📎 Attaching ${resolvedRefs.length} file(s)...`);
 
       for (const ref of resolvedRefs) {
         const absolutePath = this.resolvePath(ref.path);
@@ -81,9 +82,9 @@ export class NativeAttachmentHandler {
               "workbench.action.chat.attachFolder",
               uri
             );
-            console.log(`✅ Directory: ${ref.path}`);
+            Log.info(`✅ Directory: ${ref.path}`);
           } catch (error) {
-            console.error(`❌ Attach directory failed: ${ref.path}`, error);
+            Log.error(`❌ Attach directory failed: ${ref.path}`, error);
           }
         } else if (!ref.startLine || !ref.endLine) {
           // Attach entire file
@@ -93,9 +94,9 @@ export class NativeAttachmentHandler {
                 "github.copilot.chat.attachFile"
               );
             });
-            console.log(`✅ File: ${ref.path}`);
+            Log.info(`✅ File: ${ref.path}`);
           } catch (error) {
-            console.error(`❌ Attach failed: ${ref.path}`, error);
+            Log.error(`❌ Attach failed: ${ref.path}`, error);
           }
         } else {
           // Attach line range using selection
@@ -114,12 +115,12 @@ export class NativeAttachmentHandler {
             const refDesc = ref.symbolName
               ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`
               : `${ref.path}:${ref.startLine}-${ref.endLine}`;
-            console.log(`✅ Selection: ${refDesc}`);
+            Log.info(`✅ Selection: ${refDesc}`);
           } catch (error) {
             const refDesc = ref.symbolName
               ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`
               : `${ref.path}:${ref.startLine}-${ref.endLine}`;
-            console.error(`❌ Attach failed: ${refDesc}`, error);
+            Log.error(`❌ Attach failed: ${refDesc}`, error);
           }
         }
 
@@ -130,7 +131,7 @@ export class NativeAttachmentHandler {
       // Keep #file: references in prompt for context
       return prompt;
     } catch (error) {
-      console.error("Error processing attachments:", error);
+      Log.error("Error processing attachments:", error);
       return prompt;
     }
   }

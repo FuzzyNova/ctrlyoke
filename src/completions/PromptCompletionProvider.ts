@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
+import { Log } from "../utils/Log";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
 
 /**
@@ -301,7 +302,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
         items.push(item);
       }
     } catch (error) {
-      console.error("Failed to get symbol completions:", error);
+      Log.error("Failed to get symbol completions:", error);
     }
 
     return items;
@@ -351,7 +352,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const currentIndentActual =
       currentIndent === -1 ? currentLineText.length : currentIndent;
 
-    console.log(
+    Log.info(
       `[isInsideYamlPromptValue] Checking line ${currentLine}: "${currentLineText}" (indent=${currentIndentActual})`
     );
 
@@ -424,7 +425,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       }
     }
 
-    console.log(`[isInsideYamlPromptValue] No prompt: found, returning false`);
+    Log.info(`[isInsideYamlPromptValue] No prompt: found, returning false`);
     return false;
   }
 

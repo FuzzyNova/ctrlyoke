@@ -1,5 +1,6 @@
 import Ajv, { JSONSchemaType, ValidateFunction } from "ajv";
 import { PromptFile, PromptItem, EndCondition } from "../types/FlightPathTypes";
+import { Log } from "./Log";
 
 /**
  * NOTE: The model enum below must be kept in sync with COPILOT_MODELS in ModelConstants.ts.
@@ -162,8 +163,8 @@ export class ValidationUtils {
       condition.maxRetries > 20 &&
       condition.maxRetries !== -1
     ) {
-      console.warn(
-        `FlightPath: High maxRetries value (${condition.maxRetries}). Consider using -1 for unlimited or a lower value.`
+      Log.warn(
+        `High maxRetries value (${condition.maxRetries}). Consider using -1 for unlimited or a lower value.`
       );
     }
 
@@ -234,7 +235,7 @@ export class ValidationUtils {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
       .replace(/\${[^}]*}/g, (match) => {
         // Keep template variables but log them
-        console.log(`FlightPath: Template variable found: ${match}`);
+        Log.info(`Template variable found: ${match}`);
         return match;
       });
   }

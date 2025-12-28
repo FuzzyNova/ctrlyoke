@@ -4,6 +4,7 @@ import * as fs from "fs";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { Log } from "../utils/Log";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -311,7 +312,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         variables,
       });
     } catch (error) {
-      console.error("Failed to get template info:", error);
+      Log.error("Failed to get template info:", error);
     }
   }
 
@@ -327,7 +328,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         templateId,
       });
     } catch (error) {
-      console.error("Failed to set default template:", error);
+      Log.error("Failed to set default template:", error);
       this.postMessage({
         type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
         success: false,
@@ -539,7 +540,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     try {
       html = fs.readFileSync(htmlPath, "utf8");
     } catch (error) {
-      console.error("Failed to load dashboard.html template:", error);
+      Log.error("Failed to load dashboard.html template:", error);
       // Fallback to minimal HTML
       return `<!DOCTYPE html>
 <html>

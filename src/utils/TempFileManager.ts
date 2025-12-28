@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { randomUUID } from "crypto";
+import { Log } from "./Log";
 
 /**
  * TempFileManager - Manages temporary prompt files in .flightpath/temp/
@@ -50,7 +51,7 @@ export class TempFileManager {
     try {
       await fs.promises.mkdir(this.tempDir, { recursive: true });
     } catch (err) {
-      console.error(`Failed to create temp directory: ${err}`);
+      Log.error(`Failed to create temp directory: ${err}`);
       throw new Error(`Cannot create temp directory: ${this.tempDir}`);
     }
   }
@@ -99,7 +100,7 @@ export class TempFileManager {
       await fs.promises.writeFile(filePath, promptText, "utf-8");
       return filePath;
     } catch (err) {
-      console.error(`Failed to write temp prompt file: ${err}`);
+      Log.error(`Failed to write temp prompt file: ${err}`);
       throw new Error(`Cannot write temp file: ${filePath}`);
     }
   }
@@ -115,7 +116,7 @@ export class TempFileManager {
       await fs.promises.unlink(filePath);
     } catch (err) {
       // Log but don't throw - cleanup is best-effort
-      console.warn(`Failed to delete temp file ${filePath}: ${err}`);
+      Log.warn(`Failed to delete temp file ${filePath}: ${err}`);
     }
   }
 
@@ -158,16 +159,16 @@ export class TempFileManager {
           if (now - stats.mtimeMs > this.MAX_FILE_AGE_MS) {
             await fs.promises.unlink(filePath);
             cleanedCount++;
-            console.log(`🗑️ Cleaned up orphaned temp file: ${file}`);
+            Log.info(`🗑️ Cleaned up orphaned temp file: ${file}`);
           }
         } catch (err) {
           // File might have been deleted already - ignore
-          console.warn(`Failed to process temp file ${file}: ${err}`);
+          Log.warn(`Failed to process temp file ${file}: ${err}`);
         }
       }
     } catch (err) {
       // Log error but don't throw - cleanup is best-effort
-      console.error(`Temp file cleanup failed: ${err}`);
+      Log.error(`Temp file cleanup failed: ${err}`);
     }
 
     return cleanedCount;
@@ -239,7 +240,7 @@ export class TempFileManager {
         oldestFileAgeMs: oldestAge,
       };
     } catch (err) {
-      console.error(`Failed to get temp dir stats: ${err}`);
+      Log.error(`Failed to get temp dir stats: ${err}`);
       return {
         exists: false,
         fileCount: 0,

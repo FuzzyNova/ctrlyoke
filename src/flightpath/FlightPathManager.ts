@@ -113,7 +113,7 @@ export class FlightPathManager {
     const defaultIntegration = this.getDefaultIntegration();
     context.subscriptions.push(
       defaultIntegration.onDidChangeStatus((status) => {
-        console.log(`🔄 FlightPath: Copilot status changed to: ${status}`);
+        Log.info(`🔄 Copilot status changed to: ${status}`);
         this.updateStatusBar();
       })
     );
@@ -125,7 +125,7 @@ export class FlightPathManager {
     this.templateImporter.setWorkspaceFolder(this.currentWorkspaceFolder);
     this.workflowCommandHandler.setWorkspaceFolder(this.currentWorkspaceFolder);
 
-    console.log("FlightPath: Manager initialized");
+    Log.info("Manager initialized");
   }
 
   /**
@@ -144,17 +144,17 @@ export class FlightPathManager {
 
     switch (integrationMode) {
       case Provider.CopilotChat:
-        console.log("🔄 FlightPath: Using Copilot Chat integration");
+        Log.info("🔄 Using Copilot Chat integration");
         return this.chatIntegration;
       case Provider.ClaudeCli:
-        console.log("🔄 FlightPath: Using Claude Code CLI integration");
+        Log.info("🔄 Using Claude Code CLI integration");
         return this.claudeCliIntegration;
       case Provider.CodexCli:
-        console.log("🔄 FlightPath: Using Codex CLI integration");
+        Log.info("🔄 Using Codex CLI integration");
         return this.codexCliIntegration;
       case Provider.CopilotCli:
       default:
-        console.log("🔄 FlightPath: Using Copilot CLI integration");
+        Log.info("🔄 Using Copilot CLI integration");
         return this.cliIntegration;
     }
   }
@@ -175,7 +175,7 @@ export class FlightPathManager {
     modeOverride?: Provider
   ): CopilotIntegration {
     if (modeOverride) {
-      console.log(`🔀 FlightPath: Using mode override: ${modeOverride}`);
+      Log.info(`🔀 Using mode override: ${modeOverride}`);
       switch (modeOverride) {
         case Provider.CopilotChat:
           return this.chatIntegration;
@@ -198,7 +198,7 @@ export class FlightPathManager {
    */
   async initialize(): Promise<void> {
     try {
-      console.log("FlightPath: Initializing manager...");
+      Log.info("Initializing manager...");
 
       // Discover existing prompt files (delegated to WorkspaceSessionManager)
       if (this.currentWorkspaceFolder) {
@@ -223,9 +223,9 @@ export class FlightPathManager {
       // Note: Copilot integration starts background polling automatically in constructor
       // Status bar will update via onDidChangeStatus event listener
 
-      console.log("FlightPath: Manager initialization complete");
+      Log.info("Manager initialization complete");
     } catch (error) {
-      console.error("FlightPath: Failed to initialize manager:", error);
+      Log.error("Failed to initialize manager:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Initialization failed: ${error}`
       );
@@ -267,7 +267,7 @@ export class FlightPathManager {
   ): Promise<void> {
     if (!this.currentPromptFile) {
       vscode.window.showWarningMessage(
-        "FlightPath: No prompt file loaded. Use 'Change' button to select a file first."
+        "No prompt file loaded. Use 'Change' button to select a file first."
       );
       return;
     }
@@ -286,7 +286,7 @@ export class FlightPathManager {
     const fileName = path.basename(filePath);
 
     try {
-      console.log(`FlightPath: Executing loaded prompt file: ${filePath}`);
+      Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
 
       // Create integration for this execution (either override or default)
       const integration = this.createIntegrationForMode(modeOverride);
@@ -384,13 +384,13 @@ export class FlightPathManager {
           queueState.status === EXECUTION_STATES.PAUSED ||
           queueState.status === EXECUTION_STATES.ERROR
         ) {
-          console.log(
+          Log.info(
             `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
           );
           this.promptQueue.restart();
         }
       } else {
-        console.log(
+        Log.info(
           `FlightPath: Continuing from current position (append mode), preserving history`
         );
       }
@@ -418,7 +418,7 @@ export class FlightPathManager {
       }
       await this.startWorkflowExecution(integration);
     } catch (error) {
-      console.error("FlightPath: Failed to execute prompt file:", error);
+      Log.error("Failed to execute prompt file:", error);
 
       // Mark queue as errored
       await this.promptQueue.markErrored();
@@ -459,7 +459,7 @@ export class FlightPathManager {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!parsed || !parsed.prompts || parsed.prompts.length === 0) {
-        vscode.window.showErrorMessage("FlightPath: No prompts found in file");
+        vscode.window.showErrorMessage("No prompts found in file");
         return;
       }
 
@@ -470,7 +470,7 @@ export class FlightPathManager {
 
       // If no workflow is loaded (truly empty queue), treat as "Run with FlightPath"
       if (currentSize === 0) {
-        console.log("FlightPath: No workflow loaded, treating queue as run");
+        Log.info("No workflow loaded, treating queue as run");
         await this.executePromptFile(filePath);
         return;
       }
@@ -514,15 +514,13 @@ export class FlightPathManager {
 
       // 6. If queue was completed, trigger execution to continue (preserves history)
       if (isCompleted) {
-        console.log(
-          "FlightPath: Queue was completed, resuming execution with appended prompts"
+        Log.info(
+          "Queue was completed, resuming execution with appended prompts"
         );
 
         // If no prompt file is loaded, update context WITHOUT clearing dashboard
         if (!this.currentPromptFile) {
-          console.log(
-            "FlightPath: No prompt file loaded, updating context (append mode)"
-          );
+          Log.info("No prompt file loaded, updating context (append mode)");
           // Store the loaded file without calling loadPromptFile (which clears dashboard)
           this.currentPromptFile = { filePath, promptFile: parsed };
           // Set up file watcher for live reload
@@ -540,7 +538,7 @@ export class FlightPathManager {
         `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
       );
     } catch (error) {
-      console.error("FlightPath: Failed to queue prompts:", error);
+      Log.error("Failed to queue prompts:", error);
       vscode.window.showErrorMessage(
         `Failed to queue prompts: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -580,7 +578,7 @@ export class FlightPathManager {
               );
             }
 
-            console.log(
+            Log.info(
               `FlightPath: Reloaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
             );
           }
@@ -646,8 +644,8 @@ export class FlightPathManager {
 
     // Case 1: Tool callback already fired while paused - resume from pending response
     if (this.workflowExecutor.hasPendingResponse()) {
-      console.log(
-        "▶️ FlightPath: Resuming with pending response (Copilot finished while paused)"
+      Log.info(
+        "▶️ Resuming with pending response (Copilot finished while paused)"
       );
       this.workflowExecutor.resumePendingResponse();
       return;
@@ -655,8 +653,8 @@ export class FlightPathManager {
 
     // Case 2: Still waiting for response (prompt sent but tool callback not fired yet)
     if (this.workflowExecutor.isAwaitingResponse()) {
-      console.log(
-        "▶️ FlightPath: Resuming while Copilot is still responding - will continue when response completes"
+      Log.info(
+        "▶️ Resuming while Copilot is still responding - will continue when response completes"
       );
       // Do nothing - when the response completes, it will see queue state is "running"
       // and will resolve normally, continuing the workflow
@@ -664,7 +662,7 @@ export class FlightPathManager {
     }
 
     // Case 3: Not waiting for response (paused between prompts or before sending)
-    console.log("▶️ FlightPath: Resuming workflow from paused position");
+    Log.info("▶️ Resuming workflow from paused position");
     await this.startWorkflowExecution();
   }
 
@@ -682,7 +680,7 @@ export class FlightPathManager {
 
     // Listen for process to actually exit (responseComplete event)
     const responseCompleteDisposable = integration.onResponseComplete(() => {
-      console.log("🔔 Process confirmed exited - setting queue state to IDLE");
+      Log.info("🔔 Process confirmed exited - setting queue state to IDLE");
       this.promptQueue.confirmedStopped();
       responseCompleteDisposable.dispose();
     });
@@ -755,7 +753,7 @@ export class FlightPathManager {
    * Set dashboard ready flag (called by DashboardProvider when webview signals READY)
    */
   setDashboardReady(): void {
-    console.log("✅ FlightPath: Dashboard is ready");
+    Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
   }
 
@@ -813,7 +811,7 @@ export class FlightPathManager {
    * - Append to IDLE/PAUSED: appendPrompts() → stays IDLE/PAUSED → here → no auto-start
    */
   private onQueueStateChanged(state: QueueState): void {
-    console.log(`FlightPath: Queue state changed to ${state.status}`);
+    Log.info(`FlightPath: Queue state changed to ${state.status}`);
     this.updateStatusBar();
 
     // Send execution state to dashboard
@@ -824,12 +822,12 @@ export class FlightPathManager {
     // Auto-start execution if state is RUNNING but no execution is active
     // This handles the case where appendPrompts() set COMPLETED → RUNNING
     if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
-      console.log(
-        "FlightPath: Queue state is RUNNING but no active execution detected. Auto-starting workflow..."
+      Log.info(
+        "Queue state is RUNNING but no active execution detected. Auto-starting workflow..."
       );
       // Start execution asynchronously (don't block state change handler)
       this.startWorkflowExecution().catch((error) => {
-        console.error("FlightPath: Auto-start failed:", error);
+        Log.error("Auto-start failed:", error);
         vscode.window.showErrorMessage(
           `FlightPath: Failed to auto-start workflow: ${error}`
         );
@@ -930,6 +928,6 @@ export class FlightPathManager {
     this.promptFileWatcher.dispose();
     this.statusBarManager.dispose();
     this.endConditionEvaluator.dispose();
-    console.log("FlightPath: Manager disposed");
+    Log.info("Manager disposed");
   }
 }

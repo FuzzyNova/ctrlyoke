@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { spawn, ChildProcess } from "child_process";
+import { Log } from "../utils/Log";
 import { EndCondition } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
@@ -25,7 +26,7 @@ export class EndConditionEvaluator {
     const workspaceRoot =
       vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
     this.processManager = new CliProcessManager(workspaceRoot, (msg) =>
-      console.log(msg)
+      Log.info(msg)
     );
   }
 
@@ -57,9 +58,7 @@ export class EndConditionEvaluator {
     const startTime = Date.now();
 
     try {
-      console.log(
-        `FlightPath: Evaluating end condition script: ${condition.script}`
-      );
+      Log.info(`Evaluating end condition script: ${condition.script}`);
 
       // Parse script command to separate path from arguments
       const { scriptPath: rawScriptPath, args: additionalArgs } =
@@ -90,8 +89,8 @@ export class EndConditionEvaluator {
         command.args = [...command.args, ...additionalArgs];
       } else {
         // File not found - treat as direct shell command
-        console.log(
-          `FlightPath: Script file not found, treating as direct command: ${condition.script}`
+        Log.info(
+          `Script file not found, treating as direct command: ${condition.script}`
         );
         // Execute as shell command directly
         command = { executable: rawScriptPath, args: additionalArgs };
@@ -248,11 +247,11 @@ export class EndConditionEvaluator {
     exitCode?: number;
   }> {
     // Log what we're about to execute
-    console.log(
-      `FlightPath: Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
+    Log.info(
+      `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
     );
-    console.log(
-      `FlightPath: Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
+    Log.info(
+      `Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
     );
 
     // Clean VS Code-specific environment variables that interfere with nested VS Code instances
@@ -262,9 +261,7 @@ export class EndConditionEvaluator {
     delete cleanEnv.VSCODE_NLS_CONFIG;
     delete cleanEnv.VSCODE_PID;
     delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    console.log(
-      `FlightPath: Cleaned ${5} VS Code env vars for isolated execution`
-    );
+    Log.info(`Cleaned ${5} VS Code env vars for isolated execution`);
 
     try {
       const result = await this.processManager.spawn(executable, args, {
@@ -445,15 +442,10 @@ export class EndConditionEvaluator {
         }
       }
 
-      console.log(
-        `FlightPath: Created sample script from template: ${destinationPath}`
-      );
+      Log.info(`Created sample script from template: ${destinationPath}`);
       return destinationPath;
     } catch (error) {
-      console.error(
-        "FlightPath: Failed to create sample script from template:",
-        error
-      );
+      Log.error("Failed to create sample script from template:", error);
       return null;
     }
   }
@@ -490,7 +482,7 @@ export class EndConditionEvaluator {
    */
   killAllProcesses(): void {
     this.processManager.dispose();
-    console.log("FlightPath: Killed all running end condition processes");
+    Log.info("Killed all running end condition processes");
   }
 
   /**
@@ -498,6 +490,6 @@ export class EndConditionEvaluator {
    */
   dispose(): void {
     this.killAllProcesses();
-    console.log("FlightPath: EndConditionEvaluator disposed");
+    Log.info("EndConditionEvaluator disposed");
   }
 }

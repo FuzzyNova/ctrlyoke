@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
+import { Log } from "../../utils/Log";
 import {
   PromptFile,
   PromptItem,
@@ -38,7 +39,7 @@ export class PromptFileLoader {
     workspaceFolder?: vscode.WorkspaceFolder
   ): Promise<string | undefined> {
     try {
-      console.log(`FlightPath: Loading prompt file: ${filePath}`);
+      Log.info(`Loading prompt file: ${filePath}`);
 
       const fileName = path.basename(filePath);
 
@@ -74,13 +75,11 @@ export class PromptFileLoader {
             workspaceFolder
           );
         } catch (error) {
-          console.error("FlightPath: Failed to create working file:", error);
+          Log.error("Failed to create working file:", error);
           // Continue without working file (fallback to in-memory queue)
         }
       } else {
-        console.warn(
-          "FlightPath: No workspace folder, skipping working file creation"
-        );
+        Log.warn("No workspace folder, skipping working file creation");
       }
 
       // Load prompts into queue with working file path
@@ -94,13 +93,13 @@ export class PromptFileLoader {
         );
       }
 
-      console.log(
-        `FlightPath: Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
+      Log.info(
+        `Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
       );
 
       return workingFilePath;
     } catch (error) {
-      console.error("FlightPath: Failed to load prompt file:", error);
+      Log.error("Failed to load prompt file:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to load file: ${error}`
       );
@@ -125,15 +124,13 @@ export class PromptFileLoader {
     );
 
     if (openDocument && openDocument.isDirty) {
-      console.log(
-        `FlightPath: Auto-saving dirty file before execution: ${filePath}`
-      );
+      Log.info(`Auto-saving dirty file before execution: ${filePath}`);
       try {
         await openDocument.save();
         // Reload the prompt file to pick up saved changes
         await onReload();
       } catch (error) {
-        console.error("FlightPath: Failed to auto-save file:", error);
+        Log.error("Failed to auto-save file:", error);
         // Continue anyway - user may have unsaved changes but we'll use disk version
         vscode.window.showWarningMessage(
           "FlightPath: Could not auto-save file. Running with last saved version."
@@ -158,7 +155,7 @@ export class PromptFileLoader {
 
       // Check if prompts exist
       if (!workingFile.prompts || workingFile.prompts.length === 0) {
-        console.error("FlightPath: Working file has no prompts");
+        Log.error("Working file has no prompts");
         return;
       }
 
@@ -167,10 +164,7 @@ export class PromptFileLoader {
         workingFile.prompts
       );
       if (!validation.valid) {
-        console.error(
-          "FlightPath: Working file validation failed:",
-          validation.errors
-        );
+        Log.error("Working file validation failed:", validation.errors);
         return;
       }
 
@@ -180,8 +174,8 @@ export class PromptFileLoader {
       if (isIdle) {
         // Scenario 1: User selecting new file (IDLE state)
         // Reset everything and send FILE_SELECTED
-        console.log(
-          `FlightPath: Loading new file in IDLE state (${workingFile.prompts.length} prompts)`
+        Log.info(
+          `Loading new file in IDLE state (${workingFile.prompts.length} prompts)`
         );
         this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
 
@@ -195,32 +189,30 @@ export class PromptFileLoader {
       } else {
         // Scenario 2: Queue extended during execution (RUNNING/PAUSED/CANCELLING)
         // Merge new prompts preserving state and send QUEUE_EXTENDED
-        console.log(
-          `FlightPath: Merging prompts during execution (state: ${queueState.status})`
+        Log.info(
+          `Merging prompts during execution (state: ${queueState.status})`
         );
         const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
 
         if (newPromptsCount > 0 && this.dashboardProvider) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
-          console.log(
-            `FlightPath: Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
+          Log.info(
+            `Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
           );
 
           // Send PROMPTS_EXTENDED message with updated prompt list
           this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
         } else if (newPromptsCount === 0) {
-          console.log(
-            "FlightPath: Working file changed but no new prompts detected"
-          );
+          Log.info("Working file changed but no new prompts detected");
         }
       }
 
-      console.log(
-        `FlightPath: Reloaded ${workingFile.prompts.length} prompts from working file`
+      Log.info(
+        `Reloaded ${workingFile.prompts.length} prompts from working file`
       );
     } catch (error) {
-      console.error("FlightPath: Failed to reload working file:", error);
+      Log.error("Failed to reload working file:", error);
     }
   }
 }

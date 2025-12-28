@@ -26,6 +26,7 @@ import {
   COPILOT_CLI_MODEL_IDS,
   CLAUDE_CLI_MODELS,
 } from "./ModelConstants";
+import { Log } from "./Log";
 
 const execAsync = promisify(exec);
 
@@ -109,8 +110,8 @@ export async function initializeModelRegistry(): Promise<void> {
  */
 async function queryCopilotCliModels(): Promise<void> {
   try {
-    console.log(
-      "FlightPath: Querying Copilot CLI for available models via 'copilot help config'..."
+    Log.info(
+      "Querying Copilot CLI for available models via 'copilot help config'..."
     );
 
     const { stdout } = await execAsync("copilot help config", {
@@ -129,19 +130,17 @@ async function queryCopilotCliModels(): Promise<void> {
 
       if (models && models.length > 0) {
         cachedCopilotCliModelIds = models.map((m) => m.replace(/"/g, ""));
-        console.log(
-          `FlightPath: Copilot CLI supports ${cachedCopilotCliModelIds.length} models: ${cachedCopilotCliModelIds.join(", ")}`
+        Log.info(
+          `Copilot CLI supports ${cachedCopilotCliModelIds.length} models: ${cachedCopilotCliModelIds.join(", ")}`
         );
         return;
       }
     }
 
-    console.log(
-      "FlightPath: Could not parse Copilot CLI models, using fallback list"
-    );
+    Log.info("Could not parse Copilot CLI models, using fallback list");
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   } catch (error) {
-    console.warn(`FlightPath: Failed to query Copilot CLI models: ${error}`);
+    Log.warn(`Failed to query Copilot CLI models: ${error}`);
     cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
   }
 }
@@ -151,7 +150,7 @@ async function queryCopilotCliModels(): Promise<void> {
  */
 async function queryChatModels(): Promise<void> {
   try {
-    console.log("FlightPath: Querying VS Code LM API for available models...");
+    Log.info("Querying VS Code LM API for available models...");
 
     const models = await vscode.lm.selectChatModels({
       vendor: "copilot",
@@ -165,19 +164,15 @@ async function queryChatModels(): Promise<void> {
         cliSupported: cachedCopilotCliModelIds.includes(model.id),
       }));
 
-      console.log(
-        `FlightPath: Discovered ${cachedModels.length} chat models: ${cachedModels.map((m) => m.id).join(", ")}`
+      Log.info(
+        `Discovered ${cachedModels.length} chat models: ${cachedModels.map((m) => m.id).join(", ")}`
       );
     } else {
-      console.log(
-        "FlightPath: No models returned from LM API, using fallback list"
-      );
+      Log.info("No models returned from LM API, using fallback list");
       useFallbackModels();
     }
   } catch (error) {
-    console.warn(
-      `FlightPath: Failed to query LM API models, using fallback: ${error}`
-    );
+    Log.warn(`Failed to query LM API models, using fallback: ${error}`);
     useFallbackModels();
   }
 }

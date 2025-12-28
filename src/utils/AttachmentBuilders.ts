@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { FileReference } from "./FileReferenceParser";
+import { Log } from "./Log";
 
 /**
  * Utility functions for building XML attachments for various reference types
@@ -25,13 +26,13 @@ export async function resolveSymbol(
   symbolRef: string
 ): Promise<FileReference | null> {
   try {
-    console.log(`[resolveSymbol] Resolving: ${symbolRef}`);
+    Log.info(`[resolveSymbol] Resolving: ${symbolRef}`);
 
     // Parse format: path/to/file.ts:SymbolName:123
     // Use lastIndexOf to handle the line number (last colon), then second-to-last for symbol name
     const lastColonIndex = symbolRef.lastIndexOf(":");
     if (lastColonIndex === -1) {
-      console.warn(`Invalid symbol reference (no colons): ${symbolRef}`);
+      Log.warn(`Invalid symbol reference (no colons): ${symbolRef}`);
       return null;
     }
 
@@ -39,7 +40,7 @@ export async function resolveSymbol(
     const targetLine = parseInt(lineStr, 10);
 
     if (isNaN(targetLine)) {
-      console.warn(`Invalid line number in symbol reference: ${symbolRef}`);
+      Log.warn(`Invalid line number in symbol reference: ${symbolRef}`);
       return null;
     }
 
@@ -48,23 +49,21 @@ export async function resolveSymbol(
     const secondLastColonIndex = remainingRef.lastIndexOf(":");
 
     if (secondLastColonIndex === -1) {
-      console.warn(
-        `Invalid symbol reference (missing symbol name): ${symbolRef}`
-      );
+      Log.warn(`Invalid symbol reference (missing symbol name): ${symbolRef}`);
       return null;
     }
 
     const filePath = remainingRef.substring(0, secondLastColonIndex);
     const symbolName = remainingRef.substring(secondLastColonIndex + 1);
 
-    console.log(
+    Log.info(
       `[resolveSymbol] Parsed: filePath="${filePath}", symbolName="${symbolName}", line=${targetLine}`
     );
 
     // Resolve workspace-relative path to URI
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      console.warn("No workspace folder open");
+      Log.warn("No workspace folder open");
       return null;
     }
 
@@ -80,11 +79,11 @@ export async function resolveSymbol(
     )) as vscode.DocumentSymbol[];
 
     if (!symbols || symbols.length === 0) {
-      console.warn(`No symbols found in ${filePath}`);
+      Log.warn(`No symbols found in ${filePath}`);
       return null;
     }
 
-    console.log(
+    Log.info(
       `[resolveSymbol] Found ${symbols.length} top-level symbols, searching for "${symbolName}" at line ${targetLine}...`
     );
 
@@ -92,13 +91,13 @@ export async function resolveSymbol(
     const targetSymbol = findSymbolAtLine(symbols, symbolName, targetLine);
 
     if (!targetSymbol) {
-      console.warn(
+      Log.warn(
         `Symbol '${symbolName}' not found at line ${targetLine} in ${filePath}`
       );
       return null;
     }
 
-    console.log(
+    Log.info(
       `[resolveSymbol] Found symbol: ${targetSymbol.name} (lines ${targetSymbol.range.start.line + 1}-${targetSymbol.range.end.line + 1})`
     );
 
@@ -109,7 +108,7 @@ export async function resolveSymbol(
       symbolName: targetSymbol.name,
     };
   } catch (error) {
-    console.error(`Failed to resolve symbol '${symbolRef}':`, error);
+    Log.error(`Failed to resolve symbol '${symbolRef}':`, error);
     return null;
   }
 }
@@ -136,7 +135,7 @@ function findSymbolAtLine(
     const symbolStartLine = symbol.range.start.line + 1; // Convert to 1-based
     const normalizedSymbolName = symbol.name.replace(/\(\)$/, "");
 
-    console.log(
+    Log.info(
       `[findSymbolAtLine] Checking: "${symbol.name}" (normalized: "${normalizedSymbolName}") at line ${symbolStartLine}, ` +
         `looking for "${symbolName}" (normalized: "${normalizedSearchName}") at line ${targetLine}`
     );
@@ -145,7 +144,7 @@ function findSymbolAtLine(
       normalizedSymbolName === normalizedSearchName &&
       symbolStartLine === targetLine
     ) {
-      console.log(`[findSymbolAtLine] ✓ Match found: ${symbol.name}`);
+      Log.info(`[findSymbolAtLine] ✓ Match found: ${symbol.name}`);
       return symbol;
     }
 
@@ -225,7 +224,7 @@ async function buildDirectoryTree(
 
     return tree;
   } catch (error) {
-    console.error(`Failed to read directory ${dirUri.fsPath}:`, error);
+    Log.error(`Failed to read directory ${dirUri.fsPath}:`, error);
     return `${prefix}[Error reading directory]\n`;
   }
 }
@@ -255,7 +254,7 @@ export async function buildDirectoryAttachmentXml(
       throw new Error("Path is not a directory");
     }
   } catch (error) {
-    console.error(`Directory not found: ${dirPath}`, error);
+    Log.error(`Directory not found: ${dirPath}`, error);
     return `<attachment id="directory:${normalizedPath}">
 Directory not found: ${normalizedPath}
 </attachment>`;
@@ -297,7 +296,7 @@ export async function getWorkspaceSymbols(
 
     return allSymbols.slice(0, maxResults);
   } catch (error) {
-    console.error("Failed to get workspace symbols:", error);
+    Log.error("Failed to get workspace symbols:", error);
     return [];
   }
 }
