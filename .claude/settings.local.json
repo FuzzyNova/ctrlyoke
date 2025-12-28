@@ -19,7 +19,10 @@
       "Bash(git mv:*)",
       "Bash(ls:*)",
       "Bash(git add:*)",
-      "Bash(timeout /t 10 /nobreak)"
+      "Bash(timeout /t 10 /nobreak)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

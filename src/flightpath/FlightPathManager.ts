@@ -22,6 +22,13 @@ import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
+// Import new orchestration classes
+import { PromptFileLoader } from "./orchestration/PromptFileLoader";
+import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
+import { TemplateImporter } from "./orchestration/TemplateImporter";
+import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
+import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
+
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
   private promptQueue: PromptQueue;
@@ -38,8 +45,14 @@ export class FlightPathManager {
   private dashboardProvider?: FlightPathDashboardProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
-  private promptFileWatcher?: vscode.FileSystemWatcher; // Watch for changes to current prompt file
   private dashboardReady: boolean = false; // Track dashboard initialization state
+
+  // New orchestration dependencies (injected)
+  private promptFileLoader: PromptFileLoader;
+  private promptFileWatcher: PromptFileWatcher;
+  private templateImporter: TemplateImporter;
+  private workflowCommandHandler: WorkflowCommandHandler;
+  private workspaceSessionManager: WorkspaceSessionManager;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -73,6 +86,26 @@ export class FlightPathManager {
     this.statusBarManager = new StatusBarManager(context);
     this.updateStatusBar();
 
+    // Initialize new orchestration dependencies
+    this.promptFileLoader = new PromptFileLoader(
+      this.promptFileParser,
+      this.promptQueue,
+      this.dashboardProvider
+    );
+    this.promptFileWatcher = new PromptFileWatcher(
+      this.promptQueue,
+      this.dashboardProvider
+    );
+    this.templateImporter = new TemplateImporter(context);
+    this.workflowCommandHandler = new WorkflowCommandHandler(
+      context,
+      this.promptFileParser,
+      this.endConditionEvaluator
+    );
+    this.workspaceSessionManager = new WorkspaceSessionManager(
+      this.promptFileParser
+    );
+
     // Listen to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
 
@@ -88,6 +121,10 @@ export class FlightPathManager {
     // Get current workspace folder
     this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
+    // Update workspace folder in orchestration components
+    this.templateImporter.setWorkspaceFolder(this.currentWorkspaceFolder);
+    this.workflowCommandHandler.setWorkspaceFolder(this.currentWorkspaceFolder);
+
     console.log("FlightPath: Manager initialized");
   }
 
@@ -96,33 +133,6 @@ export class FlightPathManager {
    */
   private shouldShowCliCommand(): boolean {
     return ConfigurationUtils.shouldShowCliCommand();
-  }
-
-  /**
-   * Open a prompt file in the editor.
-   * If openPromptsInSecondGroup setting is enabled, opens in ViewColumn.Two (right side)
-   * to keep main code files visible for #selection references.
-   * Otherwise opens in the active editor (default VS Code behavior).
-   * @param filePath Path to the prompt file to open
-   */
-  private async openPromptFile(filePath: string): Promise<void> {
-    try {
-      const document = await vscode.workspace.openTextDocument(filePath);
-
-      if (ConfigurationUtils.shouldOpenPromptsInSecondGroup()) {
-        // Open in second editor group (right side) to keep main code visible
-        await vscode.window.showTextDocument(document, {
-          viewColumn: vscode.ViewColumn.Two,
-          preview: false,
-          preserveFocus: false,
-        });
-      } else {
-        // Open in active editor (default VS Code behavior)
-        await vscode.window.showTextDocument(document);
-      }
-    } catch (error) {
-      console.error("FlightPath: Failed to open prompt file:", error);
-    }
   }
 
   /**
@@ -190,14 +200,24 @@ export class FlightPathManager {
     try {
       console.log("FlightPath: Initializing manager...");
 
-      // Discover existing prompt files
-      await this.discoverPromptFiles();
+      // Discover existing prompt files (delegated to WorkspaceSessionManager)
+      if (this.currentWorkspaceFolder) {
+        await this.workspaceSessionManager.discoverPromptFiles(
+          this.currentWorkspaceFolder
+        );
+      }
 
-      // Auto-load most recent session if enabled
+      // Auto-load most recent session if enabled (delegated to WorkspaceSessionManager)
       const config = vscode.workspace.getConfiguration("flightpath");
       const autoLoad = config.get<boolean>("autoLoadRecentSession", true);
-      if (autoLoad) {
-        await this.autoLoadRecentSession();
+      if (autoLoad && this.currentWorkspaceFolder) {
+        await this.workspaceSessionManager.autoLoadRecentSession(
+          this.currentWorkspaceFolder,
+          async (workingFilePath: string) => {
+            await this.promptFileLoader.reloadFromWorkingFile(workingFilePath);
+            this.setupPromptFileWatcher(workingFilePath);
+          }
+        );
       }
 
       // Note: Copilot integration starts background polling automatically in constructor
@@ -213,155 +233,27 @@ export class FlightPathManager {
   }
 
   /**
-   * Auto-load the most recent workflow session from .flightpath/.queue/
-   * This enables seamless resume after VS Code restarts or crashes
-   */
-  private async autoLoadRecentSession(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        return; // No workspace, nothing to load
-      }
-
-      const queueDir = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        ".flightpath",
-        ".queue"
-      );
-
-      // Check if queue directory exists
-      try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
-      } catch {
-        // Queue directory doesn't exist yet
-        return;
-      }
-
-      // Read directory contents
-      const files = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(queueDir)
-      );
-
-      // Filter to .flightpath.json files
-      const workingFiles = files
-        .filter(
-          ([name, type]) =>
-            type === vscode.FileType.File && name.endsWith(".flightpath.json")
-        )
-        .map(([name]) => name);
-
-      if (workingFiles.length === 0) {
-        return; // No sessions to load
-      }
-
-      // Sort by timestamp in filename (newest first)
-      // Format: workflow-2024-12-22T15-30-00.flightpath.json
-      const sorted = workingFiles.sort().reverse();
-      const mostRecent = sorted[0];
-      const workingFilePath = path.join(queueDir, mostRecent);
-
-      // Load from working file
-      await this.reloadFromWorkingFile(workingFilePath);
-
-      // Extract workflow name from filename for logging
-      const workflowName = mostRecent
-        .replace(/\.flightpath\.json$/, "")
-        .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
-
-      console.log(
-        `FlightPath: Auto-loaded recent session: ${workflowName} (${mostRecent})`
-      );
-
-      // Optional: Show subtle notification (not intrusive)
-      // vscode.window.showInformationMessage(
-      //   `FlightPath: Resumed session: ${workflowName}`
-      // );
-    } catch (error) {
-      console.error("FlightPath: Failed to auto-load recent session:", error);
-      // Don't show error to user - just log and continue
-    }
-  }
-
-  /**
    * Load a prompt file into the dashboard without executing
+   * Delegates to PromptFileLoader
+   *
    * @param filePath Path to the prompt file
    */
   async loadPromptFile(filePath: string): Promise<void> {
-    try {
-      console.log(`FlightPath: Loading prompt file: ${filePath}`);
+    // Delegate to PromptFileLoader
+    const workingFilePath = await this.promptFileLoader.loadPromptFile(
+      filePath,
+      this.currentWorkspaceFolder
+    );
 
-      const fileName = path.basename(filePath);
-
-      // Parse prompt file (parser handles all formats including .prompt.md)
+    if (workingFilePath) {
+      // Store the loaded file reference
       const promptFile = await this.promptFileParser.parsePromptFile(filePath);
-
-      if (!promptFile || !promptFile.prompts) {
-        vscode.window.showErrorMessage(
-          "FlightPath: Failed to parse prompt file"
-        );
-        return;
+      if (promptFile) {
+        this.currentPromptFile = { filePath, promptFile };
       }
 
-      // Validate prompts
-      const validation = this.promptFileParser.validatePromptItems(
-        promptFile.prompts
-      );
-      if (!validation.valid) {
-        const errors = validation.errors.join("\n");
-        vscode.window.showErrorMessage(
-          `FlightPath: Validation failed:\n${errors}`
-        );
-        return;
-      }
-
-      // Store the loaded file
-      this.currentPromptFile = { filePath, promptFile };
-
-      // Create working file in .flightpath/.queue/ directory
-      const workspaceFolder = this.currentWorkspaceFolder;
-      if (!workspaceFolder) {
-        console.warn(
-          "FlightPath: No workspace folder, skipping working file creation"
-        );
-      }
-
-      let workingFilePath: string | undefined;
-      if (workspaceFolder) {
-        try {
-          workingFilePath = await this.promptQueue.createWorkingFile(
-            filePath,
-            promptFile.prompts,
-            workspaceFolder
-          );
-        } catch (error) {
-          console.error("FlightPath: Failed to create working file:", error);
-          // Continue without working file (fallback to in-memory queue)
-        }
-      }
-
-      // Set up file watcher for working file (not original file!)
-      if (workingFilePath) {
-        this.setupPromptFileWatcher(workingFilePath);
-      }
-
-      // Load prompts into queue with working file path
-      this.promptQueue.loadPrompts(promptFile.prompts, workingFilePath);
-
-      // Notify dashboard about file selection
-      if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected(
-          fileName,
-          promptFile.prompts.map((p) => ({ prompt: p.prompt }))
-        );
-      }
-
-      console.log(
-        `FlightPath: Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
-      );
-    } catch (error) {
-      console.error("FlightPath: Failed to load prompt file:", error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to load file: ${error}`
-      );
+      // Set up file watcher for working file
+      this.setupPromptFileWatcher(workingFilePath);
     }
   }
 
@@ -657,30 +549,44 @@ export class FlightPathManager {
 
   /**
    * Save the file if it's open in an editor with unsaved changes, then reload
-   * This ensures we always execute the latest user edits
+   * Delegates to PromptFileLoader
+   *
+   * @param filePath Path to the file to check and save
    */
   private async saveAndReloadIfDirty(filePath: string): Promise<void> {
-    // Find if this file is open in any editor
-    const openDocument = vscode.workspace.textDocuments.find(
-      (doc) => doc.uri.fsPath === filePath
-    );
-
-    if (openDocument && openDocument.isDirty) {
-      console.log(
-        `FlightPath: Auto-saving dirty file before execution: ${filePath}`
-      );
-      try {
-        await openDocument.save();
-        // Reload the prompt file to pick up saved changes
-        await this.reloadCurrentPromptFile();
-      } catch (error) {
-        console.error("FlightPath: Failed to auto-save file:", error);
-        // Continue anyway - user may have unsaved changes but we'll use disk version
-        vscode.window.showWarningMessage(
-          "FlightPath: Could not auto-save file. Running with last saved version."
+    await this.promptFileLoader.saveAndReloadIfDirty(filePath, async () => {
+      // Reload callback - re-parse and update current prompt file reference
+      if (this.currentPromptFile) {
+        const fileName = path.basename(this.currentPromptFile.filePath);
+        const promptFile = await this.promptFileParser.parsePromptFile(
+          this.currentPromptFile.filePath
         );
+
+        if (promptFile && promptFile.prompts) {
+          const validation = this.promptFileParser.validatePromptItems(
+            promptFile.prompts
+          );
+          if (validation.valid) {
+            this.currentPromptFile = {
+              filePath: this.currentPromptFile.filePath,
+              promptFile,
+            };
+            this.promptQueue.loadPrompts(promptFile.prompts);
+
+            if (this.dashboardProvider) {
+              this.dashboardProvider.updateFileSelected(
+                fileName,
+                promptFile.prompts.map((p) => ({ prompt: p.prompt }))
+              );
+            }
+
+            console.log(
+              `FlightPath: Reloaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
+            );
+          }
+        }
       }
-    }
+    });
   }
 
   /**
@@ -716,54 +622,12 @@ export class FlightPathManager {
 
   /**
    * Take off - execute selected prompt file
+   * Delegates to WorkflowCommandHandler
    */
   async takeOff(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
-        return;
-      }
-
-      // Discover available prompt files
-      const promptFiles = await this.promptFileParser.discoverPromptFiles(
-        this.currentWorkspaceFolder
-      );
-
-      if (promptFiles.length === 0) {
-        const createAction = await vscode.window.showInformationMessage(
-          "No prompt files found. Would you like to create one?",
-          "Create Prompt File",
-          "Cancel"
-        );
-
-        if (createAction === "Create Prompt File") {
-          await this.createPromptFile();
-        }
-        return;
-      }
-
-      // Show quick pick for file selection
-      const items = promptFiles.map((filePath) => ({
-        label: path.basename(filePath),
-        description: path.relative(
-          this.currentWorkspaceFolder!.uri.fsPath,
-          filePath
-        ),
-        filePath,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a prompt file to execute",
-        ignoreFocusOut: true,
-      });
-
-      if (selected) {
-        await this.executePromptFile(selected.filePath);
-      }
-    } catch (error) {
-      console.error("FlightPath: Take off failed:", error);
-      vscode.window.showErrorMessage(`FlightPath: Take off failed: ${error}`);
-    }
+    await this.workflowCommandHandler.takeOff(async (filePath: string) => {
+      await this.executePromptFile(filePath);
+    });
   }
 
   /**
@@ -832,124 +696,23 @@ export class FlightPathManager {
 
   /**
    * Create a new prompt file
+   * Delegates to WorkflowCommandHandler
    */
   async createPromptFile(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
-        return;
-      }
-
-      // Get user's preferred workflow format
-      const defaultFormat = ConfigurationUtils.getDefaultWorkflowFormat();
-
-      // Get file name from user
-      const fileName = await vscode.window.showInputBox({
-        prompt: "Enter prompt file name",
-        placeHolder:
-          defaultFormat === "yaml"
-            ? "my-workflow.flightpath.yaml"
-            : "my-workflow.flightpath.json",
-        validateInput: (value) => {
-          if (!value) {
-            return "File name is required";
-          }
-          const validExtensions = [
-            ".flightpath.yaml",
-            ".flightpath.yml",
-            ".flightpath.json",
-            ".prompt.md",
-          ];
-          const isValid = validExtensions.some((ext) => value.endsWith(ext));
-          if (!isValid) {
-            return "File must end with .flightpath.yaml, .flightpath.yml, .flightpath.json, or .prompt.md";
-          }
-          return null;
-        },
-      });
-
-      if (!fileName) {
-        return;
-      }
-
-      // Create prompts directory if it doesn't exist
-      const promptsDir = ConfigurationUtils.getPromptsDirectory();
-      const promptsDirPath = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        promptsDir
-      );
-
-      // Ensure directory exists
-      try {
-        await vscode.workspace.fs.createDirectory(
-          vscode.Uri.file(promptsDirPath)
-        );
-      } catch {
-        // Directory might already exist
-      }
-
-      const filePath = path.join(promptsDirPath, fileName);
-
-      // Create example content based on file extension
-      let exampleContent: string;
-      if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) {
-        exampleContent = this.createExampleFlightPathYAML();
-      } else if (fileName.endsWith(".json")) {
-        exampleContent = this.createExampleFlightPathJSON();
-      } else if (fileName.endsWith(".md")) {
-        exampleContent = this.createExampleMarkdownPrompt();
-      } else {
-        throw new Error("Unsupported file extension");
-      }
-
-      // Write file
-      const uri = vscode.Uri.file(filePath);
-      await vscode.workspace.fs.writeFile(
-        uri,
-        Buffer.from(exampleContent, "utf8")
-      );
-
-      // Open file in editor (respects openPromptsInSecondGroup setting)
-      await this.openPromptFile(filePath);
-
-      vscode.window.showInformationMessage(`FlightPath: Created ${fileName}`);
-    } catch (error) {
-      console.error("FlightPath: Failed to create prompt file:", error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to create prompt file: ${error}`
-      );
-    }
+    await this.workflowCommandHandler.createPromptFile();
   }
 
   /**
    * Open FlightPath panel
+   * Delegates to WorkflowCommandHandler
    */
   async openPanel(): Promise<void> {
-    // Check if Copilot is unavailable and offer retry
-    const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
-
-    if (copilotStatus.initializationStatus === CopilotStatus.Unavailable) {
-      const action = await vscode.window.showWarningMessage(
-        "FlightPath: Copilot automation is unavailable. Would you like to retry detection?",
-        "Retry Detection",
-        "View Status",
-        "Continue Anyway"
-      );
-
-      if (action === "Retry Detection") {
-        await this.retryCopilotDetection();
-        return;
-      } else if (action === "View Status") {
-        vscode.commands.executeCommand("flightpath.showCopilotStatus");
-        return;
-      }
-    }
-
-    // Focus the FlightPath dashboard panel
     try {
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      await this.workflowCommandHandler.openPanel(
+        () => this.getDefaultIntegration().getDetailedStatus(),
+        async () => await this.retryCopilotDetection()
+      );
     } catch (error) {
-      console.error("Failed to focus FlightPath dashboard:", error);
       // Fallback to takeOff if focus fails
       await this.takeOff();
     }
@@ -980,26 +743,12 @@ export class FlightPathManager {
 
   /**
    * Open the currently loaded prompt file in the editor
+   * Delegates to WorkflowCommandHandler
    */
   async openCurrentPromptFile(): Promise<void> {
-    if (!this.currentPromptFile) {
-      vscode.window.showWarningMessage(
-        "FlightPath: No prompt file loaded. Use 'Select' button to choose a file first."
-      );
-      return;
-    }
-
-    try {
-      await this.openPromptFile(this.currentPromptFile.filePath);
-      console.log(
-        `FlightPath: Opened prompt file: ${this.currentPromptFile.filePath}`
-      );
-    } catch (error) {
-      console.error("FlightPath: Failed to open prompt file:", error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to open file: ${error}`
-      );
-    }
+    await this.workflowCommandHandler.openCurrentPromptFile(
+      this.currentPromptFile?.filePath
+    );
   }
 
   /**
@@ -1054,20 +803,6 @@ export class FlightPathManager {
   }
 
   /**
-   * Discover prompt files in workspace
-   */
-  private async discoverPromptFiles(): Promise<void> {
-    if (!this.currentWorkspaceFolder) {
-      return;
-    }
-
-    const promptFiles = await this.promptFileParser.discoverPromptFiles(
-      this.currentWorkspaceFolder
-    );
-    console.log(`FlightPath: Discovered ${promptFiles.length} prompt files`);
-  }
-
-  /**
    * Handle queue state changes
    *
    * This method provides a single execution path for state management:
@@ -1113,844 +848,86 @@ export class FlightPathManager {
   }
 
   /**
-   * Create example prompt content
-   */
-  private createExamplePromptContent(): string {
-    return JSON.stringify(
-      {
-        prompt:
-          "/explain #file:src/extension.ts Analyze this file and suggest improvements",
-        endCondition: {
-          script: "check_improvements.py",
-          returns: "true",
-        },
-      },
-      null,
-      2
-    );
-  }
-
-  /**
-   * Create example FlightPath content
-   */
-  private createExampleFlightPathJSON(): string {
-    return JSON.stringify(
-      {
-        prompts: [
-          {
-            id: "analyze",
-            prompt:
-              "Analyze this codebase for potential bugs and code quality issues. Focus on error handling, type safety, and security concerns.",
-          },
-          {
-            id: "fix",
-            prompt: "Fix any issues found in the previous analysis.",
-            endCondition: {
-              script: "run_tests.py",
-              returns: "all_passed",
-            },
-          },
-        ],
-      },
-      null,
-      2
-    );
-  }
-
-  private createExampleFlightPathYAML(): string {
-    return `# FlightPath Workflow
-# Multi-step AI automation with validation
-
-prompts:
-  - id: analyze
-    prompt: |
-      Analyze this codebase for potential bugs and code quality issues.
-      
-      Focus on:
-      - Error handling
-      - Type safety
-      - Security concerns
-      
-      Provide specific recommendations with examples.
-
-  - id: fix
-    prompt: |
-      Fix any issues found in the previous analysis.
-      
-      Follow best practices and maintain code consistency.
-    newChatSession: false
-    endCondition:
-      script: run_tests.py
-      returns: "all_passed"
-      timeout: 30000
-`;
-  }
-
-  private createExampleMarkdownPrompt(): string {
-    return `Analyze this codebase and provide recommendations for improvements.
-
-Focus on:
-- Code organization and structure
-- Error handling patterns
-- Type safety
-- Security best practices
-
-Provide specific examples and actionable suggestions.
-`;
-  }
-
-  /**
    * Create an end condition script from templates
+   * Delegates to WorkflowCommandHandler
    */
   async createEndConditionScript(): Promise<void> {
-    try {
-      // Ask user which type of script to create
-      const scriptType = await vscode.window.showQuickPick(
-        [
-          {
-            label: "$(file-code) Python",
-            description: "Create a Python end condition script",
-            value: "python" as const,
-          },
-          {
-            label: "$(file-code) JavaScript",
-            description: "Create a JavaScript/Node.js end condition script",
-            value: "javascript" as const,
-          },
-          {
-            label: "$(terminal) Shell Script",
-            description:
-              process.platform === "win32"
-                ? "Create a Windows batch script"
-                : "Create a bash shell script",
-            value: "shell" as const,
-          },
-          {
-            label: "$(terminal-powershell) PowerShell",
-            description: "Create a PowerShell script (.ps1)",
-            value: "powershell" as const,
-          },
-        ],
-        {
-          placeHolder: "Select the type of end condition script to create",
-          title: "FlightPath: Create End Condition Script",
-        }
-      );
-
-      if (!scriptType) {
-        return; // User cancelled
-      }
-
-      // Create the script
-      const scriptPath = await this.endConditionEvaluator.createSampleScript(
-        scriptType.value
-      );
-
-      if (scriptPath) {
-        // Show success message with option to open
-        const action = await vscode.window.showInformationMessage(
-          `✅ Created end condition script: ${path.basename(scriptPath)}`,
-          "Open Script",
-          "Show in Explorer"
-        );
-
-        if (action === "Open Script") {
-          const doc = await vscode.workspace.openTextDocument(scriptPath);
-          await vscode.window.showTextDocument(doc);
-        } else if (action === "Show in Explorer") {
-          await vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(scriptPath)
-          );
-        }
-      } else {
-        vscode.window.showErrorMessage(
-          "❌ Failed to create end condition script. Check that you have a workspace folder open."
-        );
-      }
-    } catch (error) {
-      console.error("FlightPath: Error creating end condition script:", error);
-      vscode.window.showErrorMessage(
-        `❌ Failed to create end condition script: ${error}`
-      );
-    }
+    await this.workflowCommandHandler.createEndConditionScript();
   }
 
   /**
    * Import FlightPath custom agents to the workspace's .github/agents folder
+   * Delegates to TemplateImporter
    */
   async importAgents(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
-        return;
-      }
-
-      // Load agent manifest
-      const manifestPath = path.join(
-        this.context.extensionPath,
-        "out",
-        "templates",
-        "agents",
-        "manifest.json"
-      );
-
-      let manifest: {
-        agents: Array<{
-          id: string;
-          label: string;
-          description: string;
-          file: string;
-          tags?: string[];
-          icon?: string;
-        }>;
-      };
-
-      try {
-        const manifestUri = vscode.Uri.file(manifestPath);
-        const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
-        manifest = JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
-      } catch (error) {
-        console.error("FlightPath: Failed to load agent manifest:", error);
-        vscode.window.showErrorMessage(
-          "❌ Failed to load FlightPath agents. The extension may not be properly installed."
-        );
-        return;
-      }
-
-      if (!manifest.agents || manifest.agents.length === 0) {
-        vscode.window.showInformationMessage(
-          "FlightPath: No agents available to import"
-        );
-        return;
-      }
-
-      // Show QuickPick with available agents
-      const selectedAgents = await vscode.window.showQuickPick(
-        manifest.agents.map((agent) => ({
-          label: `${agent.icon || "$(hubot)"} ${agent.label}`,
-          description: agent.description,
-          detail: agent.tags?.join(", "),
-          picked: true,
-          agent,
-        })),
-        {
-          placeHolder: "Select agents to import to .github/agents/",
-          title: "FlightPath: Import Custom Agents",
-          canPickMany: true,
-        }
-      );
-
-      if (!selectedAgents || selectedAgents.length === 0) {
-        return; // User cancelled
-      }
-
-      // Create .github/agents directory
-      const agentsDir = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        ".github",
-        "agents"
-      );
-
-      try {
-        await vscode.workspace.fs.createDirectory(vscode.Uri.file(agentsDir));
-      } catch {
-        // Directory might already exist
-      }
-
-      // Copy selected agents
-      const templatesPath = path.join(
-        this.context.extensionPath,
-        "out",
-        "templates",
-        "agents"
-      );
-
-      const importedAgents: string[] = [];
-      const failedAgents: string[] = [];
-
-      for (const selection of selectedAgents) {
-        const agent = selection.agent;
-        const srcPath = path.join(templatesPath, agent.file);
-        const destPath = path.join(agentsDir, agent.file);
-
-        try {
-          // Check if agent already exists
-          try {
-            await vscode.workspace.fs.stat(vscode.Uri.file(destPath));
-            // File exists, ask for confirmation
-            const overwrite = await vscode.window.showWarningMessage(
-              `Agent "${agent.label}" already exists. Overwrite?`,
-              "Yes",
-              "No"
-            );
-            if (overwrite !== "Yes") {
-              continue;
-            }
-          } catch {
-            // File doesn't exist, proceed with copy
-          }
-
-          // Copy the agent file
-          const content = await vscode.workspace.fs.readFile(
-            vscode.Uri.file(srcPath)
-          );
-          await vscode.workspace.fs.writeFile(
-            vscode.Uri.file(destPath),
-            content
-          );
-          importedAgents.push(agent.label);
-        } catch (error) {
-          console.error(
-            `FlightPath: Failed to import agent ${agent.id}:`,
-            error
-          );
-          failedAgents.push(agent.label);
-        }
-      }
-
-      // Show result
-      if (importedAgents.length > 0) {
-        const action = await vscode.window.showInformationMessage(
-          `✅ Imported ${importedAgents.length} agent(s): ${importedAgents.join(", ")}`,
-          "Open Agents Folder",
-          "View Agent"
-        );
-
-        if (action === "Open Agents Folder") {
-          await vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(agentsDir)
-          );
-        } else if (action === "View Agent" && importedAgents.length === 1) {
-          // Open the first imported agent
-          const agentFile = path.join(agentsDir, selectedAgents[0].agent.file);
-          const doc = await vscode.workspace.openTextDocument(agentFile);
-          await vscode.window.showTextDocument(doc);
-        }
-      }
-
-      if (failedAgents.length > 0) {
-        vscode.window.showErrorMessage(
-          `❌ Failed to import: ${failedAgents.join(", ")}`
-        );
-      }
-    } catch (error) {
-      console.error("FlightPath: Error importing agents:", error);
-      vscode.window.showErrorMessage(`❌ Failed to import agents: ${error}`);
-    }
+    await this.templateImporter.importAgents();
   }
 
   /**
    * Import FlightPath workflow templates to the workspace's .flightpath folder
+   * Delegates to TemplateImporter
    */
   async importWorkflowTemplates(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder open");
-        return;
-      }
-
-      // Load workflow manifest
-      const manifestPath = path.join(
-        this.context.extensionPath,
-        "out",
-        "templates",
-        "workflows",
-        "manifest.json"
-      );
-
-      let manifest: {
-        workflows: Array<{
-          id: string;
-          label: string;
-          description: string;
-          file: string;
-          tags?: string[];
-          icon?: string;
-        }>;
-      };
-
-      try {
-        const manifestUri = vscode.Uri.file(manifestPath);
-        const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
-        manifest = JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
-      } catch (error) {
-        console.error("FlightPath: Failed to load workflow manifest:", error);
-        vscode.window.showErrorMessage(
-          "❌ Failed to load FlightPath workflow templates. The extension may not be properly installed."
-        );
-        return;
-      }
-
-      if (!manifest.workflows || manifest.workflows.length === 0) {
-        vscode.window.showInformationMessage(
-          "FlightPath: No workflow templates available to import"
-        );
-        return;
-      }
-
-      // Show QuickPick with available workflows
-      const selectedWorkflows = await vscode.window.showQuickPick(
-        manifest.workflows.map((workflow) => ({
-          label: `${workflow.icon || "$(file-code)"} ${workflow.label}`,
-          description: workflow.description,
-          detail: workflow.tags?.join(", "),
-          picked: false,
-          workflow,
-        })),
-        {
-          placeHolder:
-            "Select workflow templates to import to .flightpath/templates/",
-          title: "FlightPath: Import Workflow Templates",
-          canPickMany: true,
-        }
-      );
-
-      if (!selectedWorkflows || selectedWorkflows.length === 0) {
-        return; // User cancelled
-      }
-
-      // Get prompts directory from settings
-      const promptsDir = ConfigurationUtils.getPromptsDirectory();
-
-      // Create .flightpath/templates directory
-      const targetDir = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        promptsDir,
-        "templates"
-      );
-
-      try {
-        await vscode.workspace.fs.createDirectory(vscode.Uri.file(targetDir));
-      } catch {
-        // Directory might already exist
-      }
-
-      // Copy selected workflows
-      const templatesPath = path.join(
-        this.context.extensionPath,
-        "out",
-        "templates",
-        "workflows"
-      );
-
-      const importedWorkflows: string[] = [];
-      const failedWorkflows: string[] = [];
-
-      for (const selection of selectedWorkflows) {
-        const workflow = selection.workflow;
-        const srcPath = path.join(templatesPath, workflow.file);
-        const destPath = path.join(targetDir, workflow.file);
-
-        try {
-          // Check if workflow already exists
-          try {
-            await vscode.workspace.fs.stat(vscode.Uri.file(destPath));
-            // File exists, ask for confirmation
-            const overwrite = await vscode.window.showWarningMessage(
-              `Workflow "${workflow.label}" already exists. Overwrite?`,
-              "Yes",
-              "No"
-            );
-            if (overwrite !== "Yes") {
-              continue;
-            }
-          } catch {
-            // File doesn't exist, proceed with copy
-          }
-
-          // Copy the workflow file
-          const content = await vscode.workspace.fs.readFile(
-            vscode.Uri.file(srcPath)
-          );
-          await vscode.workspace.fs.writeFile(
-            vscode.Uri.file(destPath),
-            content
-          );
-          importedWorkflows.push(workflow.label);
-        } catch (error) {
-          console.error(
-            `FlightPath: Failed to import workflow ${workflow.id}:`,
-            error
-          );
-          failedWorkflows.push(workflow.label);
-        }
-      }
-
-      // Show result
-      if (importedWorkflows.length > 0) {
-        const action = await vscode.window.showInformationMessage(
-          `✅ Imported ${importedWorkflows.length} workflow(s): ${importedWorkflows.join(", ")}`,
-          "Open Folder",
-          "View Workflow"
-        );
-
-        if (action === "Open Folder") {
-          await vscode.commands.executeCommand(
-            "revealFileInOS",
-            vscode.Uri.file(targetDir)
-          );
-        } else if (
-          action === "View Workflow" &&
-          importedWorkflows.length === 1
-        ) {
-          // Open the first imported workflow
-          const workflowFile = path.join(
-            targetDir,
-            selectedWorkflows[0].workflow.file
-          );
-          const doc = await vscode.workspace.openTextDocument(workflowFile);
-          await vscode.window.showTextDocument(doc);
-        }
-      }
-
-      if (failedWorkflows.length > 0) {
-        vscode.window.showErrorMessage(
-          `❌ Failed to import: ${failedWorkflows.join(", ")}`
-        );
-      }
-    } catch (error) {
-      console.error("FlightPath: Error importing workflow templates:", error);
-      vscode.window.showErrorMessage(
-        `❌ Failed to import workflow templates: ${error}`
-      );
-    }
+    await this.templateImporter.importWorkflowTemplates();
   }
 
   /**
    * Set up file watcher for the working file (not the original prompt file!)
-   * Reloads queue when working file changes (from Queue Append, Dynamic Queue, or MCP)
-   * Note: This now watches the working file in .flightpath/.queue/, not the original file
+   * Delegates to PromptFileWatcher
+   *
+   * @param filePath Path to the working file to watch
    */
   private setupPromptFileWatcher(filePath: string): void {
-    // Dispose existing watcher
-    this.promptFileWatcher?.dispose();
-
-    // Create watcher for this specific file (working file)
-    const pattern = new vscode.RelativePattern(
-      path.dirname(filePath),
-      path.basename(filePath)
+    this.promptFileWatcher.setupFileWatcher(
+      filePath,
+      async (changedFilePath: string) => {
+        // Reload callback
+        await this.promptFileLoader.reloadFromWorkingFile(changedFilePath);
+      },
+      (deletedFilePath: string) => {
+        // Delete callback
+        this.currentPromptFile = undefined;
+      }
     );
-
-    this.promptFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    this.promptFileWatcher.onDidChange(async (uri) => {
-      // Reload during active execution states (RUNNING, PAUSED, CANCELLING) to support MCP appends
-      // Do NOT reload when IDLE (not started), COMPLETED, or ERROR (preserve final dashboard view)
-      const state = this.promptQueue.getState();
-      const shouldReload =
-        state.status === EXECUTION_STATES.RUNNING ||
-        state.status === EXECUTION_STATES.PAUSED ||
-        state.status === EXECUTION_STATES.CANCELLING;
-
-      if (shouldReload) {
-        console.log(
-          `FlightPath: Working file changed during execution, reloading queue: ${uri.fsPath}`
-        );
-        await this.reloadFromWorkingFile(uri.fsPath);
-      } else {
-        console.log(
-          `FlightPath: Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
-        );
-      }
-    });
-
-    // Also watch for deletion
-    this.promptFileWatcher.onDidDelete((uri) => {
-      console.log(`FlightPath: Working file deleted: ${uri.fsPath}`);
-      this.currentPromptFile = undefined;
-      this.promptFileWatcher?.dispose();
-      this.promptFileWatcher = undefined;
-      if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected("No file selected", []);
-      }
-    });
-  }
-
-  /**
-   * Reload queue from working file (used by Dynamic Queue and file watcher)
-   * Handles two scenarios:
-   * - IDLE: User selecting new file → Reset everything, send FILE_SELECTED
-   * - EXECUTING: MCP/append during execution → Merge prompts, send QUEUE_EXTENDED
-   * @param workingFilePath Path to working file
-   */
-  private async reloadFromWorkingFile(workingFilePath: string): Promise<void> {
-    try {
-      // Read working file
-      const workingFile =
-        await this.promptQueue.readWorkingFile(workingFilePath);
-
-      // Check if prompts exist
-      if (!workingFile.prompts || workingFile.prompts.length === 0) {
-        console.error("FlightPath: Working file has no prompts");
-        return;
-      }
-
-      // Validate prompts
-      const validation = this.promptFileParser.validatePromptItems(
-        workingFile.prompts
-      );
-      if (!validation.valid) {
-        console.error(
-          "FlightPath: Working file validation failed:",
-          validation.errors
-        );
-        return;
-      }
-
-      const queueState = this.promptQueue.getState();
-      const isIdle = queueState.status === EXECUTION_STATES.IDLE;
-
-      if (isIdle) {
-        // Scenario 1: User selecting new file (IDLE state)
-        // Reset everything and send FILE_SELECTED
-        console.log(
-          `FlightPath: Loading new file in IDLE state (${workingFile.prompts.length} prompts)`
-        );
-        this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
-
-        if (this.dashboardProvider) {
-          const fileName = path.basename(workingFile.originalFile);
-          this.dashboardProvider.updateFileSelected(
-            fileName,
-            workingFile.prompts.map((p) => ({ prompt: p.prompt }))
-          );
-        }
-      } else {
-        // Scenario 2: Queue extended during execution (RUNNING/PAUSED/CANCELLING)
-        // Merge new prompts preserving state and send QUEUE_EXTENDED
-        console.log(
-          `FlightPath: Merging prompts during execution (state: ${queueState.status})`
-        );
-        const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
-
-        if (newPromptsCount > 0 && this.dashboardProvider) {
-          // Get updated state after merge
-          const updatedState = this.promptQueue.getState();
-          console.log(
-            `FlightPath: Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
-          );
-
-          // Send PROMPTS_EXTENDED message with updated prompt list
-          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
-        } else if (newPromptsCount === 0) {
-          console.log(
-            "FlightPath: Working file changed but no new prompts detected"
-          );
-        }
-      }
-
-      console.log(
-        `FlightPath: Reloaded ${workingFile.prompts.length} prompts from working file`
-      );
-    } catch (error) {
-      console.error("FlightPath: Failed to reload working file:", error);
-    }
-  }
-
-  /**
-   * Reload the currently loaded prompt file (LEGACY - used for non-working-file scenarios)
-   * @deprecated This method is kept for backward compatibility but should be replaced with reloadFromWorkingFile
-   */
-  private async reloadCurrentPromptFile(): Promise<void> {
-    if (!this.currentPromptFile) return;
-
-    try {
-      const filePath = this.currentPromptFile.filePath;
-      const fileName = path.basename(filePath);
-
-      // Re-parse the file
-      const promptFile = await this.promptFileParser.parsePromptFile(filePath);
-      if (!promptFile || !promptFile.prompts) return;
-
-      // Validate
-      const validation = this.promptFileParser.validatePromptItems(
-        promptFile.prompts
-      );
-      if (!validation.valid) return;
-
-      // Update stored file
-      this.currentPromptFile = { filePath, promptFile };
-
-      // Reload queue
-      this.promptQueue.loadPrompts(promptFile.prompts);
-
-      // Update dashboard
-      if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected(
-          fileName,
-          promptFile.prompts.map((p) => ({ prompt: p.prompt }))
-        );
-      }
-
-      console.log(
-        `FlightPath: Reloaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
-      );
-    } catch (error) {
-      console.error("FlightPath: Failed to reload prompt file:", error);
-    }
   }
 
   /**
    * Create a new draft prompt file with timestamp-based name
-   * Opens in editor and auto-selects in dashboard
+   * Delegates to WorkflowCommandHandler
    */
   async createDraftPrompt(): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
-        return;
-      }
+    const result = await this.workflowCommandHandler.createDraftPrompt();
 
-      // Generate timestamp-based filename: YYYYMMDD-HHmmss.prompt.md
-      const now = new Date();
-      const pad = (n: number) => n.toString().padStart(2, "0");
-      const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-      const fileName = `${timestamp}.prompt.md`;
-
-      // Create prompts directory
-      const promptsDir = path.join(
-        this.currentWorkspaceFolder.uri.fsPath,
-        ".flightpath",
-        "prompts"
-      );
-
-      // Ensure directory exists
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(promptsDir));
-
-      const filePath = path.join(promptsDir, fileName);
-      const uri = vscode.Uri.file(filePath);
-
-      // Create empty file
-      await vscode.workspace.fs.writeFile(uri, Buffer.from("", "utf8"));
-
-      // Open file in editor (respects openPromptsInSecondGroup setting)
-      const document = await vscode.workspace.openTextDocument(uri);
-      if (ConfigurationUtils.shouldOpenPromptsInSecondGroup()) {
-        await vscode.window.showTextDocument(document, {
-          viewColumn: vscode.ViewColumn.Two,
-          preview: true,
-          preserveFocus: false,
-        });
-      } else {
-        await vscode.window.showTextDocument(document, {
-          preview: true,
-          preserveFocus: false,
-        });
-      }
-
+    if (result) {
       // Set up as current file (empty, but ready for the user to edit)
-      // We don't call loadPromptFile() because empty files are invalid
-      // Instead, we set up the watcher and show a placeholder in the dashboard
       this.currentPromptFile = {
-        filePath,
+        filePath: result.filePath,
         promptFile: { prompts: [] }, // Empty prompts array
       };
 
       // Set up file watcher - will reload when user saves content
-      this.setupPromptFileWatcher(filePath);
+      this.setupPromptFileWatcher(result.filePath);
 
       // Show in dashboard with placeholder
       if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected(fileName, []);
+        this.dashboardProvider.updateFileSelected(result.fileName, []);
       }
-
-      console.log(`FlightPath: Created draft prompt: ${fileName}`);
-    } catch (error) {
-      console.error("FlightPath: Failed to create draft prompt:", error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to create draft prompt: ${error}`
-      );
     }
   }
 
   /**
    * Create a new custom template from a built-in starting point
-   * Shows QuickPick to select starting point, then prompts for template name
+   * Delegates to WorkflowCommandHandler
    */
   async createNewTemplate(): Promise<void> {
-    try {
-      // Show QuickPick for starting point selection
-      const startingPoints = [
-        {
-          label: "$(new-file) Blank",
-          description: "Empty 2-prompt workflow",
-          id: "blank",
-        },
-        {
-          label: "$(lightbulb) Simple Feature",
-          description: "Plan → Implement → Commit",
-          id: "simple-feature",
-        },
-        {
-          label: "$(testing-run-icon) Fix Tests",
-          description: "Run tests and fix failures with retry",
-          id: "fix-tests",
-        },
-        {
-          label: "$(rocket) Full Feature",
-          description: "Plan → Implement → Review → Docs → Commit",
-          id: "full-feature",
-        },
-      ];
-
-      const selected = await vscode.window.showQuickPick(startingPoints, {
-        placeHolder: "Select a starting point for your custom template",
-        title: "Create New Template",
-      });
-
-      if (!selected) {
-        return; // User cancelled
-      }
-
-      // Prompt for template name
-      const templateName = await vscode.window.showInputBox({
-        prompt: "Enter a name for your custom template",
-        placeHolder: "my-custom-workflow",
-        validateInput: (value) => {
-          if (!value || !value.trim()) {
-            return "Template name is required";
-          }
-          // Check for invalid characters
-          if (/[<>:"/\\|?*\x00-\x1f]/.test(value)) {
-            return "Invalid characters in template name";
-          }
-          return undefined;
-        },
-      });
-
-      if (!templateName) {
-        return; // User cancelled
-      }
-
-      // Create the template using TemplateManager
-      const { TemplateManager } = await import("./TemplateManager");
-      const templateManager = new TemplateManager(this.context);
-
-      const templatePath = await templateManager.createCustomTemplate(
-        selected.id,
-        templateName.trim()
-      );
-
-      // Open the template file in editor
-      const doc = await vscode.workspace.openTextDocument(templatePath);
-      await vscode.window.showTextDocument(doc);
-
-      vscode.window.showInformationMessage(
-        `✅ Created custom template: ${templateName}.flightpath.json`
-      );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      vscode.window.showErrorMessage(`Failed to create template: ${errorMsg}`);
-    }
+    await this.workflowCommandHandler.createNewTemplate();
   }
 
   /**
    * Dispose resources
    */
   dispose(): void {
-    this.promptFileWatcher?.dispose();
+    this.promptFileWatcher.dispose();
     this.statusBarManager.dispose();
     this.endConditionEvaluator.dispose();
     console.log("FlightPath: Manager disposed");
