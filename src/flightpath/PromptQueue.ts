@@ -12,7 +12,7 @@ import {
 } from "../types/FlightPathTypes";
 import { Log } from "../utils/Log";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -123,6 +123,81 @@ export class PromptQueue {
 
     this.emitStateChange();
     Log.info(`Loaded ${prompts.length} prompts into queue`);
+  }
+
+  /**
+   * Restore queue state from a working file (including runtime state)
+   * This is used when resuming a previous session from .flightpath/.queue
+   * @param workingFilePath Path to the working file
+   */
+  async restoreFromWorkingFile(workingFilePath: string): Promise<void> {
+    try {
+      // Read the working file
+      const workingFile = await this.readWorkingFile(workingFilePath);
+
+      if (!workingFile.prompts || workingFile.prompts.length === 0) {
+        throw new Error("Working file has no prompts");
+      }
+
+      const runtime = workingFile._runtime;
+
+      // Restore completed IDs set from saved array
+      const completedIds = new Set<string>(runtime?.completedPrompts || []);
+
+      // Restore prompts and basic state
+      this.state = {
+        currentIndex: runtime?.currentIndex || 0,
+        status: runtime?.executionState || EXECUTION_STATES.IDLE,
+        prompts: [...workingFile.prompts],
+        results: [],
+        stopped: false,
+        completedIds,
+        totalExecutionTime: 0,
+        queueExtensions: 0,
+        totalPausedDuration: 0,
+        appendSegments: runtime?.appendSegments || [],
+        workingFilePath,
+      };
+
+      // Rebuild results array with proper status based on completion state
+      this.state.results = workingFile.prompts.map((prompt, index) => {
+        let status: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+
+        // Check if this prompt was completed
+        if (isPromptCompleted(prompt, this.state.completedIds)) {
+          status = STEP_STATUS.COMPLETED;
+        }
+        // Check if this is the current prompt
+        else if (index === this.state.currentIndex) {
+          // If execution state is RUNNING, mark as SENT
+          // Otherwise (IDLE, PAUSED, etc.), mark as PENDING
+          status = this.state.status === EXECUTION_STATES.RUNNING
+            ? STEP_STATUS.SENT
+            : STEP_STATUS.PENDING;
+        }
+        // All other prompts are pending
+        else {
+          status = STEP_STATUS.PENDING;
+        }
+
+        return {
+          prompt: prompt.prompt,
+          status,
+          timestamp: new Date(),
+        };
+      });
+
+      this.emitStateChange();
+      Log.info(
+        `Restored queue from working file: ${workingFile.prompts.length} prompts, ` +
+        `currentIndex=${this.state.currentIndex}, ` +
+        `completed=${this.state.completedIds.size}, ` +
+        `status=${this.state.status}`
+      );
+    } catch (error) {
+      Log.error("Failed to restore from working file:", error as Error);
+      throw error;
+    }
   }
 
   /**
@@ -871,8 +946,8 @@ export class PromptQueue {
       .substring(0, 19);
     const queueDir = path.join(
       workspaceFolder.uri.fsPath,
-      ".flightpath",
-      ".queue"
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.QUEUE_DIR
     );
 
     // Ensure directory exists

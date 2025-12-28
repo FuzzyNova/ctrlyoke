@@ -31,9 +31,14 @@ import type {
 } from "./types/FlightPathTypes";
 import { EXECUTION_STATES } from "./types/DashboardConstants";
 
+// Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
+const FLIGHTPATH_DIR = ".flightpath";
+const LOGS_DIR = "logs";
+const QUEUE_DIR = ".queue";
+
 // Initialize log file
 const workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
-const logDir = path.join(workspaceRoot, ".flightpath", "logs");
+const logDir = path.join(workspaceRoot, FLIGHTPATH_DIR, LOGS_DIR);
 const logFile = path.join(logDir, `mcp-server-${Date.now()}.log`);
 
 // Ensure log directory exists
@@ -456,7 +461,7 @@ class FlightPathMCPServer {
    * Find the most recently modified working file in .flightpath/.queue/
    */
   private async findActiveWorkingFile(): Promise<string | null> {
-    const queueDir = path.join(this.workspaceRoot, ".flightpath", ".queue");
+    const queueDir = path.join(this.workspaceRoot, FLIGHTPATH_DIR, QUEUE_DIR);
     log("Searching for working files in:", queueDir);
 
     try {

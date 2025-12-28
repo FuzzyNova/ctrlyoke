@@ -258,6 +258,56 @@ export class FlightPathManager {
   }
 
   /**
+   * Resume a previous session from .flightpath/.queue
+   * Shows a quick pick of available sessions and restores the selected one
+   */
+  async resumeSession(): Promise<void> {
+    if (!this.currentWorkspaceFolder) {
+      vscode.window.showErrorMessage("No workspace folder open");
+      return;
+    }
+
+    try {
+      // Discover available sessions (delegated to WorkspaceSessionManager)
+      const sessions = await this.workspaceSessionManager.discoverSessions(
+        this.currentWorkspaceFolder
+      );
+
+      if (sessions.length === 0) {
+        vscode.window.showInformationMessage(
+          "No previous sessions found. Run a workflow first to create a session."
+        );
+        return;
+      }
+
+      // Show quick pick
+      const selected = await vscode.window.showQuickPick(sessions, {
+        placeHolder: "Select a session to resume",
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+
+      if (selected) {
+        // Load the session using reloadFromWorkingFile
+        await this.promptFileLoader.reloadFromWorkingFile(selected.filePath);
+
+        // Set up file watcher for the restored working file
+        this.setupPromptFileWatcher(selected.filePath);
+
+        // Focus the dashboard to show the restored session
+        await vscode.commands.executeCommand("flightpath.dashboard.focus");
+
+        Log.info(`Resumed session: ${selected.label}`);
+      }
+    } catch (error) {
+      Log.error("Failed to resume session:", error as Error);
+      vscode.window.showErrorMessage(
+        `Failed to resume session: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
    * Execute the currently loaded prompt file
    * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */

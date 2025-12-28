@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
+import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
 /**
  * WorkspaceSessionManager
@@ -30,8 +31,8 @@ export class WorkspaceSessionManager {
     try {
       const queueDir = path.join(
         workspaceFolder.uri.fsPath,
-        ".flightpath",
-        ".queue"
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
       );
 
       // Check if queue directory exists
@@ -144,5 +145,101 @@ export class WorkspaceSessionManager {
     return filename
       .replace(/\.flightpath\.json$/, "")
       .replace(/-\d{4}-\d{2}-\d{2}T.*$/, "");
+  }
+
+  /**
+   * Discover all available sessions in .flightpath/.queue
+   * Returns session metadata for UI display
+   *
+   * @param workspaceFolder Current workspace folder
+   * @returns Array of session info objects or empty array if none found
+   */
+  async discoverSessions(
+    workspaceFolder: vscode.WorkspaceFolder
+  ): Promise<Array<{
+    label: string;
+    description: string;
+    detail: string;
+    filePath: string;
+  }>> {
+    try {
+      const queueDir = path.join(
+        workspaceFolder.uri.fsPath,
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.QUEUE_DIR
+      );
+
+      // Check if queue directory exists
+      try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
+      } catch {
+        return []; // No queue directory
+      }
+
+      // Find all working files
+      const files = await vscode.workspace.fs.readDirectory(
+        vscode.Uri.file(queueDir)
+      );
+
+      const workingFiles = files
+        .filter(
+          ([name, type]) =>
+            type === vscode.FileType.File && name.endsWith(".flightpath.json")
+        )
+        .map(([name]) => name);
+
+      if (workingFiles.length === 0) {
+        return [];
+      }
+
+      // Sort by timestamp (newest first)
+      const sortedFiles = workingFiles.sort().reverse();
+
+      // Read each file to get metadata
+      const sessions = [];
+
+      for (const filename of sortedFiles) {
+        try {
+          const filePath = path.join(queueDir, filename);
+          const content = await vscode.workspace.fs.readFile(
+            vscode.Uri.file(filePath)
+          );
+          const workingFile = JSON.parse(content.toString());
+
+          const runtime = workingFile._runtime;
+          const completedCount = runtime?.completedPrompts?.length || 0;
+          const totalCount = workingFile.prompts?.length || 0;
+          const currentIndex = runtime?.currentIndex || 0;
+
+          // Format timestamp
+          const timestamp = new Date(workingFile.startedAt).toLocaleString();
+
+          // Determine status icon
+          let statusIcon = "⏸"; // Default paused/idle
+          if (runtime?.executionState === "completed") {
+            statusIcon = "✓";
+          } else if (runtime?.executionState === "error") {
+            statusIcon = "✗";
+          } else if (runtime?.executionState === "running") {
+            statusIcon = "▶";
+          }
+
+          sessions.push({
+            label: `${statusIcon} ${workingFile.workflowName}`,
+            description: `${completedCount}/${totalCount} completed`,
+            detail: `Started: ${timestamp} • Current: Step ${currentIndex + 1}/${totalCount}`,
+            filePath,
+          });
+        } catch (error) {
+          // Skip invalid files
+          console.warn(`Failed to read session file ${filename}:`, error);
+        }
+      }
+
+      return sessions;
+    } catch (error) {
+      console.error("Failed to discover sessions:", error);
+      return [];
+    }
   }
 }

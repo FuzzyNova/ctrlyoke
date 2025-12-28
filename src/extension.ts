@@ -516,6 +516,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Resume Session command - shows list of previous sessions from .flightpath/.queue
+  const resumeSessionCommand = vscode.commands.registerCommand(
+    "flightpath.resumeSession",
+    async () => {
+      await flightPathManager.resumeSession();
+    }
+  );
+
   // Edit Current Prompt File command (for dashboard)
   const editCurrentPromptFileCommand = vscode.commands.registerCommand(
     "flightpath.editCurrentPromptFile",
@@ -598,6 +606,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     queueNextFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,
+    resumeSessionCommand,
     editCurrentPromptFileCommand,
     runCommand,
     showOutputPanelCommand,

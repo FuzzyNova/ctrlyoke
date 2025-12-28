@@ -182,6 +182,12 @@
         "icon": "$(file)"
       },
       {
+        "command": "flightpath.resumeSession",
+        "title": "Resume Session",
+        "category": "FlightPath",
+        "icon": "$(history)"
+      },
+      {
         "command": "flightpath.run",
         "title": "Run",
         "category": "FlightPath",
@@ -222,6 +228,9 @@
         },
         {
           "command": "flightpath.createPromptFile"
+        },
+        {
+          "command": "flightpath.resumeSession"
         },
         {
           "command": "flightpath.pause"

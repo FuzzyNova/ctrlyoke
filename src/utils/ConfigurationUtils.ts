@@ -7,6 +7,35 @@ import { DynamicQueueConfig, Provider } from "../types/FlightPathTypes";
 const CONFIG_NAMESPACE = "flightpath";
 
 /**
+ * Path constants (single source of truth for directory names)
+ */
+export const PATH_CONSTANTS = {
+  /** Root FlightPath directory name (default: ".flightpath") */
+  FLIGHTPATH_DIR: ".flightpath",
+
+  /** Queue directory name (subdirectory of FLIGHTPATH_DIR) */
+  QUEUE_DIR: ".queue",
+
+  /** Scripts directory name (subdirectory of FLIGHTPATH_DIR) */
+  SCRIPTS_DIR: "scripts",
+
+  /** Prompts directory name (subdirectory of FLIGHTPATH_DIR) */
+  PROMPTS_DIR: "prompts",
+
+  /** Templates directory name (subdirectory of FLIGHTPATH_DIR) */
+  TEMPLATES_DIR: "templates",
+
+  /** Workflows directory name (subdirectory of FLIGHTPATH_DIR) */
+  WORKFLOWS_DIR: "workflows",
+
+  /** Temp directory name (subdirectory of FLIGHTPATH_DIR) */
+  TEMP_DIR: "temp",
+
+  /** Logs directory name (subdirectory of FLIGHTPATH_DIR) */
+  LOGS_DIR: "logs",
+} as const;
+
+/**
  * Get the FlightPath configuration object
  */
 function getConfig(): vscode.WorkspaceConfiguration {

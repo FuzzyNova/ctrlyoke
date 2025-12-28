@@ -142,7 +142,7 @@ export class PromptFileLoader {
   /**
    * Reload queue from working file (used by Dynamic Queue and file watcher)
    * Handles two scenarios:
-   * - IDLE: User selecting new file → Reset everything, send FILE_SELECTED
+   * - IDLE: User selecting new file OR restoring session → Restore full state (including completed prompts)
    * - EXECUTING: MCP/append during execution → Merge prompts, send QUEUE_EXTENDED
    *
    * @param workingFilePath Path to working file
@@ -172,18 +172,20 @@ export class PromptFileLoader {
       const isIdle = queueState.status === EXECUTION_STATES.IDLE;
 
       if (isIdle) {
-        // Scenario 1: User selecting new file (IDLE state)
-        // Reset everything and send FILE_SELECTED
+        // Scenario 1: Restoring session (IDLE state)
+        // Restore full state including completed prompts, currentIndex, etc.
         Log.info(
-          `Loading new file in IDLE state (${workingFile.prompts.length} prompts)`
+          `Restoring session from working file (${workingFile.prompts.length} prompts)`
         );
-        this.promptQueue.loadPrompts(workingFile.prompts, workingFilePath);
+        await this.promptQueue.restoreFromWorkingFile(workingFilePath);
 
         if (this.dashboardProvider) {
           const fileName = path.basename(workingFile.originalFile);
+          // Get the restored state to send accurate prompt info
+          const restoredState = this.promptQueue.getState();
           this.dashboardProvider.updateFileSelected(
             fileName,
-            workingFile.prompts.map((p) => ({ prompt: p.prompt }))
+            restoredState.prompts.map((p) => ({ prompt: p.prompt }))
           );
         }
       } else {
