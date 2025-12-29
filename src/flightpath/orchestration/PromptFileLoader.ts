@@ -140,14 +140,19 @@ export class PromptFileLoader {
   }
 
   /**
-   * Reload queue from working file (used by Dynamic Queue and file watcher)
-   * Handles two scenarios:
-   * - IDLE: User selecting new file OR restoring session → Restore full state (including completed prompts)
-   * - EXECUTING: MCP/append during execution → Merge prompts, send QUEUE_EXTENDED
+   * Reload queue from working file
+   * Handles three scenarios:
+   * - 'replace': Loading a different session (resume/auto-load) → Clear queue and restore state
+   * - 'merge': Same file changed (MCP/append) → Merge new prompts into existing queue
+   * - 'auto': Detect based on queue state (IDLE = restore, otherwise = merge)
    *
    * @param workingFilePath Path to working file
+   * @param mode Reload mode: 'replace' | 'merge' | 'auto' (default: 'auto')
    */
-  async reloadFromWorkingFile(workingFilePath: string): Promise<void> {
+  async reloadFromWorkingFile(
+    workingFilePath: string,
+    mode: "replace" | "merge" | "auto" = "auto"
+  ): Promise<void> {
     try {
       // Read working file
       const workingFile =
@@ -171,28 +176,37 @@ export class PromptFileLoader {
       const queueState = this.promptQueue.getState();
       const isIdle = queueState.status === EXECUTION_STATES.IDLE;
 
-      if (isIdle) {
-        // Scenario 1: Restoring session (IDLE state)
-        // Restore full state including completed prompts, currentIndex, etc.
+      // Determine actual mode based on parameter and queue state
+      let actualMode = mode;
+      if (mode === "auto") {
+        actualMode = isIdle ? "replace" : "merge";
+      }
+
+      if (actualMode === "replace") {
+        // Scenario 1: Loading a different session (resume/auto-load)
+        // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.info(
-          `Restoring session from working file (${workingFile.prompts.length} prompts)`
+          `Restoring session from working file (${workingFile.prompts.length} prompts, mode: ${mode})`
         );
         await this.promptQueue.restoreFromWorkingFile(workingFilePath);
 
         if (this.dashboardProvider) {
           const fileName = path.basename(workingFile.originalFile);
-          // Get the restored state to send accurate prompt info
+          // Get the restored state to send accurate prompt info with runtime state
           const restoredState = this.promptQueue.getState();
-          this.dashboardProvider.updateFileSelected(
+          this.dashboardProvider.updateSessionRestored(
             fileName,
-            restoredState.prompts.map((p) => ({ prompt: p.prompt }))
+            restoredState.prompts,
+            restoredState.results,
+            restoredState.status,
+            restoredState.currentIndex
           );
         }
       } else {
-        // Scenario 2: Queue extended during execution (RUNNING/PAUSED/CANCELLING)
-        // Merge new prompts preserving state and send QUEUE_EXTENDED
+        // Scenario 2: Queue extended during execution (MCP/append to same file)
+        // Merge new prompts preserving state and send PROMPTS_EXTENDED
         Log.info(
-          `Merging prompts during execution (state: ${queueState.status})`
+          `Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
         const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
 

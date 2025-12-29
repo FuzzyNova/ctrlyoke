@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { Log } from "../../utils/Log";
 
 /**
  * Result of waiting for log completion
@@ -27,16 +28,16 @@ export class ChatLogMonitor {
     this.logFilePath = await this.findCopilotLogFile();
 
     if (this.logFilePath) {
-      console.log(`📄 Log: ${this.logFilePath}`);
+      Log.info(`📄 Log: ${this.logFilePath}`);
       try {
         const stats = await fs.promises.stat(this.logFilePath);
         this.lastReadPosition = stats.size;
         return true;
       } catch (error) {
-        console.warn("⚠️ Log file stat failed:", error);
+        Log.warn("⚠️ Log file stat failed:", error);
       }
     } else {
-      console.warn("⚠️ Log file not found - completion detection may fail");
+      Log.warn("⚠️ Log file not found - completion detection may fail");
     }
     return false;
   }
@@ -53,7 +54,7 @@ export class ChatLogMonitor {
         const stats = await fs.promises.stat(this.logFilePath);
         this.lastReadPosition = stats.size;
       } catch (error) {
-        console.warn("⚠️ Could not read log position:", error);
+        Log.warn("⚠️ Could not read log position:", error);
       }
     }
   }
@@ -67,7 +68,7 @@ export class ChatLogMonitor {
       // Fallback: Try to find log file now
       this.logFilePath = await this.findCopilotLogFile();
       if (!this.logFilePath) {
-        console.warn("⚠️ No log file available");
+        Log.warn("⚠️ No log file available");
         return {
           completed: false,
           userCancelled: false,
@@ -84,7 +85,7 @@ export class ChatLogMonitor {
       pollCount++;
 
       if (isCancelledFn()) {
-        console.log("⚠️ Cancelled");
+        Log.info("⚠️ Cancelled");
         return {
           completed: false,
           userCancelled: false,
@@ -95,7 +96,7 @@ export class ChatLogMonitor {
       const timeSinceLastActivity = Date.now() - lastActivityTime;
       if (timeSinceLastActivity > inactivityTimeoutMs) {
         const timeoutSeconds = Math.round(timeSinceLastActivity / 1000);
-        console.warn(`⚠️ Inactivity timeout: ${timeoutSeconds}s`);
+        Log.warn(`⚠️ Inactivity timeout: ${timeoutSeconds}s`);
         return {
           completed: false,
           userCancelled: false,
@@ -106,7 +107,7 @@ export class ChatLogMonitor {
       // Log progress every 10 seconds
       if (pollCount % 20 === 0) {
         const inactivitySeconds = Math.round(timeSinceLastActivity / 1000);
-        console.log(
+        Log.info(
           `⏳ Monitoring... (${inactivitySeconds}s since activity, poll #${pollCount})`
         );
       }
@@ -126,7 +127,7 @@ export class ChatLogMonitor {
           lastActivityTime = Date.now();
 
           if (newContent.includes("| cancelled |")) {
-            console.warn("⚠️ User cancelled in chat UI");
+            Log.warn("⚠️ User cancelled in chat UI");
             return { completed: false, userCancelled: true };
           }
 
@@ -135,7 +136,7 @@ export class ChatLogMonitor {
           }
         }
       } catch (error) {
-        console.warn("⚠️ Error reading log:", error);
+        Log.warn("⚠️ Error reading log:", error);
       }
 
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -189,11 +190,11 @@ export class ChatLogMonitor {
 
     const derivedPath = await this.deriveCopilotLogFromLogUri();
     if (derivedPath) {
-      console.log(`📄 Log via logUri: ${derivedPath}`);
+      Log.info(`📄 Log via logUri: ${derivedPath}`);
       return derivedPath;
     }
 
-    console.log("⚠️ logUri derivation failed, searching...");
+    Log.info("⚠️ logUri derivation failed, searching...");
     const logBaseDir = this.getLogBaseDirectory();
     const allLogs = await this.findFilesRecursive(logBaseDir, targetFilename);
 
@@ -220,11 +221,11 @@ export class ChatLogMonitor {
         await fs.promises.access(copilotLogPath, fs.constants.R_OK);
         return copilotLogPath;
       } catch {
-        console.log(`📄 Log not at: ${copilotLogPath}`);
+        Log.info(`📄 Log not at: ${copilotLogPath}`);
         return undefined;
       }
     } catch (error) {
-      console.error("Error deriving log path:", error);
+      Log.error("Error deriving log path:", error);
       return undefined;
     }
   }

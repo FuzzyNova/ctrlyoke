@@ -76,7 +76,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.sendInitialState();
   }
 
-  private handleWebviewMessage(message: any): void {
+  private async handleWebviewMessage(message: any): Promise<void> {
     // Handle export specially since it needs message data
     if (message.type === MESSAGE_TYPES.EXPORT_OUTPUT) {
       this.handleExportOutput(message.content, message.fileName);
@@ -109,9 +109,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     if (commandId) {
       if (message.type === MESSAGE_TYPES.READY) {
         this.sendInitialState();
-        // Notify FlightPathManager that dashboard is ready
+        // Notify FlightPathManager that dashboard is ready (triggers deferred auto-load)
         if (this.flightPathManager) {
-          this.flightPathManager.setDashboardReady();
+          await this.flightPathManager.setDashboardReady();
         }
       } else {
         vscode.commands.executeCommand(commandId);
@@ -122,6 +122,23 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   // Public methods to send updates from FlightPathManager
   public updateFileSelected(fileName: string, prompts: any[]): void {
     this.postMessage({ type: MESSAGE_TYPES.FILE_SELECTED, fileName, prompts });
+  }
+
+  public updateSessionRestored(
+    fileName: string,
+    prompts: any[],
+    results: any[],
+    executionState: string,
+    currentIndex: number
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.SESSION_RESTORED,
+      fileName,
+      prompts: prompts.map((p) => ({ prompt: p.prompt })),
+      results,
+      executionState,
+      currentIndex,
+    });
   }
 
   public updateExecutionStarted(fileName: string, totalSteps: number): void {

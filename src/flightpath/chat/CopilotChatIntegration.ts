@@ -5,6 +5,7 @@ import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ChatLogMonitor } from "./ChatLogMonitor";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
+import { Log } from "../../utils/Log";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with log-based response detection.
@@ -61,9 +62,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
     try {
       await vscode.commands.executeCommand(command);
-      console.log(`✨ New chat session: ${chatLocation}`);
+      Log.info(`✨ New chat session: ${chatLocation}`);
     } catch (error) {
-      console.error("❌ Failed to start new chat:", error);
+      Log.error("❌ Failed to start new chat:", error);
       // Don't throw - we'll still try to send the prompt to existing chat
     }
   }
@@ -72,11 +73,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
   private async ensureAgentMode(): Promise<void> {
     try {
       await vscode.commands.executeCommand("workbench.action.chat.openagent");
-      console.log("🤖 Agent mode enabled");
+      Log.info("🤖 Agent mode enabled");
       // Small delay to allow mode switch
       await new Promise((resolve) => setTimeout(resolve, 200));
     } catch (error) {
-      console.warn("⚠️ Could not switch to agent mode:", error);
+      Log.warn("⚠️ Could not switch to agent mode:", error);
       // Don't throw - user may have manually selected agent mode
     }
   }
@@ -94,7 +95,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
     // Validate model is available (using dynamically discovered models)
     if (!isModelAvailable(targetModel)) {
       const message = `Model "${targetModel}" not recognized. Using current chat model.`;
-      console.warn(`⚠️ ${message}`);
+      Log.warn(`⚠️ ${message}`);
       vscode.window.showWarningMessage(`FlightPath: ${message}`);
       return;
     }
@@ -118,9 +119,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Wait for model switch to complete (300ms proven reliable in testing)
       await new Promise((resolve) => setTimeout(resolve, 300));
 
-      console.log(`✅ Model: ${targetModel}`);
+      Log.info(`✅ Model: ${targetModel}`);
     } catch (error) {
-      console.error(`❌ Model switch failed (${targetModel}):`, error);
+      Log.error(`❌ Model switch failed (${targetModel}):`, error);
       vscode.window.showWarningMessage(
         `FlightPath: Could not switch to model "${targetModel}". ` +
           `This model may not be available on your subscription. ` +
@@ -151,10 +152,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
           try {
             await copilotChatExtension.activate();
           } catch (activationError) {
-            console.warn(
-              "⚠️ Could not activate Copilot Chat:",
-              activationError
-            );
+            Log.warn("⚠️ Could not activate Copilot Chat:", activationError);
           }
         }
 
@@ -162,7 +160,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
           try {
             await copilotExtension.activate();
           } catch (activationError) {
-            console.warn("⚠️ Could not activate Copilot:", activationError);
+            Log.warn("⚠️ Could not activate Copilot:", activationError);
           }
         }
 
@@ -205,12 +203,12 @@ export class CopilotChatIntegration extends CopilotIntegration {
         hasTypeCommand && hasChatSubmit && hasChatOpenCommand && hasSelectAll;
 
       if (this.isAvailable) {
-        console.log("✅ Chat automation ready");
+        Log.info("✅ Chat automation ready");
       } else {
-        console.error("❌ Required commands unavailable");
+        Log.error("❌ Required commands unavailable");
       }
     } catch (error) {
-      console.error("❌ Error checking Copilot availability:", error);
+      Log.error("❌ Error checking Copilot availability:", error);
       this.isAvailable = false;
     }
   }
@@ -238,7 +236,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
     await this.checkCopilotAvailability(shouldActivate);
 
     if (this.isAvailable) {
-      console.log("✅ Copilot ready");
+      Log.info("✅ Copilot ready");
 
       // Initialize log monitor for completion detection
       await this.logMonitor.initialize();
@@ -254,7 +252,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
     }
 
     if (this.pollingAttempts >= this.maxPollingAttempts) {
-      console.error("❌ Copilot unavailable (30s timeout)");
+      Log.error("❌ Copilot unavailable (30s timeout)");
       this.initializationStatus = CopilotStatus.Unavailable;
       this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
 
@@ -298,7 +296,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Verify automation is still available
       if (!this.isAvailable) {
-        console.error("❌ Automation became unavailable");
+        Log.error("❌ Automation became unavailable");
         vscode.window.showErrorMessage(
           "FlightPath: Automation became unavailable"
         );
@@ -361,7 +359,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
         );
 
         if (result.userCancelled) {
-          console.log("⚠️ User cancelled - stopping workflow");
+          Log.info("⚠️ User cancelled - stopping workflow");
           this.lastFailureWasUserCancellation = true;
           return false;
         }
@@ -374,7 +372,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
             ConfigurationUtils.shouldTreatChatTimeoutAsSuccess();
 
           if (isInactivityTimeout && treatTimeoutAsSuccess) {
-            console.warn(
+            Log.warn(
               "⚠️ Inactivity timeout - treating as successful completion (treatChatTimeoutAsSuccess=true)"
             );
             // Proceed as if completed - get chat content and fire event
@@ -383,7 +381,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
             return true;
           }
 
-          console.error("❌ Completion detection failed");
+          Log.error("❌ Completion detection failed");
           if (result.failureReason) {
             this.lastFailureReason = result.failureReason;
           }
@@ -397,7 +395,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       return true;
     } catch (error) {
-      console.error("❌ Failed to send prompt:", error);
+      Log.error("❌ Failed to send prompt:", error);
       if (!this.lastFailureReason) {
         this.lastFailureReason =
           error instanceof Error
@@ -442,16 +440,16 @@ export class CopilotChatIntegration extends CopilotIntegration {
           const afterPromptStart = lastPromptIndex + searchText.length;
           const responseText = chatContent.substring(afterPromptStart).trim();
 
-          console.log(`📋 Response: ${responseText.length} chars`);
+          Log.info(`📋 Response: ${responseText.length} chars`);
           return responseText;
         } else {
-          console.warn("⚠️ Prompt not found in chat, returning full content");
+          Log.warn("⚠️ Prompt not found in chat, returning full content");
         }
       }
 
       return chatContent;
     } catch (error) {
-      console.error("❌ Failed to copy chat to clipboard:", error);
+      Log.error("❌ Failed to copy chat to clipboard:", error);
       return "";
     }
   }
@@ -477,7 +475,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       attempt++;
 
       if (this.isCancelling) {
-        console.log("⏹️ Cancelled");
+        Log.info("⏹️ Cancelled");
         return false;
       }
 
@@ -510,7 +508,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
           return true;
         }
       } catch (error) {
-        console.warn(
+        Log.warn(
           "⚠️ Submit attempt failed:",
           error instanceof Error ? error.message : String(error)
         );
@@ -524,7 +522,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       }
     }
 
-    console.error(`❌ Submit failed after ${maxAttempts} attempts`);
+    Log.error(`❌ Submit failed after ${maxAttempts} attempts`);
     return false;
   }
 
@@ -539,7 +537,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       try {
         await vscode.commands.executeCommand(chatCommand);
       } catch (focusError) {
-        console.error("❌ Could not open Copilot Chat:", focusError);
+        Log.error("❌ Could not open Copilot Chat:", focusError);
         throw new Error(`Failed to open Copilot Chat: ${focusError}`);
       }
 
@@ -553,7 +551,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       try {
         await vscode.commands.executeCommand("editor.action.selectAll");
       } catch (selectError) {
-        console.error("❌ Could not select all text:", selectError);
+        Log.error("❌ Could not select all text:", selectError);
         throw new Error(`Failed to select all: ${selectError}`);
       }
 
@@ -563,7 +561,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       try {
         await vscode.commands.executeCommand("type", { text: chatPrompt });
       } catch (typeError) {
-        console.error("❌ Could not type text:", typeError);
+        Log.error("❌ Could not type text:", typeError);
         throw new Error(`Failed to type text: ${typeError}`);
       }
 
@@ -587,7 +585,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       return true;
     } catch (error) {
-      console.error("❌ Direct automation failed:", error);
+      Log.error("❌ Direct automation failed:", error);
 
       // Set specific failure reason
       this.lastFailureReason =
@@ -768,13 +766,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
   protected async cancelImplementation(): Promise<void> {
     try {
       await vscode.commands.executeCommand("workbench.action.chat.cancel");
-      console.log("⏹️ Cancelled");
+      Log.info("⏹️ Cancelled");
 
       // Fire responseComplete so FlightPathManager knows cancellation finished
       // This allows state transition from CANCELLING to IDLE
       this.responseCompleteEmitter.fire("Chat cancelled");
     } catch (error) {
-      console.warn("⚠️ Could not cancel chat:", error);
+      Log.warn("⚠️ Could not cancel chat:", error);
       // Still fire completion even if cancel failed (chat might already be idle)
       this.responseCompleteEmitter.fire("Chat cancel failed");
     }

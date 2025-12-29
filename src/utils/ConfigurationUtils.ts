@@ -348,6 +348,13 @@ export const ConfigurationUtils = {
     return getConfig().get<string>("defaultWorkflowTemplate", "blank");
   },
 
+  /**
+   * Check if recent session should be auto-loaded on startup
+   */
+  shouldAutoLoadRecentSession(): boolean {
+    return getConfig().get<boolean>("autoLoadRecentSession", true);
+  },
+
   // ============================================================
   // CHAT MODE SETTINGS
   // ============================================================

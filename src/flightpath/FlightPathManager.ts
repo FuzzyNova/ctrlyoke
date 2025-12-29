@@ -207,18 +207,8 @@ export class FlightPathManager {
         );
       }
 
-      // Auto-load most recent session if enabled (delegated to WorkspaceSessionManager)
-      const config = vscode.workspace.getConfiguration("flightpath");
-      const autoLoad = config.get<boolean>("autoLoadRecentSession", true);
-      if (autoLoad && this.currentWorkspaceFolder) {
-        await this.workspaceSessionManager.autoLoadRecentSession(
-          this.currentWorkspaceFolder,
-          async (workingFilePath: string) => {
-            await this.promptFileLoader.reloadFromWorkingFile(workingFilePath);
-            this.setupPromptFileWatcher(workingFilePath);
-          }
-        );
-      }
+      // Note: Auto-load recent session is deferred until dashboard is ready
+      // (see setDashboardReady() method)
 
       // Note: Copilot integration starts background polling automatically in constructor
       // Status bar will update via onDidChangeStatus event listener
@@ -288,8 +278,22 @@ export class FlightPathManager {
       });
 
       if (selected) {
-        // Load the session using reloadFromWorkingFile
-        await this.promptFileLoader.reloadFromWorkingFile(selected.filePath);
+        // Load the session using reloadFromWorkingFile with replace mode
+        await this.promptFileLoader.reloadFromWorkingFile(
+          selected.filePath,
+          "replace"
+        );
+
+        // Set currentPromptFile so getCurrentPromptFile() works correctly
+        const workingFile = await this.promptQueue.readWorkingFile(
+          selected.filePath
+        );
+        if (workingFile && workingFile.originalFile && workingFile.prompts) {
+          this.currentPromptFile = {
+            filePath: workingFile.originalFile,
+            promptFile: { prompts: workingFile.prompts },
+          };
+        }
 
         // Set up file watcher for the restored working file
         this.setupPromptFileWatcher(selected.filePath);
@@ -801,10 +805,41 @@ export class FlightPathManager {
 
   /**
    * Set dashboard ready flag (called by DashboardProvider when webview signals READY)
+   * Triggers auto-load if enabled in settings
    */
-  setDashboardReady(): void {
+  async setDashboardReady(): Promise<void> {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
+
+    // Check if auto-load is enabled and trigger it now that dashboard is ready
+    if (
+      ConfigurationUtils.shouldAutoLoadRecentSession() &&
+      this.currentWorkspaceFolder
+    ) {
+      Log.info("Triggering auto-load of recent session");
+
+      await this.workspaceSessionManager.autoLoadRecentSession(
+        this.currentWorkspaceFolder,
+        async (workingFilePath: string) => {
+          await this.promptFileLoader.reloadFromWorkingFile(
+            workingFilePath,
+            "replace"
+          );
+
+          // Set currentPromptFile so getCurrentPromptFile() works correctly
+          const workingFile =
+            await this.promptQueue.readWorkingFile(workingFilePath);
+          if (workingFile && workingFile.originalFile && workingFile.prompts) {
+            this.currentPromptFile = {
+              filePath: workingFile.originalFile,
+              promptFile: { prompts: workingFile.prompts },
+            };
+          }
+
+          this.setupPromptFileWatcher(workingFilePath);
+        }
+      );
+    }
   }
 
   /**
@@ -931,6 +966,16 @@ export class FlightPathManager {
       async (changedFilePath: string) => {
         // Reload callback
         await this.promptFileLoader.reloadFromWorkingFile(changedFilePath);
+
+        // Keep currentPromptFile in sync with working file (for queue extensions)
+        const workingFile =
+          await this.promptQueue.readWorkingFile(changedFilePath);
+        if (workingFile && workingFile.originalFile && workingFile.prompts) {
+          this.currentPromptFile = {
+            filePath: workingFile.originalFile,
+            promptFile: { prompts: workingFile.prompts },
+          };
+        }
       },
       (deletedFilePath: string) => {
         // Delete callback

@@ -3,6 +3,7 @@ import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
 import { EXECUTION_STATES } from "../../types/FlightPathTypes";
 import { FlightPathDashboardProvider } from "../../ui/FlightPathDashboardProvider";
+import { Log } from "../../utils/Log";
 
 /**
  * PromptFileWatcher
@@ -55,7 +56,7 @@ export class PromptFileWatcher {
       this.onFileDeleted(uri, onFileDeleted);
     });
 
-    console.log(`FlightPath: Set up file watcher for ${filePath}`);
+    Log.info(`Set up file watcher for ${filePath}`);
   }
 
   /**
@@ -78,13 +79,13 @@ export class PromptFileWatcher {
       state.status === EXECUTION_STATES.CANCELLING;
 
     if (shouldReload) {
-      console.log(
-        `FlightPath: Working file changed during execution, reloading queue: ${uri.fsPath}`
+      Log.info(
+        `Working file changed during execution, reloading queue: ${uri.fsPath}`
       );
       await onReload(uri.fsPath);
     } else {
-      console.log(
-        `FlightPath: Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
+      Log.info(
+        `Working file changed but ignoring reload (state: ${state.status}) to preserve dashboard view`
       );
     }
   }
@@ -99,7 +100,7 @@ export class PromptFileWatcher {
     uri: vscode.Uri,
     onDelete: (filePath: string) => void
   ): void {
-    console.log(`FlightPath: Working file deleted: ${uri.fsPath}`);
+    Log.info(`Working file deleted: ${uri.fsPath}`);
 
     // Cleanup file references
     onDelete(uri.fsPath);

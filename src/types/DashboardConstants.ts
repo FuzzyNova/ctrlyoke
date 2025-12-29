@@ -11,6 +11,7 @@ export const MESSAGE_TYPES = {
   // Extension -> Webview
   INIT: "init",
   FILE_SELECTED: "fileSelected",
+  SESSION_RESTORED: "sessionRestored", // Restore previous session with runtime state preserved
   EXECUTION_STARTED: "executionStarted",
   EXECUTION_STATE_CHANGED: "executionStateChanged",
   PROGRESS_UPDATE: "progressUpdate",

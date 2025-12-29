@@ -181,6 +181,15 @@
       case MESSAGE_TYPES.FILE_SELECTED:
         handleFileSelected(message.fileName, message.prompts);
         break;
+      case MESSAGE_TYPES.SESSION_RESTORED:
+        handleSessionRestored(
+          message.fileName,
+          message.prompts,
+          message.results,
+          message.executionState,
+          message.currentIndex
+        );
+        break;
       case MESSAGE_TYPES.EXECUTION_STARTED:
         handleExecutionStarted(message.fileName, message.totalSteps);
         break;
@@ -269,6 +278,49 @@
 
     // Reset prompt counter
     elements.promptCounter.textContent = "";
+
+    // Clear CLI output and show empty state
+    elements.outputContent.innerHTML =
+      '<p class="empty-state">CLI output will appear here during execution</p>';
+
+    render();
+  }
+
+  function handleSessionRestored(
+    fileName,
+    prompts,
+    results,
+    executionState,
+    currentIndex
+  ) {
+    // This handler is for restoring a previous session with runtime state preserved
+    console.log(
+      `Dashboard: Session restored (${fileName}), ${prompts.length} prompts, state: ${executionState}, currentIndex: ${currentIndex}`
+    );
+
+    state.fileName = fileName;
+    state.executionState = executionState;
+    state.currentStep = currentIndex;
+    state.totalSteps = prompts.length;
+
+    // Map prompts with their runtime status from results
+    state.prompts = prompts.map((p, i) => {
+      const result = results[i];
+      return {
+        index: i,
+        text: p.prompt || p,
+        status: result?.status || STEP_STATUS.PENDING,
+        details: {},
+      };
+    });
+
+    // Reset outputs and retry states (not persisted in working file)
+    state.cliOutputs = {};
+    state.retryStates = {};
+    state.statusMessages = {};
+
+    // Update prompt counter to reflect restored state
+    updatePromptCounter();
 
     // Clear CLI output and show empty state
     elements.outputContent.innerHTML =

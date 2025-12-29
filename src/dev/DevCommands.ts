@@ -31,6 +31,7 @@ import {
   getCliSupportedModelIdsSync,
 } from "../utils/ModelRegistry";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { Log } from "../utils/Log";
 
 // ============================================================================
 // Test Functions
@@ -40,11 +41,11 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
  * Test File Attachment - Test github.copilot.chat.attachFile and attachSelection commands
  */
 async function testFileAttachment(): Promise<void> {
-  console.log("🧪 Testing File Attachment Commands...");
+  Log.info("🧪 Testing File Attachment Commands...");
 
   try {
     // Step 1: Open Copilot Chat
-    console.log("📋 Step 1: Opening Copilot Chat...");
+    Log.info("📋 Step 1: Opening Copilot Chat...");
     await vscode.commands.executeCommand(
       "workbench.panel.chat.view.copilot.focus"
     );
@@ -52,22 +53,22 @@ async function testFileAttachment(): Promise<void> {
 
     // Step 2: Test attachFile with this file
     const thisFileUri = vscode.Uri.file(__filename);
-    console.log(`📎 Step 2: Testing attachFile with: ${thisFileUri.fsPath}`);
+    Log.info(`📎 Step 2: Testing attachFile with: ${thisFileUri.fsPath}`);
 
     try {
       await vscode.commands.executeCommand(
         "github.copilot.chat.attachFile",
         thisFileUri
       );
-      console.log("✅ attachFile command executed successfully");
+      Log.info("✅ attachFile command executed successfully");
     } catch (error) {
-      console.error("❌ attachFile command failed:", error);
+      Log.error("❌ attachFile command failed:", error);
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Step 3: Test attachSelection - open a file with a selection
-    console.log("📋 Step 3: Testing attachSelection...");
+    Log.info("📋 Step 3: Testing attachSelection...");
 
     // Open a file and create a selection
     const doc = await vscode.workspace.openTextDocument(thisFileUri);
@@ -82,7 +83,7 @@ async function testFileAttachment(): Promise<void> {
     );
     editor.selection = selection;
 
-    console.log(`✂️ Selected lines ${startLine}-${endLine}`);
+    Log.info(`✂️ Selected lines ${startLine}-${endLine}`);
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Focus back to chat and try attachSelection
@@ -95,15 +96,15 @@ async function testFileAttachment(): Promise<void> {
       await vscode.commands.executeCommand(
         "github.copilot.chat.attachSelection"
       );
-      console.log("✅ attachSelection command executed successfully");
+      Log.info("✅ attachSelection command executed successfully");
     } catch (error) {
-      console.error("❌ attachSelection command failed:", error);
+      Log.error("❌ attachSelection command failed:", error);
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
     // Step 4: Try typing a prompt to see if attachments worked
-    console.log("⌨️ Step 4: Typing test prompt...");
+    Log.info("⌨️ Step 4: Typing test prompt...");
     const testPrompt = "Explain what these attachments contain";
     await vscode.commands.executeCommand("type", { text: testPrompt });
 
@@ -118,9 +119,9 @@ async function testFileAttachment(): Promise<void> {
         }
       });
 
-    console.log("✅ Test completed - check chat window for results");
+    Log.info("✅ Test completed - check chat window for results");
   } catch (error) {
-    console.error("❌ File attachment test failed:", error);
+    Log.error("❌ File attachment test failed:", error);
     vscode.window.showErrorMessage(`File attachment test failed: ${error}`);
   }
 }
@@ -129,27 +130,27 @@ async function testFileAttachment(): Promise<void> {
  * Test Chat Model Selection - Investigate workbench.action.chat.changeModel
  */
 async function testChatModelSelection(): Promise<void> {
-  console.log("🧪 Testing Chat Model Selection Command...");
+  Log.info("🧪 Testing Chat Model Selection Command...");
 
   try {
     // Step 1: Query available language models
-    console.log("📋 Step 1: Querying available language models...");
+    Log.info("📋 Step 1: Querying available language models...");
     try {
       const models = await vscode.lm.selectChatModels({
         vendor: "copilot",
       });
-      console.log(`✅ Found ${models.length} available models:`);
+      Log.info(`✅ Found ${models.length} available models:`);
       models.forEach((model) => {
-        console.log(
+        Log.info(
           `   - ID: ${model.id}, Family: ${model.family}, Vendor: ${model.vendor}`
         );
       });
     } catch (error) {
-      console.log("⚠️ Could not query models via API:", error);
+      Log.info("⚠️ Could not query models via API:", error);
     }
 
     // Step 2: Open Copilot Chat
-    console.log("\n📋 Step 2: Opening Copilot Chat...");
+    Log.info("\n📋 Step 2: Opening Copilot Chat...");
     await vscode.commands.executeCommand(
       "workbench.panel.chat.view.copilot.focus"
     );
@@ -212,18 +213,18 @@ async function testChatModelSelection(): Promise<void> {
     ];
 
     for (const testCase of testCases) {
-      console.log(`\n🔍 Testing: ${testCase.name}`);
-      console.log(`   Parameters: ${JSON.stringify(testCase.params)}`);
+      Log.info(`\n🔍 Testing: ${testCase.name}`);
+      Log.info(`   Parameters: ${JSON.stringify(testCase.params)}`);
 
       try {
         await vscode.commands.executeCommand(
           "workbench.action.chat.changeModel",
           ...testCase.params
         );
-        console.log(`   ✅ Command executed successfully`);
+        Log.info(`   ✅ Command executed successfully`);
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
-        console.log(`   ❌ Command failed:`, error);
+        Log.info(`   ❌ Command failed:`, error);
       }
     }
 
@@ -240,9 +241,9 @@ async function testChatModelSelection(): Promise<void> {
         }
       });
 
-    console.log("\n✅ All test cases completed - check results above");
+    Log.info("\n✅ All test cases completed - check results above");
   } catch (error) {
-    console.error("❌ Chat model selection test failed:", error);
+    Log.error("❌ Chat model selection test failed:", error);
     vscode.window.showErrorMessage(
       `Chat model selection test failed: ${error}`
     );
@@ -254,11 +255,11 @@ async function testChatModelSelection(): Promise<void> {
  * Investigates workbench.action.chat.openagent to determine if we can programmatically select agents
  */
 async function testChatAgentSelection(): Promise<void> {
-  console.log("🧪 Testing Chat Agent Selection Command...");
+  Log.info("🧪 Testing Chat Agent Selection Command...");
 
   try {
     // Step 1: Open Copilot Chat
-    console.log("\n📋 Step 1: Opening Copilot Chat...");
+    Log.info("\n📋 Step 1: Opening Copilot Chat...");
     await vscode.commands.executeCommand(
       "workbench.panel.chat.view.copilot.focus"
     );
@@ -299,19 +300,19 @@ async function testChatAgentSelection(): Promise<void> {
     ];
 
     for (const testCase of testCases) {
-      console.log(`\n🔍 Testing: ${testCase.name}`);
-      console.log(`   Command: ${testCase.command}`);
-      console.log(`   Parameters: ${JSON.stringify(testCase.params)}`);
+      Log.info(`\n🔍 Testing: ${testCase.name}`);
+      Log.info(`   Command: ${testCase.command}`);
+      Log.info(`   Parameters: ${JSON.stringify(testCase.params)}`);
 
       try {
         await vscode.commands.executeCommand(
           testCase.command,
           ...testCase.params
         );
-        console.log(`   ✅ Command executed successfully (no error thrown)`);
+        Log.info(`   ✅ Command executed successfully (no error thrown)`);
         await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
-        console.log(`   ❌ Command failed:`, error);
+        Log.info(`   ❌ Command failed:`, error);
       }
     }
 
@@ -329,12 +330,12 @@ async function testChatAgentSelection(): Promise<void> {
         }
       });
 
-    console.log("\n✅ All test cases completed - check results above");
-    console.log(
+    Log.info("\n✅ All test cases completed - check results above");
+    Log.info(
       "⚠️ IMPORTANT: Manually verify if agent selection occurred in Chat UI"
     );
   } catch (error) {
-    console.error("❌ Chat agent selection test failed:", error);
+    Log.error("❌ Chat agent selection test failed:", error);
     vscode.window.showErrorMessage(
       `Chat agent selection test failed: ${error}`
     );
@@ -349,7 +350,7 @@ async function testCopilotAutomation(): Promise<boolean> {
     "Hello Copilot! This is an automated test message from FlightPath using editor chat. Please respond with 'Test received' if you can see this.";
 
   try {
-    console.log(
+    Log.info(
       "🚀 FlightPath: Starting Copilot automation test (Editor Chat approach)..."
     );
 
@@ -379,16 +380,16 @@ async function testCopilotAutomation(): Promise<boolean> {
 
     const method = commandMap[chatLocation] || commandMap["chatPanel"];
 
-    console.log(
+    Log.info(
       `📋 Step 1: Opening Copilot Chat using ${method.label} (configured in settings)...`
     );
 
     try {
       await vscode.commands.executeCommand(method.command);
       await new Promise((resolve) => setTimeout(resolve, method.delay));
-      console.log(`✅ Chat opened in ${method.label}`);
+      Log.info(`✅ Chat opened in ${method.label}`);
     } catch (error) {
-      console.error(`❌ Failed to open chat using ${method.label}:`, error);
+      Log.error(`❌ Failed to open chat using ${method.label}:`, error);
       vscode.window.showErrorMessage(
         `Failed to open Copilot Chat using ${method.label}. Error: ${error}`
       );
@@ -396,26 +397,26 @@ async function testCopilotAutomation(): Promise<boolean> {
     }
 
     // Note: Model selection cannot be automated via VS Code commands
-    console.log(
+    Log.info(
       "ℹ️ Note: Using currently selected model (model switching cannot be automated)"
     );
 
     // Step 2: Clear any existing text
-    console.log("🧹 Step 2: Clearing existing input...");
+    Log.info("🧹 Step 2: Clearing existing input...");
     await vscode.commands.executeCommand("editor.action.selectAll");
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Step 3: Type the test message
-    console.log("⌨️ Step 3: Typing test message...");
+    Log.info("⌨️ Step 3: Typing test message...");
     await vscode.commands.executeCommand("type", { text: testMessage });
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Step 4: Submit the message
-    console.log("📤 Step 4: Submitting message...");
+    Log.info("📤 Step 4: Submitting message...");
     await vscode.commands.executeCommand("workbench.action.chat.submit");
 
     // Success!
-    console.log("✅ FlightPath: Automation test completed successfully!");
+    Log.info("✅ FlightPath: Automation test completed successfully!");
 
     const response = await vscode.window.showInformationMessage(
       "🎉 FlightPath: Automation test completed! Check the editor or chat panel for the test message. Did it work?",
@@ -438,7 +439,7 @@ async function testCopilotAutomation(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error("❌ FlightPath: Automation test failed:", error);
+    Log.error("❌ FlightPath: Automation test failed:", error);
 
     await vscode.window
       .showErrorMessage(
@@ -447,7 +448,7 @@ async function testCopilotAutomation(): Promise<boolean> {
       )
       .then((selection) => {
         if (selection === "View Error Details") {
-          console.error("Full error details:", error);
+          Log.error("Full error details:", error);
         }
       });
 
@@ -471,9 +472,9 @@ async function listAndDisplayCommands(
     ? allCommands.filter(filterFn).sort()
     : allCommands.sort();
 
-  console.log(`=== ${title.toUpperCase()} ===`);
-  console.log(`Found ${filteredCommands.length} commands:\n`);
-  filteredCommands.forEach((cmd) => console.log(`  ${cmd}`));
+  Log.info(`=== ${title.toUpperCase()} ===`);
+  Log.info(`Found ${filteredCommands.length} commands:\n`);
+  filteredCommands.forEach((cmd) => Log.info(`  ${cmd}`));
 
   // Create a document to show the commands
   const doc = await vscode.workspace.openTextDocument({
@@ -492,7 +493,7 @@ async function listAndDisplayCommands(
  * 3. Run: npm run sync-models -- --import
  */
 async function exportDiscoveredModels(): Promise<void> {
-  console.log("📤 Exporting discovered models...");
+  Log.info("📤 Exporting discovered models...");
 
   // Get models from registry
   const chatModels = getAvailableModelsSync();
@@ -535,7 +536,7 @@ async function exportDiscoveredModels(): Promise<void> {
 
   try {
     fs.writeFileSync(outputPath, JSON.stringify(exportData, null, 2) + "\n");
-    console.log(`✅ Exported ${chatModels.length} models to ${outputPath}`);
+    Log.info(`✅ Exported ${chatModels.length} models to ${outputPath}`);
 
     const action = await vscode.window.showInformationMessage(
       `Exported ${chatModels.length} chat models and ${cliModelIds.length} CLI models to scripts/discovered-models.json`,
@@ -553,7 +554,7 @@ async function exportDiscoveredModels(): Promise<void> {
       terminal.sendText("npm run sync-models -- --import");
     }
   } catch (error) {
-    console.error("❌ Failed to export models:", error);
+    Log.error("❌ Failed to export models:", error);
     vscode.window.showErrorMessage(`Failed to export models: ${error}`);
   }
 }
@@ -571,7 +572,7 @@ async function exportDiscoveredModels(): Promise<void> {
  * @param context Extension context for registering disposables
  */
 export function registerDevCommands(context: vscode.ExtensionContext): void {
-  console.log("🔧 FlightPath: Registering development commands...");
+  Log.info("🔧 FlightPath: Registering development commands...");
 
   // Test Copilot Automation command - feasibility test (legacy POC)
   context.subscriptions.push(
@@ -676,5 +677,5 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
     )
   );
 
-  console.log("🔧 FlightPath: Development commands registered");
+  Log.info("🔧 FlightPath: Development commands registered");
 }

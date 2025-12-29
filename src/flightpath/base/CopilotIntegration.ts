@@ -4,6 +4,7 @@ import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotCliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
+import { Log } from "../../utils/Log";
 
 /**
  * Copilot initialization status
@@ -119,7 +120,7 @@ export abstract class CopilotIntegration {
     if (autoAttach) {
       const workspaceRoot = this.getWorkspaceRoot();
       if (!workspaceRoot) {
-        console.warn("No workspace root, skipping context expansion");
+        Log.warn("No workspace root, skipping context expansion");
         return promptText;
       }
 
