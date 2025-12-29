@@ -46,6 +46,7 @@ export class FlightPathManager {
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
   private dashboardReady: boolean = false; // Track dashboard initialization state
+  private startPending: boolean = false; // Prevent duplicate workflow starts (race condition guard)
 
   // New orchestration dependencies (injected)
   private promptFileLoader: PromptFileLoader;
@@ -650,26 +651,39 @@ export class FlightPathManager {
   private async startWorkflowExecution(
     integration?: CopilotIntegration
   ): Promise<void> {
-    const activeIntegration = integration || this.getDefaultIntegration();
+    // Race condition guard: Prevent duplicate starts (from both auto-start and explicit calls)
+    if (this.startPending) {
+      Log.info("⚠️ Workflow start already pending, skipping duplicate start request");
+      return;
+    }
 
-    // Track the active integration for stop() method
-    this.activeIntegration = activeIntegration;
+    this.startPending = true;
 
-    // Build workflow context for the executor
-    const context: WorkflowContext = {
-      workspaceFolderPath: this.currentWorkspaceFolder?.uri.fsPath,
-      currentPromptFilePath: this.currentPromptFile?.filePath,
-      dashboardProvider: this.dashboardProvider,
-      shouldShowCliCommand: this.shouldShowCliCommand(),
-      showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
-      dynamicQueueConfig: this.getDynamicQueueConfig(),
-    };
+    try {
+      const activeIntegration = integration || this.getDefaultIntegration();
 
-    // Delegate to WorkflowExecutor
-    await this.workflowExecutor.execute(activeIntegration, context);
+      // Track the active integration for stop() method
+      this.activeIntegration = activeIntegration;
 
-    // Clear active integration reference after execution
-    this.activeIntegration = undefined;
+      // Build workflow context for the executor
+      const context: WorkflowContext = {
+        workspaceFolderPath: this.currentWorkspaceFolder?.uri.fsPath,
+        currentPromptFilePath: this.currentPromptFile?.filePath,
+        dashboardProvider: this.dashboardProvider,
+        shouldShowCliCommand: this.shouldShowCliCommand(),
+        showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
+        dynamicQueueConfig: this.getDynamicQueueConfig(),
+      };
+
+      // Delegate to WorkflowExecutor
+      await this.workflowExecutor.execute(activeIntegration, context);
+
+      // Clear active integration reference after execution
+      this.activeIntegration = undefined;
+    } finally {
+      // Always clear the pending flag, even if execution throws
+      this.startPending = false;
+    }
   }
 
   /**
@@ -890,12 +904,13 @@ export class FlightPathManager {
   /**
    * Handle queue state changes
    *
-   * This method provides a single execution path for state management:
-   * - Normal start: User action → startWorkflowExecution() → WorkflowExecutor → start() → RUNNING state → here
-   *   (activeIntegration is set, so no auto-start)
-   * - Append to COMPLETED: appendPrompts() → RUNNING state → here → auto-start
-   *   (activeIntegration is undefined, so we start execution)
-   * - Append to IDLE/PAUSED: appendPrompts() → stays IDLE/PAUSED → here → no auto-start
+   * Auto-starts workflow execution when queue transitions to RUNNING without an active integration.
+   * This handles cases like:
+   * - Append to COMPLETED: appendPrompts() → RUNNING state → here → auto-start (or skipped if explicit start pending)
+   * - Resume from STOPPED/PAUSED: resume() → RUNNING state → here → auto-start (or skipped if explicit start pending)
+   *
+   * Race condition protection: startWorkflowExecution() uses startPending flag to prevent duplicate starts,
+   * ensuring only one execution path runs regardless of whether auto-start or explicit start happens first.
    */
   private onQueueStateChanged(state: QueueState): void {
     Log.info(`FlightPath: Queue state changed to ${state.status}`);
@@ -907,7 +922,7 @@ export class FlightPathManager {
     }
 
     // Auto-start execution if state is RUNNING but no execution is active
-    // This handles the case where appendPrompts() set COMPLETED → RUNNING
+    // startWorkflowExecution() will prevent duplicate starts via startPending flag
     if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
       Log.info(
         "Queue state is RUNNING but no active execution detected. Auto-starting workflow..."

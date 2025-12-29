@@ -446,7 +446,6 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       try {
         // executePromptFile without provider override uses the current settings provider
         await flightPathManager.executePromptFile(uri.fsPath);
-        vscode.window.showInformationMessage("FlightPath workflow completed");
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to execute FlightPath workflow: ${error}`
