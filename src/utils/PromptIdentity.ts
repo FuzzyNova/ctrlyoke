@@ -12,20 +12,56 @@ export function hashPromptContent(promptText: string): string {
 }
 
 /**
- * Checks if a prompt has been completed based on ID or content hash
+ * Checks if a prompt has been completed based on tracking ID format
+ *
+ * Tracking ID format (from markPromptCompleted):
+ * - With explicit ID: "{id}:{hash}"
+ * - Without ID or auto-assigned hash ID: "{hash}"
+ *
+ * A prompt is considered completed if:
+ * 1. Exact tracking ID match (either "{id}:{hash}" or "{hash}")
+ * 2. Hash fallback ONLY for prompts without explicit IDs (prevents re-execution of
+ *    duplicate content that was appended without an ID, while allowing legitimate
+ *    duplicate content with different explicit IDs like review-1 and review-2)
+ *
+ * Note: Auto-assigned hash IDs (where id === hash) are treated as "no explicit ID"
+ * for deduplication purposes, ensuring they work correctly across reloads.
  */
 export function isPromptCompleted(
   prompt: PromptItem,
   completedIds: Set<string>
 ): boolean {
-  // Check explicit ID first
-  if (prompt.id && completedIds.has(prompt.id)) {
+  const hash = hashPromptContent(prompt.prompt);
+
+  // Distinguish between explicit user IDs and auto-assigned hash IDs
+  // Auto-assigned hash IDs (id === hash) are treated as "no explicit ID"
+  const hasExplicitId = prompt.id && prompt.id !== hash;
+
+  // Check for exact match: "{id}:{hash}" or "{hash}"
+  const trackingId = hasExplicitId ? `${prompt.id}:${hash}` : hash;
+  if (completedIds.has(trackingId)) {
     return true;
   }
 
-  // Fallback to content hash
-  const hash = hashPromptContent(prompt.prompt);
-  return completedIds.has(hash);
+  // Only check hash fallback for prompts WITHOUT explicit IDs
+  // This allows different explicit IDs with same content to both execute
+  // (e.g., review-1 and review-2 can have identical content)
+  if (!hasExplicitId) {
+    for (const completedId of completedIds) {
+      // Check if this is a concatenated ID and extract the hash
+      if (completedId.includes(":")) {
+        const [, completedHash] = completedId.split(":", 2);
+        if (completedHash === hash) {
+          return true;
+        }
+      } else if (completedId === hash) {
+        // Standalone hash match
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**

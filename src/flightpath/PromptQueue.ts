@@ -12,7 +12,10 @@ import {
 } from "../types/FlightPathTypes";
 import { Log } from "../utils/Log";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -171,9 +174,10 @@ export class PromptQueue {
         else if (index === this.state.currentIndex) {
           // If execution state is RUNNING, mark as SENT
           // Otherwise (IDLE, PAUSED, etc.), mark as PENDING
-          status = this.state.status === EXECUTION_STATES.RUNNING
-            ? STEP_STATUS.SENT
-            : STEP_STATUS.PENDING;
+          status =
+            this.state.status === EXECUTION_STATES.RUNNING
+              ? STEP_STATUS.SENT
+              : STEP_STATUS.PENDING;
         }
         // All other prompts are pending
         else {
@@ -190,9 +194,9 @@ export class PromptQueue {
       this.emitStateChange();
       Log.info(
         `Restored queue from working file: ${workingFile.prompts.length} prompts, ` +
-        `currentIndex=${this.state.currentIndex}, ` +
-        `completed=${this.state.completedIds.size}, ` +
-        `status=${this.state.status}`
+          `currentIndex=${this.state.currentIndex}, ` +
+          `completed=${this.state.completedIds.size}, ` +
+          `status=${this.state.status}`
       );
     } catch (error) {
       Log.error("Failed to restore from working file:", error as Error);
@@ -571,16 +575,23 @@ export class PromptQueue {
 
   /**
    * Mark a prompt as completed (add to completedIds set)
+   *
+   * Uses a concatenated tracking ID:
+   * - Prompts with explicit ID: "{id}:{hash}" (e.g., "review:abc123...")
+   * - Prompts without ID or auto-assigned hash ID: "{hash}" (e.g., "abc123...")
+   *
+   * This ensures:
+   * - ONE entry per completed prompt (no duplicates in completedPrompts array)
+   * - Deduplication works via hash portion for non-explicit IDs
+   * - Explicit IDs are preserved and respected (allows duplicate content with different IDs)
+   * - Auto-assigned hash IDs (id === hash) are treated as non-explicit
    */
   markPromptCompleted(prompt: PromptItem): void {
-    // Add both explicit ID and content hash to completed set
-    if (prompt.id) {
-      this.state.completedIds.add(prompt.id);
-    }
-
-    // Always add content hash as fallback
     const hash = hashPromptContent(prompt.prompt);
-    this.state.completedIds.add(hash);
+    // Treat auto-assigned hash IDs (id === hash) as non-explicit
+    const hasExplicitId = prompt.id && prompt.id !== hash;
+    const trackingId = hasExplicitId ? `${prompt.id}:${hash}` : hash;
+    this.state.completedIds.add(trackingId);
   }
 
   /**
@@ -1149,7 +1160,16 @@ export class PromptQueue {
       }
 
       // Now write back the merged prompts array
-      workingFile.prompts = this.state.prompts;
+      // Update prompts without explicit IDs to include their generated hash IDs
+      workingFile.prompts = this.state.prompts.map((prompt) => {
+        if (!prompt.id) {
+          return {
+            ...prompt,
+            id: hashPromptContent(prompt.prompt),
+          };
+        }
+        return prompt;
+      });
       Log.info(
         `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
       );

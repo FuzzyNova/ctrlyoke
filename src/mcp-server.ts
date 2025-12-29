@@ -30,6 +30,7 @@ import type {
   WorkingFileRuntime,
 } from "./types/FlightPathTypes";
 import { EXECUTION_STATES } from "./types/DashboardConstants";
+import { hashPromptContent, isPromptCompleted } from "./utils/PromptIdentity";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const FLIGHTPATH_DIR = ".flightpath";
@@ -370,39 +371,69 @@ class FlightPathMCPServer {
         : (queueData.prompts || []).length;
     log("Insert index calculated:", insertIndex);
 
-    // Validate queue size limit
+    // Deduplicate prompts using shared identity logic
+    log("Starting deduplication validation...");
+    const validationResults = this.validatePrompts(
+      prompts,
+      queueData.prompts || [],
+      new Set(runtime.completedPrompts || [])
+    );
+    log("Validation results:", validationResults);
+
+    const validPrompts = validationResults
+      .filter((r) => r.accepted)
+      .map((r) => r.prompt);
+    const rejectedPrompts = validationResults.filter((r) => !r.accepted);
+
+    if (validPrompts.length === 0) {
+      log("All prompts rejected, returning error response");
+      const rejectionReasons = rejectedPrompts
+        .map((r) => `"${r.prompt.prompt.substring(0, 50)}...": ${r.reason}`)
+        .join("; ");
+      throw new Error(
+        `All ${prompts.length} prompts rejected. Reasons: ${rejectionReasons}`
+      );
+    }
+
+    // Validate queue size limit (only for prompts that will actually be added)
     const maxQueueSize = 100; // TODO: Read from config
-    const newTotalSize = (queueData.prompts || []).length + prompts.length;
+    const newTotalSize = (queueData.prompts || []).length + validPrompts.length;
     log("Queue size check:", {
       current: (queueData.prompts || []).length,
-      adding: prompts.length,
+      adding: validPrompts.length,
+      rejected: rejectedPrompts.length,
       newTotal: newTotalSize,
       max: maxQueueSize,
     });
 
     if (newTotalSize > maxQueueSize) {
       throw new Error(
-        `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${prompts.length}, Max: ${maxQueueSize}`
+        `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
       );
     }
 
-    // Insert prompts at calculated position
+    // Insert valid prompts at calculated position
     if (!queueData.prompts) {
       log("Initializing empty prompts array");
       queueData.prompts = [];
     }
-    log("Inserting", prompts.length, "prompts at index", insertIndex);
-    queueData.prompts.splice(insertIndex, 0, ...prompts);
+    log(
+      "Inserting",
+      validPrompts.length,
+      "valid prompts at index",
+      insertIndex
+    );
+    queueData.prompts.splice(insertIndex, 0, ...validPrompts);
     log("New queue size:", queueData.prompts.length);
 
-    // Track segment metadata
+    // Track segment metadata (only for prompts that were actually added)
     const segment: AppendSegment = {
       id: this.generateId(),
       timestamp: Date.now(),
       source: reason ? `${source}: ${reason}` : source,
-      promptCount: prompts.length,
+      promptCount: validPrompts.length,
       promptIndices: Array.from(
-        { length: prompts.length },
+        { length: validPrompts.length },
         (_, i) => insertIndex + i
       ),
     };
@@ -441,10 +472,20 @@ class FlightPathMCPServer {
 
     const response = {
       success: true,
-      promptsAdded: prompts.length,
+      promptsAdded: validPrompts.length,
+      promptsRejected: rejectedPrompts.length,
       newQueueSize: queueData.prompts.length,
       insertIndex,
       workingFile: path.relative(this.workspaceRoot, workingFile),
+      ...(rejectedPrompts.length > 0 && {
+        rejectionDetails: rejectedPrompts.map((r) => ({
+          prompt:
+            r.prompt.prompt.substring(0, 100) +
+            (r.prompt.prompt.length > 100 ? "..." : ""),
+          id: r.prompt.id,
+          reason: r.reason,
+        })),
+      }),
     };
 
     return {
@@ -455,6 +496,108 @@ class FlightPathMCPServer {
         },
       ],
     };
+  }
+
+  /**
+   * Validate prompts for deduplication before appending
+   * Uses shared PromptIdentity logic for consistency with extension
+   */
+  private validatePrompts(
+    newPrompts: PromptItem[],
+    existingPrompts: PromptItem[],
+    completedIds: Set<string>
+  ): Array<{ prompt: PromptItem; accepted: boolean; reason?: string }> {
+    const results: Array<{
+      prompt: PromptItem;
+      accepted: boolean;
+      reason?: string;
+    }> = [];
+    const seenHashes = new Set<string>();
+    const seenExplicitIds = new Set<string>();
+
+    // Build tracking sets from existing queue
+    for (const existingPrompt of existingPrompts) {
+      const hash = hashPromptContent(existingPrompt.prompt);
+      const hasExplicitId = existingPrompt.id && existingPrompt.id !== hash;
+
+      if (hasExplicitId) {
+        seenExplicitIds.add(existingPrompt.id!);
+      }
+      // Track hashes for non-explicit IDs only (same logic as isPromptCompleted)
+      if (!hasExplicitId) {
+        seenHashes.add(hash);
+      }
+    }
+
+    log("Deduplication context:", {
+      completedIds: Array.from(completedIds),
+      seenExplicitIds: Array.from(seenExplicitIds),
+      seenHashes: Array.from(seenHashes).map((h) => h.substring(0, 16)),
+    });
+
+    // Validate each new prompt
+    for (const newPrompt of newPrompts) {
+      const hash = hashPromptContent(newPrompt.prompt);
+      const hasExplicitId = newPrompt.id && newPrompt.id !== hash;
+
+      // Check 1: Already completed (uses shared isPromptCompleted logic)
+      if (isPromptCompleted(newPrompt, completedIds)) {
+        results.push({
+          prompt: newPrompt,
+          accepted: false,
+          reason: "Prompt already completed",
+        });
+        continue;
+      }
+
+      // Check 2: Duplicate explicit ID in existing queue
+      if (hasExplicitId && seenExplicitIds.has(newPrompt.id!)) {
+        results.push({
+          prompt: newPrompt,
+          accepted: false,
+          reason: `Duplicate ID: ${newPrompt.id}`,
+        });
+        continue;
+      }
+
+      // Check 3: Duplicate content (for prompts without explicit ID)
+      if (!hasExplicitId && seenHashes.has(hash)) {
+        results.push({
+          prompt: newPrompt,
+          accepted: false,
+          reason: "Duplicate content (no explicit ID)",
+        });
+        continue;
+      }
+
+      // Check 4: Duplicate within this append batch
+      if (hasExplicitId) {
+        if (seenExplicitIds.has(newPrompt.id!)) {
+          results.push({
+            prompt: newPrompt,
+            accepted: false,
+            reason: `Duplicate ID in append batch: ${newPrompt.id}`,
+          });
+          continue;
+        }
+        seenExplicitIds.add(newPrompt.id!);
+      } else {
+        if (seenHashes.has(hash)) {
+          results.push({
+            prompt: newPrompt,
+            accepted: false,
+            reason: "Duplicate content in append batch",
+          });
+          continue;
+        }
+        seenHashes.add(hash);
+      }
+
+      // Prompt is valid
+      results.push({ prompt: newPrompt, accepted: true });
+    }
+
+    return results;
   }
 
   /**
