@@ -441,7 +441,7 @@ export class FlightPathManager {
           Log.info(
             `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
           );
-          this.promptQueue.restart();
+          await this.promptQueue.restart();
         }
       } else {
         Log.info(
@@ -735,7 +735,9 @@ export class FlightPathManager {
     // Listen for process to actually exit (responseComplete event)
     const responseCompleteDisposable = integration.onResponseComplete(() => {
       Log.info("🔔 Process confirmed exited - setting queue state to IDLE");
-      this.promptQueue.confirmedStopped();
+      this.promptQueue.confirmedStopped().catch((err) => {
+        Log.error("Failed to update working file after stop:", err);
+      });
       responseCompleteDisposable.dispose();
     });
 

@@ -152,6 +152,11 @@ body {
   color: var(--vscode-button-foreground);
 }
 
+.execution-state-stopped {
+  background: var(--vscode-editorInfo-foreground, rgba(150, 150, 150, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
 .execution-state-cancelling {
   background: var(--vscode-editorWarning-foreground, rgba(255, 140, 0, 0.8));
   color: var(--vscode-button-foreground);

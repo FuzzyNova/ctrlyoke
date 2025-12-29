@@ -247,25 +247,43 @@ export class PromptQueue {
   /**
    * Resume queue execution
    * Note: This only updates queue state. FlightPathManager checks the state
-   * and continues execution from where it was paused.
+   * and continues execution from where it was paused or stopped.
+   *
+   * PAUSED: Current prompt completed, will continue to next prompt
+   * STOPPED: Current prompt cancelled, will restart current prompt
    */
   async resume(): Promise<void> {
-    if (this.state.status !== EXECUTION_STATES.PAUSED) {
+    if (this.state.status !== EXECUTION_STATES.PAUSED && this.state.status !== EXECUTION_STATES.STOPPED) {
       return;
     }
 
-    // Calculate paused duration and add to total
-    if (this.state.pausedTime) {
+    const previousState = this.state.status;
+
+    // Handle PAUSED state - calculate paused duration
+    if (this.state.status === EXECUTION_STATES.PAUSED && this.state.pausedTime) {
       const pauseDuration = Date.now() - this.state.pausedTime;
       this.state.totalPausedDuration += pauseDuration;
       this.state.pausedTime = undefined;
     }
 
+    // Handle STOPPED state - reset current (cancelled) prompt to PENDING
+    if (this.state.status === EXECUTION_STATES.STOPPED) {
+      if (this.hasNext()) {
+        const currentResult = this.state.results[this.state.currentIndex];
+        if (currentResult.status === STEP_STATUS.CANCELLED) {
+          currentResult.status = STEP_STATUS.PENDING;
+          currentResult.timestamp = new Date();
+          Log.info("Reset cancelled prompt to PENDING for restart");
+        }
+      }
+    }
+
     this.isPaused = false;
+    this.state.stopped = false; // Clear stopped flag when resuming
     this.state.status = EXECUTION_STATES.RUNNING;
     this.emitStateChange();
 
-    Log.info("Queue state set to running (resumed)");
+    Log.info(`Queue state set to running (resumed from ${previousState})`);
   }
 
   /**
@@ -291,21 +309,38 @@ export class PromptQueue {
   /**
    * Confirm that execution has fully stopped (process exited)
    * Call this after the CLI process actually terminates
+   *
+   * STOP semantics: Abort current prompt but preserve workflow state
+   * - Unlike PAUSE (which lets current prompt finish), STOP cancels immediately
+   * - Unlike RESTART (which resets to beginning), STOP preserves all progress
+   * - Preserves currentIndex, completedIds, and all completed results
+   * - Current prompt marked as CANCELLED (not completed)
+   * - Can resume from STOPPED state to restart the cancelled prompt
    */
-  confirmedStopped(): void {
+  async confirmedStopped(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.CANCELLING) {
-      this.state.status = EXECUTION_STATES.IDLE;
-      this.state.currentIndex = 0;
+      this.state.status = EXECUTION_STATES.STOPPED;
+
+      // NOTE: Do NOT reset state - preserve everything:
+      // - currentIndex stays on the cancelled prompt
+      // - completedIds preserves all past completions
+      // - results preserve all completed/failed statuses
+      // - Current prompt already marked CANCELLED by stop()
+
       this.emitStateChange();
-      Log.info("Queue execution fully stopped (process exited)");
+      Log.info("Queue execution fully stopped (process exited) - state preserved");
+
+      // Update working file to reflect STOPPED state (preserves progress)
+      await this.updateWorkingFile();
     }
   }
 
   /**
    * Restart queue from the beginning
    * Resets index, results, and tracking state while keeping prompts loaded
+   * Updates working file to clear completedPrompts array
    */
-  restart(): void {
+  async restart(): Promise<void> {
     this.isPaused = false;
     this.state.currentIndex = 0;
     this.state.status = EXECUTION_STATES.IDLE;
@@ -328,6 +363,11 @@ export class PromptQueue {
 
     this.emitStateChange();
     Log.info("Queue restarted from beginning");
+
+    // Update working file immediately to clear completedPrompts array
+    // This prevents race condition where MCP appends during first prompt
+    // would reload stale completedPrompts from disk
+    await this.updateWorkingFile();
   }
 
   /**

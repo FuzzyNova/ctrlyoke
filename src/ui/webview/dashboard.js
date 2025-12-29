@@ -83,8 +83,10 @@
   });
 
   elements.pauseBtn.addEventListener("click", () => {
-    // Toggle between pause and resume based on current state
-    if (state.executionState === EXECUTION_STATES.PAUSED) {
+    // Toggle between pause/resume based on current state
+    // PAUSED or STOPPED: Resume execution
+    // RUNNING: Pause execution
+    if (state.executionState === EXECUTION_STATES.PAUSED || state.executionState === EXECUTION_STATES.STOPPED) {
       vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
     } else {
       vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
@@ -577,6 +579,9 @@
       case EXECUTION_STATES.PAUSED:
         stateText = "Paused";
         break;
+      case EXECUTION_STATES.STOPPED:
+        stateText = "Stopped";
+        break;
       case EXECUTION_STATES.CANCELLING:
         stateText = "Stopping...";
         break;
@@ -739,6 +744,7 @@
   function updateControls() {
     const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
     const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+    const isStopped = state.executionState === EXECUTION_STATES.STOPPED;
     const isCancelling = state.executionState === EXECUTION_STATES.CANCELLING;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
@@ -746,24 +752,26 @@
     // Enable Edit button when a file is loaded
     elements.editFileBtn.disabled = !hasFile;
 
-    // Enable Run button if: has file AND (not running OR is completed OR is paused)
+    // Enable Run button if: has file AND (not running OR is completed OR is paused OR is stopped)
     // Disable during cancellation - must wait for process to fully stop
-    // When paused, Run button acts as "Restart from beginning"
+    // When paused/stopped/completed, Run button acts as "Restart from beginning"
     elements.runBtn.disabled =
-      !hasFile || isCancelling || (isRunning && !isCompleted && !isPaused);
+      !hasFile || isCancelling || (isRunning && !isCompleted && !isPaused && !isStopped);
     // Change button text and class based on state
-    // Show restart icon when paused or completed
-    elements.runBtn.textContent = isCompleted || isPaused ? "↻" : "▶";
+    // Show restart icon when paused, stopped, or completed
+    elements.runBtn.textContent = isCompleted || isPaused || isStopped ? "↻" : "▶";
     elements.runBtn.title =
-      isCompleted || isPaused ? "Restart from beginning" : "Run";
+      isCompleted || isPaused || isStopped ? "Restart from beginning" : "Run";
     elements.runBtn.className =
-      isCompleted || isPaused ? "btn-rerun" : "btn-primary";
+      isCompleted || isPaused || isStopped ? "btn-rerun" : "btn-primary";
 
-    // Pause button becomes resume button when paused
+    // Pause button becomes resume button when paused or stopped
     // Disable during cancellation
-    if (isPaused) {
+    // PAUSED: Resumes to next prompt (current one completed)
+    // STOPPED: Resumes to restart current prompt (cancelled)
+    if (isPaused || isStopped) {
       elements.pauseBtn.textContent = "▶";
-      elements.pauseBtn.title = "Resume";
+      elements.pauseBtn.title = isStopped ? "Resume (restart current prompt)" : "Resume";
       elements.pauseBtn.disabled = false;
     } else {
       elements.pauseBtn.textContent = "⏸";
@@ -772,6 +780,7 @@
     }
 
     // Stop button enabled when running, paused, or cancelling (allow re-pressing Stop to see status)
+    // Disable when stopped (already stopped)
     elements.stopBtn.disabled = !isRunning && !isPaused && !isCancelling;
   }
 

@@ -122,9 +122,14 @@ export class WorkflowExecutor {
       const prompt = state.prompts[i];
       const dynamicConfig = context.dynamicQueueConfig;
 
-      // Check if paused before starting new prompt
-      if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
+      // Check if paused or stopped before starting new prompt
+      const currentStatus = this.promptQueue.getState().status;
+      if (currentStatus === EXECUTION_STATES.PAUSED) {
         Log.info("⏸️ Workflow paused before executing next prompt");
+        break;
+      }
+      if (currentStatus === EXECUTION_STATES.STOPPED || currentStatus === EXECUTION_STATES.CANCELLING) {
+        Log.info("🛑 Workflow stopped before executing next prompt");
         break;
       }
 
@@ -368,18 +373,20 @@ export class WorkflowExecutor {
 
     Log.info("🎉 Workflow execution complete");
 
-    // Set queue state to completed
+    // Set queue state to completed (unless user paused, stopped, or error occurred)
     const finalState = this.promptQueue.getState();
     if (
       finalState.status !== EXECUTION_STATES.PAUSED &&
+      finalState.status !== EXECUTION_STATES.STOPPED &&
+      finalState.status !== EXECUTION_STATES.CANCELLING &&
       finalState.status !== EXECUTION_STATES.ERROR
     ) {
       await this.promptQueue.markCompleted();
-    }
 
-    // Notify dashboard about execution completion
-    if (context.dashboardProvider) {
-      context.dashboardProvider.updateExecutionCompleted();
+      // Only notify dashboard about completion if we actually completed
+      if (context.dashboardProvider) {
+        context.dashboardProvider.updateExecutionCompleted();
+      }
     }
 
     // Log workflow completion to output channel (only for CLI integration when output is enabled)

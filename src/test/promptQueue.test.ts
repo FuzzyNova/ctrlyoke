@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as vscode from "vscode";
 import { PromptQueue } from "../flightpath/PromptQueue";
 import { EXECUTION_STATES, STEP_STATUS } from "../types/DashboardConstants";
 import { PromptItem } from "../types/FlightPathTypes";
@@ -177,30 +178,37 @@ suite("PromptQueue State Machine Tests", () => {
   });
 
   suite("State Transitions - stop()", () => {
-    test("should transition to CANCELLING, then IDLE after confirmedStopped", async () => {
+    test("should transition to CANCELLING, then STOPPED after confirmedStopped", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
       queue.stop();
       let state = queue.getState();
       assert.strictEqual(state.status, EXECUTION_STATES.CANCELLING);
 
-      // After confirmedStopped(), should transition to IDLE
-      queue.confirmedStopped();
+      // After confirmedStopped(), should transition to STOPPED
+      await queue.confirmedStopped();
       state = queue.getState();
-      assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
+      assert.strictEqual(state.status, EXECUTION_STATES.STOPPED);
     });
 
-    test("should reset currentIndex to 0 after confirmedStopped", async () => {
+    test("should preserve currentIndex and state after confirmedStopped", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
       // Simulate moving forward
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getState().currentIndex, 1);
+      assert.ok(queue.getState().completedIds.size > 0);
+
       queue.stop();
-      // confirmedStopped() resets currentIndex
-      queue.confirmedStopped();
-      assert.strictEqual(queue.getState().currentIndex, 0);
+      // confirmedStopped() preserves state (STOP = abort current, preserve progress)
+      await queue.confirmedStopped();
+
+      const state = queue.getState();
+      assert.strictEqual(state.currentIndex, 1); // Preserved
+      assert.ok(state.completedIds.size > 0); // Preserved
+      // First prompt should still be completed
+      assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
     });
 
     test("should mark SENT prompts as CANCELLED", async () => {
@@ -242,7 +250,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.start();
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
-      queue.restart();
+      await queue.restart();
       assert.strictEqual(queue.getState().currentIndex, 0);
     });
 
@@ -251,7 +259,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.start();
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
-      queue.restart();
+      await queue.restart();
       queue.getState().results.forEach((result) => {
         assert.strictEqual(result.status, STEP_STATUS.PENDING);
       });
@@ -263,7 +271,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.ok(queue.getState().completedIds.size > 0);
-      queue.restart();
+      await queue.restart();
       assert.strictEqual(queue.getState().completedIds.size, 0);
     });
 
@@ -271,23 +279,70 @@ suite("PromptQueue State Machine Tests", () => {
       queue.loadPrompts(samplePrompts);
       queue.startExecutionTimer();
       await new Promise((resolve) => setTimeout(resolve, 10));
-      queue.restart();
+      await queue.restart();
       const state = queue.getState();
       assert.strictEqual(state.totalExecutionTime, 0);
       assert.strictEqual(state.totalPausedDuration, 0);
     });
 
-    test("should keep prompts loaded", () => {
+    test("should keep prompts loaded", async () => {
       queue.loadPrompts(samplePrompts);
-      queue.restart();
+      await queue.restart();
       assert.strictEqual(queue.getState().prompts.length, 3);
     });
 
     test("should reset to IDLE status", async () => {
       queue.loadPrompts(samplePrompts);
       await queue.start();
-      queue.restart();
+      await queue.restart();
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.IDLE);
+    });
+
+    test("should update working file to clear completedPrompts", async () => {
+      // Create a temporary working file
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        // Skip test if no workspace (test environment limitation)
+        return;
+      }
+
+      queue.loadPrompts(samplePrompts);
+      const workingFilePath = await queue.createWorkingFile(
+        "test.flightpath.json",
+        samplePrompts,
+        workspaceFolder
+      );
+
+      // Complete some prompts
+      await queue.start();
+      await queue.markCurrentAsSent();
+      await queue.completeCurrentAndMoveNext();
+
+      // Verify completedIds has entries
+      assert.ok(queue.getState().completedIds.size > 0);
+
+      // Restart should clear completedIds AND update working file
+      await queue.restart();
+      assert.strictEqual(queue.getState().completedIds.size, 0);
+
+      // Read working file to verify completedPrompts is empty
+      const workingFile = await queue.readWorkingFile(workingFilePath);
+      assert.ok(
+        workingFile._runtime,
+        "Working file should have _runtime section"
+      );
+      assert.strictEqual(
+        workingFile._runtime!.completedPrompts.length,
+        0,
+        "Working file should have empty completedPrompts array after restart"
+      );
+
+      // Cleanup
+      try {
+        await vscode.workspace.fs.delete(vscode.Uri.file(workingFilePath));
+      } catch {
+        // Ignore cleanup errors
+      }
     });
   });
 

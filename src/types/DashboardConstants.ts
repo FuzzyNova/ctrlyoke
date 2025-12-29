@@ -72,6 +72,7 @@ export const EXECUTION_STATES = {
   IDLE: "idle",
   RUNNING: "running",
   PAUSED: "paused",
+  STOPPED: "stopped", // Execution aborted, state preserved, can resume from current prompt
   CANCELLING: "cancelling", // Kill signal sent, waiting for process to die
   COMPLETED: "completed",
   ERROR: "error",
