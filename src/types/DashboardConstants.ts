@@ -127,9 +127,10 @@ export const DEFAULT_MODELS = {
 // CLAUDE CLI MODELS - Static options (no programmatic way to query)
 // ============================================================================
 export const CLAUDE_CLI_MODELS = [
-  { value: "sonnet", label: "Sonnet (Recommended)" },
-  { value: "opus", label: "Opus (Most Capable)" },
-  { value: "haiku", label: "Haiku (Fastest)" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "sonnet[1m]", label: "Sonnet 1M Context" },
+  { value: "opus", label: "Opus" },
+  { value: "haiku", label: "Haiku" },
 ] as const;
 
 // ============================================================================
@@ -138,11 +139,11 @@ export const CLAUDE_CLI_MODELS = [
 export const CODEX_CLI_MODELS = [
   {
     value: "gpt-5.1-codex-max",
-    label: "GPT-5.1 Codex Max (Most Capable)",
+    label: "GPT-5.1 Codex Max",
   },
-  { value: "gpt-5.1-codex", label: "GPT-5.1 Codex (Recommended)" },
-  { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini (Fastest)" },
-  { value: "gpt-5.2", label: "GPT-5.2 (Latest Frontier)" },
+  { value: "gpt-5.1-codex", label: "GPT-5.1 Codex" },
+  { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
+  { value: "gpt-5.2", label: "GPT-5.2" },
   { value: "gpt-5.1", label: "GPT-5.1" },
 ] as const;
 

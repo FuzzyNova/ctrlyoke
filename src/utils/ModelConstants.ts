@@ -120,10 +120,10 @@ export const CLAUDE_CLI_DEFAULT_MODEL = "sonnet" as const;
  * Claude CLI model display names
  */
 export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
-  sonnet: "Sonnet (Recommended)",
-  "sonnet[1m]": "Sonnet 1M Context (Extended)",
-  opus: "Opus (Most Capable)",
-  haiku: "Haiku (Fastest)",
+  sonnet: "Sonnet",
+  "sonnet[1m]": "Sonnet 1M Context",
+  opus: "Opus",
+  haiku: "Haiku",
 };
 
 /**
@@ -151,10 +151,10 @@ export const CODEX_CLI_DEFAULT_MODEL = "gpt-5.1-codex" as const;
  * Codex CLI model display names
  */
 export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {
-  "gpt-5.1-codex-max": "GPT-5.1 Codex Max (Most Capable)",
-  "gpt-5.1-codex": "GPT-5.1 Codex (Recommended)",
-  "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini (Fastest)",
-  "gpt-5.2": "GPT-5.2 (Latest Frontier)",
+  "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
+  "gpt-5.1-codex": "GPT-5.1 Codex",
+  "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
+  "gpt-5.2": "GPT-5.2",
   "gpt-5.1": "GPT-5.1",
 };
 
