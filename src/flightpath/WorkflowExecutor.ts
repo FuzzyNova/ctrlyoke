@@ -88,32 +88,10 @@ export class WorkflowExecutor {
     let state = this.promptQueue.getState();
 
     // Show the FlightPath dashboard panel when execution starts
-    try {
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
-    } catch (error) {
-      Log.error("Could not focus dashboard panel:", error);
-    }
+    await this.showDashboard();
 
-    // Log workflow start to output channel (only for CLI integration when output is enabled)
-    if (context.showCliOutput && defaultIntegration.isCli()) {
-      Log.getOutputChannel().clear();
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine("        FLIGHTPATH WORKFLOW STARTED");
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine(`Started: ${new Date().toLocaleString()}`);
-      Log.appendLine(`Total prompts: ${state.prompts.length}`);
-      Log.appendLine(
-        `Integration: ${defaultIntegration.getStatus().strategy.toUpperCase()}`
-      );
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine("");
-    }
+    // Log workflow start to output channel
+    this.logWorkflowStart(context, defaultIntegration, state.prompts.length);
 
     // Start from currentIndex to support resume functionality
     // Note: Use queue.hasNext() instead of state.prompts.length to support dynamic queue extension
@@ -133,49 +111,26 @@ export class WorkflowExecutor {
         Log.info("⏸️ Workflow paused before executing next prompt");
         break;
       }
-      if (currentStatus === EXECUTION_STATES.STOPPED || currentStatus === EXECUTION_STATES.CANCELLING) {
+      if (
+        currentStatus === EXECUTION_STATES.STOPPED ||
+        currentStatus === EXECUTION_STATES.CANCELLING
+      ) {
         Log.info("🛑 Workflow stopped before executing next prompt");
         break;
       }
 
       // Check workflow execution time limit (unless unlimited mode or timeout disabled)
-      const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
-      const unlimitedWorkflow =
-        dynamicConfig.unlimitedMode || maxTimeSec === -1;
-
-      if (!unlimitedWorkflow) {
-        const elapsedMs = this.promptQueue.getActiveExecutionTime();
-        const elapsedSec = Math.floor(elapsedMs / 1000);
-
-        if (elapsedSec >= maxTimeSec) {
-          const completedCount = this.promptQueue.getCompletedCount();
-          const totalCount = state.prompts.length;
-          const remainingCount = totalCount - i;
-
-          const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalCount} prompts. ${remainingCount} prompts remaining in queue.`;
-
-          vscode.window.showWarningMessage(message);
-          Log.info(`⏱️ ${message}`);
-
-          await this.promptQueue.markErrored();
-          break;
-        }
+      const shouldStop = await this.checkExecutionTimeLimit(
+        dynamicConfig,
+        i,
+        state.prompts.length
+      );
+      if (shouldStop) {
+        break;
       }
 
       // Update dashboard step status to running
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateStepStatus(i, {
-          state: STEP_STATUS.RUNNING,
-        });
-
-        // Send status message: Starting prompt
-        const promptPreview = prompt.prompt.split("\n")[0].substring(0, 60);
-        const ellipsis = prompt.prompt.length > 60 ? "..." : "";
-        context.dashboardProvider.updateStatusMessage(
-          i,
-          `Starting Prompt ${i + 1}: ${promptPreview}${ellipsis}`
-        );
-      }
+      this.updateDashboardForPromptStart(context, prompt, i);
 
       // Update progress
       integration.setWorkflowProgress(i + 1, state.prompts.length);
@@ -233,7 +188,7 @@ export class WorkflowExecutor {
         });
       }
 
-      // Send prompt to Copilot with workflow context for dynamic queue instructions
+      // Send prompt to integration
       const success = await integration.sendPrompt(
         prompt,
         needsCompletionDetection,
@@ -249,38 +204,14 @@ export class WorkflowExecutor {
       promptReadyDisposable?.dispose();
 
       if (!success) {
-        // Check if this was a user-initiated stop (not a real error)
-        const queueState = this.promptQueue.getState();
-        if (queueState.stopped) {
-          Log.info("⏹️ Execution stopped by user");
-          break; // Exit loop without error
-        }
-
-        // Check if this was a user cancellation in chat UI
-        // wasLastFailureUserCancellation() returns false by default (CLI)
-        if (integration.wasLastFailureUserCancellation()) {
-          Log.info("⏹️ User cancelled in Copilot Chat - stopping workflow");
-          this.promptQueue.stop();
+        const shouldContinue = await this.handlePromptSendFailure(
+          integration,
+          context,
+          i
+        );
+        if (!shouldContinue) {
           break;
         }
-
-        // Real error - get the specific failure reason and show message
-        const failureReason = integration.getLastFailureReason();
-        vscode.window.showErrorMessage(
-          `Failed to execute prompt ${i + 1}: ${failureReason}`
-        );
-
-        // Mark queue as errored
-        await this.promptQueue.markErrored();
-
-        // Update dashboard with the specific failure reason
-        if (context.dashboardProvider) {
-          context.dashboardProvider.updateStepStatus(i, {
-            state: STEP_STATUS.FAILED,
-            message: failureReason,
-          });
-        }
-        break;
       }
 
       // Mark as sent in queue
@@ -297,34 +228,17 @@ export class WorkflowExecutor {
       Log.info(`✅ Prompt ${i + 1} completed`);
 
       // Calculate duration
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
 
       // Update dashboard with CLI output (if integration provides it)
-      if (context.dashboardProvider) {
-        // Get token statistics from CLI result (returns undefined for non-CLI)
-        let tokens: { prompt: number; completion: number } | undefined;
-        const lastResult = integration.getLastResult();
-        if (lastResult?.statistics) {
-          tokens = integration.parseTokenCounts(lastResult.statistics);
-        }
-
-        // Get CLI command if debugging is enabled (returns undefined for non-CLI)
-        const cliCommand = context.shouldShowCliCommand
-          ? integration.getLastCliCommand()
-          : undefined;
-
-        // Get full prompt text (with all context and instructions)
-        const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
-
-        context.dashboardProvider.updateCliOutput(i, {
-          prompt: fullPrompt,
-          response: responseText,
-          elapsed: parseFloat(duration),
-          tokens,
-          isStreaming: false,
-          cliCommand,
-        });
-      }
+      this.updateDashboardWithResponse(
+        context,
+        integration,
+        prompt,
+        responseText,
+        duration,
+        i
+      );
 
       // Evaluate end condition if present
       if (prompt.endCondition) {
@@ -333,7 +247,7 @@ export class WorkflowExecutor {
           integration,
           context,
           i,
-          parseFloat(duration)
+          duration
         );
 
         if (!shouldContinue) {
@@ -346,7 +260,7 @@ export class WorkflowExecutor {
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
             state: STEP_STATUS.COMPLETED,
-            duration: parseFloat(duration),
+            duration: duration,
           });
           context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
           context.dashboardProvider.updateRetryAttempt(i, 0, 0);
@@ -356,7 +270,7 @@ export class WorkflowExecutor {
         if (context.dashboardProvider) {
           context.dashboardProvider.updateStepStatus(i, {
             state: STEP_STATUS.COMPLETED,
-            duration: parseFloat(duration),
+            duration: duration,
           });
           context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
         }
@@ -379,39 +293,10 @@ export class WorkflowExecutor {
     Log.info("🎉 Workflow execution complete");
 
     // Set queue state to completed (unless user paused, stopped, or error occurred)
-    const finalState = this.promptQueue.getState();
-    if (
-      finalState.status !== EXECUTION_STATES.PAUSED &&
-      finalState.status !== EXECUTION_STATES.STOPPED &&
-      finalState.status !== EXECUTION_STATES.CANCELLING &&
-      finalState.status !== EXECUTION_STATES.ERROR
-    ) {
-      await this.promptQueue.markCompleted();
+    await this.finalizeWorkflowExecution(context);
 
-      // Only notify dashboard about completion if we actually completed
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateExecutionCompleted();
-      }
-    }
-
-    // Log workflow completion to output channel (only for CLI integration when output is enabled)
-    if (context.showCliOutput && defaultIntegration.isCli()) {
-      Log.appendLine("");
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine("        WORKFLOW COMPLETE ✓");
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine(`Completed: ${new Date().toLocaleString()}`);
-      Log.appendLine(
-        `Prompts completed: ${state.prompts.length}/${state.prompts.length}`
-      );
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-    }
+    // Log workflow completion to output channel
+    this.logWorkflowCompletion(context, state.prompts.length);
   }
 
   /**
@@ -647,6 +532,248 @@ export class WorkflowExecutor {
       this.pendingResponseText = null;
 
       resolver(responseText);
+    }
+  }
+
+  /**
+   * Log workflow start message to output channel.
+   * Logs workflow metadata including start time, total prompts, and integration type.
+   */
+  private logWorkflowStart(
+    context: WorkflowContext,
+    integration: CopilotIntegration,
+    totalPrompts: number
+  ): void {
+    if (!context.showCliOutput) {
+      return;
+    }
+
+    Log.getOutputChannel().clear();
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+    Log.appendLine("        FLIGHTPATH WORKFLOW STARTED");
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+    Log.appendLine(`Started: ${new Date().toLocaleString()}`);
+    Log.appendLine(`Total prompts: ${totalPrompts}`);
+    Log.appendLine(
+      `Integration: ${integration.getStatus().strategy.toUpperCase()}`
+    );
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+    Log.appendLine("");
+  }
+
+  /**
+   * Log workflow completion message to output channel.
+   * Logs completion metadata including end time and prompts completed.
+   */
+  private logWorkflowCompletion(
+    context: WorkflowContext,
+    totalPrompts: number
+  ): void {
+    if (!context.showCliOutput) {
+      return;
+    }
+
+    Log.appendLine("");
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+    Log.appendLine("        WORKFLOW COMPLETE ✓");
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+    Log.appendLine(`Completed: ${new Date().toLocaleString()}`);
+    Log.appendLine(`Prompts completed: ${totalPrompts}/${totalPrompts}`);
+    Log.appendLine(
+      "═══════════════════════════════════════════════════════════"
+    );
+  }
+
+  /**
+   * Show the FlightPath dashboard panel.
+   * Attempts to focus the dashboard when execution starts.
+   */
+  private async showDashboard(): Promise<void> {
+    try {
+      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+    } catch (error) {
+      Log.error("Could not focus dashboard panel:", error);
+    }
+  }
+
+  /**
+   * Check if workflow has exceeded maximum execution time.
+   * Returns true if workflow should stop, false if it can continue.
+   */
+  private async checkExecutionTimeLimit(
+    dynamicConfig: DynamicQueueConfig,
+    currentIndex: number,
+    totalPrompts: number
+  ): Promise<boolean> {
+    const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
+    const unlimitedWorkflow =
+      dynamicConfig.unlimitedMode || maxTimeSec === -1;
+
+    if (unlimitedWorkflow) {
+      return false; // Can continue
+    }
+
+    const elapsedMs = this.promptQueue.getActiveExecutionTime();
+    const elapsedSec = Math.floor(elapsedMs / 1000);
+
+    if (elapsedSec >= maxTimeSec) {
+      const completedCount = this.promptQueue.getCompletedCount();
+      const remainingCount = totalPrompts - currentIndex;
+
+      const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalPrompts} prompts. ${remainingCount} prompts remaining in queue.`;
+
+      vscode.window.showWarningMessage(message);
+      Log.info(`⏱️ ${message}`);
+
+      await this.promptQueue.markErrored();
+      return true; // Should stop
+    }
+
+    return false; // Can continue
+  }
+
+  /**
+   * Update dashboard to show prompt is starting.
+   * Sets step status to running and updates status message.
+   */
+  private updateDashboardForPromptStart(
+    context: WorkflowContext,
+    prompt: PromptItem,
+    currentIndex: number
+  ): void {
+    if (!context.dashboardProvider) {
+      return;
+    }
+
+    context.dashboardProvider.updateStepStatus(currentIndex, {
+      state: STEP_STATUS.RUNNING,
+    });
+
+    // Send status message: Starting prompt
+    const promptPreview = prompt.prompt.split("\n")[0].substring(0, 60);
+    const ellipsis = prompt.prompt.length > 60 ? "..." : "";
+    context.dashboardProvider.updateStatusMessage(
+      currentIndex,
+      `Starting Prompt ${currentIndex + 1}: ${promptPreview}${ellipsis}`
+    );
+  }
+
+  /**
+   * Handle prompt send failure.
+   * Checks for user-initiated stop, user cancellation, or real errors.
+   * Returns true if workflow should continue, false if it should stop.
+   */
+  private async handlePromptSendFailure(
+    integration: CopilotIntegration,
+    context: WorkflowContext,
+    currentIndex: number
+  ): Promise<boolean> {
+    // Check if this was a user-initiated stop (not a real error)
+    const queueState = this.promptQueue.getState();
+    if (queueState.stopped) {
+      Log.info("⏹️ Execution stopped by user");
+      return false; // Stop workflow
+    }
+
+    // Check if this was a user cancellation in chat UI
+    // wasLastFailureUserCancellation() returns false by default (CLI)
+    if (integration.wasLastFailureUserCancellation()) {
+      Log.info("⏹️ User cancelled in Copilot Chat - stopping workflow");
+      this.promptQueue.stop();
+      return false; // Stop workflow
+    }
+
+    // Real error - get the specific failure reason and show message
+    const failureReason = integration.getLastFailureReason();
+    vscode.window.showErrorMessage(
+      `Failed to execute prompt ${currentIndex + 1}: ${failureReason}`
+    );
+
+    // Mark queue as errored
+    await this.promptQueue.markErrored();
+
+    // Update dashboard with the specific failure reason
+    if (context.dashboardProvider) {
+      context.dashboardProvider.updateStepStatus(currentIndex, {
+        state: STEP_STATUS.FAILED,
+        message: failureReason,
+      });
+    }
+
+    return false; // Stop workflow
+  }
+
+  /**
+   * Update dashboard with response data from integration.
+   * Includes CLI output, tokens, elapsed time, and streaming status.
+   */
+  private updateDashboardWithResponse(
+    context: WorkflowContext,
+    integration: CopilotIntegration,
+    prompt: PromptItem,
+    responseText: string,
+    duration: number,
+    currentIndex: number
+  ): void {
+    if (!context.dashboardProvider) {
+      return;
+    }
+
+    // Get token statistics from CLI result (returns undefined for non-CLI)
+    let tokens: { prompt: number; completion: number } | undefined;
+    const lastResult = integration.getLastResult();
+    if (lastResult?.statistics) {
+      tokens = integration.parseTokenCounts(lastResult.statistics);
+    }
+
+    // Get CLI command if debugging is enabled (returns undefined for non-CLI)
+    const cliCommand = context.shouldShowCliCommand
+      ? integration.getLastCliCommand()
+      : undefined;
+
+    // Get full prompt text (with all context and instructions)
+    const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
+
+    context.dashboardProvider.updateCliOutput(currentIndex, {
+      prompt: fullPrompt,
+      response: responseText,
+      elapsed: duration,
+      tokens,
+      isStreaming: false,
+      cliCommand,
+    });
+  }
+
+  /**
+   * Finalize workflow execution by setting appropriate end state.
+   * Marks queue as completed if no errors, pauses, or stops occurred.
+   */
+  private async finalizeWorkflowExecution(
+    context: WorkflowContext
+  ): Promise<void> {
+    const finalState = this.promptQueue.getState();
+    if (
+      finalState.status !== EXECUTION_STATES.PAUSED &&
+      finalState.status !== EXECUTION_STATES.STOPPED &&
+      finalState.status !== EXECUTION_STATES.CANCELLING &&
+      finalState.status !== EXECUTION_STATES.ERROR
+    ) {
+      await this.promptQueue.markCompleted();
+
+      // Only notify dashboard about completion if we actually completed
+      if (context.dashboardProvider) {
+        context.dashboardProvider.updateExecutionCompleted();
+      }
     }
   }
 }
