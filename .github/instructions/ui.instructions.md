@@ -174,6 +174,16 @@ User interface components for status display and workflow monitoring.
 - `copyWebviewPlugin` in esbuild.js copies all `src/ui/webview/*` to `out/ui/webview/`
 - HTML template must be present in output directory for runtime loading
 - Constants compiled separately as standalone bundle (no VS Code imports)
+
+**Emoji and icon policy:**
+
+- NEVER use raw emoji characters (🔄, ✅, ❌, 📁, etc.) in dashboard HTML/CSS/JS
+- Emojis cannot be styled or colored to match VS Code themes
+- ALWAYS use text symbols or Unicode characters instead:
+  - Status icons: ○ (pending), ▶ (running), ✓ (completed), ✗ (failed)
+  - Actions: ↻ (retry/restart), → (arrow/path), ⏸ (pause), ⏹ (stop)
+- These symbols inherit VS Code theme colors and maintain visual consistency
+- Use codicons via CSS classes when available for VS Code native icons
   </importantContext>
 
 <relatedFiles>

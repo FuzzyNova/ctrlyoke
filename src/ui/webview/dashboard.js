@@ -684,7 +684,7 @@
         // Show retry state if retrying
         const retryState = state.retryStates[prompt.index];
         if (retryState && retryState.currentRetry > 0) {
-          detailsHtml += `<div class="prompt-retry">🔄 Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
+          detailsHtml += `<div class="prompt-retry">↻ Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
         }
 
         if (prompt.details.duration) {
@@ -792,11 +792,11 @@
 
         if (output.tokens) {
           const total = output.tokens.prompt + output.tokens.completion;
-          html += `<div class="output-stats">📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total</div>`;
+          html += `<div class="output-stats">Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total</div>`;
         }
 
         if (!output.isStreaming && output.elapsed !== undefined) {
-          html += `<div class="output-stats">⏱️ ${output.elapsed}s</div>`;
+          html += `<div class="output-stats">${output.elapsed}s</div>`;
         }
 
         html += "</div>";
@@ -852,11 +852,12 @@
   }
 
   function getStatusIcon(status) {
+    // Use text symbols instead of emojis for proper theme color inheritance
     const icons = {
-      [STEP_STATUS.PENDING]: "⏸️",
-      [STEP_STATUS.RUNNING]: "▶️",
-      [STEP_STATUS.COMPLETED]: "✅",
-      [STEP_STATUS.FAILED]: "❌",
+      [STEP_STATUS.PENDING]: "○",
+      [STEP_STATUS.RUNNING]: "▶",
+      [STEP_STATUS.COMPLETED]: "✓",
+      [STEP_STATUS.FAILED]: "✗",
     };
     return icons[status] || icons[STEP_STATUS.PENDING];
   }
@@ -984,11 +985,11 @@
         if (output.tokens) {
           const total = output.tokens.prompt + output.tokens.completion;
           stats.push(
-            `📊 Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
+            `Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
           );
         }
         if (output.elapsed !== undefined) {
-          stats.push(`⏱️ ${output.elapsed}s`);
+          stats.push(`${output.elapsed}s`);
         }
 
         if (stats.length > 0) {

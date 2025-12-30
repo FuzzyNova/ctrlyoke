@@ -121,9 +121,9 @@ body {
   opacity: 0.6;
 }
 
-/* Override shared btn-small for dashboard */
+/* Override shared btn-small for dashboard - match control button height */
 .btn-small {
-  padding: 2px 8px;
+  padding: 4px 8px;
   font-size: 11px;
 }
 
@@ -792,7 +792,7 @@ h3 {
 }
 
 .save-path-preview::before {
-  content: "📁 ";
+  content: "→ ";
 }
 
 .error-message {
