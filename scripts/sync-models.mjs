@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 
 /**
- * sync-models.mjs - Sync model lists from ModelConstants.ts to package.json
+ * sync-models.mjs - Sync model lists from ModelConstants.ts to package.json and schemas
  *
- * This script reads model constants from ModelConstants.ts and updates
- * the enum arrays in package.json for:
- * - flightpath.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
- * - flightpath.copilotChatModel (uses COPILOT_MODELS keys - full set)
- * - flightpath.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
+ * This script reads model constants from ModelConstants.ts and updates:
+ * 1. package.json enum arrays for settings:
+ *    - flightpath.copilotCliModel (uses COPILOT_CLI_MODEL_IDS - smaller set)
+ *    - flightpath.copilotChatModel (uses COPILOT_MODELS keys - full set)
+ *    - flightpath.claudeCliModel (uses CLAUDE_CLI_MODELS - Claude models)
+ *    - flightpath.codexCliModel (uses CODEX_CLI_MODELS - Codex models)
+ * 2. prompt-schema.json model examples (combines all models for autocomplete)
  *
  * IMPORTANT: Different providers support different model sets!
  * - Copilot CLI models come from `copilot help config` (smaller subset)
  * - Copilot Chat models come from VS Code's Language Model API (larger set)
  * - Claude CLI models come from Anthropic's Claude Code CLI (separate)
+ * - Codex CLI models come from OpenAI's Codex CLI (separate)
  *
  * Usage:
- *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts to package.json
+ *   node scripts/sync-models.mjs             # Sync all models from ModelConstants.ts
  *   node scripts/sync-models.mjs --check     # Check if in sync (CI mode)
  *   node scripts/sync-models.mjs --discover  # Discover models from Copilot CLI
  *   node scripts/sync-models.mjs --import    # Import from discovered-models.json and update ModelConstants.ts
@@ -24,9 +27,9 @@
  *   1. Run extension (F5)
  *   2. Run "FlightPath: Export Discovered Models" command
  *   3. Run: npm run sync-models -- --import
- *   4. Run: npm run sync-models (to update package.json)
+ *   4. Run: npm run sync-models (to update package.json and schema)
  *
- * The script preserves package.json formatting and only updates the enum arrays.
+ * The script preserves formatting and only updates the enum arrays and schema examples.
  */
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
@@ -43,6 +46,7 @@ const ROOT_DIR = resolve(__dirname, "..");
 const MODEL_CONSTANTS_PATH = resolve(ROOT_DIR, "src/utils/ModelConstants.ts");
 const PACKAGE_JSON_PATH = resolve(ROOT_DIR, "package.json");
 const DISCOVERED_MODELS_PATH = resolve(__dirname, "discovered-models.json");
+const SCHEMA_PATH = resolve(ROOT_DIR, "schemas/prompt-schema.json");
 
 /**
  * Parse COPILOT_MODELS (Chat models - full set) from ModelConstants.ts
@@ -129,6 +133,31 @@ function parseClaudeModels(content) {
 }
 
 /**
+ * Parse CODEX_CLI_MODELS (Codex CLI models) from ModelConstants.ts
+ */
+function parseCodexModels(content) {
+  // Find the CODEX_CLI_MODELS array literal
+  const codexBlockMatch = content.match(
+    /export\s+const\s+CODEX_CLI_MODELS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
+  );
+
+  if (!codexBlockMatch) {
+    throw new Error("Could not find CODEX_CLI_MODELS in ModelConstants.ts");
+  }
+
+  const arrayContent = codexBlockMatch[1];
+  const modelIds = [];
+  const stringRegex = /["']([^"']+)["']/g;
+  let match;
+
+  while ((match = stringRegex.exec(arrayContent)) !== null) {
+    modelIds.push(match[1]);
+  }
+
+  return modelIds;
+}
+
+/**
  * Parse all model constants from ModelConstants.ts
  */
 function parseModelConstants() {
@@ -137,21 +166,23 @@ function parseModelConstants() {
   const chatModels = parseChatModels(content);
   const cliModels = parseCliModels(content);
   const claudeModels = parseClaudeModels(content);
+  const codexModels = parseCodexModels(content);
 
   console.log(`Found ${chatModels.length} Chat models in COPILOT_MODELS`);
   console.log(`Found ${cliModels.length} CLI models in COPILOT_CLI_MODEL_IDS`);
   console.log(
     `Found ${claudeModels.length} Claude models in CLAUDE_CLI_MODELS`
   );
+  console.log(`Found ${codexModels.length} Codex models in CODEX_CLI_MODELS`);
 
-  return { chatModels, cliModels, claudeModels };
+  return { chatModels, cliModels, claudeModels, codexModels };
 }
 
 /**
  * Update enum arrays in package.json
  */
 function updatePackageJson(
-  { chatModels, cliModels, claudeModels },
+  { chatModels, cliModels, claudeModels, codexModels },
   checkOnly = false
 ) {
   const content = readFileSync(PACKAGE_JSON_PATH, "utf-8");
@@ -162,6 +193,7 @@ function updatePackageJson(
     "flightpath.copilotCliModel": cliModels,
     "flightpath.copilotChatModel": chatModels,
     "flightpath.claudeCliModel": claudeModels,
+    "flightpath.codexCliModel": codexModels,
   };
 
   let needsUpdate = false;
@@ -204,6 +236,61 @@ function updatePackageJson(
     process.exit(1);
   } else {
     console.log("\n✓ All model lists are in sync");
+  }
+}
+
+/**
+ * Update model examples in prompt-schema.json
+ * Combines all models from all providers for autocomplete
+ */
+function updateSchema(
+  { chatModels, cliModels, claudeModels, codexModels },
+  checkOnly = false
+) {
+  console.log("\nUpdating prompt-schema.json...");
+
+  const content = readFileSync(SCHEMA_PATH, "utf-8");
+  const schema = JSON.parse(content);
+
+  // Combine all unique models from all providers
+  const allModels = [
+    ...new Set([...chatModels, ...cliModels, ...claudeModels, ...codexModels]),
+  ].sort();
+
+  // Find the model property in promptItem definition
+  const modelProperty = schema.definitions?.promptItem?.properties?.model;
+
+  if (!modelProperty) {
+    console.warn("Warning: model property not found in schema");
+    return;
+  }
+
+  const currentExamples = modelProperty.examples || [];
+
+  // Check if different
+  const isDifferent =
+    currentExamples.length !== allModels.length ||
+    !currentExamples.every((id, i) => id === allModels[i]);
+
+  if (isDifferent) {
+    console.log(
+      `  model examples: ${currentExamples.length} → ${allModels.length} models`
+    );
+
+    if (!checkOnly) {
+      modelProperty.examples = allModels;
+
+      // Write back with 2-space indentation
+      writeFileSync(SCHEMA_PATH, JSON.stringify(schema, null, 2) + "\n");
+      console.log("  ✓ prompt-schema.json updated");
+    }
+  } else {
+    console.log("  ✓ Schema examples already in sync");
+  }
+
+  if (isDifferent && checkOnly) {
+    console.log("\n✗ Schema is out of sync");
+    process.exit(1);
   }
 }
 
@@ -363,6 +450,7 @@ async function main() {
   try {
     const models = parseModelConstants();
     updatePackageJson(models, checkOnly);
+    updateSchema(models, checkOnly);
   } catch (error) {
     console.error("Error:", error.message);
     process.exit(1);

@@ -33,7 +33,9 @@
           "$ref": "#/definitions/runtimeMetadata"
         }
       },
-      "required": ["prompts"],
+      "required": [
+        "prompts"
+      ],
       "additionalProperties": false
     }
   ],
@@ -54,7 +56,12 @@
         "provider": {
           "type": "string",
           "description": "AI provider to use for this prompt. Determines which CLI or chat integration to use. Optional - defaults to flightpath.provider setting.",
-          "enum": ["copilot-cli", "copilot-chat", "claude-cli", "codex-cli"],
+          "enum": [
+            "copilot-cli",
+            "copilot-chat",
+            "claude-cli",
+            "codex-cli"
+          ],
           "enumDescriptions": [
             "GitHub Copilot CLI",
             "GitHub Copilot Chat",
@@ -66,12 +73,32 @@
           "type": "string",
           "description": "AI model to use for this prompt. Available models are queried dynamically from your Copilot subscription. Use IntelliSense (Ctrl+Space) to see available models. CLI mode supports limited models (claude-sonnet-4.5, claude-sonnet-4, claude-haiku-4.5, gpt-5) - others will fallback to default with warning. Optional - defaults to flightpath.copilotCliModel setting.",
           "examples": [
-            "claude-sonnet-4.5",
-            "claude-sonnet-4",
+            "auto",
             "claude-haiku-4.5",
-            "gpt-5",
+            "claude-opus-4.5",
+            "claude-sonnet-4",
+            "claude-sonnet-4.5",
+            "copilot-fast",
+            "gemini-2.5-pro",
+            "gemini-3-flash-preview",
+            "gemini-3-pro-preview",
+            "gpt-4.1",
             "gpt-4o",
-            "gemini-2.5-pro"
+            "gpt-4o-mini",
+            "gpt-5",
+            "gpt-5-codex",
+            "gpt-5-mini",
+            "gpt-5.1",
+            "gpt-5.1-codex",
+            "gpt-5.1-codex-max",
+            "gpt-5.1-codex-mini",
+            "gpt-5.2",
+            "grok-code-fast-1",
+            "haiku",
+            "opus",
+            "oswe-vscode-prime",
+            "sonnet",
+            "sonnet[1m]"
           ]
         },
         "agent": {
@@ -91,7 +118,9 @@
           "$ref": "#/definitions/endCondition"
         }
       },
-      "required": ["prompt"]
+      "required": [
+        "prompt"
+      ]
     },
     "endCondition": {
       "type": "object",
@@ -119,7 +148,10 @@
           "description": "Template for retry prompt with placeholders: {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}"
         }
       },
-      "required": ["script", "returns"]
+      "required": [
+        "script",
+        "returns"
+      ]
     },
     "runtimeMetadata": {
       "type": "object",
@@ -156,7 +188,11 @@
           "description": "Track all queue append operations"
         }
       },
-      "required": ["currentIndex", "completedPrompts", "executionState"],
+      "required": [
+        "currentIndex",
+        "completedPrompts",
+        "executionState"
+      ],
       "additionalProperties": false
     },
     "appendSegment": {
@@ -187,7 +223,13 @@
           "description": "Indices of prompts in this segment"
         }
       },
-      "required": ["id", "timestamp", "source", "promptCount", "promptIndices"],
+      "required": [
+        "id",
+        "timestamp",
+        "source",
+        "promptCount",
+        "promptIndices"
+      ],
       "additionalProperties": false
     }
   }

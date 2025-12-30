@@ -32,40 +32,28 @@
  * Some of these may NOT be available via Copilot CLI.
  */
 export const COPILOT_MODELS: Record<string, string> = {
-  // Claude models (Anthropic via Copilot)
-  "claude-sonnet-4.5": "Claude Sonnet 4.5",
-  "claude-haiku-4.5": "Claude Haiku 4.5",
-  "claude-opus-4.5": "Claude Opus 4.5",
-  "claude-sonnet-4": "Claude Sonnet 4",
-
-  // GPT-5 family (OpenAI)
-  "gpt-5": "GPT-5",
-  "gpt-5.1": "GPT-5.1",
-  "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
-  "gpt-5.1-codex": "GPT-5.1 Codex",
-  "gpt-5-codex": "GPT-5 Codex",
   "gpt-5-mini": "GPT-5 Mini",
-
-  // GPT-4 family (OpenAI)
-  "gpt-4.1": "GPT-4.1",
-  "gpt-4o": "GPT-4o",
+  "gpt-5": "GPT-5",
   "gpt-4o-mini": "GPT-4o Mini",
-  "gpt-4": "GPT-4",
-  "gpt-4-0125-preview": "GPT-4 Turbo",
-
-  // Legacy models
-  "gpt-3.5-turbo": "GPT-3.5 Turbo",
-
-  // Gemini models (Google)
-  "gemini-3-pro-preview": "Gemini 3 Pro",
-  "gemini-2.5-pro": "Gemini 2.5 Pro",
-
-  // Special models (internal IDs differ from public names)
-  "oswe-vscode-prime": "Raptor Mini",
+  "copilot-fast": "Copilot Fast",
+  "gpt-4o": "GPT-4o",
   "grok-code-fast-1": "Grok Code Fast",
-
-  // Auto model (let provider decide)
-  auto: "Auto",
+  "gpt-5.1": "GPT-5.1",
+  "gpt-5.1-codex": "GPT-5.1 Codex",
+  "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
+  "gpt-5.1-codex-max": "Gpt 5.1 Codex Max",
+  "gpt-5-codex": "GPT-5 Codex",
+  "claude-sonnet-4": "Claude Sonnet 4",
+  "claude-sonnet-4.5": "Claude Sonnet 4.5",
+  "claude-opus-4.5": "Claude Opus 4.5",
+  "claude-haiku-4.5": "Claude Haiku 4.5",
+  "gemini-3-pro-preview": "Gemini 3 Pro",
+  "gemini-3-flash-preview": "Gemini 3 Flash Preview",
+  "gemini-2.5-pro": "Gemini 2.5 Pro",
+  "gpt-4.1": "GPT-4.1",
+  "oswe-vscode-prime": "Raptor Mini",
+  "gpt-5.2": "Gpt 5.2",
+  "auto": "Auto",
 };
 
 /**

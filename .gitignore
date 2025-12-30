@@ -5,6 +5,9 @@ logs
 .vscode-test/
 *.vsix
 
+# Build artifacts
+package.json.backup
+
 # FlightPath temp files (prompt files for CLI execution)
 .flightpath/temp/
 .flightpath/.queue/

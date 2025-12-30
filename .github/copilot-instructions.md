@@ -103,7 +103,7 @@ schemas/                          # Schemas (source)
 ├── prompt-schema.json            # Unified JSON schema (source of truth)
 └── prompt-schema.yaml            # Auto-generated YAML version
 scripts/
-├── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json
+├── sync-models.mjs               # Sync ModelConstants.ts ↔ package.json ↔ prompt-schema.json
 └── generate-yaml-schema.mjs      # Generate YAML schema from JSON
 ```
 
@@ -475,8 +475,11 @@ if (IS_DEV_MODE) {
 1. Run extension (F5 in dev mode)
 2. Run command: `FlightPath: Export Discovered Models`
 3. Run: `npm run sync-models:import` (updates ModelConstants.ts)
-4. Run: `npm run sync-models` (updates package.json)
-5. Commit both files
+4. Run: `npm run sync-models` (updates package.json AND prompt-schema.json)
+5. Run: `npm run generate-schema` (regenerates YAML schema from JSON)
+6. Commit all updated files
+
+**Note:** The sync-models script now automatically updates BOTH package.json settings AND the prompt-schema.json model examples, ensuring autocomplete shows all available models across all providers (Copilot, Claude, Codex).
 
 ## Development Guidelines
 
@@ -505,7 +508,8 @@ if (IS_DEV_MODE) {
   - Copilot Chat models (COPILOT_MODELS) - full set with display names
   - Copilot CLI models (COPILOT_CLI_MODEL_IDS) - subset from `copilot help config`
   - Claude CLI model aliases (CLAUDE_CLI_MODELS)
-  - Run `npm run sync-models` to sync package.json enums
+  - Codex CLI models (CODEX_CLI_MODELS)
+  - Run `npm run sync-models` to sync package.json enums AND prompt-schema.json examples
   - Run `node scripts/sync-models.mjs --discover` to see current CLI models
 
 **Single Source of Truth Principle**: Each shared constant must have exactly ONE definition. Import and reuse - never duplicate. When updating a constant value, you should only need to change it in ONE place.
