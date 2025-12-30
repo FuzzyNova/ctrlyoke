@@ -90,28 +90,35 @@ body {
   flex-shrink: 0;
 }
 
-#file-info {
+#action-buttons {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  min-width: 0;
-  flex: 1 1 0;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 
-#file-name {
+#workflow-status {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+#workflow-name {
   font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex: 0 1 auto;
+  max-width: 300px;
 }
 
-.file-buttons {
-  display: flex;
-  gap: var(--spacing-xs);
-  flex-shrink: 0;
+.status-separator {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
 }
 
 /* Override shared btn-small for dashboard */
@@ -130,7 +137,6 @@ body {
   letter-spacing: 0.5px;
   flex-shrink: 0;
   white-space: nowrap;
-  margin: 0 auto;
 }
 
 .execution-state-idle {
@@ -280,25 +286,17 @@ button:disabled {
     gap: var(--spacing-xs) var(--spacing-sm);
   }
 
-  #file-info {
+  #action-buttons {
     flex: 1 1 100%;
     order: 1;
   }
 
-  #execution-state {
+  #workflow-status {
     order: 2;
   }
 
-  #provider-selector {
-    order: 3;
-  }
-
-  #provider-selector label {
-    display: none; /* Hide label in narrow layout */
-  }
-
   #controls {
-    order: 4;
+    order: 3;
   }
 
   .btn-small {

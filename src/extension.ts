@@ -515,6 +515,44 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Append Prompt File command (for dashboard Append button)
+  const appendFromDashboardCommand = vscode.commands.registerCommand(
+    "flightpath.appendFromDashboard",
+    async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage("No workspace folder open");
+        return;
+      }
+
+      // Find all prompt files in the workspace
+      const promptFiles = await vscode.workspace.findFiles(
+        "**/*.{prompt.json,flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
+        "**/node_modules/**"
+      );
+
+      if (promptFiles.length === 0) {
+        vscode.window.showWarningMessage("No prompt files found in workspace");
+        return;
+      }
+
+      // Show quick pick
+      const items = promptFiles.map((uri) => ({
+        label: vscode.workspace.asRelativePath(uri),
+        uri: uri,
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: "Select a prompt file to append to queue",
+      });
+
+      if (selected) {
+        // Append to end of queue (dashboard button always uses "end" position)
+        await flightPathManager.appendFromFile(selected.uri.fsPath, "end");
+      }
+    }
+  );
+
   // Resume Session command - shows list of previous sessions from .flightpath/.queue
   const resumeSessionCommand = vscode.commands.registerCommand(
     "flightpath.resumeSession",
@@ -605,6 +643,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     queueNextFromContextCommand,
     loadFromContextCommand,
     selectPromptFileCommand,
+    appendFromDashboardCommand,
     resumeSessionCommand,
     editCurrentPromptFileCommand,
     runCommand,

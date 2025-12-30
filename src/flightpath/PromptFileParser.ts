@@ -26,7 +26,7 @@ export class PromptFileParser {
     this.loadSchemas();
   }
 
-  private async loadSchemas(): Promise<void> {
+  private loadSchemas(): void {
     try {
       // Load schema from bundled location (copied from /schemas during build)
       const promptSchemaPath = path.join(
@@ -36,7 +36,12 @@ export class PromptFileParser {
         "prompt-schema.json"
       );
 
-      const promptSchemaContent = await fs.readFile(promptSchemaPath, "utf8");
+      // Use synchronous read to avoid race condition where parsePromptFile
+      // is called before the schema finishes loading
+      const promptSchemaContent = require("fs").readFileSync(
+        promptSchemaPath,
+        "utf8"
+      );
 
       this.promptSchema = JSON.parse(promptSchemaContent);
 

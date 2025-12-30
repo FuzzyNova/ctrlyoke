@@ -14,46 +14,38 @@
   <body>
     <div id="app">
       <div id="header">
-        <div id="file-info">
-          <span id="file-name">No file selected</span>
-          <div class="file-buttons">
-            <!-- Current file actions -->
-            <button
-              id="select-file"
-              class="btn-secondary btn-small"
-              title="Select a different prompt file"
-            >
-              Select
-            </button>
-            <button
-              id="edit-file"
-              class="btn-secondary btn-small"
-              title="Open current prompt file in editor"
-              disabled
-            >
-              Edit
-            </button>
-
-            <span class="button-divider"></span>
-
-            <!-- Creation actions -->
-            <button
-              id="new-prompt"
-              class="btn-secondary btn-small"
-              title="Create new draft prompt (.prompt.md)"
-            >
-              New Prompt
-            </button>
-            <button
-              id="new-workflow"
-              class="btn-secondary btn-small"
-              title="Create workflow from template"
-            >
-              New Workflow
-            </button>
-          </div>
+        <div id="action-buttons">
+          <button
+            id="load-file"
+            class="btn-secondary btn-small"
+            title="Load a prompt file to start a new workflow"
+          >
+            Load
+          </button>
+          <button
+            id="append-file"
+            class="btn-secondary btn-small"
+            title="Append prompts from a file to the current queue"
+            disabled
+          >
+            Append
+          </button>
+          <span class="button-divider"></span>
+          <button
+            id="new-workflow"
+            class="btn-secondary btn-small"
+            title="Create workflow from template"
+          >
+            New Workflow
+          </button>
         </div>
-        <div id="execution-state" class="execution-state-idle">Idle</div>
+
+        <div id="workflow-status">
+          <span id="workflow-name">No workflow loaded</span>
+          <span id="status-separator" class="status-separator" style="display: none;"> - </span>
+          <span id="execution-state" class="execution-state-idle" style="display: none;">Idle</span>
+        </div>
+
         <div id="controls">
           <button id="btn-run" class="btn-primary" title="Run">▶</button>
           <button id="btn-pause" class="btn-secondary" title="Pause" disabled>

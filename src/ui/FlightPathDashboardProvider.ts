@@ -19,6 +19,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     [MESSAGE_TYPES.READY, "flightpath.ready"],
     [MESSAGE_TYPES.NEW_PROMPT, "flightpath.createDraftPrompt"],
     [MESSAGE_TYPES.SELECT_FILE, "flightpath.selectPromptFile"],
+    [MESSAGE_TYPES.APPEND_FILE, "flightpath.appendFromDashboard"],
     [MESSAGE_TYPES.EDIT_FILE, "flightpath.editCurrentPromptFile"],
     [MESSAGE_TYPES.RUN, "flightpath.run"],
     [MESSAGE_TYPES.PAUSE, "flightpath.pause"],

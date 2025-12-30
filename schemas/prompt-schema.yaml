@@ -58,11 +58,6 @@ definitions:
           - copilot-chat
           - claude-cli
           - codex-cli
-        enumDescriptions:
-          - GitHub Copilot CLI
-          - GitHub Copilot Chat
-          - Claude Code CLI
-          - Codex CLI
       model:
         type: string
         description: >-

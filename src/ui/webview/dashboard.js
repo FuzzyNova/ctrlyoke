@@ -21,12 +21,12 @@
 
   // DOM elements
   const elements = {
-    fileName: document.getElementById("file-name"),
-    newPromptBtn: document.getElementById("new-prompt"),
-    newWorkflowBtn: document.getElementById("new-workflow"),
-    selectFileBtn: document.getElementById("select-file"),
-    editFileBtn: document.getElementById("edit-file"),
+    workflowName: document.getElementById("workflow-name"),
+    statusSeparator: document.getElementById("status-separator"),
     executionState: document.getElementById("execution-state"),
+    loadFileBtn: document.getElementById("load-file"),
+    appendFileBtn: document.getElementById("append-file"),
+    newWorkflowBtn: document.getElementById("new-workflow"),
     runBtn: document.getElementById("btn-run"),
     pauseBtn: document.getElementById("btn-pause"),
     stopBtn: document.getElementById("btn-stop"),
@@ -45,7 +45,7 @@
     defaultConfirmation: document.getElementById("default-confirmation"),
     templateDescription: document.getElementById("template-description"),
     variablesSection: document.getElementById("variables-section"),
-    workflowName: document.getElementById("workflow-name"),
+    workflowNameInput: document.getElementById("workflow-name"),
     savePathPreview: document.getElementById("save-path-preview"),
     filenameError: document.getElementById("filename-error"),
     modalCancel: document.getElementById("modal-cancel"),
@@ -62,20 +62,16 @@
   };
 
   // Event listeners
-  elements.newPromptBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.NEW_PROMPT });
+  elements.loadFileBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
+  });
+
+  elements.appendFileBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
   });
 
   elements.newWorkflowBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
-  });
-
-  elements.selectFileBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
-  });
-
-  elements.editFileBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.EDIT_FILE });
   });
 
   elements.runBtn.addEventListener("click", () => {
@@ -135,7 +131,7 @@
     }
   });
 
-  elements.workflowName.addEventListener("input", () => {
+  elements.workflowNameInput.addEventListener("input", () => {
     updatePathPreview();
     validateFilename();
   });
@@ -171,6 +167,57 @@
       }
     }
   });
+
+  // Helper: Extract workflow name from file path
+  function getWorkflowName(filePath) {
+    if (!filePath) return "No workflow loaded";
+    const fileName = filePath.split(/[/\\]/).pop(); // Get last segment
+    return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, ""); // Remove extension
+  }
+
+  // Update workflow name and state display
+  function updateWorkflowStatus(filePath, executionState) {
+    if (!filePath) {
+      // No workflow loaded - hide state separator and execution state
+      elements.workflowName.textContent = "No workflow loaded";
+      elements.statusSeparator.style.display = "none";
+      elements.executionState.style.display = "none";
+    } else {
+      // Workflow loaded - show name, separator, and state
+      elements.workflowName.textContent = getWorkflowName(filePath);
+      elements.statusSeparator.style.display = "inline";
+      elements.executionState.style.display = "inline";
+    }
+  }
+
+  // Update Load button state (disable when running/paused)
+  function updateLoadButtonState() {
+    if (
+      state.executionState === EXECUTION_STATES.RUNNING ||
+      state.executionState === EXECUTION_STATES.PAUSED
+    ) {
+      elements.loadFileBtn.disabled = true;
+      elements.loadFileBtn.title =
+        "Cannot load while workflow is running (stop first)";
+    } else {
+      elements.loadFileBtn.disabled = false;
+      elements.loadFileBtn.title = "Load a prompt file to start a new workflow";
+    }
+  }
+
+  // Update Append button state (disable when no queue)
+  function updateAppendButtonState() {
+    const hasQueue = state.fileName !== null;
+    elements.appendFileBtn.disabled = !hasQueue;
+
+    if (!hasQueue) {
+      elements.appendFileBtn.title =
+        "No workflow loaded (load a file first)";
+    } else {
+      elements.appendFileBtn.title =
+        "Append prompts from a file to the current queue";
+    }
+  }
 
   // Message handler
   window.addEventListener("message", (event) => {
@@ -278,6 +325,11 @@
     state.retryStates = {}; // Reset retry states
     state.statusMessages = {}; // Reset status messages
 
+    // Update workflow status display
+    updateWorkflowStatus(fileName, EXECUTION_STATES.IDLE);
+    updateLoadButtonState();
+    updateAppendButtonState();
+
     // Reset prompt counter
     elements.promptCounter.textContent = "";
 
@@ -321,6 +373,11 @@
     state.retryStates = {};
     state.statusMessages = {};
 
+    // Update workflow status display
+    updateWorkflowStatus(fileName, executionState);
+    updateLoadButtonState();
+    updateAppendButtonState();
+
     // Update prompt counter to reflect restored state
     updatePromptCounter();
 
@@ -332,6 +389,7 @@
   }
 
   function handleExecutionStarted(fileName, totalSteps) {
+    state.fileName = fileName;
     state.executionState = EXECUTION_STATES.RUNNING;
     state.totalSteps = totalSteps;
     state.currentStep = 0;
@@ -351,6 +409,11 @@
     elements.outputContent.innerHTML =
       '<p class="empty-state">CLI output will appear here during execution</p>';
 
+    // Update workflow status display
+    updateWorkflowStatus(fileName, EXECUTION_STATES.RUNNING);
+    updateLoadButtonState();
+    updateAppendButtonState();
+
     updateControls();
     updatePromptCounter();
     renderPromptsList();
@@ -358,6 +421,8 @@
 
   function handleExecutionStateChanged(executionState) {
     state.executionState = executionState;
+    updateWorkflowStatus(state.fileName, executionState);
+    updateLoadButtonState();
     render();
   }
 
@@ -510,6 +575,9 @@
 
   function handleExecutionCompleted() {
     state.executionState = EXECUTION_STATES.COMPLETED;
+    updateWorkflowStatus(state.fileName, EXECUTION_STATES.COMPLETED);
+    updateLoadButtonState();
+    updateAppendButtonState();
     updateControls();
   }
 
@@ -552,10 +620,12 @@
   }
 
   function render() {
-    elements.fileName.textContent = state.fileName || "No file selected";
+    updateWorkflowStatus(state.fileName, state.executionState);
     renderExecutionState();
     renderPromptsList();
     updateControls();
+    updateLoadButtonState();
+    updateAppendButtonState();
     updatePromptCounter();
   }
 
@@ -748,9 +818,6 @@
     const isCancelling = state.executionState === EXECUTION_STATES.CANCELLING;
     const hasFile = state.fileName !== null;
     const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
-
-    // Enable Edit button when a file is loaded
-    elements.editFileBtn.disabled = !hasFile;
 
     // Enable Run button if: has file AND (not running OR is completed OR is paused OR is stopped)
     // Disable during cancellation - must wait for process to fully stop
@@ -953,7 +1020,7 @@
     populateTemplateDropdown();
 
     // Reset form
-    elements.workflowName.value = "";
+    elements.workflowNameInput.value = "";
     elements.variablesSection.innerHTML = "";
     elements.variablesSection.hidden = true;
     elements.filenameError.hidden = true;
@@ -978,7 +1045,7 @@
 
     // Focus first input
     setTimeout(() => {
-      elements.workflowName.focus();
+      elements.workflowNameInput.focus();
     }, 100);
   }
 
@@ -1108,7 +1175,7 @@
    * Update the save path preview
    */
   function updatePathPreview() {
-    const filename = elements.workflowName.value.trim();
+    const filename = elements.workflowNameInput.value.trim();
     if (filename) {
       elements.savePathPreview.textContent = `${modalState.workflowsDir}/${filename}.flightpath.json`;
     } else {
@@ -1121,7 +1188,7 @@
    * @returns {boolean} True if valid
    */
   function validateFilename() {
-    const filename = elements.workflowName.value.trim();
+    const filename = elements.workflowNameInput.value.trim();
 
     // Check for empty
     if (!filename) {
@@ -1160,7 +1227,7 @@
     }
 
     const templateId = elements.templateSelect.value;
-    const filename = elements.workflowName.value.trim();
+    const filename = elements.workflowNameInput.value.trim();
 
     // Collect variable values
     const variables = {};
