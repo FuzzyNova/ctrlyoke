@@ -32,7 +32,7 @@ import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
   private promptQueue: PromptQueue;
-  private cliIntegration: CopilotCommandLineIntegration;
+  private copilotCliIntegration: CopilotCommandLineIntegration;
   private chatIntegration: CopilotChatIntegration;
   private claudeCliIntegration: ClaudeCommandLineIntegration;
   private codexCliIntegration: CodexCommandLineIntegration;
@@ -65,7 +65,7 @@ export class FlightPathManager {
     this.promptQueue = new PromptQueue();
 
     // Initialize ALL integrations so they're always ready to use
-    this.cliIntegration = new CopilotCommandLineIntegration(context);
+    this.copilotCliIntegration = new CopilotCommandLineIntegration(context);
     this.chatIntegration = new CopilotChatIntegration(context);
     this.claudeCliIntegration = new ClaudeCommandLineIntegration(context);
     this.codexCliIntegration = new CodexCommandLineIntegration(context);
@@ -156,7 +156,7 @@ export class FlightPathManager {
       case Provider.CopilotCli:
       default:
         Log.info("🔄 Using Copilot CLI integration");
-        return this.cliIntegration;
+        return this.copilotCliIntegration;
     }
   }
 
@@ -186,7 +186,7 @@ export class FlightPathManager {
           return this.codexCliIntegration;
         case Provider.CopilotCli:
         default:
-          return this.cliIntegration;
+          return this.copilotCliIntegration;
       }
     }
 
@@ -653,7 +653,9 @@ export class FlightPathManager {
   ): Promise<void> {
     // Race condition guard: Prevent duplicate starts (from both auto-start and explicit calls)
     if (this.startPending) {
-      Log.info("⚠️ Workflow start already pending, skipping duplicate start request");
+      Log.info(
+        "⚠️ Workflow start already pending, skipping duplicate start request"
+      );
       return;
     }
 
@@ -676,7 +678,9 @@ export class FlightPathManager {
         getIntegrationForPrompt: (prompt: PromptItem) => {
           // If prompt has a provider override, use it; otherwise use the active integration
           if (prompt.provider) {
-            Log.info(`🔀 Prompt ${prompt.id || 'unnamed'} using provider override: ${prompt.provider}`);
+            Log.info(
+              `🔀 Prompt ${prompt.id || "unnamed"} using provider override: ${prompt.provider}`
+            );
             return this.createIntegrationForMode(prompt.provider);
           }
           return activeIntegration;
@@ -768,6 +772,10 @@ export class FlightPathManager {
 
     // Clear any pending response state in the executor
     this.workflowExecutor.clearPendingState();
+
+    // Clear the startPending flag to allow new workflows to start
+    // (The finally block in startWorkflowExecution may not have run yet if execute() is still unwinding)
+    this.startPending = false;
   }
 
   /**
