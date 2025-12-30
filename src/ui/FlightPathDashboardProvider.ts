@@ -550,6 +550,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const sharedStyleUri = webview.asWebviewUri(
       this.getWebviewPath("shared.css")
     );
+    // Get codicon CSS from copied files in webview directory
+    const codiconsUri = webview.asWebviewUri(
+      this.getWebviewPath("codicons", "codicon.css")
+    );
 
     // Read HTML template and replace placeholders
     const htmlPath = this.getWebviewFsPath("dashboard.html");
@@ -573,6 +577,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
+      .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;

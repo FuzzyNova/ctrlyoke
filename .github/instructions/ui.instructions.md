@@ -179,11 +179,14 @@ User interface components for status display and workflow monitoring.
 
 - NEVER use raw emoji characters (🔄, ✅, ❌, 📁, etc.) in dashboard HTML/CSS/JS
 - Emojis cannot be styled or colored to match VS Code themes
-- ALWAYS use text symbols or Unicode characters instead:
-  - Status icons: ○ (pending), ▶ (running), ✓ (completed), ✗ (failed)
-  - Actions: ↻ (retry/restart), → (arrow/path), ⏸ (pause), ⏹ (stop)
-- These symbols inherit VS Code theme colors and maintain visual consistency
-- Use codicons via CSS classes when available for VS Code native icons
+- ALWAYS use codicons for icons - they inherit VS Code theme colors perfectly
+- Codicon usage:
+  - Include codicon.css via `{{codiconsUri}}` placeholder in HTML template
+  - Use `<i class="codicon codicon-{name}"></i>` for icons
+  - Status icons: `codicon-circle-outline` (pending), `codicon-play` (running), `codicon-pass` (completed), `codicon-error` (failed)
+  - Actions: `codicon-refresh` (retry), `codicon-arrow-right` (path/arrow)
+  - See https://microsoft.github.io/vscode-codicons/dist/codicon.html for full icon list
+- Text symbols (→, ↻, etc.) are acceptable for CSS ::before/::after content where codicons cannot be used
   </importantContext>
 
 <relatedFiles>

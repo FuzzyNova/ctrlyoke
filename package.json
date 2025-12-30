@@ -1043,6 +1043,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@types/js-yaml": "^4.0.9",
+    "@vscode/codicons": "^0.0.44",
     "ajv": "^8.17.1",
     "chokidar": "^4.0.3",
     "js-yaml": "^4.1.1",

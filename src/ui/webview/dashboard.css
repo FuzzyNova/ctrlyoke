@@ -368,6 +368,12 @@ h3 {
 
 .prompt-icon {
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.prompt-icon .codicon {
+  font-size: 14px;
 }
 
 .prompt-detail {
@@ -386,6 +392,10 @@ h3 {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
+}
+
+.prompt-retry .codicon {
+  font-size: 12px;
 }
 
 .prompt-status-msg {

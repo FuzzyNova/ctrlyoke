@@ -684,7 +684,7 @@
         // Show retry state if retrying
         const retryState = state.retryStates[prompt.index];
         if (retryState && retryState.currentRetry > 0) {
-          detailsHtml += `<div class="prompt-retry">↻ Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
+          detailsHtml += `<div class="prompt-retry"><i class="codicon codicon-refresh"></i> Retry ${retryState.currentRetry} of ${retryState.maxRetries}</div>`;
         }
 
         if (prompt.details.duration) {
@@ -692,7 +692,9 @@
         }
         if (prompt.details.endConditionResult) {
           const result = prompt.details.endConditionResult;
-          const resultIcon = result.passed ? "✓" : "✗";
+          const resultIcon = result.passed
+            ? '<i class="codicon codicon-pass"></i>'
+            : '<i class="codicon codicon-error"></i>';
           detailsHtml += `<div class="prompt-detail">End condition: ${resultIcon} ${result.message || ""}</div>`;
         }
         if (prompt.details.message) {
@@ -852,12 +854,12 @@
   }
 
   function getStatusIcon(status) {
-    // Use text symbols instead of emojis for proper theme color inheritance
+    // Use codicons for proper VS Code theme integration
     const icons = {
-      [STEP_STATUS.PENDING]: "○",
-      [STEP_STATUS.RUNNING]: "▶",
-      [STEP_STATUS.COMPLETED]: "✓",
-      [STEP_STATUS.FAILED]: "✗",
+      [STEP_STATUS.PENDING]: '<i class="codicon codicon-circle-outline"></i>',
+      [STEP_STATUS.RUNNING]: '<i class="codicon codicon-play"></i>',
+      [STEP_STATUS.COMPLETED]: '<i class="codicon codicon-pass"></i>',
+      [STEP_STATUS.FAILED]: '<i class="codicon codicon-error"></i>',
     };
     return icons[status] || icons[STEP_STATUS.PENDING];
   }

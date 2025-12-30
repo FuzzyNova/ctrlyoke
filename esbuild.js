@@ -166,6 +166,27 @@ const copyWebviewPlugin = {
           console.log(`[copy] ${file} -> out/ui/webview/${file}`);
         });
       }
+
+      // Copy codicon files from node_modules to webview directory
+      const codiconsSource = path.join(__dirname, "node_modules", "@vscode", "codicons", "dist");
+      const codiconsOut = path.join(outWebview, "codicons");
+
+      if (fs.existsSync(codiconsSource)) {
+        if (!fs.existsSync(codiconsOut)) {
+          fs.mkdirSync(codiconsOut, { recursive: true });
+        }
+
+        // Copy only the files we need (CSS and font)
+        const codiconFiles = ["codicon.css", "codicon.ttf"];
+        codiconFiles.forEach((file) => {
+          const srcFile = path.join(codiconsSource, file);
+          const outFile = path.join(codiconsOut, file);
+          if (fs.existsSync(srcFile)) {
+            fs.copyFileSync(srcFile, outFile);
+            console.log(`[copy] ${file} -> out/ui/webview/codicons/${file}`);
+          }
+        });
+      }
     });
   },
 };
