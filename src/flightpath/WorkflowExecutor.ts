@@ -33,6 +33,8 @@ export interface WorkflowContext {
   showCliOutput: boolean;
   /** Dynamic queue configuration */
   dynamicQueueConfig: DynamicQueueConfig;
+  /** Integration resolver - gets the appropriate integration for a prompt */
+  getIntegrationForPrompt: (prompt: PromptItem) => CopilotIntegration;
 }
 
 /**
@@ -66,11 +68,11 @@ export class WorkflowExecutor {
    * Execute the workflow with the given integration and context.
    * This is the main execution loop that processes prompts sequentially.
    *
-   * @param integration The Copilot integration to use for sending prompts
+   * @param defaultIntegration The default Copilot integration to use (can be overridden per-prompt)
    * @param context Workflow context with dependencies and configuration
    */
   async execute(
-    integration: CopilotIntegration,
+    defaultIntegration: CopilotIntegration,
     context: WorkflowContext
   ): Promise<void> {
     // Clear any pending response state from previous execution
@@ -93,7 +95,7 @@ export class WorkflowExecutor {
     }
 
     // Log workflow start to output channel (only for CLI integration when output is enabled)
-    if (context.showCliOutput && integration.isCli()) {
+    if (context.showCliOutput && defaultIntegration.isCli()) {
       Log.getOutputChannel().clear();
       Log.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -105,7 +107,7 @@ export class WorkflowExecutor {
       Log.appendLine(`Started: ${new Date().toLocaleString()}`);
       Log.appendLine(`Total prompts: ${state.prompts.length}`);
       Log.appendLine(
-        `Integration: ${integration.getStatus().strategy.toUpperCase()}`
+        `Integration: ${defaultIntegration.getStatus().strategy.toUpperCase()}`
       );
       Log.appendLine(
         "═══════════════════════════════════════════════════════════"
@@ -121,6 +123,9 @@ export class WorkflowExecutor {
       const i = state.currentIndex;
       const prompt = state.prompts[i];
       const dynamicConfig = context.dynamicQueueConfig;
+
+      // Resolve the integration for this prompt (supports per-prompt provider override)
+      const integration = context.getIntegrationForPrompt(prompt);
 
       // Check if paused or stopped before starting new prompt
       const currentStatus = this.promptQueue.getState().status;
@@ -390,7 +395,7 @@ export class WorkflowExecutor {
     }
 
     // Log workflow completion to output channel (only for CLI integration when output is enabled)
-    if (context.showCliOutput && integration.isCli()) {
+    if (context.showCliOutput && defaultIntegration.isCli()) {
       Log.appendLine("");
       Log.appendLine(
         "═══════════════════════════════════════════════════════════"

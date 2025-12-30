@@ -673,6 +673,14 @@ export class FlightPathManager {
         shouldShowCliCommand: this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
+        getIntegrationForPrompt: (prompt: PromptItem) => {
+          // If prompt has a provider override, use it; otherwise use the active integration
+          if (prompt.provider) {
+            Log.info(`🔀 Prompt ${prompt.id || 'unnamed'} using provider override: ${prompt.provider}`);
+            return this.createIntegrationForMode(prompt.provider);
+          }
+          return activeIntegration;
+        },
       };
 
       // Delegate to WorkflowExecutor

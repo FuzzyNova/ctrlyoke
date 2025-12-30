@@ -1,5 +1,5 @@
 import Ajv, { JSONSchemaType, ValidateFunction } from "ajv";
-import { PromptFile, PromptItem, EndCondition } from "../types/FlightPathTypes";
+import { PromptFile, PromptItem, EndCondition, Provider } from "../types/FlightPathTypes";
 import { Log } from "./Log";
 
 /**
@@ -46,6 +46,16 @@ export class ValidationUtils {
           "oswe-vscode-prime",
           "grok-code-fast-1",
           "auto",
+        ],
+        nullable: true,
+      },
+      provider: {
+        type: "string",
+        enum: [
+          Provider.CopilotCli,
+          Provider.CopilotChat,
+          Provider.ClaudeCli,
+          Provider.CodexCli,
         ],
         nullable: true,
       },

@@ -48,6 +48,21 @@ definitions:
           file containing the prompt. File paths are resolved relative to the prompt file's
           directory, then workspace root, then .flightpath directory. Absolute paths are also
           supported.
+      provider:
+        type: string
+        description: >-
+          AI provider to use for this prompt. Determines which CLI or chat integration to use.
+          Optional - defaults to flightpath.provider setting.
+        enum:
+          - copilot-cli
+          - copilot-chat
+          - claude-cli
+          - codex-cli
+        enumDescriptions:
+          - GitHub Copilot CLI
+          - GitHub Copilot Chat
+          - Claude Code CLI
+          - Codex CLI
       model:
         type: string
         description: >-

@@ -60,6 +60,7 @@ export interface WorkingFile extends PromptFile {
 export interface PromptItem {
   id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
+  provider?: Provider; // Provider to use for this prompt (overrides global setting if specified)
   model?: string; // Model ID (dynamically discovered). CLI validates and falls back if unsupported.
   agent?: string; // Custom agent name for CLI mode (e.g., 'flightpath-orchestrator'). Ignored in Chat mode.
   newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
