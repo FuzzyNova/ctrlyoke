@@ -196,9 +196,8 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     // Accumulate into buffer
     this.streamBuffer += chunk;
 
-    const { objects, remainder } = CliResponseParser.extractJsonObjectsFromStream(
-      this.streamBuffer
-    );
+    const { objects, remainder } =
+      CliResponseParser.extractJsonObjectsFromStream(this.streamBuffer);
     this.streamBuffer = remainder;
 
     let contentToEmit = "";
@@ -526,7 +525,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
           promptWithInstruction,
           tuiProcessor,
           timeoutMs,
-          shouldShowOutput,
         }) => {
           const tuiAbortController = new AbortController();
           const startTime = new Date();
@@ -541,7 +539,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
             promptWithInstruction,
             timeoutMs,
             this.lastSanitizedPrompt,
-            shouldShowOutput,
             tuiAbortController
           );
 
@@ -592,7 +589,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       return false;
     }
   }
-
 
   /**
    * Execute in headless mode (background process)

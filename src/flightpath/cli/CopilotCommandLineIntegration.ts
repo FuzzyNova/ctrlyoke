@@ -68,10 +68,12 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       /^●\s+Model changed to:/i, // Model change notification
 
       // Copilot spinner/thinking indicator (UI chrome - just the spinner character alone)
-      /^[·∙◉◎●]\s*$/, // Spinner alone (U+00B7 middle dot, U+2219 bullet operator, or filled circles)
+      /^\s*[·∙◉◎●]\s*$/, // Spinner alone (U+00B7 middle dot, U+2219 bullet operator, or filled circles)
 
       // Copilot spinner with status text and cancel hint (UI chrome)
-      /^[·∙◉◎●]\s+.*\(Esc to cancel/i, // Spinner with status text (e.g., "Thinking (Esc to cancel)")
+      // Allow optional leading whitespace (left after zero-width char stripping)
+      // Note: Only filters lines that are JUST chrome (no content before the spinner)
+      /^\s*[·∙◉◎●]\s+.*\(Esc to cancel/i, // Pure chrome: "∙ Thinking (Esc to cancel)"
 
       // Copilot status bar (UI chrome - path + branch + model display)
       /\[⎇\s+\w+\*?\].*gpt-.*\(\d+x\)/i, // Look for distinctive parts: branch indicator, model, and multiplier
@@ -416,7 +418,6 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
     return args;
   }
-
 
   /**
    * Execute in headless mode (background process)

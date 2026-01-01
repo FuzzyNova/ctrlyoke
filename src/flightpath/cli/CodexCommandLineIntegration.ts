@@ -540,7 +540,8 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     } else {
       // Interactive mode: Configure notify hook for completion detection
       const notifyScript = this.getNotificationScriptPath();
-      const notifyConfig = CliNotificationMonitor.buildCodexNotifyConfig(notifyScript);
+      const notifyConfig =
+        CliNotificationMonitor.buildCodexNotifyConfig(notifyScript);
       args.push("--config", notifyConfig);
       Log.debug(`🔔 Configured notify hook for completion detection`);
     }
@@ -555,7 +556,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
     return args;
   }
-
 
   /**
    * Execute in headless mode (background process)
@@ -760,7 +760,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
           promptWithInstruction,
           tuiProcessor,
           timeoutMs,
-          shouldShowOutput,
         }) => {
           const tuiAbortController = new AbortController();
           const startTime = new Date();
@@ -775,7 +774,6 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
             promptWithInstruction,
             timeoutMs,
             this.lastSanitizedPrompt,
-            shouldShowOutput,
             tuiAbortController
           );
 

@@ -94,7 +94,6 @@ export class TuiStreamProcessor {
     prompt: string,
     timeoutMs: number,
     lastSanitizedPrompt?: string,
-    shouldShowOutput?: boolean,
     abortController?: AbortController
   ): Promise<TuiProcessResult> {
     let tuiReady = false;
@@ -132,9 +131,7 @@ export class TuiStreamProcessor {
       if (atIndex === -1) {
         // No @ symbol, just check for the whole prompt (remove all whitespace for comparison)
         // TUIs may remove spaces in output, so we compare without any whitespace
-        const normalizedPrompt = prompt
-          .toLowerCase()
-          .replace(/\s+/g, "");
+        const normalizedPrompt = prompt.toLowerCase().replace(/\s+/g, "");
         const normalizedBuffer = fileEchoBuffer
           .toLowerCase()
           .replace(/\s+/g, "");
@@ -545,7 +542,8 @@ export class TuiStreamProcessor {
   ): string {
     const lines = screen.split(/\r?\n/);
     const newLines: string[] = [];
-    let consecutiveBlankLines = 0;
+    // Note: consecutiveBlankLines tracking uses the class-level persistent counter
+    // (this.consecutiveBlankLines) to prevent accumulation across multiple screens
 
     // Build set of prompt lines for efficient filtering
     const promptLines = new Set<string>();
@@ -592,13 +590,13 @@ export class TuiStreamProcessor {
 
       // Handle blank line collapsing (max 2 consecutive blank lines)
       if (trimmed.length === 0) {
-        consecutiveBlankLines++;
-        if (consecutiveBlankLines <= this.maxConsecutiveBlankLines) {
+        this.consecutiveBlankLines++;
+        if (this.consecutiveBlankLines <= this.maxConsecutiveBlankLines) {
           newLines.push(line);
         }
         continue;
       } else {
-        consecutiveBlankLines = 0;
+        this.consecutiveBlankLines = 0;
       }
 
       // Check if we've already emitted this line in this pass
@@ -698,6 +696,8 @@ export class TuiStreamProcessor {
         .replace(/\x1B[@-Z\\-_]/g, "")
         // Standalone BEL character
         .replace(/\x07/g, "")
+        // Zero-width characters (U+200B-U+200F: ZWSP, ZWNJ, ZWJ, LRM, RLM, etc.)
+        .replace(/[\u200B-\u200F]/g, "")
       // Note: Excessive whitespace is collapsed in deduplicateContent() instead
     );
   }
@@ -815,6 +815,11 @@ export class TuiStreamProcessor {
         this.consecutiveBlankLines++;
         if (this.consecutiveBlankLines <= this.maxConsecutiveBlankLines) {
           newLines.push(line);
+        } else {
+          // Log when we skip excessive blank lines
+          Log.debug(
+            `[deduplicateContent] 🚫 Skipping blank line (counter: ${this.consecutiveBlankLines}, max: ${this.maxConsecutiveBlankLines})`
+          );
         }
         continue;
       }
@@ -947,8 +952,7 @@ export class TuiStreamProcessor {
   private processScreenBasedChunk(
     screens: string[],
     lastEmittedContent: Map<string, number>,
-    lastSanitizedPrompt?: string,
-    shouldShowOutput?: boolean
+    lastSanitizedPrompt?: string
   ): void {
     for (const screen of screens) {
       const delta = this.extractNewContent(
