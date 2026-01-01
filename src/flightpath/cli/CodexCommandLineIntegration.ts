@@ -105,6 +105,8 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
 
       // Codex status bar (UI chrome - context percentage and shortcuts)
       /\d+%\s+context\s+left.*\?\s+for shortcuts/i, // Status bar (distinctive parts)
+      /^\d+%\s+context\s+left\s*$/i, // Context percentage alone
+      /[·•]\s*\?\s*for shortcuts/i, // Status bar fragment (just shortcuts part)
 
       // Codex prompt indicator when empty (UI chrome)
       /^›\s*$/, // Empty prompt line only
@@ -124,7 +126,9 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       /^•?\s*W(o(r(k(i(n(g)?)?)?)?)?)?\d*\s*$/i, // Working prefixes (W, Wo, Wor, Work, Worki, Workin, Working + numbers)
       /^•?\s*(orking|rking|king|ing|ng|g)\s*$/i, // Working suffixes (fragments from right side)
       /^•?\s*\d+\s*$/i, // Standalone numbers (spinner frame counters)
-      /\(.*esc to interrupt.*\)/i, // Lines with "(esc to interrupt)" or "(Xs • esc to interrupt)"
+      /^[•·]\s*$/i, // Standalone bullet points
+      /\(.*esc to interr?upt.*\)/i, // Lines with "(esc to interrupt)" or "(Xs • esc to interrupt)" (handles typo "interupt")
+      /\d+s\s*[•·]\s*esc to interr?upt/i, // Timer with escape indicator (handles missing opening paren)
     ];
   }
 
