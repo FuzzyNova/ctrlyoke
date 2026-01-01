@@ -1,11 +1,15 @@
 # Test File Attachments
 
-This prompt demonstrates the automatic file attachment feature:
+This prompt is a manual test that demonstrates the various types of file attachments supported in prompts. Please review the following attachments and confirm you received the actual attachments as expected:
 
-1. Full file attachment: Review the entire extension entry point in @src/extension.ts
+1. Full file attachment: @src/extension.ts
 
-2. Line range attachment: Analyze the sendPrompt method implementation in #file:src/flightpath/cli/CopilotCommandLineIntegration.ts:90-130
+2. Line range attachment: #file:src/flightpath/cli/CopilotCommandLineIntegration.ts:90-130
 
-3. Multiple attachments: Compare the base integration in #file:src/flightpath/base/CopilotIntegration.ts:80-110 with the CLI implementation in #file:src/flightpath/cli/CopilotCommandLineIntegration.ts:24-40
+3. Directory Attachment: @src/ui/
 
-Explain how these components work together and suggest any improvements to the architecture.
+4. Symbol attachement: #sym:src/flightpath/cli/BaseCliIntegration.ts:processStreamingChunk():300
+
+5. Duplicate symbol attachment, you should only see it once despite being referenced multiple times: #sym:src/flightpath/cli/BaseCliIntegration.ts:processStreamingChunk():300 and again #sym:src/flightpath/cli/BaseCliIntegration.ts:processStreamingChunk():300. IF you see the full attachment more than once, please let me know, that means the test failed.
+
+If all attachments are present and correct, please respond with "All attachments received successfully." otherwise, please specify which attachments are missing or incorrect.

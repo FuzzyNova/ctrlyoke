@@ -29,7 +29,8 @@ import { Log } from "./Log";
  */
 export class ContextExpander {
   private workspaceRoot: string;
-  private expandedFiles = new Set<string>();
+  // Track attachment IDs to prevent duplicates
+  private attachmentIds = new Set<string>();
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -68,8 +69,9 @@ export class ContextExpander {
       );
 
       const attachments = await Promise.all(attachmentPromises);
+      // Filter out nulls (errors) and empty strings (duplicates)
       const validAttachments = attachments.filter(
-        (a) => a !== null
+        (a) => a !== null && a !== ""
       ) as string[];
 
       if (validAttachments.length === 0) {
@@ -100,6 +102,32 @@ export class ContextExpander {
       return `${ref.path}:${ref.startLine}-${ref.endLine}`;
     }
     return ref.path;
+  }
+
+  /**
+   * Generate unique attachment ID for deduplication
+   * MUST match the attachment ID format used in buildAttachmentXml
+   */
+  private getAttachmentId(ref: FileReference): string {
+    if (ref.isDirectory) {
+      // Match format in buildDirectoryAttachmentXml
+      const normalizedPath = ref.path.replace(/[\/\\]+$/, "");
+      return `directory:${normalizedPath}`;
+    }
+
+    if (ref.symbolName && ref.startLine && ref.endLine) {
+      // Symbol with line range - use path + lines for uniqueness
+      // (same symbol can appear in multiple files or multiple times in same file)
+      return `symbol:${ref.path}:${ref.startLine}-${ref.endLine}`;
+    }
+
+    if (ref.startLine && ref.endLine) {
+      // Line range
+      return `file:${ref.path}:${ref.startLine}-${ref.endLine}`;
+    }
+
+    // Full file
+    return `file:${ref.path}`;
   }
 
   /**
@@ -139,6 +167,18 @@ export class ContextExpander {
   private async buildAttachmentForReference(
     ref: FileReference
   ): Promise<string> {
+    // Generate attachment ID for deduplication
+    const attachmentId = this.getAttachmentId(ref);
+
+    // Skip if already attached
+    if (this.attachmentIds.has(attachmentId)) {
+      Log.info(`Skipping duplicate attachment: ${attachmentId}`);
+      return ""; // Return empty string for duplicates
+    }
+
+    // Mark as attached
+    this.attachmentIds.add(attachmentId);
+
     if (ref.isDirectory) {
       // Directory reference - build tree structure
       return buildDirectoryAttachmentXml(ref.path, this.workspaceRoot);
@@ -179,9 +219,9 @@ export class ContextExpander {
     // If no line range, attach entire file
     if (!startLine || !endLine) {
       const content = doc.getText();
-      const attachmentId = symbolName
-        ? `symbol:${symbolName}`
-        : `file:${filePath}`;
+      // Note: For full files with symbolName, we should have startLine/endLine from resolveSymbol
+      // This case should rarely happen for symbols, but use file path for consistency
+      const attachmentId = `file:${filePath}`;
       const description = symbolName
         ? `Symbol: ${symbolName} in ${filePath}`
         : `File: ${filePath}`;
@@ -201,8 +241,9 @@ ${content}
     const content = doc.getText(range);
 
     // Build attachment with symbol-aware ID and description
+    // Use path + line range for uniqueness (same symbol can appear in multiple files)
     const attachmentId = symbolName
-      ? `symbol:${symbolName}`
+      ? `symbol:${filePath}:${startLine}-${endLine}`
       : `file:${filePath}:${startLine}-${endLine}`;
     const description = symbolName
       ? `Symbol: ${symbolName} in ${filePath}, lines ${startLine} to ${endLine}`
