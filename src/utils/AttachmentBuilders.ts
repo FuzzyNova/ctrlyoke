@@ -135,16 +135,16 @@ function findSymbolAtLine(
     const symbolStartLine = symbol.range.start.line + 1; // Convert to 1-based
     const normalizedSymbolName = symbol.name.replace(/\(\)$/, "");
 
-    Log.info(
-      `[findSymbolAtLine] Checking: "${symbol.name}" (normalized: "${normalizedSymbolName}") at line ${symbolStartLine}, ` +
-        `looking for "${symbolName}" (normalized: "${normalizedSearchName}") at line ${targetLine}`
-    );
+    // Only log individual checks at debug level to reduce verbosity
+    // (checking dozens of symbols is normal for large files)
 
     if (
       normalizedSymbolName === normalizedSearchName &&
       symbolStartLine === targetLine
     ) {
-      Log.info(`[findSymbolAtLine] ✓ Match found: ${symbol.name}`);
+      Log.info(
+        `[findSymbolAtLine] ✓ Found: ${symbol.name} at line ${symbolStartLine}`
+      );
       return symbol;
     }
 

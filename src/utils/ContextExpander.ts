@@ -31,6 +31,9 @@ export class ContextExpander {
   private workspaceRoot: string;
   // Track attachment IDs to prevent duplicates
   private attachmentIds = new Set<string>();
+  // Cache resolved symbols to avoid redundant VS Code API calls
+  // Key: "path:symbolName:line", Value: resolved FileReference
+  private symbolResolutionCache = new Map<string, FileReference | null>();
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -145,7 +148,18 @@ export class ContextExpander {
         // Symbol reference - build full reference string for resolveSymbol
         // Format: path/to/file.ts:SymbolName:123
         const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-        const resolved = await resolveSymbol(symbolRef);
+
+        // Check cache first to avoid expensive re-resolution
+        let resolved: FileReference | null;
+        if (this.symbolResolutionCache.has(symbolRef)) {
+          resolved = this.symbolResolutionCache.get(symbolRef)!;
+          Log.info(`Using cached resolution for: ${symbolRef}`);
+        } else {
+          // Not in cache - resolve and cache the result
+          resolved = await resolveSymbol(symbolRef);
+          this.symbolResolutionCache.set(symbolRef, resolved);
+        }
+
         if (resolved) {
           resolvedRefs.push(resolved);
         } else {
