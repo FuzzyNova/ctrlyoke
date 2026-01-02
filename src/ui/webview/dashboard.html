@@ -70,6 +70,7 @@
       </div>
 
       <div id="main-content">
+        <!-- Left side: Prompts -->
         <div id="prompts-section">
           <div class="section-header">
             <h3>Prompts</h3>
@@ -80,38 +81,53 @@
           </div>
         </div>
 
-        <div id="output-section">
-          <div class="section-header">
-            <div class="tab-controls">
-              <button class="tab-btn active" data-tab="output">Output</button>
-              <button class="tab-btn" data-tab="editor">Editor</button>
+        <!-- Right side: Output + Editor (chat-like layout) -->
+        <div id="output-editor-container">
+          <!-- Output section (always visible, top) -->
+          <div id="output-section">
+            <div class="section-header">
+              <h3>Output</h3>
+              <div class="output-controls">
+                <label class="autoscroll-toggle">
+                  <input type="checkbox" id="autoscroll-checkbox" checked />
+                  <span>Autoscroll</span>
+                </label>
+                <button
+                  id="btn-export"
+                  class="btn-secondary btn-small"
+                  title="Export output to markdown file"
+                >
+                  Export
+                </button>
+              </div>
             </div>
-            <div class="output-controls">
-              <label class="autoscroll-toggle">
-                <input type="checkbox" id="autoscroll-checkbox" checked />
-                <span>Autoscroll</span>
-              </label>
-              <button
-                id="btn-export"
-                class="btn-secondary btn-small"
-                title="Export output to markdown file"
-              >
-                Export
-              </button>
-            </div>
-          </div>
 
-          <!-- Output Tab -->
-          <div id="output-panel" class="tab-panel active">
             <div id="output-content">
               <div class="empty-state">No output yet</div>
             </div>
           </div>
 
-          <!-- Editor Tab -->
-          <div id="editor-panel" class="tab-panel">
-            <div class="editor-status">
-              <span id="editor-mode-indicator">New Prompt</span>
+          <!-- Editor section (always visible, bottom) -->
+
+          <div id="editor-section">
+            <div class="editor-header">
+              <div class="editor-mode-info">
+                <span id="editor-mode-indicator">New Prompt</span>
+                <input
+                  type="text"
+                  id="prompt-name-input"
+                  class="prompt-name-input"
+                  placeholder="Prompt name (optional)"
+                />
+              </div>
+              <button
+                id="btn-new-prompt"
+                class="btn-secondary btn-small"
+                title="Start a new prompt"
+                style="display: none"
+              >
+                New Prompt
+              </button>
             </div>
 
             <div
@@ -122,176 +138,183 @@
               data-placeholder="Write your prompt here..."
             ></div>
 
-            <div class="property-controls">
-              <div class="property-row">
-                <div class="property-group">
-                  <label for="prop-provider">Provider:</label>
-                  <select id="prop-provider" class="property-select">
-                    <option value="default" selected>Default</option>
-                    <option value="copilot-cli">Copilot CLI</option>
-                    <option value="copilot-chat">Copilot Chat</option>
-                    <option value="claude-cli">Claude CLI</option>
-                    <option value="codex-cli">Codex CLI</option>
-                  </select>
-                </div>
-
-                <div class="property-group">
-                  <label for="prop-model">Model:</label>
-                  <select id="prop-model" class="property-select">
-                    <option value="default" selected>Default</option>
-                    <!-- Populated dynamically -->
-                  </select>
-                </div>
-              </div>
-
-              <div class="property-row">
-                <div class="property-group">
-                  <label for="prop-agent">Agent:</label>
-                  <input
-                    type="text"
-                    id="prop-agent"
-                    class="property-input"
-                    placeholder="Default (leave empty)"
-                  />
-                </div>
-
-                <div class="property-group">
-                  <label for="prop-new-chat">New Chat Session:</label>
-                  <select id="prop-new-chat" class="property-select">
-                    <option value="default" selected>Default</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="property-row">
-                <div class="property-group full-width">
-                  <label for="prop-allow-dynamic"
-                    >Allow Dynamic Extension:</label
-                  >
-                  <select id="prop-allow-dynamic" class="property-select">
-                    <option value="default" selected>Default</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </div>
-              </div>
-
-              <details class="end-condition-section">
-                <summary>End Condition (optional)</summary>
-                <div class="end-condition-controls">
+            <details class="property-controls" open>
+              <summary>Properties (optional)</summary>
+              <div class="property-controls-content">
+                <div class="property-row">
                   <div class="property-group">
-                    <label for="prop-end-script">Script:</label>
+                    <label for="prop-provider">Provider:</label>
+                    <select id="prop-provider" class="property-select">
+                      <option value="default" selected>Default</option>
+                      <option value="copilot-cli">Copilot CLI</option>
+                      <option value="copilot-chat">Copilot Chat</option>
+                      <option value="claude-cli">Claude CLI</option>
+                      <option value="codex-cli">Codex CLI</option>
+                    </select>
+                  </div>
+
+                  <div class="property-group">
+                    <label for="prop-model">Model:</label>
+                    <select id="prop-model" class="property-select">
+                      <option value="default" selected>Default</option>
+                      <!-- Populated dynamically -->
+                    </select>
+                  </div>
+                </div>
+
+                <div class="property-row">
+                  <div class="property-group">
+                    <label for="prop-agent">Agent:</label>
                     <input
                       type="text"
-                      id="prop-end-script"
+                      id="prop-agent"
                       class="property-input"
-                      placeholder="npm test"
+                      placeholder="Default (leave empty)"
                     />
                   </div>
+
                   <div class="property-group">
-                    <label for="prop-end-returns">Returns:</label>
-                    <input
-                      type="text"
-                      id="prop-end-returns"
-                      class="property-input"
-                      placeholder="true"
-                    />
+                    <label for="prop-new-chat">New Chat Session:</label>
+                    <select id="prop-new-chat" class="property-select">
+                      <option value="default" selected>Default</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
                   </div>
-                  <div class="property-group">
-                    <label for="prop-end-timeout">Timeout (ms):</label>
-                    <input
-                      type="number"
-                      id="prop-end-timeout"
-                      class="property-input"
-                      value="30000"
-                      min="1000"
-                    />
-                  </div>
-                  <div class="property-group">
-                    <label for="prop-end-retries">Max Retries:</label>
-                    <input
-                      type="number"
-                      id="prop-end-retries"
-                      class="property-input"
-                      value="0"
-                      min="-1"
-                    />
-                  </div>
+                </div>
+
+                <div class="property-row">
                   <div class="property-group full-width">
-                    <label for="prop-end-retry-prompt">Retry Prompt:</label>
-                    <textarea
-                      id="prop-end-retry-prompt"
-                      class="property-textarea"
-                      rows="2"
-                      placeholder="Validation failed: {error}
+                    <label for="prop-allow-dynamic"
+                      >Allow Dynamic Extension:</label
+                    >
+                    <select id="prop-allow-dynamic" class="property-select">
+                      <option value="default" selected>Default</option>
+                      <option value="yes">Yes</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                </div>
+
+                <details class="end-condition-section">
+                  <summary>End Condition (optional)</summary>
+                  <div class="end-condition-controls">
+                    <div class="property-group">
+                      <label for="prop-end-script">Script:</label>
+                      <input
+                        type="text"
+                        id="prop-end-script"
+                        class="property-input"
+                        placeholder="npm test"
+                      />
+                    </div>
+                    <div class="property-group">
+                      <label for="prop-end-returns">Returns:</label>
+                      <input
+                        type="text"
+                        id="prop-end-returns"
+                        class="property-input"
+                        placeholder="true"
+                      />
+                    </div>
+                    <div class="property-group">
+                      <label for="prop-end-timeout">Timeout (ms):</label>
+                      <input
+                        type="number"
+                        id="prop-end-timeout"
+                        class="property-input"
+                        value="30000"
+                        min="1000"
+                      />
+                    </div>
+                    <div class="property-group">
+                      <label for="prop-end-retries">Max Retries:</label>
+                      <input
+                        type="number"
+                        id="prop-end-retries"
+                        class="property-input"
+                        value="0"
+                        min="-1"
+                      />
+                    </div>
+                    <div class="property-group full-width">
+                      <label for="prop-end-retry-prompt">Retry Prompt:</label>
+                      <textarea
+                        id="prop-end-retry-prompt"
+                        class="property-textarea"
+                        rows="2"
+                        placeholder="Validation failed: {error}
 
 Please fix the issues."
-                    ></textarea>
+                      ></textarea>
+                    </div>
                   </div>
-                </div>
-              </details>
-            </div>
+                </details>
+              </div>
+            </details>
 
-            <div class="editor-metadata">
-              <span id="editor-char-count">0 characters</span>
-              <span class="metadata-separator">•</span>
-              <span id="editor-word-count">0 words</span>
-            </div>
+            <div class="editor-footer">
+              <div class="editor-metadata">
+                <span id="editor-char-count">0 characters</span>
+                <span class="metadata-separator">•</span>
+                <span id="editor-word-count">0 words</span>
+              </div>
 
-            <div class="editor-actions">
-              <!-- New Prompt Mode Buttons -->
-              <button
-                id="btn-editor-run"
-                class="btn-primary"
-                title="Create new workflow and run"
-              >
-                Run
-              </button>
-              <button
-                id="btn-editor-append"
-                class="btn-secondary"
-                title="Append to end of queue"
-                disabled
-              >
-                Append
-              </button>
-              <button
-                id="btn-editor-append-next"
-                class="btn-secondary"
-                title="Insert after current prompt"
-                disabled
-              >
-                Append Next
-              </button>
+              <div class="editor-actions">
+                <!-- New Prompt Mode Buttons -->
+                <button
+                  id="btn-editor-run"
+                  class="btn-primary"
+                  title="Create new workflow and run"
+                >
+                  Run
+                </button>
+                <button
+                  id="btn-editor-append"
+                  class="btn-secondary"
+                  title="Append to end of queue"
+                  disabled
+                >
+                  Append
+                </button>
+                <button
+                  id="btn-editor-append-next"
+                  class="btn-secondary"
+                  title="Insert after current prompt"
+                  disabled
+                >
+                  Append Next
+                </button>
 
-              <!-- Edit Existing Mode Buttons (hidden by default) -->
-              <button
-                id="btn-editor-cancel"
-                class="btn-secondary"
-                style="display: none"
-              >
-                Cancel
-              </button>
-              <button
-                id="btn-editor-update"
-                class="btn-primary"
-                style="display: none"
-              >
-                Update
-              </button>
-              <button
-                id="btn-editor-delete"
-                class="btn-secondary"
-                style="display: none"
-              >
-                Delete
-              </button>
+                <!-- Edit Existing Mode Buttons (hidden by default) -->
+                <button
+                  id="btn-editor-cancel"
+                  class="btn-secondary"
+                  style="display: none"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="btn-editor-update"
+                  class="btn-primary"
+                  style="display: none"
+                >
+                  Update
+                </button>
+                <button
+                  id="btn-editor-delete"
+                  class="btn-secondary"
+                  style="display: none"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
+        <!-- Close output-editor-container -->
       </div>
+      <!-- Close main-content -->
 
       <!-- New Workflow Modal -->
       <div id="new-workflow-modal" class="modal" hidden>

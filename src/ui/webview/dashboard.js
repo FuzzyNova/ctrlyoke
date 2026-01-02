@@ -24,7 +24,6 @@
     selectedPromptIndex: null, // null = new prompt mode, number = editing existing
     originalPromptData: null, // For Cancel/revert functionality
     hasActiveQueue: false, // Whether a workflow is currently loaded
-    activeTab: "output", // 'output' or 'editor'
     promptEditor: null, // PromptEditor instance (initialized after DOM load)
   };
 
@@ -60,12 +59,10 @@
     modalCancel: document.getElementById("modal-cancel"),
     modalCreate: document.getElementById("modal-create"),
     modalCreateRun: document.getElementById("modal-create-run"),
-    // Tab elements
-    tabButtons: document.querySelectorAll(".tab-btn"),
-    outputPanel: document.getElementById("output-panel"),
-    editorPanel: document.getElementById("editor-panel"),
     // Editor elements
     editorModeIndicator: document.getElementById("editor-mode-indicator"),
+    promptNameInput: document.getElementById("prompt-name-input"),
+    btnNewPrompt: document.getElementById("btn-new-prompt"),
     promptEditor: document.getElementById("prompt-editor"),
     editorCharCount: document.getElementById("editor-char-count"),
     editorWordCount: document.getElementById("editor-word-count"),
@@ -1347,12 +1344,9 @@
     // Update character/word count on input
     elements.promptEditor.addEventListener("input", updateEditorMetadata);
 
-    // Tab switching
-    elements.tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tabName = btn.dataset.tab;
-        switchTab(tabName);
-      });
+    // New Prompt button (returns to new prompt mode from editing mode)
+    elements.btnNewPrompt.addEventListener("click", () => {
+      cancelEdit();
     });
 
     // Editor action buttons
@@ -1385,23 +1379,6 @@
 
     // Update editor metadata initially
     updateEditorMetadata();
-  }
-
-  /**
-   * Switch between Output and Editor tabs
-   * @param {string} tabName - 'output' or 'editor'
-   */
-  function switchTab(tabName) {
-    editorState.activeTab = tabName;
-
-    // Update tab buttons
-    elements.tabButtons.forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tab === tabName);
-    });
-
-    // Update tab panels
-    elements.outputPanel.classList.toggle("active", tabName === "output");
-    elements.editorPanel.classList.toggle("active", tabName === "editor");
   }
 
   /**
@@ -1539,6 +1516,8 @@
 
     if (isNewMode) {
       elements.editorModeIndicator.textContent = "New Prompt";
+      elements.promptNameInput.style.display = ""; // Show name input in new mode
+      elements.btnNewPrompt.style.display = "none"; // Hide New Prompt button
 
       // Show new prompt buttons
       elements.btnEditorRun.style.display = "";
@@ -1557,6 +1536,8 @@
     } else {
       const totalPrompts = state.prompts.length;
       elements.editorModeIndicator.textContent = `Editing: Prompt ${editorState.selectedPromptIndex + 1} of ${totalPrompts}`;
+      elements.promptNameInput.style.display = "none"; // Hide name input in edit mode
+      elements.btnNewPrompt.style.display = ""; // Show New Prompt button
 
       // Hide new prompt buttons
       elements.btnEditorRun.style.display = "none";
@@ -1698,9 +1679,6 @@
 
     // Load property controls
     setPropertyControls(prompt);
-
-    // Switch to editor tab
-    switchTab("editor");
 
     // Update UI
     updateEditorMode();

@@ -245,11 +245,10 @@ button:disabled {
   font-size: 13px;
 }
 
-/* Responsive main content area */
+/* Main content area - prompts on left, output+editor stacked on right */
 #main-content {
   display: flex;
   gap: var(--spacing-md);
-  flex-wrap: wrap;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -258,27 +257,59 @@ button:disabled {
   box-sizing: border-box;
 }
 
-/* Wide layout: side-by-side (>= 600px) */
-@media (min-width: 600px) {
+/* Left side: Prompts */
+#prompts-section {
+  flex: 0 0 350px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Right side: Output + Editor container (stacked vertically) */
+#output-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Output section (top half) */
+#output-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Editor section (bottom half) */
+#editor-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Wide layout: side-by-side (>= 800px) */
+@media (min-width: 800px) {
+  /* Already defined above */
+}
+
+/* Narrow layout: stack everything (< 800px) */
+@media (max-width: 799px) {
   #main-content {
-    flex-wrap: nowrap;
+    flex-direction: column;
   }
 
   #prompts-section {
-    flex: 0 0 350px;
-    min-width: 0;
+    flex: 0 1 auto;
+    max-height: 200px;
   }
 
-  #output-section {
+  #output-editor-container {
     flex: 1;
-    min-width: 0;
-  }
-}
-
-/* Very narrow layout: compact header (< 600px) */
-@media (max-width: 599px) {
-  #main-content {
-    flex-direction: column;
+    min-height: 0;
   }
 
   #header {
@@ -828,85 +859,75 @@ h3 {
   font-style: italic;
 }
 /* ==================================================================
-   EDITOR TAB STYLES
+   EDITOR SECTION STYLES
    ================================================================== */
 
-/* Tab controls */
-.tab-controls {
-  display: flex;
-  gap: var(--spacing-xs);
-  flex-shrink: 0;
-}
-
-.tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--fg-secondary);
-  cursor: pointer;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  color: var(--fg-primary);
-}
-
-.tab-btn.active {
-  color: var(--fg-primary);
-  border-bottom-color: var(--accent);
-}
-
-/* Tab panels */
-.tab-panel {
-  display: none;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.tab-panel.active {
-  display: flex;
-}
-
-/* Output panel adjustments */
-#output-panel {
+/* Editor section container */
+#editor-section {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-#output-panel.active #output-content {
-  display: block;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* Editor panel */
-#editor-panel {
   padding: var(--spacing-md);
-  gap: var(--spacing-md);
-  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+  padding-bottom: 150px; /* Space for fixed footer + collapsed property controls */
 }
 
-.editor-status {
+/* Editor header */
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: var(--spacing-md);
+}
+
+.editor-mode-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex: 1;
+  min-width: 0;
+}
+
+#editor-mode-indicator {
   font-size: 11px;
   color: var(--fg-secondary);
-  font-weight: 500;
-  padding-bottom: var(--spacing-xs);
-  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prompt-name-input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  color: var(--fg-primary);
+  font-size: 12px;
+  outline: none;
+  max-width: 250px;
+}
+
+.prompt-name-input:focus {
+  border-color: var(--input-focus-border);
+}
+
+#btn-new-prompt {
+  flex-shrink: 0;
 }
 
 /* Prompt editor (contenteditable) */
 .prompt-editor {
-  min-height: 150px;
-  max-height: 300px;
+  flex: 1;
   padding: var(--spacing-md);
   background: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -920,6 +941,9 @@ h3 {
   cursor: text;
   white-space: pre-wrap;
   word-wrap: break-word;
+  min-height: 0;
+  min-height: calc(1.6em * 2 + var(--spacing-md) * 2); /* 2 lines + padding */
+  margin-bottom: 0; /* No bottom margin since property controls are absolutely positioned */
 }
 
 .prompt-editor:focus {
@@ -977,13 +1001,58 @@ h3 {
 
 /* Property controls */
 .property-controls {
+  position: absolute;
+  bottom: 80px; /* Just above footer */
+  left: var(--spacing-md);
+  right: var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  z-index: 5;
+  max-height: 400px; /* Limit expansion height */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.property-controls summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.property-controls summary::-webkit-details-marker {
+  display: none;
+}
+
+.property-controls summary::before {
+  content: "▶";
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 9px;
+}
+
+.property-controls[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.property-controls-content {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  padding-top: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  overflow-y: auto;
+  max-height: 350px; /* Allow scrolling if too many properties */
 }
 
 .property-row {
@@ -1092,6 +1161,21 @@ h3 {
   border-top: 1px solid var(--border-color);
 }
 
+/* Editor footer - fixed to bottom */
+.editor-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  z-index: 10;
+}
+
 /* Editor metadata (character/word count) */
 .editor-metadata {
   display: flex;
@@ -1099,7 +1183,6 @@ h3 {
   align-items: center;
   font-size: 11px;
   color: var(--fg-secondary);
-  padding: var(--spacing-xs) 0;
 }
 
 .metadata-separator {
@@ -1110,7 +1193,5 @@ h3 {
 .editor-actions {
   display: flex;
   gap: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
-  border-top: 1px solid var(--border-color);
   justify-content: flex-end;
 }
