@@ -77,6 +77,10 @@
     propEndTimeout: document.getElementById("prop-end-timeout"),
     propEndRetries: document.getElementById("prop-end-retries"),
     propEndRetryPrompt: document.getElementById("prop-end-retry-prompt"),
+    // Properties drawer
+    btnProperties: document.getElementById("btn-properties"),
+    propertiesDrawer: document.getElementById("properties-drawer"),
+    btnCloseDrawer: document.getElementById("btn-close-drawer"),
     // Editor action buttons
     btnEditorRun: document.getElementById("btn-editor-run"),
     btnEditorAppend: document.getElementById("btn-editor-append"),
@@ -136,6 +140,25 @@
       content: markdownContent,
       fileName: state.fileName,
     });
+  });
+
+  // Properties drawer event listeners
+  elements.btnProperties.addEventListener("click", () => {
+    togglePropertiesDrawer();
+  });
+
+  elements.btnCloseDrawer.addEventListener("click", () => {
+    closePropertiesDrawer();
+  });
+
+  // Close drawer on overlay click (if we add one) or ESC key
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "Escape" &&
+      elements.propertiesDrawer.classList.contains("open")
+    ) {
+      closePropertiesDrawer();
+    }
   });
 
   // Modal event listeners
@@ -1301,6 +1324,35 @@
   function closeModal() {
     elements.modal.hidden = true;
     modalState.currentTemplate = null;
+  }
+
+  // ============================================================================
+  // PROPERTIES DRAWER FUNCTIONALITY
+  // ============================================================================
+
+  /**
+   * Toggle properties drawer open/closed
+   */
+  function togglePropertiesDrawer() {
+    if (elements.propertiesDrawer.classList.contains("open")) {
+      closePropertiesDrawer();
+    } else {
+      openPropertiesDrawer();
+    }
+  }
+
+  /**
+   * Open properties drawer
+   */
+  function openPropertiesDrawer() {
+    elements.propertiesDrawer.classList.add("open");
+  }
+
+  /**
+   * Close properties drawer
+   */
+  function closePropertiesDrawer() {
+    elements.propertiesDrawer.classList.remove("open");
   }
 
   // ============================================================================
