@@ -277,8 +277,7 @@ button:disabled {
 
 /* Output section - takes remaining space after editor */
 #output-section {
-  flex: 1;
-  min-height: 150px;
+  flex: 1 1 300px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -878,7 +877,6 @@ h3 {
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
-  padding-bottom: 150px; /* Space for fixed footer + collapsed property controls */
 }
 
 /* Editor header */
@@ -1122,12 +1120,12 @@ h3 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md) 0;
+  padding: var(--spacing-xs) 0;
   gap: var(--spacing-md);
   flex-shrink: 0;
   border-top: 1px solid var(--border-color);
-  margin-top: var(--spacing-sm);
-  flex-wrap: wrap;
+  background: var(--bg-secondary);
+  min-height: auto;
 }
 
 .editor-footer-left {
