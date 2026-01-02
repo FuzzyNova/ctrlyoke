@@ -1050,6 +1050,161 @@ export class FlightPathManager {
   }
 
   /**
+   * Execute an ephemeral prompt from the dashboard editor
+   * @param text - Prompt text
+   * @param properties - PromptItem properties (provider, model, etc.)
+   * @param action - 'run', 'append', or 'appendNext'
+   */
+  async executeEphemeralPrompt(
+    text: string,
+    properties: any,
+    action: "run" | "append" | "appendNext"
+  ): Promise<void> {
+    // Build PromptItem with only non-default properties
+    const promptItem: Partial<PromptItem> = {
+      prompt: text,
+      id: `ephemeral-${Date.now()}`,
+    };
+
+    // Only add properties that aren't "default"
+    if (properties.provider) {
+      promptItem.provider = properties.provider as Provider;
+    }
+    if (properties.model) {
+      promptItem.model = properties.model;
+    }
+    if (properties.agent) {
+      promptItem.agent = properties.agent;
+    }
+    if (properties.newChatSession !== undefined) {
+      promptItem.newChatSession = properties.newChatSession;
+    }
+    if (properties.allowDynamicExtension !== undefined) {
+      promptItem.allowDynamicExtension = properties.allowDynamicExtension;
+    }
+    if (properties.endCondition) {
+      promptItem.endCondition = properties.endCondition;
+    }
+
+    switch (action) {
+      case "run":
+        // Create new single-prompt workflow (replaces current queue)
+        this.promptQueue.loadPrompts([promptItem as PromptItem]);
+
+        // Update dashboard
+        if (this.dashboardProvider) {
+          this.dashboardProvider.updateFileSelected("Ephemeral Workflow", [
+            promptItem as PromptItem,
+          ]);
+        }
+
+        // Set current prompt file to ephemeral (no file path)
+        this.currentPromptFile = {
+          filePath: "",
+          promptFile: { prompts: [promptItem as PromptItem] },
+        };
+
+        // Execute immediately
+        await this.executeLoadedPromptFile();
+        break;
+
+      case "append":
+        // Add to end of existing queue
+        await this.promptQueue.appendPrompts(
+          [promptItem as PromptItem],
+          "Dashboard editor",
+          "end"
+        );
+
+        // Notify dashboard
+        if (this.dashboardProvider) {
+          const currentState = this.promptQueue.getState();
+          this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+        }
+        break;
+
+      case "appendNext":
+        // Insert after current prompt
+        await this.promptQueue.appendPrompts(
+          [promptItem as PromptItem],
+          "Dashboard editor",
+          "next"
+        );
+
+        // Notify dashboard
+        if (this.dashboardProvider) {
+          const currentState = this.promptQueue.getState();
+          this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+        }
+        break;
+    }
+
+    Log.info(`Ephemeral prompt ${action}: ${text.substring(0, 50)}...`);
+  }
+
+  /**
+   * Update an existing prompt in the queue
+   * @param index - Prompt index
+   * @param text - New prompt text
+   * @param properties - Updated PromptItem properties
+   */
+  async updatePromptInQueue(
+    index: number,
+    text: string,
+    properties: any
+  ): Promise<void> {
+    const updates: Partial<PromptItem> = {
+      prompt: text,
+    };
+
+    // Apply property updates (same logic as executeEphemeralPrompt)
+    if (properties.provider) {
+      updates.provider = properties.provider as Provider;
+    }
+    if (properties.model) {
+      updates.model = properties.model;
+    }
+    if (properties.agent) {
+      updates.agent = properties.agent;
+    }
+    if (properties.newChatSession !== undefined) {
+      updates.newChatSession = properties.newChatSession;
+    }
+    if (properties.allowDynamicExtension !== undefined) {
+      updates.allowDynamicExtension = properties.allowDynamicExtension;
+    }
+    if (properties.endCondition) {
+      updates.endCondition = properties.endCondition;
+    }
+
+    this.promptQueue.updatePrompt(index, updates);
+
+    // Notify dashboard
+    if (this.dashboardProvider) {
+      const currentState = this.promptQueue.getState();
+      this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+    }
+
+    Log.info(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
+  }
+
+  /**
+   * Delete a prompt from the queue
+   * @param index - Prompt index
+   */
+  async deletePromptFromQueue(index: number): Promise<void> {
+    this.promptQueue.deletePrompt(index);
+
+    // Notify dashboard
+    if (this.dashboardProvider) {
+      const currentState = this.promptQueue.getState();
+      this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+    }
+
+    Log.info(`Deleted prompt ${index}`);
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {

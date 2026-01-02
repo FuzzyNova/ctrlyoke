@@ -253,14 +253,20 @@ export class PromptQueue {
    * STOPPED: Current prompt cancelled, will restart current prompt
    */
   async resume(): Promise<void> {
-    if (this.state.status !== EXECUTION_STATES.PAUSED && this.state.status !== EXECUTION_STATES.STOPPED) {
+    if (
+      this.state.status !== EXECUTION_STATES.PAUSED &&
+      this.state.status !== EXECUTION_STATES.STOPPED
+    ) {
       return;
     }
 
     const previousState = this.state.status;
 
     // Handle PAUSED state - calculate paused duration
-    if (this.state.status === EXECUTION_STATES.PAUSED && this.state.pausedTime) {
+    if (
+      this.state.status === EXECUTION_STATES.PAUSED &&
+      this.state.pausedTime
+    ) {
       const pauseDuration = Date.now() - this.state.pausedTime;
       this.state.totalPausedDuration += pauseDuration;
       this.state.pausedTime = undefined;
@@ -328,7 +334,9 @@ export class PromptQueue {
       // - Current prompt already marked CANCELLED by stop()
 
       this.emitStateChange();
-      Log.info("Queue execution fully stopped (process exited) - state preserved");
+      Log.info(
+        "Queue execution fully stopped (process exited) - state preserved"
+      );
 
       // Update working file to reflect STOPPED state (preserves progress)
       await this.updateWorkingFile();
@@ -1239,5 +1247,74 @@ export class PromptQueue {
    */
   private emitStateChange(): void {
     this.onStateChanged.fire({ ...this.state });
+  }
+
+  /**
+   * Update an existing prompt in the queue
+   * @param index - Prompt index (0-based)
+   * @param updates - Partial PromptItem updates to apply
+   * @throws Error if index is out of range
+   */
+  public updatePrompt(index: number, updates: Partial<PromptItem>): void {
+    if (index < 0 || index >= this.state.prompts.length) {
+      throw new Error(`Invalid prompt index: ${index}`);
+    }
+
+    // Merge updates into existing prompt
+    this.state.prompts[index] = {
+      ...this.state.prompts[index],
+      ...updates,
+    };
+
+    // Persist to working file
+    this.updateWorkingFile();
+
+    // Emit state change
+    this.emitStateChange();
+
+    Log.info(`Updated prompt at index ${index}`);
+  }
+
+  /**
+   * Delete a prompt from the queue
+   * @param index - Prompt index (0-based)
+   * @throws Error if index is out of range or if deleting current/completed prompt
+   */
+  public deletePrompt(index: number): void {
+    if (index < 0 || index >= this.state.prompts.length) {
+      throw new Error(`Invalid prompt index: ${index}`);
+    }
+
+    // Don't allow deleting the currently executing prompt
+    if (index === this.state.currentIndex) {
+      throw new Error("Cannot delete the currently executing prompt");
+    }
+
+    // Don't allow deleting completed prompts
+    const promptId = this.state.prompts[index].id;
+    if (promptId && this.state.completedIds.has(promptId)) {
+      throw new Error("Cannot delete a completed prompt");
+    }
+
+    // Remove the prompt
+    this.state.prompts.splice(index, 1);
+
+    // Update currentIndex if deletion affects it
+    if (index < this.state.currentIndex) {
+      this.state.currentIndex--;
+    }
+
+    // Update results array to match
+    if (this.state.results.length > index) {
+      this.state.results.splice(index, 1);
+    }
+
+    // Persist to working file
+    this.updateWorkingFile();
+
+    // Emit state change
+    this.emitStateChange();
+
+    Log.info(`Deleted prompt at index ${index}`);
   }
 }

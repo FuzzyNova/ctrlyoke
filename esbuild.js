@@ -156,19 +156,33 @@ const copyWebviewPlugin = {
         fs.mkdirSync(outWebview, { recursive: true });
       }
 
-      // Copy all webview files
+      // Copy all webview files and directories
       if (fs.existsSync(srcWebview)) {
-        const files = fs.readdirSync(srcWebview);
-        files.forEach((file) => {
-          const srcFile = path.join(srcWebview, file);
-          const outFile = path.join(outWebview, file);
-          fs.copyFileSync(srcFile, outFile);
-          console.log(`[copy] ${file} -> out/ui/webview/${file}`);
+        const entries = fs.readdirSync(srcWebview, { withFileTypes: true });
+        entries.forEach((entry) => {
+          const srcPath = path.join(srcWebview, entry.name);
+          const outPath = path.join(outWebview, entry.name);
+
+          if (entry.isDirectory()) {
+            copyDirRecursive(srcPath, outPath);
+            console.log(
+              `[copy] ${entry.name}/ -> out/ui/webview/${entry.name}/`
+            );
+          } else {
+            fs.copyFileSync(srcPath, outPath);
+            console.log(`[copy] ${entry.name} -> out/ui/webview/${entry.name}`);
+          }
         });
       }
 
       // Copy codicon files from node_modules to webview directory
-      const codiconsSource = path.join(__dirname, "node_modules", "@vscode", "codicons", "dist");
+      const codiconsSource = path.join(
+        __dirname,
+        "node_modules",
+        "@vscode",
+        "codicons",
+        "dist"
+      );
       const codiconsOut = path.join(outWebview, "codicons");
 
       if (fs.existsSync(codiconsSource)) {

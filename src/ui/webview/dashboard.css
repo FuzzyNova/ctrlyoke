@@ -827,3 +827,290 @@ h3 {
   color: var(--vscode-textLink-foreground);
   font-style: italic;
 }
+/* ==================================================================
+   EDITOR TAB STYLES
+   ================================================================== */
+
+/* Tab controls */
+.tab-controls {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--fg-primary);
+}
+
+.tab-btn.active {
+  color: var(--fg-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* Tab panels */
+.tab-panel {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tab-panel.active {
+  display: flex;
+}
+
+/* Output panel adjustments */
+#output-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+#output-panel.active #output-content {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Editor panel */
+#editor-panel {
+  padding: var(--spacing-md);
+  gap: var(--spacing-md);
+  overflow-y: auto;
+}
+
+.editor-status {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  font-weight: 500;
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Prompt editor (contenteditable) */
+.prompt-editor {
+  min-height: 150px;
+  max-height: 300px;
+  padding: var(--spacing-md);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg-primary);
+  overflow-y: auto;
+  outline: none;
+  cursor: text;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.prompt-editor:focus {
+  border-color: var(--input-focus-border);
+}
+
+.prompt-editor:empty:before {
+  content: attr(data-placeholder);
+  color: var(--fg-secondary);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Spell check highlighting */
+.misspelled-word {
+  text-decoration: wavy underline #ff0000;
+  text-decoration-skip-ink: none;
+  cursor: pointer;
+}
+
+/* Spell check suggestion menu */
+.spell-check-menu {
+  background: var(--vscode-menu-background);
+  border: 1px solid var(--vscode-menu-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  min-width: 150px;
+  max-width: 250px;
+  overflow: hidden;
+}
+
+.spell-check-menu .menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--vscode-menu-foreground);
+}
+
+.spell-check-menu .menu-item:hover:not(.disabled) {
+  background: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+}
+
+.spell-check-menu .menu-item.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spell-check-menu .menu-separator {
+  height: 1px;
+  background: var(--vscode-menu-separatorBackground);
+  margin: 4px 0;
+}
+
+/* Property controls */
+.property-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.property-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.property-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.property-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.property-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+}
+
+.property-select,
+.property-input {
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  color: var(--fg-primary);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.property-select:focus,
+.property-input:focus {
+  border-color: var(--input-focus-border);
+}
+
+.property-input {
+  cursor: text;
+}
+
+.property-textarea {
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 3px;
+  color: var(--fg-primary);
+  font-size: 12px;
+  font-family: var(--vscode-editor-font-family), monospace;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.property-textarea:focus {
+  border-color: var(--input-focus-border);
+}
+
+/* End condition section */
+.end-condition-section {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+}
+
+.end-condition-section summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.end-condition-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.end-condition-section summary::before {
+  content: "▶";
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 9px;
+}
+
+.end-condition-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.end-condition-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+}
+
+/* Editor metadata (character/word count) */
+.editor-metadata {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  font-size: 11px;
+  color: var(--fg-secondary);
+  padding: var(--spacing-xs) 0;
+}
+
+.metadata-separator {
+  opacity: 0.5;
+}
+
+/* Editor action buttons */
+.editor-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
+}

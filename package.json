@@ -1048,6 +1048,7 @@
     "chokidar": "^4.0.3",
     "js-yaml": "^4.1.1",
     "jsonschema": "^1.5.0",
-    "tree-kill": "^1.2.2"
+    "tree-kill": "^1.2.2",
+    "typo-js": "^1.3.1"
   }
 }

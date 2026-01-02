@@ -19,6 +19,15 @@
     statusMessages: {}, // Maps stepIndex -> array of status messages
   };
 
+  // Editor state
+  let editorState = {
+    selectedPromptIndex: null, // null = new prompt mode, number = editing existing
+    originalPromptData: null, // For Cancel/revert functionality
+    hasActiveQueue: false, // Whether a workflow is currently loaded
+    activeTab: "output", // 'output' or 'editor'
+    promptEditor: null, // PromptEditor instance (initialized after DOM load)
+  };
+
   // DOM elements
   const elements = {
     workflowName: document.getElementById("workflow-name"),
@@ -51,6 +60,33 @@
     modalCancel: document.getElementById("modal-cancel"),
     modalCreate: document.getElementById("modal-create"),
     modalCreateRun: document.getElementById("modal-create-run"),
+    // Tab elements
+    tabButtons: document.querySelectorAll(".tab-btn"),
+    outputPanel: document.getElementById("output-panel"),
+    editorPanel: document.getElementById("editor-panel"),
+    // Editor elements
+    editorModeIndicator: document.getElementById("editor-mode-indicator"),
+    promptEditor: document.getElementById("prompt-editor"),
+    editorCharCount: document.getElementById("editor-char-count"),
+    editorWordCount: document.getElementById("editor-word-count"),
+    // Property controls
+    propProvider: document.getElementById("prop-provider"),
+    propModel: document.getElementById("prop-model"),
+    propAgent: document.getElementById("prop-agent"),
+    propNewChat: document.getElementById("prop-new-chat"),
+    propAllowDynamic: document.getElementById("prop-allow-dynamic"),
+    propEndScript: document.getElementById("prop-end-script"),
+    propEndReturns: document.getElementById("prop-end-returns"),
+    propEndTimeout: document.getElementById("prop-end-timeout"),
+    propEndRetries: document.getElementById("prop-end-retries"),
+    propEndRetryPrompt: document.getElementById("prop-end-retry-prompt"),
+    // Editor action buttons
+    btnEditorRun: document.getElementById("btn-editor-run"),
+    btnEditorAppend: document.getElementById("btn-editor-append"),
+    btnEditorAppendNext: document.getElementById("btn-editor-append-next"),
+    btnEditorCancel: document.getElementById("btn-editor-cancel"),
+    btnEditorUpdate: document.getElementById("btn-editor-update"),
+    btnEditorDelete: document.getElementById("btn-editor-delete"),
   };
 
   // Modal state
@@ -82,7 +118,10 @@
     // Toggle between pause/resume based on current state
     // PAUSED or STOPPED: Resume execution
     // RUNNING: Pause execution
-    if (state.executionState === EXECUTION_STATES.PAUSED || state.executionState === EXECUTION_STATES.STOPPED) {
+    if (
+      state.executionState === EXECUTION_STATES.PAUSED ||
+      state.executionState === EXECUTION_STATES.STOPPED
+    ) {
       vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
     } else {
       vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
@@ -211,8 +250,7 @@
     elements.appendFileBtn.disabled = !hasQueue;
 
     if (!hasQueue) {
-      elements.appendFileBtn.title =
-        "No workflow loaded (load a file first)";
+      elements.appendFileBtn.title = "No workflow loaded (load a file first)";
     } else {
       elements.appendFileBtn.title =
         "Append prompts from a file to the current queue";
@@ -324,6 +362,10 @@
     state.cliOutputs = {}; // Reset outputs
     state.retryStates = {}; // Reset retry states
     state.statusMessages = {}; // Reset status messages
+
+    // Update editor state
+    editorState.hasActiveQueue = prompts.length > 0;
+    updateEditorMode();
 
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.IDLE);
@@ -702,7 +744,7 @@
         }
 
         return `
-        <div class="${statusClass}">
+        <div class="${statusClass}" data-prompt-index="${prompt.index}" style="cursor: pointer;" title="Click to edit">
           <div class="prompt-header">
             <span class="prompt-icon">${icon}</span>
             <span class="prompt-text">${prompt.index + 1}. ${truncate(prompt.text, 60)}</span>
@@ -825,10 +867,13 @@
     // Disable during cancellation - must wait for process to fully stop
     // When paused/stopped/completed, Run button acts as "Restart from beginning"
     elements.runBtn.disabled =
-      !hasFile || isCancelling || (isRunning && !isCompleted && !isPaused && !isStopped);
+      !hasFile ||
+      isCancelling ||
+      (isRunning && !isCompleted && !isPaused && !isStopped);
     // Change button text and class based on state
     // Show restart icon when paused, stopped, or completed
-    elements.runBtn.textContent = isCompleted || isPaused || isStopped ? "↻" : "▶";
+    elements.runBtn.textContent =
+      isCompleted || isPaused || isStopped ? "↻" : "▶";
     elements.runBtn.title =
       isCompleted || isPaused || isStopped ? "Restart from beginning" : "Run";
     elements.runBtn.className =
@@ -840,7 +885,9 @@
     // STOPPED: Resumes to restart current prompt (cancelled)
     if (isPaused || isStopped) {
       elements.pauseBtn.textContent = "▶";
-      elements.pauseBtn.title = isStopped ? "Resume (restart current prompt)" : "Resume";
+      elements.pauseBtn.title = isStopped
+        ? "Resume (restart current prompt)"
+        : "Resume";
       elements.pauseBtn.disabled = false;
     } else {
       elements.pauseBtn.textContent = "⏸";
@@ -1257,6 +1304,399 @@
   function closeModal() {
     elements.modal.hidden = true;
     modalState.currentTemplate = null;
+  }
+
+  // ============================================================================
+  // EDITOR TAB FUNCTIONALITY
+  // ============================================================================
+
+  /**
+   * Initialize the prompt editor with spell checking
+   */
+  function initializeEditor() {
+    // Get dictionary path from template placeholder (replaced by FlightPathDashboardProvider)
+    const dictionaryPath = "{{dictionaryPath}}";
+
+    // Initialize PromptEditor with spell checking
+    if (window.PromptEditor) {
+      editorState.promptEditor = new window.PromptEditor(
+        elements.promptEditor,
+        dictionaryPath
+      );
+    }
+
+    // Update character/word count on input
+    elements.promptEditor.addEventListener("input", updateEditorMetadata);
+
+    // Tab switching
+    elements.tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tabName = btn.dataset.tab;
+        switchTab(tabName);
+      });
+    });
+
+    // Editor action buttons
+    elements.btnEditorRun.addEventListener("click", () => {
+      executePrompt("run");
+    });
+
+    elements.btnEditorAppend.addEventListener("click", () => {
+      executePrompt("append");
+    });
+
+    elements.btnEditorAppendNext.addEventListener("click", () => {
+      executePrompt("appendNext");
+    });
+
+    elements.btnEditorUpdate.addEventListener("click", updateExistingPrompt);
+
+    elements.btnEditorCancel.addEventListener("click", cancelEdit);
+
+    elements.btnEditorDelete.addEventListener("click", deletePrompt);
+
+    // Make prompts in the list clickable for editing
+    elements.promptsList.addEventListener("click", (e) => {
+      const promptItem = e.target.closest(".prompt-item");
+      if (promptItem && promptItem.dataset.promptIndex !== undefined) {
+        const index = parseInt(promptItem.dataset.promptIndex, 10);
+        selectPromptForEdit(index);
+      }
+    });
+
+    // Update editor metadata initially
+    updateEditorMetadata();
+  }
+
+  /**
+   * Switch between Output and Editor tabs
+   * @param {string} tabName - 'output' or 'editor'
+   */
+  function switchTab(tabName) {
+    editorState.activeTab = tabName;
+
+    // Update tab buttons
+    elements.tabButtons.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === tabName);
+    });
+
+    // Update tab panels
+    elements.outputPanel.classList.toggle("active", tabName === "output");
+    elements.editorPanel.classList.toggle("active", tabName === "editor");
+  }
+
+  /**
+   * Update character and word count in editor metadata
+   */
+  function updateEditorMetadata() {
+    const text = elements.promptEditor.textContent || "";
+    const charCount = text.length;
+    const wordCount = text
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
+
+    elements.editorCharCount.textContent = `${charCount} character${charCount !== 1 ? "s" : ""}`;
+    elements.editorWordCount.textContent = `${wordCount} word${wordCount !== 1 ? "s" : ""}`;
+  }
+
+  /**
+   * Get current property values from the UI
+   * @returns {Object} Property values
+   */
+  function getPropertyValues() {
+    const properties = {};
+
+    // Only include non-default values
+    if (elements.propProvider.value !== "default") {
+      properties.provider = elements.propProvider.value;
+    }
+
+    if (elements.propModel.value !== "default") {
+      properties.model = elements.propModel.value;
+    }
+
+    const agent = elements.propAgent.value.trim();
+    if (agent && agent !== "default") {
+      properties.agent = agent;
+    }
+
+    if (elements.propNewChat.value !== "default") {
+      properties.newChatSession = elements.propNewChat.value === "yes";
+    }
+
+    if (elements.propAllowDynamic.value !== "default") {
+      properties.allowDynamicExtension =
+        elements.propAllowDynamic.value === "yes";
+    }
+
+    // End condition (if any fields are filled)
+    const script = elements.propEndScript.value.trim();
+    const returns = elements.propEndReturns.value.trim();
+
+    if (script || returns) {
+      properties.endCondition = {};
+
+      if (script) properties.endCondition.script = script;
+      if (returns) properties.endCondition.returns = returns;
+
+      const timeout = parseInt(elements.propEndTimeout.value, 10);
+      if (!isNaN(timeout) && timeout !== 30000) {
+        properties.endCondition.timeout = timeout;
+      }
+
+      const maxRetries = parseInt(elements.propEndRetries.value, 10);
+      if (!isNaN(maxRetries) && maxRetries !== 0) {
+        properties.endCondition.maxRetries = maxRetries;
+      }
+
+      const retryPrompt = elements.propEndRetryPrompt.value.trim();
+      if (retryPrompt) {
+        properties.endCondition.retryPrompt = retryPrompt;
+      }
+    }
+
+    return properties;
+  }
+
+  /**
+   * Reset property controls to default values
+   */
+  function resetPropertyControls() {
+    elements.propProvider.value = "default";
+    elements.propModel.value = "default";
+    elements.propAgent.value = "";
+    elements.propNewChat.value = "default";
+    elements.propAllowDynamic.value = "default";
+    elements.propEndScript.value = "";
+    elements.propEndReturns.value = "";
+    elements.propEndTimeout.value = "30000";
+    elements.propEndRetries.value = "0";
+    elements.propEndRetryPrompt.value = "";
+  }
+
+  /**
+   * Set property controls from a prompt object
+   * @param {Object} prompt - PromptItem object
+   */
+  function setPropertyControls(prompt) {
+    elements.propProvider.value = prompt.provider || "default";
+    elements.propModel.value = prompt.model || "default";
+    elements.propAgent.value = prompt.agent || "";
+    elements.propNewChat.value =
+      prompt.newChatSession === undefined
+        ? "default"
+        : prompt.newChatSession
+          ? "yes"
+          : "no";
+    elements.propAllowDynamic.value =
+      prompt.allowDynamicExtension === undefined
+        ? "default"
+        : prompt.allowDynamicExtension
+          ? "yes"
+          : "no";
+
+    if (prompt.endCondition) {
+      elements.propEndScript.value = prompt.endCondition.script || "";
+      elements.propEndReturns.value = prompt.endCondition.returns || "";
+      elements.propEndTimeout.value = prompt.endCondition.timeout || 30000;
+      elements.propEndRetries.value = prompt.endCondition.maxRetries || 0;
+      elements.propEndRetryPrompt.value = prompt.endCondition.retryPrompt || "";
+    } else {
+      elements.propEndScript.value = "";
+      elements.propEndReturns.value = "";
+      elements.propEndTimeout.value = "30000";
+      elements.propEndRetries.value = "0";
+      elements.propEndRetryPrompt.value = "";
+    }
+  }
+
+  /**
+   * Update editor mode indicator and button visibility
+   */
+  function updateEditorMode() {
+    const isNewMode = editorState.selectedPromptIndex === null;
+    const hasQueue = editorState.hasActiveQueue;
+
+    if (isNewMode) {
+      elements.editorModeIndicator.textContent = "New Prompt";
+
+      // Show new prompt buttons
+      elements.btnEditorRun.style.display = "";
+      elements.btnEditorRun.disabled = false;
+
+      elements.btnEditorAppend.style.display = "";
+      elements.btnEditorAppend.disabled = !hasQueue;
+
+      elements.btnEditorAppendNext.style.display = "";
+      elements.btnEditorAppendNext.disabled = !hasQueue;
+
+      // Hide editing buttons
+      elements.btnEditorCancel.style.display = "none";
+      elements.btnEditorUpdate.style.display = "none";
+      elements.btnEditorDelete.style.display = "none";
+    } else {
+      const totalPrompts = state.prompts.length;
+      elements.editorModeIndicator.textContent = `Editing: Prompt ${editorState.selectedPromptIndex + 1} of ${totalPrompts}`;
+
+      // Hide new prompt buttons
+      elements.btnEditorRun.style.display = "none";
+      elements.btnEditorAppend.style.display = "none";
+      elements.btnEditorAppendNext.style.display = "none";
+
+      // Show editing buttons
+      elements.btnEditorCancel.style.display = "";
+      elements.btnEditorCancel.disabled = false;
+
+      elements.btnEditorUpdate.style.display = "";
+      elements.btnEditorUpdate.disabled = false;
+
+      elements.btnEditorDelete.style.display = "";
+      elements.btnEditorDelete.disabled = false;
+    }
+  }
+
+  /**
+   * Execute a prompt (Run/Append/AppendNext)
+   * @param {string} action - 'run', 'append', or 'appendNext'
+   */
+  function executePrompt(action) {
+    const text = elements.promptEditor.textContent.trim();
+
+    if (!text) {
+      return; // Don't execute empty prompts
+    }
+
+    const properties = getPropertyValues();
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.EXECUTE_PROMPT,
+      text,
+      properties,
+      action,
+    });
+
+    // Clear editor after Run (but not after Append - user may want to add more)
+    if (action === "run") {
+      if (editorState.promptEditor) {
+        editorState.promptEditor.clear();
+      } else {
+        elements.promptEditor.textContent = "";
+      }
+      resetPropertyControls();
+      updateEditorMetadata();
+    }
+  }
+
+  /**
+   * Update an existing prompt in the queue
+   */
+  function updateExistingPrompt() {
+    if (editorState.selectedPromptIndex === null) return;
+
+    const text = elements.promptEditor.textContent.trim();
+
+    if (!text) {
+      return; // Don't save empty prompts
+    }
+
+    const properties = getPropertyValues();
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_PROMPT,
+      index: editorState.selectedPromptIndex,
+      text,
+      properties,
+    });
+
+    // Return to new prompt mode after updating
+    cancelEdit();
+  }
+
+  /**
+   * Cancel editing and return to new prompt mode
+   */
+  function cancelEdit() {
+    editorState.selectedPromptIndex = null;
+    editorState.originalPromptData = null;
+
+    // Clear editor
+    if (editorState.promptEditor) {
+      editorState.promptEditor.clear();
+    } else {
+      elements.promptEditor.textContent = "";
+    }
+
+    // Reset property controls
+    resetPropertyControls();
+
+    // Update UI
+    updateEditorMode();
+    updateEditorMetadata();
+  }
+
+  /**
+   * Delete a prompt from the queue
+   */
+  function deletePrompt() {
+    if (editorState.selectedPromptIndex === null) return;
+
+    // Confirm deletion
+    const confirmed = confirm(
+      `Delete prompt ${editorState.selectedPromptIndex + 1}?`
+    );
+
+    if (confirmed) {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        index: editorState.selectedPromptIndex,
+      });
+
+      // Return to new prompt mode
+      cancelEdit();
+    }
+  }
+
+  /**
+   * Select a prompt from the queue for editing
+   * @param {number} index - Prompt index
+   */
+  function selectPromptForEdit(index) {
+    if (index < 0 || index >= state.prompts.length) return;
+
+    const prompt = state.prompts[index];
+
+    // Store original data for cancel functionality
+    editorState.selectedPromptIndex = index;
+    editorState.originalPromptData = { ...prompt };
+
+    // Load prompt text into editor
+    if (editorState.promptEditor) {
+      editorState.promptEditor.setText(prompt.prompt || "");
+    } else {
+      elements.promptEditor.textContent = prompt.prompt || "";
+    }
+
+    // Load property controls
+    setPropertyControls(prompt);
+
+    // Switch to editor tab
+    switchTab("editor");
+
+    // Update UI
+    updateEditorMode();
+    updateEditorMetadata();
+  }
+
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
+  // Initialize editor when DOM is ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeEditor);
+  } else {
+    initializeEditor();
   }
 
   // Signal ready

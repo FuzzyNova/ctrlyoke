@@ -84,6 +84,24 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Handle editor messages
+    if (message.type === MESSAGE_TYPES.EXECUTE_PROMPT) {
+      this.handleExecutePrompt(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.UPDATE_PROMPT) {
+      this.handleUpdatePrompt(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT) {
+      this.handleSelectPromptForEdit(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.DELETE_PROMPT) {
+      this.handleDeletePrompt(message);
+      return;
+    }
+
     // Handle modal messages
     if (message.type === MESSAGE_TYPES.NEW_WORKFLOW) {
       this.handleNewWorkflow();
@@ -554,6 +572,14 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const codiconsUri = webview.asWebviewUri(
       this.getWebviewPath("codicons", "codicon.css")
     );
+    // Get typo.js and prompt-editor.js URIs
+    const typoUri = webview.asWebviewUri(this.getWebviewPath("typo.js"));
+    const promptEditorUri = webview.asWebviewUri(
+      this.getWebviewPath("prompt-editor.js")
+    );
+    const dictionaryPath = webview
+      .asWebviewUri(this.getWebviewPath("dictionaries"))
+      .toString();
 
     // Read HTML template and replace placeholders
     const htmlPath = this.getWebviewFsPath("dashboard.html");
@@ -578,8 +604,91 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
       .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
+      .replace(/\{\{typoUri\}\}/g, typoUri.toString())
+      .replace(/\{\{promptEditorUri\}\}/g, promptEditorUri.toString())
+      .replace(/\{\{dictionaryPath\}\}/g, dictionaryPath)
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;
+  }
+
+  /**
+   * Handle EXECUTE_PROMPT message from webview
+   * Creates ephemeral prompt and executes it (Run/Append/AppendNext)
+   */
+  private async handleExecutePrompt(message: any): Promise<void> {
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    const { text, properties, action } = message;
+
+    try {
+      await this.flightPathManager.executeEphemeralPrompt(
+        text,
+        properties,
+        action
+      );
+    } catch (error) {
+      Log.error("Failed to execute ephemeral prompt:", error);
+      vscode.window.showErrorMessage(
+        `Failed to execute prompt: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Handle UPDATE_PROMPT message from webview
+   * Updates an existing prompt in the queue
+   */
+  private async handleUpdatePrompt(message: any): Promise<void> {
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    const { index, text, properties } = message;
+
+    try {
+      await this.flightPathManager.updatePromptInQueue(index, text, properties);
+    } catch (error) {
+      Log.error("Failed to update prompt:", error);
+      vscode.window.showErrorMessage(
+        `Failed to update prompt: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Handle SELECT_PROMPT_FOR_EDIT message from webview
+   * Currently just a placeholder - selection is handled in webview
+   */
+  private handleSelectPromptForEdit(message: any): void {
+    // Selection is handled entirely in the webview
+    // This handler exists for potential future use (e.g., logging, analytics)
+    Log.debug(`Prompt ${message.index} selected for editing`);
+  }
+
+  /**
+   * Handle DELETE_PROMPT message from webview
+   * Removes a prompt from the queue
+   */
+  private async handleDeletePrompt(message: any): Promise<void> {
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    const { index } = message;
+
+    try {
+      await this.flightPathManager.deletePromptFromQueue(index);
+    } catch (error) {
+      Log.error("Failed to delete prompt:", error);
+      vscode.window.showErrorMessage(
+        `Failed to delete prompt: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }

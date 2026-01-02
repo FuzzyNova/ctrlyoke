@@ -43,6 +43,13 @@ export const MESSAGE_TYPES = {
   EXPORT_OUTPUT: "exportOutput",
   CHANGE_PROVIDER: "changeProvider",
 
+  // Prompt Editor - Webview -> Extension
+  EXECUTE_PROMPT: "executePrompt", // Run/Append/AppendNext with properties
+  UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
+  CANCEL_EDIT: "cancelEdit", // Exit edit mode
+  SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
+  DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
+
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_EXECUTION_MODE: "changeExecutionMode",

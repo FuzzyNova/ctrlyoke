@@ -43,8 +43,19 @@
 
         <div id="workflow-status">
           <span id="workflow-name">No workflow loaded</span>
-          <span id="status-separator" class="status-separator" style="display: none;"> - </span>
-          <span id="execution-state" class="execution-state-idle" style="display: none;">Idle</span>
+          <span
+            id="status-separator"
+            class="status-separator"
+            style="display: none"
+          >
+            -
+          </span>
+          <span
+            id="execution-state"
+            class="execution-state-idle"
+            style="display: none"
+            >Idle</span
+          >
         </div>
 
         <div id="controls">
@@ -71,7 +82,10 @@
 
         <div id="output-section">
           <div class="section-header">
-            <h3>Output</h3>
+            <div class="tab-controls">
+              <button class="tab-btn active" data-tab="output">Output</button>
+              <button class="tab-btn" data-tab="editor">Editor</button>
+            </div>
             <div class="output-controls">
               <label class="autoscroll-toggle">
                 <input type="checkbox" id="autoscroll-checkbox" checked />
@@ -86,8 +100,195 @@
               </button>
             </div>
           </div>
-          <div id="output-content">
-            <div class="empty-state">No output yet</div>
+
+          <!-- Output Tab -->
+          <div id="output-panel" class="tab-panel active">
+            <div id="output-content">
+              <div class="empty-state">No output yet</div>
+            </div>
+          </div>
+
+          <!-- Editor Tab -->
+          <div id="editor-panel" class="tab-panel">
+            <div class="editor-status">
+              <span id="editor-mode-indicator">New Prompt</span>
+            </div>
+
+            <div
+              id="prompt-editor"
+              class="prompt-editor"
+              contenteditable="true"
+              spellcheck="true"
+              data-placeholder="Write your prompt here..."
+            ></div>
+
+            <div class="property-controls">
+              <div class="property-row">
+                <div class="property-group">
+                  <label for="prop-provider">Provider:</label>
+                  <select id="prop-provider" class="property-select">
+                    <option value="default" selected>Default</option>
+                    <option value="copilot-cli">Copilot CLI</option>
+                    <option value="copilot-chat">Copilot Chat</option>
+                    <option value="claude-cli">Claude CLI</option>
+                    <option value="codex-cli">Codex CLI</option>
+                  </select>
+                </div>
+
+                <div class="property-group">
+                  <label for="prop-model">Model:</label>
+                  <select id="prop-model" class="property-select">
+                    <option value="default" selected>Default</option>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+              </div>
+
+              <div class="property-row">
+                <div class="property-group">
+                  <label for="prop-agent">Agent:</label>
+                  <input
+                    type="text"
+                    id="prop-agent"
+                    class="property-input"
+                    placeholder="Default (leave empty)"
+                  />
+                </div>
+
+                <div class="property-group">
+                  <label for="prop-new-chat">New Chat Session:</label>
+                  <select id="prop-new-chat" class="property-select">
+                    <option value="default" selected>Default</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="property-row">
+                <div class="property-group full-width">
+                  <label for="prop-allow-dynamic"
+                    >Allow Dynamic Extension:</label
+                  >
+                  <select id="prop-allow-dynamic" class="property-select">
+                    <option value="default" selected>Default</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+              </div>
+
+              <details class="end-condition-section">
+                <summary>End Condition (optional)</summary>
+                <div class="end-condition-controls">
+                  <div class="property-group">
+                    <label for="prop-end-script">Script:</label>
+                    <input
+                      type="text"
+                      id="prop-end-script"
+                      class="property-input"
+                      placeholder="npm test"
+                    />
+                  </div>
+                  <div class="property-group">
+                    <label for="prop-end-returns">Returns:</label>
+                    <input
+                      type="text"
+                      id="prop-end-returns"
+                      class="property-input"
+                      placeholder="true"
+                    />
+                  </div>
+                  <div class="property-group">
+                    <label for="prop-end-timeout">Timeout (ms):</label>
+                    <input
+                      type="number"
+                      id="prop-end-timeout"
+                      class="property-input"
+                      value="30000"
+                      min="1000"
+                    />
+                  </div>
+                  <div class="property-group">
+                    <label for="prop-end-retries">Max Retries:</label>
+                    <input
+                      type="number"
+                      id="prop-end-retries"
+                      class="property-input"
+                      value="0"
+                      min="-1"
+                    />
+                  </div>
+                  <div class="property-group full-width">
+                    <label for="prop-end-retry-prompt">Retry Prompt:</label>
+                    <textarea
+                      id="prop-end-retry-prompt"
+                      class="property-textarea"
+                      rows="2"
+                      placeholder="Validation failed: {error}
+
+Please fix the issues."
+                    ></textarea>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <div class="editor-metadata">
+              <span id="editor-char-count">0 characters</span>
+              <span class="metadata-separator">•</span>
+              <span id="editor-word-count">0 words</span>
+            </div>
+
+            <div class="editor-actions">
+              <!-- New Prompt Mode Buttons -->
+              <button
+                id="btn-editor-run"
+                class="btn-primary"
+                title="Create new workflow and run"
+              >
+                Run
+              </button>
+              <button
+                id="btn-editor-append"
+                class="btn-secondary"
+                title="Append to end of queue"
+                disabled
+              >
+                Append
+              </button>
+              <button
+                id="btn-editor-append-next"
+                class="btn-secondary"
+                title="Insert after current prompt"
+                disabled
+              >
+                Append Next
+              </button>
+
+              <!-- Edit Existing Mode Buttons (hidden by default) -->
+              <button
+                id="btn-editor-cancel"
+                class="btn-secondary"
+                style="display: none"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-editor-update"
+                class="btn-primary"
+                style="display: none"
+              >
+                Update
+              </button>
+              <button
+                id="btn-editor-delete"
+                class="btn-secondary"
+                style="display: none"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -155,6 +356,10 @@
 
     <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
     <script src="{{constantsUri}}"></script>
+    <!-- Load Typo.js for spell checking -->
+    <script src="{{typoUri}}"></script>
+    <!-- Load PromptEditor for spell checking functionality -->
+    <script src="{{promptEditorUri}}"></script>
     <!-- Then load main dashboard code that depends on constants -->
     <script src="{{scriptUri}}"></script>
   </body>
