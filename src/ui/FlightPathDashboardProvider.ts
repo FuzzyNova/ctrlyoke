@@ -577,8 +577,12 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const promptEditorUri = webview.asWebviewUri(
       this.getWebviewPath("prompt-editor.js")
     );
-    const dictionaryPath = webview
-      .asWebviewUri(this.getWebviewPath("dictionaries"))
+    // Get dictionary file URIs (pass individual files, not directory)
+    const affUri = webview
+      .asWebviewUri(this.getWebviewPath("dictionaries", "en_US", "en_US.aff"))
+      .toString();
+    const dicUri = webview
+      .asWebviewUri(this.getWebviewPath("dictionaries", "en_US", "en_US.dic"))
       .toString();
 
     // Read HTML template and replace placeholders
@@ -606,7 +610,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
       .replace(/\{\{typoUri\}\}/g, typoUri.toString())
       .replace(/\{\{promptEditorUri\}\}/g, promptEditorUri.toString())
-      .replace(/\{\{dictionaryPath\}\}/g, dictionaryPath)
+      .replace(/\{\{affUri\}\}/g, affUri)
+      .replace(/\{\{dicUri\}\}/g, dicUri)
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;

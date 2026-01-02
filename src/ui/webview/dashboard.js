@@ -1314,15 +1314,34 @@
    * Initialize the prompt editor with spell checking
    */
   function initializeEditor() {
-    // Get dictionary path from template placeholder (replaced by FlightPathDashboardProvider)
-    const dictionaryPath = "{{dictionaryPath}}";
+    // Get dictionary file URIs from body data attributes
+    const affUri = document.body.getAttribute("data-aff-uri");
+    const dicUri = document.body.getAttribute("data-dic-uri");
+    console.log("[Dashboard] .aff URI from data attribute:", affUri);
+    console.log("[Dashboard] .dic URI from data attribute:", dicUri);
+    console.log(
+      "[Dashboard] window.Typo available:",
+      typeof window.Typo !== "undefined"
+    );
+    console.log(
+      "[Dashboard] window.PromptEditor available:",
+      typeof window.PromptEditor !== "undefined"
+    );
 
     // Initialize PromptEditor with spell checking
     if (window.PromptEditor) {
+      console.log("[Dashboard] Initializing PromptEditor...");
       editorState.promptEditor = new window.PromptEditor(
         elements.promptEditor,
-        dictionaryPath
+        affUri,
+        dicUri
       );
+      console.log(
+        "[Dashboard] PromptEditor initialized:",
+        !!editorState.promptEditor
+      );
+    } else {
+      console.warn("[Dashboard] PromptEditor class not available");
     }
 
     // Update character/word count on input

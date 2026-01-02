@@ -4,9 +4,10 @@
  */
 (function () {
   class PromptEditor {
-    constructor(editorElement, dictionaryPath) {
+    constructor(editorElement, affUri, dicUri) {
       this.editor = editorElement;
-      this.dictionaryPath = dictionaryPath;
+      this.affUri = affUri;
+      this.dicUri = dicUri;
       this.spellChecker = null;
       this.misspelledWords = new Set();
       this.checkDebounceTimer = null;
@@ -18,28 +19,109 @@
     }
 
     async initSpellChecker() {
+      console.log("[PromptEditor] Initializing spell checker...");
+      console.log("[PromptEditor] .aff URI:", this.affUri);
+      console.log("[PromptEditor] .dic URI:", this.dicUri);
+      console.log(
+        "[PromptEditor] Typo available:",
+        typeof Typo !== "undefined"
+      );
+
       try {
-        // Load dictionary files
-        const affResponse = await fetch(`${this.dictionaryPath}/en_US.aff`);
-        const dicResponse = await fetch(`${this.dictionaryPath}/en_US.dic`);
+        console.log("[PromptEditor] Loading .aff from:", this.affUri);
+        console.log("[PromptEditor] Loading .dic from:", this.dicUri);
+
+        const affResponse = await fetch(this.affUri);
+        const dicResponse = await fetch(this.dicUri);
+
+        console.log(
+          "[PromptEditor] .aff response status:",
+          affResponse.status,
+          affResponse.ok
+        );
+        console.log(
+          "[PromptEditor] .dic response status:",
+          dicResponse.status,
+          dicResponse.ok
+        );
 
         if (!affResponse.ok || !dicResponse.ok) {
-          console.warn("Failed to load spell check dictionaries");
+          console.warn(
+            "[PromptEditor] Failed to load spell check dictionaries"
+          );
+          console.warn(
+            "[PromptEditor] .aff ok:",
+            affResponse.ok,
+            "status:",
+            affResponse.status
+          );
+          console.warn(
+            "[PromptEditor] .dic ok:",
+            dicResponse.ok,
+            "status:",
+            dicResponse.status
+          );
           return;
         }
 
         const affData = await affResponse.text();
         const dicData = await dicResponse.text();
 
+        console.log("[PromptEditor] .aff data length:", affData.length);
+        console.log("[PromptEditor] .dic data length:", dicData.length);
+        console.log(
+          "[PromptEditor] .aff first 100 chars:",
+          affData.substring(0, 100)
+        );
+        console.log(
+          "[PromptEditor] .dic first 100 chars:",
+          dicData.substring(0, 100)
+        );
+
         // Initialize Typo.js
+        console.log("[PromptEditor] Creating Typo instance...");
         this.spellChecker = new Typo("en_US", affData, dicData);
+        console.log(
+          "[PromptEditor] Typo instance created:",
+          !!this.spellChecker
+        );
+        console.log(
+          "[PromptEditor] Typo loaded flag:",
+          this.spellChecker.loaded
+        );
+
+        // Test spell checker
+        const testCorrect = this.spellChecker.check("hello");
+        const testIncorrect = this.spellChecker.check("helo");
+        console.log(
+          '[PromptEditor] Spell check test - "hello":',
+          testCorrect,
+          "(should be true)"
+        );
+        console.log(
+          '[PromptEditor] Spell check test - "helo":',
+          testIncorrect,
+          "(should be false)"
+        );
+
+        if (!testIncorrect) {
+          const suggestions = this.spellChecker.suggest("helo");
+          console.log('[PromptEditor] Suggestions for "helo":', suggestions);
+        }
 
         // Re-check current content if any
         if (this.editor.textContent.trim()) {
+          console.log("[PromptEditor] Re-checking existing content");
           this.checkSpelling();
         }
+
+        console.log("[PromptEditor] Spell checker initialization complete");
       } catch (error) {
-        console.error("Error initializing spell checker:", error);
+        console.error(
+          "[PromptEditor] Error initializing spell checker:",
+          error
+        );
+        console.error("[PromptEditor] Error stack:", error.stack);
       }
     }
 
@@ -72,8 +154,14 @@
     }
 
     checkSpelling() {
-      if (!this.spellChecker) return;
+      if (!this.spellChecker) {
+        console.log(
+          "[PromptEditor] checkSpelling called but spellChecker not ready"
+        );
+        return;
+      }
 
+      console.log("[PromptEditor] checkSpelling called");
       this.isUpdatingHighlights = true;
 
       // Save cursor position
@@ -81,9 +169,15 @@
 
       // Get plain text
       const text = this.editor.textContent;
+      console.log(
+        "[PromptEditor] Checking text:",
+        text.substring(0, 100),
+        "..."
+      );
 
       // Extract words with positions
       const words = this.extractWords(text);
+      console.log("[PromptEditor] Extracted", words.length, "words");
 
       // Clear misspelled words set
       this.misspelledWords.clear();
@@ -93,6 +187,12 @@
 
       // Update editor content
       this.editor.innerHTML = highlightedHTML;
+      console.log(
+        "[PromptEditor] Found",
+        this.misspelledWords.size,
+        "misspelled words:",
+        [...this.misspelledWords]
+      );
 
       // Restore cursor position
       this.restoreCursorOffset(cursorOffset);
@@ -119,6 +219,8 @@
     buildHighlightedHTML(text, words) {
       let html = "";
       let lastIndex = 0;
+      let checkedCount = 0;
+      let misspelledCount = 0;
 
       words.forEach(({ word, start, end }) => {
         // Add text before word
@@ -126,12 +228,15 @@
 
         // Check spelling
         const isCorrect = this.spellChecker.check(word);
+        checkedCount++;
 
         if (isCorrect) {
           html += this.escapeHTML(word);
         } else {
+          misspelledCount++;
           html += `<span class="misspelled-word" data-word="${this.escapeHTML(word)}">${this.escapeHTML(word)}</span>`;
           this.misspelledWords.add(word.toLowerCase());
+          console.log("[PromptEditor] Misspelled word:", word);
         }
 
         lastIndex = end;
@@ -139,6 +244,14 @@
 
       // Add remaining text
       html += this.escapeHTML(text.substring(lastIndex));
+
+      console.log(
+        "[PromptEditor] Checked",
+        checkedCount,
+        "words, found",
+        misspelledCount,
+        "misspelled"
+      );
 
       return html;
     }

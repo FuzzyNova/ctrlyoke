@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}};"
+      content="default-src 'none'; connect-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}};"
     />
     <link rel="stylesheet" href="{{codiconsUri}}" />
     <link rel="stylesheet" href="{{sharedStyleUri}}" />
     <link rel="stylesheet" href="{{styleUri}}" />
     <title>FlightPath Dashboard</title>
   </head>
-  <body>
+  <body data-aff-uri="{{affUri}}" data-dic-uri="{{dicUri}}">
     <div id="app">
       <div id="header">
         <div id="action-buttons">
