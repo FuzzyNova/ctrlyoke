@@ -67,7 +67,7 @@ export function clearFilesCache(): void {
 export async function getFileCompletions(
   filterText: string
 ): Promise<PlainCompletionItem[]> {
-  const items: PlainCompletionItem[] = [];
+  const fileItems: PlainCompletionItem[] = [];
   const files = await getWorkspaceFiles();
 
   // Convert filter text to lowercase and normalize path separators
@@ -75,6 +75,9 @@ export async function getFileCompletions(
 
   // Track unique directories we've seen
   const directories = new Set<string>();
+
+  const MAX_TOTAL_ITEMS = 500;
+  const MAX_FILE_ITEMS = 450; // Leave room for directories so they don't get buried
 
   for (const fileUri of files) {
     const relativePath = vscode.workspace.asRelativePath(fileUri, false);
@@ -87,35 +90,33 @@ export async function getFileCompletions(
     const fileName = path.basename(relativePath);
     const dirName = path.dirname(relativePath);
 
-    // Add file completion
-    const fileItem: PlainCompletionItem = {
-      label: fileName,
-      kind: "file",
-      insertText: relativePath,
-      detail: dirName === "." ? "Root directory" : dirName,
-      documentation:
-        `**Full file attachment** (CLI-native)\n\n` +
-        `Insert: \`@${relativePath}\`\n\n` +
-        `The CLI will automatically attach this file's content.\n\n` +
-        `_For line ranges, use \`#file:${relativePath}:10-20\`_`,
-      sortText: `0_${relativePath.split(path.sep).length}_${relativePath}`,
-      filterText: `${relativePath} ${fileName}`,
-    };
-
-    items.push(fileItem);
-
-    // Track directory for directory completions
+    // Track directory for directory completions (even if we stop adding file items)
     if (dirName !== ".") {
       directories.add(dirName);
     }
 
-    // Limit to 500 items for performance
-    if (items.length >= 500) {
-      break;
+    // Add file completion (but don't let files crowd out directory entries)
+    if (fileItems.length < MAX_FILE_ITEMS) {
+      const fileItem: PlainCompletionItem = {
+        label: fileName,
+        kind: "file",
+        insertText: relativePath,
+        detail: dirName === "." ? "Root directory" : dirName,
+        documentation:
+          `**Full file attachment** (CLI-native)\n\n` +
+          `Insert: \`@${relativePath}\`\n\n` +
+          `The CLI will automatically attach this file's content.\n\n` +
+          `_For line ranges, use \`#file:${relativePath}:10-20\`_`,
+        sortText: `0_${relativePath.split(path.sep).length}_${relativePath}`,
+        filterText: `${relativePath} ${fileName}`,
+      };
+
+      fileItems.push(fileItem);
     }
   }
 
   // Add directory completions (with trailing slash)
+  const dirItems: PlainCompletionItem[] = [];
   for (const dirPath of directories) {
     if (filter && !dirPath.toLowerCase().includes(filter)) {
       continue;
@@ -138,10 +139,25 @@ export async function getFileCompletions(
       filterText: `${dirPath} ${dirName}`,
     };
 
-    items.push(dirItem);
+    dirItems.push(dirItem);
   }
 
-  return items;
+  // Sort by sortText (matches VS Code behavior) so directories bubble up consistently
+  const bySortText = (
+    a: PlainCompletionItem,
+    b: PlainCompletionItem
+  ): number => {
+    const aKey = a.sortText ?? a.label;
+    const bKey = b.sortText ?? b.label;
+    return aKey.localeCompare(bKey);
+  };
+
+  dirItems.sort(bySortText);
+  fileItems.sort(bySortText);
+
+  // Return directories first so UIs that don't honor sortText still surface them
+  const remainingForFiles = Math.max(0, MAX_TOTAL_ITEMS - dirItems.length);
+  return [...dirItems, ...fileItems.slice(0, remainingForFiles)];
 }
 
 /**

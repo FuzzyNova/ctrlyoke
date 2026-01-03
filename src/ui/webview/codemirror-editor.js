@@ -212,15 +212,24 @@
 
           const diagnostics = [];
           const text = view.state.doc.toString();
+
+          // Get ranges to exclude from spell checking (@ and # references)
+          const excludedRanges = this.getCompletionRanges(text);
+
           const wordRegex = /\b[a-zA-Z]+\b/g;
           let match;
 
           while ((match = wordRegex.exec(text)) !== null) {
             const word = match[0];
-            if (!this.typoChecker.check(word)) {
-              const from = match.index;
-              const to = from + word.length;
+            const from = match.index;
+            const to = from + word.length;
 
+            // Skip spell checking if word is within a completion range
+            if (this.isInExcludedRange(from, to, excludedRanges)) {
+              continue;
+            }
+
+            if (!this.typoChecker.check(word)) {
               const suggestions = this.typoChecker.suggest(word);
               const message =
                 suggestions.length > 0
@@ -250,6 +259,44 @@
           delay: 300, // Debounce spell checking
         }
       );
+    }
+
+    // Get ranges of @ and # completions to exclude from spell checking
+    getCompletionRanges(text) {
+      const ranges = [];
+
+      // Patterns matching @ and # completions
+      const patterns = [
+        // @file.ext (no trailing slash, has extension or path separator)
+        /@[^\s@#]+/g,
+
+        // #file:, #selection, #caret, #sym:, etc.
+        /#[^\s@#]+/g,
+      ];
+
+      for (const pattern of patterns) {
+        let match;
+        const regex = new RegExp(pattern.source, "g");
+        while ((match = regex.exec(text)) !== null) {
+          ranges.push({
+            from: match.index,
+            to: match.index + match[0].length,
+          });
+        }
+      }
+
+      return ranges;
+    }
+
+    // Check if a range overlaps with any excluded range
+    isInExcludedRange(from, to, excludedRanges) {
+      for (const range of excludedRanges) {
+        // Check if word is completely or partially within excluded range
+        if (from < range.to && to > range.from) {
+          return true;
+        }
+      }
+      return false;
     }
 
     // Initialize Typo.js checker
@@ -304,7 +351,9 @@
 
       // Don't provide completions on empty match unless explicitly requested
       if (before.from === before.to && !context.explicit) {
-        console.log("[CodeMirror] Empty match and not explicit, returning null");
+        console.log(
+          "[CodeMirror] Empty match and not explicit, returning null"
+        );
         return null;
       }
 
@@ -328,7 +377,9 @@
           position: from,
         });
 
-        console.log("[CodeMirror] Message sent to extension, waiting for response...");
+        console.log(
+          "[CodeMirror] Message sent to extension, waiting for response..."
+        );
       });
     }
 
@@ -339,7 +390,9 @@
       );
 
       if (!this.pendingCompletionResolve) {
-        console.log("[CodeMirror] No pending completion resolve, ignoring response");
+        console.log(
+          "[CodeMirror] No pending completion resolve, ignoring response"
+        );
         return;
       }
 
@@ -357,12 +410,12 @@
 
       console.log("[CodeMirror] Resolving with completions:", completions);
 
-      // Return completion result with validFor pattern
-      // This tells CodeMirror when the cached results are still valid
+      // Return completion result
+      // Note: We don't use validFor because we do server-side filtering.
+      // CodeMirror will re-request completions on each keystroke to get updated filtered results.
       this.pendingCompletionResolve({
         from: from,
         options: completions,
-        validFor: /@[a-zA-Z0-9_/.-]*|#[a-zA-Z0-9_/:.-]*/,
         filter: false, // We handle filtering server-side
       });
 
@@ -372,7 +425,7 @@
 
     // Decorate links (@file, @dir/, #file:, #sym:)
     linkDecorationExtension() {
-      const { ViewPlugin, Decoration} = CM;
+      const { ViewPlugin, Decoration } = CM;
 
       const linkPlugin = ViewPlugin.fromClass(
         class {

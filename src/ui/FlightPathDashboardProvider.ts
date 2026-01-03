@@ -749,7 +749,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         from: position,
       });
 
-      Log.info(`[Dashboard] Sent COMPLETIONS_RESPONSE with ${items.length} items`);
+      Log.info(
+        `[Dashboard] Sent COMPLETIONS_RESPONSE with ${items.length} items`
+      );
     } catch (error) {
       Log.error("Error generating completions:", error);
       this.postMessage({
@@ -788,11 +790,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
    * Handle OPEN_FILE message from CodeMirror editor
    * Opens a file when user Ctrl+Clicks on #file: link
    */
-  private handleOpenFile(
-    path: string,
+  private async handleOpenFile(
+    relativePath: string,
     lineStart?: number,
     lineEnd?: number
-  ): void {
+  ): Promise<void> {
     try {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder) {
@@ -800,7 +802,25 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, path);
+      const normalizedPath = relativePath.replace(/\\/g, "/");
+      const isDirectory = normalizedPath.endsWith("/");
+      const trimmedPath = isDirectory
+        ? normalizedPath.replace(/\/+$/, "")
+        : normalizedPath;
+
+      const segments = trimmedPath.split("/").filter(Boolean);
+      const targetUri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+
+      if (isDirectory) {
+        // Match PromptLinkProvider behavior (reveal directory)
+        // Prefer revealInExplorer, fall back to revealFileInOS
+        try {
+          await vscode.commands.executeCommand("revealInExplorer", targetUri);
+        } catch {
+          await vscode.commands.executeCommand("revealFileInOS", targetUri);
+        }
+        return;
+      }
 
       const options: vscode.TextDocumentShowOptions = {
         preview: false,
@@ -814,10 +834,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         options.selection = new vscode.Range(start, end);
       }
 
-      vscode.window.showTextDocument(fileUri, options);
+      await vscode.window.showTextDocument(targetUri, options);
     } catch (error) {
       Log.error("Error opening file:", error);
-      vscode.window.showErrorMessage(`Failed to open file: ${path}`);
+      vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
     }
   }
 }
