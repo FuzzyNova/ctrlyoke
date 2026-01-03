@@ -71,6 +71,11 @@ export const MESSAGE_TYPES = {
   SET_DEFAULT_TEMPLATE: "setDefaultTemplate",
   CREATE_WORKFLOW: "createWorkflow",
   CREATE_NEW_TEMPLATE: "createNewTemplate",
+
+  // CodeMirror editor - Webview <-> Extension
+  REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
+  COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
+  OPEN_FILE: "openFile", // Open file from #file: link
 } as const;
 
 // ============================================================================

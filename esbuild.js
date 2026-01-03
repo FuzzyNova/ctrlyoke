@@ -236,7 +236,37 @@ const copyScriptsPlugin = {
   },
 };
 
+/**
+ * Bundle CodeMirror for webview use
+ */
+async function buildCodeMirror() {
+  const outDir = path.join(__dirname, "out", "ui", "webview", "lib");
+
+  // Ensure lib directory exists
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
+
+  await esbuild.build({
+    entryPoints: ["src/ui/webview/codemirror-bundle-source.js"],
+    bundle: true,
+    format: "esm",
+    outfile: "out/ui/webview/lib/codemirror.bundle.js",
+    platform: "browser",
+    external: [], // Bundle everything
+    minify: production,
+    sourcemap: !production,
+    target: ["es2020"],
+    logLevel: "info",
+  });
+
+  console.log("✓ CodeMirror bundle created");
+}
+
 async function main() {
+  // Build CodeMirror bundle first
+  await buildCodeMirror();
+
   // Build main extension
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],

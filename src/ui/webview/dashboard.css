@@ -926,78 +926,27 @@ h3 {
   flex-shrink: 0;
 }
 
-/* Prompt editor (contenteditable) - auto-expands with content */
+/* Prompt editor (CodeMirror 6) - auto-expands with content */
 .prompt-editor {
   flex: 1;
-  padding: var(--spacing-md);
-  background: var(--input-bg);
+  height: 200px;
+  min-height: 150px;
   border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-family: var(--vscode-editor-font-family), monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--fg-primary);
-  overflow-y: auto;
-  outline: none;
-  cursor: text;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  min-height: 120px;
-  max-height: 50vh;
-  resize: vertical;
-}
-
-.prompt-editor:focus {
-  border-color: var(--input-focus-border);
-}
-
-.prompt-editor:empty:before {
-  content: attr(data-placeholder);
-  color: var(--fg-secondary);
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* Spell check highlighting */
-.misspelled-word {
-  text-decoration: wavy underline #ff0000;
-  text-decoration-skip-ink: none;
-  cursor: pointer;
-}
-
-/* Spell check suggestion menu */
-.spell-check-menu {
-  background: var(--vscode-menu-background);
-  border: 1px solid var(--vscode-menu-border);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  z-index: 1000;
-  min-width: 150px;
-  max-width: 250px;
+  border-radius: 3px;
   overflow: hidden;
+  position: relative;
 }
 
-.spell-check-menu .menu-item {
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--vscode-menu-foreground);
+.prompt-editor .cm-editor {
+  height: 100%;
 }
 
-.spell-check-menu .menu-item:hover:not(.disabled) {
-  background: var(--vscode-menu-selectionBackground);
-  color: var(--vscode-menu-selectionForeground);
+.prompt-editor .cm-scroller {
+  overflow: auto;
 }
 
-.spell-check-menu .menu-item.disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.spell-check-menu .menu-separator {
-  height: 1px;
-  background: var(--vscode-menu-separatorBackground);
-  margin: 4px 0;
+.prompt-editor:focus-within {
+  border-color: var(--input-focus-border);
 }
 
 /* Property controls - REMOVED (now in drawer) */

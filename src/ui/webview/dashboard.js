@@ -354,6 +354,18 @@
       case MESSAGE_TYPES.CLOSE_MODAL:
         closeModal();
         break;
+      // CodeMirror editor messages
+      case MESSAGE_TYPES.COMPLETIONS_RESPONSE:
+        if (
+          editorState.promptEditor &&
+          editorState.promptEditor.handleCompletionResponse
+        ) {
+          editorState.promptEditor.handleCompletionResponse(
+            message.items,
+            message.from
+          );
+        }
+        break;
     }
   });
 
@@ -1373,28 +1385,46 @@
       typeof window.Typo !== "undefined"
     );
     console.log(
-      "[Dashboard] window.PromptEditor available:",
-      typeof window.PromptEditor !== "undefined"
+      "[Dashboard] window.CodeMirrorPromptEditor available:",
+      typeof window.CodeMirrorPromptEditor !== "undefined"
     );
 
-    // Initialize PromptEditor with spell checking
-    if (window.PromptEditor) {
-      console.log("[Dashboard] Initializing PromptEditor...");
-      editorState.promptEditor = new window.PromptEditor(
-        elements.promptEditor,
-        affUri,
-        dicUri
-      );
-      console.log(
-        "[Dashboard] PromptEditor initialized:",
-        !!editorState.promptEditor
-      );
-    } else {
-      console.warn("[Dashboard] PromptEditor class not available");
-    }
+    // Initialize CodeMirror editor with spell checking
+    // Wait for CodeMirror to be ready
+    window.addEventListener(
+      "codemirror-ready",
+      () => {
+        if (window.CodeMirrorPromptEditor) {
+          console.log("[Dashboard] Initializing CodeMirror editor...");
+          editorState.promptEditor = new window.CodeMirrorPromptEditor(
+            elements.promptEditor,
+            affUri,
+            dicUri
+          );
 
-    // Update character/word count on input
-    elements.promptEditor.addEventListener("input", updateEditorMetadata);
+          // Set up onChange callback for character/word count
+          editorState.promptEditor.onChange((text) => {
+            updateEditorMetadata(text);
+          });
+
+          console.log(
+            "[Dashboard] CodeMirror editor initialized:",
+            !!editorState.promptEditor
+          );
+        }
+      },
+      { once: true }
+    );
+
+    // Handle CodeMirror loading error
+    window.addEventListener(
+      "codemirror-error",
+      () => {
+        console.error("[Dashboard] CodeMirror failed to load");
+        showErrorMessage("Failed to initialize editor");
+      },
+      { once: true }
+    );
 
     // New Prompt button (returns to new prompt mode from editing mode)
     elements.btnNewPrompt.addEventListener("click", () => {
@@ -1436,8 +1466,12 @@
   /**
    * Update character and word count in editor metadata
    */
-  function updateEditorMetadata() {
-    const text = elements.promptEditor.textContent || "";
+  function updateEditorMetadata(text) {
+    // If no text provided, get it from the editor
+    if (text === undefined) {
+      text = editorState.promptEditor ? editorState.promptEditor.getText() : "";
+    }
+
     const charCount = text.length;
     const wordCount = text
       .trim()
@@ -1613,7 +1647,9 @@
    * @param {string} action - 'run', 'append', or 'appendNext'
    */
   function executePrompt(action) {
-    const text = elements.promptEditor.textContent.trim();
+    const text = editorState.promptEditor
+      ? editorState.promptEditor.getText().trim()
+      : "";
 
     if (!text) {
       return; // Don't execute empty prompts
@@ -1632,8 +1668,6 @@
     if (action === "run") {
       if (editorState.promptEditor) {
         editorState.promptEditor.clear();
-      } else {
-        elements.promptEditor.textContent = "";
       }
       resetPropertyControls();
       updateEditorMetadata();
@@ -1646,7 +1680,9 @@
   function updateExistingPrompt() {
     if (editorState.selectedPromptIndex === null) return;
 
-    const text = elements.promptEditor.textContent.trim();
+    const text = editorState.promptEditor
+      ? editorState.promptEditor.getText().trim()
+      : "";
 
     if (!text) {
       return; // Don't save empty prompts
@@ -1675,8 +1711,6 @@
     // Clear editor
     if (editorState.promptEditor) {
       editorState.promptEditor.clear();
-    } else {
-      elements.promptEditor.textContent = "";
     }
 
     // Reset property controls
@@ -1725,8 +1759,6 @@
     // Load prompt text into editor
     if (editorState.promptEditor) {
       editorState.promptEditor.setText(prompt.prompt || "");
-    } else {
-      elements.promptEditor.textContent = prompt.prompt || "";
     }
 
     // Load property controls

@@ -130,13 +130,9 @@
               </button>
             </div>
 
-            <div
-              id="prompt-editor"
-              class="prompt-editor"
-              contenteditable="true"
-              spellcheck="true"
-              data-placeholder="Write your prompt here..."
-            ></div>
+            <div id="prompt-editor" class="prompt-editor">
+              <!-- CodeMirror will be initialized here -->
+            </div>
 
             <div class="editor-footer">
               <div class="editor-footer-left">
@@ -404,10 +400,12 @@ Please fix the issues."
 
     <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
     <script src="{{constantsUri}}"></script>
-    <!-- Load Typo.js for spell checking -->
+    <!-- Load Typo.js for spell checking (KEEP - needed for Electron) -->
     <script src="{{typoUri}}"></script>
-    <!-- Load PromptEditor for spell checking functionality -->
-    <script src="{{promptEditorUri}}"></script>
+    <!-- Load CodeMirror modules -->
+    <script type="module" src="{{codemirrorLoaderUri}}"></script>
+    <!-- Load CodeMirror prompt editor -->
+    <script src="{{codemirrorEditorUri}}"></script>
     <!-- Then load main dashboard code that depends on constants -->
     <script src="{{scriptUri}}"></script>
   </body>

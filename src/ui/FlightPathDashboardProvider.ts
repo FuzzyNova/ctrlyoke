@@ -102,6 +102,20 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Handle CodeMirror editor messages
+    if (message.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
+      this.handleCompletionRequest(
+        message.trigger,
+        message.prefix,
+        message.position
+      );
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.OPEN_FILE) {
+      this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+      return;
+    }
+
     // Handle modal messages
     if (message.type === MESSAGE_TYPES.NEW_WORKFLOW) {
       this.handleNewWorkflow();
@@ -572,10 +586,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const codiconsUri = webview.asWebviewUri(
       this.getWebviewPath("codicons", "codicon.css")
     );
-    // Get typo.js and prompt-editor.js URIs
+    // Get typo.js and CodeMirror URIs (KEEP Typo.js for spell checking)
     const typoUri = webview.asWebviewUri(this.getWebviewPath("typo.js"));
-    const promptEditorUri = webview.asWebviewUri(
-      this.getWebviewPath("prompt-editor.js")
+    const codemirrorLoaderUri = webview.asWebviewUri(
+      this.getWebviewPath("codemirror-loader.js")
+    );
+    const codemirrorEditorUri = webview.asWebviewUri(
+      this.getWebviewPath("codemirror-editor.js")
     );
     // Get dictionary file URIs (pass individual files, not directory)
     const affUri = webview
@@ -609,7 +626,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
       .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
       .replace(/\{\{typoUri\}\}/g, typoUri.toString())
-      .replace(/\{\{promptEditorUri\}\}/g, promptEditorUri.toString())
+      .replace(/\{\{codemirrorLoaderUri\}\}/g, codemirrorLoaderUri.toString())
+      .replace(/\{\{codemirrorEditorUri\}\}/g, codemirrorEditorUri.toString())
       .replace(/\{\{affUri\}\}/g, affUri)
       .replace(/\{\{dicUri\}\}/g, dicUri)
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
@@ -694,6 +712,102 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage(
         `Failed to delete prompt: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  /**
+   * Handle REQUEST_COMPLETIONS message from CodeMirror editor
+   * Provides autocomplete suggestions for @file and #file references
+   */
+  private handleCompletionRequest(
+    trigger: string,
+    prefix: string,
+    position: number
+  ): void {
+    try {
+      const items = this.getCompletionItems(trigger, prefix);
+
+      this.postMessage({
+        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+        items: items.map((item) => ({
+          label: item.label,
+          kind: item.kind,
+          insertText: item.insertText,
+          detail: item.detail,
+          documentation: item.documentation,
+        })),
+        from: position,
+      });
+    } catch (error) {
+      Log.error("Error generating completions:", error);
+      this.postMessage({
+        type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
+        items: [],
+        from: position,
+      });
+    }
+  }
+
+  /**
+   * Get completion items based on trigger (@file or #file)
+   * This is a simplified implementation - can be enhanced with PromptCompletionProvider logic
+   */
+  private getCompletionItems(trigger: string, prefix: string): any[] {
+    const items: any[] = [];
+
+    if (trigger === "@") {
+      // Add @workspace completion
+      items.push({
+        label: "workspace",
+        kind: "folder",
+        insertText: "@workspace ",
+        detail: "Reference entire workspace",
+      });
+
+      // TODO: Add file completions by scanning workspace
+      // This would require implementing file scanning logic similar to PromptCompletionProvider
+    } else if (trigger === "#" && prefix.startsWith("#file:")) {
+      // TODO: Add #file: completions
+      // This would require implementing file path completion logic
+    }
+
+    return items;
+  }
+
+  /**
+   * Handle OPEN_FILE message from CodeMirror editor
+   * Opens a file when user Ctrl+Clicks on #file: link
+   */
+  private handleOpenFile(
+    path: string,
+    lineStart?: number,
+    lineEnd?: number
+  ): void {
+    try {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        Log.warn("No workspace folder open");
+        return;
+      }
+
+      const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, path);
+
+      const options: vscode.TextDocumentShowOptions = {
+        preview: false,
+      };
+
+      if (lineStart) {
+        const start = new vscode.Position(lineStart - 1, 0);
+        const end = lineEnd
+          ? new vscode.Position(lineEnd - 1, Number.MAX_SAFE_INTEGER)
+          : start;
+        options.selection = new vscode.Range(start, end);
+      }
+
+      vscode.window.showTextDocument(fileUri, options);
+    } catch (error) {
+      Log.error("Error opening file:", error);
+      vscode.window.showErrorMessage(`Failed to open file: ${path}`);
     }
   }
 }
