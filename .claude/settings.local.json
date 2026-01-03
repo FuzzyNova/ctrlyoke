@@ -22,7 +22,9 @@
       "Bash(timeout /t 10 /nobreak)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "WebFetch(domain:codemirror.net)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
