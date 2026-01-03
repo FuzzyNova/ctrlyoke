@@ -62,6 +62,7 @@
       return [
         basicSetup,
         this.themeExtension(),
+        this.linterThemeExtension(),
         this.spellCheckExtension(),
         this.autocompletionExtension(),
         this.linkDecorationExtension(),
@@ -128,6 +129,70 @@
         },
         { dark: document.body.classList.contains("vscode-dark") }
       );
+    }
+
+    // Linter theme for squiggly underlines and tooltips
+    linterThemeExtension() {
+      const { EditorView } = CM;
+
+      return EditorView.baseTheme({
+        // Squiggly underlines for linter diagnostics
+        ".cm-lintRange": {
+          backgroundPosition: "left bottom",
+          backgroundRepeat: "repeat-x",
+          paddingBottom: "0.7px",
+        },
+        ".cm-lintRange-error": {
+          backgroundImage:
+            "url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%226%22 height=%223%22><path d=%22m0 2.5 l2 -1.5 l1 0 l2 1.5 l1 0%22 stroke=%22%23d11%22 fill=%22none%22 stroke-width=%22.7%22/></svg>')",
+        },
+        ".cm-lintRange-warning": {
+          backgroundImage:
+            "url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%226%22 height=%223%22><path d=%22m0 2.5 l2 -1.5 l1 0 l2 1.5 l1 0%22 stroke=%22orange%22 fill=%22none%22 stroke-width=%22.7%22/></svg>')",
+        },
+        ".cm-lintRange-info": {
+          backgroundImage:
+            "url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%226%22 height=%223%22><path d=%22m0 2.5 l2 -1.5 l1 0 l2 1.5 l1 0%22 stroke=%22%23999%22 fill=%22none%22 stroke-width=%22.7%22/></svg>')",
+        },
+        ".cm-lintRange-hint": {
+          backgroundImage:
+            "url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%226%22 height=%223%22><path d=%22m0 2.5 l2 -1.5 l1 0 l2 1.5 l1 0%22 stroke=%22%2366d%22 fill=%22none%22 stroke-width=%22.7%22/></svg>')",
+        },
+        // Vertical layout for spell check action buttons
+        ".cm-tooltip-lint": {
+          padding: "0",
+          margin: "0",
+        },
+        ".cm-diagnostic": {
+          padding: "3px 6px 3px 8px",
+          marginLeft: "-1px",
+          display: "block",
+          whiteSpace: "pre-wrap",
+        },
+        ".cm-diagnosticText": {
+          display: "block",
+          marginBottom: "4px",
+        },
+        ".cm-diagnosticAction": {
+          display: "block",
+          font: "inherit",
+          border: "1px solid var(--vscode-button-border, transparent)",
+          padding: "4px 8px",
+          margin: "2px 0",
+          backgroundColor: "var(--vscode-button-background)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "2px",
+          cursor: "pointer",
+          textAlign: "left",
+          width: "100%",
+        },
+        ".cm-diagnosticAction:hover": {
+          backgroundColor: "var(--vscode-button-hoverBackground)",
+        },
+        ".cm-diagnosticAction:active": {
+          backgroundColor: "var(--vscode-button-background)",
+        },
+      });
     }
 
     // Typo.js spell checking via CodeMirror linter
