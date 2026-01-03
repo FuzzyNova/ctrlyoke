@@ -5,6 +5,10 @@ import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import {
+  getFileCompletions,
+  getHashCompletions,
+} from "../completions/CompletionHelpers";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -719,13 +723,19 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
    * Handle REQUEST_COMPLETIONS message from CodeMirror editor
    * Provides autocomplete suggestions for @file and #file references
    */
-  private handleCompletionRequest(
+  private async handleCompletionRequest(
     trigger: string,
     prefix: string,
     position: number
-  ): void {
+  ): Promise<void> {
+    Log.info(
+      `[Dashboard] handleCompletionRequest: trigger="${trigger}", prefix="${prefix}", position=${position}`
+    );
+
     try {
-      const items = this.getCompletionItems(trigger, prefix);
+      const items = await this.getCompletionItems(trigger, prefix);
+
+      Log.info(`[Dashboard] Got ${items.length} completion items`);
 
       this.postMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
@@ -738,6 +748,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         })),
         from: position,
       });
+
+      Log.info(`[Dashboard] Sent COMPLETIONS_RESPONSE with ${items.length} items`);
     } catch (error) {
       Log.error("Error generating completions:", error);
       this.postMessage({
@@ -750,28 +762,26 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   /**
    * Get completion items based on trigger (@file or #file)
-   * This is a simplified implementation - can be enhanced with PromptCompletionProvider logic
+   * Uses shared CompletionHelpers for code reuse with PromptCompletionProvider
    */
-  private getCompletionItems(trigger: string, prefix: string): any[] {
-    const items: any[] = [];
+  private async getCompletionItems(
+    trigger: string,
+    prefix: string
+  ): Promise<any[]> {
+    // Remove trigger character from prefix to get filter text
+    const filterText = prefix.substring(1); // Remove @ or #
 
     if (trigger === "@") {
-      // Add @workspace completion
-      items.push({
-        label: "workspace",
-        kind: "folder",
-        insertText: "@workspace ",
-        detail: "Reference entire workspace",
-      });
-
-      // TODO: Add file completions by scanning workspace
-      // This would require implementing file scanning logic similar to PromptCompletionProvider
-    } else if (trigger === "#" && prefix.startsWith("#file:")) {
-      // TODO: Add #file: completions
-      // This would require implementing file path completion logic
+      // Get file and directory completions
+      const completions = await getFileCompletions(filterText);
+      return completions;
+    } else if (trigger === "#") {
+      // Get selection and symbol completions
+      const completions = await getHashCompletions(filterText);
+      return completions;
     }
 
-    return items;
+    return [];
   }
 
   /**

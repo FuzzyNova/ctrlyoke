@@ -15,14 +15,17 @@
   let CM = null;
 
   class CodeMirrorPromptEditor {
-    constructor(containerElement, affUri, dicUri) {
+    constructor(containerElement, affUri, dicUri, vscodeApi) {
       this.container = containerElement;
       this.view = null;
       this.onChangeCallback = null;
       this.pendingCompletionResolve = null;
+      this.pendingCompletionTrigger = null; // Store trigger char for prefix preservation
       this.typoChecker = null;
       this.affUri = affUri;
       this.dicUri = dicUri;
+      // Cache the VS Code API instance (can only be acquired once per webview)
+      this.vscode = vscodeApi || window.vscode;
 
       this.init();
     }
@@ -56,11 +59,15 @@
 
     buildExtensions() {
       const { EditorView, keymap, ViewPlugin, Decoration } = CM;
-      const { basicSetup } = CM;
-      const { autocompletion } = CM;
+      const { minimalSetup } = CM;
+      const { autocompletion, completionKeymap } = CM;
+      const { history, historyKeymap } = CM;
+      const { searchKeymap } = CM;
 
       return [
-        basicSetup,
+        minimalSetup,
+        history(),
+        keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
         this.themeExtension(),
         this.linterThemeExtension(),
         this.spellCheckExtension(),
@@ -281,53 +288,91 @@
     }
 
     customCompletions(context) {
-      // Match @file or #file patterns
+      // Match @ or # patterns for completions
+      // @ matches: @file.ext, @path/to/file, @dir/
+      // # matches: #selection, #caret, #file:path:10-20, #sym:path:symbol:42
       const before = context.matchBefore(
-        /@[a-zA-Z0-9_/.-]*|#file:[a-zA-Z0-9_/.-]*/
+        /@[a-zA-Z0-9_/.-]*|#[a-zA-Z0-9_/:.-]*/
       );
 
-      if (!before) return null;
+      console.log("[CodeMirror] customCompletions called, before:", before);
+
+      if (!before) {
+        console.log("[CodeMirror] No match found, returning null");
+        return null;
+      }
+
+      // Don't provide completions on empty match unless explicitly requested
+      if (before.from === before.to && !context.explicit) {
+        console.log("[CodeMirror] Empty match and not explicit, returning null");
+        return null;
+      }
 
       const trigger = before.text[0]; // @ or #
       const from = before.from;
 
+      console.log(
+        `[CodeMirror] Requesting completions: trigger="${trigger}", prefix="${before.text}", position=${from}, explicit=${context.explicit}`
+      );
+
       // Request completions from extension host
       return new Promise((resolve) => {
         this.pendingCompletionResolve = resolve;
+        this.pendingCompletionTrigger = trigger; // Store for apply text
 
-        const vscode = window.vscode || window.acquireVsCodeApi();
-        vscode.postMessage({
+        // Use cached VS Code API instance
+        this.vscode.postMessage({
           type: "requestCompletions",
           trigger: trigger,
           prefix: before.text,
           position: from,
         });
+
+        console.log("[CodeMirror] Message sent to extension, waiting for response...");
       });
     }
 
     // Handle completion response from extension
     handleCompletionResponse(items, from) {
-      if (!this.pendingCompletionResolve) return;
+      console.log(
+        `[CodeMirror] handleCompletionResponse called: ${items.length} items, from=${from}`
+      );
+
+      if (!this.pendingCompletionResolve) {
+        console.log("[CodeMirror] No pending completion resolve, ignoring response");
+        return;
+      }
+
+      // Get the trigger character to prepend to completion text
+      const trigger = this.pendingCompletionTrigger || "";
 
       const completions = items.map((item) => ({
         label: item.label,
         type: item.kind || "text",
-        apply: item.insertText || item.label,
+        // Prepend trigger char (@ or #) to preserve it when inserting
+        apply: trigger + (item.insertText || item.label),
         detail: item.detail,
         info: item.documentation,
       }));
 
+      console.log("[CodeMirror] Resolving with completions:", completions);
+
+      // Return completion result with validFor pattern
+      // This tells CodeMirror when the cached results are still valid
       this.pendingCompletionResolve({
         from: from,
         options: completions,
+        validFor: /@[a-zA-Z0-9_/.-]*|#[a-zA-Z0-9_/:.-]*/,
+        filter: false, // We handle filtering server-side
       });
 
       this.pendingCompletionResolve = null;
+      this.pendingCompletionTrigger = null;
     }
 
-    // Decorate #file: links
+    // Decorate links (@file, @dir/, #file:, #sym:)
     linkDecorationExtension() {
-      const { ViewPlugin, Decoration } = CM;
+      const { ViewPlugin, Decoration} = CM;
 
       const linkPlugin = ViewPlugin.fromClass(
         class {
@@ -345,26 +390,105 @@
 
           buildDecorations(view) {
             const builder = new CM.RangeSetBuilder();
-            const regex = /#file:([a-zA-Z0-9_/.-]+)(?::(\d+)(?:-(\d+))?)?/g;
+
+            // Regex patterns matching PromptLinkProvider
+            const patterns = {
+              // @file.ext (no trailing slash, has extension)
+              fullFile: /@([^\s@#]+\.[a-zA-Z0-9]+)/g,
+
+              // @dir/ (trailing slash)
+              directory: /@([^\s@#]+\/)/g,
+
+              // #file:path:10-20 (line range)
+              lineRange: /#file:([^\s:]+):(\d+)-(\d+)/g,
+
+              // #sym:path:symbol:42 (symbol reference)
+              symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
+            };
 
             for (let { from, to } of view.visibleRanges) {
               const text = view.state.doc.sliceString(from, to);
-              let match;
 
-              while ((match = regex.exec(text)) !== null) {
-                const matchFrom = from + match.index;
-                const matchTo = matchFrom + match[0].length;
+              // Collect all matches with their positions
+              const matches = [];
+
+              // 1. Full file references (@file.ext)
+              let match;
+              const fullFileRegex = new RegExp(patterns.fullFile.source, "g");
+              while ((match = fullFileRegex.exec(text)) !== null) {
+                matches.push({
+                  from: from + match.index,
+                  to: from + match.index + match[0].length,
+                  type: "file",
+                  path: match[1],
+                });
+              }
+
+              // 2. Directory references (@dir/)
+              const directoryRegex = new RegExp(patterns.directory.source, "g");
+              while ((match = directoryRegex.exec(text)) !== null) {
+                matches.push({
+                  from: from + match.index,
+                  to: from + match.index + match[0].length,
+                  type: "directory",
+                  path: match[1],
+                });
+              }
+
+              // 3. Line range references (#file:path:10-20)
+              const lineRangeRegex = new RegExp(patterns.lineRange.source, "g");
+              while ((match = lineRangeRegex.exec(text)) !== null) {
+                matches.push({
+                  from: from + match.index,
+                  to: from + match.index + match[0].length,
+                  type: "lineRange",
+                  path: match[1],
+                  lineStart: match[2],
+                  lineEnd: match[3],
+                });
+              }
+
+              // 4. Symbol references (#sym:path:symbol:42)
+              const symbolRegex = new RegExp(patterns.symbol.source, "g");
+              while ((match = symbolRegex.exec(text)) !== null) {
+                matches.push({
+                  from: from + match.index,
+                  to: from + match.index + match[0].length,
+                  type: "symbol",
+                  path: match[1],
+                  symbolName: match[2],
+                  line: match[3],
+                });
+              }
+
+              // Sort matches by position and add decorations
+              matches.sort((a, b) => a.from - b.from);
+
+              for (const linkMatch of matches) {
+                const attrs = {
+                  "data-type": linkMatch.type,
+                  "data-path": linkMatch.path,
+                };
+
+                if (linkMatch.lineStart) {
+                  attrs["data-line-start"] = linkMatch.lineStart;
+                }
+                if (linkMatch.lineEnd) {
+                  attrs["data-line-end"] = linkMatch.lineEnd;
+                }
+                if (linkMatch.line) {
+                  attrs["data-line"] = linkMatch.line;
+                }
+                if (linkMatch.symbolName) {
+                  attrs["data-symbol-name"] = linkMatch.symbolName;
+                }
 
                 builder.add(
-                  matchFrom,
-                  matchTo,
+                  linkMatch.from,
+                  linkMatch.to,
                   Decoration.mark({
                     class: "cm-link",
-                    attributes: {
-                      "data-path": match[1],
-                      "data-line-start": match[2] || "",
-                      "data-line-end": match[3] || "",
-                    },
+                    attributes: attrs,
                   })
                 );
               }
@@ -395,17 +519,36 @@
           // Check if we clicked on a link decoration
           const target = event.target;
           if (target.classList.contains("cm-link")) {
+            const type = target.getAttribute("data-type");
             const path = target.getAttribute("data-path");
-            const lineStart = target.getAttribute("data-line-start");
-            const lineEnd = target.getAttribute("data-line-end");
 
-            const vscode = window.vscode || window.acquireVsCodeApi();
-            vscode.postMessage({
-              type: "openFile",
-              path: path,
-              lineStart: lineStart ? parseInt(lineStart) : undefined,
-              lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
-            });
+            // Handle different link types
+            if (type === "file" || type === "directory") {
+              // Simple file/directory open (no line numbers)
+              this.vscode.postMessage({
+                type: "openFile",
+                path: path,
+              });
+            } else if (type === "lineRange") {
+              // #file:path:10-20 (line range)
+              const lineStart = target.getAttribute("data-line-start");
+              const lineEnd = target.getAttribute("data-line-end");
+              this.vscode.postMessage({
+                type: "openFile",
+                path: path,
+                lineStart: lineStart ? parseInt(lineStart) : undefined,
+                lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
+              });
+            } else if (type === "symbol") {
+              // #sym:path:symbol:42 (single line)
+              const line = target.getAttribute("data-line");
+              this.vscode.postMessage({
+                type: "openFile",
+                path: path,
+                lineStart: line ? parseInt(line) : undefined,
+                lineEnd: line ? parseInt(line) : undefined,
+              });
+            }
 
             event.preventDefault();
             return true;

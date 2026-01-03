@@ -356,13 +356,21 @@
         break;
       // CodeMirror editor messages
       case MESSAGE_TYPES.COMPLETIONS_RESPONSE:
+        console.log(
+          `[Dashboard] Received COMPLETIONS_RESPONSE: ${message.items?.length} items, from=${message.from}`
+        );
         if (
           editorState.promptEditor &&
           editorState.promptEditor.handleCompletionResponse
         ) {
+          console.log("[Dashboard] Calling promptEditor.handleCompletionResponse");
           editorState.promptEditor.handleCompletionResponse(
             message.items,
             message.from
+          );
+        } else {
+          console.log(
+            "[Dashboard] Cannot handle completions - editor not ready or missing handler"
           );
         }
         break;
@@ -1399,7 +1407,8 @@
           editorState.promptEditor = new window.CodeMirrorPromptEditor(
             elements.promptEditor,
             affUri,
-            dicUri
+            dicUri,
+            vscode // Pass cached VS Code API instance
           );
 
           // Set up onChange callback for character/word count

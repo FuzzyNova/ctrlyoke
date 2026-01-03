@@ -2,7 +2,12 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { getAvailableModelsSync } from "../utils/ModelRegistry";
 import { Log } from "../utils/Log";
-import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
+import {
+  getFileCompletions,
+  getHashCompletions,
+  toVSCodeCompletionItem,
+  clearFilesCache,
+} from "./CompletionHelpers";
 
 /**
  * Trigger character types for context-aware completions
@@ -25,10 +30,7 @@ type TriggerChar = "@" | "#";
  * - #sym:symbolName        → Symbol reference (planned)
  */
 export class PromptCompletionProvider implements vscode.CompletionItemProvider {
-  // Cache for workspace files
-  private filesCache: vscode.Uri[] = [];
-  private filesCacheTimestamp: number = 0;
-  private readonly CACHE_DURATION_MS = 5000; // 5 seconds
+  // No local cache - using shared cache from CompletionHelpers
 
   /**
    * Provide completion items for prompt files (JSON and Markdown)
@@ -92,111 +94,14 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   private async getAtCompletions(
     filterText: string
   ): Promise<vscode.CompletionList> {
-    const items: vscode.CompletionItem[] = [];
-    const files = await this.getWorkspaceFiles();
+    // Use shared helper to get plain completions
+    const plainItems = await getFileCompletions(filterText);
 
-    // Convert filter text to lowercase and normalize path separators
-    // (VS Code always uses forward slashes, but Windows users type backslashes)
-    const filter = filterText.toLowerCase().replace(/\\/g, "/");
-
-    // Track unique directories we've seen
-    const directories = new Set<string>();
-
-    for (const fileUri of files) {
-      const relativePath = vscode.workspace.asRelativePath(fileUri, false);
-
-      // Simple filtering: check if the path contains the filter text
-      if (filter && !relativePath.toLowerCase().includes(filter)) {
-        continue;
-      }
-
-      const fileName = path.basename(relativePath);
-      const dirName = path.dirname(relativePath);
-
-      // Add file completion
-      const fileItem = new vscode.CompletionItem(
-        fileName,
-        vscode.CompletionItemKind.File
-      );
-
-      // Insert just the path (@ is already typed)
-      fileItem.insertText = relativePath;
-
-      // CRITICAL: Set range to fix VS Code YAML bug where completions don't show
-      // The range tells VS Code exactly what text to replace (the filter text after @)
-      // Without this, YAML completions are suppressed by the RedHat YAML extension
-      fileItem.range = this.calculateCompletionRange("@");
-
-      // Show directory in detail
-      fileItem.detail = dirName === "." ? "Root directory" : dirName;
-
-      // Full path in documentation with @path example
-      fileItem.documentation = new vscode.MarkdownString(
-        `**Full file attachment** (CLI-native)\n\n` +
-          `Insert: \`@${relativePath}\`\n\n` +
-          `The CLI will automatically attach this file's content.\n\n` +
-          `_For line ranges, use \`#file:${relativePath}:10-20\`_`
-      );
-
-      // Sort by path depth (shorter paths first) then alphabetically
-      const depth = relativePath.split(path.sep).length;
-      fileItem.sortText = `0_${depth}_${relativePath}`;
-
-      // Include path in filter text for fuzzy search
-      fileItem.filterText = `${relativePath} ${fileName}`;
-
-      items.push(fileItem);
-
-      // Track directory for directory completions
-      if (dirName !== ".") {
-        directories.add(dirName);
-      }
-
-      // Limit to 500 items for performance
-      if (items.length >= 500) {
-        break;
-      }
-    }
-
-    // Add directory completions (with trailing slash)
-    for (const dirPath of directories) {
-      if (filter && !dirPath.toLowerCase().includes(filter)) {
-        continue;
-      }
-
-      const dirName = path.basename(dirPath);
-      const parentDir = path.dirname(dirPath);
-
-      const dirItem = new vscode.CompletionItem(
-        dirName + "/",
-        vscode.CompletionItemKind.Folder
-      );
-
-      // Insert directory path WITH trailing slash
-      dirItem.insertText = dirPath + "/";
-
-      // Set range for YAML compatibility (same as files)
-      dirItem.range = this.calculateCompletionRange("@");
-
-      // Show parent directory
-      dirItem.detail = parentDir === "." ? "Root directory" : parentDir;
-
-      // Documentation
-      dirItem.documentation = new vscode.MarkdownString(
-        `**Directory structure attachment**\n\n` +
-          `Insert: \`@${dirPath}/\`\n\n` +
-          `FlightPath will attach a file tree of this directory.\n\n` +
-          `_No file contents, just structure._`
-      );
-
-      // Sort directories before files at same depth
-      const depth = dirPath.split(path.sep).length;
-      dirItem.sortText = `0_${depth}_0_${dirPath}`;
-
-      dirItem.filterText = `${dirPath} ${dirName}`;
-
-      items.push(dirItem);
-    }
+    // Convert to VS Code completion items with range for YAML compatibility
+    const range = this.calculateCompletionRange("@");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "@", range)
+    );
 
     return new vscode.CompletionList(items, true);
   }
@@ -215,23 +120,14 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   private async getHashCompletions(
     filterText: string
   ): Promise<vscode.CompletionList> {
-    const items: vscode.CompletionItem[] = [];
+    // Use shared helper to get plain completions
+    const plainItems = await getHashCompletions(filterText);
 
-    // 1. Add selection completions FIRST (bubbled to top with sortText)
-    const selectionItems = this.getAllSelectionCompletions();
-    selectionItems.forEach((item) => {
-      // Prefix sortText to bubble selections to top
-      item.sortText = `0_${item.sortText || item.label}`;
-    });
-    items.push(...selectionItems);
-
-    // 2. Add workspace symbols
-    const symbolItems = await this.getSymbolCompletions(filterText);
-    symbolItems.forEach((item) => {
-      // Prefix sortText to keep symbols below selections
-      item.sortText = `1_${item.sortText || item.label}`;
-    });
-    items.push(...symbolItems);
+    // Convert to VS Code completion items with range for YAML compatibility
+    const range = this.calculateCompletionRange("#");
+    const items = plainItems.map((item) =>
+      toVSCodeCompletionItem(item, "#", range)
+    );
 
     // CRITICAL: Must be true to get fresh symbol queries as user types
     // DO NOT CHANGE TO FALSE - list will not refresh without this
@@ -243,70 +139,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     return new vscode.CompletionList(items, true);
   }
 
-  /**
-   * Get symbol completions for # trigger
-   * Shows workspace symbols from all file types (functions, classes, methods, variables, markdown headers, etc.)
-   */
-  private async getSymbolCompletions(
-    filterText: string
-  ): Promise<vscode.CompletionItem[]> {
-    const items: vscode.CompletionItem[] = [];
-
-    try {
-      // Query workspace symbols (all file types)
-      const symbols = await getWorkspaceSymbols(filterText, 500);
-
-      for (const symbol of symbols) {
-        const item = new vscode.CompletionItem(
-          symbol.name,
-          vscode.CompletionItemKind.Reference
-        );
-
-        // Get workspace-relative path for detail
-        const relativePath = vscode.workspace.asRelativePath(
-          symbol.location.uri,
-          false
-        );
-
-        // Get line number (1-based)
-        const line = symbol.location.range.start.line + 1;
-
-        // Insert #sym:path/to/file.ts:SymbolName:123
-        // This format allows disambiguation when:
-        // - Same symbol name exists in multiple files
-        // - Same symbol name appears multiple times in same file
-        item.insertText = `sym:${relativePath}:${symbol.name}:${line}`;
-
-        // Set range for YAML compatibility
-        item.range = this.calculateCompletionRange("#");
-
-        // Show symbol kind and location
-        const symbolKindName = vscode.SymbolKind[symbol.kind];
-        item.detail = `${symbolKindName} in ${relativePath}:${line}`;
-
-        // Documentation shows full location
-        item.documentation = new vscode.MarkdownString(
-          `**Symbol Reference**\n\n` +
-            `Type: ${symbolKindName}\n\n` +
-            `Location: \`${relativePath}:${line}\`\n\n` +
-            `Insert: \`#sym:${relativePath}:${symbol.name}:${line}\`\n\n` +
-            `_FlightPath will resolve this symbol to its exact location and attach the code._`
-        );
-
-        // Sort by symbol name
-        item.sortText = symbol.name;
-
-        // Filter text includes both symbol name and file path
-        item.filterText = `${symbol.name} ${relativePath}`;
-
-        items.push(item);
-      }
-    } catch (error) {
-      Log.error("Failed to get symbol completions:", error);
-    }
-
-    return items;
-  }
 
   /**
    * Check if we should provide completions based on file type and cursor position
@@ -565,125 +397,11 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
   }
 
   /**
-   * Get completions for all editor selections (from all visible editors)
-   */
-  private getAllSelectionCompletions(): vscode.CompletionItem[] {
-    const items: vscode.CompletionItem[] = [];
-
-    // Get all visible editors (including split views)
-    const visibleEditors = vscode.window.visibleTextEditors;
-
-    // Track unique selections (avoid duplicates if same file/range appears multiple times)
-    const seenSelections = new Set<string>();
-
-    let selectionIndex = 0;
-
-    for (const editor of visibleEditors) {
-      // Skip if no selection or selection is empty
-      if (editor.selection.isEmpty) {
-        continue;
-      }
-
-      const selection = editor.selection;
-      const document = editor.document;
-
-      // Get workspace-relative path
-      const relativePath = vscode.workspace.asRelativePath(document.uri, false);
-
-      // Convert to 1-based line numbers
-      const startLine = selection.start.line + 1;
-      const endLine = selection.end.line + 1;
-
-      // Create unique key for this selection
-      const selectionKey = `${relativePath}:${startLine}-${endLine}`;
-
-      // Skip if we've already seen this exact selection
-      if (seenSelections.has(selectionKey)) {
-        continue;
-      }
-      seenSelections.add(selectionKey);
-
-      // Format: #file:path:startLine-endLine
-      const completionText = `file:${relativePath}:${startLine}-${endLine}`;
-
-      // Create label with file name and line range
-      const fileName = path.basename(relativePath);
-      const label =
-        visibleEditors.length > 1
-          ? `$(selection) ${fileName} (lines ${startLine}-${endLine})`
-          : `$(selection) Current Selection`;
-
-      const item = new vscode.CompletionItem(
-        label,
-        vscode.CompletionItemKind.Reference
-      );
-
-      item.insertText = completionText;
-      item.detail = `Lines ${startLine}-${endLine} in ${relativePath}`;
-
-      // Set range for YAML compatibility
-      item.range = this.calculateCompletionRange("#");
-
-      // Get preview of selected text (first 100 chars)
-      const selectedText = document.getText(selection);
-      const preview =
-        selectedText.length > 100
-          ? selectedText.substring(0, 100) + "..."
-          : selectedText;
-
-      item.documentation = new vscode.MarkdownString(
-        `Insert reference to selected code:\n\n\`#${completionText}\`\n\n` +
-          `**Preview:**\n\`\`\`\n${preview}\n\`\`\``
-      );
-
-      // Sort at top of list, with index to maintain order
-      // Use "!" prefix to sort before other items (ASCII sort)
-      item.sortText = `!000_selection_${selectionIndex.toString().padStart(3, "0")}`;
-
-      // Show full path in filter text for searchability
-      item.filterText = `file selection ${relativePath} ${fileName}`;
-
-      items.push(item);
-      selectionIndex++;
-    }
-
-    return items;
-  }
-
-  /**
-   * Get all workspace files (with caching)
-   */
-  private async getWorkspaceFiles(): Promise<vscode.Uri[]> {
-    const now = Date.now();
-
-    // Return cached results if still valid
-    if (
-      this.filesCache.length > 0 &&
-      this.filesCacheTimestamp &&
-      now - this.filesCacheTimestamp < this.CACHE_DURATION_MS
-    ) {
-      return this.filesCache;
-    }
-
-    // Find all files in workspace, excluding common directories
-    const files = await vscode.workspace.findFiles(
-      "**/*",
-      "{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**,**/.vscode/**}"
-    );
-
-    // Update cache
-    this.filesCache = files;
-    this.filesCacheTimestamp = now;
-
-    return files;
-  }
-
-  /**
    * Clear the cache (useful for testing or when workspace changes)
    */
   public clearCache(): void {
-    this.filesCache = [];
-    this.filesCacheTimestamp = 0;
+    // Delegate to shared cache in CompletionHelpers
+    clearFilesCache();
   }
 
   /**
