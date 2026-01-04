@@ -9,12 +9,77 @@ import { Log } from "../utils/Log";
  */
 export interface PlainCompletionItem {
   label: string;
-  kind: string;
+  kind: vscode.CompletionItemKind;
   insertText: string;
   detail?: string;
   documentation?: string;
   sortText?: string;
   filterText?: string;
+}
+
+/**
+ * Map VS Code SymbolKind to CompletionItemKind
+ * SymbolKind and CompletionItemKind are different enums with different values
+ */
+function mapSymbolKindToCompletionKind(
+  symbolKind: vscode.SymbolKind
+): vscode.CompletionItemKind {
+  switch (symbolKind) {
+    case vscode.SymbolKind.File:
+      return vscode.CompletionItemKind.File;
+    case vscode.SymbolKind.Module:
+      return vscode.CompletionItemKind.Module;
+    case vscode.SymbolKind.Namespace:
+      return vscode.CompletionItemKind.Module;
+    case vscode.SymbolKind.Package:
+      return vscode.CompletionItemKind.Module;
+    case vscode.SymbolKind.Class:
+      return vscode.CompletionItemKind.Class;
+    case vscode.SymbolKind.Method:
+      return vscode.CompletionItemKind.Method;
+    case vscode.SymbolKind.Property:
+      return vscode.CompletionItemKind.Property;
+    case vscode.SymbolKind.Field:
+      return vscode.CompletionItemKind.Field;
+    case vscode.SymbolKind.Constructor:
+      return vscode.CompletionItemKind.Constructor;
+    case vscode.SymbolKind.Enum:
+      return vscode.CompletionItemKind.Enum;
+    case vscode.SymbolKind.Interface:
+      return vscode.CompletionItemKind.Interface;
+    case vscode.SymbolKind.Function:
+      return vscode.CompletionItemKind.Function;
+    case vscode.SymbolKind.Variable:
+      return vscode.CompletionItemKind.Variable;
+    case vscode.SymbolKind.Constant:
+      return vscode.CompletionItemKind.Constant;
+    case vscode.SymbolKind.String:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.Number:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.Boolean:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.Array:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.Object:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.Key:
+      return vscode.CompletionItemKind.Property;
+    case vscode.SymbolKind.Null:
+      return vscode.CompletionItemKind.Value;
+    case vscode.SymbolKind.EnumMember:
+      return vscode.CompletionItemKind.EnumMember;
+    case vscode.SymbolKind.Struct:
+      return vscode.CompletionItemKind.Struct;
+    case vscode.SymbolKind.Event:
+      return vscode.CompletionItemKind.Event;
+    case vscode.SymbolKind.Operator:
+      return vscode.CompletionItemKind.Operator;
+    case vscode.SymbolKind.TypeParameter:
+      return vscode.CompletionItemKind.TypeParameter;
+    default:
+      return vscode.CompletionItemKind.Reference;
+  }
 }
 
 /**
@@ -99,7 +164,7 @@ export async function getFileCompletions(
     if (fileItems.length < MAX_FILE_ITEMS) {
       const fileItem: PlainCompletionItem = {
         label: fileName,
-        kind: "file",
+        kind: vscode.CompletionItemKind.File,
         insertText: relativePath,
         detail: dirName === "." ? "Root directory" : dirName,
         documentation:
@@ -127,7 +192,7 @@ export async function getFileCompletions(
 
     const dirItem: PlainCompletionItem = {
       label: dirName + "/",
-      kind: "folder",
+      kind: vscode.CompletionItemKind.Folder,
       insertText: dirPath + "/",
       detail: parentDir === "." ? "Root directory" : parentDir,
       documentation:
@@ -189,9 +254,12 @@ export async function getSymbolCompletions(
       // Show symbol kind and location
       const symbolKindName = vscode.SymbolKind[symbol.kind];
 
+      // Map SymbolKind to CompletionItemKind for proper icon/color
+      const completionKind = mapSymbolKindToCompletionKind(symbol.kind);
+
       const item: PlainCompletionItem = {
         label: symbol.name,
-        kind: "reference",
+        kind: completionKind,
         insertText: insertText,
         detail: `${symbolKindName} in ${relativePath}:${line}`,
         documentation:
@@ -271,7 +339,7 @@ export function getSelectionCompletions(): PlainCompletionItem[] {
 
     const item: PlainCompletionItem = {
       label: label,
-      kind: "reference",
+      kind: vscode.CompletionItemKind.Reference,
       insertText: completionText,
       detail: `Lines ${startLine}-${endLine} in ${relativePath}`,
       documentation:
@@ -321,23 +389,7 @@ export function toVSCodeCompletionItem(
   triggerChar: "@" | "#",
   range?: vscode.Range
 ): vscode.CompletionItem {
-  // Map kind string to VS Code CompletionItemKind
-  let kind: vscode.CompletionItemKind;
-  switch (item.kind) {
-    case "file":
-      kind = vscode.CompletionItemKind.File;
-      break;
-    case "folder":
-      kind = vscode.CompletionItemKind.Folder;
-      break;
-    case "reference":
-      kind = vscode.CompletionItemKind.Reference;
-      break;
-    default:
-      kind = vscode.CompletionItemKind.Text;
-  }
-
-  const vscodeItem = new vscode.CompletionItem(item.label, kind);
+  const vscodeItem = new vscode.CompletionItem(item.label, item.kind);
   vscodeItem.insertText = item.insertText;
   vscodeItem.detail = item.detail;
 

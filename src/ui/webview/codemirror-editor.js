@@ -134,6 +134,87 @@
           "&.cm-focused": {
             outline: "1px solid var(--vscode-focusBorder)",
           },
+          // Autocomplete dropdown styling with VS Code theme colors
+          ".cm-tooltip-autocomplete": {
+            backgroundColor: "var(--vscode-editorSuggestWidget-background)",
+            border: "1px solid var(--vscode-editorSuggestWidget-border)",
+            boxShadow: "0 2px 8px var(--vscode-widget-shadow)",
+          },
+          ".cm-tooltip-autocomplete ul": {
+            fontFamily:
+              "var(--vscode-editor-font-family, 'Consolas, monospace')",
+          },
+          ".cm-tooltip-autocomplete li": {
+            color: "var(--vscode-editorSuggestWidget-foreground)",
+          },
+          ".cm-tooltip-autocomplete li[aria-selected]": {
+            backgroundColor:
+              "var(--vscode-editorSuggestWidget-selectedBackground)",
+            color: "var(--vscode-editorSuggestWidget-selectedForeground)",
+          },
+          // Type-based completion styling (icons and labels with VS Code semantic token colors)
+          // Classes are applied to <li> elements via optionClass
+          ".cm-completion-class .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-classForeground, #ee9d28)",
+          },
+          ".cm-completion-class .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-classForeground, #ee9d28)",
+          },
+          ".cm-completion-method .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-methodForeground, #b180d7)",
+          },
+          ".cm-completion-method .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-methodForeground, #b180d7)",
+          },
+          ".cm-completion-function .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-functionForeground, #b180d7)",
+          },
+          ".cm-completion-function .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-functionForeground, #b180d7)",
+          },
+          ".cm-completion-property .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-propertyForeground, #75beff)",
+          },
+          ".cm-completion-property .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-propertyForeground, #75beff)",
+          },
+          ".cm-completion-variable .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
+          },
+          ".cm-completion-variable .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
+          },
+          ".cm-completion-type .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-typeForeground, #4ec9b0)",
+          },
+          ".cm-completion-type .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-typeForeground, #4ec9b0)",
+          },
+          ".cm-completion-string .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-stringForeground, #ce9178)",
+          },
+          ".cm-completion-string .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-stringForeground, #ce9178)",
+          },
+          ".cm-completion-keyword .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-keywordForeground, #569cd6)",
+          },
+          ".cm-completion-keyword .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-keywordForeground, #569cd6)",
+          },
+          // Custom styling for file/folder completions
+          ".cm-completion-file .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-fileForeground, #858585)",
+          },
+          ".cm-completion-file .cm-completionLabel": {
+            color: "var(--vscode-editorSuggestWidget-foreground)",
+          },
+          ".cm-completion-folder .cm-completionIcon": {
+            color: "var(--vscode-symbolIcon-folderForeground, #dcb67a",
+          },
+          ".cm-completion-folder .cm-completionLabel": {
+            color: "var(--vscode-symbolIcon-folderForeground, #dcb67a",
+          },
         },
         { dark: document.body.classList.contains("vscode-dark") }
       );
@@ -332,7 +413,39 @@
         override: [this.customCompletions.bind(this)],
         activateOnTyping: true,
         closeOnBlur: true,
+        // Add type-based class to each option for coloring
+        optionClass: this.completionOptionClass.bind(this),
+        // Add icon elements for file/folder types
+        addToOptions: [
+          {
+            render: (completion, state) => {
+              // Only render icons for file/folder types
+              // Return null for other types to avoid empty space
+              if (completion.type === "file") {
+                const icon = document.createElement("span");
+                icon.className = "cm-completionIcon";
+                icon.textContent = "📄";
+                return icon;
+              } else if (completion.type === "folder") {
+                const icon = document.createElement("span");
+                icon.className = "cm-completionIcon";
+                icon.textContent = "📁";
+                return icon;
+              }
+
+              // Return null for all other types (let CodeMirror handle them)
+              return null;
+            },
+            position: 20, // Position before label
+          },
+        ],
       });
+    }
+
+    // Add CSS class based on completion type for theme coloring
+    completionOptionClass(completion) {
+      // Add type-based class to the <li> element for styling
+      return `cm-completion-${completion.type || "text"}`;
     }
 
     customCompletions(context) {
@@ -421,14 +534,55 @@
           boost = -index;
         }
 
+        // Map VS Code CompletionItemKind (numeric) to CodeMirror type string
+        // https://code.visualstudio.com/api/references/vscode-api#CompletionItemKind
+        let type = "text";
+        if (item.kind !== undefined) {
+          const kindMap = {
+            0: "text", // Text
+            1: "method", // Method
+            2: "function", // Function
+            3: "function", // Constructor (treat as function)
+            4: "property", // Field (treat as property)
+            5: "variable", // Variable
+            6: "class", // Class
+            7: "interface", // Interface
+            8: "namespace", // Module
+            9: "property", // Property
+            10: "constant", // Unit
+            11: "constant", // Value
+            12: "enum", // Enum
+            13: "keyword", // Keyword
+            14: "text", // Snippet (treat as text)
+            15: "string", // Color (treat as string)
+            16: "file", // File
+            17: "text", // Reference
+            18: "folder", // Folder (changed from "directory" to match CodeMirror's expected type)
+            19: "enum", // EnumMember (treat as enum)
+            20: "constant", // Constant
+            21: "class", // Struct (treat as class)
+            22: "text", // Event
+            23: "text", // Operator
+            24: "type", // TypeParameter
+          };
+          type = kindMap[item.kind] || "text";
+
+          // Log mapping for first item to debug
+          if (index === 0) {
+            console.log(
+              `[CodeMirror] Kind mapping for first item: kind=${item.kind} (${typeof item.kind}) -> type="${type}"`
+            );
+          }
+        }
+
         return {
           label: item.label,
-          type: item.kind || "text",
+          type: type,
           // Don't prepend trigger - it stays in the document at position 'from'
           // We only replace from 'from + 1' onward
           apply: item.insertText || item.label,
           detail: item.detail,
-          info: item.documentation,
+          // info: item.documentation, // Commented out to keep tooltip compact (can re-enable with setting)
           // Preserve sort order from extension (server-side relevance ranking)
           boost: boost,
           // Store sortText for debugging
@@ -436,7 +590,9 @@
         };
       });
 
-      console.log(`[CodeMirror] Resolved ${items.length} completions with fuzzy matching enabled`);
+      console.log(
+        `[CodeMirror] Resolved ${items.length} completions with fuzzy matching enabled`
+      );
 
       // Return completion result
       // Enable CodeMirror's built-in fuzzy matching (matches VS Code behavior)
