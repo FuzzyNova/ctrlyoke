@@ -27,6 +27,10 @@
     promptEditor: null, // PromptEditor instance (initialized after DOM load)
   };
 
+  // State persistence (debounced to avoid excessive saves)
+  let saveStateTimeout = null;
+  const SAVE_STATE_DEBOUNCE_MS = 500;
+
   // DOM elements
   const elements = {
     workflowName: document.getElementById("workflow-name"),
@@ -402,9 +406,16 @@
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => ({
       index: i,
-      text: p.prompt || p,
+      text: typeof p === "string" ? p : p.prompt,
       status: STEP_STATUS.PENDING,
       details: {},
+      // Preserve all prompt properties for editing
+      provider: p.provider,
+      model: p.model,
+      agent: p.agent,
+      newChatSession: p.newChatSession,
+      allowDynamicExtension: p.allowDynamicExtension,
+      endCondition: p.endCondition,
     }));
 
     // Reset execution state and progress when new file is selected
@@ -456,9 +467,16 @@
       const result = results[i];
       return {
         index: i,
-        text: p.prompt || p,
+        text: typeof p === "string" ? p : p.prompt,
         status: result?.status || STEP_STATUS.PENDING,
         details: {},
+        // Preserve all prompt properties for editing
+        provider: p.provider,
+        model: p.model,
+        agent: p.agent,
+        newChatSession: p.newChatSession,
+        allowDynamicExtension: p.allowDynamicExtension,
+        endCondition: p.endCondition,
       };
     });
 
@@ -466,6 +484,10 @@
     state.cliOutputs = {};
     state.retryStates = {};
     state.statusMessages = {};
+
+    // Update editor state - we have an active queue from restored session
+    editorState.hasActiveQueue = prompts.length > 0;
+    updateEditorMode();
 
     // Update workflow status display
     updateWorkflowStatus(fileName, executionState);
@@ -502,6 +524,10 @@
     // Clear CLI output and show empty state
     elements.outputContent.innerHTML =
       '<p class="empty-state">CLI output will appear here during execution</p>';
+
+    // Update editor state - we have an active queue now
+    editorState.hasActiveQueue = true;
+    updateEditorMode();
 
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.RUNNING);
@@ -669,6 +695,10 @@
 
   function handleExecutionCompleted() {
     state.executionState = EXECUTION_STATES.COMPLETED;
+
+    // Keep hasActiveQueue true - completed queue is still a queue
+    // (Only set to false when queue is truly cleared/empty)
+
     updateWorkflowStatus(state.fileName, EXECUTION_STATES.COMPLETED);
     updateLoadButtonState();
     updateAppendButtonState();
@@ -694,7 +724,7 @@
 
     // Replace entire array, preserving statuses for matching prompts
     state.prompts = prompts.map((p, i) => {
-      const text = p.prompt || p;
+      const text = typeof p === "string" ? p : p.prompt;
       const key = text.trim();
       const existing = existingStatusMap.get(key);
 
@@ -703,10 +733,21 @@
         text: text,
         status: existing ? existing.status : STEP_STATUS.PENDING,
         details: existing ? existing.details : {},
+        // Preserve all prompt properties for editing
+        provider: p.provider,
+        model: p.model,
+        agent: p.agent,
+        newChatSession: p.newChatSession,
+        allowDynamicExtension: p.allowDynamicExtension,
+        endCondition: p.endCondition,
       };
     });
 
     state.totalSteps = state.prompts.length;
+
+    // Update editor state - queue was extended so we definitely have an active queue
+    editorState.hasActiveQueue = state.prompts.length > 0;
+    updateEditorMode();
 
     // Re-render the prompts list to show all prompts in correct order
     renderPromptsList();
@@ -1456,6 +1497,105 @@
   }
 
   // ============================================================================
+  // STATE PERSISTENCE (using VS Code webview state API)
+  // ============================================================================
+
+  /**
+   * Save current editor state to webview persistent storage
+   * Debounced to avoid excessive saves during typing
+   * Only saves when in new prompt mode (not when editing existing prompts)
+   */
+  function saveEditorState() {
+    // Only save state for new prompt mode, not when editing existing prompts
+    if (editorState.selectedPromptIndex !== null) {
+      return;
+    }
+
+    if (saveStateTimeout) {
+      clearTimeout(saveStateTimeout);
+    }
+
+    saveStateTimeout = setTimeout(() => {
+      const currentText = editorState.promptEditor
+        ? editorState.promptEditor.getText()
+        : "";
+      const promptName = elements.promptNameInput.value;
+
+      const persistedState = {
+        editorText: currentText,
+        promptName: promptName,
+        selectedPromptIndex: null, // Always null for new prompt state
+        properties: getPropertyValues(),
+      };
+
+      vscode.setState(persistedState);
+      console.log("[Dashboard] Editor state saved:", persistedState);
+    }, SAVE_STATE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Restore editor state from webview persistent storage
+   * Called during initialization
+   */
+  function restoreEditorState() {
+    const persistedState = vscode.getState();
+
+    if (!persistedState) {
+      console.log("[Dashboard] No persisted state to restore");
+      return;
+    }
+
+    console.log("[Dashboard] Restoring editor state:", persistedState);
+
+    // Restore editor text (only in new prompt mode)
+    if (
+      persistedState.selectedPromptIndex === null &&
+      persistedState.editorText &&
+      editorState.promptEditor
+    ) {
+      editorState.promptEditor.setText(persistedState.editorText);
+    }
+
+    // Restore prompt name
+    if (persistedState.promptName) {
+      elements.promptNameInput.value = persistedState.promptName;
+    }
+
+    // Restore property controls
+    if (persistedState.properties) {
+      const props = persistedState.properties;
+      if (props.provider)
+        elements.propProvider.value = props.provider || "default";
+      if (props.model) elements.propModel.value = props.model || "default";
+      if (props.agent) elements.propAgent.value = props.agent || "";
+      elements.propNewChat.value =
+        props.newChatSession === undefined
+          ? "default"
+          : props.newChatSession
+            ? "yes"
+            : "no";
+      elements.propAllowDynamic.value =
+        props.allowDynamicExtension === undefined
+          ? "default"
+          : props.allowDynamicExtension
+            ? "yes"
+            : "no";
+
+      if (props.endCondition) {
+        elements.propEndScript.value = props.endCondition.script || "";
+        elements.propEndReturns.value = props.endCondition.returns || "";
+        elements.propEndTimeout.value = props.endCondition.timeout || 30000;
+        elements.propEndRetries.value = props.endCondition.maxRetries || 0;
+        elements.propEndRetryPrompt.value =
+          props.endCondition.retryPrompt || "";
+      }
+    }
+
+    // Update metadata
+    updateEditorMetadata();
+  }
+
+  // ============================================================================
   // EDITOR TAB FUNCTIONALITY
   // ============================================================================
 
@@ -1491,10 +1631,14 @@
             vscode // Pass cached VS Code API instance
           );
 
-          // Set up onChange callback for character/word count
+          // Set up onChange callback for character/word count and state persistence
           editorState.promptEditor.onChange((text) => {
             updateEditorMetadata(text);
+            saveEditorState(); // Persist editor state on every change
           });
+
+          // Restore persisted state after editor is ready
+          restoreEditorState();
 
           console.log(
             "[Dashboard] CodeMirror editor initialized:",
@@ -1547,6 +1691,23 @@
         selectPromptForEdit(index);
       }
     });
+
+    // Save state when prompt name changes
+    elements.promptNameInput.addEventListener("input", () => {
+      saveEditorState();
+    });
+
+    // Save state when property controls change
+    elements.propProvider.addEventListener("change", saveEditorState);
+    elements.propModel.addEventListener("change", saveEditorState);
+    elements.propAgent.addEventListener("input", saveEditorState);
+    elements.propNewChat.addEventListener("change", saveEditorState);
+    elements.propAllowDynamic.addEventListener("change", saveEditorState);
+    elements.propEndScript.addEventListener("input", saveEditorState);
+    elements.propEndReturns.addEventListener("input", saveEditorState);
+    elements.propEndTimeout.addEventListener("input", saveEditorState);
+    elements.propEndRetries.addEventListener("input", saveEditorState);
+    elements.propEndRetryPrompt.addEventListener("input", saveEditorState);
 
     // Update editor metadata initially
     updateEditorMetadata();
@@ -1687,22 +1848,21 @@
    */
   function updateEditorMode() {
     const isNewMode = editorState.selectedPromptIndex === null;
-    const hasQueue = editorState.hasActiveQueue;
 
     if (isNewMode) {
       elements.editorModeIndicator.textContent = "New Prompt";
       elements.promptNameInput.style.display = ""; // Show name input in new mode
       elements.btnNewPrompt.style.display = "none"; // Hide New Prompt button
 
-      // Show new prompt buttons
+      // Show new prompt buttons (all always enabled - they create queue if none exists)
       elements.btnEditorRun.style.display = "";
       elements.btnEditorRun.disabled = false;
 
       elements.btnEditorAppend.style.display = "";
-      elements.btnEditorAppend.disabled = !hasQueue;
+      elements.btnEditorAppend.disabled = false;
 
       elements.btnEditorAppendNext.style.display = "";
-      elements.btnEditorAppendNext.disabled = !hasQueue;
+      elements.btnEditorAppendNext.disabled = false;
 
       // Hide editing buttons
       elements.btnEditorCancel.style.display = "none";
@@ -1753,14 +1913,16 @@
       action,
     });
 
-    // Clear editor after Run (but not after Append - user may want to add more)
-    if (action === "run") {
-      if (editorState.promptEditor) {
-        editorState.promptEditor.clear();
-      }
-      resetPropertyControls();
-      updateEditorMetadata();
+    // Clear editor after all actions (Run/Append/AppendNext)
+    // User can click the prompt in the queue to edit it further
+    if (editorState.promptEditor) {
+      editorState.promptEditor.clear();
     }
+    resetPropertyControls();
+    updateEditorMetadata();
+
+    // Clear persisted state since prompt was submitted
+    vscode.setState(null);
   }
 
   /**
@@ -1794,16 +1956,16 @@
    * Cancel editing and return to new prompt mode
    */
   function cancelEdit() {
+    const wasEditingExisting = editorState.selectedPromptIndex !== null;
+
     editorState.selectedPromptIndex = null;
     editorState.originalPromptData = null;
 
-    // Clear editor
-    if (editorState.promptEditor) {
-      editorState.promptEditor.clear();
+    if (wasEditingExisting) {
+      // Cancelled editing an existing prompt - restore persisted new prompt state
+      restoreEditorState();
     }
-
-    // Reset property controls
-    resetPropertyControls();
+    // If already in new prompt mode, editor state is already current
 
     // Update UI
     updateEditorMode();
@@ -1846,8 +2008,9 @@
     editorState.originalPromptData = { ...prompt };
 
     // Load prompt text into editor
+    // Note: onChange will fire but saveEditorState will skip since we're in edit mode
     if (editorState.promptEditor) {
-      editorState.promptEditor.setText(prompt.prompt || "");
+      editorState.promptEditor.setText(prompt.text || "");
     }
 
     // Load property controls
