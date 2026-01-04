@@ -735,8 +735,6 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     try {
       const items = await this.getCompletionItems(trigger, prefix);
 
-      Log.info(`[Dashboard] Got ${items.length} completion items`);
-
       this.postMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
         items: items.map((item) => ({
@@ -745,13 +743,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
           insertText: item.insertText,
           detail: item.detail,
           documentation: item.documentation,
+          sortText: item.sortText,
         })),
         from: position,
       });
-
-      Log.info(
-        `[Dashboard] Sent COMPLETIONS_RESPONSE with ${items.length} items`
-      );
     } catch (error) {
       Log.error("Error generating completions:", error);
       this.postMessage({

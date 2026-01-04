@@ -400,26 +400,52 @@
       // Get the trigger character to prepend to completion text
       const trigger = this.pendingCompletionTrigger || "";
 
-      const completions = items.map((item, index) => ({
-        label: item.label,
-        type: item.kind || "text",
-        // Prepend trigger char (@ or #) to preserve it when inserting
-        apply: trigger + (item.insertText || item.label),
-        detail: item.detail,
-        info: item.documentation,
-        // Preserve sort order from extension (server-side relevance ranking)
-        boost: -index,  // CodeMirror uses boost for sorting (higher = better)
-      }));
+      const completions = items.map((item, index) => {
+        // Calculate boost from sortText if available, otherwise use index
+        // sortText format: "0_...", "1_...", etc. where lower prefix = higher priority
+        let boost;
+        if (item.sortText) {
+          // Extract prefix number (e.g., "0_" -> 0, "1_" -> 1)
+          const prefixMatch = item.sortText.match(/^(\d+)_/);
+          if (prefixMatch) {
+            const prefix = parseInt(prefixMatch[1]);
+            // Invert so lower prefix = higher boost (0 -> 1000, 1 -> 900, etc.)
+            // Also incorporate index within same prefix for stability
+            boost = 1000 - prefix * 100 - index * 0.01;
+          } else {
+            // No numeric prefix, use negative index
+            boost = -index;
+          }
+        } else {
+          // No sortText, preserve array order with negative index
+          boost = -index;
+        }
 
-      console.log("[CodeMirror] Resolving with completions:", completions);
+        return {
+          label: item.label,
+          type: item.kind || "text",
+          // Don't prepend trigger - it stays in the document at position 'from'
+          // We only replace from 'from + 1' onward
+          apply: item.insertText || item.label,
+          detail: item.detail,
+          info: item.documentation,
+          // Preserve sort order from extension (server-side relevance ranking)
+          boost: boost,
+          // Store sortText for debugging
+          _sortText: item.sortText,
+        };
+      });
+
+      console.log(`[CodeMirror] Resolved ${items.length} completions with fuzzy matching enabled`);
 
       // Return completion result
-      // Note: We don't use validFor because we do server-side filtering.
-      // CodeMirror will re-request completions on each keystroke to get updated filtered results.
+      // Enable CodeMirror's built-in fuzzy matching (matches VS Code behavior)
+      // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
+      // matches against "src" instead of "@src" (labels don't include trigger)
       this.pendingCompletionResolve({
-        from: from,
+        from: from + 1, // Skip the @ or # trigger character
         options: completions,
-        filter: false, // We handle filtering server-side
+        filter: true, // Let CodeMirror do fuzzy matching (highlights matches, ranks by relevance)
       });
 
       this.pendingCompletionResolve = null;
