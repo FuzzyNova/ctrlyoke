@@ -293,52 +293,73 @@
           if (!this.typoChecker) return [];
 
           const diagnostics = [];
-          const text = view.state.doc.toString();
 
-          // Get ranges to exclude from spell checking (@ and # references)
-          const excludedRanges = this.getCompletionRanges(text);
+          // PERFORMANCE: Only check visible ranges (not entire document)
+          // CodeMirror automatically reruns this when viewport changes (scroll/resize)
+          for (let { from, to } of view.visibleRanges) {
+            const text = view.state.doc.sliceString(from, to);
 
-          const wordRegex = /\b[a-zA-Z]+\b/g;
-          let match;
+            // Get ranges to exclude from spell checking (@ and # references)
+            const excludedRanges = this.getCompletionRanges(text);
 
-          while ((match = wordRegex.exec(text)) !== null) {
-            const word = match[0];
-            const from = match.index;
-            const to = from + word.length;
+            // APOSTROPHE FIX: Handle contractions and hyphenated words
+            // Matches: "I've", "doesn't", "can't", "rock'n'roll", "self-aware"
+            const wordRegex = /\b[a-zA-Z]+(?:['-][a-zA-Z]+)*\b/g;
+            let match;
 
-            // Skip spell checking if word is within a completion range
-            if (this.isInExcludedRange(from, to, excludedRanges)) {
-              continue;
-            }
+            while ((match = wordRegex.exec(text)) !== null) {
+              const word = match[0];
+              const wordFrom = from + match.index; // Convert to absolute position
+              const wordTo = wordFrom + word.length;
 
-            if (!this.typoChecker.check(word)) {
-              const suggestions = this.typoChecker.suggest(word);
-              const message =
-                suggestions.length > 0
-                  ? `Spelling: "${word}". Suggestions: ${suggestions.slice(0, 3).join(", ")}`
-                  : `Spelling: "${word}"`;
+              // Skip spell checking if word is within a completion range
+              if (this.isInExcludedRange(match.index, match.index + word.length, excludedRanges)) {
+                continue;
+              }
 
-              diagnostics.push({
-                from: from,
-                to: to,
-                severity: "warning",
-                message: message,
-                actions: suggestions.slice(0, 5).map((suggestion) => ({
-                  name: `Change to "${suggestion}"`,
-                  apply: (view, from, to) => {
-                    view.dispatch({
-                      changes: { from, to, insert: suggestion },
-                    });
+              // Skip all-caps words (likely acronyms like "HTML", "JSON", "API")
+              if (word === word.toUpperCase() && word.length > 1) {
+                continue;
+              }
+
+              if (!this.typoChecker.check(word)) {
+                // LAZY LOADING: Use getter to defer suggestion generation until tooltip shows
+                const diagnostic = {
+                  from: wordFrom,
+                  to: wordTo,
+                  severity: "warning",
+                  message: `Spelling: "${word}"`,
+                  // Getter runs only when CodeMirror accesses actions (tooltip display)
+                  get actions() {
+                    if (!this._cachedActions) {
+                      const suggestions = this._typoChecker.suggest(this._word);
+                      this._cachedActions = suggestions.slice(0, 5).map((suggestion) => ({
+                        name: `Change to "${suggestion}"`,
+                        apply: (view, from, to) => {
+                          view.dispatch({
+                            changes: { from, to, insert: suggestion },
+                          });
+                        },
+                      }));
+                    }
+                    return this._cachedActions;
                   },
-                })),
-              });
+                  _word: word,
+                  _typoChecker: this.typoChecker,
+                  _cachedActions: null,
+                };
+
+                diagnostics.push(diagnostic);
+              }
             }
           }
 
           return diagnostics;
         },
         {
-          delay: 300, // Debounce spell checking
+          delay: 500, // Increased debounce for better performance during fast typing
+          // Force linter to rerun when viewport changes (scroll/resize)
+          needsRefresh: (update) => update.docChanged || update.viewportChanged,
         }
       );
     }
