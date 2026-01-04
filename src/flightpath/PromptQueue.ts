@@ -942,10 +942,18 @@ export class PromptQueue {
       // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
       // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
       // - RUNNING: Already running, no change needed
+      const previousStatus = this.state.status;
       if (this.state.status === EXECUTION_STATES.COMPLETED) {
+        Log.info(
+          `appendPrompts: Auto-starting workflow (appended to COMPLETED queue, ${this.state.completedIds.size} prompts previously completed)`
+        );
         this.state.status = EXECUTION_STATES.RUNNING;
         this.isPaused = false;
         this.state.stopped = false;
+      } else {
+        Log.info(
+          `appendPrompts: NOT auto-starting (current state: ${previousStatus}, completed count: ${this.state.completedIds.size})`
+        );
       }
 
       this.emitStateChange();

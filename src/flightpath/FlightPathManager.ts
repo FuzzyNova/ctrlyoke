@@ -929,7 +929,9 @@ export class FlightPathManager {
    * ensuring only one execution path runs regardless of whether auto-start or explicit start happens first.
    */
   private onQueueStateChanged(state: QueueState): void {
-    Log.info(`FlightPath: Queue state changed to ${state.status}`);
+    Log.info(
+      `FlightPath: Queue state changed to ${state.status} (currentIndex: ${state.currentIndex}, total: ${state.prompts.length}, completed: ${state.completedIds.size})`
+    );
     this.updateStatusBar();
 
     // Send execution state to dashboard
@@ -941,7 +943,7 @@ export class FlightPathManager {
     // startWorkflowExecution() will prevent duplicate starts via startPending flag
     if (state.status === EXECUTION_STATES.RUNNING && !this.activeIntegration) {
       Log.info(
-        "Queue state is RUNNING but no active execution detected. Auto-starting workflow..."
+        `Auto-starting workflow: State=RUNNING, activeIntegration=null, currentIndex=${state.currentIndex}, totalPrompts=${state.prompts.length}`
       );
       // Start execution asynchronously (don't block state change handler)
       this.startWorkflowExecution().catch((error) => {
@@ -950,6 +952,10 @@ export class FlightPathManager {
           `FlightPath: Failed to auto-start workflow: ${error}`
         );
       });
+    } else if (state.status === EXECUTION_STATES.RUNNING) {
+      Log.info(
+        `State is RUNNING but NOT auto-starting (activeIntegration already exists)`
+      );
     }
   }
 

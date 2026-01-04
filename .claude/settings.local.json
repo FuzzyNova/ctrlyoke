@@ -24,7 +24,8 @@
       "Bash(findstr:*)",
       "Bash(powershell -Command:*)",
       "WebFetch(domain:codemirror.net)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []
