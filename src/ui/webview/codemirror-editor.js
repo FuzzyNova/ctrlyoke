@@ -66,6 +66,7 @@
 
       return [
         minimalSetup,
+        EditorView.lineWrapping,
         history(),
         keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
         this.themeExtension(),
@@ -399,13 +400,15 @@
       // Get the trigger character to prepend to completion text
       const trigger = this.pendingCompletionTrigger || "";
 
-      const completions = items.map((item) => ({
+      const completions = items.map((item, index) => ({
         label: item.label,
         type: item.kind || "text",
         // Prepend trigger char (@ or #) to preserve it when inserting
         apply: trigger + (item.insertText || item.label),
         detail: item.detail,
         info: item.documentation,
+        // Preserve sort order from extension (server-side relevance ranking)
+        boost: -index,  // CodeMirror uses boost for sorting (higher = better)
       }));
 
       console.log("[CodeMirror] Resolving with completions:", completions);

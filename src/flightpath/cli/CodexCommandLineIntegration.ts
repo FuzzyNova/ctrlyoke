@@ -6,7 +6,10 @@ import { BaseCliIntegration, CLI_EXECUTION_MODE } from "./BaseCliIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { CliResponseParser } from "./shared/CliResponseParser";
-import { CliNotificationMonitor } from "./shared/CliNotificationMonitor";
+import {
+  CliNotificationMonitor,
+  NotificationResult,
+} from "./shared/CliNotificationMonitor";
 import { CliMcpConfigGenerator } from "./shared/CliMcpConfigGenerator";
 import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
 
@@ -714,7 +717,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     threadId: string | undefined,
     startTime: Date,
     timeoutMs: number
-  ): Promise<{ completed: boolean; error?: string }> {
+  ): Promise<NotificationResult> {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       return {
@@ -800,6 +803,18 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
               "🛑 Notify hook detected completion - aborting TUI stream"
             );
             tuiAbortController.abort();
+
+            // Extract and store thread ID from notification data
+            // (Codex uses threadId, stored as sessionId for consistency)
+            // Type guard: only notification results have 'data' property
+            if ("data" in notifyResult) {
+              const extractedId =
+                notifyResult.data?.threadId || notifyResult.data?.sessionId;
+              if (extractedId) {
+                this.sessionId = extractedId;
+                Log.debug(`💾 Session ID: ${this.sessionId}`);
+              }
+            }
           }
 
           const tuiResult = await tuiPromise;

@@ -8,7 +8,10 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import type { TuiProcessResult } from "../../utils/TuiStreamProcessor";
 import { CliResponseParser } from "./shared/CliResponseParser";
-import { CliNotificationMonitor } from "./shared/CliNotificationMonitor";
+import {
+  CliNotificationMonitor,
+  NotificationResult,
+} from "./shared/CliNotificationMonitor";
 import { CliMcpConfigGenerator } from "./shared/CliMcpConfigGenerator";
 import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
 
@@ -559,6 +562,13 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
           if (notifyResult.completed) {
             Log.debug("🛑 Stop hook detected completion - aborting TUI stream");
             tuiAbortController.abort();
+
+            // Extract and store session ID from notification data
+            // Type guard: only notification results have 'data' property
+            if ("data" in notifyResult && notifyResult.data?.sessionId) {
+              this.sessionId = notifyResult.data.sessionId;
+              Log.debug(`💾 Session ID: ${this.sessionId}`);
+            }
           }
 
           const tuiResult = await tuiPromise;
@@ -752,7 +762,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     sessionId: string | undefined,
     startTime: Date,
     timeoutMs: number
-  ): Promise<{ completed: boolean; error?: string }> {
+  ): Promise<NotificationResult> {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       return {
