@@ -1,0 +1,16 @@
+{
+  "prompts": [
+    {
+      "id": "1",
+      "prompt": "my favorite color is orange",
+      "model": "haiku",
+      "newChatSession": false
+    },
+    {
+      "id": "2",
+      "prompt": "what is my favorite color?",
+      "model": "haiku",
+      "newChatSession": false
+    }
+  ]
+}

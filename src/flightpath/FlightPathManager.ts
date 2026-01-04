@@ -1076,8 +1076,12 @@ export class FlightPathManager {
     if (properties.agent) {
       promptItem.agent = properties.agent;
     }
+    // Apply global default for newChatSession if not explicitly set
     if (properties.newChatSession !== undefined) {
       promptItem.newChatSession = properties.newChatSession;
+    } else {
+      promptItem.newChatSession =
+        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
     }
     if (properties.allowDynamicExtension !== undefined) {
       promptItem.allowDynamicExtension = properties.allowDynamicExtension;
@@ -1167,8 +1171,12 @@ export class FlightPathManager {
     if (properties.agent) {
       updates.agent = properties.agent;
     }
+    // Apply global default for newChatSession if not explicitly set
     if (properties.newChatSession !== undefined) {
       updates.newChatSession = properties.newChatSession;
+    } else {
+      updates.newChatSession =
+        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
     }
     if (properties.allowDynamicExtension !== undefined) {
       updates.allowDynamicExtension = properties.allowDynamicExtension;

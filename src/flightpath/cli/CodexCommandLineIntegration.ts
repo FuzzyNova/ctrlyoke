@@ -519,15 +519,28 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       }
     }
 
-    // Only add exec subcommand and --json flag for headless mode
+    // Session resume detection (applies to both interactive and headless)
+    const isResuming = prompt.newChatSession === false && this.sessionId;
+
     if (!isInteractive) {
+      // Headless mode: codex exec --json --model ... [resume] [<session-id>] <prompt>
+      // OPTIONS must come BEFORE the resume subcommand
       args.push("exec");
       args.push("--json");
+    } else {
+      // Interactive mode: codex --model ... [resume] [<session-id>] <prompt>
+      // No exec/json for interactive
     }
 
-    // Model selection
+    // Model selection (comes before resume subcommand)
     const model = this.validateAndGetModel(prompt.model);
     args.push("--model", model);
+
+    // Add workspace directories (before resume subcommand)
+    const workspaceDirs = this.getWorkspaceDirs();
+    workspaceDirs.forEach((dir) => {
+      args.push("--add-dir", dir);
+    });
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
     if (!isInteractive) {
@@ -553,13 +566,19 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       Log.debug(`🔔 Configured notify hook for completion detection`);
     }
 
-    // Session management
-    if (prompt.newChatSession === false && this.sessionId) {
-      args.push("--resume", this.sessionId);
+    // NOW add the resume subcommand and session ID
+    // Format: codex exec --json --model ... resume <session-id> <prompt>
+    if (isResuming) {
+      args.push("resume");
+      args.push(this.sessionId!);
+      Log.debug(`✅ Resuming session: ${this.sessionId}`);
+    } else if (prompt.newChatSession === false) {
+      Log.debug(`⚠️ Resume requested but no session ID available`);
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
     // handled by the execution methods
+    // For session resume, prompt comes after session ID: "exec resume <id> <prompt>"
 
     return args;
   }

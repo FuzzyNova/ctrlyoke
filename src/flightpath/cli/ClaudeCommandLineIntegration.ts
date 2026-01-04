@@ -475,7 +475,25 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       args.push("--add-dir", dir);
     });
 
+    // Session management (MUST come BEFORE tool permissions to avoid being consumed by variadic --disallowedTools)
+    Log.debug(
+      `🔍 Session check: newChatSession=${prompt.newChatSession}, sessionId=${this.sessionId}`
+    );
+    if (prompt.newChatSession === false && this.sessionId) {
+      args.push("-r", this.sessionId);
+      Log.debug(`✅ Added resume flag: -r ${this.sessionId}`);
+    } else if (prompt.newChatSession === false) {
+      args.push("-c");
+      Log.debug(`✅ Added continue flag: -c`);
+    } else {
+      Log.debug(
+        `🆕 Starting new session (newChatSession=${prompt.newChatSession})`
+      );
+    }
+
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
+    // and will consume any flags after it (including -r <sessionId>)
     if (!isInteractive) {
       const toolPermissionArgs = this.getToolPermissionArgs();
       args.push(...toolPermissionArgs);
@@ -485,13 +503,6 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
       // Wrap JSON in single quotes for shell safety (PowerShell/bash)
       args.push("--settings", `'${hookSettings}'`);
       Log.debug(`🔔 Configured stop hook for completion detection`);
-    }
-
-    // Session management
-    if (prompt.newChatSession === false && this.sessionId) {
-      args.push("-r", this.sessionId);
-    } else if (prompt.newChatSession === false) {
-      args.push("-c");
     }
 
     // Note: Prompt is NOT included here - it's a positional argument
