@@ -44,6 +44,9 @@
     outputSection: document.getElementById("output-section"),
     outputContent: document.getElementById("output-content"),
     autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
+    btnCollapseOutput: document.getElementById("btn-collapse-output"),
+    btnCollapseEditor: document.getElementById("btn-collapse-editor"),
+    editorSection: document.getElementById("editor-section"),
     // Modal elements
     modal: document.getElementById("new-workflow-modal"),
     modalOverlay: document.querySelector(".modal-overlay"),
@@ -149,6 +152,15 @@
 
   elements.btnCloseDrawer.addEventListener("click", () => {
     closePropertiesDrawer();
+  });
+
+  // Section collapse event listeners
+  elements.btnCollapseOutput.addEventListener("click", () => {
+    toggleSectionCollapse("output");
+  });
+
+  elements.btnCollapseEditor.addEventListener("click", () => {
+    toggleSectionCollapse("editor");
   });
 
   // Close drawer on overlay click (if we add one) or ESC key
@@ -1376,6 +1388,74 @@
   }
 
   // ============================================================================
+  // SECTION COLLAPSE FUNCTIONALITY
+  // ============================================================================
+
+  /**
+   * Toggle section collapse state (output or editor)
+   * @param {string} section - "output" or "editor"
+   */
+  function toggleSectionCollapse(section) {
+    const sectionElement =
+      section === "output" ? elements.outputSection : elements.editorSection;
+    const storageKey = `flightpath.section.${section}.collapsed`;
+
+    // Toggle collapsed class
+    const isCollapsed = sectionElement.classList.toggle("collapsed");
+
+    // Save state to localStorage
+    try {
+      localStorage.setItem(storageKey, isCollapsed.toString());
+    } catch (error) {
+      console.warn(`Failed to save ${section} collapse state:`, error);
+    }
+
+    // Update button title
+    const btn =
+      section === "output"
+        ? elements.btnCollapseOutput
+        : elements.btnCollapseEditor;
+    btn.title = isCollapsed
+      ? `Expand ${section} section`
+      : `Collapse ${section} section`;
+    btn.setAttribute(
+      "aria-label",
+      isCollapsed ? `Expand ${section}` : `Collapse ${section}`
+    );
+  }
+
+  /**
+   * Restore section collapse states from localStorage
+   */
+  function restoreSectionCollapseStates() {
+    // Restore output section state
+    try {
+      const outputCollapsed =
+        localStorage.getItem("flightpath.section.output.collapsed") === "true";
+      if (outputCollapsed) {
+        elements.outputSection.classList.add("collapsed");
+        elements.btnCollapseOutput.title = "Expand output section";
+        elements.btnCollapseOutput.setAttribute("aria-label", "Expand output");
+      }
+    } catch (error) {
+      console.warn("Failed to restore output collapse state:", error);
+    }
+
+    // Restore editor section state
+    try {
+      const editorCollapsed =
+        localStorage.getItem("flightpath.section.editor.collapsed") === "true";
+      if (editorCollapsed) {
+        elements.editorSection.classList.add("collapsed");
+        elements.btnCollapseEditor.title = "Expand editor section";
+        elements.btnCollapseEditor.setAttribute("aria-label", "Expand editor");
+      }
+    } catch (error) {
+      console.warn("Failed to restore editor collapse state:", error);
+    }
+  }
+
+  // ============================================================================
   // EDITOR TAB FUNCTIONALITY
   // ============================================================================
 
@@ -1788,6 +1868,9 @@
   } else {
     initializeEditor();
   }
+
+  // Restore section collapse states from localStorage
+  restoreSectionCollapseStates();
 
   // Signal ready
   vscode.postMessage({ type: MESSAGE_TYPES.READY });

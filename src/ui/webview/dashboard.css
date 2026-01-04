@@ -47,6 +47,68 @@ body {
   overflow: hidden;
 }
 
+/* Section title group (h3 + collapse button) */
+.section-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* Collapse button */
+.btn-collapse {
+  background: none;
+  border: none;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 3px;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+
+.btn-collapse:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  color: var(--fg-primary);
+}
+
+.collapse-icon {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed state */
+#output-section.collapsed .collapse-icon,
+#editor-section.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+/* Hide content when collapsed */
+#output-section.collapsed #output-content,
+#editor-section.collapsed .prompt-editor,
+#editor-section.collapsed .editor-footer {
+  display: none;
+}
+
+/* Adjust section sizing when collapsed */
+#output-section.collapsed,
+#editor-section.collapsed {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+/* When output is collapsed and editor is open, editor expands to fill space */
+#output-section.collapsed ~ #editor-section:not(.collapsed) {
+  flex: 1;
+  max-height: none;
+}
+
 .section-header h3 {
   margin: 0;
   font-size: 12px;
