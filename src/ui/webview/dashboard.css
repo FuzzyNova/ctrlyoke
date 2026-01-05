@@ -404,7 +404,7 @@ button:disabled {
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-secondary);
   border: none;
-  min-height: 50px; /* Prevent shrinking below header height */
+  min-height: 30px; /* Prevent shrinking below header height */
   min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
@@ -482,7 +482,7 @@ button:disabled {
   #output-section {
     flex: 1;
     width: 100%;
-    min-height: 0;
+    min-height: 30px;
   }
 }
 
