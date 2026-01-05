@@ -55,6 +55,13 @@ body {
   flex-shrink: 0;
 }
 
+/* Section icon (hidden by default, shown when collapsed) */
+.section-icon {
+  display: none;
+  font-size: 16px;
+  color: var(--fg-secondary);
+}
+
 /* Collapse button */
 .btn-collapse {
   background: none;
@@ -116,6 +123,24 @@ body {
   #prompts-section.collapsed {
     flex: 0 0 auto;
     min-width: auto;
+    width: auto;
+  }
+
+  /* Stack icon below chevron for narrowest collapse */
+  #prompts-section.collapsed .section-title-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Show icon, hide text and counter in wide collapsed state */
+  #prompts-section.collapsed .section-icon {
+    display: inline-block;
+  }
+
+  #prompts-section.collapsed h3,
+  #prompts-section.collapsed .prompt-counter {
+    display: none;
   }
 
   /* When prompts collapsed, output-editor-container expands to fill space */
