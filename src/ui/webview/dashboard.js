@@ -92,6 +92,7 @@
     btnCollapseEditor: document.getElementById("btn-collapse-editor"),
     btnLayoutVertical: document.getElementById("btn-layout-vertical"),
     btnLayoutHorizontal: document.getElementById("btn-layout-horizontal"),
+    btnSwapPanels: document.getElementById("btn-swap-panels"),
     editorSection: document.getElementById("editor-section"),
     // Modal elements
     modal: document.getElementById("new-workflow-modal"),
@@ -388,6 +389,10 @@
 
   elements.btnLayoutHorizontal.addEventListener("click", () => {
     setLayoutMode("horizontal");
+  });
+
+  elements.btnSwapPanels.addEventListener("click", () => {
+    togglePanelSwap();
   });
 
   // Close drawer on overlay click (if we add one) or ESC key
@@ -1788,6 +1793,50 @@
     }
   }
 
+  /**
+   * Toggle the swap state of output and editor panels
+   */
+  function togglePanelSwap() {
+    const storageKey = "flightpath.layout.swapped";
+    const isCurrentlySwapped =
+      elements.outputEditorContainer.classList.contains("swapped");
+
+    if (isCurrentlySwapped) {
+      elements.outputEditorContainer.classList.remove("swapped");
+      elements.btnSwapPanels.classList.remove("active");
+      try {
+        localStorage.setItem(storageKey, "false");
+      } catch (error) {
+        console.warn("Failed to save panel swap state:", error);
+      }
+    } else {
+      elements.outputEditorContainer.classList.add("swapped");
+      elements.btnSwapPanels.classList.add("active");
+      try {
+        localStorage.setItem(storageKey, "true");
+      } catch (error) {
+        console.warn("Failed to save panel swap state:", error);
+      }
+    }
+  }
+
+  /**
+   * Restore panel swap state from localStorage
+   */
+  function restorePanelSwap() {
+    const storageKey = "flightpath.layout.swapped";
+
+    try {
+      const isSwapped = localStorage.getItem(storageKey) === "true";
+      if (isSwapped) {
+        elements.outputEditorContainer.classList.add("swapped");
+        elements.btnSwapPanels.classList.add("active");
+      }
+    } catch (error) {
+      console.warn("Failed to restore panel swap state:", error);
+    }
+  }
+
   // ============================================================================
   // STATE PERSISTENCE (using VS Code webview state API)
   // ============================================================================
@@ -2375,6 +2424,9 @@
 
   // Restore layout mode from localStorage
   restoreLayoutMode();
+
+  // Restore panel swap state from localStorage
+  restorePanelSwap();
 
   // Signal ready
   vscode.postMessage({ type: MESSAGE_TYPES.READY });

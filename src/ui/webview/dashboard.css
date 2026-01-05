@@ -319,6 +319,7 @@ body {
   transition:
     opacity 0.2s,
     background 0.2s,
+    background 0.2s,
     color 0.2s;
 }
 
@@ -443,6 +444,15 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Swapped panel order (CSS order property) */
+#output-editor-container.swapped #output-section {
+  order: 2;
+}
+
+#output-editor-container.swapped #editor-section {
+  order: 1;
+}
+
 /* Horizontal layout mode - only on wide screens */
 @media (min-width: 800px) {
   #output-editor-container.layout-horizontal {
@@ -461,6 +471,16 @@ button:disabled {
     min-width: 30px;
     border-top: none;
     max-height: none;
+  }
+
+  /* When swapped in horizontal mode, adjust borders */
+  #output-editor-container.layout-horizontal.swapped #output-section {
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+  }
+
+  #output-editor-container.layout-horizontal.swapped #editor-section {
+    border-right: 1px solid var(--border-color);
   }
 
   /* Horizontal collapse behavior - similar to prompts-section */
