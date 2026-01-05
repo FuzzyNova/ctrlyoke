@@ -649,13 +649,14 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const { text, properties, action } = message;
+    const { text, properties, action, promptName } = message;
 
     try {
       await this.flightPathManager.executeEphemeralPrompt(
         text,
         properties,
-        action
+        action,
+        promptName
       );
     } catch (error) {
       Log.error("Failed to execute ephemeral prompt:", error);

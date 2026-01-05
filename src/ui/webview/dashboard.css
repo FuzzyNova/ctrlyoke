@@ -974,7 +974,7 @@ h3 {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 3px;
-  color: var(--fg-primary);
+  color: var(--input-fg);
   font-size: 12px;
   outline: none;
   max-width: 250px;
@@ -1036,25 +1036,40 @@ h3 {
   text-transform: uppercase;
 }
 
-.property-select,
 .property-input {
   padding: 6px 8px;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 3px;
-  color: var(--fg-primary);
+  color: var(--input-fg);
+  font-size: 12px;
+  outline: none;
+  cursor: text;
+}
+
+.property-input:focus {
+  border-color: var(--input-focus-border);
+}
+
+.property-select {
+  padding: 6px 8px;
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--border-color));
+  border-radius: 3px;
+  color: var(--vscode-dropdown-foreground);
   font-size: 12px;
   outline: none;
   cursor: pointer;
 }
 
-.property-select:focus,
-.property-input:focus {
-  border-color: var(--input-focus-border);
+.property-select option,
+.property-select optgroup {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
 }
 
-.property-input {
-  cursor: text;
+.property-select:focus {
+  border-color: var(--input-focus-border);
 }
 
 .property-textarea {
@@ -1062,7 +1077,7 @@ h3 {
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 3px;
-  color: var(--fg-primary);
+  color: var(--input-fg);
   font-size: 12px;
   font-family: var(--vscode-editor-font-family), monospace;
   outline: none;

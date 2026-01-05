@@ -1905,12 +1905,14 @@
     }
 
     const properties = getPropertyValues();
+    const promptName = elements.promptNameInput.value.trim();
 
     vscode.postMessage({
       type: MESSAGE_TYPES.EXECUTE_PROMPT,
       text,
       properties,
       action,
+      promptName, // Include user-entered prompt name
     });
 
     // Clear editor after all actions (Run/Append/AppendNext)
@@ -1918,6 +1920,7 @@
     if (editorState.promptEditor) {
       editorState.promptEditor.clear();
     }
+    elements.promptNameInput.value = ""; // Clear prompt name input
     resetPropertyControls();
     updateEditorMetadata();
 

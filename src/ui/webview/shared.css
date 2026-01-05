@@ -10,6 +10,12 @@
   --border-color: var(--vscode-panel-border);
   --focus-border: var(--vscode-focusBorder);
 
+  /* Form controls */
+  --input-bg: var(--vscode-input-background);
+  --input-fg: var(--vscode-input-foreground);
+  --input-border: var(--vscode-input-border, var(--border-color));
+  --input-focus-border: var(--vscode-focusBorder);
+
   /* Status colors */
   --status-success: var(--vscode-testing-iconPassed);
   --status-error: var(--vscode-testing-iconFailed);
@@ -32,6 +38,17 @@ body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
   background: var(--bg-primary);
+}
+
+/* Hint to the browser how to render native form controls */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  color-scheme: light;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast {
+  color-scheme: dark;
 }
 
 /* Common button styles */

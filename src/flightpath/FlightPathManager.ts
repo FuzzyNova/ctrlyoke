@@ -1061,15 +1061,82 @@ export class FlightPathManager {
    * @param properties - PromptItem properties (provider, model, etc.)
    * @param action - 'run', 'append', or 'appendNext'
    */
+  /**
+   * Generate a workflow name from prompt text
+   * Takes first 5 words, converts to kebab-case, adds timestamp
+   */
+  private generateWorkflowNameFromPrompt(
+    text: string,
+    promptName?: string
+  ): string {
+    let baseName: string;
+
+    // Prefer user-provided prompt name if available
+    if (promptName && promptName.trim().length > 0) {
+      baseName = promptName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
+        .replace(/^-+|-+$/g, ""); // Remove leading/trailing dashes
+    } else {
+      // Fallback: Extract first 5 words from prompt text
+      const words = text
+        .trim()
+        .split(/\s+/)
+        .slice(0, 5)
+        .map((word) =>
+          word
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
+            .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
+        )
+        .filter((word) => word.length > 0);
+
+      baseName = words.length > 0 ? words.join("-") : "ephemeral-prompt";
+    }
+
+    // Add timestamp for uniqueness
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
+
+    return `${baseName}-${dateStr}-${timeStr}.flightpath.json`;
+  }
+
   async executeEphemeralPrompt(
     text: string,
     properties: any,
-    action: "run" | "append" | "appendNext"
+    action: "run" | "append" | "appendNext",
+    promptName?: string
   ): Promise<void> {
-    // Build PromptItem with only non-default properties
+    // Generate timestamp components for both filename and ID
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
+
+    // Generate a meaningful workflow name from prompt name (if provided) or prompt text
+    const generatedFileName = this.generateWorkflowNameFromPrompt(
+      text,
+      promptName
+    );
+
+    // Build PromptItem with ID that includes timestamp for uniqueness
+    // This prevents deduplication when users append multiple prompts with the same name
+    let promptId: string;
+    if (promptName && promptName.trim().length > 0) {
+      const sanitizedName = promptName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      promptId = `${sanitizedName}-${dateStr}-${timeStr}`;
+    } else {
+      promptId = `ephemeral-${Date.now()}`;
+    }
+
     const promptItem: Partial<PromptItem> = {
       prompt: text,
-      id: `ephemeral-${Date.now()}`,
+      id: promptId,
     };
 
     // Only add properties that aren't "default"
@@ -1098,19 +1165,44 @@ export class FlightPathManager {
 
     switch (action) {
       case "run":
-        // Create new single-prompt workflow (replaces current queue)
-        this.promptQueue.loadPrompts([promptItem as PromptItem]);
+        // Create working file for ephemeral prompt (required for MCP integration)
+        let workingFilePath: string | undefined;
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
-        // Update dashboard
+        if (workspaceFolder) {
+          try {
+            workingFilePath = await this.promptQueue.createWorkingFile(
+              generatedFileName, // Use generated name as original file (ephemeral)
+              [promptItem as PromptItem],
+              workspaceFolder
+            );
+            Log.info(
+              `✅ Created working file for ephemeral prompt: ${workingFilePath}`
+            );
+          } catch (error) {
+            Log.error("Failed to create working file for ephemeral prompt:", error);
+            // Continue without working file (MCP won't work, but basic execution will)
+          }
+        } else {
+          Log.warn(
+            "No workspace folder, skipping working file creation (MCP won't work)"
+          );
+        }
+
+        // Create new single-prompt workflow (replaces current queue)
+        this.promptQueue.loadPrompts([promptItem as PromptItem], workingFilePath);
+
+        // Update dashboard with generated workflow name
         if (this.dashboardProvider) {
-          this.dashboardProvider.updateFileSelected("Ephemeral Workflow", [
+          this.dashboardProvider.updateFileSelected(generatedFileName, [
             promptItem as PromptItem,
           ]);
         }
 
-        // Set current prompt file to ephemeral (no file path)
+        // Set current prompt file with generated name
+        // Note: For ephemeral prompts, filePath is the generated name, not a real source file
         this.currentPromptFile = {
-          filePath: "",
+          filePath: generatedFileName,
           promptFile: { prompts: [promptItem as PromptItem] },
         };
 
