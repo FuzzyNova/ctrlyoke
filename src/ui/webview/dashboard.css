@@ -100,8 +100,9 @@ body {
 /* Hide content when collapsed */
 #prompts-section.collapsed #prompts-list,
 #output-section.collapsed #output-content,
-#editor-section.collapsed .prompt-editor,
-#editor-section.collapsed .editor-footer {
+#editor-section.collapsed .prompt-editor-wrapper,
+#editor-section.collapsed .editor-footer,
+#editor-section.collapsed .editor-controls {
   display: none;
 }
 
@@ -298,6 +299,52 @@ body {
   }
 }
 
+#layout-toggle {
+  display: flex;
+  gap: 0;
+  align-items: center;
+}
+
+.btn-layout {
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--border-color);
+  color: var(--fg-primary);
+  cursor: pointer;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 1;
+  transition:
+    opacity 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+
+.btn-layout:first-child {
+  border-radius: 2px 0 0 2px;
+  border-right: none;
+}
+
+.btn-layout:last-child {
+  border-radius: 0 2px 2px 0;
+}
+
+.btn-layout:hover:not(.active) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-layout.active {
+  background: var(--bg-secondary);
+  color: var(--vscode-focusBorder, rgb(0, 122, 204));
+  opacity: 0.85;
+}
+
+.btn-layout .codicon {
+  font-size: 14px;
+}
+
 #controls {
   display: flex;
   gap: var(--spacing-xs);
@@ -396,6 +443,74 @@ button:disabled {
   overflow: hidden;
 }
 
+/* Horizontal layout mode - only on wide screens */
+@media (min-width: 800px) {
+  #output-editor-container.layout-horizontal {
+    flex-direction: row;
+  }
+
+  #output-editor-container.layout-horizontal #output-section {
+    flex: 1 1 50%;
+    min-width: 30px;
+    border-top: none;
+    border-right: 1px solid var(--border-color);
+  }
+
+  #output-editor-container.layout-horizontal #editor-section {
+    flex: 1 1 50%;
+    min-width: 30px;
+    border-top: none;
+    max-height: none;
+  }
+
+  /* Horizontal collapse behavior - similar to prompts-section */
+  #output-editor-container.layout-horizontal #output-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  #output-editor-container.layout-horizontal #editor-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  /* Stack icon below chevron for horizontal collapsed state */
+  #output-editor-container.layout-horizontal #output-section.collapsed .section-title-group,
+  #output-editor-container.layout-horizontal #editor-section.collapsed .section-title-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Show icon, hide text in horizontal collapsed state */
+  #output-editor-container.layout-horizontal #output-section.collapsed .section-icon,
+  #output-editor-container.layout-horizontal #editor-section.collapsed .section-icon {
+    display: inline-block;
+  }
+
+  #output-editor-container.layout-horizontal #output-section.collapsed h3,
+  #output-editor-container.layout-horizontal #editor-section.collapsed h3 {
+    display: none;
+  }
+
+  /* Hide controls when output section is collapsed in horizontal mode */
+  #output-editor-container.layout-horizontal #output-section.collapsed .output-controls {
+    display: none;
+  }
+
+  /* When output collapsed, editor expands to fill space */
+  #output-editor-container.layout-horizontal #output-section.collapsed ~ #editor-section:not(.collapsed) {
+    flex: 1;
+  }
+
+  /* When editor collapsed, output expands to fill space */
+  #output-editor-container.layout-horizontal #editor-section.collapsed ~ #output-section:not(.collapsed) {
+    flex: 1;
+  }
+}
+
 /* Output section - takes remaining space after editor */
 #output-section {
   flex: 1 1 300px;
@@ -467,6 +582,12 @@ button:disabled {
 
   #controls {
     order: 3;
+  }
+
+  /* Hide layout toggle and its divider on narrow screens */
+  #layout-toggle,
+  #layout-toggle + .button-divider {
+    display: none;
   }
 
   .btn-small {
@@ -988,23 +1109,24 @@ button:disabled {
    EDITOR SECTION STYLES
    ================================================================== */
 
-/* Editor header */
+/* Editor header - extends section-header */
 .editor-header {
+  /* No additional styles needed - inherits from section-header */
+}
+
+/* Editor controls container (matches output-controls pattern) */
+.editor-controls {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
   gap: var(--spacing-md);
+  flex-shrink: 0;
 }
 
 .editor-mode-info {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 0;
 }
 
 #editor-mode-indicator {

@@ -59,6 +59,25 @@
         </div>
 
         <div id="controls">
+          <div id="layout-toggle" class="layout-toggle">
+            <button
+              id="btn-layout-vertical"
+              class="btn-layout active"
+              title="Stack vertically"
+              aria-label="Stack output and editor vertically"
+            >
+              <i class="codicon codicon-split-vertical"></i>
+            </button>
+            <button
+              id="btn-layout-horizontal"
+              class="btn-layout"
+              title="Stack horizontally"
+              aria-label="Stack output and editor horizontally"
+            >
+              <i class="codicon codicon-split-horizontal"></i>
+            </button>
+          </div>
+          <span class="button-divider"></span>
           <button id="btn-run" class="btn-primary" title="Run">▶</button>
           <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
             ⏸
@@ -132,7 +151,7 @@
           <!-- Editor section (always visible, bottom) -->
 
           <div id="editor-section">
-            <div class="editor-header">
+            <div class="section-header editor-header">
               <div class="section-title-group">
                 <button
                   id="btn-collapse-editor"
@@ -143,24 +162,27 @@
                   <i class="codicon codicon-chevron-down collapse-icon"></i>
                 </button>
                 <i class="codicon codicon-edit section-icon"></i>
+                <h3>Prompt Editor</h3>
               </div>
-              <div class="editor-mode-info">
-                <span id="editor-mode-indicator">New Prompt</span>
-                <input
-                  type="text"
-                  id="prompt-name-input"
-                  class="prompt-name-input"
-                  placeholder="Prompt name (optional)"
-                />
+              <div class="editor-controls">
+                <div class="editor-mode-info">
+                  <span id="editor-mode-indicator">New Prompt</span>
+                  <input
+                    type="text"
+                    id="prompt-name-input"
+                    class="prompt-name-input"
+                    placeholder="Prompt name (optional)"
+                  />
+                </div>
+                <button
+                  id="btn-new-prompt"
+                  class="btn-secondary btn-small"
+                  title="Start a new prompt"
+                  style="display: none"
+                >
+                  New Prompt
+                </button>
               </div>
-              <button
-                id="btn-new-prompt"
-                class="btn-secondary btn-small"
-                title="Start a new prompt"
-                style="display: none"
-              >
-                New Prompt
-              </button>
             </div>
 
             <div class="prompt-editor-wrapper">

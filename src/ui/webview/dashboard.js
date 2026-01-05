@@ -47,11 +47,14 @@
     promptsList: document.getElementById("prompts-list"),
     promptsSection: document.getElementById("prompts-section"),
     outputSection: document.getElementById("output-section"),
+    outputEditorContainer: document.getElementById("output-editor-container"),
     outputContent: document.getElementById("output-content"),
     autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
     btnCollapsePrompts: document.getElementById("btn-collapse-prompts"),
     btnCollapseOutput: document.getElementById("btn-collapse-output"),
     btnCollapseEditor: document.getElementById("btn-collapse-editor"),
+    btnLayoutVertical: document.getElementById("btn-layout-vertical"),
+    btnLayoutHorizontal: document.getElementById("btn-layout-horizontal"),
     editorSection: document.getElementById("editor-section"),
     // Modal elements
     modal: document.getElementById("new-workflow-modal"),
@@ -171,6 +174,15 @@
 
   elements.btnCollapseEditor.addEventListener("click", () => {
     toggleSectionCollapse("editor");
+  });
+
+  // Layout toggle event listeners
+  elements.btnLayoutVertical.addEventListener("click", () => {
+    setLayoutMode("vertical");
+  });
+
+  elements.btnLayoutHorizontal.addEventListener("click", () => {
+    setLayoutMode("horizontal");
   });
 
   // Close drawer on overlay click (if we add one) or ESC key
@@ -1523,6 +1535,62 @@
   }
 
   // ============================================================================
+  // LAYOUT MODE FUNCTIONALITY
+  // ============================================================================
+
+  /**
+   * Set the layout mode for output and editor sections
+   * @param {string} mode - "vertical" or "horizontal"
+   */
+  function setLayoutMode(mode) {
+    const storageKey = "flightpath.layout.mode";
+
+    // Update container class
+    if (mode === "horizontal") {
+      elements.outputEditorContainer.classList.add("layout-horizontal");
+    } else {
+      elements.outputEditorContainer.classList.remove("layout-horizontal");
+    }
+
+    // Update button states
+    if (mode === "horizontal") {
+      elements.btnLayoutVertical.classList.remove("active");
+      elements.btnLayoutHorizontal.classList.add("active");
+    } else {
+      elements.btnLayoutVertical.classList.add("active");
+      elements.btnLayoutHorizontal.classList.remove("active");
+    }
+
+    // Save preference to localStorage
+    try {
+      localStorage.setItem(storageKey, mode);
+    } catch (error) {
+      console.warn("Failed to save layout mode:", error);
+    }
+  }
+
+  /**
+   * Restore layout mode from localStorage
+   */
+  function restoreLayoutMode() {
+    const storageKey = "flightpath.layout.mode";
+
+    try {
+      const savedMode = localStorage.getItem(storageKey);
+      if (savedMode === "horizontal") {
+        setLayoutMode("horizontal");
+      } else {
+        // Default to vertical (no class needed)
+        setLayoutMode("vertical");
+      }
+    } catch (error) {
+      console.warn("Failed to restore layout mode:", error);
+      // Default to vertical
+      setLayoutMode("vertical");
+    }
+  }
+
+  // ============================================================================
   // STATE PERSISTENCE (using VS Code webview state API)
   // ============================================================================
 
@@ -2064,6 +2132,9 @@
 
   // Restore section collapse states from localStorage
   restoreSectionCollapseStates();
+
+  // Restore layout mode from localStorage
+  restoreLayoutMode();
 
   // Signal ready
   vscode.postMessage({ type: MESSAGE_TYPES.READY });
