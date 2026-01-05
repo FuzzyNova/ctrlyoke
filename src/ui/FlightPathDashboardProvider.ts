@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  EXECUTION_STATES,
+  PROVIDER_IDS,
+} from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -9,6 +13,16 @@ import {
   getFileCompletions,
   getHashCompletions,
 } from "../completions/CompletionHelpers";
+import {
+  getAvailableModelsSync,
+  getCliSupportedModelIdsSync,
+  onModelsLoaded,
+} from "../utils/ModelRegistry";
+import {
+  getModelDisplayName,
+  CLAUDE_CLI_MODEL_LABELS,
+  CODEX_CLI_MODEL_LABELS,
+} from "../utils/ModelConstants";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -34,6 +48,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.templateManager = new TemplateManager(context);
+
+    // Listen for model registry updates
+    onModelsLoaded(() => {
+      this.sendModelOptionsUpdate();
+    });
   }
 
   /**
@@ -171,7 +190,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
       fileName,
-      prompts: prompts.map((p) => ({ prompt: p.prompt })),
+      prompts, // Send full prompt objects with all properties
       results,
       executionState,
       currentIndex,
@@ -267,7 +286,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     );
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
-      prompts: prompts.map((p) => ({ prompt: p.prompt })),
+      prompts, // Send full prompt objects with all properties
     });
   }
 
@@ -544,11 +563,92 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.flightPathManager = manager;
   }
 
+  /**
+   * Build model options for all providers
+   * Returns a map of provider ID to array of {value, label} options
+   */
+  private buildModelOptions(): Record<
+    string,
+    Array<{ value: string; label: string }>
+  > {
+    // Get all chat models (superset - includes models not available in CLI)
+    const chatModels = getAvailableModelsSync();
+
+    // Get CLI-supported model IDs
+    const cliModelIds = getCliSupportedModelIdsSync();
+
+    // Models to hide from the UI (non-functional or internal)
+    const hiddenModels = new Set(["copilot-fast"]);
+
+    // Format chat models for dropdown (filter out hidden models)
+    const copilotChatOptions = chatModels
+      .filter((m) => !hiddenModels.has(m.id))
+      .map((m) => ({
+        value: m.id,
+        label: getModelDisplayName(m.id),
+      }));
+
+    // Format CLI models for dropdown (only CLI-supported ones, filter hidden)
+    const copilotCliOptions = cliModelIds
+      .filter((id) => !hiddenModels.has(id))
+      .map((id) => ({
+        value: id,
+        label: getModelDisplayName(id),
+      }));
+
+    // Claude CLI uses static list with friendly labels from ModelConstants
+    const claudeCliOptions = Object.entries(CLAUDE_CLI_MODEL_LABELS).map(
+      ([value, label]) => ({
+        value,
+        label,
+      })
+    );
+
+    // Codex CLI uses static list with friendly labels from ModelConstants
+    const codexCliOptions = Object.entries(CODEX_CLI_MODEL_LABELS).map(
+      ([value, label]) => ({
+        value,
+        label,
+      })
+    );
+
+    return {
+      [PROVIDER_IDS.COPILOT_CLI]: copilotCliOptions,
+      [PROVIDER_IDS.COPILOT_CHAT]: copilotChatOptions,
+      [PROVIDER_IDS.CLAUDE_CLI]: claudeCliOptions,
+      [PROVIDER_IDS.CODEX_CLI]: codexCliOptions,
+    };
+  }
+
+  /**
+   * Send updated model options to the webview
+   * Called when model registry finishes loading
+   */
+  private sendModelOptionsUpdate(): void {
+    if (!this.view) {
+      return;
+    }
+
+    const modelOptions = this.buildModelOptions();
+    this.view.webview.postMessage({
+      type: MESSAGE_TYPES.MODEL_OPTIONS_UPDATE,
+      data: { modelOptions },
+    });
+  }
+
   private sendInitialState(): void {
     // Get current state from FlightPathManager and send to webview
+    const state = this.getCurrentState();
+
+    // Build dynamic model options from ModelRegistry
+    const modelOptions = this.buildModelOptions();
+
     this.postMessage({
       type: MESSAGE_TYPES.INIT,
-      data: this.getCurrentState(),
+      data: {
+        ...state,
+        modelOptions,
+      },
     });
   }
 

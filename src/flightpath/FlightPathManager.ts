@@ -629,7 +629,7 @@ export class FlightPathManager {
             if (this.dashboardProvider) {
               this.dashboardProvider.updateFileSelected(
                 fileName,
-                promptFile.prompts.map((p) => ({ prompt: p.prompt }))
+                promptFile.prompts // Send full prompt objects with all properties
               );
             }
 

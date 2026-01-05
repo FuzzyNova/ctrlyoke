@@ -12,4 +12,11 @@ prompts:
       - Schema validation with AJV
 
       Provide specific feedback on code quality and potential improvements.
-    model: claude-sonnet-4.5
+    provider: copilot-cli
+    model: gpt-5-mini
+    newChatSession: true
+    endCondition:
+      script: npm run compile
+      returns: "true"
+      maxRetries: 5
+      timeout: 2500

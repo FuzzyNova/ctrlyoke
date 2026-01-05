@@ -4,8 +4,29 @@
   // Import constants from compiled DashboardConstants.js (loaded via script tag in HTML)
   // Single source of truth - these match src/types/DashboardConstants.ts
   // Only importing cross-file shared constants (not UI-specific strings)
-  const { MESSAGE_TYPES, EXECUTION_STATES, STEP_STATUS } =
-    window.FlightPathConstants;
+  const {
+    MESSAGE_TYPES,
+    EXECUTION_STATES,
+    STEP_STATUS,
+    PROVIDER_IDS,
+    DEFAULT_MODELS,
+    CLAUDE_CLI_MODELS,
+    CODEX_CLI_MODELS,
+    PROMPT_PROPERTIES,
+    END_CONDITION_PROPERTIES,
+  } = window.FlightPathConstants;
+
+  // Model options per provider - populated dynamically from ModelRegistry via INIT message
+  // Chat models come from VS Code LM API (full list)
+  // CLI models come from `copilot help config` (subset)
+  // Claude CLI models are static (no programmatic way to query)
+  // Codex CLI models are static (from codex /model command)
+  let modelOptions = {
+    [PROVIDER_IDS.COPILOT_CLI]: [],
+    [PROVIDER_IDS.COPILOT_CHAT]: [],
+    [PROVIDER_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
+    [PROVIDER_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
+  };
 
   // State management
   let state = {
@@ -161,6 +182,14 @@
 
   elements.btnCloseDrawer.addEventListener("click", () => {
     closePropertiesDrawer();
+  });
+
+  // Provider dropdown change listener - update model dropdown dynamically
+  elements.propProvider.addEventListener("change", (e) => {
+    const selectedProvider = e.target.value;
+    if (selectedProvider !== "default") {
+      updatePropertyModelDropdown(selectedProvider);
+    }
   });
 
   // Section collapse event listeners
@@ -319,6 +348,9 @@
       case MESSAGE_TYPES.INIT:
         handleInit(message.data);
         break;
+      case MESSAGE_TYPES.MODEL_OPTIONS_UPDATE:
+        handleModelOptionsUpdate(message.data);
+        break;
       case MESSAGE_TYPES.FILE_SELECTED:
         handleFileSelected(message.fileName, message.prompts);
         break;
@@ -412,28 +444,51 @@
   });
 
   function handleInit(data) {
+    // Update model options from extension (dynamic from ModelRegistry)
+    if (data.modelOptions) {
+      modelOptions = { ...modelOptions, ...data.modelOptions };
+    }
+
     state = { ...state, ...data };
     render();
+  }
+
+  /**
+   * Handle model options update from extension (when ModelRegistry finishes loading)
+   */
+  function handleModelOptionsUpdate(data) {
+    if (data.modelOptions) {
+      modelOptions = { ...modelOptions, ...data.modelOptions };
+      console.log(
+        "[Dashboard] Model options updated:",
+        Object.keys(modelOptions).map((k) => `${k}:${modelOptions[k].length}`)
+      );
+    }
   }
 
   function handleFileSelected(fileName, prompts) {
     // This handler is ONLY for IDLE state (user selects new file via Select button)
     // Queue extension during execution uses handleQueueExtended()
-    console.log(`Dashboard: New file selected (${fileName}), resetting state`);
+    console.log(
+      `Dashboard: New file selected (${fileName}), resetting state`,
+      prompts
+    );
 
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => ({
       index: i,
-      text: typeof p === "string" ? p : p.prompt,
+      text: typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT],
       status: STEP_STATUS.PENDING,
       details: {},
-      // Preserve all prompt properties for editing
-      provider: p.provider,
-      model: p.model,
-      agent: p.agent,
-      newChatSession: p.newChatSession,
-      allowDynamicExtension: p.allowDynamicExtension,
-      endCondition: p.endCondition,
+      // Preserve all prompt properties for editing using shared constants
+      [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
+      [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
+      [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
+      [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
+        p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+      [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
+        p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+      [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
     }));
 
     // Reset execution state and progress when new file is selected
@@ -485,16 +540,18 @@
       const result = results[i];
       return {
         index: i,
-        text: typeof p === "string" ? p : p.prompt,
+        text: typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT],
         status: result?.status || STEP_STATUS.PENDING,
         details: {},
-        // Preserve all prompt properties for editing
-        provider: p.provider,
-        model: p.model,
-        agent: p.agent,
-        newChatSession: p.newChatSession,
-        allowDynamicExtension: p.allowDynamicExtension,
-        endCondition: p.endCondition,
+        // Preserve all prompt properties for editing using shared constants
+        [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
+        [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
+        [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
+        [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
+          p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+        [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
+          p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+        [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
       };
     });
 
@@ -742,7 +799,7 @@
 
     // Replace entire array, preserving statuses for matching prompts
     state.prompts = prompts.map((p, i) => {
-      const text = typeof p === "string" ? p : p.prompt;
+      const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
       const key = text.trim();
       const existing = existingStatusMap.get(key);
 
@@ -751,13 +808,15 @@
         text: text,
         status: existing ? existing.status : STEP_STATUS.PENDING,
         details: existing ? existing.details : {},
-        // Preserve all prompt properties for editing
-        provider: p.provider,
-        model: p.model,
-        agent: p.agent,
-        newChatSession: p.newChatSession,
-        allowDynamicExtension: p.allowDynamicExtension,
-        endCondition: p.endCondition,
+        // Preserve all prompt properties for editing using shared constants
+        [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
+        [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
+        [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
+        [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
+          p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+        [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
+          p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+        [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
       };
     });
 
@@ -1656,33 +1715,46 @@
       elements.promptNameInput.value = persistedState.promptName;
     }
 
-    // Restore property controls
+    // Restore property controls using shared constants
     if (persistedState.properties) {
       const props = persistedState.properties;
-      if (props.provider)
-        elements.propProvider.value = props.provider || "default";
-      if (props.model) elements.propModel.value = props.model || "default";
-      if (props.agent) elements.propAgent.value = props.agent || "";
+      const provider = props[PROMPT_PROPERTIES.PROVIDER] || "default";
+      elements.propProvider.value = provider;
+
+      // Update model dropdown based on provider BEFORE setting the model value
+      if (provider !== "default") {
+        updatePropertyModelDropdown(provider);
+      }
+
+      if (props[PROMPT_PROPERTIES.MODEL])
+        elements.propModel.value = props[PROMPT_PROPERTIES.MODEL] || "default";
+      if (props[PROMPT_PROPERTIES.AGENT])
+        elements.propAgent.value = props[PROMPT_PROPERTIES.AGENT] || "";
+
+      const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
       elements.propNewChat.value =
-        props.newChatSession === undefined
+        newChatSession === undefined
           ? "default"
-          : props.newChatSession
-            ? "yes"
-            : "no";
-      elements.propAllowDynamic.value =
-        props.allowDynamicExtension === undefined
-          ? "default"
-          : props.allowDynamicExtension
+          : newChatSession
             ? "yes"
             : "no";
 
-      if (props.endCondition) {
-        elements.propEndScript.value = props.endCondition.script || "";
-        elements.propEndReturns.value = props.endCondition.returns || "";
-        elements.propEndTimeout.value = props.endCondition.timeout || 30000;
-        elements.propEndRetries.value = props.endCondition.maxRetries || 0;
+      const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
+      elements.propAllowDynamic.value =
+        allowDynamic === undefined ? "default" : allowDynamic ? "yes" : "no";
+
+      const endCondition = props[PROMPT_PROPERTIES.END_CONDITION];
+      if (endCondition) {
+        elements.propEndScript.value =
+          endCondition[END_CONDITION_PROPERTIES.SCRIPT] || "";
+        elements.propEndReturns.value =
+          endCondition[END_CONDITION_PROPERTIES.RETURNS] || "";
+        elements.propEndTimeout.value =
+          endCondition[END_CONDITION_PROPERTIES.TIMEOUT] || 30000;
+        elements.propEndRetries.value =
+          endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] || 0;
         elements.propEndRetryPrompt.value =
-          props.endCondition.retryPrompt || "";
+          endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] || "";
       }
     }
 
@@ -1834,53 +1906,64 @@
   function getPropertyValues() {
     const properties = {};
 
-    // Only include non-default values
+    // Only include non-default values - use shared property name constants
     if (elements.propProvider.value !== "default") {
-      properties.provider = elements.propProvider.value;
+      properties[PROMPT_PROPERTIES.PROVIDER] = elements.propProvider.value;
     }
 
     if (elements.propModel.value !== "default") {
-      properties.model = elements.propModel.value;
+      properties[PROMPT_PROPERTIES.MODEL] = elements.propModel.value;
     }
 
     const agent = elements.propAgent.value.trim();
     if (agent && agent !== "default") {
-      properties.agent = agent;
+      properties[PROMPT_PROPERTIES.AGENT] = agent;
     }
 
     if (elements.propNewChat.value !== "default") {
-      properties.newChatSession = elements.propNewChat.value === "yes";
+      properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] =
+        elements.propNewChat.value === "yes";
     }
 
     if (elements.propAllowDynamic.value !== "default") {
-      properties.allowDynamicExtension =
+      properties[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION] =
         elements.propAllowDynamic.value === "yes";
     }
 
-    // End condition (if any fields are filled)
+    // End condition (if ANY field is filled)
     const script = elements.propEndScript.value.trim();
     const returns = elements.propEndReturns.value.trim();
+    const retryPrompt = elements.propEndRetryPrompt.value.trim();
+    const timeout = parseInt(elements.propEndTimeout.value, 10);
+    const maxRetries = parseInt(elements.propEndRetries.value, 10);
 
-    if (script || returns) {
-      properties.endCondition = {};
+    // Create endCondition if ANY field has a non-default value
+    if (
+      script ||
+      returns ||
+      retryPrompt ||
+      (!isNaN(timeout) && timeout !== 30000) ||
+      (!isNaN(maxRetries) && maxRetries !== 0)
+    ) {
+      const endCondition = {};
 
-      if (script) properties.endCondition.script = script;
-      if (returns) properties.endCondition.returns = returns;
+      if (script)
+        endCondition[END_CONDITION_PROPERTIES.SCRIPT] = script;
+      if (returns)
+        endCondition[END_CONDITION_PROPERTIES.RETURNS] = returns;
+      if (!isNaN(timeout) && timeout !== 30000)
+        endCondition[END_CONDITION_PROPERTIES.TIMEOUT] = timeout;
+      if (!isNaN(maxRetries) && maxRetries !== 0)
+        endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] = maxRetries;
+      if (retryPrompt)
+        endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] = retryPrompt;
 
-      const timeout = parseInt(elements.propEndTimeout.value, 10);
-      if (!isNaN(timeout) && timeout !== 30000) {
-        properties.endCondition.timeout = timeout;
-      }
+      properties[PROMPT_PROPERTIES.END_CONDITION] = endCondition;
 
-      const maxRetries = parseInt(elements.propEndRetries.value, 10);
-      if (!isNaN(maxRetries) && maxRetries !== 0) {
-        properties.endCondition.maxRetries = maxRetries;
-      }
-
-      const retryPrompt = elements.propEndRetryPrompt.value.trim();
-      if (retryPrompt) {
-        properties.endCondition.retryPrompt = retryPrompt;
-      }
+      console.log(
+        "[Dashboard] getPropertyValues - endCondition:",
+        JSON.stringify(endCondition, null, 2)
+      );
     }
 
     return properties;
@@ -1903,33 +1986,87 @@
   }
 
   /**
+   * Update the model dropdown in properties drawer based on selected provider
+   * @param {string} provider - Provider ID (copilot-cli, copilot-chat, claude-cli, codex-cli)
+   */
+  function updatePropertyModelDropdown(provider) {
+    const options = modelOptions[provider] || [];
+
+    // Always show "Default" option first
+    let optionsHtml = '<option value="default">Default</option>';
+
+    // Show loading state if no models yet (only for providers that need to load models)
+    if (
+      options.length === 0 &&
+      (provider === PROVIDER_IDS.COPILOT_CLI ||
+        provider === PROVIDER_IDS.COPILOT_CHAT)
+    ) {
+      optionsHtml += '<option value="" disabled>Loading models...</option>';
+    } else {
+      // Add all available models for this provider
+      optionsHtml += options
+        .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
+        .join("");
+    }
+
+    elements.propModel.innerHTML = optionsHtml;
+    console.log(
+      `[Dashboard] Updated property model dropdown for ${provider}: ${options.length} models`
+    );
+  }
+
+  /**
    * Set property controls from a prompt object
    * @param {Object} prompt - PromptItem object
    */
   function setPropertyControls(prompt) {
-    elements.propProvider.value = prompt.provider || "default";
-    elements.propModel.value = prompt.model || "default";
-    elements.propAgent.value = prompt.agent || "";
-    elements.propNewChat.value =
-      prompt.newChatSession === undefined
-        ? "default"
-        : prompt.newChatSession
-          ? "yes"
-          : "no";
-    elements.propAllowDynamic.value =
-      prompt.allowDynamicExtension === undefined
-        ? "default"
-        : prompt.allowDynamicExtension
-          ? "yes"
-          : "no";
+    console.log(
+      "[Dashboard] setPropertyControls called with prompt:",
+      JSON.stringify(prompt, null, 2)
+    );
 
-    if (prompt.endCondition) {
-      elements.propEndScript.value = prompt.endCondition.script || "";
-      elements.propEndReturns.value = prompt.endCondition.returns || "";
-      elements.propEndTimeout.value = prompt.endCondition.timeout || 30000;
-      elements.propEndRetries.value = prompt.endCondition.maxRetries || 0;
-      elements.propEndRetryPrompt.value = prompt.endCondition.retryPrompt || "";
+    // Use shared property name constants for type safety
+    const provider = prompt[PROMPT_PROPERTIES.PROVIDER] || "default";
+    elements.propProvider.value = provider;
+
+    // Update model dropdown based on provider BEFORE setting the model value
+    if (provider !== "default") {
+      updatePropertyModelDropdown(provider);
+    }
+
+    elements.propModel.value = prompt[PROMPT_PROPERTIES.MODEL] || "default";
+    elements.propAgent.value = prompt[PROMPT_PROPERTIES.AGENT] || "";
+
+    const newChatSession = prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
+    elements.propNewChat.value =
+      newChatSession === undefined ? "default" : newChatSession ? "yes" : "no";
+
+    const allowDynamic = prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
+    elements.propAllowDynamic.value =
+      allowDynamic === undefined ? "default" : allowDynamic ? "yes" : "no";
+
+    const endCondition = prompt[PROMPT_PROPERTIES.END_CONDITION];
+    if (endCondition) {
+      console.log(
+        "[Dashboard] endCondition found:",
+        JSON.stringify(endCondition, null, 2)
+      );
+      elements.propEndScript.value =
+        endCondition[END_CONDITION_PROPERTIES.SCRIPT] || "";
+      elements.propEndReturns.value =
+        endCondition[END_CONDITION_PROPERTIES.RETURNS] || "";
+      elements.propEndTimeout.value =
+        endCondition[END_CONDITION_PROPERTIES.TIMEOUT] || 30000;
+      elements.propEndRetries.value =
+        endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] || 0;
+      elements.propEndRetryPrompt.value =
+        endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] || "";
+
+      console.log(
+        `[Dashboard] Set retryPrompt field to: "${elements.propEndRetryPrompt.value}"`
+      );
     } else {
+      console.log("[Dashboard] No endCondition found, resetting fields");
       elements.propEndScript.value = "";
       elements.propEndReturns.value = "";
       elements.propEndTimeout.value = "30000";

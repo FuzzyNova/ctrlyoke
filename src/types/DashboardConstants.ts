@@ -179,6 +179,37 @@ export const UI_STRINGS = {
 } as const;
 
 // ============================================================================
+// PROMPT PROPERTY NAMES - Single source of truth for PromptItem properties
+// Used by dashboard.js to access prompt properties consistently
+// ============================================================================
+export const PROMPT_PROPERTIES = {
+  // Core properties
+  PROMPT: "prompt",
+  ID: "id",
+
+  // Provider/Model properties
+  PROVIDER: "provider",
+  MODEL: "model",
+  AGENT: "agent",
+
+  // Session properties
+  NEW_CHAT_SESSION: "newChatSession",
+  ALLOW_DYNAMIC_EXTENSION: "allowDynamicExtension",
+
+  // End condition root
+  END_CONDITION: "endCondition",
+} as const;
+
+// End condition property names
+export const END_CONDITION_PROPERTIES = {
+  SCRIPT: "script",
+  RETURNS: "returns",
+  TIMEOUT: "timeout",
+  MAX_RETRIES: "maxRetries",
+  RETRY_PROMPT: "retryPrompt",
+} as const;
+
+// ============================================================================
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
