@@ -73,7 +73,17 @@
         <!-- Left side: Prompts -->
         <div id="prompts-section">
           <div class="section-header">
-            <h3>Prompts</h3>
+            <div class="section-title-group">
+              <button
+                id="btn-collapse-prompts"
+                class="btn-collapse"
+                title="Collapse prompts section"
+                aria-label="Collapse prompts"
+              >
+                <i class="codicon codicon-chevron-down collapse-icon"></i>
+              </button>
+              <h3>Prompts</h3>
+            </div>
             <span id="prompt-counter" class="prompt-counter"></span>
           </div>
           <div id="prompts-list">
@@ -93,7 +103,7 @@
                   title="Collapse output section"
                   aria-label="Collapse output"
                 >
-                  <span class="collapse-icon">▼</span>
+                  <i class="codicon codicon-chevron-down collapse-icon"></i>
                 </button>
                 <h3>Output</h3>
               </div>
@@ -128,7 +138,7 @@
                   title="Collapse editor section"
                   aria-label="Collapse editor"
                 >
-                  <span class="collapse-icon">▼</span>
+                  <i class="codicon codicon-chevron-down collapse-icon"></i>
                 </button>
               </div>
               <div class="editor-mode-info">

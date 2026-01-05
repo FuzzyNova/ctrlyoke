@@ -80,16 +80,18 @@ body {
 
 .collapse-icon {
   display: inline-block;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 12px;
 }
 
-/* Collapsed state */
+/* Collapsed state - rotate icon */
 #output-section.collapsed .collapse-icon,
-#editor-section.collapsed .collapse-icon {
+#editor-section.collapsed .collapse-icon,
+#prompts-section.collapsed .collapse-icon {
   transform: rotate(-90deg);
 }
 
 /* Hide content when collapsed */
+#prompts-section.collapsed #prompts-list,
 #output-section.collapsed #output-content,
 #editor-section.collapsed .prompt-editor,
 #editor-section.collapsed .editor-footer {
@@ -98,15 +100,41 @@ body {
 
 /* Adjust section sizing when collapsed */
 #output-section.collapsed,
-#editor-section.collapsed {
+#editor-section.collapsed,
+#prompts-section.collapsed {
   flex: 0 0 auto;
-  min-height: auto;
 }
 
 /* When output is collapsed and editor is open, editor expands to fill space */
 #output-section.collapsed ~ #editor-section:not(.collapsed) {
   flex: 1;
   max-height: none;
+}
+
+/* Prompts section collapsed - wide screen (horizontal collapse) */
+@media (min-width: 800px) {
+  #prompts-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+  }
+
+  /* When prompts collapsed, output-editor-container expands to fill space */
+  #prompts-section.collapsed ~ #output-editor-container {
+    flex: 1;
+  }
+}
+
+/* Prompts section collapsed - narrow screen (vertical collapse) */
+@media (max-width: 799px) {
+  #prompts-section.collapsed {
+    flex: 0 0 auto;
+    min-height: auto;
+  }
+
+  /* When prompts collapsed, output-editor-container expands upward */
+  #prompts-section.collapsed ~ #output-editor-container {
+    flex: 1;
+  }
 }
 
 .section-header h3 {

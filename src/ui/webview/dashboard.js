@@ -45,9 +45,11 @@
     exportBtn: document.getElementById("btn-export"),
     promptCounter: document.getElementById("prompt-counter"),
     promptsList: document.getElementById("prompts-list"),
+    promptsSection: document.getElementById("prompts-section"),
     outputSection: document.getElementById("output-section"),
     outputContent: document.getElementById("output-content"),
     autoscrollCheckbox: document.getElementById("autoscroll-checkbox"),
+    btnCollapsePrompts: document.getElementById("btn-collapse-prompts"),
     btnCollapseOutput: document.getElementById("btn-collapse-output"),
     btnCollapseEditor: document.getElementById("btn-collapse-editor"),
     editorSection: document.getElementById("editor-section"),
@@ -159,6 +161,10 @@
   });
 
   // Section collapse event listeners
+  elements.btnCollapsePrompts.addEventListener("click", () => {
+    toggleSectionCollapse("prompts");
+  });
+
   elements.btnCollapseOutput.addEventListener("click", () => {
     toggleSectionCollapse("output");
   });
@@ -1433,12 +1439,23 @@
   // ============================================================================
 
   /**
-   * Toggle section collapse state (output or editor)
-   * @param {string} section - "output" or "editor"
+   * Toggle section collapse state (prompts, output, or editor)
+   * @param {string} section - "prompts", "output", or "editor"
    */
   function toggleSectionCollapse(section) {
-    const sectionElement =
-      section === "output" ? elements.outputSection : elements.editorSection;
+    let sectionElement, btn;
+
+    if (section === "prompts") {
+      sectionElement = elements.promptsSection;
+      btn = elements.btnCollapsePrompts;
+    } else if (section === "output") {
+      sectionElement = elements.outputSection;
+      btn = elements.btnCollapseOutput;
+    } else if (section === "editor") {
+      sectionElement = elements.editorSection;
+      btn = elements.btnCollapseEditor;
+    }
+
     const storageKey = `flightpath.section.${section}.collapsed`;
 
     // Toggle collapsed class
@@ -1452,10 +1469,6 @@
     }
 
     // Update button title
-    const btn =
-      section === "output"
-        ? elements.btnCollapseOutput
-        : elements.btnCollapseEditor;
     btn.title = isCollapsed
       ? `Expand ${section} section`
       : `Collapse ${section} section`;
@@ -1469,6 +1482,19 @@
    * Restore section collapse states from localStorage
    */
   function restoreSectionCollapseStates() {
+    // Restore prompts section state
+    try {
+      const promptsCollapsed =
+        localStorage.getItem("flightpath.section.prompts.collapsed") === "true";
+      if (promptsCollapsed) {
+        elements.promptsSection.classList.add("collapsed");
+        elements.btnCollapsePrompts.title = "Expand prompts section";
+        elements.btnCollapsePrompts.setAttribute("aria-label", "Expand prompts");
+      }
+    } catch (error) {
+      console.warn("Failed to restore prompts collapse state:", error);
+    }
+
     // Restore output section state
     try {
       const outputCollapsed =
