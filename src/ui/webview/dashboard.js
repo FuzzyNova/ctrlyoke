@@ -1548,9 +1548,10 @@
     console.log("[Dashboard] Restoring editor state:", persistedState);
 
     // Restore editor text (only in new prompt mode)
+    // Check for undefined/null explicitly, not truthiness, because empty string is valid
     if (
       persistedState.selectedPromptIndex === null &&
-      persistedState.editorText &&
+      persistedState.editorText !== undefined &&
       editorState.promptEditor
     ) {
       editorState.promptEditor.setText(persistedState.editorText);

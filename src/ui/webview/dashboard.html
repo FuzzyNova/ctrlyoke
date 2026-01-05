@@ -150,9 +150,141 @@
               </button>
             </div>
 
-            <div id="prompt-editor" class="prompt-editor">
-              <!-- CodeMirror will be initialized here -->
+            <div class="prompt-editor-wrapper">
+              <div id="prompt-editor" class="prompt-editor">
+                <!-- CodeMirror will be initialized here -->
+              </div>
+
+              <!-- Properties Drawer (moved inside editor wrapper) -->
+              <div id="properties-drawer" class="properties-drawer">
+                <div class="drawer-content">
+                  <div class="drawer-header">
+                    <h3>Prompt Properties</h3>
+                    <button
+                      id="btn-close-drawer"
+                      class="btn-close-drawer"
+                      title="Close properties"
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  <div class="drawer-body">
+                    <div class="property-row">
+                      <div class="property-group">
+                        <label for="prop-provider">Provider:</label>
+                        <select id="prop-provider" class="property-select">
+                          <option value="default" selected>Default</option>
+                          <option value="copilot-cli">Copilot CLI</option>
+                          <option value="copilot-chat">Copilot Chat</option>
+                          <option value="claude-cli">Claude CLI</option>
+                          <option value="codex-cli">Codex CLI</option>
+                        </select>
+                      </div>
+
+                      <div class="property-group">
+                        <label for="prop-model">Model:</label>
+                        <select id="prop-model" class="property-select">
+                          <option value="default" selected>Default</option>
+                          <!-- Populated dynamically -->
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="property-row">
+                      <div class="property-group">
+                        <label for="prop-agent">Agent:</label>
+                        <input
+                          type="text"
+                          id="prop-agent"
+                          class="property-input"
+                          placeholder="Default (leave empty)"
+                        />
+                      </div>
+
+                      <div class="property-group">
+                        <label for="prop-new-chat">New Chat Session:</label>
+                        <select id="prop-new-chat" class="property-select">
+                          <option value="default" selected>Default</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="property-row">
+                      <div class="property-group full-width">
+                        <label for="prop-allow-dynamic"
+                          >Allow Dynamic Extension:</label
+                        >
+                        <select id="prop-allow-dynamic" class="property-select">
+                          <option value="default" selected>Default</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <details class="end-condition-section">
+                      <summary>End Condition (optional)</summary>
+                      <div class="end-condition-controls">
+                        <div class="property-group">
+                          <label for="prop-end-script">Script:</label>
+                          <input
+                            type="text"
+                            id="prop-end-script"
+                            class="property-input"
+                            placeholder="npm test"
+                          />
+                        </div>
+                        <div class="property-group">
+                          <label for="prop-end-returns">Returns:</label>
+                          <input
+                            type="text"
+                            id="prop-end-returns"
+                            class="property-input"
+                            placeholder="true"
+                          />
+                        </div>
+                        <div class="property-group">
+                          <label for="prop-end-timeout">Timeout (ms):</label>
+                          <input
+                            type="number"
+                            id="prop-end-timeout"
+                            class="property-input"
+                            value="30000"
+                            min="1000"
+                          />
+                        </div>
+                        <div class="property-group">
+                          <label for="prop-end-retries">Max Retries:</label>
+                          <input
+                            type="number"
+                            id="prop-end-retries"
+                            class="property-input"
+                            value="0"
+                            min="-1"
+                          />
+                        </div>
+                        <div class="property-group full-width">
+                          <label for="prop-end-retry-prompt">Retry Prompt:</label>
+                          <textarea
+                            id="prop-end-retry-prompt"
+                            class="property-textarea"
+                            rows="2"
+                            placeholder="Validation failed: {error}
+
+Please fix the issues."
+                          ></textarea>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              </div>
+              <!-- Close properties-drawer -->
             </div>
+            <!-- Close prompt-editor-wrapper -->
 
             <div class="editor-footer">
               <div class="editor-footer-left">
@@ -221,135 +353,6 @@
                 </button>
               </div>
             </div>
-
-            <!-- Properties Drawer (inside editor-section) -->
-            <div id="properties-drawer" class="properties-drawer">
-              <div class="drawer-content">
-                <div class="drawer-header">
-                  <h3>Prompt Properties</h3>
-                  <button
-                    id="btn-close-drawer"
-                    class="btn-close-drawer"
-                    title="Close properties"
-                  >
-                    &times;
-                  </button>
-                </div>
-
-                <div class="drawer-body">
-                  <div class="property-row">
-                    <div class="property-group">
-                      <label for="prop-provider">Provider:</label>
-                      <select id="prop-provider" class="property-select">
-                        <option value="default" selected>Default</option>
-                        <option value="copilot-cli">Copilot CLI</option>
-                        <option value="copilot-chat">Copilot Chat</option>
-                        <option value="claude-cli">Claude CLI</option>
-                        <option value="codex-cli">Codex CLI</option>
-                      </select>
-                    </div>
-
-                    <div class="property-group">
-                      <label for="prop-model">Model:</label>
-                      <select id="prop-model" class="property-select">
-                        <option value="default" selected>Default</option>
-                        <!-- Populated dynamically -->
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="property-row">
-                    <div class="property-group">
-                      <label for="prop-agent">Agent:</label>
-                      <input
-                        type="text"
-                        id="prop-agent"
-                        class="property-input"
-                        placeholder="Default (leave empty)"
-                      />
-                    </div>
-
-                    <div class="property-group">
-                      <label for="prop-new-chat">New Chat Session:</label>
-                      <select id="prop-new-chat" class="property-select">
-                        <option value="default" selected>Default</option>
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="property-row">
-                    <div class="property-group full-width">
-                      <label for="prop-allow-dynamic"
-                        >Allow Dynamic Extension:</label
-                      >
-                      <select id="prop-allow-dynamic" class="property-select">
-                        <option value="default" selected>Default</option>
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <details class="end-condition-section">
-                    <summary>End Condition (optional)</summary>
-                    <div class="end-condition-controls">
-                      <div class="property-group">
-                        <label for="prop-end-script">Script:</label>
-                        <input
-                          type="text"
-                          id="prop-end-script"
-                          class="property-input"
-                          placeholder="npm test"
-                        />
-                      </div>
-                      <div class="property-group">
-                        <label for="prop-end-returns">Returns:</label>
-                        <input
-                          type="text"
-                          id="prop-end-returns"
-                          class="property-input"
-                          placeholder="true"
-                        />
-                      </div>
-                      <div class="property-group">
-                        <label for="prop-end-timeout">Timeout (ms):</label>
-                        <input
-                          type="number"
-                          id="prop-end-timeout"
-                          class="property-input"
-                          value="30000"
-                          min="1000"
-                        />
-                      </div>
-                      <div class="property-group">
-                        <label for="prop-end-retries">Max Retries:</label>
-                        <input
-                          type="number"
-                          id="prop-end-retries"
-                          class="property-input"
-                          value="0"
-                          min="-1"
-                        />
-                      </div>
-                      <div class="property-group full-width">
-                        <label for="prop-end-retry-prompt">Retry Prompt:</label>
-                        <textarea
-                          id="prop-end-retry-prompt"
-                          class="property-textarea"
-                          rows="2"
-                          placeholder="Validation failed: {error}
-
-Please fix the issues."
-                        ></textarea>
-                      </div>
-                    </div>
-                  </details>
-                </div>
-              </div>
-            </div>
-            <!-- Close properties-drawer -->
           </div>
           <!-- Close editor-section -->
         </div>
