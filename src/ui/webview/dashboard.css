@@ -1392,7 +1392,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   background: var(--bg-secondary);
@@ -1403,11 +1403,10 @@ button:disabled {
 
 .drawer-header h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--vscode-foreground);
+  color: var(--fg-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .btn-close-drawer {

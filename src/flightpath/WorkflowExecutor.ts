@@ -314,11 +314,25 @@ export class WorkflowExecutor {
   ): Promise<boolean> {
     Log.info(`🔍 Evaluating end condition for prompt ${currentIndex + 1}...`);
 
+    // Validate that the end condition has a script property
+    if (!prompt.endCondition?.script) {
+      Log.error(
+        `End condition for prompt ${currentIndex + 1} is missing required 'script' property`
+      );
+      if (context.dashboardProvider) {
+        context.dashboardProvider.updateStatusMessage(
+          currentIndex,
+          `End condition failed: Missing script property`
+        );
+      }
+      return false;
+    }
+
     // Send status message: Evaluating end condition
     if (context.dashboardProvider) {
       const scriptName =
-        prompt.endCondition!.script.split(/[\\/]/).pop() ||
-        prompt.endCondition!.script;
+        prompt.endCondition.script.split(/[\\/]/).pop() ||
+        prompt.endCondition.script;
       context.dashboardProvider.updateStatusMessage(
         currentIndex,
         `Evaluating end condition: Running ${scriptName}`
@@ -327,7 +341,7 @@ export class WorkflowExecutor {
 
     // Evaluate the end condition
     const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
-      prompt.endCondition!,
+      prompt.endCondition,
       context.workspaceFolderPath
     );
 
@@ -616,8 +630,7 @@ export class WorkflowExecutor {
     totalPrompts: number
   ): Promise<boolean> {
     const maxTimeSec = dynamicConfig.maxWorkflowExecutionTime;
-    const unlimitedWorkflow =
-      dynamicConfig.unlimitedMode || maxTimeSec === -1;
+    const unlimitedWorkflow = dynamicConfig.unlimitedMode || maxTimeSec === -1;
 
     if (unlimitedWorkflow) {
       return false; // Can continue

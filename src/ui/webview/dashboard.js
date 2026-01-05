@@ -52,6 +52,22 @@
   let saveStateTimeout = null;
   const SAVE_STATE_DEBOUNCE_MS = 500;
 
+  // Property control defaults (single source of truth)
+  const PROPERTY_DEFAULTS = {
+    PROVIDER: "default",
+    MODEL: "default",
+    AGENT: "",
+    NEW_CHAT: "default",
+    ALLOW_DYNAMIC: "default",
+    END_SCRIPT: "",
+    END_RETURNS: "",
+    END_TIMEOUT: 30000,
+    END_TIMEOUT_STRING: "30000",
+    END_RETRIES: 0,
+    END_RETRIES_STRING: "0",
+    END_RETRY_PROMPT: "",
+  };
+
   // DOM elements
   const elements = {
     workflowName: document.getElementById("workflow-name"),
@@ -131,6 +147,157 @@
     defaultTemplateId: "blank",
   };
 
+  // ============================================================================
+  // UTILITY HELPERS (extracted for reuse)
+  // ============================================================================
+
+  /**
+   * Get current timestamp in milliseconds
+   */
+  function getTimestamp() {
+    return new Date().getTime();
+  }
+
+  /**
+   * Format timestamp as locale time string
+   */
+  function formatTime(timestampMs) {
+    return new Date(timestampMs).toLocaleTimeString();
+  }
+
+  /**
+   * Escape HTML special characters
+   */
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Truncate string to maximum length
+   */
+  function truncate(str, maxLen) {
+    return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
+  }
+
+  /**
+   * Get end condition value from object with fallback to default
+   * @param {Object} endCondition - End condition object
+   * @param {string} property - Property name from END_CONDITION_PROPERTIES
+   * @param {any} defaultValue - Default value if not found
+   */
+  function getEndConditionValue(endCondition, property, defaultValue) {
+    return endCondition && endCondition[property] !== undefined
+      ? endCondition[property]
+      : defaultValue;
+  }
+
+  /**
+   * Create a prompt item with all properties preserved (DRY helper)
+   * Used by handleFileSelected, handleSessionRestored, and handlePromptsExtended
+   * @param {Object|string} prompt - Raw prompt object or string
+   * @param {number} index - Prompt index in array
+   * @param {string} status - Step status (pending, running, completed, failed)
+   * @param {Object} details - Additional details object
+   * @returns {Object} Prompt item with all properties
+   */
+  function createPromptItem(prompt, index, status = STEP_STATUS.PENDING, details = {}) {
+    return {
+      index,
+      text: typeof prompt === "string" ? prompt : prompt[PROMPT_PROPERTIES.PROMPT],
+      status,
+      details,
+      // Preserve all prompt properties for editing using shared constants
+      [PROMPT_PROPERTIES.PROVIDER]: prompt[PROMPT_PROPERTIES.PROVIDER],
+      [PROMPT_PROPERTIES.MODEL]: prompt[PROMPT_PROPERTIES.MODEL],
+      [PROMPT_PROPERTIES.AGENT]: prompt[PROMPT_PROPERTIES.AGENT],
+      [PROMPT_PROPERTIES.NEW_CHAT_SESSION]: prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+      [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]: prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+      [PROMPT_PROPERTIES.END_CONDITION]: prompt[PROMPT_PROPERTIES.END_CONDITION],
+    };
+  }
+
+  /**
+   * Build end condition object from current property control values
+   * @returns {Object|undefined} End condition object or undefined if no values set
+   */
+  function buildEndConditionFromControls() {
+    const script = elements.propEndScript.value.trim();
+    const returns = elements.propEndReturns.value.trim();
+    const retryPrompt = elements.propEndRetryPrompt.value.trim();
+    const timeout = parseInt(elements.propEndTimeout.value, 10);
+    const maxRetries = parseInt(elements.propEndRetries.value, 10);
+
+    // Return undefined if all values are defaults
+    if (
+      !script &&
+      !returns &&
+      !retryPrompt &&
+      (isNaN(timeout) || timeout === PROPERTY_DEFAULTS.END_TIMEOUT) &&
+      (isNaN(maxRetries) || maxRetries === PROPERTY_DEFAULTS.END_RETRIES)
+    ) {
+      return undefined;
+    }
+
+    // Build end condition with only non-default values
+    const endCondition = {};
+    if (script) endCondition[END_CONDITION_PROPERTIES.SCRIPT] = script;
+    if (returns) endCondition[END_CONDITION_PROPERTIES.RETURNS] = returns;
+    if (!isNaN(timeout) && timeout !== PROPERTY_DEFAULTS.END_TIMEOUT) {
+      endCondition[END_CONDITION_PROPERTIES.TIMEOUT] = timeout;
+    }
+    if (!isNaN(maxRetries) && maxRetries !== PROPERTY_DEFAULTS.END_RETRIES) {
+      endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] = maxRetries;
+    }
+    if (retryPrompt) {
+      endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] = retryPrompt;
+    }
+
+    return endCondition;
+  }
+
+  /**
+   * Set end condition controls from end condition object
+   * @param {Object} endCondition - End condition object or undefined
+   */
+  function setEndConditionControls(endCondition) {
+    if (endCondition) {
+      elements.propEndScript.value = getEndConditionValue(
+        endCondition,
+        END_CONDITION_PROPERTIES.SCRIPT,
+        PROPERTY_DEFAULTS.END_SCRIPT
+      );
+      elements.propEndReturns.value = getEndConditionValue(
+        endCondition,
+        END_CONDITION_PROPERTIES.RETURNS,
+        PROPERTY_DEFAULTS.END_RETURNS
+      );
+      elements.propEndTimeout.value = getEndConditionValue(
+        endCondition,
+        END_CONDITION_PROPERTIES.TIMEOUT,
+        PROPERTY_DEFAULTS.END_TIMEOUT
+      );
+      elements.propEndRetries.value = getEndConditionValue(
+        endCondition,
+        END_CONDITION_PROPERTIES.MAX_RETRIES,
+        PROPERTY_DEFAULTS.END_RETRIES
+      );
+      elements.propEndRetryPrompt.value = getEndConditionValue(
+        endCondition,
+        END_CONDITION_PROPERTIES.RETRY_PROMPT,
+        PROPERTY_DEFAULTS.END_RETRY_PROMPT
+      );
+    } else {
+      // Reset to defaults
+      elements.propEndScript.value = PROPERTY_DEFAULTS.END_SCRIPT;
+      elements.propEndReturns.value = PROPERTY_DEFAULTS.END_RETURNS;
+      elements.propEndTimeout.value = PROPERTY_DEFAULTS.END_TIMEOUT_STRING;
+      elements.propEndRetries.value = PROPERTY_DEFAULTS.END_RETRIES_STRING;
+      elements.propEndRetryPrompt.value = PROPERTY_DEFAULTS.END_RETRY_PROMPT;
+    }
+  }
+
   // Event listeners
   elements.loadFileBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
@@ -187,7 +354,7 @@
   // Provider dropdown change listener - update model dropdown dynamically
   elements.propProvider.addEventListener("change", (e) => {
     const selectedProvider = e.target.value;
-    if (selectedProvider !== "default") {
+    if (selectedProvider !== PROPERTY_DEFAULTS.PROVIDER) {
       updatePropertyModelDropdown(selectedProvider);
     }
   });
@@ -475,21 +642,7 @@
     );
 
     state.fileName = fileName;
-    state.prompts = prompts.map((p, i) => ({
-      index: i,
-      text: typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT],
-      status: STEP_STATUS.PENDING,
-      details: {},
-      // Preserve all prompt properties for editing using shared constants
-      [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
-      [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
-      [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
-      [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
-        p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
-      [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
-        p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-      [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
-    }));
+    state.prompts = prompts.map((p, i) => createPromptItem(p, i));
 
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
@@ -536,24 +689,9 @@
     state.totalSteps = prompts.length;
 
     // Map prompts with their runtime status from results
-    state.prompts = prompts.map((p, i) => {
-      const result = results[i];
-      return {
-        index: i,
-        text: typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT],
-        status: result?.status || STEP_STATUS.PENDING,
-        details: {},
-        // Preserve all prompt properties for editing using shared constants
-        [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
-        [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
-        [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
-        [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
-          p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
-        [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
-          p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-        [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
-      };
-    });
+    state.prompts = prompts.map((p, i) =>
+      createPromptItem(p, i, results[i]?.status || STEP_STATUS.PENDING, {})
+    );
 
     // Reset outputs and retry states (not persisted in working file)
     state.cliOutputs = {};
@@ -653,11 +791,11 @@
     }
 
     // Add status message with timestamp
-    const now = new Date();
+    const timestampMs = getTimestamp();
     state.statusMessages[stepIndex].push({
       message,
-      timestamp: now.toLocaleTimeString(),
-      timestampMs: now.getTime(),
+      timestamp: formatTime(timestampMs),
+      timestampMs,
     });
 
     // Always render to show all accumulated messages
@@ -681,7 +819,7 @@
 
     // Add timestamp to output if not present
     if (!output.timestampMs) {
-      output.timestampMs = new Date().getTime();
+      output.timestampMs = getTimestamp();
     }
 
     const outputs = state.cliOutputs[stepIndex];
@@ -754,7 +892,7 @@
         elapsed: 0,
         tokens: null,
         isStreaming: true,
-        timestampMs: new Date().getTime(),
+        timestampMs: getTimestamp(),
       });
     }
 
@@ -803,21 +941,12 @@
       const key = text.trim();
       const existing = existingStatusMap.get(key);
 
-      return {
-        index: i,
-        text: text,
-        status: existing ? existing.status : STEP_STATUS.PENDING,
-        details: existing ? existing.details : {},
-        // Preserve all prompt properties for editing using shared constants
-        [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
-        [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
-        [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
-        [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
-          p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
-        [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
-          p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-        [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
-      };
+      return createPromptItem(
+        p,
+        i,
+        existing?.status || STEP_STATUS.PENDING,
+        existing?.details || {}
+      );
     });
 
     state.totalSteps = state.prompts.length;
@@ -1081,22 +1210,12 @@
     return icons[status] || icons[STEP_STATUS.PENDING];
   }
 
-  function truncate(str, maxLen) {
-    return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
-  }
-
   function updatePromptCounter() {
     if (state.totalSteps > 0) {
       elements.promptCounter.textContent = `Completed ${state.currentStep} of ${state.totalSteps}`;
     } else {
       elements.promptCounter.textContent = "";
     }
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   /**
@@ -1718,44 +1837,41 @@
     // Restore property controls using shared constants
     if (persistedState.properties) {
       const props = persistedState.properties;
-      const provider = props[PROMPT_PROPERTIES.PROVIDER] || "default";
+      const provider =
+        props[PROMPT_PROPERTIES.PROVIDER] || PROPERTY_DEFAULTS.PROVIDER;
       elements.propProvider.value = provider;
 
       // Update model dropdown based on provider BEFORE setting the model value
-      if (provider !== "default") {
+      if (provider !== PROPERTY_DEFAULTS.PROVIDER) {
         updatePropertyModelDropdown(provider);
       }
 
       if (props[PROMPT_PROPERTIES.MODEL])
-        elements.propModel.value = props[PROMPT_PROPERTIES.MODEL] || "default";
+        elements.propModel.value =
+          props[PROMPT_PROPERTIES.MODEL] || PROPERTY_DEFAULTS.MODEL;
       if (props[PROMPT_PROPERTIES.AGENT])
-        elements.propAgent.value = props[PROMPT_PROPERTIES.AGENT] || "";
+        elements.propAgent.value =
+          props[PROMPT_PROPERTIES.AGENT] || PROPERTY_DEFAULTS.AGENT;
 
       const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
       elements.propNewChat.value =
         newChatSession === undefined
-          ? "default"
+          ? PROPERTY_DEFAULTS.NEW_CHAT
           : newChatSession
             ? "yes"
             : "no";
 
       const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
       elements.propAllowDynamic.value =
-        allowDynamic === undefined ? "default" : allowDynamic ? "yes" : "no";
+        allowDynamic === undefined
+          ? PROPERTY_DEFAULTS.ALLOW_DYNAMIC
+          : allowDynamic
+            ? "yes"
+            : "no";
 
+      // Use extracted helper for end condition controls
       const endCondition = props[PROMPT_PROPERTIES.END_CONDITION];
-      if (endCondition) {
-        elements.propEndScript.value =
-          endCondition[END_CONDITION_PROPERTIES.SCRIPT] || "";
-        elements.propEndReturns.value =
-          endCondition[END_CONDITION_PROPERTIES.RETURNS] || "";
-        elements.propEndTimeout.value =
-          endCondition[END_CONDITION_PROPERTIES.TIMEOUT] || 30000;
-        elements.propEndRetries.value =
-          endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] || 0;
-        elements.propEndRetryPrompt.value =
-          endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] || "";
-      }
+      setEndConditionControls(endCondition);
     }
 
     // Update metadata
@@ -1907,59 +2023,33 @@
     const properties = {};
 
     // Only include non-default values - use shared property name constants
-    if (elements.propProvider.value !== "default") {
+    if (elements.propProvider.value !== PROPERTY_DEFAULTS.PROVIDER) {
       properties[PROMPT_PROPERTIES.PROVIDER] = elements.propProvider.value;
     }
 
-    if (elements.propModel.value !== "default") {
+    if (elements.propModel.value !== PROPERTY_DEFAULTS.MODEL) {
       properties[PROMPT_PROPERTIES.MODEL] = elements.propModel.value;
     }
 
     const agent = elements.propAgent.value.trim();
-    if (agent && agent !== "default") {
+    if (agent && agent !== PROPERTY_DEFAULTS.AGENT) {
       properties[PROMPT_PROPERTIES.AGENT] = agent;
     }
 
-    if (elements.propNewChat.value !== "default") {
+    if (elements.propNewChat.value !== PROPERTY_DEFAULTS.NEW_CHAT) {
       properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] =
         elements.propNewChat.value === "yes";
     }
 
-    if (elements.propAllowDynamic.value !== "default") {
+    if (elements.propAllowDynamic.value !== PROPERTY_DEFAULTS.ALLOW_DYNAMIC) {
       properties[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION] =
         elements.propAllowDynamic.value === "yes";
     }
 
-    // End condition (if ANY field is filled)
-    const script = elements.propEndScript.value.trim();
-    const returns = elements.propEndReturns.value.trim();
-    const retryPrompt = elements.propEndRetryPrompt.value.trim();
-    const timeout = parseInt(elements.propEndTimeout.value, 10);
-    const maxRetries = parseInt(elements.propEndRetries.value, 10);
-
-    // Create endCondition if ANY field has a non-default value
-    if (
-      script ||
-      returns ||
-      retryPrompt ||
-      (!isNaN(timeout) && timeout !== 30000) ||
-      (!isNaN(maxRetries) && maxRetries !== 0)
-    ) {
-      const endCondition = {};
-
-      if (script)
-        endCondition[END_CONDITION_PROPERTIES.SCRIPT] = script;
-      if (returns)
-        endCondition[END_CONDITION_PROPERTIES.RETURNS] = returns;
-      if (!isNaN(timeout) && timeout !== 30000)
-        endCondition[END_CONDITION_PROPERTIES.TIMEOUT] = timeout;
-      if (!isNaN(maxRetries) && maxRetries !== 0)
-        endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] = maxRetries;
-      if (retryPrompt)
-        endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] = retryPrompt;
-
+    // Build end condition from controls (extracted helper)
+    const endCondition = buildEndConditionFromControls();
+    if (endCondition) {
       properties[PROMPT_PROPERTIES.END_CONDITION] = endCondition;
-
       console.log(
         "[Dashboard] getPropertyValues - endCondition:",
         JSON.stringify(endCondition, null, 2)
@@ -1973,16 +2063,12 @@
    * Reset property controls to default values
    */
   function resetPropertyControls() {
-    elements.propProvider.value = "default";
-    elements.propModel.value = "default";
-    elements.propAgent.value = "";
-    elements.propNewChat.value = "default";
-    elements.propAllowDynamic.value = "default";
-    elements.propEndScript.value = "";
-    elements.propEndReturns.value = "";
-    elements.propEndTimeout.value = "30000";
-    elements.propEndRetries.value = "0";
-    elements.propEndRetryPrompt.value = "";
+    elements.propProvider.value = PROPERTY_DEFAULTS.PROVIDER;
+    elements.propModel.value = PROPERTY_DEFAULTS.MODEL;
+    elements.propAgent.value = PROPERTY_DEFAULTS.AGENT;
+    elements.propNewChat.value = PROPERTY_DEFAULTS.NEW_CHAT;
+    elements.propAllowDynamic.value = PROPERTY_DEFAULTS.ALLOW_DYNAMIC;
+    setEndConditionControls(undefined); // Use extracted helper
   }
 
   /**
@@ -1993,7 +2079,7 @@
     const options = modelOptions[provider] || [];
 
     // Always show "Default" option first
-    let optionsHtml = '<option value="default">Default</option>';
+    let optionsHtml = `<option value="${PROPERTY_DEFAULTS.MODEL}">Default</option>`;
 
     // Show loading state if no models yet (only for providers that need to load models)
     if (
@@ -2026,52 +2112,49 @@
     );
 
     // Use shared property name constants for type safety
-    const provider = prompt[PROMPT_PROPERTIES.PROVIDER] || "default";
+    const provider =
+      prompt[PROMPT_PROPERTIES.PROVIDER] || PROPERTY_DEFAULTS.PROVIDER;
     elements.propProvider.value = provider;
 
     // Update model dropdown based on provider BEFORE setting the model value
-    if (provider !== "default") {
+    if (provider !== PROPERTY_DEFAULTS.PROVIDER) {
       updatePropertyModelDropdown(provider);
     }
 
-    elements.propModel.value = prompt[PROMPT_PROPERTIES.MODEL] || "default";
-    elements.propAgent.value = prompt[PROMPT_PROPERTIES.AGENT] || "";
+    elements.propModel.value =
+      prompt[PROMPT_PROPERTIES.MODEL] || PROPERTY_DEFAULTS.MODEL;
+    elements.propAgent.value =
+      prompt[PROMPT_PROPERTIES.AGENT] || PROPERTY_DEFAULTS.AGENT;
 
     const newChatSession = prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
     elements.propNewChat.value =
-      newChatSession === undefined ? "default" : newChatSession ? "yes" : "no";
+      newChatSession === undefined
+        ? PROPERTY_DEFAULTS.NEW_CHAT
+        : newChatSession
+          ? "yes"
+          : "no";
 
     const allowDynamic = prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
     elements.propAllowDynamic.value =
-      allowDynamic === undefined ? "default" : allowDynamic ? "yes" : "no";
+      allowDynamic === undefined
+        ? PROPERTY_DEFAULTS.ALLOW_DYNAMIC
+        : allowDynamic
+          ? "yes"
+          : "no";
 
+    // Use extracted helper for end condition controls
     const endCondition = prompt[PROMPT_PROPERTIES.END_CONDITION];
     if (endCondition) {
       console.log(
         "[Dashboard] endCondition found:",
         JSON.stringify(endCondition, null, 2)
       );
-      elements.propEndScript.value =
-        endCondition[END_CONDITION_PROPERTIES.SCRIPT] || "";
-      elements.propEndReturns.value =
-        endCondition[END_CONDITION_PROPERTIES.RETURNS] || "";
-      elements.propEndTimeout.value =
-        endCondition[END_CONDITION_PROPERTIES.TIMEOUT] || 30000;
-      elements.propEndRetries.value =
-        endCondition[END_CONDITION_PROPERTIES.MAX_RETRIES] || 0;
-      elements.propEndRetryPrompt.value =
-        endCondition[END_CONDITION_PROPERTIES.RETRY_PROMPT] || "";
-
+    }
+    setEndConditionControls(endCondition);
+    if (endCondition) {
       console.log(
         `[Dashboard] Set retryPrompt field to: "${elements.propEndRetryPrompt.value}"`
       );
-    } else {
-      console.log("[Dashboard] No endCondition found, resetting fields");
-      elements.propEndScript.value = "";
-      elements.propEndReturns.value = "";
-      elements.propEndTimeout.value = "30000";
-      elements.propEndRetries.value = "0";
-      elements.propEndRetryPrompt.value = "";
     }
   }
 
