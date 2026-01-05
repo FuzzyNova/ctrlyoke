@@ -4,7 +4,10 @@ import {
   DynamicQueueConfig,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
-import { STEP_STATUS } from "../types/DashboardConstants";
+import {
+  STEP_STATUS,
+  STATUS_MESSAGE_SEVERITY,
+} from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
 import { CopilotIntegration } from "./base/CopilotIntegration";
@@ -322,8 +325,14 @@ export class WorkflowExecutor {
       if (context.dashboardProvider) {
         context.dashboardProvider.updateStatusMessage(
           currentIndex,
-          `End condition failed: Missing script property`
+          `End condition failed: Missing script property`,
+          STATUS_MESSAGE_SEVERITY.ERROR
         );
+        context.dashboardProvider.updateStepStatus(currentIndex, {
+          state: STEP_STATUS.FAILED,
+          message: "End condition missing required 'script' property",
+          duration,
+        });
       }
       return false;
     }
@@ -348,13 +357,17 @@ export class WorkflowExecutor {
     // Send status message: End condition result
     if (context.dashboardProvider) {
       const resultStatus = evaluationResult.success ? "Passed ✓" : "Failed ✗";
+      const severity = evaluationResult.success
+        ? STATUS_MESSAGE_SEVERITY.INFO
+        : STATUS_MESSAGE_SEVERITY.ERROR;
       // Show error message when present, otherwise show stdout (no truncation)
       const output = evaluationResult.error
         ? evaluationResult.error
         : evaluationResult.stdout.trim();
       context.dashboardProvider.updateStatusMessage(
         currentIndex,
-        `End condition ${resultStatus} - Output: ${output}`
+        `End condition ${resultStatus} - Output: ${output}`,
+        severity
       );
     }
 

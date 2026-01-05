@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import { PromptItem } from "../types/FlightPathTypes";
-import { STEP_STATUS } from "../types/DashboardConstants";
+import {
+  STEP_STATUS,
+  STATUS_MESSAGE_SEVERITY,
+} from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import {
   EndConditionEvaluator,
@@ -208,7 +211,8 @@ export class EndConditionHandler {
         const ellipsis = retryPromptText.length > 60 ? "..." : "";
         this.dashboardProvider.updateStatusMessage(
           currentIndex,
-          `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`
+          `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`,
+          STATUS_MESSAGE_SEVERITY.WARNING
         );
       }
 

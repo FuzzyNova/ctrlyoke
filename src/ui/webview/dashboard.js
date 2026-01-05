@@ -202,19 +202,28 @@
    * @param {Object} details - Additional details object
    * @returns {Object} Prompt item with all properties
    */
-  function createPromptItem(prompt, index, status = STEP_STATUS.PENDING, details = {}) {
+  function createPromptItem(
+    prompt,
+    index,
+    status = STEP_STATUS.PENDING,
+    details = {}
+  ) {
     return {
       index,
-      text: typeof prompt === "string" ? prompt : prompt[PROMPT_PROPERTIES.PROMPT],
+      text:
+        typeof prompt === "string" ? prompt : prompt[PROMPT_PROPERTIES.PROMPT],
       status,
       details,
       // Preserve all prompt properties for editing using shared constants
       [PROMPT_PROPERTIES.PROVIDER]: prompt[PROMPT_PROPERTIES.PROVIDER],
       [PROMPT_PROPERTIES.MODEL]: prompt[PROMPT_PROPERTIES.MODEL],
       [PROMPT_PROPERTIES.AGENT]: prompt[PROMPT_PROPERTIES.AGENT],
-      [PROMPT_PROPERTIES.NEW_CHAT_SESSION]: prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
-      [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]: prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-      [PROMPT_PROPERTIES.END_CONDITION]: prompt[PROMPT_PROPERTIES.END_CONDITION],
+      [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
+        prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+      [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
+        prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+      [PROMPT_PROPERTIES.END_CONDITION]:
+        prompt[PROMPT_PROPERTIES.END_CONDITION],
     };
   }
 
@@ -563,7 +572,7 @@
         handleCliStreamingChunk(message.stepIndex, message.chunk);
         break;
       case MESSAGE_TYPES.STATUS_MESSAGE:
-        handleStatusMessage(message.stepIndex, message.message);
+        handleStatusMessage(message);
         break;
       case MESSAGE_TYPES.EXECUTION_COMPLETED:
         handleExecutionCompleted();
@@ -596,7 +605,9 @@
           editorState.promptEditor &&
           editorState.promptEditor.handleCompletionResponse
         ) {
-          console.log("[Dashboard] Calling promptEditor.handleCompletionResponse");
+          console.log(
+            "[Dashboard] Calling promptEditor.handleCompletionResponse"
+          );
           editorState.promptEditor.handleCompletionResponse(
             message.items,
             message.from
@@ -778,11 +789,12 @@
     renderPromptsList();
   }
 
-  function handleStatusMessage(stepIndex, message) {
+  function handleStatusMessage(messageData) {
+    const stepIndex = messageData.stepIndex;
     console.log(
       "📝 Dashboard: Received status message for step",
       stepIndex,
-      message
+      messageData
     );
 
     // Initialize array for this step if needed
@@ -790,12 +802,14 @@
       state.statusMessages[stepIndex] = [];
     }
 
-    // Add status message with timestamp
+    // Add status message with timestamp and severity
     const timestampMs = getTimestamp();
+
     state.statusMessages[stepIndex].push({
-      message,
+      message: messageData.message,
       timestamp: formatTime(timestampMs),
       timestampMs,
+      severity: messageData.severity || "info",
     });
 
     // Always render to show all accumulated messages
@@ -1104,7 +1118,10 @@
     allMessages.forEach((item) => {
       if (item.type === "status") {
         const statusMsg = item.data;
-        html += '<div class="status-message">';
+        const severityClass = statusMsg.severity
+          ? `status-${statusMsg.severity}`
+          : "status-info";
+        html += `<div class="status-message ${severityClass}">`;
         html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
         html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
         html += "</div>";
@@ -1679,7 +1696,10 @@
       if (promptsCollapsed) {
         elements.promptsSection.classList.add("collapsed");
         elements.btnCollapsePrompts.title = "Expand prompts section";
-        elements.btnCollapsePrompts.setAttribute("aria-label", "Expand prompts");
+        elements.btnCollapsePrompts.setAttribute(
+          "aria-label",
+          "Expand prompts"
+        );
       }
     } catch (error) {
       console.warn("Failed to restore prompts collapse state:", error);

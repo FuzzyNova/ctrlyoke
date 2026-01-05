@@ -5,6 +5,9 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   PROVIDER_IDS,
+  STEP_STATUS,
+  STATUS_MESSAGE_SEVERITY,
+  StatusMessageSeverity,
 } from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -254,11 +257,16 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public updateStatusMessage(stepIndex: number, message: string): void {
+  public updateStatusMessage(
+    stepIndex: number,
+    message: string,
+    severity: StatusMessageSeverity = STATUS_MESSAGE_SEVERITY.INFO
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STATUS_MESSAGE,
       stepIndex,
       message,
+      severity,
     });
   }
 

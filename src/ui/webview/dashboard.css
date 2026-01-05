@@ -477,16 +477,24 @@ button:disabled {
   }
 
   /* Stack icon below chevron for horizontal collapsed state */
-  #output-editor-container.layout-horizontal #output-section.collapsed .section-title-group,
-  #output-editor-container.layout-horizontal #editor-section.collapsed .section-title-group {
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .section-title-group,
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    .section-title-group {
     flex-direction: column;
     align-items: center;
     gap: 2px;
   }
 
   /* Show icon, hide text in horizontal collapsed state */
-  #output-editor-container.layout-horizontal #output-section.collapsed .section-icon,
-  #output-editor-container.layout-horizontal #editor-section.collapsed .section-icon {
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .section-icon,
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    .section-icon {
     display: inline-block;
   }
 
@@ -496,17 +504,23 @@ button:disabled {
   }
 
   /* Hide controls when output section is collapsed in horizontal mode */
-  #output-editor-container.layout-horizontal #output-section.collapsed .output-controls {
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .output-controls {
     display: none;
   }
 
   /* When output collapsed, editor expands to fill space */
-  #output-editor-container.layout-horizontal #output-section.collapsed ~ #editor-section:not(.collapsed) {
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    ~ #editor-section:not(.collapsed) {
     flex: 1;
   }
 
   /* When editor collapsed, output expands to fill space */
-  #output-editor-container.layout-horizontal #editor-section.collapsed ~ #output-section:not(.collapsed) {
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    ~ #output-section:not(.collapsed) {
     flex: 1;
   }
 }
@@ -773,11 +787,40 @@ button:disabled {
 .status-message {
   padding: var(--spacing-xs) var(--spacing-md);
   margin: var(--spacing-xs) 0;
-  background: rgba(156, 220, 254, 0.15);
-  border-left: 3px solid rgb(156, 220, 254);
+  border-left: 3px solid;
   border-radius: 2px;
   font-size: 11px;
   color: var(--fg-primary);
+}
+
+/* Info severity (default - blue) */
+.status-message.status-info {
+  background: rgba(156, 220, 254, 0.15);
+  border-left-color: rgb(156, 220, 254);
+}
+
+.status-message.status-info .status-text {
+  color: rgb(156, 220, 254);
+}
+
+/* Warning severity (yellow/orange) */
+.status-message.status-warning {
+  background: rgba(252, 175, 62, 0.15);
+  border-left-color: rgb(252, 175, 62);
+}
+
+.status-message.status-warning .status-text {
+  color: rgb(252, 175, 62);
+}
+
+/* Error severity (red) */
+.status-message.status-error {
+  background: rgba(244, 71, 71, 0.15);
+  border-left-color: rgb(244, 71, 71);
+}
+
+.status-message.status-error .status-text {
+  color: rgb(244, 71, 71);
 }
 
 .status-time {
@@ -787,7 +830,7 @@ button:disabled {
 }
 
 .status-text {
-  color: rgb(156, 220, 254);
+  /* Color set by severity class */
   font-weight: 500;
 }
 

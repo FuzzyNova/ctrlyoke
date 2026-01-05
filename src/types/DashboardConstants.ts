@@ -104,6 +104,15 @@ export const STEP_STATUS = {
 } as const;
 
 // ============================================================================
+// STATUS MESSAGE SEVERITY - Visual severity levels for status messages
+// ============================================================================
+export const STATUS_MESSAGE_SEVERITY = {
+  INFO: "info",
+  WARNING: "warning",
+  ERROR: "error",
+} as const;
+
+// ============================================================================
 // PROVIDER IDS - Copilot integration modes
 // ============================================================================
 export const PROVIDER_IDS = {
@@ -217,3 +226,5 @@ export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];
+export type StatusMessageSeverity =
+  (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
