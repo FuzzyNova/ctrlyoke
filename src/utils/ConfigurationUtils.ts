@@ -367,6 +367,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Get the default Copilot agent
+   */
+  getCopilotAgent(): string {
+    return getConfig().get<string>("copilotAgent", "default");
+  },
+
+  /**
    * Check if agent mode should be forced for chat
    */
   shouldForceAgentModeForChat(): boolean {

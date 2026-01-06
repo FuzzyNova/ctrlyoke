@@ -141,6 +141,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.CHANGE_MODEL:
         this.handleModelChange(message.model, message.provider);
         break;
+      case MESSAGE_TYPES.CHANGE_AGENT:
+        this.handleAgentChange(message.agent);
+        break;
       case MESSAGE_TYPES.CHANGE_EXECUTION_MODE:
         this.handleExecutionModeChange(message.executionMode);
         break;
@@ -160,6 +163,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     const provider = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForProvider(provider);
+    const agent = ConfigurationUtils.getCopilotAgent();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const newChatSessionPerPrompt =
       ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
@@ -177,6 +181,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       data: {
         provider,
         model,
+        agent,
         executionMode,
         newChatSessionPerPrompt,
         dynamicQueueEnabled,
@@ -423,6 +428,21 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       Log.info(`✅ Model changed to: ${model} (for ${provider})`);
     } catch (error) {
       Log.error("Failed to update model setting:", error);
+    }
+  }
+
+  private async handleAgentChange(agent: string): Promise<void> {
+    const validAgents = ["default", "workspace", "vscode", "terminal", "github"];
+    if (!validAgents.includes(agent)) {
+      Log.error(`Invalid agent: ${agent}`);
+      return;
+    }
+
+    try {
+      await ConfigurationUtils.updateSetting("copilotAgent", agent);
+      Log.info(`✅ Agent changed to: ${agent}`);
+    } catch (error) {
+      Log.error("Failed to update agent setting:", error);
     }
   }
 

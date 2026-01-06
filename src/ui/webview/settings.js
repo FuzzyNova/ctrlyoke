@@ -49,6 +49,7 @@
   let state = {
     provider: PROVIDER_IDS.COPILOT_CLI,
     model: DEFAULT_MODELS[PROVIDER_IDS.COPILOT_CLI],
+    agent: "default",
     executionMode: "interactive",
     newChatSessionPerPrompt: true,
     dynamicQueueEnabled: false,
@@ -57,6 +58,7 @@
   const elements = {
     providerDropdown: document.getElementById("provider-dropdown"),
     modelDropdown: document.getElementById("model-dropdown"),
+    agentDropdown: document.getElementById("agent-dropdown"),
     executionModeDropdown: document.getElementById("execution-mode-dropdown"),
     executionModeGroup: document.getElementById("execution-mode-group"),
     newChatSessionCheckbox: document.getElementById(
@@ -82,6 +84,14 @@
       type: MESSAGE_TYPES.CHANGE_MODEL,
       model: state.model,
       provider: state.provider,
+    });
+  });
+
+  elements.agentDropdown.addEventListener("change", (e) => {
+    state.agent = e.target.value;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CHANGE_AGENT,
+      agent: state.agent,
     });
   });
 
@@ -144,6 +154,7 @@
 
     updateModelDropdownOptions(state.provider);
     elements.modelDropdown.value = state.model;
+    elements.agentDropdown.value = state.agent || "default";
     elements.executionModeDropdown.value = state.executionMode;
     updateExecutionModeVisibility(state.provider);
     elements.newChatSessionCheckbox.checked = state.newChatSessionPerPrompt;

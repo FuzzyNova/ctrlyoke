@@ -13,57 +13,75 @@
   </head>
   <body>
     <div id="settings-app">
-      <div class="setting-group">
-        <label for="provider-dropdown">Provider</label>
-        <select
-          id="provider-dropdown"
-          title="Select AI provider for prompt execution"
-        >
-          <!-- Populated dynamically with availability status -->
-        </select>
-        <span class="setting-description">Choose which AI provider to use</span>
+      <!-- Row 1: Provider, Model -->
+      <div class="settings-row">
+        <div class="setting-group">
+          <label for="provider-dropdown">Provider</label>
+          <select
+            id="provider-dropdown"
+            title="Select AI provider for prompt execution"
+          >
+            <!-- Populated dynamically with availability status -->
+          </select>
+          <span class="setting-description">Choose which AI provider to use</span>
+        </div>
+
+        <div class="setting-group">
+          <label for="model-dropdown">Model</label>
+          <select id="model-dropdown" title="Select AI model">
+            <!-- Populated dynamically based on provider -->
+          </select>
+          <span class="setting-description">AI model for prompt execution</span>
+        </div>
       </div>
 
-      <div class="setting-group">
-        <label for="model-dropdown">Model</label>
-        <select id="model-dropdown" title="Select AI model">
-          <!-- Populated dynamically based on provider -->
-        </select>
-        <span class="setting-description">AI model for prompt execution</span>
+      <!-- Row 2: Agent, New Chat Session -->
+      <div class="settings-row">
+        <div class="setting-group">
+          <label for="agent-dropdown">Agent</label>
+          <select id="agent-dropdown" title="Select Copilot agent">
+            <option value="default">Default</option>
+            <option value="workspace">@workspace</option>
+            <option value="vscode">@vscode</option>
+            <option value="terminal">@terminal</option>
+            <option value="github">@github</option>
+          </select>
+          <span class="setting-description">Copilot agent to use</span>
+        </div>
+
+        <div class="setting-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="new-chat-session-checkbox" />
+            <span>New Chat Session Per Prompt</span>
+          </label>
+          <span class="setting-description"
+            >Start fresh chat session for each prompt</span
+          >
+        </div>
       </div>
 
-      <div class="setting-group" id="execution-mode-group">
-        <label for="execution-mode-dropdown">Execution Mode</label>
-        <select id="execution-mode-dropdown" title="Select CLI execution mode">
-          <option value="interactive">Interactive</option>
-          <option value="headless">Headless</option>
-        </select>
-        <span class="setting-description"
-          >Where the command executes (interactive shows terminal, headless runs
-          in background)</span
-        >
-      </div>
+      <!-- Row 3: Execution Mode, Dynamic Queue -->
+      <div class="settings-row">
+        <div class="setting-group" id="execution-mode-group">
+          <label for="execution-mode-dropdown">Execution Mode</label>
+          <select id="execution-mode-dropdown" title="Select CLI execution mode">
+            <option value="interactive">Interactive</option>
+            <option value="headless">Headless</option>
+          </select>
+          <span class="setting-description"
+            >Interactive shows terminal, headless runs in background</span
+          >
+        </div>
 
-      <div class="setting-group">
-        <label class="checkbox-label">
-          <input type="checkbox" id="new-chat-session-checkbox" />
-          <span>New Chat Session Per Prompt</span>
-        </label>
-        <span class="setting-description"
-          >Start fresh chat session for each prompt in workflows</span
-        >
-      </div>
-
-      <hr class="setting-divider" />
-
-      <div class="setting-group">
-        <label class="checkbox-label">
-          <input type="checkbox" id="dynamic-queue-checkbox" />
-          <span>Enable Dynamic Queue Extension</span>
-        </label>
-        <span class="setting-description"
-          >Allow prompts to extend the workflow queue</span
-        >
+        <div class="setting-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="dynamic-queue-checkbox" />
+            <span>Enable Dynamic Queue Extension</span>
+          </label>
+          <span class="setting-description"
+            >Allow prompts to extend the workflow queue</span
+          >
+        </div>
       </div>
     </div>
 

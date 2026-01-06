@@ -9,26 +9,43 @@ body {
 #settings-app {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
-  max-width: 250px;
+  gap: var(--spacing-md);
+  max-width: 100%;
+}
+
+/* Settings row - stacks on narrow screens, grid on wide screens */
+.settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+/* Two-column grid layout for wider screens (>= 400px) */
+@media (min-width: 400px) {
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+  }
 }
 
 .setting-group {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-  max-width: 200px;
 }
 
 .setting-group label {
   font-weight: 600;
-  font-size: 12px;
-  color: var(--fg-primary);
+  font-size: 11px;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
 }
 
 .setting-group select {
   width: 100%;
-  max-width: 200px;
+  font-size: 12px;
 }
 
 .setting-description {

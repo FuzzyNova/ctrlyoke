@@ -52,6 +52,7 @@ export const MESSAGE_TYPES = {
 
   // Settings view messages
   CHANGE_MODEL: "changeModel",
+  CHANGE_AGENT: "changeAgent",
   CHANGE_EXECUTION_MODE: "changeExecutionMode",
   CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
   CHANGE_NEW_CHAT_SESSION: "changeNewChatSession",

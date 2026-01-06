@@ -612,6 +612,27 @@
           "description": "[Chat Mode] Force chat to switch to default agent mode before sending prompts",
           "markdownDescription": "**Chat Mode Only.** When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices."
         },
+        "flightpath.copilotAgent": {
+          "order": 102.5,
+          "type": "string",
+          "enum": [
+            "default",
+            "workspace",
+            "vscode",
+            "terminal",
+            "github"
+          ],
+          "enumDescriptions": [
+            "Default agent mode (general purpose)",
+            "@workspace - Workspace-aware agent with full codebase context",
+            "@vscode - VS Code extension and API expert",
+            "@terminal - Terminal and command-line expert",
+            "@github - GitHub and Git expert"
+          ],
+          "default": "default",
+          "description": "[All Modes] Default Copilot agent to use",
+          "markdownDescription": "Select which Copilot agent to use by default. Available agents: **default** (general), **@workspace** (codebase context), **@vscode** (extension API), **@terminal** (CLI), **@github** (Git)."
+        },
         "flightpath.chatInactivityTimeout": {
           "order": 103,
           "type": "number",
