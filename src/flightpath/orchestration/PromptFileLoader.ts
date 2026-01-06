@@ -167,8 +167,9 @@ export class PromptFileLoader {
         workingFile.prompts
       );
       if (!validation.valid) {
-        Log.error("Working file validation failed:", validation.errors);
-        return;
+        const errorMessage = validation.errors.join(",");
+        Log.error("Working file validation failed:", errorMessage);
+        throw new Error(`Working file validation failed: ${errorMessage}`);
       }
 
       const queueState = this.promptQueue.getState();
@@ -227,6 +228,8 @@ export class PromptFileLoader {
       );
     } catch (error) {
       Log.error("Failed to reload working file:", error);
+      // Re-throw so caller knows the operation failed
+      throw error;
     }
   }
 }

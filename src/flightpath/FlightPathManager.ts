@@ -279,30 +279,38 @@ export class FlightPathManager {
       });
 
       if (selected) {
-        // Load the session using reloadFromWorkingFile with replace mode
-        await this.promptFileLoader.reloadFromWorkingFile(
-          selected.filePath,
-          "replace"
-        );
+        try {
+          // Load the session using reloadFromWorkingFile with replace mode (throws on validation failure)
+          await this.promptFileLoader.reloadFromWorkingFile(
+            selected.filePath,
+            "replace"
+          );
 
-        // Set currentPromptFile so getCurrentPromptFile() works correctly
-        const workingFile = await this.promptQueue.readWorkingFile(
-          selected.filePath
-        );
-        if (workingFile && workingFile.originalFile && workingFile.prompts) {
-          this.currentPromptFile = {
-            filePath: workingFile.originalFile,
-            promptFile: { prompts: workingFile.prompts },
-          };
+          // Set currentPromptFile so getCurrentPromptFile() works correctly
+          const workingFile = await this.promptQueue.readWorkingFile(
+            selected.filePath
+          );
+          if (workingFile && workingFile.originalFile && workingFile.prompts) {
+            this.currentPromptFile = {
+              filePath: workingFile.originalFile,
+              promptFile: { prompts: workingFile.prompts },
+            };
+          }
+
+          // Set up file watcher for the restored working file (only if validation succeeded)
+          this.setupPromptFileWatcher(selected.filePath);
+
+          // Focus the dashboard to show the restored session
+          await vscode.commands.executeCommand("flightpath.dashboard.focus");
+
+          Log.info(`Resumed session: ${selected.label}`);
+        } catch (loadError) {
+          // Validation or loading failed - show error to user
+          Log.error("Failed to load session:", loadError as Error);
+          vscode.window.showErrorMessage(
+            `Failed to load session: ${loadError instanceof Error ? loadError.message : String(loadError)}`
+          );
         }
-
-        // Set up file watcher for the restored working file
-        this.setupPromptFileWatcher(selected.filePath);
-
-        // Focus the dashboard to show the restored session
-        await vscode.commands.executeCommand("flightpath.dashboard.focus");
-
-        Log.info(`Resumed session: ${selected.label}`);
       }
     } catch (error) {
       Log.error("Failed to resume session:", error as Error);
@@ -853,6 +861,7 @@ export class FlightPathManager {
       await this.workspaceSessionManager.autoLoadRecentSession(
         this.currentWorkspaceFolder,
         async (workingFilePath: string) => {
+          // Attempt to reload from working file - throws if validation fails
           await this.promptFileLoader.reloadFromWorkingFile(
             workingFilePath,
             "replace"
@@ -868,6 +877,7 @@ export class FlightPathManager {
             };
           }
 
+          // Only set up file watcher if we successfully loaded and validated
           this.setupPromptFileWatcher(workingFilePath);
         }
       );
