@@ -87,10 +87,14 @@ src/
 ├── ui/                           # User interface
 │   ├── FlightPathDashboardProvider.ts  # Dashboard webview provider
 │   ├── FlightPathSettingsProvider.ts   # Settings webview provider
-│   └── webview/                  # Webview assets
+│   ├── icons/                    # Custom SVG icons (source only, NOT copied to output)
+│   │   ├── append.svg            # Icon source files
+│   │   └── README.md             # Icon system documentation
+│   └── webview/                  # Webview assets (copied to output)
 │       ├── dashboard.html        # Dashboard template
 │       ├── dashboard.css         # Dashboard styles
 │       ├── dashboard.js          # Dashboard logic
+│       ├── custom-icons.css      # Generated from icons/ (auto-created)
 │       ├── settings.html         # Settings template
 │       ├── settings.css          # Settings styles
 │       └── settings.js           # Settings logic

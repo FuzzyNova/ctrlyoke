@@ -8,6 +8,7 @@
       content="default-src 'none'; connect-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}}; img-src data:;"
     />
     <link rel="stylesheet" href="{{codiconsUri}}" />
+    <link rel="stylesheet" href="{{customIconsUri}}" />
     <link rel="stylesheet" href="{{sharedStyleUri}}" />
     <link rel="stylesheet" href="{{styleUri}}" />
     <title>FlightPath Dashboard</title>
@@ -363,6 +364,7 @@ Please fix the issues."
                   title="Append to end of queue"
                   disabled
                 >
+                  <i class="custom-icon icon-append"></i>
                   Append
                 </button>
                 <button
@@ -371,6 +373,7 @@ Please fix the issues."
                   title="Insert after current prompt"
                   disabled
                 >
+                  <i class="custom-icon icon-append-next"></i>
                   Append Next
                 </button>
 

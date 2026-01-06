@@ -1018,7 +1018,8 @@
   },
   "scripts": {
     "generate-schema": "node scripts/generate-yaml-schema.mjs",
-    "precompile": "npm run generate-schema",
+    "generate-icons": "node scripts/generate-custom-icons.mjs",
+    "precompile": "npm run generate-schema && npm run generate-icons",
     "compile": "npm run check-types && node esbuild.js",
     "compile-tests": "tsc -p .",
     "check-types": "tsc --noEmit",

@@ -698,6 +698,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const codiconsUri = webview.asWebviewUri(
       this.getWebviewPath("codicons", "codicon.css")
     );
+    // Get custom icons CSS (auto-generated from SVG files)
+    const customIconsUri = webview.asWebviewUri(
+      this.getWebviewPath("custom-icons.css")
+    );
     // Get typo.js and CodeMirror URIs (KEEP Typo.js for spell checking)
     const typoUri = webview.asWebviewUri(this.getWebviewPath("typo.js"));
     const codemirrorLoaderUri = webview.asWebviewUri(
@@ -737,6 +741,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
       .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
+      .replace(/\{\{customIconsUri\}\}/g, customIconsUri.toString())
       .replace(/\{\{typoUri\}\}/g, typoUri.toString())
       .replace(/\{\{codemirrorLoaderUri\}\}/g, codemirrorLoaderUri.toString())
       .replace(/\{\{codemirrorEditorUri\}\}/g, codemirrorEditorUri.toString())
