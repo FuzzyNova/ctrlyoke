@@ -654,38 +654,11 @@
     // This handler is ONLY for IDLE state (user selects new file via Select button)
     // Queue extension during execution uses handleQueueExtended()
     console.log(
-      `Dashboard: New file selected (${fileName}), resetting state`,
-      prompts
-    );
-
-    // DEBUG: Log what properties each prompt has
-    console.log(
-      "DEBUG - Received prompts with properties:",
-      prompts.map((p, i) => ({
-        index: i,
-        hasProvider: !!p.provider,
-        hasModel: !!p.model,
-        hasAgent: !!p.agent,
-        hasNewChatSession: p.newChatSession !== undefined,
-        hasAllowDynamicExtension: p.allowDynamicExtension !== undefined,
-        hasEndCondition: !!p.endCondition,
-        provider: p.provider,
-        model: p.model,
-      }))
+      `Dashboard: New file selected (${fileName}), resetting state`
     );
 
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => createPromptItem(p, i));
-
-    // DEBUG: Log what was created
-    console.log(
-      "DEBUG - Created prompt items:",
-      state.prompts.map((p) => ({
-        provider: p[PROMPT_PROPERTIES.PROVIDER],
-        model: p[PROMPT_PROPERTIES.MODEL],
-        agent: p[PROMPT_PROPERTIES.AGENT],
-      }))
-    );
 
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
@@ -1897,7 +1870,6 @@
       };
 
       vscode.setState(persistedState);
-      console.log("[Dashboard] Editor state saved:", persistedState);
     }, SAVE_STATE_DEBOUNCE_MS);
   }
 
@@ -1909,11 +1881,8 @@
     const persistedState = vscode.getState();
 
     if (!persistedState) {
-      console.log("[Dashboard] No persisted state to restore");
       return;
     }
-
-    console.log("[Dashboard] Restoring editor state:", persistedState);
 
     // Restore editor text (only in new prompt mode)
     // Check for undefined/null explicitly, not truthiness, because empty string is valid
@@ -2146,10 +2115,6 @@
     const endCondition = buildEndConditionFromControls();
     if (endCondition) {
       properties[PROMPT_PROPERTIES.END_CONDITION] = endCondition;
-      console.log(
-        "[Dashboard] getPropertyValues - endCondition:",
-        JSON.stringify(endCondition, null, 2)
-      );
     }
 
     return properties;
@@ -2174,17 +2139,6 @@
   function updatePropertyModelDropdown(provider) {
     const options = modelOptions[provider] || [];
 
-    // DEBUG: Log detailed model options info
-    console.log(
-      `[Dashboard] updatePropertyModelDropdown for provider "${provider}":`,
-      {
-        hasOptions: options.length > 0,
-        optionsCount: options.length,
-        options: options.map((o) => o.value),
-        allProviders: Object.keys(modelOptions),
-      }
-    );
-
     // Always show "Default" option first
     let optionsHtml = `<option value="${PROPERTY_DEFAULTS.MODEL}">Default</option>`;
 
@@ -2203,9 +2157,6 @@
     }
 
     elements.propModel.innerHTML = optionsHtml;
-    console.log(
-      `[Dashboard] Updated property model dropdown for ${provider}: ${options.length} models`
-    );
   }
 
   /**
@@ -2213,11 +2164,6 @@
    * @param {Object} prompt - PromptItem object
    */
   function setPropertyControls(prompt) {
-    console.log(
-      "[Dashboard] setPropertyControls called with prompt:",
-      JSON.stringify(prompt, null, 2)
-    );
-
     // Use shared property name constants for type safety
     const provider =
       prompt[PROMPT_PROPERTIES.PROVIDER] || PROPERTY_DEFAULTS.PROVIDER;
@@ -2251,18 +2197,7 @@
 
     // Use extracted helper for end condition controls
     const endCondition = prompt[PROMPT_PROPERTIES.END_CONDITION];
-    if (endCondition) {
-      console.log(
-        "[Dashboard] endCondition found:",
-        JSON.stringify(endCondition, null, 2)
-      );
-    }
     setEndConditionControls(endCondition);
-    if (endCondition) {
-      console.log(
-        `[Dashboard] Set retryPrompt field to: "${elements.propEndRetryPrompt.value}"`
-      );
-    }
   }
 
   /**
@@ -2389,11 +2324,6 @@
     if (wasEditingExisting) {
       // Cancelled editing an existing prompt - restore the saved new prompt state
       if (editorState.savedNewPromptState) {
-        console.log(
-          "[Dashboard] Restoring saved new prompt state:",
-          editorState.savedNewPromptState
-        );
-
         // Restore editor text
         if (editorState.promptEditor) {
           editorState.promptEditor.setText(
@@ -2410,9 +2340,6 @@
 
         // If no saved properties (all were defaults), reset to defaults
         if (Object.keys(props).length === 0) {
-          console.log(
-            "[Dashboard] No saved properties, resetting to defaults"
-          );
           resetPropertyControls();
         } else {
           // Restore saved property values
@@ -2454,7 +2381,6 @@
         editorState.savedNewPromptState = null;
       } else {
         // No saved state, fall back to defaults
-        console.log("[Dashboard] No saved state, resetting to defaults");
         resetPropertyControls();
         if (editorState.promptEditor) {
           editorState.promptEditor.setText("");
@@ -2500,17 +2426,6 @@
 
     const prompt = state.prompts[index];
 
-    // DEBUG: Log what properties the selected prompt has
-    console.log("DEBUG - selectPromptForEdit:", {
-      index,
-      provider: prompt[PROMPT_PROPERTIES.PROVIDER],
-      model: prompt[PROMPT_PROPERTIES.MODEL],
-      agent: prompt[PROMPT_PROPERTIES.AGENT],
-      newChatSession: prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
-      allowDynamicExtension: prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-      hasEndCondition: !!prompt[PROMPT_PROPERTIES.END_CONDITION],
-    });
-
     // ONLY save new prompt state if we're currently in new prompt mode
     // If we're already editing a prompt, don't overwrite the saved new prompt state
     if (editorState.selectedPromptIndex === null) {
@@ -2521,14 +2436,6 @@
         promptName: elements.promptNameInput.value,
         properties: getPropertyValues(),
       };
-      console.log(
-        "[Dashboard] Saved new prompt state before editing:",
-        editorState.savedNewPromptState
-      );
-    } else {
-      console.log(
-        "[Dashboard] Already in edit mode, keeping existing saved new prompt state"
-      );
     }
 
     // Store original data for cancel functionality

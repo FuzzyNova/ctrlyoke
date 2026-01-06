@@ -87,20 +87,7 @@ export class PromptFileLoader {
 
       // Notify dashboard about file selection
       if (this.dashboardProvider) {
-        // DEBUG: Log what we're sending to dashboard
-        Log.debug(
-          `Sending ${promptFile.prompts.length} prompts to dashboard with properties:`,
-          promptFile.prompts.map((p) => ({
-            hasProvider: !!p.provider,
-            hasModel: !!p.model,
-            hasAgent: !!p.agent,
-            hasNewChatSession: p.newChatSession !== undefined,
-            hasAllowDynamicExtension: p.allowDynamicExtension !== undefined,
-            hasEndCondition: !!p.endCondition,
-          }))
-        );
-
-        // Send FULL prompt objects with all properties (not just prompt text)
+        // Send full prompt objects with all properties
         this.dashboardProvider.updateFileSelected(fileName, promptFile.prompts);
       }
 
