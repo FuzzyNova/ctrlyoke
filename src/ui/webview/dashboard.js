@@ -44,6 +44,7 @@
   let editorState = {
     selectedPromptIndex: null, // null = new prompt mode, number = editing existing
     originalPromptData: null, // For Cancel/revert functionality
+    savedNewPromptState: null, // Saved new prompt state when switching to edit mode
     hasActiveQueue: false, // Whether a workflow is currently loaded
     promptEditor: null, // PromptEditor instance (initialized after DOM load)
   };
@@ -657,8 +658,34 @@
       prompts
     );
 
+    // DEBUG: Log what properties each prompt has
+    console.log(
+      "DEBUG - Received prompts with properties:",
+      prompts.map((p, i) => ({
+        index: i,
+        hasProvider: !!p.provider,
+        hasModel: !!p.model,
+        hasAgent: !!p.agent,
+        hasNewChatSession: p.newChatSession !== undefined,
+        hasAllowDynamicExtension: p.allowDynamicExtension !== undefined,
+        hasEndCondition: !!p.endCondition,
+        provider: p.provider,
+        model: p.model,
+      }))
+    );
+
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => createPromptItem(p, i));
+
+    // DEBUG: Log what was created
+    console.log(
+      "DEBUG - Created prompt items:",
+      state.prompts.map((p) => ({
+        provider: p[PROMPT_PROPERTIES.PROVIDER],
+        model: p[PROMPT_PROPERTIES.MODEL],
+        agent: p[PROMPT_PROPERTIES.AGENT],
+      }))
+    );
 
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
@@ -2147,6 +2174,17 @@
   function updatePropertyModelDropdown(provider) {
     const options = modelOptions[provider] || [];
 
+    // DEBUG: Log detailed model options info
+    console.log(
+      `[Dashboard] updatePropertyModelDropdown for provider "${provider}":`,
+      {
+        hasOptions: options.length > 0,
+        optionsCount: options.length,
+        options: options.map((o) => o.value),
+        allProviders: Object.keys(modelOptions),
+      }
+    );
+
     // Always show "Default" option first
     let optionsHtml = `<option value="${PROPERTY_DEFAULTS.MODEL}">Default</option>`;
 
@@ -2349,8 +2387,80 @@
     editorState.originalPromptData = null;
 
     if (wasEditingExisting) {
-      // Cancelled editing an existing prompt - restore persisted new prompt state
-      restoreEditorState();
+      // Cancelled editing an existing prompt - restore the saved new prompt state
+      if (editorState.savedNewPromptState) {
+        console.log(
+          "[Dashboard] Restoring saved new prompt state:",
+          editorState.savedNewPromptState
+        );
+
+        // Restore editor text
+        if (editorState.promptEditor) {
+          editorState.promptEditor.setText(
+            editorState.savedNewPromptState.editorText || ""
+          );
+        }
+
+        // Restore prompt name
+        elements.promptNameInput.value =
+          editorState.savedNewPromptState.promptName || "";
+
+        // Restore properties
+        const props = editorState.savedNewPromptState.properties || {};
+
+        // If no saved properties (all were defaults), reset to defaults
+        if (Object.keys(props).length === 0) {
+          console.log(
+            "[Dashboard] No saved properties, resetting to defaults"
+          );
+          resetPropertyControls();
+        } else {
+          // Restore saved property values
+          const provider =
+            props[PROMPT_PROPERTIES.PROVIDER] || PROPERTY_DEFAULTS.PROVIDER;
+          elements.propProvider.value = provider;
+
+          // Update model dropdown based on provider BEFORE setting the model value
+          if (provider !== PROPERTY_DEFAULTS.PROVIDER) {
+            updatePropertyModelDropdown(provider);
+          }
+
+          elements.propModel.value =
+            props[PROMPT_PROPERTIES.MODEL] || PROPERTY_DEFAULTS.MODEL;
+          elements.propAgent.value =
+            props[PROMPT_PROPERTIES.AGENT] || PROPERTY_DEFAULTS.AGENT;
+
+          const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
+          elements.propNewChat.value =
+            newChatSession === undefined
+              ? PROPERTY_DEFAULTS.NEW_CHAT
+              : newChatSession
+                ? "yes"
+                : "no";
+
+          const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
+          elements.propAllowDynamic.value =
+            allowDynamic === undefined
+              ? PROPERTY_DEFAULTS.ALLOW_DYNAMIC
+              : allowDynamic
+                ? "yes"
+                : "no";
+
+          const endCondition = props[PROMPT_PROPERTIES.END_CONDITION];
+          setEndConditionControls(endCondition);
+        }
+
+        // Clear the saved state after restoring
+        editorState.savedNewPromptState = null;
+      } else {
+        // No saved state, fall back to defaults
+        console.log("[Dashboard] No saved state, resetting to defaults");
+        resetPropertyControls();
+        if (editorState.promptEditor) {
+          editorState.promptEditor.setText("");
+        }
+        elements.promptNameInput.value = "";
+      }
     }
     // If already in new prompt mode, editor state is already current
 
@@ -2389,6 +2499,37 @@
     if (index < 0 || index >= state.prompts.length) return;
 
     const prompt = state.prompts[index];
+
+    // DEBUG: Log what properties the selected prompt has
+    console.log("DEBUG - selectPromptForEdit:", {
+      index,
+      provider: prompt[PROMPT_PROPERTIES.PROVIDER],
+      model: prompt[PROMPT_PROPERTIES.MODEL],
+      agent: prompt[PROMPT_PROPERTIES.AGENT],
+      newChatSession: prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+      allowDynamicExtension: prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+      hasEndCondition: !!prompt[PROMPT_PROPERTIES.END_CONDITION],
+    });
+
+    // ONLY save new prompt state if we're currently in new prompt mode
+    // If we're already editing a prompt, don't overwrite the saved new prompt state
+    if (editorState.selectedPromptIndex === null) {
+      editorState.savedNewPromptState = {
+        editorText: editorState.promptEditor
+          ? editorState.promptEditor.getText()
+          : "",
+        promptName: elements.promptNameInput.value,
+        properties: getPropertyValues(),
+      };
+      console.log(
+        "[Dashboard] Saved new prompt state before editing:",
+        editorState.savedNewPromptState
+      );
+    } else {
+      console.log(
+        "[Dashboard] Already in edit mode, keeping existing saved new prompt state"
+      );
+    }
 
     // Store original data for cancel functionality
     editorState.selectedPromptIndex = index;

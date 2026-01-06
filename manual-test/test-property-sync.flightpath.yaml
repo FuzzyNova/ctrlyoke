@@ -1,0 +1,46 @@
+prompts:
+  - id: test-all-properties
+    prompt: |
+      This is a test prompt to verify all properties sync correctly to the dashboard UI.
+
+      When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
+      - Provider: copilot-cli
+      - Model: claude-sonnet-4.5
+      - Agent: test-agent
+      - New Chat Session: No
+      - Allow Dynamic Extension: Yes
+      - End Condition: Script, Returns, Timeout, Max Retries, Retry Prompt all filled in
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    agent: test-agent
+    newChatSession: false
+    allowDynamicExtension: true
+    endCondition:
+      script: .flightpath/scripts/always_true.py
+      returns: "true"
+      timeout: 45000
+      maxRetries: 3
+      retryPrompt: |
+        Validation failed: {errorOutput}
+
+        Expected: {expectedValue}
+        Actual: {actualValue}
+        Retry {retryCount} of {maxRetries}
+
+        Please fix the issues and try again.
+
+  - id: test-minimal-properties
+    prompt: |
+      This is a test prompt with NO end condition properties.
+
+      When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
+      - Provider: claude-cli
+      - Model: sonnet
+      - Agent: (empty)
+      - New Chat Session: Yes
+      - Allow Dynamic Extension: No
+      - End Condition: All fields should be empty/default
+    provider: claude-cli
+    model: sonnet
+    newChatSession: true
+    allowDynamicExtension: false

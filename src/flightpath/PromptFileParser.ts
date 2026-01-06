@@ -351,6 +351,7 @@ export class PromptFileParser {
           {
             id: parsed.id,
             prompt: resolvedPrompt,
+            provider: parsed.provider,
             model: parsed.model,
             agent: parsed.agent,
             // Use explicit value if set, otherwise fall back to user's setting
@@ -376,6 +377,7 @@ export class PromptFileParser {
           return {
             id: item.id,
             prompt: resolvedPrompt,
+            provider: item.provider,
             model: item.model,
             agent: item.agent,
             // Use explicit value if set, otherwise fall back to user's setting
