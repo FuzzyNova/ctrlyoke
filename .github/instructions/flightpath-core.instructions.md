@@ -244,6 +244,47 @@ Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files
 - Enable response content validation (not yet implemented)
   </endConditionEvaluator>
 
+<orchestrationClasses>
+**Orchestration classes** (extracted from FlightPathManager for single responsibility):
+
+**PromptFileLoader:**
+
+- Validates and loads prompt files into queue
+- Notifies dashboard without executing
+- Handles both load (review) and execute (run) flows
+
+**PromptFileWatcher:**
+
+- Monitors .flightpath/.queue directory for external changes
+- Triggers queue reload when working files are modified
+- Enables MCP-driven queue extensions
+
+**TemplateImporter:**
+
+- Imports workflow templates to .flightpath/templates/
+- Imports custom agents to .github/agents/
+- Template variable substitution (planned)
+
+**WorkflowCommandHandler:**
+
+- Handles createPromptFile command
+- Handles createEndConditionScript command
+- Manages file creation dialogs and user input
+
+**WorkspaceSessionManager:**
+
+- Auto-loads recent session on startup (if enabled)
+- Restores queue state from working files
+- Manages session persistence across VS Code restarts
+
+**Why extracted:**
+
+- FlightPathManager was growing too large (SRP violation)
+- Each class has single, well-defined responsibility
+- Improves testability and maintainability
+- Enables future feature additions without bloating manager
+  </orchestrationClasses>
+
 <relatedFiles>
 - `./base/CopilotIntegration.ts` - Integration contract
 - `./cli/CopilotCommandLineIntegration.ts` - CLI implementation

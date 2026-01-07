@@ -20,6 +20,10 @@ Core data structures. TypeScript strict mode enforced.
 **Enums:**
 
 - `Provider` - "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
+  - CopilotCli: GitHub Copilot CLI (default)
+  - CopilotChat: Copilot Chat window (UI automation)
+  - ClaudeCli: Claude Code CLI (Anthropic)
+  - CodexCli: Codex CLI (OpenAI)
 
 **Important patterns:**
 

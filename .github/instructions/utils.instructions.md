@@ -35,7 +35,7 @@ Shared file system, logging, and validation utilities.
 - Configurable debouncing and throttling
   </fileSystemUtils>
 
-<loggingUtils>
+<log>
 **Responsibilities:**
 - Centralized logging with log levels
 - Output channel integration
@@ -52,9 +52,9 @@ Shared file system, logging, and validation utilities.
 **Usage pattern:**
 
 ```typescript
-LoggingUtils.initialize(context, LogLevel.INFO);
-LoggingUtils.info("Operation started");
-LoggingUtils.error("Operation failed", error);
+Log.initialize(context, LogLevel.INFO);
+Log.info("Operation started");
+Log.error("Operation failed", error);
 ```
 
 **Output routing:**
@@ -69,7 +69,7 @@ LoggingUtils.error("Operation failed", error);
 - Log level filtering
 - Single output channel (avoids clutter)
 - Stack trace capture for errors
-  </loggingUtils>
+  </log>
 
 <validationUtils>
 **Responsibilities:**
@@ -107,6 +107,19 @@ const validator = ajv.compile<PromptItem>(promptItemSchema);
 
 </validationUtils>
 
+<otherUtilities>
+**Additional utility classes** (see source files for details):
+- **CliProcessManager**: CLI process spawning, terminal management, cancellation
+- **ContextExpander**: Context variable expansion for prompt processing
+- **TempFileManager**: Temporary file creation and cleanup
+- **TuiStreamProcessor**: TUI output parsing and chrome filtering
+- **ConfigurationUtils**: VS Code settings access with type safety
+- **FileReferenceParser**: Parse #file: and @file syntax
+- **AttachmentBuilders**: Build Copilot XML attachment format
+- **BuildConfig**: Build-time constants (IS_DEV_MODE, BUILD_DATE)
+- **ModelConstants/ModelRegistry**: Model definitions and runtime discovery
+</otherUtilities>
+
 <sharedPatterns>
 **Error handling:**
 - Never throw exceptions from utility functions
@@ -124,7 +137,7 @@ const validator = ajv.compile<PromptItem>(promptItemSchema);
 <relatedFiles>
 - `../flightpath/PromptFileParser.ts` - Uses similar validation patterns
 - `../flightpath/EndConditionEvaluator.ts` - Uses file system utilities
-- `../extension.ts` - Initializes LoggingUtils with context
+- `../extension.ts` - Initializes Log with context
 - `PromptIdentity.ts` - Hash-based prompt identity tracking for queue deduplication
 - `docs/QUEUE_APPEND_FEATURE.md` - Working file system documentation
 </relatedFiles>

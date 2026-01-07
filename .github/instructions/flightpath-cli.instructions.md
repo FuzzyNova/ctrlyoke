@@ -3,8 +3,19 @@ applyTo: "src/flightpath/cli/**"
 ---
 
 <purpose>
-Default integration using GitHub Copilot CLI. Deterministic completion, no UI dependencies.
+CLI integrations for GitHub Copilot, Claude Code, and Codex. Deterministic completion, no UI dependencies.
 </purpose>
+
+<baseClass>
+**BaseCliIntegration**: Abstract base class for all CLI integrations
+- Provides common execution modes (interactive TUI and headless)
+- Handles session management, process lifecycle, and cancellation
+- Delegates CLI-specific details to subclasses via abstract methods
+- Three concrete implementations:
+  - CopilotCommandLineIntegration (GitHub Copilot CLI)
+  - ClaudeCommandLineIntegration (Claude Code CLI)
+  - CodexCommandLineIntegration (Codex CLI)
+</baseClass>
 
 <architecture>
 - Two execution modes: **interactive** (TUI injection) and **headless** (spawn + stdin)
@@ -59,16 +70,20 @@ Default integration using GitHub Copilot CLI. Deterministic completion, no UI de
   </sessionManagement>
 
 <abstractMethods>
-Subclasses must implement:
-- `getCliName()`: Returns "copilot" or "claude"
+BaseCliIntegration subclasses must implement:
+- `getCliName()`: Returns "copilot", "claude", or "codex"
 - `getEscapeIndicator()`: Pattern that appears during generation, disappears when complete
-- `buildHeadlessArgs(baseArgs)`: Args for headless mode (Copilot: no -p, Claude: with -p)
+- `buildHeadlessArgs(baseArgs)`: Args for headless mode (Copilot: no -p, Claude: with -p, Codex: varies)
 - `buildInteractiveTuiCommand(baseArgs)`: Command to start interactive TUI
 - `hasFullPermissions()`: Check if headless mode will auto-grant permissions
 - `parseTokenCounts(statistics)`: Extract token counts from CLI statistics output
   - Returns `{ prompt: number; completion: number } | undefined`
   - Handles CLI-specific output formats (k suffix, decimal numbers, etc.)
   - Used by WorkflowExecutor to populate dashboard token display
+- `getCliDisplayName()`: Display name for status messages
+- `getInstallHint()`: Installation instructions for unavailable CLI
+- `getScreenEndPattern()`: Regex pattern marking end of TUI screen frame
+- `getTuiChromePatterns()`: UI element patterns to filter from responses
 </abstractMethods>
 
 <cancellation>
