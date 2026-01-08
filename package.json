@@ -369,7 +369,7 @@
         {
           "id": "flightpath",
           "title": "FlightPath",
-          "icon": "$(compass)"
+          "icon": "images/flightpath-sidebar-icon.svg"
         }
       ]
     },

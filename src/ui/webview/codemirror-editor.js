@@ -327,7 +327,7 @@
                 const diagnostic = {
                   from: wordFrom,
                   to: wordTo,
-                  severity: "warning",
+                  severity: "error",
                   message: `Spelling: "${word}"`,
                   // Getter runs only when CodeMirror accesses actions (tooltip display)
                   get actions() {
