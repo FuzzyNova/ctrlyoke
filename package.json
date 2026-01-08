@@ -1019,7 +1019,8 @@
   "scripts": {
     "generate-schema": "node scripts/generate-yaml-schema.mjs",
     "generate-icons": "node scripts/generate-custom-icons.mjs",
-    "precompile": "npm run generate-schema && npm run generate-icons",
+    "generate-sidebar-icon": "node scripts/generate-sidebar-icon.mjs",
+    "precompile": "npm run generate-schema && npm run generate-icons && npm run generate-sidebar-icon",
     "compile": "npm run check-types && node esbuild.js",
     "compile-tests": "tsc -p .",
     "check-types": "tsc --noEmit",
