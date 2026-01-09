@@ -232,7 +232,8 @@
 
   /**
    * Build end condition object from current property control values
-   * @returns {Object|undefined} End condition object or undefined if no values set
+   * Only returns an object if BOTH required fields (script AND returns) are present
+   * @returns {Object|undefined} End condition object or undefined if required fields missing
    */
   function buildEndConditionFromControls() {
     const script = elements.propEndScript.value.trim();
@@ -241,21 +242,18 @@
     const timeout = parseInt(elements.propEndTimeout.value, 10);
     const maxRetries = parseInt(elements.propEndRetries.value, 10);
 
-    // Return undefined if all values are defaults
-    if (
-      !script &&
-      !returns &&
-      !retryPrompt &&
-      (isNaN(timeout) || timeout === PROPERTY_DEFAULTS.END_TIMEOUT) &&
-      (isNaN(maxRetries) || maxRetries === PROPERTY_DEFAULTS.END_RETRIES)
-    ) {
+    // Return undefined if required fields are missing (schema requires both script AND returns)
+    if (!script || !returns) {
       return undefined;
     }
 
-    // Build end condition with only non-default values
-    const endCondition = {};
-    if (script) endCondition[END_CONDITION_PROPERTIES.SCRIPT] = script;
-    if (returns) endCondition[END_CONDITION_PROPERTIES.RETURNS] = returns;
+    // Build end condition with required fields and optional fields
+    const endCondition = {
+      [END_CONDITION_PROPERTIES.SCRIPT]: script,
+      [END_CONDITION_PROPERTIES.RETURNS]: returns,
+    };
+
+    // Add optional fields only if they differ from defaults
     if (!isNaN(timeout) && timeout !== PROPERTY_DEFAULTS.END_TIMEOUT) {
       endCondition[END_CONDITION_PROPERTIES.TIMEOUT] = timeout;
     }

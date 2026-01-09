@@ -1067,6 +1067,38 @@ export class FlightPathManager {
   }
 
   /**
+   * Build PromptItem properties from dashboard properties object
+   * Only includes explicitly set values (filters out "default" placeholders)
+   * @param properties - Raw properties from dashboard
+   * @returns Partial PromptItem with only explicitly set properties
+   */
+  private buildPromptItemProperties(properties: any): Partial<PromptItem> {
+    const updates: Partial<PromptItem> = {};
+
+    // Only add properties that aren't "default"
+    if (properties.provider) {
+      updates.provider = properties.provider as Provider;
+    }
+    if (properties.model) {
+      updates.model = properties.model;
+    }
+    if (properties.agent) {
+      updates.agent = properties.agent;
+    }
+    if (properties.newChatSession !== undefined) {
+      updates.newChatSession = properties.newChatSession;
+    }
+    if (properties.allowDynamicExtension !== undefined) {
+      updates.allowDynamicExtension = properties.allowDynamicExtension;
+    }
+    if (properties.endCondition) {
+      updates.endCondition = properties.endCondition;
+    }
+
+    return updates;
+  }
+
+  /**
    * Execute an ephemeral prompt from the dashboard editor
    * @param text - Prompt text
    * @param properties - PromptItem properties (provider, model, etc.)
@@ -1146,34 +1178,11 @@ export class FlightPathManager {
       promptId = `ephemeral-${Date.now()}`;
     }
 
-    const promptItem: Partial<PromptItem> = {
+    const promptItem: PromptItem = {
       prompt: text,
       id: promptId,
+      ...this.buildPromptItemProperties(properties),
     };
-
-    // Only add properties that aren't "default"
-    if (properties.provider) {
-      promptItem.provider = properties.provider as Provider;
-    }
-    if (properties.model) {
-      promptItem.model = properties.model;
-    }
-    if (properties.agent) {
-      promptItem.agent = properties.agent;
-    }
-    // Apply global default for newChatSession if not explicitly set
-    if (properties.newChatSession !== undefined) {
-      promptItem.newChatSession = properties.newChatSession;
-    } else {
-      promptItem.newChatSession =
-        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
-    }
-    if (properties.allowDynamicExtension !== undefined) {
-      promptItem.allowDynamicExtension = properties.allowDynamicExtension;
-    }
-    if (properties.endCondition) {
-      promptItem.endCondition = properties.endCondition;
-    }
 
     // Get current queue state to determine behavior
     const currentState = this.promptQueue.getState();
@@ -1192,7 +1201,7 @@ export class FlightPathManager {
           try {
             workingFilePath = await this.promptQueue.createWorkingFile(
               generatedFileName,
-              [promptItem as PromptItem],
+              [promptItem],
               workspaceFolder
             );
             Log.info(
@@ -1211,22 +1220,19 @@ export class FlightPathManager {
         }
 
         // Create new single-prompt workflow
-        this.promptQueue.loadPrompts(
-          [promptItem as PromptItem],
-          workingFilePath
-        );
+        this.promptQueue.loadPrompts([promptItem], workingFilePath);
 
         // Update dashboard
         if (this.dashboardProvider) {
           this.dashboardProvider.updateFileSelected(generatedFileName, [
-            promptItem as PromptItem,
+            promptItem,
           ]);
         }
 
         // Set current prompt file
         this.currentPromptFile = {
           filePath: generatedFileName,
-          promptFile: { prompts: [promptItem as PromptItem] },
+          promptFile: { prompts: [promptItem] },
         };
 
         // Execute immediately
@@ -1234,7 +1240,7 @@ export class FlightPathManager {
       } else {
         // Workflow exists: Append to end
         await this.promptQueue.appendPrompts(
-          [promptItem as PromptItem],
+          [promptItem],
           "Dashboard editor",
           "end"
         );
@@ -1265,7 +1271,7 @@ export class FlightPathManager {
           try {
             workingFilePath = await this.promptQueue.createWorkingFile(
               generatedFileName,
-              [promptItem as PromptItem],
+              [promptItem],
               workspaceFolder
             );
             Log.info(
@@ -1284,29 +1290,26 @@ export class FlightPathManager {
         }
 
         // Create new single-prompt workflow (idle)
-        this.promptQueue.loadPrompts(
-          [promptItem as PromptItem],
-          workingFilePath
-        );
+        this.promptQueue.loadPrompts([promptItem], workingFilePath);
 
         // Update dashboard
         if (this.dashboardProvider) {
           this.dashboardProvider.updateFileSelected(generatedFileName, [
-            promptItem as PromptItem,
+            promptItem,
           ]);
         }
 
         // Set current prompt file
         this.currentPromptFile = {
           filePath: generatedFileName,
-          promptFile: { prompts: [promptItem as PromptItem] },
+          promptFile: { prompts: [promptItem] },
         };
 
         // Don't execute - leave in idle state
       } else {
         // Workflow exists: Append to end (preserve current state)
         await this.promptQueue.appendPrompts(
-          [promptItem as PromptItem],
+          [promptItem],
           "Dashboard editor",
           "end"
         );
@@ -1337,31 +1340,8 @@ export class FlightPathManager {
   ): Promise<void> {
     const updates: Partial<PromptItem> = {
       prompt: text,
+      ...this.buildPromptItemProperties(properties),
     };
-
-    // Apply property updates (same logic as executeEphemeralPrompt)
-    if (properties.provider) {
-      updates.provider = properties.provider as Provider;
-    }
-    if (properties.model) {
-      updates.model = properties.model;
-    }
-    if (properties.agent) {
-      updates.agent = properties.agent;
-    }
-    // Apply global default for newChatSession if not explicitly set
-    if (properties.newChatSession !== undefined) {
-      updates.newChatSession = properties.newChatSession;
-    } else {
-      updates.newChatSession =
-        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
-    }
-    if (properties.allowDynamicExtension !== undefined) {
-      updates.allowDynamicExtension = properties.allowDynamicExtension;
-    }
-    if (properties.endCondition) {
-      updates.endCondition = properties.endCondition;
-    }
 
     this.promptQueue.updatePrompt(index, updates);
 
