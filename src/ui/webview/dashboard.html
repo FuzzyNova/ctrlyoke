@@ -36,9 +36,16 @@
           <button
             id="new-workflow"
             class="btn-secondary btn-small"
-            title="Create workflow from template"
+            title="Clear current workflow and start blank"
           >
             New Workflow
+          </button>
+          <button
+            id="from-template"
+            class="btn-secondary btn-small"
+            title="Create workflow from template"
+          >
+            From Template...
           </button>
         </div>
 
@@ -352,29 +359,20 @@ Please fix the issues."
               <div class="editor-actions">
                 <!-- New Prompt Mode Buttons -->
                 <button
-                  id="btn-editor-run"
+                  id="btn-editor-send"
                   class="btn-primary"
-                  title="Create new workflow and run"
+                  title="Send and run"
                 >
-                  Run
+                  <i class="codicon codicon-send"></i>
+                  Send
                 </button>
                 <button
-                  id="btn-editor-append"
+                  id="btn-editor-add"
                   class="btn-secondary"
-                  title="Append to end of queue"
-                  disabled
+                  title="Add to queue"
                 >
-                  <i class="custom-icon icon-append"></i>
-                  Append
-                </button>
-                <button
-                  id="btn-editor-append-next"
-                  class="btn-secondary"
-                  title="Insert after current prompt"
-                  disabled
-                >
-                  <i class="custom-icon icon-append-next"></i>
-                  Append Next
+                  <i class="codicon codicon-add"></i>
+                  Add
                 </button>
 
                 <!-- Edit Existing Mode Buttons (hidden by default) -->

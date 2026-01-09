@@ -110,6 +110,12 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    // Handle clear workflow
+    if (message.type === MESSAGE_TYPES.CLEAR_WORKFLOW) {
+      this.handleClearWorkflow();
+      return;
+    }
+
     // Handle editor messages
     if (message.type === MESSAGE_TYPES.EXECUTE_PROMPT) {
       this.handleExecutePrompt(message);
@@ -334,6 +340,22 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
+  }
+
+  /**
+   * Handle clear workflow request from dashboard
+   * Creates a blank workflow (no prompts, idle state)
+   */
+  private handleClearWorkflow(): void {
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    // Clear current workflow by sending empty prompts array
+    this.updateFileSelected("Blank Workflow", []);
+
+    Log.info("Workflow cleared, ready for new prompts");
   }
 
   // ============================================================================

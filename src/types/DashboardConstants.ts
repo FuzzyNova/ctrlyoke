@@ -35,6 +35,7 @@ export const MESSAGE_TYPES = {
   SELECT_FILE: "selectFile",
   APPEND_FILE: "appendFile",
   EDIT_FILE: "editFile",
+  CLEAR_WORKFLOW: "clearWorkflow", // Clear current workflow, start blank
   RUN: "run",
   PAUSE: "pause",
   RESUME: "resume",
@@ -44,7 +45,7 @@ export const MESSAGE_TYPES = {
   CHANGE_PROVIDER: "changeProvider",
 
   // Prompt Editor - Webview -> Extension
-  EXECUTE_PROMPT: "executePrompt", // Run/Append/AppendNext with properties
+  EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
   UPDATE_PROMPT: "updatePrompt", // Update existing prompt in queue
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
@@ -90,6 +91,14 @@ export const EXECUTION_STATES = {
   CANCELLING: "cancelling", // Kill signal sent, waiting for process to die
   COMPLETED: "completed",
   ERROR: "error",
+} as const;
+
+// ============================================================================
+// ACTION TYPES - Prompt editor actions (Send/Add)
+// ============================================================================
+export const ACTION_TYPES = {
+  SEND: "send", // Append + ensure workflow runs
+  ADD: "add", // Append only, preserve current state
 } as const;
 
 // ============================================================================
@@ -229,3 +238,4 @@ export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
+export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];

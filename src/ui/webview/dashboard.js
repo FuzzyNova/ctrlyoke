@@ -8,6 +8,7 @@
     MESSAGE_TYPES,
     EXECUTION_STATES,
     STEP_STATUS,
+    ACTION_TYPES,
     PROVIDER_IDS,
     DEFAULT_MODELS,
     CLAUDE_CLI_MODELS,
@@ -77,6 +78,7 @@
     loadFileBtn: document.getElementById("load-file"),
     appendFileBtn: document.getElementById("append-file"),
     newWorkflowBtn: document.getElementById("new-workflow"),
+    fromTemplateBtn: document.getElementById("from-template"),
     runBtn: document.getElementById("btn-run"),
     pauseBtn: document.getElementById("btn-pause"),
     stopBtn: document.getElementById("btn-stop"),
@@ -133,9 +135,8 @@
     propertiesDrawer: document.getElementById("properties-drawer"),
     btnCloseDrawer: document.getElementById("btn-close-drawer"),
     // Editor action buttons
-    btnEditorRun: document.getElementById("btn-editor-run"),
-    btnEditorAppend: document.getElementById("btn-editor-append"),
-    btnEditorAppendNext: document.getElementById("btn-editor-append-next"),
+    btnEditorSend: document.getElementById("btn-editor-send"),
+    btnEditorAdd: document.getElementById("btn-editor-add"),
     btnEditorCancel: document.getElementById("btn-editor-cancel"),
     btnEditorUpdate: document.getElementById("btn-editor-update"),
     btnEditorDelete: document.getElementById("btn-editor-delete"),
@@ -319,6 +320,10 @@
   });
 
   elements.newWorkflowBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+  });
+
+  elements.fromTemplateBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
   });
 
@@ -653,9 +658,7 @@
   function handleFileSelected(fileName, prompts) {
     // This handler is ONLY for IDLE state (user selects new file via Select button)
     // Queue extension during execution uses handleQueueExtended()
-    console.log(
-      `Dashboard: New file selected (${fileName}), resetting state`
-    );
+    console.log(`Dashboard: New file selected (${fileName}), resetting state`);
 
     state.fileName = fileName;
     state.prompts = prompts.map((p, i) => createPromptItem(p, i));
@@ -762,6 +765,7 @@
     updateWorkflowStatus(fileName, EXECUTION_STATES.RUNNING);
     updateLoadButtonState();
     updateAppendButtonState();
+    updateButtonTooltips();
 
     updateControls();
     updatePromptCounter();
@@ -772,6 +776,7 @@
     state.executionState = executionState;
     updateWorkflowStatus(state.fileName, executionState);
     updateLoadButtonState();
+    updateButtonTooltips();
     render();
   }
 
@@ -934,6 +939,7 @@
     updateWorkflowStatus(state.fileName, EXECUTION_STATES.COMPLETED);
     updateLoadButtonState();
     updateAppendButtonState();
+    updateButtonTooltips();
     updateControls();
   }
 
@@ -2013,16 +2019,12 @@
     });
 
     // Editor action buttons
-    elements.btnEditorRun.addEventListener("click", () => {
-      executePrompt("run");
+    elements.btnEditorSend.addEventListener("click", () => {
+      executePrompt(ACTION_TYPES.SEND);
     });
 
-    elements.btnEditorAppend.addEventListener("click", () => {
-      executePrompt("append");
-    });
-
-    elements.btnEditorAppendNext.addEventListener("click", () => {
-      executePrompt("appendNext");
+    elements.btnEditorAdd.addEventListener("click", () => {
+      executePrompt(ACTION_TYPES.ADD);
     });
 
     elements.btnEditorUpdate.addEventListener("click", updateExistingPrompt);
@@ -2211,15 +2213,15 @@
       elements.promptNameInput.style.display = ""; // Show name input in new mode
       elements.btnNewPrompt.style.display = "none"; // Hide New Prompt button
 
-      // Show new prompt buttons (all always enabled - they create queue if none exists)
-      elements.btnEditorRun.style.display = "";
-      elements.btnEditorRun.disabled = false;
+      // Show Send/Add buttons (always enabled)
+      elements.btnEditorSend.style.display = "";
+      elements.btnEditorSend.disabled = false;
 
-      elements.btnEditorAppend.style.display = "";
-      elements.btnEditorAppend.disabled = false;
+      elements.btnEditorAdd.style.display = "";
+      elements.btnEditorAdd.disabled = false;
 
-      elements.btnEditorAppendNext.style.display = "";
-      elements.btnEditorAppendNext.disabled = false;
+      // Update tooltips based on workflow state
+      updateButtonTooltips();
 
       // Hide editing buttons
       elements.btnEditorCancel.style.display = "none";
@@ -2231,10 +2233,9 @@
       elements.promptNameInput.style.display = "none"; // Hide name input in edit mode
       elements.btnNewPrompt.style.display = ""; // Show New Prompt button
 
-      // Hide new prompt buttons
-      elements.btnEditorRun.style.display = "none";
-      elements.btnEditorAppend.style.display = "none";
-      elements.btnEditorAppendNext.style.display = "none";
+      // Hide Send/Add buttons
+      elements.btnEditorSend.style.display = "none";
+      elements.btnEditorAdd.style.display = "none";
 
       // Show editing buttons
       elements.btnEditorCancel.style.display = "";
@@ -2249,8 +2250,38 @@
   }
 
   /**
-   * Execute a prompt (Run/Append/AppendNext)
-   * @param {string} action - 'run', 'append', or 'appendNext'
+   * Update button tooltips based on current workflow state
+   */
+  function updateButtonTooltips() {
+    const hasWorkflow = editorState.hasActiveQueue;
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isCompleted = state.executionState === EXECUTION_STATES.COMPLETED;
+    const isIdle =
+      state.executionState === EXECUTION_STATES.IDLE ||
+      state.executionState === EXECUTION_STATES.READY;
+
+    if (!hasWorkflow) {
+      // No workflow: Send creates new and runs, Add creates new without running
+      elements.btnEditorSend.title = "Send to new workflow";
+      elements.btnEditorAdd.title = "Add to new workflow";
+    } else if (isIdle) {
+      // Idle workflow: Send appends and starts from beginning, Add just appends
+      elements.btnEditorSend.title = "Send and run workflow";
+      elements.btnEditorAdd.title = "Add to queue";
+    } else if (isRunning) {
+      // Running: Send appends and continues, Add just appends
+      elements.btnEditorSend.title = "Send to current workflow";
+      elements.btnEditorAdd.title = "Add to queue";
+    } else if (isCompleted) {
+      // Completed: Send appends and resumes, Add just appends
+      elements.btnEditorSend.title = "Send and resume workflow";
+      elements.btnEditorAdd.title = "Add to queue";
+    }
+  }
+
+  /**
+   * Execute a prompt (Send/Add)
+   * @param {string} action - ACTION_TYPES.SEND or ACTION_TYPES.ADD
    */
   function executePrompt(action) {
     const text = editorState.promptEditor

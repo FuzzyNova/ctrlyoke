@@ -17,6 +17,7 @@ import {
   Provider,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
+import { ACTION_TYPES, type ActionType } from "../types/DashboardConstants";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -1069,7 +1070,7 @@ export class FlightPathManager {
    * Execute an ephemeral prompt from the dashboard editor
    * @param text - Prompt text
    * @param properties - PromptItem properties (provider, model, etc.)
-   * @param action - 'run', 'append', or 'appendNext'
+   * @param action - 'send' (append + run) or 'add' (append only)
    */
   /**
    * Generate a workflow name from prompt text
@@ -1094,11 +1095,12 @@ export class FlightPathManager {
         .trim()
         .split(/\s+/)
         .slice(0, 5)
-        .map((word) =>
-          word
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
-            .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
+        .map(
+          (word) =>
+            word
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
+              .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
         )
         .filter((word) => word.length > 0);
 
@@ -1116,7 +1118,7 @@ export class FlightPathManager {
   async executeEphemeralPrompt(
     text: string,
     properties: any,
-    action: "run" | "append" | "appendNext",
+    action: ActionType,
     promptName?: string
   ): Promise<void> {
     // Generate timestamp components for both filename and ID
@@ -1173,16 +1175,23 @@ export class FlightPathManager {
       promptItem.endCondition = properties.endCondition;
     }
 
-    switch (action) {
-      case "run":
-        // Create working file for ephemeral prompt (required for MCP integration)
+    // Get current queue state to determine behavior
+    const currentState = this.promptQueue.getState();
+    const hasWorkflow = currentState.prompts.length > 0;
+    const isIdle = currentState.status === EXECUTION_STATES.IDLE;
+    const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
+
+    if (action === ACTION_TYPES.SEND) {
+      // SEND: Append + ensure workflow runs
+      if (!hasWorkflow) {
+        // No workflow: Create new workflow + run immediately
         let workingFilePath: string | undefined;
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
         if (workspaceFolder) {
           try {
             workingFilePath = await this.promptQueue.createWorkingFile(
-              generatedFileName, // Use generated name as original file (ephemeral)
+              generatedFileName,
               [promptItem as PromptItem],
               workspaceFolder
             );
@@ -1190,8 +1199,10 @@ export class FlightPathManager {
               `✅ Created working file for ephemeral prompt: ${workingFilePath}`
             );
           } catch (error) {
-            Log.error("Failed to create working file for ephemeral prompt:", error);
-            // Continue without working file (MCP won't work, but basic execution will)
+            Log.error(
+              "Failed to create working file for ephemeral prompt:",
+              error
+            );
           }
         } else {
           Log.warn(
@@ -1199,18 +1210,20 @@ export class FlightPathManager {
           );
         }
 
-        // Create new single-prompt workflow (replaces current queue)
-        this.promptQueue.loadPrompts([promptItem as PromptItem], workingFilePath);
+        // Create new single-prompt workflow
+        this.promptQueue.loadPrompts(
+          [promptItem as PromptItem],
+          workingFilePath
+        );
 
-        // Update dashboard with generated workflow name
+        // Update dashboard
         if (this.dashboardProvider) {
           this.dashboardProvider.updateFileSelected(generatedFileName, [
             promptItem as PromptItem,
           ]);
         }
 
-        // Set current prompt file with generated name
-        // Note: For ephemeral prompts, filePath is the generated name, not a real source file
+        // Set current prompt file
         this.currentPromptFile = {
           filePath: generatedFileName,
           promptFile: { prompts: [promptItem as PromptItem] },
@@ -1218,10 +1231,8 @@ export class FlightPathManager {
 
         // Execute immediately
         await this.executeLoadedPromptFile();
-        break;
-
-      case "append":
-        // Add to end of existing queue
+      } else {
+        // Workflow exists: Append to end
         await this.promptQueue.appendPrompts(
           [promptItem as PromptItem],
           "Dashboard editor",
@@ -1230,28 +1241,87 @@ export class FlightPathManager {
 
         // Notify dashboard
         if (this.dashboardProvider) {
-          const currentState = this.promptQueue.getState();
-          this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+          const updatedState = this.promptQueue.getState();
+          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
         }
-        break;
 
-      case "appendNext":
-        // Insert after current prompt
+        // If idle (never started): Start from beginning
+        // If completed: Resume execution
+        // If running: Continue (appending automatically continues)
+        if (isIdle || isCompleted) {
+          await this.executeLoadedPromptFile();
+        }
+      }
+
+      Log.info(`Send prompt (run): ${text.substring(0, 50)}...`);
+    } else {
+      // ADD: Append only, preserve current state
+      if (!hasWorkflow) {
+        // No workflow: Create new workflow (idle, don't run)
+        let workingFilePath: string | undefined;
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+        if (workspaceFolder) {
+          try {
+            workingFilePath = await this.promptQueue.createWorkingFile(
+              generatedFileName,
+              [promptItem as PromptItem],
+              workspaceFolder
+            );
+            Log.info(
+              `✅ Created working file for ephemeral prompt: ${workingFilePath}`
+            );
+          } catch (error) {
+            Log.error(
+              "Failed to create working file for ephemeral prompt:",
+              error
+            );
+          }
+        } else {
+          Log.warn(
+            "No workspace folder, skipping working file creation (MCP won't work)"
+          );
+        }
+
+        // Create new single-prompt workflow (idle)
+        this.promptQueue.loadPrompts(
+          [promptItem as PromptItem],
+          workingFilePath
+        );
+
+        // Update dashboard
+        if (this.dashboardProvider) {
+          this.dashboardProvider.updateFileSelected(generatedFileName, [
+            promptItem as PromptItem,
+          ]);
+        }
+
+        // Set current prompt file
+        this.currentPromptFile = {
+          filePath: generatedFileName,
+          promptFile: { prompts: [promptItem as PromptItem] },
+        };
+
+        // Don't execute - leave in idle state
+      } else {
+        // Workflow exists: Append to end (preserve current state)
         await this.promptQueue.appendPrompts(
           [promptItem as PromptItem],
           "Dashboard editor",
-          "next"
+          "end"
         );
 
         // Notify dashboard
         if (this.dashboardProvider) {
-          const currentState = this.promptQueue.getState();
-          this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+          const updatedState = this.promptQueue.getState();
+          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
         }
-        break;
-    }
 
-    Log.info(`Ephemeral prompt ${action}: ${text.substring(0, 50)}...`);
+        // Don't change execution state - just append
+      }
+
+      Log.info(`Add prompt (no run): ${text.substring(0, 50)}...`);
+    }
   }
 
   /**
