@@ -92,10 +92,16 @@ User types "Fix bug in auth.ts" and clicks:
 
 **Setting:**
 
-- `flightpath.createNewWorkflowFromEditor` (boolean, default: false)
-- Persists user's preference for checkbox default state
-- Checkbox state syncs with setting on load
-- Checkbox change updates setting
+- **REMOVED** - Setting was unnecessary complexity
+- Checkbox always defaults to unchecked (simple, predictable behavior)
+- Checkbox is a one-time action flag, not a persistent preference
+- After creating new workflow, checkbox auto-unchecks
+
+**Tooltip Behavior:**
+
+- **Enabled**: "Create new workflow instead of appending to current one"
+- **Disabled (running)**: "Can't create new workflow while running"
+- **Disabled (new/empty)**: "No workflow loaded yet"
 
 **Example Flows:**
 
@@ -161,6 +167,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
   } as const;
   ```
 - [ ] Update dashboard.js `executePrompt()` to send position based on state:
+
   ```javascript
   function executePrompt(action) {
     const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
@@ -178,6 +185,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
     });
   }
   ```
+
 - [ ] Update `FlightPathManager.executeEphemeralPrompt()` to handle positions:
   - `QUEUE`: Always `position: "end"`
   - `QUEUE_NEXT`: Always `position: "next"`
@@ -194,6 +202,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
     - Text: "Run Next"
     - Tooltip: "Add prompt next in queue (high priority)"
 - [ ] Implement dynamic button text in dashboard.js:
+
   ```javascript
   function updateEditorButtons() {
     const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
@@ -213,111 +222,23 @@ Scenario 2: User wants to quickly iterate on completed workflow
     queueButton.title = "Add prompt to end of queue";
   }
   ```
+
 - [ ] Call `updateEditorButtons()` on state changes (STATE_UPDATE message)
 - [ ] Test: Verify button text changes when workflow starts/stops
 - [ ] Test: Verify position behavior in all states
 
 ### Phase 3: New Workflow Checkbox
 
-- [ ] Add setting to package.json:
-  ```json
-  "flightpath.createNewWorkflowFromEditor": {
-    "type": "boolean",
-    "default": false,
-    "description": "Default state for 'New Workflow' checkbox in prompt editor"
-  }
-  ```
-- [ ] Add checkbox to HTML (dashboard.html):
-  ```html
-  <div class="editor-actions">
-    <label id="new-workflow-toggle" class="new-workflow-toggle" hidden>
-      <input type="checkbox" id="new-workflow-checkbox" />
-      <span>New Workflow</span>
-    </label>
-    <button id="btn-editor-queue">...</button>
-    <button id="btn-editor-run">...</button>
-  </div>
-  ```
-- [ ] Add CSS styling for checkbox (dashboard.css):
-
-  ```css
-  .new-workflow-toggle {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    margin-right: 8px;
-  }
-
-  .new-workflow-toggle[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  ```
-
-- [ ] Add checkbox state to dashboard.js:
-  ```javascript
-  let newWorkflowCheckbox = {
-    element: document.getElementById("new-workflow-checkbox"),
-    toggle: document.getElementById("new-workflow-toggle"),
-    defaultChecked: false, // from settings
-  };
-  ```
-- [ ] Implement visibility/enabled logic:
-  ```javascript
-  function updateNewWorkflowCheckbox() {
-    const hasWorkflow = state.prompts.length > 0;
-    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
-    const isNew = !editorState.hasActiveQueue || state.prompts.length === 0;
-
-    if (!hasWorkflow) {
-      // Hidden when no workflow
-      newWorkflowCheckbox.toggle.hidden = true;
-    } else if (isRunning || isNew) {
-      // Visible but disabled
-      newWorkflowCheckbox.toggle.hidden = false;
-      newWorkflowCheckbox.element.disabled = true;
-      newWorkflowCheckbox.element.checked = false;
-    } else {
-      // Enabled
-      newWorkflowCheckbox.toggle.hidden = false;
-      newWorkflowCheckbox.element.disabled = false;
-    }
-  }
-  ```
-- [ ] Call `updateNewWorkflowCheckbox()` on state changes
-- [ ] Update `executePrompt()` to read checkbox:
-  ```javascript
-  function executePrompt(action) {
-    const forceNewWorkflow = newWorkflowCheckbox.element.checked;
-
-    vscode.postMessage({
-      type: MESSAGE_TYPES.EXECUTE_PROMPT,
-      action,
-      forceNewWorkflow, // NEW parameter
-      // ...
-    });
-  }
-  ```
-- [ ] Load setting on INIT:
-  ```javascript
-  function handleInit(message) {
-    newWorkflowCheckbox.defaultChecked =
-      message.settings.createNewWorkflowFromEditor;
-    newWorkflowCheckbox.element.checked = newWorkflowCheckbox.defaultChecked;
-  }
-  ```
-- [ ] Save setting on checkbox change:
-  ```javascript
-  newWorkflowCheckbox.element.addEventListener("change", () => {
-    vscode.postMessage({
-      type: MESSAGE_TYPES.UPDATE_SETTING,
-      setting: "createNewWorkflowFromEditor",
-      value: newWorkflowCheckbox.element.checked,
-    });
-  });
-  ```
+- [x] Add checkbox to HTML (dashboard.html): ✅
+- [x] Add CSS styling for checkbox (dashboard.css): ✅
+- [x] Implement visibility/enabled logic with tooltips: ✅
+  - Hidden when no workflow
+  - Disabled with tooltip when running or new/empty
+  - Enabled with descriptive tooltip otherwise
+- [x] Call `updateNewWorkflowCheckbox()` on state changes: ✅
+- [x] Update `executePrompt()` to read checkbox: ✅
 - [ ] Update `FlightPathManager.executeEphemeralPrompt()`:
+
   ```typescript
   async executeEphemeralPrompt(
     text: string,
@@ -338,7 +259,9 @@ Scenario 2: User wants to quickly iterate on completed workflow
     // ... rest of existing logic
   }
   ```
+
 - [ ] Update `FlightPathDashboardProvider.handleExecutePrompt()`:
+
   ```typescript
   private async handleExecutePrompt(message: any): Promise<void> {
     const { text, properties, action, promptName, forceNewWorkflow } = message;
@@ -352,6 +275,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
     );
   }
   ```
+
 - [ ] Test: All checkbox states and behaviors
 
 ### Phase 4: Integration Testing

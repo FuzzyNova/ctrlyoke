@@ -135,12 +135,6 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Handle setting updates
-    if (message.type === MESSAGE_TYPES.UPDATE_SETTING) {
-      this.handleUpdateSetting(message);
-      return;
-    }
-
     // Handle CodeMirror editor messages
     if (message.type === MESSAGE_TYPES.REQUEST_COMPLETIONS) {
       this.handleCompletionRequest(
@@ -694,21 +688,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     // Build dynamic model options from ModelRegistry
     const modelOptions = this.buildModelOptions();
 
-    // Get settings to pass to webview
-    const config = vscode.workspace.getConfiguration("flightpath");
-    const createNewWorkflowFromEditor = config.get<boolean>(
-      "createNewWorkflowFromEditor",
-      false
-    );
-
     this.postMessage({
       type: MESSAGE_TYPES.INIT,
       data: {
         ...state,
         modelOptions,
-        settings: {
-          createNewWorkflowFromEditor,
-        },
       },
     });
   }
@@ -899,25 +883,6 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       console.error("🗑️ DashboardProvider.handleDeletePrompt: Error:", error);
       vscode.window.showErrorMessage(
         `Failed to delete prompt: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-
-  /**
-   * Handle UPDATE_SETTING message from webview
-   * Updates a VS Code setting
-   */
-  private async handleUpdateSetting(message: any): Promise<void> {
-    const { setting, value } = message;
-
-    try {
-      const config = vscode.workspace.getConfiguration("flightpath");
-      await config.update(setting, value, vscode.ConfigurationTarget.Global);
-      Log.debug(`Setting updated: flightpath.${setting} = ${value}`);
-    } catch (error) {
-      Log.error(`Failed to update setting ${setting}:`, error);
-      vscode.window.showErrorMessage(
-        `Failed to update setting: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

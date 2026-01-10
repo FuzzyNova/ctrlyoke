@@ -649,14 +649,6 @@
       modelOptions = { ...modelOptions, ...data.modelOptions };
     }
 
-    // Load settings
-    if (data.settings) {
-      if (data.settings.createNewWorkflowFromEditor !== undefined) {
-        elements.newWorkflowCheckbox.checked =
-          data.settings.createNewWorkflowFromEditor;
-      }
-    }
-
     state = { ...state, ...data };
     updateEditorButtons(); // Initialize button text/behavior
     updateNewWorkflowCheckbox(); // Initialize checkbox visibility
@@ -2155,16 +2147,6 @@
     elements.propEndRetries.addEventListener("input", saveEditorState);
     elements.propEndRetryPrompt.addEventListener("input", saveEditorState);
 
-    // New Workflow checkbox event handlers
-    elements.newWorkflowCheckbox.addEventListener("change", () => {
-      // Save setting when checkbox state changes
-      vscode.postMessage({
-        type: MESSAGE_TYPES.UPDATE_SETTING,
-        setting: "createNewWorkflowFromEditor",
-        value: elements.newWorkflowCheckbox.checked,
-      });
-    });
-
     // Update editor metadata initially
     updateEditorMetadata();
   }
@@ -2400,11 +2382,20 @@
       elements.newWorkflowToggle.hidden = false;
       elements.newWorkflowCheckbox.disabled = true;
       elements.newWorkflowCheckbox.checked = false;
+
+      // Set tooltip explaining why disabled
+      if (isRunning) {
+        elements.newWorkflowToggle.title =
+          "Can't create new workflow while running";
+      } else {
+        elements.newWorkflowToggle.title = "No workflow loaded yet";
+      }
     } else {
       // Enabled when workflow exists, has content, and not running
       elements.newWorkflowToggle.hidden = false;
       elements.newWorkflowCheckbox.disabled = false;
-      // Keep current checked state (from setting)
+      elements.newWorkflowToggle.title =
+        "Create new workflow instead of appending to current one";
     }
   }
 

@@ -52,9 +52,6 @@ export const MESSAGE_TYPES = {
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
 
-  // Settings - Webview -> Extension
-  UPDATE_SETTING: "updateSetting", // Update a VS Code setting
-
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_AGENT: "changeAgent",
