@@ -267,12 +267,6 @@ export class WorkflowExecutor {
             state: STEP_STATUS.COMPLETED,
             duration: duration,
           });
-          // Use live queue state to get accurate total (MCP may have extended queue)
-          const progress = this.promptQueue.getProgress();
-          context.dashboardProvider.updateProgress(
-            progress.current,
-            progress.total
-          );
           context.dashboardProvider.updateRetryAttempt(i, 0, 0);
         }
       } else {
@@ -282,17 +276,20 @@ export class WorkflowExecutor {
             state: STEP_STATUS.COMPLETED,
             duration: duration,
           });
-          // Use live queue state to get accurate total (MCP may have extended queue)
-          const progress = this.promptQueue.getProgress();
-          context.dashboardProvider.updateProgress(
-            progress.current,
-            progress.total
-          );
         }
       }
 
       // Mark current prompt as completed and move to next
       await this.promptQueue.completeCurrentAndMoveNext();
+
+      // Update progress after moving to next (progress.current = completed count)
+      if (context.dashboardProvider) {
+        const progress = this.promptQueue.getProgress();
+        context.dashboardProvider.updateProgress(
+          progress.current,
+          progress.total
+        );
+      }
 
       // Note: Queue extension now handled via MCP tools (flightpath_append_queue)
       // or user commands (Queue with FlightPath). The working file watcher in
