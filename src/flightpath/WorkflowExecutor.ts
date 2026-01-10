@@ -123,10 +123,12 @@ export class WorkflowExecutor {
       }
 
       // Check workflow execution time limit (unless unlimited mode or timeout disabled)
+      // Use live queue state for accurate total (MCP may have extended queue)
+      const liveProgress = this.promptQueue.getProgress();
       const shouldStop = await this.checkExecutionTimeLimit(
         dynamicConfig,
         i,
-        state.prompts.length
+        liveProgress.total
       );
       if (shouldStop) {
         break;
@@ -135,10 +137,10 @@ export class WorkflowExecutor {
       // Update dashboard step status to running
       this.updateDashboardForPromptStart(context, prompt, i);
 
-      // Update progress
-      integration.setWorkflowProgress(i + 1, state.prompts.length);
+      // Update progress - use live queue state for accurate total
+      integration.setWorkflowProgress(i + 1, liveProgress.total);
 
-      Log.info(`🚀 Executing prompt ${i + 1}/${state.prompts.length}`);
+      Log.info(`🚀 Executing prompt ${i + 1}/${liveProgress.total}`);
 
       // Record start time for this prompt
       const startTime = Date.now();
@@ -265,7 +267,12 @@ export class WorkflowExecutor {
             state: STEP_STATUS.COMPLETED,
             duration: duration,
           });
-          context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+          // Use live queue state to get accurate total (MCP may have extended queue)
+          const progress = this.promptQueue.getProgress();
+          context.dashboardProvider.updateProgress(
+            progress.current,
+            progress.total
+          );
           context.dashboardProvider.updateRetryAttempt(i, 0, 0);
         }
       } else {
@@ -275,7 +282,12 @@ export class WorkflowExecutor {
             state: STEP_STATUS.COMPLETED,
             duration: duration,
           });
-          context.dashboardProvider.updateProgress(i + 1, state.prompts.length);
+          // Use live queue state to get accurate total (MCP may have extended queue)
+          const progress = this.promptQueue.getProgress();
+          context.dashboardProvider.updateProgress(
+            progress.current,
+            progress.total
+          );
         }
       }
 
