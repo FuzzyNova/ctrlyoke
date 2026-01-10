@@ -137,11 +137,14 @@
     propertiesDrawer: document.getElementById("properties-drawer"),
     btnCloseDrawer: document.getElementById("btn-close-drawer"),
     // Editor action buttons
-    btnEditorSend: document.getElementById("btn-editor-send"),
-    btnEditorAdd: document.getElementById("btn-editor-add"),
+    btnEditorRun: document.getElementById("btn-editor-run"),
+    btnEditorQueue: document.getElementById("btn-editor-queue"),
     btnEditorCancel: document.getElementById("btn-editor-cancel"),
     btnEditorUpdate: document.getElementById("btn-editor-update"),
     btnEditorDelete: document.getElementById("btn-editor-delete"),
+    // New Workflow checkbox
+    newWorkflowCheckbox: document.getElementById("new-workflow-checkbox"),
+    newWorkflowToggle: document.getElementById("new-workflow-toggle"),
     // Confirmation modal
     confirmModal: document.getElementById("confirm-modal"),
     confirmTitle: document.getElementById("confirm-title"),
@@ -646,7 +649,17 @@
       modelOptions = { ...modelOptions, ...data.modelOptions };
     }
 
+    // Load settings
+    if (data.settings) {
+      if (data.settings.createNewWorkflowFromEditor !== undefined) {
+        elements.newWorkflowCheckbox.checked =
+          data.settings.createNewWorkflowFromEditor;
+      }
+    }
+
     state = { ...state, ...data };
+    updateEditorButtons(); // Initialize button text/behavior
+    updateNewWorkflowCheckbox(); // Initialize checkbox visibility
     render();
   }
 
@@ -682,6 +695,7 @@
     // Update editor state
     editorState.hasActiveQueue = prompts.length > 0;
     updateEditorMode();
+    updateNewWorkflowCheckbox(); // Update checkbox visibility
 
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.IDLE);
@@ -784,6 +798,8 @@
     state.executionState = executionState;
     updateWorkflowStatus(state.fileName, executionState);
     updateLoadButtonState();
+    updateEditorButtons(); // Update button text and behavior based on state
+    updateNewWorkflowCheckbox(); // Update checkbox visibility
     updateButtonTooltips();
     render();
   }
@@ -997,6 +1013,7 @@
     // Update editor state - queue was extended so we definitely have an active queue
     editorState.hasActiveQueue = state.prompts.length > 0;
     updateEditorMode();
+    updateNewWorkflowCheckbox(); // Update checkbox visibility
 
     // Re-render the prompts list to show all prompts in correct order
     renderPromptsList();
@@ -2091,11 +2108,11 @@
     });
 
     // Editor action buttons
-    elements.btnEditorSend.addEventListener("click", () => {
+    elements.btnEditorRun.addEventListener("click", () => {
       executePrompt(ACTION_TYPES.RUN);
     });
 
-    elements.btnEditorAdd.addEventListener("click", () => {
+    elements.btnEditorQueue.addEventListener("click", () => {
       executePrompt(ACTION_TYPES.QUEUE);
     });
 
@@ -2137,6 +2154,16 @@
     elements.propEndTimeout.addEventListener("input", saveEditorState);
     elements.propEndRetries.addEventListener("input", saveEditorState);
     elements.propEndRetryPrompt.addEventListener("input", saveEditorState);
+
+    // New Workflow checkbox event handlers
+    elements.newWorkflowCheckbox.addEventListener("change", () => {
+      // Save setting when checkbox state changes
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_SETTING,
+        setting: "createNewWorkflowFromEditor",
+        value: elements.newWorkflowCheckbox.checked,
+      });
+    });
 
     // Update editor metadata initially
     updateEditorMetadata();
@@ -2288,12 +2315,12 @@
       elements.promptNameInput.style.display = ""; // Show name input in new mode
       elements.btnNewPrompt.style.display = "none"; // Hide New Prompt button
 
-      // Show Send/Add buttons (always enabled)
-      elements.btnEditorSend.style.display = "";
-      elements.btnEditorSend.disabled = false;
+      // Show Run/Queue buttons (always enabled)
+      elements.btnEditorRun.style.display = "";
+      elements.btnEditorRun.disabled = false;
 
-      elements.btnEditorAdd.style.display = "";
-      elements.btnEditorAdd.disabled = false;
+      elements.btnEditorQueue.style.display = "";
+      elements.btnEditorQueue.disabled = false;
 
       // Update tooltips based on workflow state
       updateButtonTooltips();
@@ -2308,9 +2335,9 @@
       elements.promptNameInput.style.display = "none"; // Hide name input in edit mode
       elements.btnNewPrompt.style.display = ""; // Show New Prompt button
 
-      // Hide Send/Add buttons
-      elements.btnEditorSend.style.display = "none";
-      elements.btnEditorAdd.style.display = "none";
+      // Hide Run/Queue buttons
+      elements.btnEditorRun.style.display = "none";
+      elements.btnEditorQueue.style.display = "none";
 
       // Show editing buttons
       elements.btnEditorCancel.style.display = "";
@@ -2321,6 +2348,63 @@
 
       elements.btnEditorDelete.style.display = "";
       elements.btnEditorDelete.disabled = false;
+    }
+  }
+
+  /**
+   * Update editor button text and behavior based on execution state
+   * Called on state changes to differentiate Queue/Run when running
+   */
+  function updateEditorButtons() {
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+
+    if (isRunning) {
+      // When running: Run button changes to "Run Next" (insert after current)
+      elements.btnEditorRun.innerHTML =
+        '<i class="codicon codicon-send"></i>\n                  Run Next';
+      elements.btnEditorRun.title = "Add prompt next in queue (high priority)";
+
+      // Queue button stays the same (append to end)
+      elements.btnEditorQueue.innerHTML =
+        '<i class="codicon codicon-add"></i>\n                  Queue';
+      elements.btnEditorQueue.title = "Add prompt to end of queue";
+    } else {
+      // Not running: Run button shows normal "Run" (append to end + run)
+      elements.btnEditorRun.innerHTML =
+        '<i class="codicon codicon-send"></i>\n                  Run';
+
+      // Update tooltip based on state (handled by updateButtonTooltips)
+      // Queue button stays the same
+      elements.btnEditorQueue.innerHTML =
+        '<i class="codicon codicon-add"></i>\n                  Queue';
+
+      // Let updateButtonTooltips handle the detailed tooltip text
+      updateButtonTooltips();
+    }
+  }
+
+  /**
+   * Update New Workflow checkbox visibility and enabled state
+   * Called on state changes to show/hide/enable/disable checkbox
+   */
+  function updateNewWorkflowCheckbox() {
+    const hasWorkflow = state.prompts.length > 0;
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isNew = !editorState.hasActiveQueue || state.prompts.length === 0;
+
+    if (!hasWorkflow) {
+      // Hidden when no workflow
+      elements.newWorkflowToggle.hidden = true;
+    } else if (isRunning || isNew) {
+      // Visible but disabled when running or workflow is new/empty
+      elements.newWorkflowToggle.hidden = false;
+      elements.newWorkflowCheckbox.disabled = true;
+      elements.newWorkflowCheckbox.checked = false;
+    } else {
+      // Enabled when workflow exists, has content, and not running
+      elements.newWorkflowToggle.hidden = false;
+      elements.newWorkflowCheckbox.disabled = false;
+      // Keep current checked state (from setting)
     }
   }
 
@@ -2336,26 +2420,26 @@
       state.executionState === EXECUTION_STATES.READY;
 
     if (!hasWorkflow) {
-      // No workflow: Queue & Run creates new and runs, Queue creates new without running
-      elements.btnEditorSend.title = "Queue to new workflow and run";
-      elements.btnEditorAdd.title = "Queue to new workflow";
+      // No workflow: Run creates new and runs, Queue creates new without running
+      elements.btnEditorRun.title = "Queue to new workflow and run";
+      elements.btnEditorQueue.title = "Queue to new workflow";
     } else if (isIdle) {
-      // Idle workflow: Queue & Run queues and starts from beginning, Queue just queues
-      elements.btnEditorSend.title = "Queue and run workflow";
-      elements.btnEditorAdd.title = "Add prompt to execution queue";
+      // Idle workflow: Run queues and starts from beginning, Queue just queues
+      elements.btnEditorRun.title = "Queue and run workflow";
+      elements.btnEditorQueue.title = "Add prompt to execution queue";
     } else if (isRunning) {
-      // Running: Queue & Run queues and continues, Queue just queues
-      elements.btnEditorSend.title = "Queue to current workflow";
-      elements.btnEditorAdd.title = "Add prompt to execution queue";
+      // Running: Run queues and continues, Queue just queues
+      elements.btnEditorRun.title = "Queue to current workflow";
+      elements.btnEditorQueue.title = "Add prompt to execution queue";
     } else if (isCompleted) {
-      // Completed: Queue & Run queues and resumes, Queue just queues
-      elements.btnEditorSend.title = "Queue and resume workflow";
-      elements.btnEditorAdd.title = "Add prompt to execution queue";
+      // Completed: Run queues and resumes, Queue just queues
+      elements.btnEditorRun.title = "Queue and resume workflow";
+      elements.btnEditorQueue.title = "Add prompt to execution queue";
     }
   }
 
   /**
-   * Execute a prompt (Send/Add)
+   * Execute a prompt (Run/Queue)
    * @param {string} action - ACTION_TYPES.RUN or ACTION_TYPES.QUEUE
    */
   function executePrompt(action) {
@@ -2370,15 +2454,31 @@
     const properties = getPropertyValues();
     const promptName = elements.promptNameInput.value.trim();
 
+    // Determine final action based on state
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    let finalAction = action;
+
+    if (isRunning && action === ACTION_TYPES.RUN) {
+      // When running, Run button should insert next (high priority)
+      finalAction = ACTION_TYPES.RUN_NEXT;
+    }
+    // Queue always appends to end (no change needed for QUEUE action)
+
+    // Check if user wants to force new workflow
+    const forceNewWorkflow =
+      elements.newWorkflowCheckbox.checked &&
+      !elements.newWorkflowCheckbox.disabled;
+
     vscode.postMessage({
       type: MESSAGE_TYPES.EXECUTE_PROMPT,
       text,
       properties,
-      action,
+      action: finalAction,
       promptName, // Include user-entered prompt name
+      forceNewWorkflow, // Include new workflow flag
     });
 
-    // Clear editor after all actions (Run/Append/AppendNext)
+    // Clear editor after all actions (Run/Queue/RunNext)
     // User can click the prompt in the queue to edit it further
     if (editorState.promptEditor) {
       editorState.promptEditor.clear();

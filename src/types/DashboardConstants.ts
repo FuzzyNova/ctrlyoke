@@ -52,6 +52,9 @@ export const MESSAGE_TYPES = {
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
 
+  // Settings - Webview -> Extension
+  UPDATE_SETTING: "updateSetting", // Update a VS Code setting
+
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_AGENT: "changeAgent",
@@ -98,8 +101,10 @@ export const EXECUTION_STATES = {
 // ACTION TYPES - Prompt editor actions (Run/Queue)
 // ============================================================================
 export const ACTION_TYPES = {
-  RUN: "run", // Append + ensure workflow runs
-  QUEUE: "queue", // Append only, preserve current state
+  RUN: "run", // Append to end + ensure workflow runs
+  QUEUE: "queue", // Append to end, preserve current state
+  RUN_NEXT: "runNext", // Append next (after current) + ensure workflow runs
+  QUEUE_NEXT: "queueNext", // Append next (after current), preserve current state
 } as const;
 
 // ============================================================================

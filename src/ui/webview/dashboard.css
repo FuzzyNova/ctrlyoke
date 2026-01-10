@@ -1423,7 +1423,36 @@ button:disabled {
 .editor-actions {
   display: flex;
   gap: var(--spacing-sm);
+  align-items: center;
   justify-content: flex-end;
+}
+
+/* New Workflow checkbox */
+.new-workflow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-right: var(--spacing-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.new-workflow-toggle[hidden] {
+  display: none;
+}
+
+.new-workflow-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.new-workflow-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.new-workflow-toggle input[type="checkbox"]:disabled + span {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Align codicons with text in buttons */

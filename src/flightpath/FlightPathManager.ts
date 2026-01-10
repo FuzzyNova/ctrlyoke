@@ -1187,7 +1187,8 @@ export class FlightPathManager {
     text: string,
     properties: any,
     action: ActionType,
-    promptName?: string
+    promptName?: string,
+    forceNewWorkflow: boolean = false
   ): Promise<void> {
     // Generate timestamp components for both filename and ID
     const now = new Date();
@@ -1220,14 +1221,35 @@ export class FlightPathManager {
       ...this.buildPromptItemProperties(properties),
     };
 
+    // If forceNewWorkflow is true, clear current workflow first
+    if (forceNewWorkflow) {
+      Log.info("Force new workflow requested - clearing current workflow");
+      this.clearWorkflow();
+    }
+
     // Get current queue state to determine behavior
     const currentState = this.promptQueue.getState();
     const hasWorkflow = currentState.prompts.length > 0;
     const isIdle = currentState.status === EXECUTION_STATES.IDLE;
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
-    if (action === ACTION_TYPES.RUN) {
-      // RUN: Append + ensure workflow runs
+    // Determine position (end vs next)
+    let position: "end" | "next" = "end";
+    let shouldRun = false;
+
+    if (action === ACTION_TYPES.RUN || action === ACTION_TYPES.RUN_NEXT) {
+      shouldRun = true;
+      position = action === ACTION_TYPES.RUN_NEXT ? "next" : "end";
+    } else if (
+      action === ACTION_TYPES.QUEUE ||
+      action === ACTION_TYPES.QUEUE_NEXT
+    ) {
+      shouldRun = false;
+      position = action === ACTION_TYPES.QUEUE_NEXT ? "next" : "end";
+    }
+
+    if (shouldRun) {
+      // RUN or RUN_NEXT: Append + ensure workflow runs
       if (!hasWorkflow) {
         // No workflow: Create new workflow + run immediately
         let workingFilePath: string | undefined;
@@ -1274,11 +1296,11 @@ export class FlightPathManager {
         // Execute immediately
         await this.executeLoadedPromptFile();
       } else {
-        // Workflow exists: Append to end
+        // Workflow exists: Append with specified position (end or next)
         await this.promptQueue.appendPrompts(
           [promptItem],
           "Dashboard editor",
-          "end"
+          position
         );
 
         // Notify dashboard
@@ -1298,9 +1320,11 @@ export class FlightPathManager {
         }
       }
 
-      Log.info(`Send prompt (run): ${text.substring(0, 50)}...`);
+      Log.info(
+        `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
+      );
     } else {
-      // QUEUE: Append only, preserve current state
+      // QUEUE or QUEUE_NEXT: Append only, preserve current state
       if (!hasWorkflow) {
         // No workflow: Create new workflow (idle, don't run)
         let workingFilePath: string | undefined;
@@ -1346,11 +1370,11 @@ export class FlightPathManager {
 
         // Don't execute - leave in idle state
       } else {
-        // Workflow exists: Append to end (preserve current state)
+        // Workflow exists: Append with specified position (preserve current state)
         await this.promptQueue.appendPrompts(
           [promptItem],
           "Dashboard editor",
-          "end"
+          position
         );
 
         // Notify dashboard
@@ -1362,7 +1386,9 @@ export class FlightPathManager {
         // Don't change execution state - just append
       }
 
-      Log.info(`Add prompt (no run): ${text.substring(0, 50)}...`);
+      Log.info(
+        `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
+      );
     }
   }
 

@@ -989,6 +989,13 @@
           "description": "[Dynamic Queue] Show notification when AI extends the prompt queue",
           "markdownDescription": "Show notification when the AI extends the prompt queue during workflow execution."
         },
+        "flightpath.createNewWorkflowFromEditor": {
+          "order": 605,
+          "type": "boolean",
+          "default": false,
+          "description": "[Prompt Editor] Default state for 'New Workflow' checkbox",
+          "markdownDescription": "When enabled, the **New Workflow** checkbox in the prompt editor will be checked by default. This determines whether prompts create a new workflow or append to the current one."
+        },
         "flightpath.autoLoadRecentSession": {
           "order": 700,
           "type": "boolean",

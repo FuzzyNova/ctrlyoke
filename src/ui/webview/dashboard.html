@@ -355,9 +355,17 @@ Please fix the issues."
               </div>
 
               <div class="editor-actions">
+                <label
+                  id="new-workflow-toggle"
+                  class="new-workflow-toggle"
+                  hidden
+                >
+                  <input type="checkbox" id="new-workflow-checkbox" />
+                  <span>New Workflow</span>
+                </label>
                 <!-- New Prompt Mode Buttons -->
                 <button
-                  id="btn-editor-add"
+                  id="btn-editor-queue"
                   class="btn-secondary"
                   title="Add prompt to execution queue"
                 >
@@ -365,7 +373,7 @@ Please fix the issues."
                   Queue
                 </button>
                 <button
-                  id="btn-editor-send"
+                  id="btn-editor-run"
                   class="btn-primary"
                   title="Add to queue and start execution"
                 >
