@@ -1288,10 +1288,11 @@ export class FlightPathManager {
         }
 
         // If idle (never started): Start from beginning
-        // If completed: Resume execution
+        // If completed: Resume execution (continueFromCurrent=true preserves history)
         // If running: Continue (appending automatically continues)
         if (isIdle || isCompleted) {
-          await this.executeLoadedPromptFile();
+          // When resuming completed queue or continuing idle queue, preserve existing state
+          await this.executeLoadedPromptFile(undefined, true);
         }
       }
 

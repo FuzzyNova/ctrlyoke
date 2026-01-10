@@ -26,10 +26,11 @@ import {
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
+import { FlightPathManager } from "../flightpath/FlightPathManager";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-  private flightPathManager?: any; // Reference to manager (set after construction to avoid circular dependency)
+  private flightPathManager?: FlightPathManager;
   private templateManager: TemplateManager;
 
   // Webview path segments

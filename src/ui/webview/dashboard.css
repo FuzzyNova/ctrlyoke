@@ -1426,6 +1426,13 @@ button:disabled {
   justify-content: flex-end;
 }
 
+/* Align codicons with text in buttons */
+.editor-actions button .codicon {
+  vertical-align: middle;
+  margin-right: 2px;
+  transform: translateY(-1px);
+}
+
 /* ============================================================================
    PROPERTIES DRAWER
    ============================================================================ */

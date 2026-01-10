@@ -528,8 +528,7 @@
     if (!hasQueue) {
       elements.appendFileBtn.title = "New workflow (load a file first)";
     } else {
-      elements.appendFileBtn.title =
-        "Append prompts from a file to the current queue";
+      elements.appendFileBtn.title = "Queue prompts from a file";
     }
   }
 
@@ -954,36 +953,46 @@
 
   function handlePromptsExtended(prompts) {
     // Replace entire prompts array with new disk order (preserves MCP insertion positions)
-    // Map existing prompts by text to preserve their status/details
+    // Preserve all existing state: status, details, CLI outputs, retry states, status messages
     console.log(
-      `Dashboard: Prompts extended, replacing with ${prompts.length} prompts in disk order`
+      `Dashboard: Prompts extended from ${state.prompts.length} to ${prompts.length} prompts`
     );
 
-    const existingStatusMap = new Map();
-    state.prompts.forEach((p) => {
-      // Use prompt text as key (trim for consistency)
-      const key = p.text.trim();
-      existingStatusMap.set(key, {
-        status: p.status,
-        details: p.details,
-      });
+    const oldLength = state.prompts.length;
+    const newLength = prompts.length;
+
+    // Build map of existing prompts by index to preserve ALL state
+    const existingPromptsMap = new Map();
+    state.prompts.forEach((p, idx) => {
+      existingPromptsMap.set(idx, p);
     });
 
-    // Replace entire array, preserving statuses for matching prompts
-    state.prompts = prompts.map((p, i) => {
-      const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
-      const key = text.trim();
-      const existing = existingStatusMap.get(key);
+    // Build map of existing CLI outputs, retry states, and status messages by index
+    const existingOutputs = { ...state.cliOutputs };
+    const existingRetryStates = { ...state.retryStates };
+    const existingStatusMessages = { ...state.statusMessages };
 
-      return createPromptItem(
-        p,
-        i,
-        existing?.status || STEP_STATUS.PENDING,
-        existing?.details || {}
-      );
+    // Replace entire array, preserving existing prompts and creating new ones for appended items
+    state.prompts = prompts.map((p, i) => {
+      const existing = existingPromptsMap.get(i);
+
+      if (existing && i < oldLength) {
+        // Existing prompt - preserve ALL its state (status, details, outputs, etc.)
+        // Update the text in case it changed (e.g., via MCP edit)
+        const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
+        return {
+          ...existing,
+          text, // Update text to reflect any MCP edits
+        };
+      } else {
+        // New prompt (appended) - create fresh item
+        return createPromptItem(p, i, STEP_STATUS.PENDING, {});
+      }
     });
 
     state.totalSteps = state.prompts.length;
+    // CLI outputs, retry states, and status messages are already preserved via spread operators above
+    // (no need to reassign since we didn't clear them)
 
     // Update editor state - queue was extended so we definitely have an active queue
     editorState.hasActiveQueue = state.prompts.length > 0;
@@ -992,6 +1001,10 @@
     // Re-render the prompts list to show all prompts in correct order
     renderPromptsList();
     updatePromptCounter();
+
+    console.log(
+      `Dashboard: Preserved ${oldLength} existing prompts, added ${newLength - oldLength} new prompts`
+    );
   }
 
   /**
@@ -2323,21 +2336,21 @@
       state.executionState === EXECUTION_STATES.READY;
 
     if (!hasWorkflow) {
-      // No workflow: Send creates new and runs, Add creates new without running
-      elements.btnEditorSend.title = "Send to new workflow";
-      elements.btnEditorAdd.title = "Add to new workflow";
+      // No workflow: Queue & Run creates new and runs, Queue creates new without running
+      elements.btnEditorSend.title = "Queue to new workflow and run";
+      elements.btnEditorAdd.title = "Queue to new workflow";
     } else if (isIdle) {
-      // Idle workflow: Send appends and starts from beginning, Add just appends
-      elements.btnEditorSend.title = "Send and run workflow";
-      elements.btnEditorAdd.title = "Add to queue";
+      // Idle workflow: Queue & Run queues and starts from beginning, Queue just queues
+      elements.btnEditorSend.title = "Queue and run workflow";
+      elements.btnEditorAdd.title = "Add prompt to execution queue";
     } else if (isRunning) {
-      // Running: Send appends and continues, Add just appends
-      elements.btnEditorSend.title = "Send to current workflow";
-      elements.btnEditorAdd.title = "Add to queue";
+      // Running: Queue & Run queues and continues, Queue just queues
+      elements.btnEditorSend.title = "Queue to current workflow";
+      elements.btnEditorAdd.title = "Add prompt to execution queue";
     } else if (isCompleted) {
-      // Completed: Send appends and resumes, Add just appends
-      elements.btnEditorSend.title = "Send and resume workflow";
-      elements.btnEditorAdd.title = "Add to queue";
+      // Completed: Queue & Run queues and resumes, Queue just queues
+      elements.btnEditorSend.title = "Queue and resume workflow";
+      elements.btnEditorAdd.title = "Add prompt to execution queue";
     }
   }
 
