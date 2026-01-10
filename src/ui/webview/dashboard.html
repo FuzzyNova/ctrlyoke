@@ -351,9 +351,7 @@ Please fix the issues."
               </div>
 
               <div class="editor-metadata">
-                <span id="editor-char-count">0 characters</span>
-                <span class="metadata-separator">•</span>
-                <span id="editor-word-count">0 words</span>
+                <span id="editor-token-count">0 tokens</span>
               </div>
 
               <div class="editor-actions">
@@ -486,6 +484,8 @@ Please fix the issues."
 
     <!-- Load constants first (SINGLE SOURCE OF TRUTH) -->
     <script src="{{constantsUri}}"></script>
+    <!-- Load gpt-tokenizer (exposes window.gptTokenizer) -->
+    <script src="{{gptTokenizerUri}}"></script>
     <!-- Load Typo.js for spell checking (KEEP - needed for Electron) -->
     <script src="{{typoUri}}"></script>
     <!-- Load CodeMirror modules -->

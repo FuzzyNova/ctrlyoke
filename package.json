@@ -1077,6 +1077,7 @@
     "ajv": "^8.17.1",
     "chokidar": "^4.0.3",
     "codemirror": "^6.0.2",
+    "gpt-tokenizer": "^2.6.2",
     "js-yaml": "^4.1.1",
     "jsonschema": "^1.5.0",
     "tree-kill": "^1.2.2",

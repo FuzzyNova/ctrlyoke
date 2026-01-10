@@ -160,6 +160,11 @@ const copyWebviewPlugin = {
       if (fs.existsSync(srcWebview)) {
         const entries = fs.readdirSync(srcWebview, { withFileTypes: true });
         entries.forEach((entry) => {
+          // Skip gpt-tokenizer-bundle.js - it's bundled separately
+          if (entry.name === "gpt-tokenizer-bundle.js") {
+            return;
+          }
+
           const srcPath = path.join(srcWebview, entry.name);
           const outPath = path.join(outWebview, entry.name);
 
@@ -263,9 +268,32 @@ async function buildCodeMirror() {
   console.log("✓ CodeMirror bundle created");
 }
 
+/**
+ * Bundle gpt-tokenizer for webview use (exposes window.gptTokenizer)
+ */
+async function buildGptTokenizer() {
+  await esbuild.build({
+    entryPoints: ["src/ui/webview/gpt-tokenizer-bundle.js"],
+    bundle: true,
+    format: "iife", // Immediately Invoked Function Expression for browser
+    outfile: "out/ui/webview/gpt-tokenizer.js",
+    platform: "browser",
+    external: [], // Bundle gpt-tokenizer
+    minify: production,
+    sourcemap: !production,
+    target: ["es2020"],
+    logLevel: "info",
+  });
+
+  console.log("✓ GPT Tokenizer bundle created");
+}
+
 async function main() {
   // Build CodeMirror bundle first
   await buildCodeMirror();
+
+  // Build gpt-tokenizer bundle
+  await buildGptTokenizer();
 
   // Build main extension
   const ctx = await esbuild.context({

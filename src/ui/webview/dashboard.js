@@ -17,6 +17,9 @@
     END_CONDITION_PROPERTIES,
   } = window.FlightPathConstants;
 
+  // Import gpt-tokenizer from global scope (loaded via script tag)
+  const { encode } = window.gptTokenizer;
+
   // Model options per provider - populated dynamically from ModelRegistry via INIT message
   // Chat models come from VS Code LM API (full list)
   // CLI models come from `copilot help config` (subset)
@@ -117,8 +120,7 @@
     promptNameInput: document.getElementById("prompt-name-input"),
     btnNewPrompt: document.getElementById("btn-new-prompt"),
     promptEditor: document.getElementById("prompt-editor"),
-    editorCharCount: document.getElementById("editor-char-count"),
-    editorWordCount: document.getElementById("editor-word-count"),
+    editorTokenCount: document.getElementById("editor-token-count"),
     // Property controls
     propProvider: document.getElementById("prop-provider"),
     propModel: document.getElementById("prop-model"),
@@ -2128,7 +2130,7 @@
   }
 
   /**
-   * Update character and word count in editor metadata
+   * Update token count in editor metadata
    */
   function updateEditorMetadata(text) {
     // If no text provided, get it from the editor
@@ -2136,14 +2138,10 @@
       text = editorState.promptEditor ? editorState.promptEditor.getText() : "";
     }
 
-    const charCount = text.length;
-    const wordCount = text
-      .trim()
-      .split(/\s+/)
-      .filter((word) => word.length > 0).length;
+    // Count tokens using gpt-tokenizer (works for GPT-4, Claude models use similar tokenization)
+    const tokenCount = text.length > 0 ? encode(text).length : 0;
 
-    elements.editorCharCount.textContent = `${charCount} character${charCount !== 1 ? "s" : ""}`;
-    elements.editorWordCount.textContent = `${wordCount} word${wordCount !== 1 ? "s" : ""}`;
+    elements.editorTokenCount.textContent = `${tokenCount.toLocaleString()} token${tokenCount !== 1 ? "s" : ""}`;
   }
 
   /**

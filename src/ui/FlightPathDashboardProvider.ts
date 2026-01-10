@@ -725,6 +725,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const constantsUri = webview.asWebviewUri(
       this.getWebviewPath("DashboardConstants.js")
     );
+    const gptTokenizerUri = webview.asWebviewUri(
+      this.getWebviewPath("gpt-tokenizer.js")
+    );
     const scriptUri = webview.asWebviewUri(this.getWebviewPath("dashboard.js"));
     const styleUri = webview.asWebviewUri(this.getWebviewPath("dashboard.css"));
     const sharedStyleUri = webview.asWebviewUri(
@@ -773,6 +776,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     // Replace template placeholders with actual URIs
     html = html
       .replace(/\{\{constantsUri\}\}/g, constantsUri.toString())
+      .replace(/\{\{gptTokenizerUri\}\}/g, gptTokenizerUri.toString())
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
