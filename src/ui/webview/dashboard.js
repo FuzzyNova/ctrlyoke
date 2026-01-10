@@ -140,6 +140,12 @@
     btnEditorCancel: document.getElementById("btn-editor-cancel"),
     btnEditorUpdate: document.getElementById("btn-editor-update"),
     btnEditorDelete: document.getElementById("btn-editor-delete"),
+    // Confirmation modal
+    confirmModal: document.getElementById("confirm-modal"),
+    confirmTitle: document.getElementById("confirm-title"),
+    confirmMessage: document.getElementById("confirm-message"),
+    confirmOk: document.getElementById("confirm-ok"),
+    confirmCancel: document.getElementById("confirm-cancel"),
   };
 
   // Modal state
@@ -477,16 +483,16 @@
 
   // Helper: Extract workflow name from file path
   function getWorkflowName(filePath) {
-    if (!filePath) return "No workflow loaded";
+    if (!filePath) return "New Workflow";
     const fileName = filePath.split(/[/\\]/).pop(); // Get last segment
     return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, ""); // Remove extension
   }
 
   // Update workflow name and state display
   function updateWorkflowStatus(filePath, executionState) {
-    if (!filePath) {
-      // No workflow loaded - hide state separator and execution state
-      elements.workflowName.textContent = "No workflow loaded";
+    if (!filePath || filePath === "New Workflow") {
+      // Empty workflow - hide state separator and execution state
+      elements.workflowName.textContent = "New Workflow";
       elements.statusSeparator.style.display = "none";
       elements.executionState.style.display = "none";
     } else {
@@ -518,7 +524,7 @@
     elements.appendFileBtn.disabled = !hasQueue;
 
     if (!hasQueue) {
-      elements.appendFileBtn.title = "No workflow loaded (load a file first)";
+      elements.appendFileBtn.title = "New workflow (load a file first)";
     } else {
       elements.appendFileBtn.title =
         "Append prompts from a file to the current queue";
@@ -588,6 +594,9 @@
         break;
       case MESSAGE_TYPES.PROMPTS_EXTENDED:
         handlePromptsExtended(message.prompts);
+        break;
+      case MESSAGE_TYPES.PROMPT_DELETED:
+        handlePromptDeleted(message.fileName, message.prompts);
         break;
       // Modal messages
       case MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL:
@@ -981,6 +990,56 @@
     // Re-render the prompts list to show all prompts in correct order
     renderPromptsList();
     updatePromptCounter();
+  }
+
+  /**
+   * Handle PROMPT_DELETED message - a prompt was removed from the queue
+   * Preserves execution state if workflow is running
+   */
+  function handlePromptDeleted(fileName, prompts) {
+    console.log(
+      `[Dashboard] handlePromptDeleted: Received PROMPT_DELETED message, ${prompts.length} prompts remaining`,
+      { fileName, promptsCount: prompts.length }
+    );
+
+    // Update prompts list, preserving statuses for remaining prompts
+    const existingStatusMap = new Map();
+    state.prompts.forEach((p) => {
+      const key = p.text.trim();
+      existingStatusMap.set(key, {
+        status: p.status,
+        details: p.details,
+      });
+    });
+
+    state.prompts = prompts.map((p, i) => {
+      const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
+      const key = text.trim();
+      const existing = existingStatusMap.get(key);
+
+      return createPromptItem(
+        p,
+        i,
+        existing?.status || STEP_STATUS.PENDING,
+        existing?.details || {}
+      );
+    });
+
+    state.totalSteps = state.prompts.length;
+
+    // Update editor state
+    editorState.hasActiveQueue = state.prompts.length > 0;
+    updateEditorMode();
+
+    // Update UI
+    updateWorkflowStatus(fileName, state.executionState);
+    updateLoadButtonState();
+    updateAppendButtonState();
+    renderPromptsList();
+    updatePromptCounter();
+
+    // Note: We intentionally DON'T reset execution state, cliOutputs, or retryStates
+    // because the workflow might still be running. Those are preserved.
   }
 
   function render() {
@@ -2029,7 +2088,14 @@
 
     elements.btnEditorCancel.addEventListener("click", cancelEdit);
 
-    elements.btnEditorDelete.addEventListener("click", deletePrompt);
+    console.log(
+      "[Dashboard] Attaching delete button listener, button element:",
+      elements.btnEditorDelete
+    );
+    elements.btnEditorDelete.addEventListener("click", () => {
+      console.log("[Dashboard] Delete button clicked!");
+      deletePrompt();
+    });
 
     // Make prompts in the list clickable for editing
     elements.promptsList.addEventListener("click", (e) => {
@@ -2428,22 +2494,77 @@
    * Delete a prompt from the queue
    */
   function deletePrompt() {
-    if (editorState.selectedPromptIndex === null) return;
-
-    // Confirm deletion
-    const confirmed = confirm(
-      `Delete prompt ${editorState.selectedPromptIndex + 1}?`
+    console.log(
+      "[Dashboard] deletePrompt called, selectedPromptIndex:",
+      editorState.selectedPromptIndex
     );
 
-    if (confirmed) {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.DELETE_PROMPT,
-        index: editorState.selectedPromptIndex,
-      });
-
-      // Return to new prompt mode
-      cancelEdit();
+    if (editorState.selectedPromptIndex === null) {
+      console.warn(
+        "[Dashboard] Cannot delete - no prompt selected (selectedPromptIndex is null)"
+      );
+      return;
     }
+
+    // Show custom confirmation modal
+    showConfirmModal(
+      "Delete Prompt",
+      `Are you sure you want to delete prompt ${editorState.selectedPromptIndex + 1}?`,
+      () => {
+        // Confirmed - delete the prompt
+        console.log(
+          "[Dashboard] Delete confirmed, sending DELETE_PROMPT message for index:",
+          editorState.selectedPromptIndex
+        );
+        vscode.postMessage({
+          type: MESSAGE_TYPES.DELETE_PROMPT,
+          index: editorState.selectedPromptIndex,
+        });
+
+        // Return to new prompt mode
+        cancelEdit();
+      }
+    );
+  }
+
+  /**
+   * Show custom confirmation modal
+   * @param {string} title - Modal title
+   * @param {string} message - Confirmation message
+   * @param {Function} onConfirm - Callback when user clicks OK
+   */
+  function showConfirmModal(title, message, onConfirm) {
+    elements.confirmTitle.textContent = title;
+    elements.confirmMessage.textContent = message;
+    elements.confirmModal.hidden = false;
+
+    // Remove previous listeners to avoid duplicates
+    const newOkBtn = elements.confirmOk.cloneNode(true);
+    const newCancelBtn = elements.confirmCancel.cloneNode(true);
+    elements.confirmOk.replaceWith(newOkBtn);
+    elements.confirmCancel.replaceWith(newCancelBtn);
+    elements.confirmOk = newOkBtn;
+    elements.confirmCancel = newCancelBtn;
+
+    // OK button handler
+    elements.confirmOk.addEventListener("click", () => {
+      elements.confirmModal.hidden = true;
+      onConfirm();
+    });
+
+    // Cancel button handler
+    elements.confirmCancel.addEventListener("click", () => {
+      elements.confirmModal.hidden = true;
+    });
+
+    // Close on overlay click
+    elements.confirmModal.querySelector(".modal-overlay").addEventListener(
+      "click",
+      () => {
+        elements.confirmModal.hidden = true;
+      },
+      { once: true }
+    );
   }
 
   /**

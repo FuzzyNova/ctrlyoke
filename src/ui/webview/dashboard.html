@@ -50,7 +50,7 @@
         </div>
 
         <div id="workflow-status">
-          <span id="workflow-name">No workflow loaded</span>
+          <span id="workflow-name">New Workflow</span>
           <span
             id="status-separator"
             class="status-separator"
@@ -359,20 +359,20 @@ Please fix the issues."
               <div class="editor-actions">
                 <!-- New Prompt Mode Buttons -->
                 <button
-                  id="btn-editor-send"
-                  class="btn-primary"
-                  title="Send and run"
-                >
-                  <i class="codicon codicon-send"></i>
-                  Send
-                </button>
-                <button
                   id="btn-editor-add"
                   class="btn-secondary"
                   title="Add to queue"
                 >
                   <i class="codicon codicon-add"></i>
                   Add
+                </button>
+                <button
+                  id="btn-editor-send"
+                  class="btn-primary"
+                  title="Send and run"
+                >
+                  <i class="codicon codicon-send"></i>
+                  Send
                 </button>
 
                 <!-- Edit Existing Mode Buttons (hidden by default) -->
@@ -463,6 +463,23 @@ Please fix the issues."
               Create & Run
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation Modal (for delete, etc.) -->
+    <div id="confirm-modal" class="modal" hidden>
+      <div class="modal-overlay"></div>
+      <div class="modal-content modal-content-small">
+        <div class="modal-header">
+          <h2 id="confirm-title">Confirm</h2>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-message">Are you sure?</p>
+        </div>
+        <div class="modal-footer">
+          <button id="confirm-cancel" class="btn-secondary">Cancel</button>
+          <button id="confirm-ok" class="btn-primary">OK</button>
         </div>
       </div>
     </div>

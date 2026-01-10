@@ -908,6 +908,11 @@ button:disabled {
   animation: modalFadeIn 0.15s ease-out;
 }
 
+/* Smaller modal variant for confirmations */
+.modal-content-small {
+  max-width: 400px;
+}
+
 @keyframes modalFadeIn {
   from {
     opacity: 0;

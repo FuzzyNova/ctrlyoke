@@ -304,6 +304,17 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  public updatePromptDeleted(fileName: string, prompts: any[]): void {
+    console.log(
+      `🗑️ DashboardProvider.updatePromptDeleted: ${prompts.length} prompts remaining`
+    );
+    this.postMessage({
+      type: MESSAGE_TYPES.PROMPT_DELETED,
+      fileName,
+      prompts,
+    });
+  }
+
   public notifyQueueSizeLimitReached(
     currentSize: number,
     maxSize: number
@@ -344,7 +355,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
   /**
    * Handle clear workflow request from dashboard
-   * Creates a blank workflow (no prompts, idle state)
+   * Clears all workflow state (prompts, working file, current file reference)
    */
   private handleClearWorkflow(): void {
     if (!this.flightPathManager) {
@@ -352,8 +363,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Clear current workflow by sending empty prompts array
-    this.updateFileSelected("Blank Workflow", []);
+    // Clear workflow state in FlightPathManager
+    this.flightPathManager.clearWorkflow();
+
+    // Update dashboard to show empty state
+    this.updateFileSelected("New Workflow", []);
 
     Log.info("Workflow cleared, ready for new prompts");
   }
@@ -838,6 +852,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
    * Removes a prompt from the queue
    */
   private async handleDeletePrompt(message: any): Promise<void> {
+    console.log(
+      "🗑️ DashboardProvider.handleDeletePrompt: Received delete request for index:",
+      message.index
+    );
+
     if (!this.flightPathManager) {
       Log.error("FlightPathManager not initialized");
       return;
@@ -846,9 +865,16 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const { index } = message;
 
     try {
+      console.log(
+        "🗑️ DashboardProvider.handleDeletePrompt: Calling FlightPathManager.deletePromptFromQueue"
+      );
       await this.flightPathManager.deletePromptFromQueue(index);
+      console.log(
+        "🗑️ DashboardProvider.handleDeletePrompt: Delete completed successfully"
+      );
     } catch (error) {
       Log.error("Failed to delete prompt:", error);
+      console.error("🗑️ DashboardProvider.handleDeletePrompt: Error:", error);
       vscode.window.showErrorMessage(
         `Failed to delete prompt: ${error instanceof Error ? error.message : String(error)}`
       );

@@ -48,6 +48,7 @@ export class FlightPathManager {
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
   private dashboardReady: boolean = false; // Track dashboard initialization state
   private startPending: boolean = false; // Prevent duplicate workflow starts (race condition guard)
+  private lastKnownPromptCount: number = 0; // Track prompt count to detect MCP merges
 
   // New orchestration dependencies (injected)
   private promptFileLoader: PromptFileLoader;
@@ -534,7 +535,7 @@ export class FlightPathManager {
 
       // If no workflow is loaded (truly empty queue), treat as "Run with FlightPath"
       if (currentSize === 0) {
-        Log.info("No workflow loaded, treating queue as run");
+        Log.info("Empty workflow, treating queue as run");
         await this.executePromptFile(filePath);
         return;
       }
@@ -812,6 +813,23 @@ export class FlightPathManager {
   }
 
   /**
+   * Clear current workflow state
+   * Resets queue, clears current prompt file, and removes working file reference
+   */
+  clearWorkflow(): void {
+    // Clear current prompt file reference
+    this.currentPromptFile = undefined;
+
+    // Clear queue state (including working file path)
+    this.promptQueue.clearQueue();
+
+    // Reset tracked prompt count
+    this.lastKnownPromptCount = 0;
+
+    Log.info("Workflow state cleared");
+  }
+
+  /**
    * Get current queue state
    */
   getQueueState(): QueueState {
@@ -948,7 +966,25 @@ export class FlightPathManager {
     // Send execution state to dashboard
     if (this.dashboardProvider) {
       this.dashboardProvider.updateExecutionState(state.status);
+
+      // Detect if prompts were added externally (e.g., MCP merge)
+      // This happens when updateWorkingFile() detects new prompts on disk and merges them
+      if (state.prompts.length > this.lastKnownPromptCount) {
+        Log.info(
+          `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.prompts.length}. Notifying dashboard.`
+        );
+        this.dashboardProvider.updatePromptsExtended(state.prompts);
+
+        // Also update progress so the counter updates immediately
+        this.dashboardProvider.updateProgress(
+          state.currentIndex,
+          state.prompts.length
+        );
+      }
     }
+
+    // Update tracked prompt count
+    this.lastKnownPromptCount = state.prompts.length;
 
     // Auto-start execution if state is RUNNING but no execution is active
     // startWorkflowExecution() will prevent duplicate starts via startPending flag
@@ -1343,7 +1379,7 @@ export class FlightPathManager {
       ...this.buildPromptItemProperties(properties),
     };
 
-    this.promptQueue.updatePrompt(index, updates);
+    await this.promptQueue.updatePrompt(index, updates);
 
     // Notify dashboard
     if (this.dashboardProvider) {
@@ -1359,12 +1395,28 @@ export class FlightPathManager {
    * @param index - Prompt index
    */
   async deletePromptFromQueue(index: number): Promise<void> {
-    this.promptQueue.deletePrompt(index);
+    console.log(
+      `🗑️ FlightPathManager.deletePromptFromQueue: Deleting prompt at index ${index}`
+    );
 
-    // Notify dashboard
+    await this.promptQueue.deletePrompt(index);
+    console.log(
+      `🗑️ FlightPathManager.deletePromptFromQueue: PromptQueue.deletePrompt completed`
+    );
+
+    // Notify dashboard of deletion
     if (this.dashboardProvider) {
       const currentState = this.promptQueue.getState();
-      this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+      const fileName = this.currentPromptFile
+        ? path.basename(this.currentPromptFile.filePath)
+        : "Untitled";
+      console.log(
+        `🗑️ FlightPathManager.deletePromptFromQueue: Notifying dashboard, ${currentState.prompts.length} prompts remaining`
+      );
+      this.dashboardProvider.updatePromptDeleted(
+        fileName,
+        currentState.prompts
+      );
     }
 
     Log.info(`Deleted prompt ${index}`);

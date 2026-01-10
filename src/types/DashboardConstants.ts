@@ -24,6 +24,7 @@ export const MESSAGE_TYPES = {
   QUEUE_EXTENDED: "queueExtended",
   PROMPTS_EXTENDED: "promptsExtended", // Send updated prompt list after queue extension
   PROMPTS_APPENDED: "promptsAppended",
+  PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
   DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",
