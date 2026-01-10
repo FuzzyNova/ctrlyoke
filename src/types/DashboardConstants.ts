@@ -95,11 +95,11 @@ export const EXECUTION_STATES = {
 } as const;
 
 // ============================================================================
-// ACTION TYPES - Prompt editor actions (Send/Add)
+// ACTION TYPES - Prompt editor actions (Run/Queue)
 // ============================================================================
 export const ACTION_TYPES = {
-  SEND: "send", // Append + ensure workflow runs
-  ADD: "add", // Append only, preserve current state
+  RUN: "run", // Append + ensure workflow runs
+  QUEUE: "queue", // Append only, preserve current state
 } as const;
 
 // ============================================================================

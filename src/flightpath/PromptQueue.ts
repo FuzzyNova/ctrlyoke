@@ -962,18 +962,18 @@ export class PromptQueue {
       this.state.results.splice(insertIndex, 0, ...newResults);
 
       // Auto-start behavior based on current state:
-      // - COMPLETED: Set to RUNNING (user already started workflow, treat as continuation)
+      // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
       // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
       // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
       // - RUNNING: Already running, no change needed
       const previousStatus = this.state.status;
       if (this.state.status === EXECUTION_STATES.COMPLETED) {
         Log.info(
-          `appendPrompts: Auto-starting workflow (appended to COMPLETED queue, ${this.state.completedIds.size} prompts previously completed)`
+          `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIds.size} prompts previously completed, user can Resume)`
         );
-        this.state.status = EXECUTION_STATES.RUNNING;
+        this.state.status = EXECUTION_STATES.STOPPED;
         this.isPaused = false;
-        this.state.stopped = false;
+        this.state.stopped = true; // Mark as stopped so Resume will work
       } else {
         Log.info(
           `appendPrompts: NOT auto-starting (current state: ${previousStatus}, completed count: ${this.state.completedIds.size})`

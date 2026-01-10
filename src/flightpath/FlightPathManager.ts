@@ -1226,8 +1226,8 @@ export class FlightPathManager {
     const isIdle = currentState.status === EXECUTION_STATES.IDLE;
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
-    if (action === ACTION_TYPES.SEND) {
-      // SEND: Append + ensure workflow runs
+    if (action === ACTION_TYPES.RUN) {
+      // RUN: Append + ensure workflow runs
       if (!hasWorkflow) {
         // No workflow: Create new workflow + run immediately
         let workingFilePath: string | undefined;
@@ -1289,16 +1289,18 @@ export class FlightPathManager {
 
         // If idle (never started): Start from beginning
         // If completed: Resume execution (continueFromCurrent=true preserves history)
+        // If stopped (from Queue button on completed queue): Resume from current
         // If running: Continue (appending automatically continues)
-        if (isIdle || isCompleted) {
-          // When resuming completed queue or continuing idle queue, preserve existing state
+        const isStopped = currentState.status === EXECUTION_STATES.STOPPED;
+        if (isIdle || isCompleted || isStopped) {
+          // When resuming completed/stopped queue or continuing idle queue, preserve existing state
           await this.executeLoadedPromptFile(undefined, true);
         }
       }
 
       Log.info(`Send prompt (run): ${text.substring(0, 50)}...`);
     } else {
-      // ADD: Append only, preserve current state
+      // QUEUE: Append only, preserve current state
       if (!hasWorkflow) {
         // No workflow: Create new workflow (idle, don't run)
         let workingFilePath: string | undefined;

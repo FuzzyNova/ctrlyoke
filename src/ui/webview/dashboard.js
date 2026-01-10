@@ -2092,11 +2092,11 @@
 
     // Editor action buttons
     elements.btnEditorSend.addEventListener("click", () => {
-      executePrompt(ACTION_TYPES.SEND);
+      executePrompt(ACTION_TYPES.RUN);
     });
 
     elements.btnEditorAdd.addEventListener("click", () => {
-      executePrompt(ACTION_TYPES.ADD);
+      executePrompt(ACTION_TYPES.QUEUE);
     });
 
     elements.btnEditorUpdate.addEventListener("click", updateExistingPrompt);
@@ -2356,7 +2356,7 @@
 
   /**
    * Execute a prompt (Send/Add)
-   * @param {string} action - ACTION_TYPES.SEND or ACTION_TYPES.ADD
+   * @param {string} action - ACTION_TYPES.RUN or ACTION_TYPES.QUEUE
    */
   function executePrompt(action) {
     const text = editorState.promptEditor
