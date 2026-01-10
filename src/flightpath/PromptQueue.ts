@@ -10,6 +10,10 @@ import {
   WorkingFile,
   AppendSegment,
 } from "../types/FlightPathTypes";
+import {
+  QUEUE_POSITION,
+  type QueuePosition,
+} from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
 import {
@@ -915,13 +919,13 @@ export class PromptQueue {
    * This method now uses working file operations for persistence
    * @param prompts - Prompts to append
    * @param source - Description of append source (e.g., filename or "MCP")
-   * @param position - Where to insert prompts: "next" (after current) or "end" (at end of queue)
+   * @param position - Where to insert prompts: QUEUE_POSITION.NEXT (after current) or QUEUE_POSITION.END (at end of queue)
    * @throws Error if queue is in invalid state for appending
    */
   public async appendPrompts(
     prompts: PromptItem[],
     source: string = "User append",
-    position: "next" | "end" = "end"
+    position: QueuePosition = QUEUE_POSITION.END
   ): Promise<void> {
     if (!this.canAppend()) {
       throw new Error("Cannot append: Queue is in cancelled or error state");
@@ -931,7 +935,7 @@ export class PromptQueue {
     this.operationQueue = this.operationQueue.then(async () => {
       // Calculate insert index based on position
       const insertIndex =
-        position === "next"
+        position === QUEUE_POSITION.NEXT
           ? this.state.currentIndex + 1
           : this.state.prompts.length;
 

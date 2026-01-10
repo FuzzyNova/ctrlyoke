@@ -204,6 +204,14 @@ export const UI_STRINGS = {
 } as const;
 
 // ============================================================================
+// QUEUE POSITION - Position values for appending prompts to queue
+// ============================================================================
+export const QUEUE_POSITION = {
+  NEXT: "next", // Insert after current prompt (high priority)
+  END: "end", // Insert at end of queue (normal priority)
+} as const;
+
+// ============================================================================
 // PROMPT PROPERTY NAMES - Single source of truth for PromptItem properties
 // Used by dashboard.js to access prompt properties consistently
 // ============================================================================
@@ -245,3 +253,5 @@ export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];
+export type QueuePosition =
+  (typeof QUEUE_POSITION)[keyof typeof QUEUE_POSITION];

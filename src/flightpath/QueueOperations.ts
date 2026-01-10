@@ -9,12 +9,17 @@
 
 import { PromptQueue } from "./PromptQueue";
 import { PromptItem, EXECUTION_STATES } from "../types/FlightPathTypes";
+import {
+  QUEUE_POSITION,
+  type QueuePosition,
+} from "../types/DashboardConstants";
 import * as vscode from "vscode";
 
 /**
  * Position where prompts should be inserted
+ * @deprecated Use QueuePosition from DashboardConstants instead
  */
-export type AppendPosition = "next" | "end";
+export type AppendPosition = QueuePosition;
 
 /**
  * Queue status response (single source for both MCP and Language Model Tools)
@@ -48,7 +53,7 @@ export interface AppendPromptsRequest {
     model?: string;
     endCondition?: any;
   }>;
-  position: AppendPosition;
+  position: QueuePosition;
   source: string;
   reason?: string;
 }
@@ -103,7 +108,8 @@ export function getQueueStatus(
       workflowName,
       currentIndex: state.currentIndex,
       totalPrompts: state.prompts.length,
-      completedPrompts: state.results.filter((r) => r.status === "completed").length,
+      completedPrompts: state.results.filter((r) => r.status === "completed")
+        .length,
       executionState: state.status,
       maxQueueSize: unlimitedMode ? 0 : maxQueueSize, // 0 means unlimited
       remainingSlots: remainingSlots === Infinity ? 0 : remainingSlots,
@@ -148,7 +154,7 @@ export async function appendToQueue(
   if (!unlimitedMode && newSize > maxQueueSize) {
     throw new Error(
       `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
-      `Enable unlimitedMode or increase maxQueueSize to proceed.`
+        `Enable unlimitedMode or increase maxQueueSize to proceed.`
     );
   }
 
@@ -160,9 +166,10 @@ export async function appendToQueue(
   }));
 
   // 4. Calculate insert index based on position
-  const insertIndex = request.position === "next"
-    ? state.currentIndex + 1
-    : state.prompts.length;
+  const insertIndex =
+    request.position === QUEUE_POSITION.NEXT
+      ? state.currentIndex + 1
+      : state.prompts.length;
 
   // 5. Append prompts (PromptQueue.appendPrompts now supports position)
   await queue.appendPrompts(promptItems, request.source, request.position);

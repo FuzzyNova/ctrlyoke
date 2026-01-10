@@ -17,7 +17,12 @@ import {
   Provider,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
-import { ACTION_TYPES, type ActionType } from "../types/DashboardConstants";
+import {
+  ACTION_TYPES,
+  QUEUE_POSITION,
+  type ActionType,
+  type QueuePosition,
+} from "../types/DashboardConstants";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
@@ -513,11 +518,11 @@ export class FlightPathManager {
   /**
    * Append prompts from a file to the current queue
    * @param filePath - Path to prompt file (.prompt.md, .flightpath.yaml, .flightpath.json)
-   * @param position - Where to insert prompts: "next" (after current) or "end" (at end of queue)
+   * @param position - Where to insert prompts: QUEUE_POSITION.NEXT (after current) or QUEUE_POSITION.END (at end of queue)
    */
   public async appendFromFile(
     filePath: string,
-    position: "next" | "end" = "end"
+    position: QueuePosition = QUEUE_POSITION.END
   ): Promise<void> {
     try {
       // 1. Parse file (reuse existing parser)
@@ -563,8 +568,7 @@ export class FlightPathManager {
       }
 
       // 5. Append prompts with specified position
-      const positionLabel = position === "next" ? "next" : "end";
-      const source = `User append (${positionLabel}): ${path.basename(filePath)}`;
+      const source = `User append (${position}): ${path.basename(filePath)}`;
       await this.promptQueue.appendPrompts(parsed.prompts, source, position);
 
       // 5.1. Notify dashboard about extended prompts
@@ -598,7 +602,9 @@ export class FlightPathManager {
 
       // 7. Show notification
       const positionText =
-        position === "next" ? "after current prompt" : "at end of queue";
+        position === QUEUE_POSITION.NEXT
+          ? "after current prompt"
+          : "at end of queue";
       vscode.window.showInformationMessage(
         `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
       );
@@ -1234,18 +1240,24 @@ export class FlightPathManager {
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
     // Determine position (end vs next)
-    let position: "end" | "next" = "end";
+    let position: QueuePosition = QUEUE_POSITION.END;
     let shouldRun = false;
 
     if (action === ACTION_TYPES.RUN || action === ACTION_TYPES.RUN_NEXT) {
       shouldRun = true;
-      position = action === ACTION_TYPES.RUN_NEXT ? "next" : "end";
+      position =
+        action === ACTION_TYPES.RUN_NEXT
+          ? QUEUE_POSITION.NEXT
+          : QUEUE_POSITION.END;
     } else if (
       action === ACTION_TYPES.QUEUE ||
       action === ACTION_TYPES.QUEUE_NEXT
     ) {
       shouldRun = false;
-      position = action === ACTION_TYPES.QUEUE_NEXT ? "next" : "end";
+      position =
+        action === ACTION_TYPES.QUEUE_NEXT
+          ? QUEUE_POSITION.NEXT
+          : QUEUE_POSITION.END;
     }
 
     if (shouldRun) {

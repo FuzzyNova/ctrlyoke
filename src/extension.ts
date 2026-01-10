@@ -4,6 +4,7 @@ import { PromptCompletionProvider } from "./completions/PromptCompletionProvider
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
+import { QUEUE_POSITION } from "./types/DashboardConstants";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
@@ -79,7 +80,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 
           const request = {
             prompts: parameters.prompts || [],
-            position: parameters.position || "end",
+            position: parameters.position || QUEUE_POSITION.END,
             source: parameters.source || "VS Code Chat",
             reason: parameters.reason,
           };

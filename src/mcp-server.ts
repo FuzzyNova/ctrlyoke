@@ -29,7 +29,11 @@ import type {
   WorkingFile,
   WorkingFileRuntime,
 } from "./types/FlightPathTypes";
-import { EXECUTION_STATES } from "./types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  QUEUE_POSITION,
+  type QueuePosition,
+} from "./types/DashboardConstants";
 import { hashPromptContent, isPromptCompleted } from "./utils/PromptIdentity";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
@@ -119,8 +123,7 @@ class FlightPathMCPServer {
           },
           {
             name: "flightpath_append_queue",
-            description:
-              "Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('next') or at end of queue ('end').",
+            description: `Append prompts to the current FlightPath workflow queue. Use when you want to extend the workflow with additional tasks. Supports inserting after current position ('${QUEUE_POSITION.NEXT}') or at end of queue ('${QUEUE_POSITION.END}').`,
             inputSchema: {
               type: "object",
               properties: {
@@ -145,9 +148,8 @@ class FlightPathMCPServer {
                 },
                 position: {
                   type: "string",
-                  enum: ["next", "end"],
-                  description:
-                    "Where to insert prompts: 'next' (after current) or 'end' (at end of queue)",
+                  enum: [QUEUE_POSITION.NEXT, QUEUE_POSITION.END],
+                  description: `Where to insert prompts: '${QUEUE_POSITION.NEXT}' (after current) or '${QUEUE_POSITION.END}' (at end of queue)`,
                 },
                 source: {
                   type: "string",
@@ -312,7 +314,7 @@ class FlightPathMCPServer {
       reason,
     } = args as {
       prompts: PromptItem[];
-      position: "next" | "end";
+      position: QueuePosition;
       source?: string;
       reason?: string;
     };
@@ -330,9 +332,11 @@ class FlightPathMCPServer {
       throw new Error("prompts must be a non-empty array");
     }
 
-    if (position !== "next" && position !== "end") {
+    if (position !== QUEUE_POSITION.NEXT && position !== QUEUE_POSITION.END) {
       log("ERROR: Invalid position:", position);
-      throw new Error("position must be 'next' or 'end'");
+      throw new Error(
+        `position must be '${QUEUE_POSITION.NEXT}' or '${QUEUE_POSITION.END}'`
+      );
     }
 
     // Find active working file
@@ -366,7 +370,7 @@ class FlightPathMCPServer {
 
     // Calculate insert index
     const insertIndex =
-      position === "next"
+      position === QUEUE_POSITION.NEXT
         ? runtime.currentIndex + 1
         : (queueData.prompts || []).length;
     log("Insert index calculated:", insertIndex);
