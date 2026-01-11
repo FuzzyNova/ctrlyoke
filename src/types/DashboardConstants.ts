@@ -102,6 +102,7 @@ export const ACTION_TYPES = {
   QUEUE: "queue", // Append to end, preserve current state
   RUN_NEXT: "runNext", // Append next (after current) + ensure workflow runs
   QUEUE_NEXT: "queueNext", // Append next (after current), preserve current state
+  RUN_BEFORE_CURRENT: "runBeforeCurrent", // Insert before current + ensure workflow runs (stopped/idle with prompts)
 } as const;
 
 // ============================================================================
@@ -204,8 +205,9 @@ export const UI_STRINGS = {
 // QUEUE POSITION - Position values for appending prompts to queue
 // ============================================================================
 export const QUEUE_POSITION = {
-  NEXT: "next", // Insert after current prompt (high priority)
+  NEXT: "next", // Insert after current prompt (paused/running with remaining prompts)
   END: "end", // Insert at end of queue (normal priority)
+  BEFORE_CURRENT: "beforeCurrent", // Insert before current prompt (stopped/idle with prompts)
 } as const;
 
 // ============================================================================

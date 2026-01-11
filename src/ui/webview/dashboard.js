@@ -319,6 +319,38 @@
     }
   }
 
+  /**
+   * Check if there are pending prompts in the queue
+   * Returns true if there are prompts that haven't been executed yet
+   * Used to determine whether Run button should say "Run" or "Run Next"
+   */
+  function hasPendingPrompts() {
+    if (state.prompts.length === 0) {
+      return false;
+    }
+
+    // If we're idle, all prompts are pending
+    if (state.executionState === EXECUTION_STATES.IDLE) {
+      return true;
+    }
+
+    // If stopped, there are pending prompts (current was cancelled, may have more after)
+    if (state.executionState === EXECUTION_STATES.STOPPED) {
+      return state.currentStep < state.totalSteps;
+    }
+
+    // If running/paused, check if there are prompts after current step
+    if (
+      state.executionState === EXECUTION_STATES.RUNNING ||
+      state.executionState === EXECUTION_STATES.PAUSED
+    ) {
+      return state.currentStep < state.totalSteps;
+    }
+
+    // If completed, no pending prompts
+    return false;
+  }
+
   // Event listeners
   elements.loadFileBtn.addEventListener("click", () => {
     vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
@@ -2335,23 +2367,23 @@
 
   /**
    * Update editor button text and behavior based on execution state
-   * Called on state changes to differentiate Queue/Run when running
+   * Called on state changes to show "Run" vs "Run Next" based on pending prompts
    */
   function updateEditorButtons() {
-    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const pendingPrompts = hasPendingPrompts();
 
-    if (isRunning) {
-      // When running: Run button changes to "Run Next" (insert after current)
+    if (pendingPrompts) {
+      // When there are pending prompts: Run button shows "Run Next" (insert next, run ASAP)
       elements.btnEditorRun.innerHTML =
         '<i class="codicon codicon-send"></i>\n                  Run Next';
-      elements.btnEditorRun.title = "Add prompt next in queue (high priority)";
+      elements.btnEditorRun.title = "Insert next in queue and run immediately";
 
       // Queue button stays the same (append to end)
       elements.btnEditorQueue.innerHTML =
         '<i class="codicon codicon-add"></i>\n                  Queue';
       elements.btnEditorQueue.title = "Add prompt to end of queue";
     } else {
-      // Not running: Run button shows normal "Run" (append to end + run)
+      // No pending prompts: Run button shows "Run" (create/append to end + run)
       elements.btnEditorRun.innerHTML =
         '<i class="codicon codicon-send"></i>\n                  Run';
 
@@ -2445,13 +2477,33 @@
     const properties = getPropertyValues();
     const promptName = elements.promptNameInput.value.trim();
 
-    // Determine final action based on state
-    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    // Determine final action based on state:
+    // - STOPPED: Always RUN_BEFORE_CURRENT (current prompt was cancelled, hasn't run yet)
+    // - IDLE (currentStep === 0): RUN_BEFORE_CURRENT (no prompts have run)
+    // - PAUSED/RUNNING (with remaining): RUN_NEXT (insert after current)
+    // - COMPLETED: RUN (append to end)
+    // - No pending prompts: RUN (create new or append to end)
     let finalAction = action;
 
-    if (isRunning && action === ACTION_TYPES.RUN) {
-      // When running, Run button should insert next (high priority)
-      finalAction = ACTION_TYPES.RUN_NEXT;
+    if (action === ACTION_TYPES.RUN && hasPendingPrompts()) {
+      const isIdle = state.executionState === EXECUTION_STATES.IDLE;
+      const isStopped = state.executionState === EXECUTION_STATES.STOPPED;
+      const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+      const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+
+      if (isStopped) {
+        // STOPPED: Current prompt was cancelled (not completed), insert before it
+        finalAction = ACTION_TYPES.RUN_BEFORE_CURRENT;
+      } else if (isIdle && state.currentStep === 0) {
+        // IDLE with no prompts executed: Insert at position 0
+        finalAction = ACTION_TYPES.RUN_BEFORE_CURRENT;
+      } else if (isPaused || isRunning) {
+        // PAUSED/RUNNING: Insert after current (current is running/ran)
+        finalAction = ACTION_TYPES.RUN_NEXT;
+      } else {
+        // Other states (shouldn't happen but fallback to RUN_NEXT)
+        finalAction = ACTION_TYPES.RUN_NEXT;
+      }
     }
     // Queue always appends to end (no change needed for QUEUE action)
 

@@ -919,7 +919,10 @@ export class PromptQueue {
    * This method now uses working file operations for persistence
    * @param prompts - Prompts to append
    * @param source - Description of append source (e.g., filename or "MCP")
-   * @param position - Where to insert prompts: QUEUE_POSITION.NEXT (after current) or QUEUE_POSITION.END (at end of queue)
+   * @param position - Where to insert prompts:
+   *   - QUEUE_POSITION.NEXT: After current prompt (paused/running)
+   *   - QUEUE_POSITION.BEFORE_CURRENT: Before current prompt (stopped/idle)
+   *   - QUEUE_POSITION.END: At end of queue (default)
    * @throws Error if queue is in invalid state for appending
    */
   public async appendPrompts(
@@ -934,10 +937,17 @@ export class PromptQueue {
     // Serialize operation to prevent race conditions
     this.operationQueue = this.operationQueue.then(async () => {
       // Calculate insert index based on position
-      const insertIndex =
-        position === QUEUE_POSITION.NEXT
-          ? this.state.currentIndex + 1
-          : this.state.prompts.length;
+      let insertIndex: number;
+      if (position === QUEUE_POSITION.NEXT) {
+        // Insert after current prompt
+        insertIndex = this.state.currentIndex + 1;
+      } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
+        // Insert before current prompt (for stopped/idle states)
+        insertIndex = this.state.currentIndex;
+      } else {
+        // QUEUE_POSITION.END - append to end
+        insertIndex = this.state.prompts.length;
+      }
 
       // Generate append segment for tracking
       const segment: AppendSegment = {

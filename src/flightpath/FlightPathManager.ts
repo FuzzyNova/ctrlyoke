@@ -1239,16 +1239,23 @@ export class FlightPathManager {
     const isIdle = currentState.status === EXECUTION_STATES.IDLE;
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
-    // Determine position (end vs next)
+    // Determine position (end vs next vs before current)
     let position: QueuePosition = QUEUE_POSITION.END;
     let shouldRun = false;
 
-    if (action === ACTION_TYPES.RUN || action === ACTION_TYPES.RUN_NEXT) {
+    if (
+      action === ACTION_TYPES.RUN ||
+      action === ACTION_TYPES.RUN_NEXT ||
+      action === ACTION_TYPES.RUN_BEFORE_CURRENT
+    ) {
       shouldRun = true;
-      position =
-        action === ACTION_TYPES.RUN_NEXT
-          ? QUEUE_POSITION.NEXT
-          : QUEUE_POSITION.END;
+      if (action === ACTION_TYPES.RUN_NEXT) {
+        position = QUEUE_POSITION.NEXT;
+      } else if (action === ACTION_TYPES.RUN_BEFORE_CURRENT) {
+        position = QUEUE_POSITION.BEFORE_CURRENT;
+      } else {
+        position = QUEUE_POSITION.END;
+      }
     } else if (
       action === ACTION_TYPES.QUEUE ||
       action === ACTION_TYPES.QUEUE_NEXT
