@@ -84,12 +84,14 @@
       handleRetryAttemptChanged;
 
     // Prompts-related messages
-    messageHandlers[MESSAGE_TYPES.FILE_SELECTED] = (message) =>
+    messageHandlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {
       promptsManager.handleMessageFileSelected(
         message.fileName,
         message.prompts
       );
-    messageHandlers[MESSAGE_TYPES.SESSION_RESTORED] = (message) =>
+      updateWorkflowUI();
+    };
+    messageHandlers[MESSAGE_TYPES.SESSION_RESTORED] = (message) => {
       promptsManager.handleMessageSessionRestored(
         message.fileName,
         message.prompts,
@@ -97,13 +99,19 @@
         message.executionState,
         message.currentIndex
       );
-    messageHandlers[MESSAGE_TYPES.PROMPTS_EXTENDED] = (message) =>
+      updateWorkflowUI();
+    };
+    messageHandlers[MESSAGE_TYPES.PROMPTS_EXTENDED] = (message) => {
       promptsManager.handleMessagePromptsExtended(message.prompts);
-    messageHandlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) =>
+      updateWorkflowUI();
+    };
+    messageHandlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {
       promptsManager.handleMessagePromptDeleted(
         message.fileName,
         message.prompts
       );
+      updateWorkflowUI();
+    };
 
     // Output-related messages
     messageHandlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) =>
@@ -183,6 +191,20 @@
     elements.stopBtn.addEventListener("click", () => {
       vscode.postMessage({ type: MESSAGE_TYPES.STOP });
     });
+  }
+
+  /**
+   * Update all workflow-related UI controls after state changes
+   * Shared utility for message handlers that modify workflow/prompts state
+   */
+  function updateWorkflowUI() {
+    const state = stateManager.getState();
+    workflowManager.updateWorkflowStatus(state.fileName, state.executionState);
+    workflowManager.updateNewWorkflowButtonState();
+    editorManager.updateEditorButtons();
+    editorManager.updateNewWorkflowCheckbox();
+    editorManager.updateButtonTooltips();
+    updateControls();
   }
 
   // ============================================================================
