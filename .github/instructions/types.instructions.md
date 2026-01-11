@@ -3,60 +3,36 @@ applyTo: "src/types/**"
 ---
 
 <purpose>
-Core data structures. TypeScript strict mode enforced.
+Core data structures and constants for FlightPath extension. TypeScript strict mode enforced. Three primary files:
+- **FlightPathTypes.ts** - Core workflow and integration types
+- **CopilotTypes.ts** - Integration-specific types (CLI and Chat)
+- **DashboardConstants.ts** - Shared constants (SINGLE SOURCE OF TRUTH for all string literals, enums, and UI values)
 </purpose>
 
 <flightPathTypes>
-**Core workflow types:**
-- `PromptFile` - Root structure for `.prompt.json`/`.flightpath.json`
-- `PromptItem` - Individual prompt with optional model override and end condition
-- `EndCondition` - Validation script configuration
-- `QueueState` - Execution state machine with progress tracking
-- `PromptResult` - Per-prompt execution result with status and timestamp
-- `WorkingFile` - Persistent queue state for crash recovery (extends PromptFile)
-- `WorkingFileRuntime` - Runtime execution state (`_runtime` object in working files)
-- `AppendSegment` - Tracks queue append operations (user or MCP)
+**File: FlightPathTypes.ts**
 
-**Enums:**
+**Core types:** `PromptFile`, `PromptItem` (id, prompt, provider?, model?, agent?, newChatSession?, allowDynamicExtension?, endCondition?), `EndCondition`, `QueueState` (completedIds, timing, extensions, workingFilePath, appendSegments), `PromptResult`, `WorkingFile`, `WorkingFileRuntime`, `AppendSegment`, `DynamicQueueConfig`
 
-- `Provider` - "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
-  - CopilotCli: GitHub Copilot CLI (default)
-  - CopilotChat: Copilot Chat window (UI automation)
-  - ClaudeCli: Claude Code CLI (Anthropic)
-  - CodexCli: Codex CLI (OpenAI)
+**Provider enum:** "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
 
-**Important patterns:**
+**Key patterns:** Provider/model/agent per-prompt overrides optional, `allowDynamicExtension` for queue extension, WorkingFile extends PromptFile with runtime metadata
+**File: CopilotTypes.ts**
 
-- Model override is optional (`model?: "claude-sonnet-4.5" | ...`)
-- EndCondition is optional (prompts can execute without validation)
-- QueueState.status is discriminated union ("idle" | "running" | "paused" | "completed" | "error")
-- PromptResult.status transitions: pending → sent → completed/failed
-- WorkingFile extends PromptFile with `originalFile`, `workflowName`, `startedAt`, `_runtime`
-- AppendSegment tracks source, timestamp, prompt count, and indices for each append operation
-  </flightPathTypes>
+Integration-specific types: `CopilotChatRequest/Response`, `CopilotIntegration` interface, `CopilotCliOptions` (tool permissions, logging, MCP), `CopilotCliResult`, `CopilotCliStatistics`
 
-<copilotTypes>
-**CLI-specific types:**
-- `CopilotCliOptions` - CLI command configuration
-- `CopilotCliResult` - Structured CLI output (response, statistics, error, exit code)
-- `CopilotCliStatistics` - Parsed statistics (usage, durations, code changes, model)
+**Separation:** FlightPathTypes = core domain, CopilotTypes = integration details (isolates CLI/Chat implementation)
+**File: DashboardConstants.ts - SINGLE SOURCE OF TRUTH**
 
-**Chat-specific types:**
+ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 
-- `CopilotChatRequest` - Simple prompt wrapper
-- `CopilotChatResponse` - Response with content, timestamp, success flag
+**Key objects:** `MESSAGE_TYPES` (50+ extension/webview messages), `EXECUTION_STATES` (QueueState.status), `STEP_STATUS` (PromptResult.status), `ACTION_TYPES`, `PROVIDER_IDS`, `PROVIDER_INFO`, `DEFAULT_MODELS`, `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `PROVIDER_STATUS_STRINGS`, `UI_STRINGS`, `QUEUE_POSITION`, `PROMPT_PROPERTIES`, `END_CONDITION_PROPERTIES`
 
-**Why separate files:**
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `ProviderId`, etc. (derived from const objects)
+**Import constants from DashboardConstants (NEVER hardcode strings):**
 
-- FlightPathTypes: Core domain types (entire extension)
-- CopilotTypes: Integration-specific types (isolates CLI/Chat details)
-- Separation enables future strategies without polluting core types
-  </copilotTypes>
-
-<typeSafetyPatterns>
-**Status constants (use instead of hardcoded strings):**
 ```typescript
-import { EXECUTION_STATES, STEP_STATUS } from "../types/FlightPathTypes";
+import { EXECUTION_STATES, STEP_STATUS, MESSAGE_TYPES } from "../types/DashboardConstants";
 
 // Execution states for QueueState.status
 if (state.status === EXECUTION_STATES.RUNNING) {
@@ -66,14 +42,27 @@ if (state.status === EXECUTION_STATES.RUNNING) {
 // Step status for PromptResult.status
 result.status = STEP_STATUS.COMPLETED;
 
-````
+// Message types for extension ↔ webview communication
+this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, data: { ... } });
 
-**Optional chaining:**
+```
+
+**Use type helpers for function signatures:**
 
 ```typescript
-const model = prompt.model || this.getConfiguredModel();
-// Prompt can override model, or use default
-````
+import { ExecutionState, StepStatus } from "../types/DashboardConstants";
+
+function updateState(status: ExecutionState) { ... }
+function getStepResult(status: StepStatus) { ... }
+```
+
+**Optional chaining and provider overrides:**
+
+```typescript
+const provider = prompt.provider || ConfigurationUtils.getProvider();
+const model = prompt.model || ConfigurationUtils.getModel();
+const agent = prompt.agent; // CLI mode only
+```
 
 **Type guards:**
 
@@ -88,10 +77,38 @@ private isChatIntegration(integration: CopilotIntegration): integration is Copil
   </typeSafetyPatterns>
 
 <relatedFiles>
+**Core workflow:**
 - `../flightpath/PromptFileParser.ts` - Validates against PromptFile structure
 - `../flightpath/PromptQueue.ts` - Uses QueueState and PromptResult
-- `../flightpath/cli/CopilotCommandLineIntegration.ts` - Uses CopilotCliOptions/Result
-- `/schemas/prompt-schema.json` - JSON Schema mirrors TypeScript types
+- `../flightpath/WorkflowExecutor.ts` - Uses DynamicQueueConfig for queue extension
 - `../utils/PromptIdentity.ts` - Hash-based prompt identity for deduplication
-- `docs/QUEUE_APPEND_FEATURE.md` - Working file system documentation
-</relatedFiles>
+- `/schemas/prompt-schema.json` - JSON Schema mirrors TypeScript types
+
+**Integrations:**
+
+- `../flightpath/cli/CopilotCommandLineIntegration.ts` - Uses CopilotCliOptions/Result
+- `../flightpath/chat/CopilotChatIntegration.ts` - Uses CopilotChatRequest/Response
+
+**UI:**
+
+- `../ui/FlightPathDashboardProvider.ts` - Uses MESSAGE_TYPES for webview communication
+- `../ui/FlightPathSettingsProvider.ts` - Uses PROVIDER_IDS, DEFAULT_MODELS
+- `../ui/webview/dashboard.js` - JavaScript code imports constants via inline script
+
+**Documentation:**
+
+- `docs/QUEUE_APPEND_FEATURE.md` - Working file system and append segments
+- `docs/DYNAMIC_QUEUE_ARCHITECTURE.md` - Dynamic queue extension
+  </relatedFiles>
+
+<criticalRules>
+1. **NO HARDCODED STRINGS** - All shared string literals MUST be defined in DashboardConstants.ts
+2. **Single Source of Truth** - Each constant has exactly ONE definition location
+3. **Type Safety** - Use ExecutionState, StepStatus, MessageType, etc. instead of raw strings
+4. **Import Consistency** - Always import from DashboardConstants for shared values
+5. **When adding new constants:**
+   - Add to appropriate constant object in DashboardConstants.ts
+   - Export as const with `as const` assertion
+   - Add type helper if needed (e.g., `type NewType = typeof NEW_CONST[keyof typeof NEW_CONST]`)
+   - Update this instruction file if adding new constant category
+</criticalRules>

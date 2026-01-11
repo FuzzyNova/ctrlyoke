@@ -3,40 +3,38 @@ applyTo: "src/flightpath/base/**"
 ---
 
 <purpose>
-Abstract base for CLI/Chat integration strategies. Strategy pattern + event-driven architecture.
+Abstract base for all integrations (Strategy pattern). Defines contract, provides common functionality (prompt building, context expansion, event emitters).
 </purpose>
 
-<contract>
-Subclasses implement: `initialize()`, `sendPrompt()`, `getStatus()`, `isIntegrationAvailable()`
-</contract>
+<architecture>
+**Hierarchy:** `CopilotIntegration` (base) → `BaseCliIntegration` (CLI abstract) → 3 CLI impls + `CopilotChatIntegration`
 
-<events>
-- `statusChangeEmitter`: Availability changes (initializing → ready → unavailable)
-- `responseCompleteEmitter`: Response text (CLI) or empty string (Chat)
-</events>
+**Abstract methods (MUST implement):** `initialize()`, `sendPrompt()`, `getStatus()`, `isIntegrationAvailable()`, `getIntegrationMode()`, `getInitializationStatus()`, `isReady()`, `cancelImplementation()`
+
+**Event emitters:** `statusChangeEmitter`, `responseCompleteEmitter`, `streamingChunkEmitter`, `promptReadyEmitter` (all disposable)
+</architecture>
+
+<promptBuilding>
+**Pipeline:** `buildPromptText()` (expand context via ContextExpander) → `buildPromptWithInstructions()` (inject MCP instructions if dynamic queue enabled) → subclass sends to provider
+
+**Dynamic queue:** Controlled by `allowDynamicExtension` flag + `enableDynamicQueue` setting. Wraps MCP tool instructions in `<criticalInstruction>` tags (hidden in UI).
+
+**Context expansion:** Delegated to `ContextExpander` utility. Supports `@file`, `#file:path:lines`, `#sym:symbol`, generates XML attachments.
+</promptBuilding>
 
 <failureTracking>
-When `sendPrompt()` returns false, integrations MUST set `this.lastFailureReason` with a specific error message before returning.
-
-Examples:
-
-- "Copilot stopped responding (inactivity timeout after 300s)"
-- "Copilot CLI error: ..."
-- "Failed to send message to Copilot Chat"
-
-`getLastFailureReason()` returns the reason and resets it to null. Falls back to "Failed to send prompt" if no specific reason was set.
+**Contract:** `sendPrompt()` returns `false` → MUST set `this.lastFailureReason` before returning. Retrieved via `getLastFailureReason()` (resets to `null`).
 </failureTracking>
 
-<fileAttachments>
-Parses `#file:path` and `#file:path:line-line`, builds Copilot XML format:
+<cancellation>
+`cancel()` sets `isCancelling = true`, calls `cancelImplementation()`. `resetCancellationFlag()` clears before new operations.
+</cancellation>
 
-```xml
-<context>
-  <file path="relative/path" startLine="10" endLine="20">
-    ...content...
-  </file>
-</context>
-```
+<optionalMethods>
+CLI-specific (default: `undefined`): `getLastResult()`, `getLastCliCommand()`, `getLastFullPrompt()`, `parseTokenCounts()`
+Diagnostics: `testAutomation()`, `retryDetection()`, `getCapabilities()`, `getDetailedStatus()`, `isCli()`
+</optionalMethods>
 
-Attachment XML prepended; `#file:` syntax kept in prompt text for LLM context.
-</fileAttachments>
+<designPrinciples>
+Strategy pattern (polymorphic providers), template method (common logic in base), single responsibility (ContextExpander for attachments), event-driven (loose coupling), graceful degradation (safe defaults).
+</designPrinciples>

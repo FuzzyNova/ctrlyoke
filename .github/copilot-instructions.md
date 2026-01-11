@@ -29,13 +29,18 @@ Automate GitHub Copilot Chat through structured YAML/JSON-based prompt workflows
 <solidPrinciples>
 SOLID principles with strict separation of concerns:
 
-- FlightPathManager: Orchestration and command handling
-- PromptQueue: Sequential execution and state management
+- FlightPathManager: Orchestration and command handling, factory pattern for 4 providers
+- PromptQueue: Sequential execution and state machine (idle → running → paused/completed/error)
 - CopilotIntegration (abstract base): Defines integration contract
+  - BaseCliIntegration (abstract CLI base) → 3 CLI implementations:
+    - CopilotCommandLineIntegration: Copilot CLI (default)
+    - ClaudeCommandLineIntegration: Claude Code CLI
+    - CodexCommandLineIntegration: Codex CLI
   - CopilotChatIntegration: Chat window automation with UI interactions
-  - CopilotCommandLineIntegration: CLI-based automation (default)
-- PromptFileParser: YAML/JSON parsing and validation
-- EndConditionEvaluator: Script execution and validation
+- WorkflowExecutor: Prompt execution loop with pause/resume support
+- EndConditionHandler: Retry orchestration and validation failure handling
+- PromptFileParser: YAML/JSON parsing and schema validation
+- EndConditionEvaluator: Script execution with timeout and process isolation
   </solidPrinciples>
 
 <codeQuality>
@@ -58,15 +63,31 @@ src/
 │   ├── base/
 │   │   └── CopilotIntegration.ts # Abstract base class
 │   ├── chat/
-│   │   └── CopilotChatIntegration.ts  # Chat window automation
+│   │   ├── CopilotChatIntegration.ts  # Chat window automation
+│   │   ├── ChatLogMonitor.ts          # Log-based completion detection
+│   │   └── NativeAttachmentHandler.ts # File attachment via native commands
 │   ├── cli/
+│   │   ├── BaseCliIntegration.ts      # Abstract CLI base
 │   │   ├── CopilotCommandLineIntegration.ts  # Copilot CLI automation (default)
-│   │   └── ClaudeCommandLineIntegration.ts   # Claude Code CLI automation
-│   ├── FlightPathManager.ts      # Orchestration with factory pattern
-│   ├── PromptQueue.ts            # Execution queue
-│   ├── PromptFileParser.ts       # JSON parsing
-│   ├── TemplateManager.ts        # Workflow template management
-│   └── EndConditionEvaluator.ts  # Script validation
+│   │   ├── ClaudeCommandLineIntegration.ts   # Claude Code CLI automation
+│   │   ├── CodexCommandLineIntegration.ts    # Codex CLI automation
+│   │   └── shared/                    # Shared CLI utilities
+│   │       ├── CliResponseParser.ts   # Multi-format response parsing
+│   │       ├── CliToolPermissionMapper.ts  # Cross-CLI tool mapping
+│   │       ├── CliMcpConfigGenerator.ts    # MCP config generation
+│   │       └── CliNotificationMonitor.ts   # Completion notification monitoring
+│   ├── orchestration/             # Specialized orchestration classes
+│   │   ├── EndConditionHandler.ts # Retry and validation logic
+│   │   ├── WorkflowExecutor.ts    # Workflow execution loop
+│   │   ├── TemplateImporter.ts    # Agent/template import
+│   │   ├── WorkflowCommandHandler.ts  # File creation commands
+│   │   └── WorkspaceSessionManager.ts # Session persistence
+│   ├── FlightPathManager.ts       # Orchestration with factory pattern
+│   ├── PromptQueue.ts             # Execution queue
+│   ├── PromptFileParser.ts        # JSON/YAML parsing
+│   ├── TemplateManager.ts         # Workflow template management
+│   ├── QueueOperations.ts         # MCP/LM Tools integration utilities
+│   └── EndConditionEvaluator.ts   # Script validation
 ├── templates/                    # Templates for scripts, agents, and workflows
 │   ├── agents/                   # Custom agent templates
 │   │   ├── manifest.json         # Agent metadata and descriptions
@@ -143,15 +164,19 @@ Sequential execution with pause/resume/cancel. State machine tracks progress. Re
 
 ## CopilotIntegration
 
-Abstract base with two implementations:
+Abstract base with four concrete implementations:
 
-- **CLI** (default): Deterministic completion, structured output, no UI dependencies
-  - **Adaptive prompt passing**: Simple prompts (≤300 chars) sent directly for speed; complex prompts use temp files
-  - **Simple prompts**: "explain that change" → instant direct passing (~1ms overhead)
-  - **Complex prompts**: Prompts with attachments/XML → temp file approach (~50ms overhead)
-- **Chat** (fallback): UI automation with hybrid response detection (Language Model Tool + clipboard polling)
+- **CLI Integrations** (via BaseCliIntegration abstract class):
+  - **Copilot CLI** (default): GitHub Copilot CLI with TUI streaming
+  - **Claude CLI**: Anthropic's Claude Code CLI with JSON streaming
+  - **Codex CLI**: OpenAI's Codex CLI with JSONL events and notify hook
+  - **Shared features**: Adaptive prompt passing (simple ≤300 chars direct, complex via temp files), two execution modes (interactive TUI or headless background), session continuity, token parsing
+  - **Shared utilities**: CliProcessManager (process/terminal), TuiStreamProcessor (TUI streaming), CliResponseParser (multi-format), CliToolPermissionMapper (cross-CLI permissions), CliMcpConfigGenerator (MCP config)
+- **Chat** (fallback): UI automation with log-based completion detection
+  - **Components**: CopilotChatIntegration (orchestration), ChatLogMonitor (log polling), NativeAttachmentHandler (file attachments)
+  - **Completion detection**: Two-tier log discovery (derived from context.logUri + fallback search)
 
-Both support automatic file attachment for `#file:path` references.
+All integrations support automatic file attachment for `@file` and `#file:path` references via unified ContextExpander utility.
 
 ## PromptFileParser
 
@@ -360,7 +385,26 @@ Status bar shows: Initializing, Waiting, Ready, Running, Paused, Setup Required
 
 ## Testing
 
-Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.instructions.md`.
+Mocha-based with comprehensive unit test coverage (2,227 lines across 11 test files):
+
+**High Priority - Fully Implemented:**
+
+- ✅ PromptFileParser: JSON/YAML parsing, schema validation, file path resolution
+- ✅ ValidationUtils: Security validation (directory traversal, shell injection)
+- ✅ PromptQueue: State machine, lifecycle, dynamic queue extension
+- ✅ EndConditionEvaluator: Script execution, timeout, retry with template variables
+- ✅ PromptIdentity: Content hashing, duplicate detection, instruction injection logic
+
+**Integration Tests:**
+
+- ⚠️ CLI/Chat command registration and setup (partial coverage)
+- ⚠️ Token parsing for Copilot/Claude CLI output
+
+**Manual Testing:**
+
+- AI-dependent features (workflow automation, real CLI responses)
+
+See `.github/instructions/test.instructions.md` for complete test documentation.
 
 ## Security
 
@@ -388,10 +432,11 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **json**: JSON format (best for programmatic generation and CI/CD)
   - **Usage**: Controls default file extension in createPromptFile command
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
-- flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli", default: "copilot-cli")
-  - **cli**: Copilot CLI (default, best reliability)
-  - **chat**: Copilot Chat window (UI automation)
-  - **claude-cli**: Claude Code CLI (Anthropic's CLI)
+- flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli", default: "copilot-cli")
+  - **copilot-cli**: GitHub Copilot CLI (default, best reliability)
+  - **copilot-chat**: Copilot Chat window (UI automation, fallback)
+  - **claude-cli**: Claude Code CLI (Anthropic's Claude with stream-json output)
+  - **codex-cli**: Codex CLI (OpenAI's Codex with JSONL events)
 - flightpath.cliExecutionMode (enum: "interactive" | "headless", default: "interactive")
   - **interactive**: Opens VS Code terminal for visibility, Ctrl+C abort, and user interaction (recommended)
   - **headless**: Runs silently in background process
@@ -437,6 +482,17 @@ Mocha-based with minimal coverage (pre-release). See `.github/instructions/test.
   - **haiku**: Fastest, best for simple tasks
 
 **Note**: Claude CLI always uses `stream-json` output format for real-time streaming with full metadata. This is hardcoded and not configurable.
+
+**Codex CLI Settings** (when using `codex-cli` mode):
+
+- flightpath.codexCliModel (enum: "gpt-5.1-codex-max" | "gpt-5.1-codex" | "gpt-5.1-codex-mini" | "gpt-5.2" | "gpt-5.1", default: "gpt-5.1-codex")
+  - **gpt-5.1-codex-max**: Maximum capability (slowest)
+  - **gpt-5.1-codex**: Balanced performance (recommended)
+  - **gpt-5.1-codex-mini**: Fastest, good for simple tasks
+  - **gpt-5.2**: Latest model version
+  - **gpt-5.1**: Previous stable version
+
+**Note**: Codex CLI uses JSONL output format with notify hook for completion detection in interactive mode. Background process uses `{"type":"turn.completed"}` events.
 
 **CLI Integration**: See `docs/COPILOT_CLI_DESIGN.md` for complete CLI flag reference, tool permission patterns, and planned enhancements.
 

@@ -3,293 +3,51 @@ applyTo: "src/flightpath/*.ts"
 ---
 
 <purpose>
-Orchestration, parsing, queue, and validation. Top-level `src/flightpath/` files only.
+Orchestration, parsing, queue, validation, and template management. Top-level `src/flightpath/` files only (excludes `orchestration/` subdirectory and CLI implementations).
 </purpose>
 
 <flightPathManager>
-**Responsibilities:**
-- Command registration and lifecycle management
-- Factory pattern for CLI vs Chat integration (both initialized)
-- Orchestrates PromptQueue and CopilotIntegration coordination
-- Subscribes to response completion events, triggers next queue item
-- Status bar updates based on queue state and Copilot availability
-- Manages prompt file loading vs execution separation (dashboard UX flow)
-
-**Critical patterns:**
-
-- Both integrations initialized in constructor (always ready)
-- `getDefaultIntegration()` respects `flightpath.provider`
-- Context menu commands override integration mode per-execution
-- Response complete event triggers `advanceQueue()`
-- Loop detection: Cancels chat if response fires without advancement
-
-**Prompt file workflow:**
-
-- `loadPromptFile(filePath)` - Loads file into dashboard WITHOUT executing (validates, parses, notifies dashboard)
-- `executeLoadedPromptFile(mode?)` - Executes the currently loaded file (checks Copilot readiness, starts workflow)
-- `executePromptFile(filePath, mode?)` - Legacy method (loads then immediately executes for backwards compatibility)
-- `appendFromFile(filePath, position)` - Queue append feature (adds prompts without clearing dashboard)
-- Dashboard "Change" button → calls `loadPromptFile()` → user can review prompts before clicking "Run"
-- Dashboard "Run" button → calls `executeLoadedPromptFile()` → starts execution immediately (no confirmation dialog)
-- Context menu "Run with FlightPath" → calls `executePromptFile()` → loads and executes immediately
-- Context menu "Queue with FlightPath" → calls `appendFromFile(filePath, "end")` → appends to queue
-- Context menu "Queue Next" → calls `appendFromFile(filePath, "next")` → inserts after current
-
-**Queue append behavior:**
-
-- Validates queue state (cannot append to cancelled/error queues)
-- Enforces queue size limits (`maxQueueSize` setting)
-- Auto-resumes execution if queue was completed
-- Preserves dashboard history (no clearing)
-- Creates working file if needed (`.flightpath/.queue/<workflow>.flightpath.json`)
-- See `docs/QUEUE_APPEND_FEATURE.md` for full details
-
-**Mode override:**
-
-- Context menu "Run with FlightPath" / "Load in FlightPath" commands respect provider setting
-- Single-prompt files execute directly; multi-prompt use queue
-
-**Editor group management (configurable via `openPromptsInSecondGroup` setting):**
-
-- When `openPromptsInSecondGroup` is **enabled**: Opens prompts in `ViewColumn.Two` (right/second group)
-- When **disabled** (default): Opens prompts in active editor (standard VS Code behavior)
-- Uses `openPromptFile()` helper method that checks the setting
-- Keeps main code files in `ViewColumn.One` when enabled, so users can view and select code while editing prompts
-- Prevents the "splits keep multiplying" issue by explicitly targeting a specific column
-- DO NOT use `moveEditorToBelowGroup` command - it creates a new split every time it's called
-- Script files and other non-prompt files can open in active editor (user-controlled)
-  </flightPathManager>
+**Factory pattern:** All 4 integrations initialized, `getDefaultIntegration()` respects provider setting, `getIntegrationForPrompt()` handles per-prompt overrides
+**Workflow separation:** `loadPromptFile()` vs `executeLoadedPromptFile()` vs `appendFromFile()` for dashboard UX
+**Delegation:** WorkflowExecutor runs loop, specialized classes in `orchestration/` handle orchestration tasks
+</flightPathManager>
 
 <promptQueue>
-**Responsibilities:**
-- State container for workflow execution (NOT event-driven execution)
-- Sequential state management (idle → running → paused/completed/error)
-- Progress tracking, retry counting, and result storage
-- State change events for UI updates
-- Working file persistence for crash recovery
-- Queue append operations (user-driven and MCP-driven)
-- Atomic file operations to prevent race conditions
-
-**Architecture decision: Direct execution, not event-driven**
-
-- FlightPathManager executes prompts directly in a for loop (deterministic control flow)
-- PromptQueue is a state container that emits change events
-- This design supports complex retry logic where execution "stays" on a step during retries
-- Event-driven model would require complex state machines to handle retry pauses
-
-**Queue Append & Working Files:**
-
-- See `docs/QUEUE_APPEND_FEATURE.md` for complete implementation details
-- Working files: `.flightpath/.queue/<workflow>-<timestamp>.flightpath.json`
-- `appendPrompts(prompts, source, position)` - Add prompts to queue ("next" or "end")
-- `updateWorkingFile()` - Persist queue state after every modification
-- `_updateWorkingFileInternal()` - Internal version to prevent operation queue deadlock
-- Operation queue serializes all file writes (prevents concurrent write corruption)
-- File watcher detects external changes (e.g., MCP appends) and triggers reload
-- Hash-based prompt deduplication prevents duplicate execution
-- Auto-resume on VS Code startup via `autoLoadRecentSession` setting
-
-**State management methods:**
-
-- `loadPrompts()` - Resets state, creates pending results array
-- `start()` - Sets status to "running" (doesn't execute, just state change)
-- `pause()` - Sets status to "paused", FlightPathManager checks this in loop
-- `resume()` - Sets status to "running", FlightPathManager continues loop
-- `stop()` - Sets status to "idle", marks sent prompts as cancelled
-- `markCompleted()` / `markErrored()` - Manual completion called by FlightPathManager
-- `emitStateChange()` - Fires event for status bar and dashboard updates
-
-**Retry tracking:**
-
-- `canRetry(prompt)` - Checks if retry is possible based on maxRetries
-- `incrementRetryCount()` / `resetRetryCount()` / `getCurrentRetryCount()`
-- `getEffectiveMaxRetries(prompt)` / `getEffectiveRetryPrompt(prompt)` - Smart defaults
-
-**Why NOT event-driven:**
-
-- Retry logic requires staying on same prompt index while retrying
-- For loop gives deterministic flow: stay at index `i` until success or max retries
-- Event-driven would need complex state to "pause" advancement during retries
-- Try-catch around loop is simpler than event-driven error propagation
-  </promptQueue>
+**State container** with events (NOT event-driven executor - that's WorkflowExecutor's job)
+**Why not event-driven:** Retry logic requires "staying" on same index - deterministic for loop control
+**Working files:** `.flightpath/.queue/*.flightpath.json`, operation queue prevents concurrent write corruption
+**Hash-based deduplication:** Prevents duplicate execution on queue reloads
+</promptQueue>
 
 <promptFileParser>
-**Responsibilities:**
-- JSON schema validation using AJV
-- Normalizes single/multi-prompt formats to consistent structure
-- Loads schema from bundled location (`out/schemas/prompt-schema.json`)
-
-**Critical patterns:**
-
-- Schema loaded asynchronously from `__dirname/../schemas/`
-- Same schema validates both `.prompt.json` and `.flightpath.json`
-- `normalizePromptFile()` converts single to multi-prompt internally
-- Detailed error reporting: maps AJV errors to human-readable messages
-
-**Schema source of truth:**
-
-- Single file: `/schemas/prompt-schema.json`
-- Copied to `out/schemas/` during build
-- VS Code IntelliSense and runtime use same schema
-- Never edit schema in `out/` directory (source is `/schemas/`)
-  </promptFileParser>
+AJV validation, normalizes single/multi formats, loads schema from `out/schemas/prompt-schema.json`. Never edit schema in `out/` directory (source is `/schemas/`).
+</promptFileParser>
 
 <endConditionHandler>
-**Responsibilities:**
-- Orchestrates end condition evaluation results and retry decisions
-- Handles execution errors (script failures, timeouts)
-- Handles validation failures (output doesn't match expected)
-- Manages retry attempts with dashboard updates
-- Provides user interaction for error recovery
-
-**Architecture:**
-
-- Extracted from FlightPathManager for single responsibility
-- Uses callback pattern for sending retry prompts (avoids tight coupling)
-- Delegates script execution to EndConditionEvaluator
-- Delegates retry state tracking to PromptQueue
-
-**Key methods:**
-
-- `handleEndConditionResult()` - Entry point, routes to success/error/validation
-- `handleExecutionError()` - Handles script failures with user prompts
-- `handleValidationFailure()` - Orchestrates retry logic
-- `handleMaxRetriesExhausted()` - Final failure with user options
-- `buildRetryPrompt()` - Template placeholder replacement
-
-**RetryContext pattern:**
-
-- Bundles integration, totalPrompts, workspaceFolderPath, currentPromptFilePath
-- Reduces parameter count in recursive calls
-- Simplifies testing by allowing mock context injection
-
-**Callback pattern for retry prompts:**
-
-- `SendRetryPromptCallback` type defined in EndConditionHandler
-- WorkflowExecutor creates callback via `createSendRetryPromptCallback()`
-- Callback handles: sending prompt, waiting for response, updating dashboard
-- Returns response text on success, null on failure
-  </endConditionHandler>
+Orchestrates retry logic with WorkflowExecutor callback pattern. Extracted from FlightPathManager for SRP.
+</endConditionHandler>
 
 <workflowExecutor>
-**Responsibilities:**
-- Execute prompts sequentially with pause/resume support
-- Wait for Copilot responses with duplicate event protection
-- Manage pause/resume state for response handling
-- Coordinate with EndConditionHandler for validation
-- Update dashboard with execution progress
-- Handle dynamic queue reload after prompt completion
-- CLI streaming output setup
-
-**Architecture:**
-
-- Extracted from FlightPathManager for single responsibility
-- Uses `WorkflowContext` interface to receive all dependencies
-- Exposes pause/resume state methods for FlightPathManager coordination
-- Owns the response waiting and streaming logic
-
-**Key methods:**
-
-- `execute()` - Main execution loop, delegates from FlightPathManager
-- `waitForResponseComplete()` - Response promise with pause awareness
-- `evaluateEndCondition()` - End condition evaluation with retry callback
-- `createSendRetryPromptCallback()` - Retry prompt callback factory
-- `hasPendingResponse()` / `isAwaitingResponse()` - State inspection for pause/resume
-- `resumePendingResponse()` / `clearPendingState()` - State management
-
-**WorkflowContext pattern:**
-
-- Bundles: workspaceFolderPath, currentPromptFilePath, dashboardProvider
-- Also: outputChannel, shouldShowCliCommand, showCliOutput, dynamicQueueConfig
-- FlightPathManager builds context before each execution
-- Reduces parameter count and improves testability
-  </workflowExecutor>
+Sequential prompt execution with pause/resume. Uses `WorkflowContext` pattern to bundle dependencies, creates retry callback for EndConditionHandler.
+</workflowExecutor>
 
 <endConditionEvaluator>
-**Responsibilities:**
-- Executes validation scripts (.py, .js, .ts, .sh, .bat, .ps1)
-- Path validation and security (workspace-only)
-- Process isolation with configurable timeouts
-- Compares script output to expected value
+Executes validation scripts in isolated child processes. Security: workspace-only paths, configurable timeout (default 30s).
+Supports: `.py`, `.js`, `.ts`, `.sh`, `.bat`, `.ps1`
+</endConditionEvaluator>
 
-**Security patterns:**
-
-- Scripts must be in workspace (no system-wide execution)
-- Runs in separate child process (isolation)
-- Timeout kills process (default 30s, configurable)
-- No direct file system access (must use CLI tools)
-
-**Script execution flow:**
-
-1. Resolve script path (absolute or workspace-relative)
-2. Determine script type by extension
-3. Spawn child process with timeout
-4. Capture stdout/stderr
-5. Compare output to `endCondition.returns` value
-6. Return success/failure with timing
-
-**Template system:**
-
-- Templates in `src/templates/` copied to `out/templates/` during build
-- `createSampleScript()` copies template to `.flightpath/` directory
-- Uses `context.extensionPath` to find bundled templates
-- Templates show basic structure, user must customize
-
-**Future enhancement:**
-
-- `../utils/PromptIdentity.ts` - Hash-based prompt identity tracking
-- `docs/QUEUE_APPEND_FEATURE.md` - Queue append and working file documentation
-- `docs/FLIGHTPATH_MCP_IMPLEMENTATION.md` - MCP-based queue extension
-- Pass Copilot response text to scripts (CLI only)
-- Enable response content validation (not yet implemented)
-  </endConditionEvaluator>
+<templateManager>
+Manages workflow templates (built-in from `out/templates/workflows/`, custom from `.flightpath/templates/`). Variable substitution with `{variableName}` syntax.
+</templateManager>
 
 <orchestrationClasses>
-**Orchestration classes** (extracted from FlightPathManager for single responsibility):
-
-**PromptFileLoader:**
-
-- Validates and loads prompt files into queue
-- Notifies dashboard without executing
-- Handles both load (review) and execute (run) flows
-
-**PromptFileWatcher:**
-
-- Monitors .flightpath/.queue directory for external changes
-- Triggers queue reload when working files are modified
-- Enables MCP-driven queue extensions
-
-**TemplateImporter:**
-
-- Imports workflow templates to .flightpath/templates/
-- Imports custom agents to .github/agents/
-- Template variable substitution (planned)
-
-**WorkflowCommandHandler:**
-
-- Handles createPromptFile command
-- Handles createEndConditionScript command
-- Manages file creation dialogs and user input
-
-**WorkspaceSessionManager:**
-
-- Auto-loads recent session on startup (if enabled)
-- Restores queue state from working files
-- Manages session persistence across VS Code restarts
-
-**Why extracted:**
-
-- FlightPathManager was growing too large (SRP violation)
-- Each class has single, well-defined responsibility
-- Improves testability and maintainability
-- Enables future feature additions without bloating manager
-  </orchestrationClasses>
+WorkflowExecutor, EndConditionHandler, TemplateImporter, WorkflowCommandHandler, WorkspaceSessionManager - extracted from FlightPathManager for SRP.
+</orchestrationClasses>
 
 <relatedFiles>
 - `./base/CopilotIntegration.ts` - Integration contract
-- `./cli/CopilotCommandLineIntegration.ts` - CLI implementation
+- `./cli/*.ts` - CLI implementations (3 files)
 - `./chat/CopilotChatIntegration.ts` - Chat implementation
-- `./WorkflowExecutor.ts` - Workflow execution loop
-- `./EndConditionHandler.ts` - Retry and validation failure handling
-- `../types/FlightPathTypes.ts` - Core type definitions
+- `./orchestration/*.ts` - Orchestration helpers
+- `../types/FlightPathTypes.ts` - Core types
 </relatedFiles>

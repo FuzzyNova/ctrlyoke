@@ -3,101 +3,70 @@ applyTo: "src/test/**"
 ---
 
 <purpose>
-Mocha test suite. Minimal coverage (pre-release, features prioritized over tests).
+Comprehensive Mocha test suite with unit and integration tests. Covers core business logic, state management, parsing, validation, and CLI integration.
 </purpose>
 
-<testFiles>
-- `extension.test.ts` - Basic sample test (placeholder)
-- `flightpath.test.ts` - Future FlightPath core logic tests
-- `runTest.ts` - Test runner configuration
-- `suite/index.ts` - Mocha test suite setup
-</testFiles>
+<testStructure>
+**Unit Tests** (src/test/*.test.ts):
+- `promptFileParser.test.ts` (303 lines) - JSON/YAML parsing, schema validation, file path resolution
+- `validationUtils.test.ts` (474 lines) - Security validation, script path validation, end condition validation
+- `promptQueue.test.ts` (763 lines) - State machine, lifecycle, pause/resume, dynamic queue extension
+- `endConditionEvaluator.test.ts` (374 lines) - Script execution, timeout handling, retry logic with template substitution
+- `promptIdentity.test.ts` (276 lines) - Content hashing, duplicate detection, instruction injection logic
+- `flightpath.test.ts` (78 lines) - Basic component instantiation and integration
+- `extension.test.ts` (12 lines) - Placeholder sample test
 
-<testPatterns>
-**Unit tests (when implemented):**
-- Mock VS Code API using test doubles
-- Test pure functions and business logic in isolation
-- Fast execution (no I/O, no timers)
-- Examples: PromptFileParser validation, ValidationUtils
+**Integration Tests** (src/test/integration/\*.test.ts):
 
-**Integration tests (when implemented):**
+- `cli.integration.test.ts` (99 lines) - Extension activation, command registration, CLI mode validation
+- `chat.integration.test.ts` (62 lines) - Chat commands, file attachment, configuration
+- `token-parsing.test.ts` (90 lines) - Token count parsing for Copilot/Claude CLI output
+- `workflow.integration.test.ts` (27 lines) - End-to-end workflow execution (minimal)
 
-- Use VS Code Extension Development Host
-- Test actual extension API interactions
-- Test command registration and execution
-- Examples: FlightPathManager command handling, CopilotIntegration initialization
+**Test Infrastructure:**
+
+- `runTest.ts` - @vscode/test-electron runner configuration
+- `suite/index.ts` - Mocha test suite setup (TDD style, glob pattern: `**/**.test.js`)
+- `fixtures/` - Test prompt files (JSON/YAML/Markdown), invalid files for error testing
 
 **Test organization:**
 
-- One test file per source file (e.g., `PromptFileParser.test.ts`)
-- Group related tests in `suite()` blocks
-- Use descriptive test names: "should [expected behavior] when [condition]"
-  </testPatterns>
+- One test file per source module
+- Nested `suite()` blocks for logical grouping
+- Descriptive test names: "should [expected behavior] when [condition]"
+- TDD style (Mocha UI: 'tdd')
+  </testStructure>
+
+<testCoverage>
+**Core logic fully tested:** PromptFileParser, ValidationUtils, PromptQueue, EndConditionEvaluator, PromptIdentity
+**Partial integration tests:** CLI/Chat setup, token parsing
+**Manual testing only:** Full workflows, AI responses, UI components
+</testCoverage>
 
 <testingChallenges>
-**Copilot integration testing:**
-- Cannot easily mock Copilot CLI (external process)
-- Cannot reliably test chat window automation (UI interactions)
-- Focus on testing integration _setup_ and _configuration_, not actual Copilot responses
-- Use test doubles for CopilotIntegration in higher-level tests
+**AI integration:** Cannot mock CLI/Chat; test setup only, manual for responses
+**Async:** Use async/await, set timeouts (30000ms for activation), cleanup resources
+**VS Code API:** Tests via @vscode/test-electron, access real APIs, check extension.isActive
+**Fixtures:** `src/test/fixtures/`, navigate from `out/test`: `path.join(__dirname, '..', '..', 'src', 'test', 'fixtures', 'prompts')`
+</testingChallenges>
 
-**Async operation testing:**
-
-- Many operations are async (file I/O, process spawning, polling)
-- Use async/await in test functions
-- Set reasonable timeouts (Mocha default: 2000ms, may need longer)
-- Clean up resources (kill processes, close files) in afterEach()
-
-**VS Code API mocking:**
-
-- vscode module cannot be imported outside Extension Development Host
-- Use dependency injection to enable testing
-- Alternative: Test in Extension Development Host (slower but more realistic)
-  </testingChallenges>
-
-<coverageGoals>
-**High priority:**
-- PromptFileParser: Schema validation, format normalization
-- ValidationUtils: Type validation, error formatting
-- PromptQueue: State transitions, progress tracking
-- EndConditionEvaluator: Script execution, timeout handling
-
-**Medium priority:**
-
-- FileSystemUtils: File operations, watching
-- StatusBarManager: State visualization
-- PromptCompletionProvider: Completion item generation
-
-**Low priority (integration heavy):**
-
-- FlightPathManager: Full workflow execution
-- CopilotIntegration: Actual Copilot interaction
-- CLI/Chat integrations: Real automation (covered by manual testing)
-  </coverageGoals>
+<keyPatterns>
+**State machines:** Test all transitions, edge cases, dynamic extension, enforcement limits
+**Security:** Directory traversal, shell injection, command injection (test reject + accept)
+**Parsers:** Format normalization, schema validation errors, file resolution
+**Retry logic:** Template substitution, maxRetries, timeout, exit codes
+**Identity:** Hash consistency, normalization, deduplication, injection logic
+</keyPatterns>
 
 <runningTests>
-```bash
-npm test                    # Run all tests
-npm run watch              # Watch mode during development
-```
-
-**Test runner:**
-
-- Uses @vscode/test-electron
-- Launches Extension Development Host
-- Runs tests in VS Code environment
-- Closes automatically after completion
-  </runningTests>
+`npm test` → @vscode/test-electron → loads extension → Mocha discovers `**/**.test.js` → runs in TDD mode
+**Debugging:** F5 (Extension Development Host), set breakpoints in TypeScript
+**Watch mode:** `npm run watch` for rapid feedback
+</runningTests>
 
 <testingPhilosophy>
-**Pre-release status** means testing is lower priority than feature completeness. As extension stabilizes, add tests incrementally:
-
-1. Start with pure functions (validation, parsing)
-2. Add unit tests for stateful components (queue, evaluator)
-3. Add integration tests for workflows
-4. Add E2E tests for user scenarios
-
-**Don't block feature development for test coverage** - Build tests when patterns stabilize and breaking changes become costly.
+**Pre-release status:** Comprehensive unit tests for core logic. Integration tests for setup only. Manual testing for AI/UI.
+**Adding tests:** Create `<module>.test.ts`, use `suite()`/`test()`, mock dependencies, cleanup resources, run `npm test` before committing.
 </testingPhilosophy>
 
 <relatedFiles>

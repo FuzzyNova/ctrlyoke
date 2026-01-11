@@ -7,84 +7,63 @@ Templates for end condition scripts, custom agents, and workflow files.
 Copied to `out/templates/` during build.
 </purpose>
 
-## End Condition Scripts
+<directory>
+`agents/` - Custom agents with manifest
+`workflows/` - Workflow templates (JSON + YAML) with manifest
+`check_condition.*` - End condition script templates (5 types)
+</directory>
 
-<contract>
-- Output expected value to stdout (`"true"`, `"false"`, etc.)
-- Exit code 0 = success, non-zero = error
-- Supported: `.py`, `.js`, `.sh`, `.bat`, `.ps1`
-</contract>
-
-<scriptGuidelines>
-- Include shebang for Unix scripts
-- No network access or file modifications
-- Use subprocess for commands (not `eval`)
-- Default to returning `"true"`
-</scriptGuidelines>
-
-## Custom Agents
+<endConditionScripts>
+**Contract:** stdout = expected value, exit 0 = success. Supports `.py`, `.js`, `.sh`, `.bat`, `.ps1`. Include shebang, avoid network/filesystem, use subprocess (not `eval`).
+</endConditionScripts>
 
 <agentFormat>
-Agents use `.agent.md` format with YAML frontmatter:
-
-```markdown
----
-name: agent-name
-description: Brief description for picker
----
-
-# Agent Title
-
-<purpose>...</purpose>
-<criticalRules>...</criticalRules>
-<guidelines>...</guidelines>
-```
-
+`.agent.md` with YAML frontmatter (name, description, optional: tools, model). XML structure: `<purpose>`, `<guidelines>`, optional: `<criticalRules>`, `<examples>`, `<context>`. See XML_PROMPTING_GUIDELINES.md.
 </agentFormat>
 
-<agentGuidelines>
-- Use XML tags for structure (see XML_PROMPTING_GUIDELINES.md)
-- NO model names in frontmatter (user/workflow controlled)
-- NO tools list in frontmatter (user/workflow controlled)
-- Only `name` and `description` in frontmatter
-- Required XML sections: `<purpose>`, `<guidelines>`
-- Optional XML sections: `<criticalRules>`, `<examples>`, `<context>`
-</agentGuidelines>
+<manifestFiles>
+`agents/manifest.json` - Agent metadata (id, label, description, file, tags, icon)
+`workflows/manifest.json` - Workflow metadata (same structure)
+Loaded by TemplateImporter for import commands.
+</manifestFiles>
 
-## Workflow Templates
+<templateVariables>
+Templates support `{variableName}` placeholder substitution:
 
-<workflowFormat>
-- `.prompt.md` - Single markdown prompt
-- `.flightpath.json` - Multi-step workflow with optional validation
-</workflowFormat>
+**Built-in templates** (defined in TemplateManager.BUILT_IN_TEMPLATES):
+
+- `simple-feature`: `{featureDescription}`
+- `fix-tests`: `{testCommand}`
+- `full-feature`: `{featureDescription}`, `{planDocument}`
+
+**Reserved variables** (automatically injected, do NOT use in templates):
+
+- `{scriptOutput}` - Output from endCondition script
+- `{retryCount}` - Current retry attempt
+- `{maxRetries}` - Maximum retries allowed
+
+**Variable extraction**:
+
+- Pattern: `/\{([a-z][a-zA-Z0-9]*)\}/g`
+- Filters out reserved variables
+- Used by TemplateManager.extractVariables()
+  </templateVariables>
 
 <contextSyntax>
-**FlightPath parses and processes:**
-- `#file:path` - Attaches file content inline via `buildAttachmentXml()`
-- `#file:path:startLine-endLine` - Attaches specific line range
-- `#file:"path with spaces"` - Quoted paths for spaces
-
-**FlightPath does NOT parse (passed through as literal text):**
-
-- `@workspace` - Copilot Chat-specific
-- `#codebase` - Copilot Chat-specific
-- `/explain`, `/fix`, etc. - Slash commands (provider-specific)
-
-Use plain English prompts + `#file:` for portable templates.
+**Parsed:** `#file:path`, `#file:path:lines`, `#file:"path with spaces"`
+**Passed through:** `@workspace`, `#codebase`, slash commands (provider-specific)
+Use `#file:` for portable templates.
 </contextSyntax>
 
 <workflowGuidelines>
-- Include `$schema` reference in JSON files
-- Use descriptive `id` for each prompt
-- Add `model` override only when needed (e.g., haiku for simple tasks)
-- Include `endCondition` for validation-required steps
-- Avoid provider-specific syntax (`@workspace`, `/commands`) in templates
+Provide JSON + YAML. Use `|` for multi-line YAML. Avoid provider-specific syntax. Import target: `.flightpath/templates/`
 </workflowGuidelines>
 
-## Build
+<integration>
+**TemplateManager**: Loads/extracts/substitutes variables, discovers custom templates. Paths: `out/templates/workflows/` (built-in), `.flightpath/templates/` (custom)
+**TemplateImporter**: Copies agents/workflows, loads manifests, handles import commands
+</integration>
 
 <build>
-- Source: `src/templates/`
-- Output: `out/templates/` (esbuild copies, never edit output)
-- Access: `context.extensionPath + "/out/templates/"`
+Source: `src/templates/` → Output: `out/templates/` (never edit). Access via `context.extensionPath`. Manifests must be valid JSON.
 </build>
