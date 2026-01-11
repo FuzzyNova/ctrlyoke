@@ -17,36 +17,70 @@
     <div id="app">
       <div id="header">
         <div id="action-buttons">
-          <button
-            id="load-file"
-            class="btn-secondary btn-small"
-            title="Load a prompt file to start a new workflow"
-          >
-            Load
-          </button>
-          <button
-            id="append-file"
-            class="btn-secondary btn-small"
-            title="Queue prompts from a file"
-            disabled
-          >
-            Queue File...
-          </button>
-          <span class="button-divider"></span>
-          <button
-            id="new-workflow"
-            class="btn-secondary btn-small"
-            title="Clear current workflow and start blank"
-          >
-            New Workflow
-          </button>
-          <button
-            id="from-template"
-            class="btn-secondary btn-small"
-            title="Create workflow from template"
-          >
-            From Template...
-          </button>
+          <!-- Split dropdown button -->
+          <div class="split-button">
+            <!-- Main button (left side) -->
+            <button
+              id="btn-new-workflow-main"
+              class="split-button-main btn-secondary btn-small"
+              title="Clear current workflow and start blank"
+            >
+              New Workflow
+            </button>
+
+            <!-- Dropdown trigger (right side) -->
+            <button
+              id="btn-workflow-dropdown"
+              class="split-button-dropdown btn-secondary btn-small"
+              title="Show more workflow options"
+              aria-label="Show workflow loading options"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="workflow-dropdown-menu"
+            >
+              <i class="codicon codicon-chevron-down"></i>
+            </button>
+
+            <!-- Dropdown menu (hidden by default) -->
+            <div
+              id="workflow-dropdown-menu"
+              class="dropdown-menu"
+              role="menu"
+              aria-label="Workflow options"
+              hidden
+            >
+              <button
+                class="dropdown-item"
+                data-action="new-workflow"
+                role="menuitem"
+              >
+                New Workflow
+              </button>
+              <button
+                class="dropdown-item"
+                data-action="from-template"
+                role="menuitem"
+              >
+                From Template...
+              </button>
+              <div class="dropdown-divider"></div>
+              <button
+                class="dropdown-item"
+                data-action="load-file"
+                role="menuitem"
+              >
+                Load from File...
+              </button>
+              <button
+                class="dropdown-item"
+                data-action="queue-file"
+                role="menuitem"
+                disabled
+              >
+                Queue from File...
+              </button>
+            </div>
+          </div>
         </div>
 
         <div id="workflow-status">

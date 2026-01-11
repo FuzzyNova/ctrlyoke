@@ -78,10 +78,10 @@
     workflowName: document.getElementById("workflow-name"),
     statusSeparator: document.getElementById("status-separator"),
     executionState: document.getElementById("execution-state"),
-    loadFileBtn: document.getElementById("load-file"),
-    appendFileBtn: document.getElementById("append-file"),
-    newWorkflowBtn: document.getElementById("new-workflow"),
-    fromTemplateBtn: document.getElementById("from-template"),
+    // Split button elements (new)
+    btnNewWorkflowMain: document.getElementById("btn-new-workflow-main"),
+    btnWorkflowDropdown: document.getElementById("btn-workflow-dropdown"),
+    workflowDropdownMenu: document.getElementById("workflow-dropdown-menu"),
     runBtn: document.getElementById("btn-run"),
     pauseBtn: document.getElementById("btn-pause"),
     stopBtn: document.getElementById("btn-stop"),
@@ -351,21 +351,244 @@
     return false;
   }
 
-  // Event listeners
-  elements.loadFileBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
-  });
+  // ============================================================================
+  // SPLIT BUTTON FUNCTIONS
+  // ============================================================================
 
-  elements.appendFileBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
-  });
+  /**
+   * Toggle the workflow dropdown menu
+   */
+  function toggleWorkflowDropdown() {
+    const isOpen = !elements.workflowDropdownMenu.hidden;
 
-  elements.newWorkflowBtn.addEventListener("click", () => {
+    if (isOpen) {
+      closeWorkflowDropdown();
+    } else {
+      openWorkflowDropdown();
+    }
+  }
+
+  /**
+   * Open the workflow dropdown menu
+   */
+  function openWorkflowDropdown() {
+    elements.workflowDropdownMenu.hidden = false;
+    elements.btnWorkflowDropdown.setAttribute("aria-expanded", "true");
+
+    // Update dropdown item states based on current workflow state
+    updateWorkflowDropdownItems();
+
+    // Focus first enabled item
+    const firstItem = elements.workflowDropdownMenu.querySelector(
+      ".dropdown-item:not(:disabled)"
+    );
+    firstItem?.focus();
+
+    // Close dropdown when clicking outside
+    document.addEventListener("click", handleDropdownClickOutside);
+  }
+
+  /**
+   * Close the workflow dropdown menu
+   */
+  function closeWorkflowDropdown() {
+    elements.workflowDropdownMenu.hidden = true;
+    elements.btnWorkflowDropdown.setAttribute("aria-expanded", "false");
+
+    // Remove click-outside listener
+    document.removeEventListener("click", handleDropdownClickOutside);
+  }
+
+  /**
+   * Handle clicks outside the dropdown to close it
+   */
+  function handleDropdownClickOutside(e) {
+    const dropdown = elements.workflowDropdownMenu;
+    const trigger = elements.btnWorkflowDropdown;
+
+    // Close if click is outside dropdown and trigger button
+    if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+      closeWorkflowDropdown();
+    }
+  }
+
+  /**
+   * Update dropdown menu item states based on current workflow state
+   */
+  function updateWorkflowDropdownItems() {
+    const hasQueue = state.fileName !== null;
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+    const isExecuting = isRunning || isPaused;
+
+    // Get dropdown items by data-action attribute
+    const items = {
+      newWorkflow: elements.workflowDropdownMenu.querySelector(
+        '[data-action="new-workflow"]'
+      ),
+      fromTemplate: elements.workflowDropdownMenu.querySelector(
+        '[data-action="from-template"]'
+      ),
+      loadFile: elements.workflowDropdownMenu.querySelector(
+        '[data-action="load-file"]'
+      ),
+      queueFile: elements.workflowDropdownMenu.querySelector(
+        '[data-action="queue-file"]'
+      ),
+    };
+
+    // Disable destructive actions during execution
+    items.newWorkflow.disabled = isExecuting;
+    items.fromTemplate.disabled = isExecuting;
+    items.loadFile.disabled = isExecuting;
+
+    // Queue file only enabled when queue exists and not during execution
+    items.queueFile.disabled = !hasQueue || isExecuting;
+  }
+
+  /**
+   * Update main button state based on workflow state
+   */
+  function updateNewWorkflowButtonState() {
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+    const isExecuting = isRunning || isPaused;
+
+    // Disable main button during execution
+    elements.btnNewWorkflowMain.disabled = isExecuting;
+
+    if (isExecuting) {
+      elements.btnNewWorkflowMain.title =
+        "Cannot clear workflow while running (stop first)";
+    } else {
+      elements.btnNewWorkflowMain.title =
+        "Clear current workflow and start blank";
+    }
+
+    // Dropdown trigger always enabled (can still queue during execution)
+    elements.btnWorkflowDropdown.disabled = false;
+  }
+
+  /**
+   * Navigate dropdown items with keyboard
+   */
+  function navigateDropdownItems(direction) {
+    const items = Array.from(
+      elements.workflowDropdownMenu.querySelectorAll(
+        ".dropdown-item:not(:disabled)"
+      )
+    );
+    const currentIndex = items.indexOf(document.activeElement);
+
+    let nextIndex = currentIndex + direction;
+
+    // Wrap around
+    if (nextIndex < 0) nextIndex = items.length - 1;
+    if (nextIndex >= items.length) nextIndex = 0;
+
+    items[nextIndex]?.focus();
+  }
+
+  /**
+   * Handle "New Workflow" main button click (zero friction - no confirmation)
+   */
+  function handleNewWorkflowAction() {
+    // Clear workflow directly without confirmation
     vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_WORKFLOW });
+  }
+
+  /**
+   * Handle dropdown menu item clicks
+   */
+  function handleDropdownAction(action) {
+    switch (action) {
+      case "new-workflow":
+        handleNewWorkflowAction();
+        break;
+
+      case "from-template":
+        vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
+        break;
+
+      case "load-file":
+        handleLoadFileAction();
+        break;
+
+      case "queue-file":
+        vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
+        break;
+
+      default:
+        console.warn("Unknown dropdown action:", action);
+    }
+  }
+
+  /**
+   * Handle "Load from File..." action (zero friction - no confirmation)
+   */
+  function handleLoadFileAction() {
+    const isRunning = state.executionState === EXECUTION_STATES.RUNNING;
+    const isPaused = state.executionState === EXECUTION_STATES.PAUSED;
+
+    if (isRunning || isPaused) {
+      // This shouldn't happen (button should be disabled), but extra safety
+      console.warn("Cannot load file while workflow is running");
+      return;
+    }
+
+    // Load file directly without confirmation
+    vscode.postMessage({ type: MESSAGE_TYPES.SELECT_FILE });
+  }
+
+  // ============================================================================
+  // SPLIT BUTTON EVENT LISTENERS
+  // ============================================================================
+
+  // Main button click (New Workflow action)
+  elements.btnNewWorkflowMain.addEventListener("click", () => {
+    handleNewWorkflowAction();
   });
 
-  elements.fromTemplateBtn.addEventListener("click", () => {
-    vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
+  // Dropdown trigger click
+  elements.btnWorkflowDropdown.addEventListener("click", (e) => {
+    e.stopPropagation(); // Prevent click-outside handler from firing immediately
+    toggleWorkflowDropdown();
+  });
+
+  // Dropdown menu item clicks
+  elements.workflowDropdownMenu.addEventListener("click", (e) => {
+    const item = e.target.closest(".dropdown-item");
+    if (!item || item.disabled) return;
+
+    const action = item.dataset.action;
+    handleDropdownAction(action);
+    closeWorkflowDropdown();
+  });
+
+  // Keyboard navigation for dropdown
+  elements.workflowDropdownMenu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeWorkflowDropdown();
+      elements.btnWorkflowDropdown.focus();
+    }
+
+    // Arrow key navigation between items
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      navigateDropdownItems(e.key === "ArrowDown" ? 1 : -1);
+    }
+
+    // Enter or Space to activate item
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const focusedItem = document.activeElement;
+      if (
+        focusedItem.classList.contains("dropdown-item") &&
+        !focusedItem.disabled
+      ) {
+        focusedItem.click();
+      }
+    }
   });
 
   elements.runBtn.addEventListener("click", () => {
@@ -518,6 +741,40 @@
     }
   });
 
+  // ============================================================================
+  // KEYBOARD SHORTCUTS FOR WORKFLOW ACTIONS
+  // ============================================================================
+  document.addEventListener("keydown", (e) => {
+    // Only trigger if Ctrl+Shift is pressed (or Cmd+Shift on Mac)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+      // Ctrl+Shift+N: New Workflow
+      if (e.key === "N") {
+        e.preventDefault();
+        handleNewWorkflowAction();
+      }
+
+      // Ctrl+Shift+T: From Template
+      if (e.key === "T") {
+        e.preventDefault();
+        vscode.postMessage({ type: MESSAGE_TYPES.NEW_WORKFLOW });
+      }
+
+      // Ctrl+Shift+L: Load from File
+      if (e.key === "L") {
+        e.preventDefault();
+        handleLoadFileAction();
+      }
+
+      // Ctrl+Shift+Q: Queue from File
+      if (e.key === "Q") {
+        e.preventDefault();
+        if (state.fileName !== null) {
+          vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
+        }
+      }
+    }
+  });
+
   // Helper: Extract workflow name from file path
   function getWorkflowName(filePath) {
     if (!filePath) return "New Workflow";
@@ -537,33 +794,6 @@
       elements.workflowName.textContent = getWorkflowName(filePath);
       elements.statusSeparator.style.display = "inline";
       elements.executionState.style.display = "inline";
-    }
-  }
-
-  // Update Load button state (disable when running/paused)
-  function updateLoadButtonState() {
-    if (
-      state.executionState === EXECUTION_STATES.RUNNING ||
-      state.executionState === EXECUTION_STATES.PAUSED
-    ) {
-      elements.loadFileBtn.disabled = true;
-      elements.loadFileBtn.title =
-        "Cannot load while workflow is running (stop first)";
-    } else {
-      elements.loadFileBtn.disabled = false;
-      elements.loadFileBtn.title = "Load a prompt file to start a new workflow";
-    }
-  }
-
-  // Update Append button state (disable when no queue)
-  function updateAppendButtonState() {
-    const hasQueue = state.fileName !== null;
-    elements.appendFileBtn.disabled = !hasQueue;
-
-    if (!hasQueue) {
-      elements.appendFileBtn.title = "New workflow (load a file first)";
-    } else {
-      elements.appendFileBtn.title = "Queue prompts from a file";
     }
   }
 
@@ -723,8 +953,7 @@
 
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.IDLE);
-    updateLoadButtonState();
-    updateAppendButtonState();
+    updateNewWorkflowButtonState();
 
     // Reset prompt counter
     elements.promptCounter.textContent = "";
@@ -769,8 +998,7 @@
 
     // Update workflow status display
     updateWorkflowStatus(fileName, executionState);
-    updateLoadButtonState();
-    updateAppendButtonState();
+    updateNewWorkflowButtonState();
 
     // Update prompt counter to reflect restored state
     updatePromptCounter();
@@ -809,8 +1037,7 @@
 
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.RUNNING);
-    updateLoadButtonState();
-    updateAppendButtonState();
+    updateNewWorkflowButtonState();
     updateButtonTooltips();
 
     updateControls();
@@ -821,7 +1048,7 @@
   function handleExecutionStateChanged(executionState) {
     state.executionState = executionState;
     updateWorkflowStatus(state.fileName, executionState);
-    updateLoadButtonState();
+    updateNewWorkflowButtonState();
     updateEditorButtons(); // Update button text and behavior based on state
     updateNewWorkflowCheckbox(); // Update checkbox visibility
     updateButtonTooltips();
