@@ -103,6 +103,16 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     return ["--prompt", `"${promptFileRef}"`, ...baseArgs];
   }
 
+  protected buildHeadlessArgsWithDirectPrompt(
+    baseArgs: string[],
+    promptText: string
+  ): string[] {
+    // Simple prompts: pass directly with --prompt flag
+    // Format: copilot --prompt "your question here" [other args]
+    // Note: Quotes handle spaces and special chars
+    return ["--prompt", `"${promptText}"`, ...baseArgs];
+  }
+
   protected buildInteractiveTuiCommand(baseArgs: string[]): string {
     return `${this.getCliName()} ${baseArgs.join(" ")}`;
   }

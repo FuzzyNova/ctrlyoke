@@ -276,6 +276,19 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   ): string[];
 
   /**
+   * Build headless CLI arguments with direct prompt text.
+   * Used for simple prompts that don't need temp file overhead.
+   *
+   * @param baseArgs The base CLI arguments
+   * @param promptText The prompt text to include directly
+   * @returns Args array for headless mode with direct prompt
+   */
+  protected abstract buildHeadlessArgsWithDirectPrompt(
+    baseArgs: string[],
+    promptText: string
+  ): string[];
+
+  /**
    * Determine if stdout should be streamed in real-time during headless execution.
    *
    * By default, returns true to stream output as it arrives.
@@ -320,6 +333,50 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    */
   protected formatFileReference(relativeFilePath: string): string {
     return `@${relativeFilePath}`;
+  }
+
+  /**
+   * Check if a prompt is simple enough to pass directly without temp file.
+   *
+   * Simple prompts:
+   * - Short length (≤300 characters)
+   * - No dynamic queue XML instructions
+   * - No complex formatting that would break shell escaping
+   *
+   * Benefits of direct passing:
+   * - No file I/O overhead
+   * - Faster response for quick queries
+   * - Better UX for interactive commands
+   *
+   * Examples:
+   * - "explain that last change" ✓
+   * - "write a commit message" ✓
+   * - Long prompt with #file: references ✗
+   * - Prompt with <criticalInstruction> ✗
+   *
+   * @param finalPromptText The final prompt text (after instruction injection)
+   * @returns true if prompt can be passed directly
+   */
+  protected isSimplePrompt(finalPromptText: string): boolean {
+    const MAX_SIMPLE_PROMPT_LENGTH = 300;
+
+    // Must be short enough
+    if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
+      return false;
+    }
+
+    // Must not contain XML instruction tags (dynamic queue)
+    if (finalPromptText.includes("<criticalInstruction>")) {
+      return false;
+    }
+
+    // Must not contain special characters that commonly break in shells
+    // (backticks can cause command execution, etc.)
+    if (finalPromptText.includes("`")) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -373,7 +430,8 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       tuiProcessor: TuiStreamProcessor;
       timeoutMs: number;
     }) => Promise<{ success: boolean; errorMessage?: string }>,
-    tuiConfigOverrides?: Partial<TuiStreamConfig>
+    tuiConfigOverrides?: Partial<TuiStreamConfig>,
+    useDirectPrompt: boolean = false
   ): Promise<{ success: boolean; errorMessage?: string }> {
     const tuiCommand = this.buildInteractiveTuiCommand(args);
     const displayCommand = `${this.getCliName()} [TUI mode] "<prompt>"`;
@@ -398,11 +456,20 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     let tempFilePath: string | undefined;
 
     try {
-      const { tempFilePath: path, promptWithInstruction } =
-        await this.createPromptFileWithReference(promptText, workflowContext);
-      tempFilePath = path;
+      let promptToSend: string;
 
-      this.lastSanitizedPrompt = promptText;
+      if (useDirectPrompt) {
+        // Simple prompt: send directly without temp file
+        promptToSend = promptText;
+        this.lastSanitizedPrompt = promptText;
+      } else {
+        // Complex prompt: create temp file with instruction
+        const { tempFilePath: path, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePath = path;
+        promptToSend = promptWithInstruction;
+        this.lastSanitizedPrompt = promptText;
+      }
 
       const timeoutMs =
         ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000; // 12 hours default if unlimited
@@ -423,7 +490,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       return await execute({
         terminal,
         execution,
-        promptWithInstruction,
+        promptWithInstruction: promptToSend,
         tuiProcessor,
         timeoutMs,
       });
@@ -446,7 +513,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * 1. Dispose any existing terminal (CLI may be running in it)
    * 2. Create fresh terminal and start CLI in interactive mode
    * 3. Wait for TUI to be ready (delay-based, simple)
-   * 4. Send prompt via terminal.sendText() (no length limits!)
+   * 4. Send prompt via terminal.sendText()
+   *    - Simple prompts: sent directly (fast!)
+   *    - Complex prompts: written to temp file and referenced
    * 5. Stream output via execution.read() and detect completion
    *
    * Session continuity is handled via --resume flag in CLI args, not by
@@ -466,6 +535,15 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     workflowContext?: WorkflowContext
   ): Promise<boolean> {
     try {
+      // Check if prompt is simple enough for direct passing
+      const useDirectPrompt = this.isSimplePrompt(promptText);
+
+      if (useDirectPrompt) {
+        Log.debug("📝 Using direct prompt (simple, no temp file)");
+      } else {
+        Log.debug("📁 Using temp file prompt (complex or long)");
+      }
+
       const result = await this.withInteractiveTuiExecution(
         args,
         promptText,
@@ -483,7 +561,9 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
             promptWithInstruction,
             timeoutMs,
             this.lastSanitizedPrompt
-          )
+          ),
+        undefined,
+        useDirectPrompt // Pass flag to skip temp file creation
       );
 
       if (!result.success && result.errorMessage) {
@@ -498,9 +578,13 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Execute a CLI command in headless mode using temp file for prompt passing.
+   * Execute a CLI command in headless mode.
    *
-   * Strategy:
+   * Strategy for simple prompts (≤300 chars, no XML, no backticks):
+   * 1. Pass prompt directly on command line (fast!)
+   * 2. No file I/O overhead
+   *
+   * Strategy for complex prompts:
    * 1. Write fully-expanded prompt to temp file
    * 2. Spawn CLI process with @temp-file or --prompt @temp-file parameter
    * 3. Wait for process to complete
@@ -513,7 +597,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
    * - Unified: Same approach for interactive and headless modes
    *
    * @param args The CLI arguments (WITHOUT prompt)
-   * @param promptText The prompt text (will be written to temp file)
+   * @param promptText The prompt text (will be written to temp file or passed directly)
    * @param workflowContext Optional workflow context for temp file naming
    * @param executeCallback Callback for CLI-specific result handling
    * @returns Promise<boolean> indicating success
@@ -537,17 +621,27 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
     let tempFilePath: string | undefined;
 
     try {
-      // Create temp file with instructional prompt
-      const { tempFilePath: path, promptWithInstruction } =
-        await this.createPromptFileWithReference(promptText, workflowContext);
-      tempFilePath = path;
+      // Check if prompt is simple enough for direct passing
+      const useDirectPrompt = this.isSimplePrompt(promptText);
+      let headlessArgs: string[];
+      let displayCommand: string;
 
-      // Build args with instructional prompt
-      const headlessArgs = this.buildHeadlessArgs(args, promptWithInstruction);
-      const displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
-
-      Log.info(`🚀 Starting headless mode with file: ${displayCommand}`);
-      Log.info(`📝 Prompt length: ${promptText.length} characters`);
+      if (useDirectPrompt) {
+        // Simple prompt: pass directly on command line (no temp file!)
+        headlessArgs = this.buildHeadlessArgsWithDirectPrompt(args, promptText);
+        displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
+        Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
+        Log.info(`📝 Prompt length: ${promptText.length} characters`);
+      } else {
+        // Complex prompt: create temp file with instructional prompt
+        const { tempFilePath: path, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePath = path;
+        headlessArgs = this.buildHeadlessArgs(args, promptWithInstruction);
+        displayCommand = `${this.getCliName()} ${headlessArgs.join(" ")}`;
+        Log.info(`🚀 Starting headless mode with file reference`);
+        Log.info(`📝 Prompt length: ${promptText.length} characters`);
+      }
 
       // Store for debugging
       this.lastCliCommand = displayCommand;
@@ -588,7 +682,7 @@ export abstract class BaseCliIntegration extends CopilotIntegration {
       Log.error(`❌ Headless execution error`, error);
       return false;
     } finally {
-      // Cleanup temp file
+      // Cleanup temp file (if used)
       if (tempFilePath) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {

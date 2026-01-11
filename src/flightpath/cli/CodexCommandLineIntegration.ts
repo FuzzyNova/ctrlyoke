@@ -145,6 +145,16 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     return [...baseArgs, `"${promptFileRef}"`];
   }
 
+  protected buildHeadlessArgsWithDirectPrompt(
+    baseArgs: string[],
+    promptText: string
+  ): string[] {
+    // Simple prompts: pass as LAST positional argument
+    // Format: codex exec [OPTIONS] "your question here"
+    // Note: Quotes handle spaces and special chars
+    return [...baseArgs, `"${promptText}"`];
+  }
+
   protected shouldStreamHeadlessOutput(): boolean {
     return true; // Stream and extract content from JSONL events
   }

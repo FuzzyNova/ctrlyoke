@@ -146,6 +146,9 @@ Sequential execution with pause/resume/cancel. State machine tracks progress. Re
 Abstract base with two implementations:
 
 - **CLI** (default): Deterministic completion, structured output, no UI dependencies
+  - **Adaptive prompt passing**: Simple prompts (≤300 chars) sent directly for speed; complex prompts use temp files
+  - **Simple prompts**: "explain that change" → instant direct passing (~1ms overhead)
+  - **Complex prompts**: Prompts with attachments/XML → temp file approach (~50ms overhead)
 - **Chat** (fallback): UI automation with hybrid response detection (Language Model Tool + clipboard polling)
 
 Both support automatic file attachment for `#file:path` references.

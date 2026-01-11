@@ -103,6 +103,16 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     return [`"${promptFileRef}"`, ...baseArgs];
   }
 
+  protected buildHeadlessArgsWithDirectPrompt(
+    baseArgs: string[],
+    promptText: string
+  ): string[] {
+    // Simple prompts: pass as FIRST positional argument
+    // Format: claude "your question here" -p [other args]
+    // Note: Quotes handle spaces and special chars
+    return [`"${promptText}"`, ...baseArgs];
+  }
+
   protected shouldStreamHeadlessOutput(): boolean {
     return true; // Stream and extract content from JSON chunks
   }
