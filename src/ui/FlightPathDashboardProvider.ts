@@ -750,6 +750,28 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const codemirrorEditorUri = webview.asWebviewUri(
       this.getWebviewPath("codemirror-editor.js")
     );
+    // FlightPath module URIs (modular architecture)
+    const utilitiesUri = webview.asWebviewUri(
+      this.getWebviewPath("utilities.js")
+    );
+    const stateManagerUri = webview.asWebviewUri(
+      this.getWebviewPath("state-manager.js")
+    );
+    const outputManagerUri = webview.asWebviewUri(
+      this.getWebviewPath("output-manager.js")
+    );
+    const workflowManagerUri = webview.asWebviewUri(
+      this.getWebviewPath("workflow-manager.js")
+    );
+    const editorManagerUri = webview.asWebviewUri(
+      this.getWebviewPath("editor-manager.js")
+    );
+    const promptsManagerUri = webview.asWebviewUri(
+      this.getWebviewPath("prompts-manager.js")
+    );
+    const messageRouterUri = webview.asWebviewUri(
+      this.getWebviewPath("message-router.js")
+    );
     // Get dictionary file URIs (pass individual files, not directory)
     const affUri = webview
       .asWebviewUri(this.getWebviewPath("dictionaries", "en_US", "en_US.aff"))
@@ -786,6 +808,13 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{typoUri\}\}/g, typoUri.toString())
       .replace(/\{\{codemirrorLoaderUri\}\}/g, codemirrorLoaderUri.toString())
       .replace(/\{\{codemirrorEditorUri\}\}/g, codemirrorEditorUri.toString())
+      .replace(/\{\{utilitiesUri\}\}/g, utilitiesUri.toString())
+      .replace(/\{\{stateManagerUri\}\}/g, stateManagerUri.toString())
+      .replace(/\{\{outputManagerUri\}\}/g, outputManagerUri.toString())
+      .replace(/\{\{workflowManagerUri\}\}/g, workflowManagerUri.toString())
+      .replace(/\{\{editorManagerUri\}\}/g, editorManagerUri.toString())
+      .replace(/\{\{promptsManagerUri\}\}/g, promptsManagerUri.toString())
+      .replace(/\{\{messageRouterUri\}\}/g, messageRouterUri.toString())
       .replace(/\{\{affUri\}\}/g, affUri)
       .replace(/\{\{dicUri\}\}/g, dicUri)
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);

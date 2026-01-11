@@ -535,7 +535,21 @@ Please fix the issues."
     <script type="module" src="{{codemirrorLoaderUri}}"></script>
     <!-- Load CodeMirror prompt editor -->
     <script src="{{codemirrorEditorUri}}"></script>
-    <!-- Then load main dashboard code that depends on constants -->
+
+    <!-- Load FlightPath modules (dependency order matters) -->
+    <!-- 1. Utilities (no dependencies) -->
+    <script src="{{utilitiesUri}}"></script>
+    <!-- 2. State Manager (depends on utilities for some defaults) -->
+    <script src="{{stateManagerUri}}"></script>
+    <!-- 3. Feature Managers (depend on state manager and utilities) -->
+    <script src="{{outputManagerUri}}"></script>
+    <script src="{{workflowManagerUri}}"></script>
+    <script src="{{editorManagerUri}}"></script>
+    <script src="{{promptsManagerUri}}"></script>
+    <!-- 4. Message Router (depends on all managers) -->
+    <script src="{{messageRouterUri}}"></script>
+
+    <!-- 5. Main dashboard orchestrator (wires everything together) -->
     <script src="{{scriptUri}}"></script>
   </body>
 </html>

@@ -7,13 +7,65 @@ WebView UI for dashboard (workflow visualization/execution, CodeMirror editor, C
 </purpose>
 
 <architecture>
-**Components:**
-1. FlightPathDashboardProvider (TypeScript) - WebView provider, message routing, state management
-2. FlightPathSettingsProvider (TypeScript) - Settings WebView provider
-3. dashboard.js (JavaScript) - DOM manipulation, state rendering, VS Code API
-4. settings.js (JavaScript) - Settings UI, provider/model selection
-5. codemirror-editor.js - Prompt editor with autocomplete, spell check, Ctrl+Click navigation
-6. shared.css → dashboard.css/settings.css (cascading styles)
+**Modular Architecture (Refactored January 2026):**
+
+Dashboard UI is now modularized into 8 files for maintainability:
+
+1. **dashboard.js** (339 lines) - Main orchestrator
+   - Initializes all modules in dependency order
+   - Global event listeners (layout toggles, ESC key)
+   - DOM elements object (single source of truth)
+
+2. **utilities.js** (233 lines) - Pure helper functions
+   - Time: getTimestamp, formatTime
+   - String: escapeHtml, truncate, getWorkflowName
+   - End conditions: getEndConditionValue, buildEndConditionFromControls, setEndConditionControls
+   - Prompt items: createPromptItem
+   - DOM: getStatusIcon
+
+3. **state-manager.js** (426 lines) - Centralized state management
+   - Immutable state accessors: getState, updateState, getEditorState, updateEditorState
+   - Model options: getModelOptions, setModelOptions
+   - Computed properties: hasPendingPrompts, getCurrentPrompt, getPromptByIndex
+   - State persistence: saveEditorState, restoreEditorState (localStorage)
+
+4. **output-manager.js** (530 lines) - CLI output display
+   - Rendering: renderAllCliOutputs (chronological sorting)
+   - Streaming: handleCliStreamingChunk (real-time updates)
+   - Export: generateMarkdownOutput, handleExportOutput
+   - Section collapse: toggleOutputSection, restoreOutputCollapseState
+
+5. **workflow-manager.js** (688 lines) - Workflow creation
+   - Split button UI: New Workflow dropdown with 4 actions
+   - Modal: Template selection, variable inputs, file creation
+   - Workflow status display
+   - Keyboard shortcuts: Ctrl+Shift+N/T/L/Q
+
+6. **prompts-manager.js** (364 lines) - Prompts list
+   - Rendering: renderPromptsList (status icons, retry tracking)
+   - Selection: Prompt click handlers for editing
+   - Counter: updatePromptCounter
+   - Section collapse: togglePromptsSection, restorePromptsCollapseState
+
+7. **editor-manager.js** (1032 lines) - Prompt editor
+   - CodeMirror integration with autocomplete
+   - Properties drawer: provider, model, agent, end conditions
+   - CRUD: Create, update, delete prompts
+   - Token counting, completions
+   - Section collapse: toggleEditorSection, restoreEditorCollapseState
+   - Confirmation modal
+
+8. **message-router.js** (475 lines) - Message routing
+   - Central message handler with registry pattern
+   - Routes 17 message types to appropriate managers
+   - Control button listeners (Run, Pause, Stop)
+   - Rendering orchestration: renderAll, updateControls
+
+**Dependency Order (enforced in HTML script loading):**
+
+```
+utilities.js → state-manager.js → [output, workflow, editor, prompts] → message-router.js → dashboard.js
+```
 
 **Communication:** Extension ↔ WebView via `postMessage()` with MESSAGE_TYPES constants
 
@@ -27,9 +79,49 @@ WebView UI for dashboard (workflow visualization/execution, CodeMirror editor, C
 </dashboardProvider>
 
 <dashboardJS>
-**State management:** currentFile, prompts array, cliOutputs array, executionState, currentStepIndex, editorState (memento-backed persistence)
+**Architecture (Modular - Refactored January 2026):**
+
+Previously a 3,017-line monolith, now split into focused modules:
+
+- **dashboard.js** - Orchestrator only (339 lines)
+  - Module initialization in dependency order
+  - Global event listeners (layout toggles)
+  - DOM elements object
+
+- **state-manager.js** - State encapsulation
+  - Prevents direct mutations via immutable getters
+  - Single source of truth for: fileName, prompts[], executionState, currentStep, cliOutputs{}, retryStates{}, statusMessages{}
+  - Memento-backed persistence for editor state
+
+- **output-manager.js** - CLI output rendering
+  - Chronological sorting of status messages + CLI outputs
+  - Real-time streaming support
+  - Markdown export generation
+
+- **workflow-manager.js** - Workflow lifecycle
+  - New Workflow split button with dropdown (New/Template/Load/Queue)
+  - Template modal with variable inputs
+  - Workflow status display
+
+- **prompts-manager.js** - Prompts list UI
+  - Renders prompts with status icons (pending/running/completed/failed)
+  - Retry tracking display
+  - Prompt selection for editing
+
+- **editor-manager.js** - Prompt editing
+  - CodeMirror editor with autocomplete
+  - Properties drawer (provider, model, agent, end conditions)
+  - CRUD operations with queue position logic (END/NEXT/BEFORE_CURRENT)
+  - Token counting, spell check integration
+
+- **message-router.js** - Message coordination
+  - Registry pattern (no giant switch/case)
+  - Routes 17 message types to handlers
+  - Rendering orchestration
 
 **Key features:** Real-time DOM updates, auto-scroll CLI output, CodeMirror integration, template modal, property drawer, queue position logic (END/NEXT/BEFORE_CURRENT)
+
+**SOLID principles applied:** Single Responsibility, Open/Closed (registry), Dependency Inversion (callbacks), DRY (state manager)
 </dashboardJS>
 
 <codemirrorEditor>
