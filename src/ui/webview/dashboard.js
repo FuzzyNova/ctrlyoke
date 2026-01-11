@@ -329,9 +329,14 @@
       return false;
     }
 
-    // If we're idle, all prompts are pending
+    // If we're idle, check if this is a fresh workflow or resumed workflow
     if (state.executionState === EXECUTION_STATES.IDLE) {
-      return true;
+      // Fresh workflow (not started yet) - no pending prompts, just "Run"
+      if (state.currentStep === 0) {
+        return false;
+      }
+      // Resumed workflow (some prompts completed) - has pending prompts, show "Run Next"
+      return state.currentStep < state.totalSteps;
     }
 
     // If stopped, there are pending prompts (current was cancelled, may have more after)
@@ -941,7 +946,7 @@
     // Reset execution state and progress when new file is selected
     state.executionState = EXECUTION_STATES.IDLE;
     state.currentStep = 0;
-    state.totalSteps = 0;
+    state.totalSteps = prompts.length; // FIX: Set to actual prompt count, not 0
     state.cliOutputs = {}; // Reset outputs
     state.retryStates = {}; // Reset retry states
     state.statusMessages = {}; // Reset status messages
@@ -954,6 +959,7 @@
     // Update workflow status display
     updateWorkflowStatus(fileName, EXECUTION_STATES.IDLE);
     updateNewWorkflowButtonState();
+    updateEditorButtons(); // FIX: Update Run/Queue button text
 
     // Reset prompt counter
     elements.promptCounter.textContent = "";
@@ -999,6 +1005,7 @@
     // Update workflow status display
     updateWorkflowStatus(fileName, executionState);
     updateNewWorkflowButtonState();
+    updateEditorButtons(); // FIX: Update Run/Queue button text based on restored state
 
     // Update prompt counter to reflect restored state
     updatePromptCounter();
@@ -1212,7 +1219,6 @@
     // (Only set to false when queue is truly cleared/empty)
 
     updateWorkflowStatus(state.fileName, EXECUTION_STATES.COMPLETED);
-    updateLoadButtonState();
     updateAppendButtonState();
     updateButtonTooltips();
     updateControls();
@@ -1316,7 +1322,6 @@
 
     // Update UI
     updateWorkflowStatus(fileName, state.executionState);
-    updateLoadButtonState();
     updateAppendButtonState();
     renderPromptsList();
     updatePromptCounter();
@@ -1330,7 +1335,6 @@
     renderExecutionState();
     renderPromptsList();
     updateControls();
-    updateLoadButtonState();
     updateAppendButtonState();
     updatePromptCounter();
   }
