@@ -3,6 +3,7 @@
 **Last Updated**: January 11, 2026
 **Status**: 📋 Planning
 **Related**:
+
 - [LOAD_BUTTON_SPLIT_DROPDOWN.md](LOAD_BUTTON_SPLIT_DROPDOWN.md) - Split dropdown pattern reference
 - [WORKFLOW_NAME_PLAN.md](WORKFLOW_NAME_PLAN.md) - workflowName property implementation
 
@@ -15,6 +16,7 @@ workflow-name - RUNNING
 ```
 
 This design has limitations:
+
 1. **No discoverability**: Users don't know they can switch between recent workflows
 2. **No editability**: Workflow name can't be changed after creation
 3. **Missing context**: Recent workflow history is hidden in file system
@@ -23,6 +25,7 @@ This design has limitations:
 ## Proposed Design: Workflow Status Split Button
 
 Transform the workflow status area into an interactive split button that:
+
 1. **Main button**: Click to edit workflow name inline (save to `workflowName` in working file)
 2. **Dropdown trigger**: Click to show recent workflows from `.flightpath/.queue` directory
 3. **Dropdown items**: Show workflow name and current state (`[name - state]`)
@@ -31,6 +34,7 @@ Transform the workflow status area into an interactive split button that:
 ### Visual Design
 
 **Current State (Static Text):**
+
 ```
 ┌────────────────────────────────────────────────────────┐
 │  [New Workflow |▼]    workflow-name - RUNNING    [▶][⏸][⏹]  │
@@ -38,6 +42,7 @@ Transform the workflow status area into an interactive split button that:
 ```
 
 **Proposed State (Interactive Split Button):**
+
 ```
 ┌────────────────────────────────────────────────────────┐
 │  [New Workflow |▼]    [workflow-name - RUNNING |▼]    [▶][⏸][⏹]  │
@@ -90,17 +95,10 @@ The workflow status split button consists of:
 ```html
 <div id="workflow-status">
   <span id="workflow-name">New Workflow</span>
-  <span
-    id="status-separator"
-    class="status-separator"
-    style="display: none"
-  >
+  <span id="status-separator" class="status-separator" style="display: none">
     -
   </span>
-  <span
-    id="execution-state"
-    class="execution-state-idle"
-    style="display: none"
+  <span id="execution-state" class="execution-state-idle" style="display: none"
     >Idle</span
   >
 </div>
@@ -167,6 +165,7 @@ function getWorkflowName(fileName) {
       aria-haspopup="menu"
       aria-expanded="false"
       aria-controls="workflow-recent-menu"
+      disabled
     >
       <i class="codicon codicon-chevron-down"></i>
       <span id="workflow-count-badge" class="workflow-count-badge" hidden
@@ -269,12 +268,17 @@ function getWorkflowName(fileName) {
   position: relative;
 }
 
-.workflow-button-dropdown:hover {
+.workflow-button-dropdown:hover:not(:disabled) {
   background-color: var(--vscode-button-hoverBackground);
 }
 
 .workflow-button-dropdown[aria-expanded="true"] {
   background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.workflow-button-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Workflow count badge */
@@ -562,6 +566,12 @@ elements.btnWorkflowMain.addEventListener("click", () => {
 
 elements.btnWorkflowDropdown.addEventListener("click", async (e) => {
   e.stopPropagation();
+
+  // Prevent opening if disabled (workflow is running)
+  if (elements.btnWorkflowDropdown.disabled) {
+    return;
+  }
+
   await toggleRecentWorkflowsDropdown();
 });
 
@@ -776,7 +786,7 @@ function updateWorkflowStatus(fileName, executionState, workflowName) {
     elements.workflowSplitButton.style.display = "none";
     elements.workflowEmptyState.style.display = "inline";
     elements.statusSeparator.style.display = "none";
-    elements.executionState.style.display = "none";
+    elements.btnWorkflowDropdown.disabled = true;
     return;
   }
 
@@ -796,6 +806,19 @@ function updateWorkflowStatus(fileName, executionState, workflowName) {
     elements.executionState.className = `execution-state-${executionState.toLowerCase()}`;
   } else {
     elements.statusSeparator.style.display = "none";
+    elements.executionState.style.display = "none";
+  }
+
+  // Disable dropdown trigger when workflow is RUNNING
+  // (matches "New Workflow" button behavior - prevent interrupting active workflow)
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  elements.btnWorkflowDropdown.disabled = isRunning;
+
+  if (isRunning) {
+    elements.btnWorkflowDropdown.title =
+      "Cannot switch workflows while running";
+  } else {
+    elements.btnWorkflowDropdown.title = "Show recent workflowse";
     elements.executionState.style.display = "none";
   }
 }
@@ -1106,19 +1129,23 @@ getQueueState(): QueueState {
 3. Split button hides, inline text input appears with "feature-implementation" selected
 4. User types "user-auth-feature"
 5. User presses Enter (or clicks away)
-6. Input hides, split button reappears with "user-auth-feature - RUNNING"
-7. Backend updates `workflowName` in working file
-8. Filename stays: `feature-implementation-20260111-143000.flightpath.json`
-
-### Flow 2: Switch to Recent Workflow
-
-1. User has active workflow "bug-fixes - RUNNING"
-2. User clicks dropdown trigger (chevron icon)
-3. Dropdown opens showing:
-   - **bug-fixes - RUNNING** (current, highlighted)
+6. Input hides, split button reappears wiPAUSED" (or COMPLETED/ERROR/IDLE)
+7. User clicks dropdown trigger (chevron icon)
+8. Dropdown opens showing:
+   - **bug-fixes - PAUSED** (current, highlighted)
    - refactor-tests - COMPLETED
    - api-migration - ERROR
    - docs-update - IDLE
+9. User clicks "refactor-tests - COMPLETED"
+10. Dropdown closes
+11. Dashboard loads `refactor-tests` workflow
+12. Main button updates to "refactor-tests - COMPLETED"
+13. Prompts list updates to show refactor-tests prompts
+
+**Note**: If workflow is RUNNING, the dropdown trigger is disabled to prevent interrupting execution.
+
+- docs-update - IDLE
+
 4. User clicks "refactor-tests - COMPLETED"
 5. Dropdown closes
 6. Dashboard loads `refactor-tests` workflow
@@ -1159,15 +1186,22 @@ getQueueState(): QueueState {
 1. **No workflows**: Dropdown shows "No recent workflows" message
 2. **Very long workflow names**: Truncate in UI with ellipsis, show full name in tooltip
 3. **Many workflows**: Dropdown scrolls, max height 400px
-4. **Editing during execution**: Allow editing when paused or running (non-destructive)
-5. **Concurrent workflows**: Only one active at a time (current workflow highlighted)
-6. **File system errors**: Graceful error handling if working file deleted externally
-7. **Badge count**: Only show if > 0 workflows exist
-8. **State synchronization**: Dropdown state updates when workflow state changes
+4. **Editing during execution**: Allow editing workflow name when paused or running (non-destructive)
+5. **Switching during execution**: **DISABLE** dropdown trigger when execution state is RUNNING to prevent interrupting active workflow
+6. **Concurrent workflows**: Only one active at a time (current workflow highlighted) - parallel execution not yet supported
+7. **File system errors**: Graceful error handling if working file deleted externally
+8. **Badge count**: Only show if > 0 wo (when NOT running)
 
-## Testing Checklist
-
-### Visual Testing
+- [ ] Dropdown trigger is disabled when execution state is RUNNING
+- [ ] Dropdown trigger shows tooltip explaining why disabled when running
+- [ ] Clicking workflow item loads that workflow
+- [ ] Clicking outside dropdown closes it
+- [ ] Pressing Enter saves workflow name
+- [ ] Pressing Escape cancels edit
+- [ ] Blur on input saves workflow name
+- [ ] Badge count updates correctly
+- [ ] Cannot open dropdown when workflow is running
+- [ ] Can open dropdown when workflow is paused, completed, or in error state
 - [ ] Split button renders correctly in light/dark themes
 - [ ] Dropdown menu aligns properly below button
 - [ ] Workflow items display name and state correctly
@@ -1178,16 +1212,24 @@ getQueueState(): QueueState {
 - [ ] Dropdown scrolls when > 10 items
 
 ### Interaction Testing
+
 - [ ] Main button click enters edit mode
 - [ ] Dropdown trigger click opens menu
 - [ ] Clicking workflow item loads that workflow
 - [ ] Clicking outside dropdown closes it
 - [ ] Pressing Enter saves workflow name
 - [ ] Pressing Escape cancels edit
+- [ ] RUNNING state: Dropdown trigger disabled
+- [ ] PAUSED state: Dropdown trigger enabled
+- [ ] COMPLETED state: Dropdown trigger enabled
+- [ ] ERROR state: Dropdown trigger enabled
+- [ ] IDLE state: Dropdown trigger enabled
+- [ ] Disabled state: Shows 50% opacity and "not-allowed" cursor
 - [ ] Blur on input saves workflow name
 - [ ] Badge count updates correctly
 
 ### State Testing
+
 - [ ] No workflow: Shows empty state
 - [ ] Workflow loaded: Shows split button
 - [ ] Name editing: Hides split button, shows input
@@ -1196,6 +1238,7 @@ getQueueState(): QueueState {
 - [ ] Current workflow: Highlighted in dropdown
 
 ### Backend Integration Testing
+
 - [ ] UPDATE_WORKFLOW_NAME updates working file
 - [ ] GET_RECENT_WORKFLOWS scans .flightpath/.queue
 - [ ] LOAD_WORKFLOW loads selected workflow
@@ -1205,15 +1248,20 @@ getQueueState(): QueueState {
 ## Implementation Phases
 
 ### Phase 1: HTML/CSS Structure
-- [ ] Update dashboard.html with split button structure
-- [ ] Add inline edit input element
-- [ ] Add dropdown menu structure
-- [ ] Add workflow-status CSS styling
-- [ ] Add split button CSS
-- [ ] Add dropdown menu CSS
-- [ ] Add state badge CSS
+
+- [ ] Add disabled check in dropdown trigger click handler
+- [ ] Implement startEditingWorkflowName()
+- [ ] Implement cancelEditingWorkflowName()
+- [ ] Implement saveWorkflowName()
+- [ ] Implement toggleRecentWorkflowsDropdown()
+- [ ] Implement populateRecentWorkflows()
+- [ ] Implement loadWorkflowFromHistory()
+- [ ] Update updateWorkflowStatus() to use workflowName
+- [ ] Update updateWorkflowStatus() to disable dropdown when RUNNING
+- [ ] Update updateWorkflowStatus() to update tooltip based on disabled stat
 
 ### Phase 2: JavaScript Behavior
+
 - [ ] Add workflowStatusState management
 - [ ] Add DOM element references
 - [ ] Add event listeners (click, blur, keydown)
@@ -1226,6 +1274,7 @@ getQueueState(): QueueState {
 - [ ] Update updateWorkflowStatus() to use workflowName
 
 ### Phase 3: Backend Integration
+
 - [ ] Add MESSAGE_TYPES to DashboardConstants.ts
 - [ ] Add handleUpdateWorkflowName() in FlightPathDashboardProvider
 - [ ] Add handleGetRecentWorkflows() in FlightPathDashboardProvider
@@ -1237,6 +1286,7 @@ getQueueState(): QueueState {
 - [ ] Include workflowName in getQueueState()
 
 ### Phase 4: Testing & Polish
+
 - [ ] Test inline editing in all execution states
 - [ ] Test dropdown with 0, 1, 5, 20 workflows
 - [ ] Test loading workflows with different states
@@ -1251,6 +1301,7 @@ getQueueState(): QueueState {
 ### Q1: Should recent workflows list include original files?
 
 **Options**:
+
 1. **Working files only** (proposed) - Only show `.flightpath/.queue` files
 2. **Both** - Show working files + original source files from workspace
 
@@ -1259,6 +1310,7 @@ getQueueState(): QueueState {
 ### Q2: How many recent workflows to show?
 
 **Options**:
+
 1. **Unlimited** (proposed) - Show all, use scrolling
 2. **Top 10** - Limit to most recent 10
 3. **Configurable** - Add setting for max count
@@ -1268,6 +1320,7 @@ getQueueState(): QueueState {
 ### Q3: Should dropdown show file timestamps?
 
 **Options**:
+
 1. **No timestamps** (proposed) - Clean, name + state only
 2. **Relative timestamps** - "2 hours ago", "Yesterday"
 3. **Absolute timestamps** - "Jan 11, 2026 2:30 PM"
@@ -1277,11 +1330,28 @@ getQueueState(): QueueState {
 ### Q4: Should editing be restricted during execution?
 
 **Options**:
+
 1. **Allow always** (proposed) - Name editing is non-destructive
 2. **Block during running** - Disable button when state=RUNNING
 3. **Prompt for confirmation** - "Workflow is running, edit anyway?"
 
 **Decision**: Allow always (renaming doesn't affect execution)
+
+### Q5: Should workflow switching be allowed during execution?
+
+**Options**:
+
+1. **Allow always** - User can switch away from running workflow
+2. **Block during running** (proposed) - Disable dropdown trigger when state=RUNNING
+3. **Prompt for confirmation** - "Stop current workflow and switch?"
+
+**Decision**: Block during running
+
+- **Rationale**: Switching workflows would interrupt the currently executing workflow, potentially leaving it in an inconsistent state
+- **Consistency**: Matches "New Workflow" button behavior (also disabled when running)
+- **Future**: When parallel workflow support is added, this restriction can be removed
+- **UX**: Dropdown trigger shows disabled state with tooltip explaining why
+- **Distinction**: Editing workflow name (main button) remains enabled since it's non-destructive
 
 ## Alternative Designs Considered
 
@@ -1317,17 +1387,20 @@ getQueueState(): QueueState {
 ## Success Metrics
 
 ### Adoption Metrics
+
 - Track split button main clicks (edit name)
 - Track dropdown trigger clicks (recent workflows)
 - Track workflow switches via dropdown
 - Goal: 30% of users use dropdown for workflow switching
 
 ### User Satisfaction Metrics
+
 - Monitor feedback on workflow switching UX
 - Track time saved vs. "Load from File" approach
 - Goal: Positive feedback, reduced file picker usage
 
 ### Technical Metrics
+
 - Measure dropdown rendering performance
 - Measure recent workflows query time
 - Goal: <50ms to open dropdown, <100ms to load workflows
@@ -1337,6 +1410,7 @@ getQueueState(): QueueState {
 ### VS Code Examples
 
 **Git Branches Dropdown**:
+
 ```
 [main ▼]
   ↓
@@ -1350,6 +1424,7 @@ getQueueState(): QueueState {
 **Reference**: Similar pattern for switching between states
 
 **Editor Tab Context Menu**:
+
 - Right-click tab → "Close Others", "Close All", etc.
 - **Reference**: Context actions on current item
 
@@ -1363,6 +1438,7 @@ getQueueState(): QueueState {
 ## Changelog
 
 ### January 11, 2026 - Initial Draft
+
 - Analyzed current workflow-status structure
 - Proposed split button design (edit name + recent workflows)
 - Documented HTML/CSS/JS implementation plan

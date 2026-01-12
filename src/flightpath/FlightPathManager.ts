@@ -256,6 +256,34 @@ export class FlightPathManager {
   }
 
   /**
+   * Restore a workflow from a working file
+   * Shared helper used by resumeSession() and loadWorkingFile()
+   * @param workingFilePath - Path to working file
+   * @throws Error if validation or loading fails
+   */
+  private async restoreWorkflowFromWorkingFile(
+    workingFilePath: string
+  ): Promise<void> {
+    // Load the session using reloadFromWorkingFile with replace mode (throws on validation failure)
+    await this.promptFileLoader.reloadFromWorkingFile(
+      workingFilePath,
+      "replace"
+    );
+
+    // Set currentPromptFile so getCurrentPromptFile() works correctly
+    const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
+    if (workingFile && workingFile.originalFile && workingFile.prompts) {
+      this.currentPromptFile = {
+        filePath: workingFile.originalFile,
+        promptFile: { prompts: workingFile.prompts },
+      };
+    }
+
+    // Set up file watcher for the restored working file (only if validation succeeded)
+    this.setupPromptFileWatcher(workingFilePath);
+  }
+
+  /**
    * Resume a previous session from .flightpath/.queue
    * Shows a quick pick of available sessions and restores the selected one
    */
@@ -287,25 +315,8 @@ export class FlightPathManager {
 
       if (selected) {
         try {
-          // Load the session using reloadFromWorkingFile with replace mode (throws on validation failure)
-          await this.promptFileLoader.reloadFromWorkingFile(
-            selected.filePath,
-            "replace"
-          );
-
-          // Set currentPromptFile so getCurrentPromptFile() works correctly
-          const workingFile = await this.promptQueue.readWorkingFile(
-            selected.filePath
-          );
-          if (workingFile && workingFile.originalFile && workingFile.prompts) {
-            this.currentPromptFile = {
-              filePath: workingFile.originalFile,
-              promptFile: { prompts: workingFile.prompts },
-            };
-          }
-
-          // Set up file watcher for the restored working file (only if validation succeeded)
-          this.setupPromptFileWatcher(selected.filePath);
+          // Restore workflow using shared helper
+          await this.restoreWorkflowFromWorkingFile(selected.filePath);
 
           // Focus the dashboard to show the restored session
           await vscode.commands.executeCommand("flightpath.dashboard.focus");
@@ -840,6 +851,43 @@ export class FlightPathManager {
    */
   getQueueState(): QueueState {
     return this.promptQueue.getState();
+  }
+
+  /**
+   * Update workflow name
+   * @param workflowName - New workflow name
+   */
+  async updateWorkflowName(workflowName: string): Promise<void> {
+    if (!this.promptQueue) {
+      throw new Error("No active queue");
+    }
+
+    await this.promptQueue.updateWorkflowName(workflowName);
+    // State change event is automatically emitted by PromptQueue
+  }
+
+  /**
+   * Load working file from path
+   * Uses the same flow as resumeSession for proper workflow restoration
+   * @param filePath - Path to working file
+   */
+  async loadWorkingFile(filePath: string): Promise<void> {
+    if (!this.promptQueue) {
+      throw new Error("Queue not initialized");
+    }
+
+    try {
+      // Restore workflow using shared helper
+      await this.restoreWorkflowFromWorkingFile(filePath);
+      Log.info(`Loaded workflow: ${filePath}`);
+    } catch (loadError) {
+      // Validation or loading failed - show error to user
+      Log.error("Failed to load workflow:", loadError as Error);
+      vscode.window.showErrorMessage(
+        `Failed to load workflow: ${loadError instanceof Error ? loadError.message : String(loadError)}`
+      );
+      throw loadError; // Re-throw so caller knows it failed
+    }
   }
 
   /**

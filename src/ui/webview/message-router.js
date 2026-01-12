@@ -137,6 +137,12 @@
     messageHandlers[MESSAGE_TYPES.CLOSE_MODAL] = () =>
       workflowManager.handleMessageCloseModal();
 
+    // Workflow status messages
+    messageHandlers[MESSAGE_TYPES.WORKFLOW_NAME_UPDATED] = (message) =>
+      workflowManager.handleWorkflowNameUpdated(message.workflowName);
+    messageHandlers[MESSAGE_TYPES.RECENT_WORKFLOWS] = (message) =>
+      workflowManager.handleRecentWorkflows(message.workflows);
+
     // Editor-related messages
     messageHandlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = (message) => {
       console.log(
@@ -199,7 +205,11 @@
    */
   function updateWorkflowUI() {
     const state = stateManager.getState();
-    workflowManager.updateWorkflowStatus(state.fileName, state.executionState);
+    workflowManager.updateWorkflowStatus(
+      state.fileName,
+      state.executionState,
+      state.workflowName
+    );
     workflowManager.updateNewWorkflowButtonState();
     editorManager.updateEditorButtons();
     editorManager.updateNewWorkflowCheckbox();

@@ -1,6 +1,6 @@
 /**
  * FlightPath Dashboard - Main Orchestrator
- * 
+ *
  * Coordinates all dashboard modules and handles global UI concerns.
  * Modules are loaded via script tags in dashboard.html in dependency order:
  * 1. utilities.js - Pure helper functions
@@ -35,10 +35,22 @@
     statusSeparator: document.getElementById("status-separator"),
     executionState: document.getElementById("execution-state"),
 
-    // Split button elements
+    // Split button elements (New Workflow dropdown)
     btnNewWorkflowMain: document.getElementById("btn-new-workflow-main"),
     btnWorkflowDropdown: document.getElementById("btn-workflow-dropdown"),
     workflowDropdownMenu: document.getElementById("workflow-dropdown-menu"),
+
+    // Workflow status split button elements
+    workflowSplitButton: document.querySelector(".workflow-split-button"),
+    workflowEmptyState: document.getElementById("workflow-empty-state"),
+    btnWorkflowMain: document.getElementById("btn-workflow-main"),
+    btnWorkflowStatusDropdown: document.getElementById(
+      "btn-workflow-status-dropdown"
+    ),
+    workflowDisplay: document.getElementById("workflow-display"),
+    workflowNameEdit: document.getElementById("workflow-name-edit"),
+    workflowRecentMenu: document.getElementById("workflow-recent-menu"),
+    workflowMenuItems: document.getElementById("workflow-menu-items"),
 
     // Control buttons
     runBtn: document.getElementById("btn-run"),

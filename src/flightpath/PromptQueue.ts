@@ -188,6 +188,7 @@ export class PromptQueue {
         totalPausedDuration: 0,
         appendSegments: runtime?.appendSegments || [],
         workingFilePath,
+        workflowName: workingFile.workflowName, // Restore workflow name from working file
       };
 
       // Rebuild results array with proper status based on completion state
@@ -1277,6 +1278,11 @@ export class PromptQueue {
         `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
       );
 
+      // Update workflow name if set in state
+      if (this.state.workflowName) {
+        workingFile.workflowName = this.state.workflowName;
+      }
+
       // Update runtime state
       workingFile._runtime = {
         currentIndex: this.state.currentIndex,
@@ -1374,5 +1380,33 @@ export class PromptQueue {
     this.emitStateChange();
 
     Log.info(`Deleted prompt at index ${index}`);
+  }
+
+  /**
+   * Update workflow name in working file
+   * @param workflowName - New workflow name
+   */
+  public async updateWorkflowName(workflowName: string): Promise<void> {
+    if (!this.state.workingFilePath) {
+      throw new Error("Cannot update workflow name: no working file");
+    }
+
+    // Update in-memory state
+    this.state.workflowName = workflowName;
+
+    // Update working file
+    await this.updateWorkingFile(true);
+
+    this.emitStateChange();
+    Log.info(`Updated workflow name to: ${workflowName}`);
+  }
+
+  /**
+   * Load working file from path
+   * @param filePath - Path to working file
+   */
+  public async loadWorkingFile(filePath: string): Promise<void> {
+    await this.restoreFromWorkingFile(filePath);
+    Log.info(`Loaded working file: ${filePath}`);
   }
 }

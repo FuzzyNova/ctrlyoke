@@ -52,6 +52,14 @@ export const MESSAGE_TYPES = {
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
 
+  // Workflow Status - Webview <-> Extension
+  UPDATE_WORKFLOW_NAME: "updateWorkflowName", // Webview -> Extension: Save new workflow name
+  WORKFLOW_NAME_UPDATED: "workflowNameUpdated", // Extension -> Webview: Confirm name update
+  GET_RECENT_WORKFLOWS: "getRecentWorkflows", // Webview -> Extension: Request workflow history
+  RECENT_WORKFLOWS: "recentWorkflows", // Extension -> Webview: Send workflow history
+  LOAD_WORKFLOW: "loadWorkflow", // Webview -> Extension: Load specific workflow
+  CLEAR_WORKFLOW_HISTORY: "clearWorkflowHistory", // Webview -> Extension: Delete all history files
+
   // Settings view messages
   CHANGE_MODEL: "changeModel",
   CHANGE_AGENT: "changeAgent",

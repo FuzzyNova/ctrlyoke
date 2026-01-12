@@ -90,6 +90,7 @@ export interface QueueState {
   pausedTime?: number; // When queue was paused (for pause duration calculation)
   totalPausedDuration: number; // Total time spent paused (milliseconds)
   workingFilePath?: string; // Path to working file (source of truth)
+  workflowName?: string; // Custom workflow name (from working file)
   appendSegments: AppendSegment[]; // Track all append operations
 }
 

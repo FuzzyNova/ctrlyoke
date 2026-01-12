@@ -31,6 +31,14 @@
     defaultTemplateId: "blank",
   };
 
+  // Workflow status state
+  let workflowStatusState = {
+    isEditing: false,
+    originalName: "",
+    recentWorkflows: [], // { filePath, workflowName, executionState, startedAt }
+    currentFilePath: null,
+  };
+
   /**
    * Initialize workflow manager with dependencies
    * @param {Object} _vscode - VS Code API instance
@@ -70,6 +78,71 @@
       handleDropdownAction(action);
       closeWorkflowDropdown();
     });
+
+    // === Workflow Status Split Button Events ===
+
+    // Main button click (Edit Workflow Name)
+    if (elements.btnWorkflowMain) {
+      elements.btnWorkflowMain.addEventListener("click", () => {
+        startEditingWorkflowName();
+      });
+    }
+
+    // Workflow status dropdown trigger click
+    if (elements.btnWorkflowStatusDropdown) {
+      elements.btnWorkflowStatusDropdown.addEventListener(
+        "click",
+        async (e) => {
+          e.stopPropagation();
+
+          // Prevent opening if disabled (workflow is running)
+          if (elements.btnWorkflowStatusDropdown.disabled) {
+            return;
+          }
+
+          await toggleRecentWorkflowsDropdown();
+        }
+      );
+    }
+
+    // Inline edit input events
+    if (elements.workflowNameEdit) {
+      elements.workflowNameEdit.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          saveWorkflowName();
+        } else if (e.key === "Escape") {
+          cancelEditingWorkflowName();
+        }
+      });
+
+      elements.workflowNameEdit.addEventListener("blur", () => {
+        if (workflowStatusState.isEditing) {
+          saveWorkflowName();
+        }
+      });
+    }
+
+    // Workflow dropdown menu item clicks
+    if (elements.workflowRecentMenu) {
+      elements.workflowRecentMenu.addEventListener("click", (e) => {
+        // Check for clear history action
+        const actionBtn = e.target.closest(".workflow-menu-action");
+        if (actionBtn && actionBtn.dataset.action === "clear-history") {
+          handleClearWorkflowHistory();
+          return;
+        }
+
+        // Check for workflow item click
+        const item = e.target.closest(".workflow-menu-item");
+        if (!item) return;
+
+        const filePath = item.dataset.filePath;
+        if (filePath) {
+          loadWorkflowFromHistory(filePath);
+          closeRecentWorkflowsDropdown();
+        }
+      });
+    }
 
     // Keyboard navigation for dropdown
     elements.workflowDropdownMenu.addEventListener("keydown", (e) => {
@@ -400,19 +473,316 @@
    * Update workflow name and state display
    * @param {string} filePath - Workflow file path
    * @param {string} executionState - Current execution state
+   * @param {string} workflowName - Custom workflow name (optional)
    */
-  function updateWorkflowStatus(filePath, executionState) {
-    if (!filePath || filePath === "New Workflow") {
-      // Empty workflow - hide state separator and execution state
-      elements.workflowName.textContent = "New Workflow";
-      elements.statusSeparator.style.display = "none";
-      elements.executionState.style.display = "none";
-    } else {
-      // Workflow loaded - show name, separator, and state
-      elements.workflowName.textContent = getWorkflowName(filePath);
-      elements.statusSeparator.style.display = "inline";
-      elements.executionState.style.display = "inline";
+  function updateWorkflowStatus(filePath, executionState, workflowName) {
+    workflowStatusState.currentFilePath = filePath;
+
+    if (!filePath) {
+      // No workflow loaded
+      if (elements.workflowSplitButton) {
+        elements.workflowSplitButton.style.display = "none";
+      }
+      if (elements.workflowEmptyState) {
+        elements.workflowEmptyState.style.display = "inline";
+      }
+      if (elements.statusSeparator) {
+        elements.statusSeparator.style.display = "none";
+      }
+      if (elements.btnWorkflowStatusDropdown) {
+        elements.btnWorkflowStatusDropdown.disabled = true;
+      }
+      return;
     }
+
+    // Workflow loaded
+    if (elements.workflowEmptyState) {
+      elements.workflowEmptyState.style.display = "none";
+    }
+    if (elements.workflowSplitButton) {
+      elements.workflowSplitButton.style.display = "inline-flex";
+    }
+
+    // Update workflow name
+    const displayName = workflowName || getWorkflowName(filePath);
+    if (elements.workflowName) {
+      elements.workflowName.textContent = displayName;
+    }
+
+    // Update execution state
+    if (executionState && executionState !== EXECUTION_STATES.IDLE) {
+      if (elements.statusSeparator) {
+        elements.statusSeparator.style.display = "inline";
+      }
+      if (elements.executionState) {
+        elements.executionState.style.display = "inline";
+        elements.executionState.textContent = executionState;
+        elements.executionState.className = `execution-state-${executionState.toLowerCase()}`;
+      }
+    } else {
+      if (elements.statusSeparator) {
+        elements.statusSeparator.style.display = "none";
+      }
+      if (elements.executionState) {
+        elements.executionState.style.display = "none";
+      }
+    }
+
+    // Disable dropdown trigger when workflow is RUNNING
+    // (matches "New Workflow" button behavior - prevent interrupting active workflow)
+    const isRunning = executionState === EXECUTION_STATES.RUNNING;
+    if (elements.btnWorkflowStatusDropdown) {
+      elements.btnWorkflowStatusDropdown.disabled = isRunning;
+
+      if (isRunning) {
+        elements.btnWorkflowStatusDropdown.title =
+          "Cannot switch workflows while running";
+      } else {
+        elements.btnWorkflowStatusDropdown.title = "Show recent workflows";
+      }
+    }
+  }
+
+  // ============================================================================
+  // WORKFLOW STATUS SPLIT BUTTON FUNCTIONS
+  // ============================================================================
+
+  /**
+   * Start editing workflow name
+   */
+  function startEditingWorkflowName() {
+    const state = stateManager.getState();
+    if (!state.fileName) return;
+
+    workflowStatusState.isEditing = true;
+    workflowStatusState.originalName = elements.workflowName.textContent;
+
+    // Hide split button, show input
+    if (elements.workflowSplitButton) {
+      elements.workflowSplitButton.style.display = "none";
+    }
+    if (elements.workflowNameEdit) {
+      elements.workflowNameEdit.style.display = "inline-block";
+      elements.workflowNameEdit.value = workflowStatusState.originalName;
+      elements.workflowNameEdit.focus();
+      elements.workflowNameEdit.select();
+    }
+  }
+
+  /**
+   * Cancel editing workflow name
+   */
+  function cancelEditingWorkflowName() {
+    workflowStatusState.isEditing = false;
+
+    // Hide input, show split button
+    if (elements.workflowNameEdit) {
+      elements.workflowNameEdit.style.display = "none";
+    }
+    if (elements.workflowSplitButton) {
+      elements.workflowSplitButton.style.display = "inline-flex";
+    }
+  }
+
+  /**
+   * Save workflow name
+   */
+  function saveWorkflowName() {
+    if (!elements.workflowNameEdit) return;
+
+    const newName = elements.workflowNameEdit.value.trim();
+
+    // Validate
+    if (!newName) {
+      cancelEditingWorkflowName();
+      return;
+    }
+
+    // Check if changed
+    if (newName === workflowStatusState.originalName) {
+      cancelEditingWorkflowName();
+      return;
+    }
+
+    // Send to backend
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_WORKFLOW_NAME,
+      workflowName: newName,
+    });
+
+    // Update UI optimistically
+    if (elements.workflowName) {
+      elements.workflowName.textContent = newName;
+    }
+    cancelEditingWorkflowName();
+  }
+
+  /**
+   * Toggle recent workflows dropdown
+   */
+  async function toggleRecentWorkflowsDropdown() {
+    if (!elements.workflowRecentMenu) return;
+
+    const isOpen = !elements.workflowRecentMenu.hidden;
+
+    if (isOpen) {
+      closeRecentWorkflowsDropdown();
+    } else {
+      await openRecentWorkflowsDropdown();
+    }
+  }
+
+  /**
+   * Open recent workflows dropdown
+   */
+  async function openRecentWorkflowsDropdown() {
+    if (!elements.workflowRecentMenu || !elements.btnWorkflowStatusDropdown)
+      return;
+
+    // Request recent workflows from backend
+    vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+
+    // Show dropdown (will be populated when backend responds)
+    elements.workflowRecentMenu.hidden = false;
+    elements.btnWorkflowStatusDropdown.setAttribute("aria-expanded", "true");
+
+    // Add click-outside listener
+    setTimeout(() => {
+      document.addEventListener("click", handleRecentWorkflowsClickOutside);
+    }, 0);
+  }
+
+  /**
+   * Close recent workflows dropdown
+   */
+  function closeRecentWorkflowsDropdown() {
+    if (!elements.workflowRecentMenu || !elements.btnWorkflowStatusDropdown)
+      return;
+
+    elements.workflowRecentMenu.hidden = true;
+    elements.btnWorkflowStatusDropdown.setAttribute("aria-expanded", "false");
+
+    // Remove click-outside listener
+    document.removeEventListener("click", handleRecentWorkflowsClickOutside);
+  }
+
+  /**
+   * Handle clicks outside the recent workflows dropdown
+   */
+  function handleRecentWorkflowsClickOutside(e) {
+    if (!elements.workflowRecentMenu || !elements.btnWorkflowStatusDropdown)
+      return;
+
+    const dropdown = elements.workflowRecentMenu;
+    const trigger = elements.btnWorkflowStatusDropdown;
+
+    // Close if click is outside dropdown and trigger button
+    if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+      closeRecentWorkflowsDropdown();
+    }
+  }
+
+  /**
+   * Populate recent workflows dropdown
+   * @param {Array} workflows - Array of workflow metadata
+   */
+  function populateRecentWorkflows(workflows) {
+    if (!elements.workflowMenuItems) return;
+
+    workflowStatusState.recentWorkflows = workflows;
+
+    // Clear existing items
+    elements.workflowMenuItems.innerHTML = "";
+
+    if (workflows.length === 0) {
+      elements.workflowMenuItems.innerHTML = `
+        <div class="workflow-menu-empty">
+          No recent workflows
+        </div>
+      `;
+      return;
+    }
+
+    // Helper to escape HTML
+    const escapeHtml = (str) => {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    };
+
+    // Add workflow items (sorted by most recent)
+    workflows.forEach((workflow) => {
+      const isCurrent =
+        workflow.filePath === workflowStatusState.currentFilePath;
+      const stateClass = `state-${workflow.executionState.toLowerCase()}`;
+
+      const item = document.createElement("button");
+      item.className = `workflow-menu-item ${isCurrent ? "current" : ""}`;
+      item.dataset.filePath = workflow.filePath;
+      item.title = workflow.filePath;
+      item.innerHTML = `
+        <span class="workflow-menu-item-name">${escapeHtml(
+          workflow.workflowName
+        )}</span>
+        <span class="workflow-menu-item-state ${stateClass}">
+          ${workflow.executionState}
+        </span>
+      `;
+
+      elements.workflowMenuItems.appendChild(item);
+    });
+  }
+
+  /**
+   * Load workflow from history
+   * @param {string} filePath - Path to working file
+   */
+  function loadWorkflowFromHistory(filePath) {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.LOAD_WORKFLOW,
+      filePath: filePath,
+    });
+  }
+
+  /**
+   * Clear workflow history
+   */
+  async function handleClearWorkflowHistory() {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY,
+    });
+  }
+
+  /**
+   * Handle workflow name updated message
+   * @param {string} workflowName - Updated workflow name
+   */
+  function handleWorkflowNameUpdated(workflowName) {
+    if (elements.workflowName) {
+      elements.workflowName.textContent = workflowName;
+    }
+  }
+
+  /**
+   * Handle recent workflows message
+   * @param {Array} workflows - Array of workflow metadata
+   */
+  function handleRecentWorkflows(workflows) {
+    populateRecentWorkflows(workflows);
+  }
+
+  // ============================================================================
+  // WORKFLOW STATUS DISPLAY (LEGACY - for backward compatibility)
+  // ============================================================================
+
+  /**
+   * Update workflow name and state display (legacy function)
+   * @param {string} filePath - Workflow file path
+   * @param {string} executionState - Current execution state
+   * @deprecated Use updateWorkflowStatus with workflowName parameter instead
+   */
+  function updateWorkflowStatusLegacy(filePath, executionState) {
+    updateWorkflowStatus(filePath, executionState, null);
   }
 
   // ============================================================================
@@ -684,5 +1054,7 @@
     handleMessageCloseModal,
     updateWorkflowStatus,
     updateNewWorkflowButtonState,
+    handleWorkflowNameUpdated,
+    handleRecentWorkflows,
   };
 })();

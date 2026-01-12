@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import * as fs from "fs";
+import * as fs from "fs/promises";
+import * as fsSync from "fs"; // For synchronous file operations
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -168,6 +169,24 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     }
     if (message.type === MESSAGE_TYPES.CREATE_NEW_TEMPLATE) {
       this.handleCreateNewTemplate();
+      return;
+    }
+
+    // Handle workflow status messages
+    if (message.type === MESSAGE_TYPES.UPDATE_WORKFLOW_NAME) {
+      this.handleUpdateWorkflowName(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.GET_RECENT_WORKFLOWS) {
+      this.handleGetRecentWorkflows();
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.LOAD_WORKFLOW) {
+      this.handleLoadWorkflow(message);
+      return;
+    }
+    if (message.type === MESSAGE_TYPES.CLEAR_WORKFLOW_HISTORY) {
+      this.handleClearWorkflowHistory();
       return;
     }
 
@@ -705,6 +724,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
       return {
         fileName: currentFile ? currentFile.fileName : null,
+        workflowName: queueState.workflowName || null, // Include workflow name
         prompts: currentFile ? currentFile.prompts : [],
         executionState: queueState.status,
         currentStep: queueState.currentIndex,
@@ -715,6 +735,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     // Fallback if manager not set yet
     return {
       fileName: null,
+      workflowName: null,
       prompts: [],
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
@@ -785,7 +806,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
     let html: string;
     try {
-      html = fs.readFileSync(htmlPath, "utf8");
+      html = fsSync.readFileSync(htmlPath, "utf8");
     } catch (error) {
       Log.error("Failed to load dashboard.html template:", error);
       // Fallback to minimal HTML
@@ -1030,6 +1051,173 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       Log.error("Error opening file:", error);
       vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
+    }
+  }
+
+  // ============================================================================
+  // WORKFLOW STATUS HANDLERS
+  // ============================================================================
+
+  /**
+   * Handle UPDATE_WORKFLOW_NAME message
+   * Update workflow name in working file
+   */
+  private async handleUpdateWorkflowName(message: any): Promise<void> {
+    const { workflowName } = message;
+
+    try {
+      await this.flightPathManager?.updateWorkflowName(workflowName);
+
+      // Confirm update
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
+        workflowName,
+      });
+    } catch (error) {
+      Log.error("Failed to update workflow name:", error);
+      vscode.window.showErrorMessage(
+        `Failed to update workflow name: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Handle GET_RECENT_WORKFLOWS message
+   * Get recent workflows from .flightpath/.queue
+   */
+  private async handleGetRecentWorkflows(): Promise<void> {
+    try {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        this.postMessage({
+          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+          workflows: [],
+        });
+        return;
+      }
+
+      const queueDir = path.join(workspaceRoot, ".flightpath", ".queue");
+
+      // Check if queue directory exists
+      try {
+        await fs.access(queueDir);
+      } catch {
+        this.postMessage({
+          type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+          workflows: [],
+        });
+        return;
+      }
+
+      // Read all .flightpath.json files
+      const files = await fs.readdir(queueDir);
+      const workflowFiles = files.filter((f) => f.endsWith(".flightpath.json"));
+
+      // Parse each file and extract metadata
+      const workflows = await Promise.all(
+        workflowFiles.map(async (file) => {
+          const filePath = path.join(queueDir, file);
+
+          try {
+            const content = await fs.readFile(filePath, "utf8");
+            const workingFile = JSON.parse(content);
+
+            return {
+              filePath,
+              workflowName:
+                workingFile.workflowName ||
+                file.replace(".flightpath.json", ""),
+              executionState: workingFile._runtime?.executionState || "IDLE",
+              startedAt: workingFile.startedAt || 0,
+            };
+          } catch (error) {
+            Log.warn(`Failed to parse workflow file ${file}:`, error);
+            return null;
+          }
+        })
+      );
+
+      // Filter out nulls and sort by most recent
+      const validWorkflows = workflows
+        .filter((w) => w !== null)
+        .sort((a, b) => b!.startedAt - a!.startedAt);
+
+      this.postMessage({
+        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+        workflows: validWorkflows,
+      });
+    } catch (error) {
+      Log.error("Failed to get recent workflows:", error);
+      this.postMessage({
+        type: MESSAGE_TYPES.RECENT_WORKFLOWS,
+        workflows: [],
+      });
+    }
+  }
+
+  /**
+   * Handle LOAD_WORKFLOW message
+   * Load workflow from file path
+   */
+  private async handleLoadWorkflow(message: any): Promise<void> {
+    const { filePath } = message;
+
+    try {
+      await this.flightPathManager?.loadWorkingFile(filePath);
+    } catch (error) {
+      Log.error("Failed to load workflow:", error);
+      vscode.window.showErrorMessage(
+        `Failed to load workflow: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Handle CLEAR_WORKFLOW_HISTORY message
+   * Clear workflow history
+   */
+  private async handleClearWorkflowHistory(): Promise<void> {
+    const confirm = await vscode.window.showWarningMessage(
+      "Delete all workflow history files from .flightpath/.queue?",
+      { modal: true },
+      "Delete All"
+    );
+
+    if (confirm !== "Delete All") {
+      return;
+    }
+
+    try {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        return;
+      }
+
+      const queueDir = path.join(workspaceRoot, ".flightpath", ".queue");
+
+      try {
+        const files = await fs.readdir(queueDir);
+        const workflowFiles = files.filter((f) =>
+          f.endsWith(".flightpath.json")
+        );
+
+        for (const file of workflowFiles) {
+          await fs.unlink(path.join(queueDir, file));
+        }
+
+        vscode.window.showInformationMessage("Workflow history cleared");
+
+        // Refresh recent workflows
+        await this.handleGetRecentWorkflows();
+      } catch (error) {
+        // Queue directory might not exist
+        Log.info("No workflow history to clear");
+      }
+    } catch (error) {
+      Log.error("Failed to clear workflow history:", error);
+      vscode.window.showErrorMessage(
+        `Failed to clear history: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 }

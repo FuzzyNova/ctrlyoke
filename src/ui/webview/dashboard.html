@@ -84,20 +84,76 @@
         </div>
 
         <div id="workflow-status">
-          <span id="workflow-name">New Workflow</span>
-          <span
-            id="status-separator"
-            class="status-separator"
+          <!-- Split button container -->
+          <div class="workflow-split-button" style="display: none">
+            <!-- Main button (workflow name + state) -->
+            <button
+              id="btn-workflow-main"
+              class="workflow-button-main btn-tertiary"
+              title="Click to edit workflow name"
+              aria-label="Workflow name and status"
+            >
+              <span id="workflow-display">
+                <span id="workflow-name">New Workflow</span>
+                <span id="status-separator" class="status-separator">-</span>
+                <span id="execution-state" class="execution-state-idle"
+                  >Idle</span
+                >
+              </span>
+            </button>
+
+            <!-- Dropdown trigger (recent workflows) -->
+            <button
+              id="btn-workflow-status-dropdown"
+              class="workflow-button-dropdown btn-tertiary"
+              title="Show recent workflows"
+              aria-label="Show recent workflows"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="workflow-recent-menu"
+              disabled
+            >
+              <i class="codicon codicon-chevron-down"></i>
+            </button>
+
+            <!-- Dropdown menu (recent workflows) -->
+            <div
+              id="workflow-recent-menu"
+              class="workflow-dropdown-menu"
+              role="menu"
+              aria-label="Recent workflows"
+              hidden
+            >
+              <div class="workflow-menu-header">Recent Workflows</div>
+              <div id="workflow-menu-items" class="workflow-menu-items">
+                <!-- Populated dynamically -->
+              </div>
+              <div class="workflow-menu-footer">
+                <button
+                  class="workflow-menu-action"
+                  data-action="clear-history"
+                >
+                  Clear History
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Inline edit input (hidden by default) -->
+          <input
+            id="workflow-name-edit"
+            class="workflow-name-edit-input"
+            type="text"
+            maxlength="100"
+            placeholder="Workflow name"
             style="display: none"
-          >
-            -
+            aria-label="Edit workflow name"
+          />
+
+          <!-- Fallback for no workflow loaded -->
+          <span id="workflow-empty-state" class="workflow-empty-state">
+            No workflow loaded
           </span>
-          <span
-            id="execution-state"
-            class="execution-state-idle"
-            style="display: none"
-            >Idle</span
-          >
         </div>
 
         <div id="controls">

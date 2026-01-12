@@ -25,6 +25,7 @@
   // Private state (closure prevents direct mutation)
   let state = {
     fileName: null,
+    workflowName: null, // Custom workflow name (from working file)
     prompts: [],
     executionState: EXECUTION_STATES.IDLE,
     currentStep: 0,
