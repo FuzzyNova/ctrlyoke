@@ -1094,6 +1094,18 @@
     }
   }
 
+  /**
+   * Refresh the model dropdown for the currently selected provider
+   * Called when MODEL_OPTIONS_UPDATE arrives from extension
+   */
+  function refreshModelDropdown() {
+    const currentProvider = elements.propProvider.value;
+
+    // Always update the dropdown to replace "Loading models..." with actual models
+    // This is especially important for copilot-cli and copilot-chat which load async
+    updatePropertyModelDropdown(currentProvider);
+  }
+
   // Export public API to global scope
   window.FlightPathEditorManager = {
     init,
@@ -1108,5 +1120,6 @@
     togglePropertiesDrawer,
     toggleEditorSection,
     restoreEditorCollapseState,
+    refreshModelDropdown,
   };
 })();

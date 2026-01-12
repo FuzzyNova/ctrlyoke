@@ -224,7 +224,9 @@
   /**
    * Handle INIT message - initial state from extension
    */
-  function handleInit(data) {
+  function handleInit(message) {
+    const data = message.data || message; // Support both message.data and direct data
+
     // Update model options from extension (dynamic from ModelRegistry)
     if (data.modelOptions) {
       stateManager.setModelOptions(data.modelOptions);
@@ -242,14 +244,11 @@
   /**
    * Handle MODEL_OPTIONS_UPDATE message
    */
-  function handleModelOptionsUpdate(data) {
-    if (data.modelOptions) {
-      stateManager.setModelOptions(data.modelOptions);
-      const modelOptions = stateManager.getModelOptions();
-      console.log(
-        "[Dashboard] Model options updated:",
-        Object.keys(modelOptions).map((k) => `${k}:${modelOptions[k].length}`)
-      );
+  function handleModelOptionsUpdate(message) {
+    if (message.data && message.data.modelOptions) {
+      stateManager.setModelOptions(message.data.modelOptions);
+      // Refresh model dropdown to replace "Loading models..." with actual models
+      editorManager.refreshModelDropdown();
     }
   }
 

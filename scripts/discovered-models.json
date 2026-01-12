@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2025-12-30T04:07:56.401Z",
+  "exportedAt": "2026-01-12T20:36:49.578Z",
   "source": "vscode.lm.selectChatModels({ vendor: 'copilot' })",
   "chatModels": [
     {
@@ -126,11 +126,11 @@
       "id": "gpt-5.2",
       "family": "gpt-5.2",
       "vendor": "copilot",
-      "cliSupported": false
+      "cliSupported": true
     },
     {
       "id": "auto",
-      "family": "claude-sonnet-4.5",
+      "family": "claude-haiku-4.5",
       "vendor": "copilot",
       "cliSupported": false
     }
@@ -140,11 +140,12 @@
     "claude-haiku-4.5",
     "claude-opus-4.5",
     "claude-sonnet-4",
-    "gpt-5",
-    "gpt-5.1",
-    "gpt-5.1-codex-mini",
     "gpt-5.1-codex-max",
     "gpt-5.1-codex",
+    "gpt-5.2",
+    "gpt-5.1",
+    "gpt-5",
+    "gpt-5.1-codex-mini",
     "gpt-5-mini",
     "gpt-4.1",
     "gemini-3-pro-preview"
