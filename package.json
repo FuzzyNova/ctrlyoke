@@ -816,32 +816,7 @@
           "type": "string",
           "default": "",
           "description": "[Copilot CLI] Custom directory for logs (default: system temp)",
-          "markdownDescription": "**Copilot CLI Only.** Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and can help with debugging."
-        },
-        "flightpath.copilotCliLogLevel": {
-          "order": 305,
-          "type": "string",
-          "enum": [
-            "default",
-            "none",
-            "error",
-            "warning",
-            "info",
-            "debug",
-            "all"
-          ],
-          "enumDescriptions": [
-            "Default logging (error, warning, info)",
-            "No logging output",
-            "Only error messages",
-            "Error and warning messages",
-            "Error, warning, and info messages",
-            "All messages including debug",
-            "Same as debug"
-          ],
-          "default": "default",
-          "description": "[Copilot CLI] Log level for debugging",
-          "markdownDescription": "**Copilot CLI Only.** Log level for debugging. Use **debug** or **all** for troubleshooting."
+          "markdownDescription": "**Copilot CLI Only.** Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and debugging. **Note:** FlightPath always uses debug log level to ensure session resumption works correctly."
         },
         "flightpath.claudeCliModel": {
           "order": 400,

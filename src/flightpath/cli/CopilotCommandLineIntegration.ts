@@ -566,10 +566,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
   // Uses base class getStatus() method
 
   /**
-   * Extract session ID from log file name in log directory
-   * Log files are named: session-{GUID}.log
-   * Example: session-53b8fdf5-3aed-4dac-8953-822830d748e0.log
-   * Returns the most recently created session log file's GUID
+   * Extract session ID from process log files in log directory
+   * New log format (as of CLI v0.0.377+): process-{timestamp}-{pid}.log
+   * Session ID appears in log lines: "Flushed X events to session {GUID}"
+   * Requires --log-level debug or higher to capture session ID
+   * Returns the session ID from the most recently modified log file
    */
   private async extractSessionIdFromLogs(): Promise<string | undefined> {
     if (!this.logDirectory) {
@@ -583,29 +584,36 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       // Read all files in log directory
       const files = await fs.readdir(this.logDirectory);
 
-      // Filter for session log files (session-{GUID}.log)
-      const sessionFiles = files.filter((file) =>
-        file.match(/^session-[a-f0-9\-]+\.log$/i)
+      // Filter for process log files (process-{timestamp}-{pid}.log)
+      const processFiles = files.filter((file) =>
+        file.match(/^process-\d+-\d+\.log$/i)
       );
 
-      if (sessionFiles.length === 0) {
+      if (processFiles.length === 0) {
         return undefined;
       }
 
       // Get file stats to find most recent
       const fileStats = await Promise.all(
-        sessionFiles.map(async (file) => {
+        processFiles.map(async (file) => {
           const filePath = path.join(this.logDirectory!, file);
           const stats = await fs.stat(filePath);
-          return { file, mtime: stats.mtime };
+          return { file, filePath, mtime: stats.mtime };
         })
       );
 
       // Sort by modification time (most recent first)
       fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-      // Extract GUID from filename: session-{GUID}.log
-      const match = fileStats[0].file.match(/^session-([a-f0-9\-]+)\.log$/i);
+      // Read the most recent log file and search for session ID
+      const logContent = await fs.readFile(fileStats[0].filePath, "utf-8");
+
+      // Pattern: "Flushed X events to session {GUID}"
+      // Example: "2026-01-12T20:11:10.385Z [DEBUG] Flushed 3 events to session 4f59192e-65ed-4fdb-aed7-ce69a263dd7b"
+      const match = logContent.match(
+        /Flushed \d+ events to session ([a-f0-9\-]+)/i
+      );
+
       if (match && match[1]) {
         return match[1];
       }

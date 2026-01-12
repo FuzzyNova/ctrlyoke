@@ -246,8 +246,12 @@ export const ConfigurationUtils = {
   /**
    * Get Copilot CLI log level
    */
+  /**
+   * Get Copilot CLI log level (hardcoded to debug for session resumption)
+   * Debug level is required to capture session IDs in logs
+   */
   getCopilotCliLogLevel(): string {
-    return getConfig().get<string>("copilotCliLogLevel", "default");
+    return "debug";
   },
 
   /**

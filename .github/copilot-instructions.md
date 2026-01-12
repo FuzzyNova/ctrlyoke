@@ -467,8 +467,9 @@ See `.github/instructions/test.instructions.md` for complete test documentation.
 - flightpath.copilotCliLogDir (string, default: "") - Custom directory for Copilot CLI logs
   - Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`)
   - Logs are used for session ID tracking and debugging
-- flightpath.copilotCliLogLevel (enum: "default" | "none" | "error" | "warning" | "info" | "debug" | "all", default: "default")
-  - Use **debug** or **all** for troubleshooting CLI issues
+- flightpath.copilotCliLogDir (string, default: "") - Custom log directory (defaults to system temp)
+  - **Note:** FlightPath always uses debug log level (hardcoded) to ensure session resumption works
+  - As of CLI v0.0.377+, session IDs are only logged at DEBUG level in process log files CLI issues
 - flightpath.showCliOutput (boolean, default: true) - Show CLI prompts/responses/statistics in Output panel
 - flightpath.chatWindowLocation (enum: "chatPanel" | "newTab" | "newWindow", default: "chatPanel")
 - flightpath.chatInactivityTimeout (number, default: 300, range: 30-3600) - Seconds to wait for log activity before timeout
