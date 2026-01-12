@@ -127,18 +127,11 @@ export class PromptFileParser {
         throw new Error("Prompt file is empty");
       }
 
-      // Get the user's default setting for newChatSession
-      const defaultNewChatSession =
-        ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
-
       return {
         prompts: [
           {
             prompt: promptText,
-            // Honor the global newChatSession setting for markdown files too
-            newChatSession: defaultNewChatSession,
-            // No end condition for markdown files (they're single prompts)
-            endCondition: undefined,
+            // Properties omitted will be undefined - global setting used at execution time
           },
         ],
       };
@@ -326,6 +319,30 @@ export class PromptFileParser {
   }
 
   /**
+   * Build a PromptItem with only explicitly set properties
+   * @param promptText The resolved prompt text
+   * @param source The source object (parsed JSON/YAML)
+   * @returns PromptItem with only defined properties
+   */
+  private buildPromptItem(promptText: string, source: any): PromptItem {
+    const promptItem: PromptItem = { prompt: promptText };
+
+    // Only include properties that are explicitly set
+    if (source.id !== undefined) promptItem.id = source.id;
+    if (source.provider !== undefined) promptItem.provider = source.provider;
+    if (source.model !== undefined) promptItem.model = source.model;
+    if (source.agent !== undefined) promptItem.agent = source.agent;
+    if (source.newChatSession !== undefined)
+      promptItem.newChatSession = source.newChatSession;
+    if (source.allowDynamicExtension !== undefined)
+      promptItem.allowDynamicExtension = source.allowDynamicExtension;
+    if (source.endCondition !== undefined)
+      promptItem.endCondition = source.endCondition;
+
+    return promptItem;
+  }
+
+  /**
    * Normalize prompt file to consistent format
    * Resolves any prompt values that are file paths to their content
    *
@@ -336,10 +353,6 @@ export class PromptFileParser {
     parsed: any,
     promptFilePath: string
   ): Promise<PromptFile> {
-    // Get the user's default setting for newChatSession
-    const defaultNewChatSession =
-      ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
-
     // Handle single prompt format
     if (parsed.prompt && typeof parsed.prompt === "string") {
       const resolvedPrompt = await this.resolvePromptContent(
@@ -347,22 +360,7 @@ export class PromptFileParser {
         promptFilePath
       );
       return {
-        prompts: [
-          {
-            id: parsed.id,
-            prompt: resolvedPrompt,
-            provider: parsed.provider,
-            model: parsed.model,
-            agent: parsed.agent,
-            // Use explicit value if set, otherwise fall back to user's setting
-            newChatSession:
-              parsed.newChatSession !== undefined
-                ? parsed.newChatSession
-                : defaultNewChatSession,
-            allowDynamicExtension: parsed.allowDynamicExtension,
-            endCondition: parsed.endCondition,
-          },
-        ],
+        prompts: [this.buildPromptItem(resolvedPrompt, parsed)],
       };
     }
 
@@ -374,20 +372,7 @@ export class PromptFileParser {
             item.prompt,
             promptFilePath
           );
-          return {
-            id: item.id,
-            prompt: resolvedPrompt,
-            provider: item.provider,
-            model: item.model,
-            agent: item.agent,
-            // Use explicit value if set, otherwise fall back to user's setting
-            newChatSession:
-              item.newChatSession !== undefined
-                ? item.newChatSession
-                : defaultNewChatSession,
-            allowDynamicExtension: item.allowDynamicExtension,
-            endCondition: item.endCondition,
-          };
+          return this.buildPromptItem(resolvedPrompt, item);
         })
       );
       return {

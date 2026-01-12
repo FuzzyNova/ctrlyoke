@@ -332,6 +332,21 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Determine if a new chat session should be started for a specific prompt
+   * Checks prompt's explicit setting first, then falls back to global setting
+   * @param promptNewChatSession The prompt's newChatSession property (may be undefined)
+   * @returns true if new session should be started, false to continue/resume session
+   */
+  shouldStartNewSessionForPrompt(
+    promptNewChatSession: boolean | undefined
+  ): boolean {
+    if (promptNewChatSession !== undefined) {
+      return promptNewChatSession;
+    }
+    return ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+  },
+
+  /**
    * Get workflows directory path
    */
   getWorkflowsDirectory(): string {

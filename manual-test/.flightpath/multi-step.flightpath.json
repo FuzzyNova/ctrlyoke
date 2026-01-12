@@ -2,7 +2,7 @@
   "prompts": [
     {
       "prompt": "What is 2 + 2? Reply with just the number.",
-      "model": "oswe-vscode-prime"
+      "model": "gpt-5-mini"
     },
     {
       "prompt": "What is the capital of France? Reply with just the city name.",

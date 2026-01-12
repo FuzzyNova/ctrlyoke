@@ -486,18 +486,21 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     });
 
     // Session management (MUST come BEFORE tool permissions to avoid being consumed by variadic --disallowedTools)
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
     Log.debug(
-      `🔍 Session check: newChatSession=${prompt.newChatSession}, sessionId=${this.sessionId}`
+      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${this.sessionId}`
     );
-    if (prompt.newChatSession === false && this.sessionId) {
+    if (!shouldStartNewSession && this.sessionId) {
       args.push("-r", this.sessionId);
       Log.debug(`✅ Added resume flag: -r ${this.sessionId}`);
-    } else if (prompt.newChatSession === false) {
+    } else if (!shouldStartNewSession) {
       args.push("-c");
       Log.debug(`✅ Added continue flag: -c`);
     } else {
       Log.debug(
-        `🆕 Starting new session (newChatSession=${prompt.newChatSession})`
+        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
       );
     }
 

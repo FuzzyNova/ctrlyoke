@@ -530,7 +530,10 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
     }
 
     // Session resume detection (applies to both interactive and headless)
-    const isResuming = prompt.newChatSession === false && this.sessionId;
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    const isResuming = !shouldStartNewSession && this.sessionId;
 
     if (!isInteractive) {
       // Headless mode: codex exec --json --model ... [resume] [<session-id>] <prompt>
@@ -582,7 +585,7 @@ export class CodexCommandLineIntegration extends BaseCliIntegration {
       args.push("resume");
       args.push(this.sessionId!);
       Log.debug(`✅ Resuming session: ${this.sessionId}`);
-    } else if (prompt.newChatSession === false) {
+    } else if (!shouldStartNewSession) {
       Log.debug(`⚠️ Resume requested but no session ID available`);
     }
 

@@ -417,7 +417,10 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     }
 
     // Session resumption
-    if (prompt.newChatSession === false && this.sessionId) {
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    if (!shouldStartNewSession && this.sessionId) {
       args.push("--resume", this.sessionId);
     }
 
