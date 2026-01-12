@@ -1081,10 +1081,10 @@ export class PromptQueue {
 
     const workingFile: WorkingFile = {
       originalFile: originalFilePath,
-      workflowName: path.basename(
-        originalFilePath,
-        path.extname(originalFilePath)
-      ),
+      // Use existing workflow name from state if set, otherwise derive from file path
+      workflowName:
+        this.state.workflowName ||
+        path.basename(originalFilePath, path.extname(originalFilePath)),
       startedAt: Date.now(),
       prompts: prompts,
       _runtime: {
@@ -1387,15 +1387,14 @@ export class PromptQueue {
    * @param workflowName - New workflow name
    */
   public async updateWorkflowName(workflowName: string): Promise<void> {
-    if (!this.state.workingFilePath) {
-      throw new Error("Cannot update workflow name: no working file");
-    }
-
-    // Update in-memory state
+    // Update in-memory state (always allow this)
     this.state.workflowName = workflowName;
 
-    // Update working file
-    await this.updateWorkingFile(true);
+    // Update working file if it exists
+    // If no working file yet (brand new workflow), the name will be included when the working file is created
+    if (this.state.workingFilePath) {
+      await this.updateWorkingFile(true);
+    }
 
     this.emitStateChange();
     Log.info(`Updated workflow name to: ${workflowName}`);

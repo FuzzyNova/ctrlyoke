@@ -21,9 +21,9 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 | `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                  |
 | `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                     |
 | `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp                      |
-| `--log-level <level>`   | `flightpath.copilotCliLogLevel`              | Full support - debug/all for troubleshooting                     |
+| `--log-level <level>`   | _(hardcoded to `debug`)_                     | Always `debug` level (required for session ID extraction)        |
 | `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                                     |
-| `-p, --prompt <text>`   | Prompt text                                  | Full support (stdin for non-agent, arg for agent)                |
+| `-p, --prompt <text>`   | Prompt text                                  | Full support (always uses `--prompt` flag)                       |
 | `--agent <agent>`       | `prompt.agent`                               | Full support                                                     |
 
 ### ❌ Not Implemented Flags
@@ -126,7 +126,8 @@ write                 # Match file creation/modification tools
 
 **Current behavior:**
 
-- Session ID extracted from log files (`session-{GUID}.log`)
+- Session ID extracted from process log files (`process-{timestamp}-{pid}.log`)
+- Pattern: "Flushed X events to session {GUID}" in log content (requires debug log level)
 - `prompt.newChatSession: false` uses `--resume <sessionId>`
 - `--continue` not implemented (we track explicit session IDs)
 
@@ -171,8 +172,8 @@ write                 # Match file creation/modification tools
 **Current behavior:**
 
 - `--log-dir` configurable via `flightpath.copilotCliLogDir` setting (defaults to OS temp)
-- `--log-level` configurable via `flightpath.copilotCliLogLevel` setting (defaults to CLI default)
-- Logs used for session ID extraction from log filenames
+- `--log-level` **hardcoded to `debug`** (required for session ID extraction from log content)
+- Session ID extracted from process log files (`process-{timestamp}-{pid}.log`) by parsing "Flushed X events to session {GUID}" pattern
 
 ### Streaming & Display
 
@@ -272,22 +273,21 @@ write                 # Match file creation/modification tools
 
 ### 2. ✅ Logging Configuration
 
-**Goal:** Allow users to customize log directory and enable debug logging for troubleshooting.
+**Goal:** Allow users to customize log directory for troubleshooting.
 
 **Settings (`package.json`):**
 
 ```json
 {
-  "flightpath.copilotCliLogDir": "/path/to/custom/logs",
-  "flightpath.copilotCliLogLevel": "debug"
+  "flightpath.copilotCliLogDir": "/path/to/custom/logs"
 }
 ```
 
 **Implementation details:**
 
 - `initializeLogDirectory()` checks the setting first, falls back to OS temp
-- `getLogLevelArgs()` adds `--log-level` flag when non-default
-- Both are applied during CLI argument building in `sendPrompt()`
+- `--log-level` is **hardcoded to `debug`** to ensure session ID extraction works (session IDs are only logged at DEBUG level)
+- Both log directory and level are applied during CLI argument building in `sendPrompt()`
 
 ---
 
@@ -415,9 +415,9 @@ if (this.shouldAllowAllPaths()) {
 if (this.logDirectory) {
   args.push("--log-dir", this.logDirectory);
 }
-// Log level (if non-default)
+// Log level (hardcoded to debug for session resumption)
 const logLevelArgs = this.getLogLevelArgs();
-args.push(...logLevelArgs);
+args.push(...logLevelArgs); // Always adds --log-level debug
 
 // Directories
 if (options.addDirs && options.addDirs.length > 0) {
@@ -649,4 +649,6 @@ FlightPath would:
 
 ## Version Compatibility
 
-This documentation is based on Copilot CLI as of November 2025. Run `copilot --version` to check your installed version and `copilot --help` for the latest options.
+This documentation is based on Copilot CLI as of January 2026. Run `copilot --version` to check your installed version and `copilot --help` for the latest options.
+
+**Log Format Change (v0.0.377+):** Session IDs are now logged in process log files (`process-{timestamp}-{pid}.log`) at DEBUG level only, requiring FlightPath to hardcode `--log-level debug`.

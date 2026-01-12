@@ -11,7 +11,7 @@
 All phases completed successfully:
 
 ✅ **Phase 1:** Installed CodeMirror packages and configured esbuild bundling (Option A - bundled approach)  
-✅ **Phase 2:** Created `codemirror-editor.js` (420 lines) and `codemirror-loader.js`  
+✅ **Phase 2:** Created `codemirror-editor.js` (~890 lines) and `codemirror-loader.js`  
 ✅ **Phase 3:** Updated `dashboard.html` and `dashboard.css` to use CodeMirror container  
 ✅ **Phase 4:** Updated `dashboard.js` to use CodeMirror API (getText/setText/clear)  
 ✅ **Phase 5:** Added completion handlers and file opening logic to `FlightPathDashboardProvider.ts`  
@@ -60,19 +60,22 @@ All phases completed successfully:
 ### Key Technical Achievements
 
 **1. Code Reuse via CompletionHelpers.ts** (NEW module)
-- Extracted ~260 lines from PromptCompletionProvider (38% reduction)
+
+- ~415 lines of shared completion logic
 - Framework-agnostic design: Plain objects shared between VS Code and webview
 - Single source of truth for completion logic
 - Exports: `getFileCompletions()`, `getHashCompletions()`, `getSelectionCompletions()`, `getSymbolCompletions()`
 
 **2. CodeMirror Autocomplete Configuration** (codemirror-editor.js)
-- **validFor pattern**: Enables result caching as user types
+
 - **minimalSetup instead of basicSetup**: Eliminates autocomplete conflicts
 - **completionKeymap**: Keyboard navigation (Ctrl+Space, arrows, Escape)
-- **Prefix preservation**: Trigger character prepended to completion text
-- **Server-side filtering**: Extension host filters, client displays (filter: false)
+- **CompletionItemKind mapping**: 24+ VS Code kinds mapped to CodeMirror types
+- **Boost/sort ordering**: Preserves server-side relevance ranking via sortText parsing
+- **Client-side fuzzy filtering**: `filter: true` enables CodeMirror's built-in matching
 
 **3. Comprehensive Link Decoration** (codemirror-editor.js)
+
 - `@file.ext` - Full file references
 - `@dir/` - Directory references
 - `#file:path:10-20` - Line range references
@@ -81,12 +84,14 @@ All phases completed successfully:
 - Ctrl+Click navigation to open files with optional line selection
 
 **4. Async Message Passing Architecture**
+
 - Webview → Extension Host: Completion requests via postMessage
 - Extension Host → Webview: Completion responses with plain objects
 - Promise-based completion resolution in CodeMirror
 - Handles 600+ completions without blocking UI
 
 **5. VS Code API Caching** (dashboard.js)
+
 - Fixed "already acquired" error by caching `acquireVsCodeApi()` result
 - Single acquisition per webview lifecycle
 - Passed to CodeMirrorPromptEditor constructor
@@ -94,12 +99,15 @@ All phases completed successfully:
 ### Files Modified
 
 **New:**
+
 - `src/completions/CompletionHelpers.ts` (300+ lines) - Shared completion logic
 
 **Refactored:**
+
 - `src/completions/PromptCompletionProvider.ts` (-260 lines, now delegates to helpers)
 
 **Enhanced:**
+
 - `src/ui/FlightPathDashboardProvider.ts` (+80 lines)
   - `handleCompletionRequest()` - Processes completion requests
   - `getCompletionItems()` - Delegates to CompletionHelpers
@@ -118,26 +126,31 @@ All phases completed successfully:
 ### Challenges Overcome
 
 **Challenge 1: Autocomplete dropdown not appearing**
+
 - **Root cause**: `basicSetup` includes default autocomplete that conflicts with custom override
 - **Solution**: Switched to `minimalSetup` + manually added needed extensions
 - **Result**: Custom autocomplete now takes control and shows dropdown
 
 **Challenge 2: Missing validFor property**
+
 - **Root cause**: CodeMirror immediately invalidated cached results without `validFor`
 - **Solution**: Added `validFor: /@[a-zA-Z0-9_/.-]*|#[a-zA-Z0-9_/:.-]*/` to completion result
 - **Result**: Results stay valid as user types, enabling smooth filtering
 
 **Challenge 3: Incomplete # pattern matching**
+
 - **Root cause**: Regex only matched `#file:`, missing `#selection`, `#caret`, `#sym:`
 - **Solution**: Updated regex from `#file:[...]` to `#[a-zA-Z0-9_/:.-]*`
 - **Result**: All # completion types now trigger properly
 
 **Challenge 4: Prefix removal on completion**
+
 - **Root cause**: CodeMirror replaces entire matched range (including @ or #)
 - **Solution**: Store trigger character and prepend to completion `apply` value
 - **Result**: Selecting "README.md" inserts "@README.md" not "README.md"
 
 **Challenge 5: VS Code API acquisition error**
+
 - **Root cause**: Multiple calls to `acquireVsCodeApi()` in webview
 - **Solution**: Cache API instance once and reuse throughout editor lifecycle
 - **Result**: No more "already acquired" errors
@@ -145,16 +158,19 @@ All phases completed successfully:
 ### Architecture Improvements
 
 **DRY Principle:**
+
 - Single source of truth for completion logic (CompletionHelpers.ts)
 - PromptCompletionProvider and CodeMirror editor both use same functions
 - No code duplication for file scanning, symbol queries, selection parsing
 
 **SOLID Principles:**
+
 - CompletionHelpers: Single responsibility (completion generation)
 - PromptCompletionProvider: Delegates to helpers, focuses on VS Code integration
 - CodeMirrorPromptEditor: Uses helpers via message passing, maintains separation
 
 **Performance:**
+
 - Cached workspace file list (5-second TTL)
 - Async completion requests don't block editor
 - Server-side filtering reduces data transfer
@@ -163,6 +179,7 @@ All phases completed successfully:
 ### Testing Results
 
 **@ Completions:**
+
 - ✅ Dropdown appears on typing @
 - ✅ Shows 600+ workspace files
 - ✅ Filters as user types (@src, @README)
@@ -170,6 +187,7 @@ All phases completed successfully:
 - ✅ Handles directories and files
 
 **# Completions:**
+
 - ✅ Shows #selection and #caret
 - ✅ Shows workspace symbols
 - ✅ Filters #file: completions
@@ -177,6 +195,7 @@ All phases completed successfully:
 - ✅ Inserts with # prefix preserved
 
 **Link Navigation:**
+
 - ✅ @file.ext links styled and clickable
 - ✅ @dir/ links open directory in explorer
 - ✅ #file:path:10-20 opens with line selection
@@ -184,6 +203,7 @@ All phases completed successfully:
 - ✅ Ctrl+Click works on all patterns
 
 **Keyboard Navigation:**
+
 - ✅ Ctrl+Space triggers completions explicitly
 - ✅ Arrow keys navigate dropdown
 - ✅ Enter/Tab inserts selected completion
@@ -191,16 +211,13 @@ All phases completed successfully:
 
 ### Code Quality Metrics
 
-**Before:**
-- PromptCompletionProvider: ~680 lines
-- No shared completion logic
-- Code duplicated between providers
+**Current Implementation:**
 
-**After:**
-- CompletionHelpers: ~300 lines (NEW, reusable)
-- PromptCompletionProvider: ~420 lines (-38%)
-- CodeMirror editor: Reuses same logic
-- Total reduction: ~260 lines of duplicated code
+- CompletionHelpers: ~415 lines (shared, reusable)
+- PromptCompletionProvider: ~440 lines (delegates to helpers)
+- CodeMirror editor: ~890 lines (full-featured with spell check, completions, links)
+- Spell check: Viewport-only checking with lazy suggestion loading
+- Completions: 24+ VS Code kinds mapped with boost ordering
 
 ### Success Criteria Met
 

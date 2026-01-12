@@ -1,32 +1,39 @@
 # Interactive Terminal Mode Design
 
+> **STATUS**: This document reflects the **implemented architecture** as of January 2026. Originally a design document, it has been updated to match the actual implementation.
+
 ## Overview
 
-This document outlines a refactor of FlightPath's CLI integrations (`CopilotCommandLineIntegration`, `ClaudeCommandLineIntegration`) to use VS Code's interactive terminal instead of headless process spawning. This allows users to interact with CLI tools for approvals while still streaming output to the dashboard.
+FlightPath's CLI integrations (`CopilotCommandLineIntegration`, `ClaudeCommandLineIntegration`, `CodexCommandLineIntegration`) use VS Code's interactive terminal by default instead of headless process spawning. This allows users to interact with CLI tools for approvals while still streaming output to the dashboard.
 
 ## Prompt Passing Strategy
 
-**All prompts use `-p` flag with `JSON.stringify()` escaping.**
+**Prompts use adaptive passing based on complexity:**
 
-We standardized on passing prompts via command-line argument rather than stdin for consistency:
+- **Simple prompts** (≤300 chars, no XML, no backticks): Passed directly on command line
+- **Complex prompts**: Written to temp file and referenced via `@filepath` syntax
 
 ```typescript
-// Both interactive and headless modes use the same approach
-args.push("-p", JSON.stringify(promptText));
+// Simple prompts: direct passing
+args = ["--prompt", `"${promptText}"`];
+
+// Complex prompts: file reference with instruction
+const tempFile = await createPromptFile(promptText);
+const promptWithInstruction = `Follow instructions in @${tempFile} `;
 ```
 
-**Why not stdin?**
+**Why file-based passing for complex prompts?**
 
 1. **Terminal API limitation**: VS Code's `TerminalShellIntegration.executeCommand()` doesn't support stdin
-2. **Consistency**: Using the same approach in both modes simplifies the codebase
-3. **Debugging**: Easy to see the exact command being executed
-4. **JSON.stringify escaping**: Handles special characters, quotes, and newlines reliably
+2. **Shell escaping**: Complex prompts with XML, backticks, or newlines are difficult to escape correctly
+3. **Debugging**: Temp files can be inspected for troubleshooting
+4. **Cross-CLI support**: Same approach works for Copilot, Claude, and Codex CLIs
 
-**Why JSON.stringify?**
+**Why "Follow instructions in" prefix?**
 
-- Properly escapes all special characters (quotes, newlines, backslashes)
-- Works cross-platform (Windows/macOS/Linux)
-- CLI tools interpret the escaped JSON string correctly
+- Helps LLMs (especially GPT-5) understand the file contains prompt instructions
+- Matches GitHub Copilot's `/prompt.md` syntax behavior
+- Trailing space prevents TUI file picker from activating
 
 ## Problem Statement
 
@@ -94,319 +101,202 @@ Add a new setting to control where CLI commands execute:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      BaseCliIntegration                          │
-│  (existing abstract base class)                                  │
+│  (src/flightpath/cli/BaseCliIntegration.ts)                      │
 │                                                                  │
-│  NEW Properties:                                                 │
-│  - terminal?: vscode.Terminal                                    │
-│  - shellIntegration?: TerminalShellIntegration                   │
-│  - executionMode: 'interactive' | 'headless'                     │
+│  Properties:                                                     │
+│  - processManager: CliProcessManager                             │
+│  - currentExecution?: TerminalShellExecution                     │
+│  - sessionId?: string                                            │
 │                                                                  │
-│  NEW Methods:                                                    │
-│  - createTerminal(): Create/reuse VS Code terminal               │
+│  Terminal Methods:                                               │
+│  - createFreshTerminal(): Create VS Code terminal                │
 │  - waitForShellIntegration(): Wait for shell integration         │
-│  - executeInTerminal(): Run command via shell integration        │
-│  - executeHeadless(): Run command via spawn (existing logic)     │
+│  - executeInTerminal(): Interactive TUI with file-based prompt   │
+│  - executeHeadlessWithPromptFile(): Headless with file reference │
 │                                                                  │
-│  MODIFIED Methods:                                               │
-│  - sendPrompt(): Route to terminal or headless based on mode     │
+│  Abstract Methods (CLI-specific):                                │
+│  - getCliName(): string                                          │
+│  - getEscapeIndicator(): string                                  │
+│  - getScreenEndPattern(): RegExp                                 │
+│  - getTuiChromePatterns(): RegExp[]                              │
+│  - buildInteractiveTuiCommand(): string                          │
+│  - buildHeadlessArgs(): string[]                                 │
+│  - hasFullPermissions(): boolean                                 │
 └─────────────────────────────────────────────────────────────────┘
                              │
-              ┌──────────────┴──────────────┐
-              │                             │
-              ▼                             ▼
-┌─────────────────────────┐   ┌─────────────────────────┐
-│ CopilotCommandLine      │   │ ClaudeCommandLine       │
-│ Integration             │   │ Integration             │
-│                         │   │                         │
-│ - buildCopilotCommand() │   │ - buildClaudeCommand()  │
-│ - copilot-specific args │   │ - claude-specific args  │
-└─────────────────────────┘   └─────────────────────────┘
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│ CopilotCommand  │ │ ClaudeCommand   │ │ CodexCommand    │
+│ LineIntegration │ │ LineIntegration │ │ LineIntegration │
+│                 │ │                 │ │                 │
+│ - Copilot CLI   │ │ - Claude CLI    │ │ - Codex CLI     │
+│ - --prompt flag │ │ - -p flag       │ │ - Direct prompt │
+│ - Log directory │ │ - JSON stream   │ │ - JSONL events  │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      CliProcessManager                           │
+│  (src/utils/CliProcessManager.ts)                                │
+│                                                                  │
+│  Responsibilities:                                               │
+│  - Spawn CLI processes (spawn, spawnSimple)                      │
+│  - Create/dispose VS Code terminals                              │
+│  - Wait for shell integration                                    │
+│  - Graceful cancellation (SIGTERM → SIGKILL)                     │
+│  - Terminal cancellation (Ctrl+C × 2, then dispose)              │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      TuiStreamProcessor                          │
+│  (src/utils/TuiStreamProcessor.ts)                               │
+│                                                                  │
+│  Responsibilities:                                               │
+│  - Process TUI output via execution.read()                       │
+│  - Detect TUI readiness and send prompt                          │
+│  - Strip ANSI codes for clean output                             │
+│  - Deduplicate content across TUI screen redraws                 │
+│  - Detect completion (escape indicator disappears)               │
+│  - Handle CLI errors in output                                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### No New Providers Needed
 
 The existing providers remain:
 
-- `copilot-cli` - Uses `CopilotCommandLineIntegration` (refactored)
-- `claude-cli` - Uses `ClaudeCommandLineIntegration` (refactored)
+- `copilot-cli` - Uses `CopilotCommandLineIntegration`
+- `claude-cli` - Uses `ClaudeCommandLineIntegration`
+- `codex-cli` - Uses `CodexCommandLineIntegration`
 - `copilot-chat` - Unchanged
 
-Each CLI integration now supports both interactive and headless execution modes internally.
+Each CLI integration supports both interactive and headless execution modes internally.
 
-## Implementation Plan
+## Implementation Details
 
-### Phase 1: Refactor BaseCliIntegration
+This section describes the key implementation details. For the full source code, see the files referenced above.
 
-Add terminal management to `BaseCliIntegration.ts`:
+### Execution Mode Routing
+
+`BaseCliIntegration.sendPrompt()` routes execution based on the `cliExecutionMode` setting:
 
 ```typescript
-// New properties
-protected terminal?: vscode.Terminal;
-protected shellIntegration?: vscode.TerminalShellIntegration;
-protected currentExecution?: vscode.TerminalShellExecution;
+// Simplified from actual implementation
+const mode = this.getExecutionMode();
+const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
 
-// Get execution mode from settings
-protected getExecutionMode(): 'interactive' | 'headless' {
-  return vscode.workspace
-    .getConfiguration('flightpath')
-    .get<string>('cliExecutionMode', 'interactive') as 'interactive' | 'headless';
-}
+// Warn if headless without full permissions
+this.warnIfHeadlessWithoutPermissions();
 
-// Create or reuse terminal
-protected async getOrCreateTerminal(): Promise<vscode.Terminal> {
-  if (this.terminal && !this.isTerminalClosed()) {
-    return this.terminal;
-  }
+// Build args and route to appropriate execution method
+const args = await this.buildCliArgs(prompt, isInteractive);
 
-  this.terminal = vscode.window.createTerminal({
-    name: `FlightPath: ${this.getCliCommand()}`,
-    cwd: this.getWorkspaceRoot(),
-  });
-
-  return this.terminal;
-}
-
-// Wait for shell integration
-protected async waitForShellIntegration(
-  terminal: vscode.Terminal,
-  timeoutMs: number = 5000
-): Promise<vscode.TerminalShellIntegration> {
-  // ... implementation
+if (isInteractive) {
+  return await this.executeInTerminal(args, promptText, workflowContext);
+} else {
+  return await this.executeHeadless(args, promptText, workflowContext);
 }
 ```
 
-### Phase 2: Refactor sendPrompt() Flow
+### Interactive Terminal Execution
 
-Modify `sendPrompt()` to route based on execution mode:
-
-```typescript
-async sendPrompt(
-  prompt: PromptItem,
-  needsCompletionDetection: boolean = true,
-  workflowContext?: WorkflowContext
-): Promise<boolean> {
-  const mode = this.getExecutionMode();
-
-  if (mode === 'headless') {
-    // Warn if headless will auto-deny permission prompts
-    if (!this.hasFullPermissions()) {
-      vscode.window.showWarningMessage(
-        'Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.'
-      );
-    }
-    return this.executeHeadless(prompt, workflowContext);
-  } else {
-    // Interactive mode - works with any permission setting
-    return this.executeInTerminal(prompt, workflowContext);
-  }
-}
-
-// Check if full permissions are granted (no prompts will occur)
-protected hasFullPermissions(): boolean {
-  // Subclasses override with provider-specific checks
-  return false;
-}
-```
-
-### Phase 3: Interactive Terminal Execution
-
-New method in `BaseCliIntegration`:
+The `executeInTerminal()` method handles interactive TUI execution:
 
 ```typescript
 protected async executeInTerminal(
-  prompt: PromptItem,
+  args: string[],
+  promptText: string,
   workflowContext?: WorkflowContext
 ): Promise<boolean> {
-  // 1. Build the command (same command as headless, just different execution context)
-  const command = await this.buildCommand(prompt, workflowContext);
+  // Check if simple prompt (≤300 chars, no XML, no backticks)
+  const useDirectPrompt = this.isSimplePrompt(promptText);
 
-  // 2. Get or create terminal
-  const terminal = await this.getOrCreateTerminal();
-  terminal.show(); // Make visible for user interaction
-
-  // 3. Wait for shell integration
+  // Create fresh terminal and start TUI
+  const terminal = await this.createFreshTerminal();
+  terminal.show();
   const shellIntegration = await this.waitForShellIntegration(terminal);
+  const execution = shellIntegration.executeCommand(tuiCommand);
 
-  // 4. Execute command
-  const execution = shellIntegration.executeCommand(command);
-  this.currentExecution = execution;
-
-  // 5. Fire prompt ready event
-  this.promptReadyEmitter.fire({
-    fullPrompt: prompt.prompt,
-    cliCommand: command,
-  });
-
-  // 6. Stream output to dashboard
-  this.streamOutput(execution);
-
-  // 7. Wait for completion
-  return this.waitForCompletion(execution);
-}
-
-private async streamOutput(execution: vscode.TerminalShellExecution): Promise<void> {
-  try {
-    for await (const data of execution.read()) {
-      // Strip ANSI codes for clean dashboard display
-      const cleanData = this.stripAnsiCodes(data);
-      this.streamingChunkEmitter.fire(cleanData);
-
-      // Also log to output channel with ANSI codes
-      this.outputChannel?.append(data);
-    }
-  } catch (error) {
-    console.error('Stream error:', error);
-  }
-}
-
-private waitForCompletion(
-  execution: vscode.TerminalShellExecution
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const disposable = vscode.window.onDidEndTerminalShellExecution(event => {
-      if (event.execution === execution) {
-        disposable.dispose();
-        this.currentExecution = undefined;
-
-        const success = event.exitCode === 0;
-        this.responseCompleteEmitter.fire(
-          success ? 'Command completed successfully' : `Command failed with exit code ${event.exitCode}`
-        );
-        resolve(success);
-      }
-    });
-  });
-}
-```
-
-### Phase 4: Provider-Specific Command Building
-
-Each CLI integration builds commands based on user's permission settings. The same permission flags are used for both interactive and headless modes - the only difference is _where_ the command runs.
-
-**CopilotCommandLineIntegration:**
-
-```typescript
-private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
-  const args: string[] = [];
-
-  // Always use -p with JSON.stringify for prompt
-  // Works identically for both interactive and headless modes
-  args.push('-p', JSON.stringify(promptText));
-
-  // Model selection
-  const model = this.validateAndGetModel(prompt.model);
-  if (model) {
-    args.push('--model', model);
-  }
-
-  // Add workspace directories
-  this.getWorkspaceDirs().forEach(dir => {
-    args.push('--add-dir', dir);
-  });
-
-  // Apply permission settings (same for both interactive and headless)
-  const toolMode = this.getToolPermissionMode();
-  if (toolMode === 'allowAll') {
-    args.push('--allow-all-tools');
+  // Create temp file for complex prompts, or pass directly for simple ones
+  let promptToSend: string;
+  if (useDirectPrompt) {
+    promptToSend = promptText;
   } else {
-    // Custom mode: use specific allow/deny patterns
-    const allowedTools = this.getAllowedTools();
-    allowedTools.forEach(tool => args.push('--allow-tool', tool));
-
-    const deniedTools = this.getDeniedTools();
-    deniedTools.forEach(tool => args.push('--deny-tool', tool));
+    const { promptWithInstruction } = await this.createPromptFileWithReference(promptText);
+    promptToSend = promptWithInstruction;  // "Follow instructions in @.flightpath/temp/prompt-1.md "
   }
 
-  // Session management
-  if (prompt.newChatSession === false && this.sessionId) {
-    args.push('--resume', this.sessionId);
-  }
-
-  return args;
-}
-
-protected hasFullPermissions(): boolean {
-  // Check if all permissions are pre-granted (no prompts will occur)
-  const toolMode = this.getToolPermissionMode();
-  const allowAllPaths = this.getAllowAllPaths();
-
-  return toolMode === 'allowAll' && allowAllPaths;
+  // TuiStreamProcessor handles:
+  // - Waiting for TUI ready state
+  // - Sending prompt via terminal.sendText()
+  // - Streaming output via execution.read()
+  // - Detecting completion (escape indicator disappears)
+  const tuiProcessor = new TuiStreamProcessor(config);
+  return tuiProcessor.processStream(execution, terminal, promptToSend, timeoutMs);
 }
 ```
 
-**ClaudeCommandLineIntegration:**
+### TUI Stream Processing
+
+`TuiStreamProcessor` handles the complexities of TUI output processing:
 
 ```typescript
-private buildCliArgs(prompt: PromptItem, promptText: string): string[] {
-  const args: string[] = [];
-
-  // Always use -p with JSON.stringify for prompt
-  // Works identically for both interactive and headless modes
-  args.push('-p', JSON.stringify(promptText));
-
-  // Apply permission settings (same for both interactive and headless)
-  const toolMode = this.getToolPermissionMode();
-  if (toolMode === 'dangerouslyAllowAll') {
-    args.push('--dangerously-skip-permissions');
-  } else if (toolMode === 'allowAll') {
-    // Allow all tools but apply deny list
-    args.push('--tools', 'default');
-    const deniedTools = this.getDeniedTools();
-    deniedTools.forEach(tool => args.push('--disallowedTools', tool));
-  } else {
-    // Custom mode: use specific allow/deny patterns
-    const allowedTools = this.getAllowedTools();
-    allowedTools.forEach(tool => args.push('--allowedTools', tool));
-    const deniedTools = this.getDeniedTools();
-    deniedTools.forEach(tool => args.push('--disallowedTools', tool));
-  }
-
-  // Model selection
-  const model = this.validateAndGetModel(prompt.model);
-  args.push('--model', model);
-
-  // Add workspace directories
-  this.getWorkspaceDirs().forEach(dir => {
-    args.push('--add-dir', dir);
-  });
-
-  return args;
-}
-
-protected hasFullPermissions(): boolean {
-  // Check if all permissions are pre-granted (no prompts will occur)
-  const toolMode = this.getToolPermissionMode();
-
-  return toolMode === 'dangerouslyAllowAll';
+async processStream(
+  execution: vscode.TerminalShellExecution,
+  terminal: vscode.Terminal,
+  prompt: string,
+  timeoutMs: number
+): Promise<TuiProcessResult> {
+  // Process flow:
+  // 1. Wait for TUI ready (screen end pattern appears)
+  // 2. Send prompt via terminal.sendText(prompt + "\r")
+  // 3. Wait for file echo (confirms CLI received the prompt)
+  // 4. Stream output and detect completion
+  //
+  // Completion detection:
+  // - Escape indicator appears (CLI is generating)
+  // - Escape indicator disappears for 2+ screens (complete)
+  //
+  // Content processing:
+  // - Strip ANSI codes for clean dashboard display
+  // - Deduplicate content across TUI screen redraws
+  // - Filter TUI chrome (box borders, status bars, etc.)
 }
 ```
 
-### Phase 5: Headless Execution (Preserved)
+### Headless Execution
 
-Keep existing headless logic as `executeHeadless()`:
+Headless mode uses file-based prompt passing with `spawn()`:
 
 ```typescript
-private async executeHeadless(
+protected async executeHeadlessWithPromptFile(
   args: string[],
-  promptText: string
+  promptText: string,
+  workflowContext?: WorkflowContext,
+  executeCallback: (result: SpawnResult) => Promise<boolean>
 ): Promise<boolean> {
-  // Fire event with prompt and command ready
-  this.promptReadyEmitter.fire({
-    fullPrompt: promptText,
-    cliCommand: this.lastCliCommand!,
-  });
+  // Check if simple prompt
+  const useDirectPrompt = this.isSimplePrompt(promptText);
 
-  // Execute CLI command (prompt is in args via -p flag)
-  // Uses spawnProcess for background execution
-  const result = await this.executeCopilotCommand(args);
+  if (useDirectPrompt) {
+    // Simple: pass directly on command line
+    headlessArgs = this.buildHeadlessArgsWithDirectPrompt(args, promptText);
+  } else {
+    // Complex: create temp file and reference it
+    const { promptWithInstruction } = await this.createPromptFileWithReference(promptText);
+    headlessArgs = this.buildHeadlessArgs(args, promptWithInstruction);
+  }
 
-  // ... handle result
+  // Spawn process with optional streaming
+  const result = await this.processManager.spawn(command, headlessArgs, options);
+  return await executeCallback(result);
 }
 ```
 
-## Settings Changes
+## Settings
 
-### New Setting
+### Execution Mode Setting
 
 ```json
 "flightpath.cliExecutionMode": {
@@ -414,10 +304,10 @@ private async executeHeadless(
   "enum": ["interactive", "headless"],
   "enumDescriptions": [
     "Opens a VS Code terminal where you can see output, interact if needed, and press Ctrl+C to stop immediately (recommended)",
-    "Runs in background process without visible terminal. Requires full permissions to avoid hanging on prompts."
+    "Runs in background process without visible terminal"
   ],
   "default": "interactive",
-  "description": "Where CLI commands execute. Interactive provides visibility and immediate abort via Ctrl+C. Headless runs silently in background."
+  "markdownDescription": "**CLI Modes Only.** Where CLI commands execute.\n\n- **Interactive** (default): Opens a VS Code terminal for visibility and immediate abort via Ctrl+C\n- **Headless**: Runs silently in background process\n\n**Note:** Headless mode without full permissions will auto-deny tool prompts, preventing the agent from acting."
 }
 ```
 
@@ -574,18 +464,30 @@ dispose(): void {
 }
 ```
 
-## File Structure (Unchanged)
+## File Structure
 
 ```
 src/flightpath/
 ├── base/
-│   └── CopilotIntegration.ts          # Abstract base (unchanged)
+│   └── CopilotIntegration.ts          # Abstract base class
 ├── cli/
-│   ├── BaseCliIntegration.ts          # MODIFIED: Add terminal support
-│   ├── CopilotCommandLineIntegration.ts  # MODIFIED: Add interactive command builder
-│   └── ClaudeCommandLineIntegration.ts   # MODIFIED: Add interactive command builder
+│   ├── BaseCliIntegration.ts          # Terminal & headless execution support
+│   ├── CopilotCommandLineIntegration.ts  # GitHub Copilot CLI
+│   ├── ClaudeCommandLineIntegration.ts   # Claude Code CLI
+│   ├── CodexCommandLineIntegration.ts    # OpenAI Codex CLI
+│   └── shared/
+│       ├── CliResponseParser.ts       # Multi-format response parsing
+│       ├── CliToolPermissionMapper.ts # Cross-CLI tool mapping
+│       ├── CliMcpConfigGenerator.ts   # MCP config generation
+│       └── CliNotificationMonitor.ts  # Completion notification monitoring
 └── chat/
-    └── CopilotChatIntegration.ts      # Unchanged
+    └── CopilotChatIntegration.ts      # Chat window automation
+
+src/utils/
+├── CliProcessManager.ts               # Process spawning & terminal management
+├── TuiStreamProcessor.ts              # TUI output processing & completion detection
+├── TempFileManager.ts                 # Temp file creation for prompts
+└── ConfigurationUtils.ts              # Settings access
 ```
 
 ## Dashboard Changes
@@ -615,48 +517,22 @@ The dashboard already handles streaming output. Minimal changes needed:
    - User cancels in terminal → handled gracefully
    - Multi-prompt workflow → terminal reused
    - Exit code detection → success/failure reported
-   - Headless mode without full permissions → warns, CLI auto-denies prompts
+   - Headless mode without full permissions → warning shown
    - Headless mode with full permissions → runs in background
-
-## Migration Path
-
-### Breaking Changes
-
-None - existing behavior preserved when:
-
-- `cliExecutionMode` defaults to `interactive` (new behavior)
-- Permission settings (`allowAllTools`, `allowedTools`, etc.) work exactly as before
-- Users can set `cliExecutionMode: headless` to get the old invisible background behavior
-
-### No Deprecation Needed
-
-Permission settings and execution mode are independent:
-
-- **Permission settings** control what the CLI can do
-- **Execution mode** controls where the CLI runs
-
-Both are useful and remain fully supported.
-
-## Future Enhancements
-
-1. **Terminal embedding** - Use xterm.js to embed terminal directly in dashboard (complex but better UX)
-2. **Approval shortcuts** - Detect common approval patterns, add quick-approve buttons
-3. **Approval history** - Remember approved tools for session
-4. **Audit log** - Track all tool approvals for security review
 
 ## Summary
 
-This refactor adds a new execution mode setting that controls where CLI commands run:
+FlightPath's CLI integrations support two execution modes:
 
 | Mode          | Description                                      |
 | ------------- | ------------------------------------------------ |
 | `interactive` | Runs in VS Code terminal (visible, Ctrl+C works) |
-| `headless`    | Runs in background process (current behavior)    |
+| `headless`    | Runs in background process                       |
 
 **Key insight: Execution mode and permission settings are orthogonal.**
 
-- A user with `allowAllTools: true` might still want `interactive` mode for visibility and immediate abort
-- A user with custom permissions must use `interactive` mode (headless would hang on prompts)
+- A user with `cliToolPermissions: allowAll` might still want `interactive` mode for visibility and immediate abort
+- A user with custom permissions should use `interactive` mode (headless auto-denies prompts)
 
 Permission flags (`--allow-all-tools`, `--allow-tool`, etc.) are applied identically in both modes - only the execution context differs.
 
@@ -665,3 +541,6 @@ Permission flags (`--allow-all-tools`, `--allow-tool`, etc.) are applied identic
 - [VS Code Terminal API](https://code.visualstudio.com/api/references/vscode-api#Terminal)
 - [Shell Integration Documentation](https://code.visualstudio.com/docs/terminal/shell-integration)
 - [TerminalShellIntegration API](https://code.visualstudio.com/api/references/vscode-api#TerminalShellIntegration)
+- [BaseCliIntegration.ts](../src/flightpath/cli/BaseCliIntegration.ts)
+- [CliProcessManager.ts](../src/utils/CliProcessManager.ts)
+- [TuiStreamProcessor.ts](../src/utils/TuiStreamProcessor.ts)

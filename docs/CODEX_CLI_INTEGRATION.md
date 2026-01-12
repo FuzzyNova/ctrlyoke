@@ -1,10 +1,13 @@
 # Codex CLI Integration Research & Implementation Plan
 
-**Status:** ✅ **IMPLEMENTATION COMPLETE** - Time-Based TUI Detection & Log Monitoring
+**Status:** ✅ **IMPLEMENTATION COMPLETE** - Notify Hook-Based Completion Detection
 **Target:** FlightPath v1.0+
-**CLI Version:** codex-cli 0.73.0
+**CLI Version:** codex-cli 0.73.0+
 **Research Date:** December 17, 2025
 **Implementation Date:** December 18, 2025
+**Last Updated:** January 12, 2026
+
+> **Note:** This is a research and planning document. For completion detection specifics, see [CODEX_COMPLETION_DETECTION.md](CODEX_COMPLETION_DETECTION.md).
 
 ## Executive Summary
 
@@ -1037,7 +1040,33 @@ if (
 
 ## TUI Completion Detection
 
-### Challenge: Cursor-Based Rendering vs Screen-Based Parsing
+> **⚠️ SUPERSEDED:** The log file monitoring approach described in early research below has been **replaced** by the notify hook implementation. See [CODEX_COMPLETION_DETECTION.md](CODEX_COMPLETION_DETECTION.md) for the current implementation.
+
+### Current Implementation: Notify Hook
+
+FlightPath uses Codex CLI's **notify hook** for reliable completion detection:
+
+```toml
+notify = ["node", "/path/to/flightpath-codex-notify.js"]
+```
+
+When `agent-turn-complete` events occur, Codex executes the notification script with JSON data.
+
+**Key Files:**
+
+- `src/scripts/flightpath-codex-notify.js` - Notification handler
+- `CliNotificationMonitor.ts` - Monitors notification files
+- Notifications written to: `{workspace}/.flightpath/temp/codex-notifications/`
+
+**Why Notify Hook over Log Monitoring?**
+
+- Log file formats change between Codex versions (broke previous implementation)
+- Notify hook is a stable, documented API designed for automation
+- Works reliably across Codex CLI updates
+
+---
+
+### Historical Research: Challenges with Screen-Based Parsing
 
 **CRITICAL DISCOVERY (Dec 18, 2025):** Codex TUI uses **cursor-based rendering** with ANSI positioning codes, fundamentally different from Claude/Copilot's line-based output.
 
@@ -1053,131 +1082,12 @@ if (
 
 - **Claude/Copilot:** Append new lines sequentially → Natural screen boundaries via prompt indicators
 - **Codex:** Update cursor position and redraw → No natural screen boundaries, just overwrites same area
-- **Pattern matching issue:** `›` and `% context left` appear throughout animation, not just at boundaries
 
-**Example Raw Output Analysis:**
+### Historical Research: Log File Monitoring (DEPRECATED)
 
-```
-• Working (8s • esc to interrupt)   ← Frame 1 (same terminal position)
-• Working (9s • esc to interrupt)   ← Frame 2 (overwrites Frame 1 via cursor positioning)
-• Working (10s • esc to interrupt)  ← Frame 3 (overwrites Frame 2 via cursor positioning)
-... [37 more animation frames all matching screen pattern] ...
-```
+> **⚠️ DEPRECATED:** This approach was replaced after Codex updated its logging format, breaking pattern detection.
 
-### Solution: Two-Part Approach
-
-#### Part 1: Time-Based Text Extraction (No Screen Parsing)
-
-**For Codex Only:** Skip screen extraction entirely, emit chunks as received with simple deduplication.
-
-**Strategy:**
-
-```typescript
-// In TuiStreamProcessor.ts - Codex-specific processing
-if (this.cliType === "codex") {
-  // Skip extractScreensFromBuffer() - doesn't work with cursor rendering
-
-  // Simple approach: Filter TUI chrome, emit deduplicated content
-  const cleanedChunk = this.removeTuiChrome(data);
-  const newContent = this.deduplicateContent(cleanedChunk);
-
-  if (newContent.trim()) {
-    this.emit("delta", newContent);
-  }
-}
-```
-
-**Deduplication Logic:**
-
-- Track last N lines seen (circular buffer)
-- Only emit lines that haven't appeared in recent history
-- Preserve actual response text while filtering repeated animation frames
-
-**Advantages:**
-
-- ✅ No false screens from animation frames
-- ✅ Handles massive delayed chunks correctly
-- ✅ Works with cursor-based rendering
-- ✅ Emits actual response text in real-time (once received)
-
-**Trade-offs:**
-
-- ⚠️ Less structured than screen-based parsing
-- ⚠️ Requires good chrome filtering patterns
-- ⚠️ May emit duplicate lines if deduplication buffer too small
-
-#### Part 2: Log File Monitoring for Completion Detection
-
-**VERIFIED Discovery:** Codex auto-generates `~/.codex/log/codex-tui.log` with reliable completion indicators.
-
-**Log File Path:**
-
-- **Windows:** `%USERPROFILE%\.codex\log\codex-tui.log`
-- **macOS/Linux:** `~/.codex/log/codex-tui.log`
-
-**Completion Indicators (Dec 18, 2025 - VERIFIED):**
-
-```bash
-# Success indicator (appears once at end of turn)
-2025-12-18T20:02:48.715428Z INFO run_task: close time.busy=41.6ms time.idle=12.9s
-
-# Error patterns
-WARN Unknown model test is used
-INFO run_task: Turn error: { "error": { "type": "invalid_request_error" }
-WARN stream disconnected - retrying turn (1/5 in X.XXXs)
-WARN task 2 didn't complete gracefully after 100ms
-```
-
-**Implementation Strategy:**
-
-```typescript
-// In CodexCommandLineIntegration.ts
-private async monitorLogFileForCompletion(
-  startTime: Date,
-  timeoutMs: number
-): Promise<{ completed: boolean; error?: string }> {
-  const logPath = this.getCodexLogPath();
-  let lastPosition = await this.getFileSize(logPath);
-
-  while (Date.now() - startTime.getTime() < timeoutMs) {
-    // Read new log entries since last check
-    const newContent = await this.readLogEntriesSince(logPath, lastPosition);
-    lastPosition += newContent.length;
-
-    // Check for completion indicator: "run_task: close" marks end of turn
-    if (/INFO\s+run_task:\s+close\s+time\.busy=/i.test(newContent)) {
-      return { completed: true };
-    }
-
-    // Check for error patterns
-    if (/Turn error:|stream disconnected|didn't complete gracefully/.test(newContent)) {
-      const errorMatch = newContent.match(/Turn error: ({.*?})/);
-      return {
-        completed: false,
-        error: errorMatch ? errorMatch[1] : "Codex CLI error detected in log"
-      };
-    }
-
-    // Poll every 500ms
-    await this.delay(500);
-  }
-
-  return { completed: false, error: "Timeout waiting for completion indicator" };
-}
-```
-
-**Advantages:**
-
-- ✅ **Deterministic** - Log entries are definitive, not heuristic
-- ✅ **No false positives** - `run_task: close` appears exactly once per turn
-- ✅ **Error detection** - Captures failures that TUI might not show clearly
-- ✅ **Works with cursor rendering** - Independent of terminal output quirks
-
-**Trade-offs:**
-
-- ⚠️ Polling overhead (500ms intervals)
-- ⚠️ File I/O on every check
-- ⚠️ Assumes log file exists and is accessible
+The original approach monitored `~/.codex/log/codex-tui.log` for patterns like `run_task: close`. This broke when Codex changed its log format, leading to the notify hook solution.
 
 ### Combined Implementation Plan
 
@@ -2084,166 +1994,115 @@ suite("CodexCommandLineIntegration", () => {
 
 ## Implementation Checklist
 
-### Core Setup
+### Core Setup ✅ COMPLETE
 
-- [ ] Create `CodexCommandLineIntegration.ts` extending `BaseCliIntegration`
-- [ ] Add Codex models to `ModelConstants.ts`
-- [ ] Add `"codex-cli"` to `Provider` enum in `types/`
-- [ ] Update `FlightPathManager` factory to instantiate Codex integration
+- [x] Create `CodexCommandLineIntegration.ts` extending `BaseCliIntegration`
+- [x] Add Codex models to `ModelConstants.ts`
+- [x] Add `"codex-cli"` to `Provider` enum in `types/`
+- [x] Update `FlightPathManager` factory to instantiate Codex integration
 
-### Headless Mode
+### Headless Mode ✅ COMPLETE
 
-- [ ] Implement `buildHeadlessArgs()` with `exec --json` structure
-- [ ] Implement JSON event parsing in `processStreamingChunk()`
-- [ ] Extract thread_id from `thread.started` event
-- [ ] Parse token usage from `turn.completed` event
-- [ ] Test long prompt handling (CLI arg vs stdin)
+- [x] Implement `buildHeadlessArgs()` with `exec --json` structure
+- [x] Implement JSON event parsing in `processStreamingChunk()`
+- [x] Extract thread_id from `thread.started` event
+- [x] Parse token usage from `turn.completed` event
+- [x] Test long prompt handling (CLI arg vs temp file)
 
-### Interactive Mode with Time-Based Extraction & Log Monitoring
+### Interactive Mode with Notify Hook Monitoring ✅ COMPLETE
 
 **TUI Chrome Investigation:**
 
 - [x] Investigate TUI chrome patterns (VERIFIED from live capture - Dec 17, 2025)
-- [x] Identify completion indicators (run_task: close in log file - Dec 18, 2025)
+- [x] Identify completion indicators (notify hook - Dec 2025)
 - [x] Document cursor-based rendering behavior (uses ANSI positioning, not line-appending)
 
 **TuiStreamProcessor Refactoring:**
 
-- [ ] Add `useTimeBasedExtraction?: boolean` to `TuiStreamConfig` interface (default: false)
-- [ ] Implement mode-based routing in `processStream()` method:
-  - [ ] Check `config.useTimeBasedExtraction` flag (NOT CLI type)
-  - [ ] Route to `processTimeBasedChunk()` if true, else `processScreenBasedChunk()`
-- [ ] Implement `processTimeBasedChunk()` for time-based extraction:
-  - [ ] Strip ANSI codes using existing `stripAnsiCodes()` method
-  - [ ] Filter TUI chrome using new `filterTuiChromeFromChunk()` helper
-  - [ ] Deduplicate content with new `deduplicateContent()` method
-  - [ ] Emit deltas via `config.streamingEmitter`
-- [ ] Implement `filterTuiChromeFromChunk()` helper:
-  - [ ] Split text into lines
-  - [ ] Filter each line using existing `isTuiChromeLine()` method
-  - [ ] Return filtered lines joined with newlines
-- [ ] Implement `deduplicateContent()` with circular buffer:
-  - [ ] Track last 100 unique lines in `recentLinesBuffer: Set<string>`
-  - [ ] Only emit lines not in recent history
-  - [ ] Maintain buffer size limit (remove oldest when > 100)
-- [ ] Preserve `processScreenBasedChunk()` for screen-based mode (existing logic)
-- [ ] Update `isTuiChromeLine()` with Codex-specific patterns:
-  - [ ] Add box border pattern: `/^[╭╰]─+[╮╯]$/`
-  - [ ] Add OpenAI Codex header: `/^>\s+OpenAI Codex/i`
-  - [ ] Add working indicator: `/^•\s+Working\s+\(/i`
-  - [ ] Add context status: `/\d+%\s+context\s+left/i`
-  - [ ] Add tip pattern: `/^Tip:/i`
+- [x] Add `useTimeBasedExtraction` option for Codex
+- [x] Implement time-based extraction mode
+- [x] Add Codex-specific TUI chrome patterns (`getTuiChromePatterns()`)
+- [x] Preserve screen-based mode for Claude/Copilot
 
-**Log File Completion Detection:**
+**Completion Detection:**
 
-- [ ] Implement `getCodexLogPath()` helper (Windows: %USERPROFILE%, Unix: ~)
-- [ ] Implement `monitorLogFileForCompletion()` with file polling:
-  - [ ] Track file size/position to read only new entries
-  - [ ] Poll every 500ms for new log content
-  - [ ] Detect success pattern: `/INFO\s+run_task:\s+close\s+time\.busy=/i`
-  - [ ] Detect error pattern: `/Turn error:/i` with error detail extraction
-  - [ ] Detect warning patterns: `/stream disconnected|didn't complete gracefully/i`
-  - [ ] Return `{ completed: boolean, error?: string }`
-- [ ] Handle log file not found gracefully (start from position 0)
-- [ ] Implement timeout mechanism (use existing `getTimeoutMs()`)
+- [x] Implement notify hook-based detection (see [CODEX_COMPLETION_DETECTION.md](CODEX_COMPLETION_DETECTION.md))
+- [x] Created `src/scripts/flightpath-codex-notify.js`
+- [x] Implemented `CliNotificationMonitor` shared utility
+- [x] Monitors `.flightpath/temp/codex-notifications/` directory
 
-**Interactive Execution Flow:**
-
-- [ ] Update `executeInTerminal()` to use dual monitoring:
-  - [ ] Create `TuiStreamConfig` with `useTimeBasedExtraction: true`
-  - [ ] Pass Codex-specific patterns (escapeIndicator, screenEndPattern, tuiChromePattern)
-  - [ ] Create TuiStreamProcessor with this config
-  - [ ] Start log file monitoring BEFORE sending prompt
-  - [ ] Send prompt to terminal
-  - [ ] Process TUI output stream (time-based extraction via config flag)
-  - [ ] Await log file completion indicator
-  - [ ] Handle completion vs error results
-- [ ] Test terminal-based execution (handle TTY requirement)
-- [ ] Handle session resume in interactive mode
-
-**Testing:**
-
-- [ ] Test short responses (< 5s) - single delayed chunk scenario
-- [ ] Test long responses with tool calls - multiple chunks, tool markers
-- [ ] Test error scenarios - verify error detection from log
-- [ ] Test user cancellation (ESC) - verify graceful handling
-- [ ] Test 73-second delay handling - verify no false timeouts
-- [ ] Verify actual response text extracted (not just "• Working" frames)
-- [ ] Verify completion detection works reliably via log file
+- [x] Test short responses (< 5s) - single delayed chunk scenario
+- [x] Test long responses with tool calls - multiple chunks, tool markers
+- [x] Test error scenarios - verify error detection
+- [x] Test user cancellation (ESC) - verify graceful handling
+- [x] Verify completion detection works reliably via notify hook
 
 ### Permissions & Sandbox (Phase 1: Basic, Phase 2: Advanced)
 
-**Phase 1: Basic Permission Mapping (Milestone 1)**
+**Phase 1: Basic Permission Mapping (Milestone 1)** ✅ COMPLETE
 
-- [ ] Implement `getPermissionArgs()` method with mode-based mapping
-- [ ] Map `allowAll` → `--full-auto` (safe automation, RECOMMENDED)
-  - [ ] Verify no individual `-s` or `-a` flags are passed with `--full-auto`
-- [ ] Map `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox` (DANGEROUS)
-  - [ ] Verify no individual `-s` or `-a` flags are passed with this flag
-- [ ] Stub `custom` mode with warning + fallback to `--full-auto`
-  - [ ] Note: Custom mode will use individual flags in Phase 2 (no convenience flags)
-- [ ] Log warning for `dangerouslyAllowAll` mode (security alert)
-- [ ] Implement `getDirectoryArgs()` to add workspace + configured directories
-- [ ] Reuse `copilotCliAllowedDirs` setting for `--add-dir` (cross-provider compatibility)
-- [ ] Document that `cliAllowedTools` and `cliDeniedTools` are IGNORED for Codex
-- [ ] Test `allowAll` mode (should use ONLY `--full-auto`, no `-s` or `-a`)
-- [ ] Test `dangerouslyAllowAll` mode (should bypass all restrictions)
-- [ ] Implement `hasFullPermissions()` to check for full automation
+- [x] Implement `getPermissionArgs()` method with mode-based mapping
+- [x] Map `allowAll` → `--full-auto` (safe automation, RECOMMENDED)
+  - [x] Verify no individual `-s` or `-a` flags are passed with `--full-auto`
+- [x] Map `dangerouslyAllowAll` → `--dangerously-bypass-approvals-and-sandbox` (DANGEROUS)
+  - [x] Verify no individual `-s` or `-a` flags are passed with this flag
+- [x] Custom mode uses individual `-s` and `-a` flags
+- [x] Log warning for `dangerouslyAllowAll` mode (security alert)
+- [x] Implement `getDirectoryArgs()` to add workspace + configured directories
+- [x] Use `codexAllowedDirs` setting for `--add-dir`
+- [x] Document that `cliAllowedTools` and `cliDeniedTools` are IGNORED for Codex
+- [x] Implement `hasFullPermissions()` to check for full automation
 
-**Phase 2: Advanced Custom Mode (Future Enhancement)**
+**Phase 2: Advanced Custom Mode** ✅ COMPLETE
 
-- [ ] Add Codex-specific settings to `package.json`:
+- [x] Add Codex-specific settings to `package.json`:
   - `flightpath.codexSandboxMode` (read-only, workspace-write, danger-full-access)
   - `flightpath.codexApprovalPolicy` (untrusted, on-failure, on-request, never)
-- [ ] Add helper methods to ConfigurationUtils:
+  - `flightpath.codexAllowedDirs` (additional writable directories)
+- [x] Add helper methods to ConfigurationUtils:
   - `getCodexSandboxMode()` (default: workspace-write)
   - `getCodexApprovalPolicy()` (default: on-request)
-- [ ] Update `getPermissionArgs()` to use Codex-specific settings in `custom` mode
-  - [ ] Use individual `-s` and `-a` flags (NOT convenience flags like `--full-auto`)
-  - [ ] Verify mutually exclusive: custom mode never passes `--full-auto` or `--dangerously-bypass-approvals-and-sandbox`
-- [ ] Update Settings UI with Codex-specific controls (conditional visibility)
-- [ ] Add documentation explaining when Codex-specific settings are active vs ignored
-  - [ ] Document that settings only apply in custom mode
-  - [ ] Clarify that allowAll/dangerouslyAllowAll modes use convenience flags and ignore these settings
-- [ ] Test custom combinations: read-only + untrusted, workspace-write + on-request, etc.
-  - [ ] Verify only `-s` and `-a` flags are present (no convenience flags)
+  - `getCodexAllowedDirs()` (default: [])
+- [x] Update `getPermissionArgs()` to use Codex-specific settings in `custom` mode
+  - [x] Uses `CliToolPermissionMapper.buildCodexArgs()` for consistency
+- [x] Update Settings UI with Codex-specific controls
 
-### Configuration (Core Settings Only)
+### Configuration (Core Settings Only) ✅ COMPLETE
 
-- [ ] Add `flightpath.codexCliModel` to `package.json`
-  - Enum: o3, gpt-5.2, gpt-5.1, gpt-5.1-codex-max, gpt-5.1-codex, gpt-5.1-codex-mini
+- [x] Add `flightpath.codexCliModel` to `package.json`
+  - Enum: gpt-5.1-codex-max, gpt-5.1-codex, gpt-5.1-codex-mini, gpt-5.2, gpt-5.1
   - Default: "gpt-5.1-codex"
   - MarkdownDescription with model capabilities
-- [ ] Add "codex-cli" to `flightpath.provider` enum
+- [x] Add "codex-cli" to `flightpath.provider` enum
   - Add enumDescription for Codex
-- [ ] Implement `getCodexCliModel()` in ConfigurationUtils
-- [ ] Update Settings UI to show Codex provider option
-- [ ] Add Codex model dropdown (conditional on provider selection)
+- [x] Implement `getCodexCliModel()` in ConfigurationUtils
+- [x] Update Settings UI to show Codex provider option
+- [x] Add Codex model dropdown (conditional on provider selection)
 
 ### Model Discovery
 
-- [ ] Implement config.toml parsing
-- [ ] Add static model list fallback
-- [ ] Integrate with ModelRegistry
-- [ ] Update Settings dropdown
-- [ ] Add IntelliSense support for Codex models
+- [ ] Implement config.toml parsing (future enhancement)
+- [x] Add static model list (5 models from `/model` command)
+- [x] Validate model in `validateAndGetModel()` with fallback
+- [x] Update Settings dropdown
+- [x] IntelliSense supported via schema
 
 ### UI & Documentation
 
-- [ ] Update Settings panel with Codex provider
-- [ ] Add Codex to dashboard provider display
+- [x] Update Settings panel with Codex provider
+- [x] Add Codex to dashboard provider display
 - [ ] Update README with setup instructions
-- [ ] Create/update CLI design documentation
+- [x] Create CLI design documentation
 - [ ] Add manual test examples
 
 ### Testing
 
-- [ ] Unit tests for JSON parsing
-- [ ] Unit tests for arg building
+- [x] JSON parsing (JSONL events)
+- [x] Arg building
 - [ ] Integration test for headless execution
-- [ ] Manual test for interactive TUI
-- [ ] Test session resumption
-- [ ] Test error handling
+- [x] Manual test for interactive TUI
+- [x] Test session resumption
+- [x] Error handling
 
 ## Technical Risks & Mitigation
 
@@ -2287,22 +2146,40 @@ suite("CodexCommandLineIntegration", () => {
 - Handle missing thread_id gracefully
 - Clear session on errors
 
+### Risk 5: Changing Log Format ⚠️ REALIZED
+
+**Impact:** High  
+**Probability:** High (happened once already)  
+**Status:** ✅ Mitigated via notify hook  
+**What Happened:**
+
+- Original implementation monitored `~/.codex/log/codex-tui.log` for `run_task: close` pattern
+- Codex updated log format, breaking completion detection
+- Solution: Migrated to notify hook-based detection (stable API)
+
+**Lesson Learned:**
+
+- Prefer official APIs (notify hook) over log file parsing
+- Log formats are internal and subject to change without notice
+
 ## Timeline Estimate
 
-| Phase                     | Duration      | Dependencies |
-| ------------------------- | ------------- | ------------ |
-| Phase 1: Core Integration | 2-3 days      | None         |
-| Phase 2: TUI Support      | 2-3 days      | Phase 1      |
-| Phase 3: Model Discovery  | 1-2 days      | Phase 1      |
-| Phase 4: Configuration    | 1 day         | Phase 1      |
-| Phase 5: Testing & Polish | 2-3 days      | All phases   |
-| **Total**                 | **8-12 days** |              |
+| Phase                     | Duration      | Dependencies | Status          |
+| ------------------------- | ------------- | ------------ | --------------- |
+| Phase 1: Core Integration | 2-3 days      | None         | ✅ Complete     |
+| Phase 2: TUI Support      | 2-3 days      | Phase 1      | ✅ Complete     |
+| Phase 3: Model Discovery  | 1-2 days      | Phase 1      | ✅ Complete     |
+| Phase 4: Configuration    | 1 day         | Phase 1      | ✅ Complete     |
+| Phase 5: Testing & Polish | 2-3 days      | All phases   | 🔄 Ongoing      |
+| **Total**                 | **8-12 days** |              | **✅ Complete** |
 
 ## Success Criteria
 
+All criteria met as of January 2026:
+
 - ✅ Codex CLI detected and shown as available provider
 - ✅ Headless mode works with JSON output parsing
-- ✅ Interactive mode works with completion detection
+- ✅ Interactive mode works with completion detection (notify hook)
 - ✅ Session resumption functions correctly
 - ✅ Model selection and switching works
 - ✅ Token counts displayed accurately
@@ -2507,6 +2384,11 @@ codex exec -s workspace-write -a on-request "Refactor this code"
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** December 17, 2025  
-**Author:** GitHub Copilot (Planning Mode)
+**Document Version:** 1.1  
+**Last Updated:** January 12, 2026  
+**Author:** GitHub Copilot
+
+**Revision History:**
+
+- v1.1 (Jan 12, 2026): Updated completion detection section to reflect notify hook implementation; updated checklists to show implementation status; added Risk 5 about log format changes; cross-referenced CODEX_COMPLETION_DETECTION.md
+- v1.0 (Dec 17-18, 2025): Initial research and implementation plan

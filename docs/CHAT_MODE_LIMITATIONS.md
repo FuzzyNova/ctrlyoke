@@ -299,6 +299,6 @@ Use **CLI mode** for:
 
 ## Related Documentation
 
-- `AGENT_SUPPORT_IMPLEMENTATION.md` - Agent support implementation (CLI mode)
-- `ARCHITECTURE.md` - System architecture overview
+- `CHAT_COMPLETION_DETECTION.md` - Detailed completion detection strategy
+- `COPILOT_CLI_DESIGN.md` - CLI mode architecture (recommended for automation)
 - `QUEUE_APPEND_FEATURE.md` - Queue append and dynamic extension guide

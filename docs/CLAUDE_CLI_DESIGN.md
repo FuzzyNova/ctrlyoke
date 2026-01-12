@@ -71,34 +71,35 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 
 ### ✅ Implemented Flags
 
-| CLI Flag                         | FlightPath Setting/Schema                            | Implementation                                                                               |
-| -------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `--model <model>`                | `flightpath.claudeCliModel`, `prompt.model`          | Full support - aliases (sonnet/opus/haiku) or full names                                     |
-| `--add-dir <directory>`          | Auto-includes workspace folders                      | Full support - workspace folders auto-included                                               |
-| `--tools "default"`              | `flightpath.cliToolPermissions: allowAll`            | Full support - default mode (safe automation)                                                |
-| `--dangerously-skip-permissions` | `flightpath.cliToolPermissions: dangerouslyAllowAll` | Full support - bypasses all checks (use with caution)                                        |
-| `--allowedTools <pattern>`       | `flightpath.cliAllowedTools` (shared)                | Full support - auto-converted from Copilot format                                            |
-| `--disallowedTools <pattern>`    | `flightpath.cliDeniedTools` (shared)                 | Full support - auto-converted from Copilot format, always applied except dangerouslyAllowAll |
-| `--output-format stream-json`    | Hardcoded                                            | Full support - always uses stream-json for real-time output                                  |
-| `--verbose`                      | Auto-added for stream-json                           | Full support - required for stream-json format                                               |
-| `-r, --resume <sessionId>`       | `prompt.newChatSession: false` + session ID          | Full support                                                                                 |
-| `-c`                             | `prompt.newChatSession: false` (no session ID)       | Full support - continues most recent session                                                 |
-| `--settings <json-string>`       | Auto-injected for stop hook (interactive mode)       | Full support - passes Stop hook configuration                                                |
-| Prompt via stdin                 | Prompt text passed to process                        | Full support - current implementation sends via stdin                                        |
+| CLI Flag                              | FlightPath Setting/Schema                                         | Implementation                                                                               |
+| ------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `--model <model>`                     | `flightpath.claudeCliModel`, `prompt.model`                       | Full support - aliases (sonnet/opus/haiku) or full names                                     |
+| `--add-dir <directory>`               | Auto-includes workspace folders                                   | Full support - workspace folders auto-included                                               |
+| `--tools "default"`                   | `flightpath.cliToolPermissions: allowAll`                         | Full support - default mode (safe automation)                                                |
+| `--permission-mode bypassPermissions` | `flightpath.cliToolPermissions: allowAll/custom`                  | Full support - used for safe automation with deny list support                               |
+| `--dangerously-skip-permissions`      | `flightpath.cliToolPermissions: dangerouslyAllowAll`              | Full support - bypasses all checks (use with caution)                                        |
+| `--allowedTools <pattern>`            | `flightpath.cliAllowedTools` (shared)                             | Full support - auto-converted from Copilot format                                            |
+| `--disallowedTools <pattern>`         | `flightpath.cliDeniedTools` (shared)                              | Full support - auto-converted from Copilot format, always applied except dangerouslyAllowAll |
+| `--output-format stream-json`         | Hardcoded                                                         | Full support - always uses stream-json for real-time output                                  |
+| `--verbose`                           | Auto-added for stream-json                                        | Full support - required for stream-json format                                               |
+| `-r, --resume <sessionId>`            | `prompt.newChatSession: false` + session ID                       | Full support                                                                                 |
+| `-c`                                  | `prompt.newChatSession: false` (no session ID)                    | Full support - continues most recent session                                                 |
+| `--settings <json-string>`            | Auto-injected for stop hook (interactive mode)                    | Full support - passes Stop hook configuration                                                |
+| `--mcp-config <path>`                 | Auto-generated for dynamic queue extension                        | Full support - FlightPath MCP server auto-configured when dynamic queue enabled              |
+| `--allowed-tools mcp__flightpath`     | Auto-added with MCP config                                        | Full support - auto-approves FlightPath MCP tools                                            |
+| Prompt via positional arg             | Prompt passed as first argument (headless) or typed (interactive) | Full support - `claude "@file" -p` for headless, stdin for interactive                       |
 
 ### ❌ Not Implemented Flags
 
 **High Priority (Automation-Relevant):**
 
-| CLI Flag                    | Priority | Notes                                                                              |
-| --------------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `--json-schema <schema>`    | **HIGH** | JSON Schema for structured output validation - **CRITICAL**                        |
-| `--permission-mode <mode>`  | **HIGH** | Granular permission modes (acceptEdits, bypassPermissions, default, dontAsk, plan) |
-| `--system-prompt <prompt>`  | MEDIUM   | Complete system prompt override (not just append)                                  |
-| `--fallback-model <model>`  | MEDIUM   | Auto-fallback when primary model is overloaded                                     |
-| `--tools <tools...>`        | MEDIUM   | Specify built-in tools from predefined set (only with --print)                     |
-| `--fork-session`            | MEDIUM   | Create new session ID when resuming (use with -r or -c)                            |
-| `--mcp-config <configs...>` | MEDIUM   | Load MCP servers from JSON files/strings (space-separated)                         |
+| CLI Flag                   | Priority | Notes                                                          |
+| -------------------------- | -------- | -------------------------------------------------------------- |
+| `--json-schema <schema>`   | **HIGH** | JSON Schema for structured output validation - **CRITICAL**    |
+| `--system-prompt <prompt>` | MEDIUM   | Complete system prompt override (not just append)              |
+| `--fallback-model <model>` | MEDIUM   | Auto-fallback when primary model is overloaded                 |
+| `--tools <tools...>`       | MEDIUM   | Specify built-in tools from predefined set (only with --print) |
+| `--fork-session`           | MEDIUM   | Create new session ID when resuming (use with -r or -c)        |
 
 **Low Priority (Utility/Debug):**
 
@@ -637,26 +638,59 @@ CopilotIntegration (abstract base)
 
 ### Key Methods
 
-| Method                               | Purpose                                         |
-| ------------------------------------ | ----------------------------------------------- |
-| `initialize()`                       | Detect CLI availability via `claude --version`  |
-| `sendPrompt()`                       | Execute prompt with all configured flags        |
-| `buildCliArgs()`                     | Construct CLI arguments from settings/prompt    |
-| `validateAndGetModel()`              | Resolve aliases, validate, fallback if needed   |
-| `convertToolPatternToClaudeFormat()` | Convert Copilot tool patterns to Claude format  |
-| `getToolPermissionArgs()`            | Build `--allowedTools`/`--disallowedTools` args |
-| `parseJsonOutput()`                  | Parse structured JSON response                  |
-| `parseTextOutput()`                  | Fallback for plain text responses               |
-| `getStatus()`                        | Return availability and version info            |
+| Method                      | Purpose                                                           |
+| --------------------------- | ----------------------------------------------------------------- |
+| `initialize()`              | Detect CLI availability via `claude --version`                    |
+| `sendPrompt()`              | Execute prompt with all configured flags                          |
+| `buildCliArgs()`            | Construct CLI arguments from settings/prompt                      |
+| `validateAndGetModel()`     | Resolve aliases, validate, fallback if needed                     |
+| `executeInTerminal()`       | Interactive TUI mode with stop hook monitoring                    |
+| `executeHeadless()`         | Background process mode with temp file prompt                     |
+| `processStreamingChunk()`   | Parse stream-json chunks for real-time content extraction         |
+| `parseStreamJsonOutput()`   | Parse final stream-json response (delegates to CliResponseParser) |
+| `getToolPermissionArgs()`   | Build permission args (delegates to CliToolPermissionMapper)      |
+| `buildStopHookSettings()`   | Configure stop hook for interactive completion detection          |
+| `monitorNotificationFile()` | Monitor for stop hook notifications                               |
+
+**Shared Utilities (in `src/flightpath/cli/shared/`):**
+
+| Utility                                           | Purpose                                        |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `CliToolPermissionMapper.convertToClaudeFormat()` | Convert Copilot tool patterns to Claude format |
+| `CliToolPermissionMapper.buildClaudeArgs()`       | Build complete permission argument list        |
+| `CliResponseParser.parseClaudeStreamJson()`       | Parse Claude stream-json output                |
+| `CliNotificationMonitor.monitorForCompletion()`   | Monitor stop hook notification files           |
 
 ### Process Execution
 
+**Headless mode (background process):**
+
 ```typescript
-// Prompt sent via stdin, not command argument
-const result = await this.spawnProcess("claude", args, {
-  stdin: promptText,
-  timeout: 300000, // 5 minutes
-  onStdout: (chunk) => this.streamingChunkEmitter.fire(chunk),
+// Prompt written to temp file, passed as positional argument: claude "@path/to/file" -p ...
+return this.executeHeadlessWithPromptFile(
+  args,
+  promptText,
+  workflowContext,
+  async (result) => {
+    const cliResult = this.parseStreamJsonOutput(
+      result.stdout,
+      result.stderr,
+      result.exitCode
+    );
+    // Handle result...
+  }
+);
+```
+
+**Interactive mode (TUI terminal):**
+
+```typescript
+// Uses stop hook for completion detection
+const result = await this.withInteractiveTuiExecution(args, promptText, workflowContext, async (ctx) => {
+  // Dual monitoring: TUI processing + stop hook notification
+  const tuiPromise = tuiProcessor.processStream(...);
+  const notifyPromise = this.monitorNotificationFile(...);
+  // Race between stop hook completion and TUI processing...
 });
 ```
 
@@ -667,14 +701,14 @@ const result = await this.spawnProcess("claude", args, {
 | Enhancement                  | Priority   | CLI Flag                 | Notes                                                 |
 | ---------------------------- | ---------- | ------------------------ | ----------------------------------------------------- |
 | Structured output validation | **HIGH**   | `--json-schema`          | Critical for reliable automation and response parsing |
-| Permission modes             | **HIGH**   | `--permission-mode`      | Granular control (acceptEdits, plan, etc.)            |
 | System prompt customization  | **MEDIUM** | `--append-system-prompt` | Workflow-specific instructions                        |
 | Model fallback               | **MEDIUM** | `--fallback-model`       | Handle overload situations gracefully                 |
-| MCP server configuration     | **MEDIUM** | `--mcp-config`           | Custom MCP servers for enhanced capabilities          |
 | Session forking              | MEDIUM     | `--fork-session`         | Branch conversation trees                             |
 | Agent support                | MEDIUM     | `--agents`               | Custom agent definitions via JSON                     |
 | Tool specification           | LOW        | `--tools`                | Limit to specific built-in tools                      |
 | Debug mode                   | LOW        | `-d, --debug`            | Category filtering for troubleshooting                |
+
+**Note:** `--permission-mode` and `--mcp-config` are now implemented (see Implemented Flags section above).
 
 **Note on Thinking Mode:** Claude CLI does **NOT** provide a command-line option to control thinking mode/level. Thinking appears to be controlled at the model level and cannot be specified per-request via CLI flags.
 
@@ -846,10 +880,11 @@ This creates a recursive chain that loads all instruction files. However, **this
 ## Related Documentation
 
 - [COPILOT_CLI_DESIGN.md](./COPILOT_CLI_DESIGN.md) - Copilot CLI reference (parallel document)
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Overall FlightPath architecture
+- [CODEX_CLI_INTEGRATION.md](./CODEX_CLI_INTEGRATION.md) - OpenAI Codex CLI integration
 - [CHAT_MODE_LIMITATIONS.md](./CHAT_MODE_LIMITATIONS.md) - Why CLI is preferred over Chat
 - [END_CONDITIONS.md](./END_CONDITIONS.md) - Validation script execution
+- [CODE_ORGANIZATION_REFACTOR.md](./CODE_ORGANIZATION_REFACTOR.md) - Shared CLI utilities documentation
 
 ## Version Compatibility
 
-This documentation is based on Claude Code CLI as of November 2025. Run `claude --version` to check your installed version and `claude --help` for the latest options.
+This documentation is based on Claude Code CLI as of January 2026. Run `claude --version` to check your installed version and `claude --help` for the latest options.

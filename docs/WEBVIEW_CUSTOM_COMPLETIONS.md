@@ -1,24 +1,30 @@
 # Webview Custom Completions Implementation
 
+> **STATUS: ✅ IMPLEMENTED**
+>
+> This feature has been implemented using CodeMirror instead of plain contenteditable.
+> See [CODEMIRROR_INTEGRATION_IMPLEMENTATION.md](CODEMIRROR_INTEGRATION_IMPLEMENTATION.md) for implementation details.
+
 ## Executive Summary
 
 **Goal:** Add rich in-panel prompt editing to FlightPath dashboard with:
 
-- @ completions (workspace files, directories)
-- # completions (file selections, symbols)
-- Spell check (browser native)
-- Ctrl+Click links to open files/selections
-- Keyboard navigation (↑↓ arrows, Enter, Escape)
+- ✅ @ completions (workspace files, directories)
+- ✅ # completions (file selections, symbols)
+- ✅ Spell check (via Typo.js with squiggly underlines)
+- ✅ Ctrl+Click links to open files/selections
+- ✅ Keyboard navigation (↑↓ arrows, Enter, Escape)
 
-**Approach:** Custom JavaScript completions in webview (same as Copilot Chat, Claude, Codex)
+**Implemented Approach:** CodeMirror 6 editor with custom extensions (better than contenteditable)
 
-**Effort:** ~3-5 days implementation
+**Key Implementation Files:**
 
-- Day 1: Basic contenteditable + dropdown UI
-- Day 2: Completion logic + keyboard navigation
-- Day 3: Link detection + click handlers
-- Day 4: Integration with existing providers
-- Day 5: Polish + edge cases
+- `src/ui/webview/codemirror-editor.js` - CodeMirrorPromptEditor class (887 lines)
+- `src/ui/webview/codemirror-bundle-source.js` - CodeMirror library bundling
+- `src/ui/FlightPathDashboardProvider.ts` - Message handling for completions/links
+- `src/completions/CompletionHelpers.ts` - Shared completion logic
+
+**Original Estimate:** ~3-5 days (contenteditable approach)
 
 ## Research Summary
 

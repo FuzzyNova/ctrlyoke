@@ -32,7 +32,11 @@ npm install -g @vscode/vsce
 Ensure your extension compiles without errors:
 
 ```powershell
+# Development build (for testing)
 npm run compile
+
+# Production build (strips dev commands, minified)
+npm run build:prod
 ```
 
 ### Step 3: Package as VSIX
@@ -112,7 +116,9 @@ Before publishing, ensure:
 - [ ] `README.md` - Displayed on Marketplace page
 - [ ] `CHANGELOG.md` - Version history
 - [ ] `LICENSE` - License file (MIT, Apache-2.0, etc.)
-- [ ] `icon.png` - Extension icon (at least 128x128px, PNG format, NOT SVG)
+- [ ] `images/icon.png` - Extension icon (at least 128x128px, PNG format, NOT SVG)
+  - **Note:** Currently only SVG files exist in `images/`. A PNG icon must be created before publishing.
+  - See `images/README.md` for design recommendations
 
 ### Content Requirements
 
@@ -127,22 +133,34 @@ Add a `.vscodeignore` file to exclude unnecessary files from the package:
 
 ```
 .vscode/**
-.github/**
-src/**
-*.ts
-**/*.map
-.gitignore
-tsconfig.json
-esbuild.js
-eslint.config.mjs
+.vscode-test/**
+out/**
+!out/extension.js
+!out/templates/**
+!out/schemas/**
 node_modules/**
-!node_modules/REQUIRED_DEPENDENCY/**
-*.vsix
-docs/
-manual-test/
-prompts/
-logs/
+src/**
+.gitignore
+.yarnrc
+esbuild.js
+vsc-extension-quickstart.md
+**/tsconfig.json
+**/eslint.config.mjs
+**/*.map
+**/*.ts
+**/.vscode-test.*
+
+# Development files
+docs/**
+manual-test/**
+logs/**
+prompts/**
+.github/**
+DEVELOPMENT.md
+images/README.md
 ```
+
+**Note:** The actual `.vscodeignore` file already exists in the project root.
 
 ---
 
@@ -468,10 +486,13 @@ Expand-Archive flightpath-0.1.0.zip -DestinationPath ./extracted
 # Install vsce
 npm install -g @vscode/vsce
 
-# Build
+# Development build
 npm run compile
 
-# Package (creates .vsix)
+# Production build (strips dev commands, minified)
+npm run build:prod
+
+# Package (runs build:prod automatically via vscode:prepublish)
 vsce package
 
 # Install locally

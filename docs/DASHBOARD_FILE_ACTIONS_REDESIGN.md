@@ -1,18 +1,44 @@
 # Dashboard File Actions Redesign
 
-**Last Updated**: December 29, 2024
-**Status**: ✅ Approved - Ready for Implementation
+**Last Updated**: January 12, 2026
+**Status**: ✅ Implemented
 **Related**:
-- [QUEUE_APPEND_FEATURE.md](../QUEUE_APPEND_FEATURE.md) - Working file system
-- [IN_PANEL_PROMPT_EDITOR.md](IN_PANEL_PROMPT_EDITOR.md) - Built-in text editor plans
 
-## Approved Decisions
+- [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md) - Working file system
+- [IN_PANEL_PROMPT_EDITOR.md](research/IN_PANEL_PROMPT_EDITOR.md) - Built-in text editor plans
 
-- **Button layout**: `[Load] [Append] | [New Workflow]` (Load and Append grouped)
-- **Append button state**: Always visible, disabled when no queue loaded
-- **Deployment timing**: Deploy now (independent of in-panel editor)
-- **Command cleanup**: Keep commands for power users (accessible via Command Palette)
-- **Header redesign**: Move workflow name next to execution state for cleaner layout
+## Implementation Summary
+
+The dashboard header was redesigned and implemented with an **enhanced split-button dropdown design** that consolidates workflow actions:
+
+### Actual Implementation (Evolved Design)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  [New Workflow ▼] | workflow-name - RUNNING | [layout] [▶][⏸][⏹]            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Split-Button Dropdown Menu:**
+
+- **New Workflow** (main button): Clear current workflow and start blank
+- **From Template...**: Open template selection modal
+- **Load from File...**: Load an existing prompt file
+- **Queue from File...**: Append prompts to current queue (disabled when no workflow)
+
+**Key implementation files:**
+
+- [dashboard.html](../src/ui/webview/dashboard.html) - Split button UI structure
+- [dashboard.css](../src/ui/webview/dashboard.css) - Split button and dropdown styles
+- [workflow-manager.js](../src/ui/webview/workflow-manager.js) - Dropdown and action handlers
+
+## Original Approved Decisions
+
+- **Button layout**: Evolved to split-button dropdown (Load, Append, New Workflow consolidated)
+- **Append button state**: Implemented as "Queue from File..." menu item, disabled when no queue loaded
+- **Deployment timing**: Deployed (independent of in-panel editor)
+- **Command cleanup**: Commands kept for power users (accessible via Command Palette)
+- **Header redesign**: Workflow name + execution state in center, implemented with editable workflow names
 
 ---
 
@@ -67,24 +93,37 @@ The current dashboard file action buttons (Select, Edit, New Prompt, New Workflo
   <span id="file-name">No file selected</span>
   <div class="file-buttons">
     <!-- Current file actions -->
-    <button id="select-file" class="btn-secondary btn-small"
-            title="Select a different prompt file">
+    <button
+      id="select-file"
+      class="btn-secondary btn-small"
+      title="Select a different prompt file"
+    >
       Select
     </button>
-    <button id="edit-file" class="btn-secondary btn-small"
-            title="Open current prompt file in editor" disabled>
+    <button
+      id="edit-file"
+      class="btn-secondary btn-small"
+      title="Open current prompt file in editor"
+      disabled
+    >
       Edit
     </button>
 
     <span class="button-divider"></span>
 
     <!-- Creation actions -->
-    <button id="new-prompt" class="btn-secondary btn-small"
-            title="Create new draft prompt (.prompt.md)">
+    <button
+      id="new-prompt"
+      class="btn-secondary btn-small"
+      title="Create new draft prompt (.prompt.md)"
+    >
       New Prompt
     </button>
-    <button id="new-workflow" class="btn-secondary btn-small"
-            title="Create workflow from template">
+    <button
+      id="new-workflow"
+      class="btn-secondary btn-small"
+      title="Create workflow from template"
+    >
       New Workflow
     </button>
   </div>
@@ -93,21 +132,21 @@ The current dashboard file action buttons (Select, Edit, New Prompt, New Workflo
 
 ### Button Functionality Mapping
 
-| Button | Message Type | Command | Behavior |
-|--------|--------------|---------|----------|
-| **Select** | `SELECT_FILE` | `flightpath.selectPromptFile` | Shows file picker, loads selected prompt file |
-| **Edit** | `EDIT_FILE` | `flightpath.editCurrentPromptFile` | Opens original prompt file in VS Code editor |
-| **New Prompt** | `NEW_PROMPT` | `flightpath.createDraftPrompt` | Creates `.prompt.md` in `.flightpath/prompts/` |
-| **New Workflow** | `NEW_WORKFLOW` | Opens modal | Shows template selection modal |
+| Button           | Message Type   | Command                            | Behavior                                       |
+| ---------------- | -------------- | ---------------------------------- | ---------------------------------------------- |
+| **Select**       | `SELECT_FILE`  | `flightpath.selectPromptFile`      | Shows file picker, loads selected prompt file  |
+| **Edit**         | `EDIT_FILE`    | `flightpath.editCurrentPromptFile` | Opens original prompt file in VS Code editor   |
+| **New Prompt**   | `NEW_PROMPT`   | `flightpath.createDraftPrompt`     | Creates `.prompt.md` in `.flightpath/prompts/` |
+| **New Workflow** | `NEW_WORKFLOW` | Opens modal                        | Shows template selection modal                 |
 
 ### Context Menu Commands (for comparison)
 
-| Command | Code | Behavior |
-|---------|------|----------|
-| **Run with FlightPath** | `flightpath.runFromContext` | Loads and executes file immediately |
-| **Load in FlightPath** | `flightpath.loadFromContext` | Loads file without executing |
-| **Queue with FlightPath** | `flightpath.queueFromContext` | Appends to end of queue (`position: "end"`) |
-| **Queue Next** | `flightpath.queueNextFromContext` | Inserts after current (`position: "next"`) |
+| Command                   | Code                              | Behavior                                    |
+| ------------------------- | --------------------------------- | ------------------------------------------- |
+| **Run with FlightPath**   | `flightpath.runFromContext`       | Loads and executes file immediately         |
+| **Load in FlightPath**    | `flightpath.loadFromContext`      | Loads file without executing                |
+| **Queue with FlightPath** | `flightpath.queueFromContext`     | Appends to end of queue (`position: "end"`) |
+| **Queue Next**            | `flightpath.queueNextFromContext` | Inserts after current (`position: "next"`)  |
 
 ### Working File System Context
 
@@ -123,6 +162,7 @@ Original File:               Working File:
 ```
 
 **Implications**:
+
 - **Edit button** opens original file, but queue runs from working file
 - **Select button** creates a new working file from selected original file
 - **Append operations** modify the working file, not the original
@@ -142,11 +182,13 @@ The header will be completely redesigned to align with the working file architec
 ```
 
 **Key changes**:
+
 - **Buttons on left**: Action buttons (Load, Append, New Workflow) grouped on the left side
 - **Workflow status center**: Combined workflow name + execution state in the middle
 - **Run controls on right**: Run/Pause/Stop buttons remain on the right
 
 **Rationale**:
+
 - Removes redundant "File:" label (working file vs. original file confusion)
 - Workflow name is the conceptual identifier, not the file path
 - More horizontal space for full workflow names
@@ -159,6 +201,7 @@ The header will be completely redesigned to align with the working file architec
 **Purpose**: Load a prompt file as the new working queue
 
 **Behavior**:
+
 - Shows file picker with `.flightpath.json`, `.flightpath.yaml`, `.prompt.md` files
 - Creates new working file in `.flightpath/.queue/`
 - Replaces current queue (if any)
@@ -172,6 +215,7 @@ The header will be completely redesigned to align with the working file architec
 **Command**: `flightpath.selectPromptFile` (existing logic is correct)
 
 **State logic**:
+
 ```javascript
 // Disable Load during active execution
 if (state === RUNNING || state === PAUSED) {
@@ -188,6 +232,7 @@ if (state === RUNNING || state === PAUSED) {
 **Purpose**: Append prompts from a file to the current queue
 
 **Behavior**:
+
 - Shows file picker (same file types as Load)
 - Appends prompts to **end of queue** (`position: "end"`)
 - **Always uses "end" position** (not "next") - context menu still has both options
@@ -202,6 +247,7 @@ if (state === RUNNING || state === PAUSED) {
 **Command**: `flightpath.appendFromDashboard` (new command, calls `appendFromFile(path, "end")`)
 
 **State logic**:
+
 ```javascript
 // Only disabled when no queue exists
 const hasQueue = state.fileName !== null;
@@ -215,6 +261,7 @@ if (!hasQueue) {
 ```
 
 **Note**: Context menu provides both append options:
+
 - "Queue with FlightPath" → `position: "end"` (same as dashboard button)
 - "Queue Next with FlightPath" → `position: "next"` (insert after current)
 
@@ -235,6 +282,7 @@ if (!hasQueue) {
 **Reason**: Misleading, edits don't affect running queue
 
 **Alternative**:
+
 - In-panel text editor (see IN_PANEL_PROMPT_EDITOR.md) for editing prompts
 - Users can still open original file via Explorer if needed
 - Working file is the source of truth, so editing original file is rarely useful
@@ -244,6 +292,7 @@ if (!hasQueue) {
 **Reason**: Redundant with in-panel editor
 
 **Alternative**:
+
 - In-panel text editor with "Create New Prompt" mode
 - Seamless experience without leaving dashboard
 - Can immediately queue/run the created prompt
@@ -251,6 +300,7 @@ if (!hasQueue) {
 ### Visual Layout Comparison
 
 **Before (Current)**:
+
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │  workflow.flightpath.json                                          │
@@ -259,6 +309,7 @@ if (!hasQueue) {
 ```
 
 **After (Proposed)**:
+
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │  [Load] [Append] | [New Workflow]    workflow - IDLE    [▶][⏸][⏹]  │
@@ -268,46 +319,56 @@ if (!hasQueue) {
 **State examples**:
 
 **Idle (no workflow loaded)**:
+
 ```
 │  [Load] [Append*] | [New Workflow]    No workflow loaded    [▶][⏸*][⏹*]  │
 ```
-*Append/Pause/Stop buttons disabled (grayed out)
+
+\*Append/Pause/Stop buttons disabled (grayed out)
 
 **Idle (workflow loaded, not started)**:
+
 ```
 │  [Load] [Append] | [New Workflow]    bugfix-auth - IDLE    [▶][⏸*][⏹*]  │
 ```
 
 **Running**:
+
 ```
 │  [Load*] [Append] | [New Workflow]    bugfix-auth - RUNNING    [▶*][⏸][⏹]  │
 ```
-*Load/Run buttons disabled (grayed out)
+
+\*Load/Run buttons disabled (grayed out)
 
 **Paused**:
+
 ```
 │  [Load*] [Append] | [New Workflow]    bugfix-auth - PAUSED    [▶][⏸*][⏹]  │
 ```
-*Load/Pause buttons disabled (grayed out)
+
+\*Load/Pause buttons disabled (grayed out)
 
 **Completed**:
+
 ```
 │  [Load] [Append] | [New Workflow]    implement-feature - COMPLETED    [▶][⏸*][⏹*]  │
 ```
-*Pause/Stop buttons disabled (grayed out)
+
+\*Pause/Stop buttons disabled (grayed out)
 
 ### Button State Matrix
 
-| State | Load Button | Append Button | Run Button | Pause Button | Stop Button |
-|-------|-------------|---------------|------------|--------------|-------------|
-| **No workflow** | Enabled | Disabled | Disabled | Disabled | Disabled |
-| **IDLE** | Enabled | Enabled | Enabled | Disabled | Disabled |
-| **RUNNING** | Disabled | Enabled | Disabled | Enabled | Enabled |
-| **PAUSED** | Disabled | Enabled | Enabled (Resume) | Disabled | Enabled |
-| **COMPLETED** | Enabled | Enabled | Enabled (Re-run) | Disabled | Disabled |
-| **ERROR** | Enabled | Enabled | Enabled (Retry) | Disabled | Disabled |
+| State           | Load Button | Append Button | Run Button       | Pause Button | Stop Button |
+| --------------- | ----------- | ------------- | ---------------- | ------------ | ----------- |
+| **No workflow** | Enabled     | Disabled      | Disabled         | Disabled     | Disabled    |
+| **IDLE**        | Enabled     | Enabled       | Enabled          | Disabled     | Disabled    |
+| **RUNNING**     | Disabled    | Enabled       | Disabled         | Enabled      | Enabled     |
+| **PAUSED**      | Disabled    | Enabled       | Enabled (Resume) | Disabled     | Enabled     |
+| **COMPLETED**   | Enabled     | Enabled       | Enabled (Re-run) | Disabled     | Disabled    |
+| **ERROR**       | Enabled     | Enabled       | Enabled (Retry)  | Disabled     | Disabled    |
 
 **Key insights**:
+
 - **Load disabled during execution** (RUNNING/PAUSED) prevents accidental queue replacement
 - **Append always enabled when queue exists** (even during execution) - safe to extend running queue
 - **Execution state hidden when no workflow** prevents "No workflow loaded - IDLE" redundancy
@@ -319,11 +380,13 @@ if (!hasQueue) {
 ### Why Load instead of Select?
 
 **User mental model alignment**:
+
 - "Load" implies bringing file content into the application
 - "Select" is ambiguous (select for what?)
 - Matches context menu language (**"Load in FlightPath"**)
 
 **Consistency**:
+
 - Context menu: "Load in FlightPath"
 - Dashboard button: "Load"
 - Same terminology across UI
@@ -331,11 +394,13 @@ if (!hasQueue) {
 ### Why Add Append Button?
 
 **Feature discoverability**:
+
 - Queue append is a **core feature** (see QUEUE_APPEND_FEATURE.md)
 - Currently hidden in context menu
 - Power users need quick access from dashboard
 
 **Workflow efficiency**:
+
 - Common pattern: Load base workflow → Append follow-up tasks
 - Reduces right-click → find file → append steps
 - Complements Load button (pair of actions)
@@ -343,31 +408,37 @@ if (!hasQueue) {
 ### Why Remove Edit Button?
 
 **Prevents user confusion**:
+
 - Users expect edits to affect the running queue
 - Working file architecture makes this expectation invalid
 - Better to remove than to explain the discrepancy
 
 **Alternative exists**:
+
 - In-panel editor allows **actual** prompt editing (modifies working file)
 - Users can still open original file via Explorer if needed
 
 **Edge cases**:
+
 - If user wants to edit template/original file, they can use Explorer
 - Most users want to edit the **current queue**, not the original file
 
 ### Why Remove New Prompt Button?
 
 **Better UX with in-panel editor**:
+
 - In-panel editor: Type → Save (stays in dashboard)
 - Current flow: Click → Open file → Type → Save → Switch back to dashboard
 
 **Reduces button clutter**:
+
 - 4 buttons → 3 buttons (cleaner UI)
 - Emphasizes core actions (Load, Append, New Workflow)
 
 ### Why Keep New Workflow?
 
 **Template system is valuable**:
+
 - Templates with `{placeholder}` variables are powerful
 - No overlap with in-panel editor (single prompts vs. structured workflows)
 - Workflow creation is distinct from prompt editing
@@ -379,11 +450,13 @@ if (!hasQueue) {
 ### Flow 1: Starting a New Workflow
 
 **Before**:
+
 1. Click **Select**
 2. Choose `analyze-code.flightpath.json`
 3. Click **▶ Run**
 
 **After**:
+
 1. Click **Load**
 2. Choose `analyze-code.flightpath.json`
 3. Click **▶ Run**
@@ -393,18 +466,21 @@ if (!hasQueue) {
 ### Flow 2: Extending an Active Workflow
 
 **Before**:
+
 1. Workflow running (Step 2 of 3)
 2. Right-click `implement-fixes.flightpath.json` in Explorer
 3. Select **"Queue with FlightPath"**
 4. Queue extends (now Step 2 of 8)
 
 **After (Option A: Dashboard button)**:
+
 1. Workflow running (Step 2 of 3)
 2. Click **Append** in dashboard
 3. Choose `implement-fixes.flightpath.json`
 4. Queue extends (now Step 2 of 8)
 
 **After (Option B: Context menu still works)**:
+
 1. Same as before (context menu unchanged)
 
 **Change**: Adds dashboard-based workflow (context menu still available)
@@ -412,6 +488,7 @@ if (!hasQueue) {
 ### Flow 3: Creating a Quick Prompt
 
 **Before**:
+
 1. Click **New Prompt**
 2. VS Code opens new `.prompt.md` file
 3. Type prompt text
@@ -419,7 +496,8 @@ if (!hasQueue) {
 5. Right-click file → **"Run with FlightPath"**
 
 **After (with in-panel editor)**:
-1. *(In-panel editor button - not part of this proposal)*
+
+1. _(In-panel editor button - not part of this proposal)_
 2. Type prompt text in dashboard panel
 3. Click **Save & Run**
 4. Prompt executes immediately
@@ -429,6 +507,7 @@ if (!hasQueue) {
 ### Flow 4: Creating a Workflow from Template
 
 **Before**:
+
 1. Click **New Workflow**
 2. Select template
 3. Fill variables
@@ -436,14 +515,16 @@ if (!hasQueue) {
 5. Click **Create & Run**
 
 **After**:
+
 1. Click **New Workflow**
-2. *(Same as before)*
+2. _(Same as before)_
 
 **Change**: None (no changes to this flow)
 
 ### Flow 5: Editing a Prompt (Current Confusion)
 
 **Before** (current, confusing behavior):
+
 1. Load `workflow.flightpath.json`
 2. Click **▶ Run** (creates working file)
 3. Click **Edit** (opens original file)
@@ -452,6 +533,7 @@ if (!hasQueue) {
 6. **Result**: Queue doesn't change! (working file unchanged)
 
 **After** (with in-panel editor):
+
 1. Load `workflow.flightpath.json`
 2. Click **▶ Run** (creates working file)
 3. Click **Edit** icon on prompt item (in-panel editor)
@@ -470,26 +552,40 @@ if (!hasQueue) {
 #### HTML Structure (dashboard.html)
 
 **Before**:
+
 ```html
 <div id="header">
   <div id="file-info">
     <span id="file-name">No file selected</span>
     <div class="file-buttons">
-      <button id="select-file" class="btn-secondary btn-small"
-              title="Select a different prompt file">
+      <button
+        id="select-file"
+        class="btn-secondary btn-small"
+        title="Select a different prompt file"
+      >
         Select
       </button>
-      <button id="edit-file" class="btn-secondary btn-small"
-              title="Open current prompt file in editor" disabled>
+      <button
+        id="edit-file"
+        class="btn-secondary btn-small"
+        title="Open current prompt file in editor"
+        disabled
+      >
         Edit
       </button>
       <span class="button-divider"></span>
-      <button id="new-prompt" class="btn-secondary btn-small"
-              title="Create new draft prompt (.prompt.md)">
+      <button
+        id="new-prompt"
+        class="btn-secondary btn-small"
+        title="Create new draft prompt (.prompt.md)"
+      >
         New Prompt
       </button>
-      <button id="new-workflow" class="btn-secondary btn-small"
-              title="Create workflow from template">
+      <button
+        id="new-workflow"
+        class="btn-secondary btn-small"
+        title="Create workflow from template"
+      >
         New Workflow
       </button>
     </div>
@@ -497,41 +593,67 @@ if (!hasQueue) {
   <div id="execution-state" class="execution-state-idle">Idle</div>
   <div id="controls">
     <button id="btn-run" class="btn-primary" title="Run">▶</button>
-    <button id="btn-pause" class="btn-secondary" title="Pause" disabled>⏸</button>
-    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>⏹</button>
+    <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
+      ⏸
+    </button>
+    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>
+      ⏹
+    </button>
   </div>
 </div>
 ```
 
 **After**:
+
 ```html
 <div id="header">
   <div id="action-buttons">
-    <button id="load-file" class="btn-secondary btn-small"
-            title="Load a prompt file to start a new workflow">
+    <button
+      id="load-file"
+      class="btn-secondary btn-small"
+      title="Load a prompt file to start a new workflow"
+    >
       Load
     </button>
-    <button id="append-file" class="btn-secondary btn-small"
-            title="Append prompts from a file to the current queue" disabled>
+    <button
+      id="append-file"
+      class="btn-secondary btn-small"
+      title="Append prompts from a file to the current queue"
+      disabled
+    >
       Append
     </button>
     <span class="button-divider"></span>
-    <button id="new-workflow" class="btn-secondary btn-small"
-            title="Create workflow from template">
+    <button
+      id="new-workflow"
+      class="btn-secondary btn-small"
+      title="Create workflow from template"
+    >
       New Workflow
     </button>
   </div>
 
   <div id="workflow-status">
     <span id="workflow-name">No workflow loaded</span>
-    <span id="status-separator" class="status-separator" style="display: none;"> - </span>
-    <span id="execution-state" class="execution-state-idle" style="display: none;">Idle</span>
+    <span id="status-separator" class="status-separator" style="display: none;">
+      -
+    </span>
+    <span
+      id="execution-state"
+      class="execution-state-idle"
+      style="display: none;"
+      >Idle</span
+    >
   </div>
 
   <div id="controls">
     <button id="btn-run" class="btn-primary" title="Run">▶</button>
-    <button id="btn-pause" class="btn-secondary" title="Pause" disabled>⏸</button>
-    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>⏹</button>
+    <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
+      ⏸
+    </button>
+    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>
+      ⏹
+    </button>
   </div>
 </div>
 ```
@@ -539,6 +661,7 @@ if (!hasQueue) {
 #### CSS Changes (dashboard.css)
 
 **Update `#header` layout**:
+
 ```css
 #header {
   display: flex;
@@ -595,6 +718,7 @@ if (!hasQueue) {
 #### JavaScript Changes (dashboard.js)
 
 **Update elements object**:
+
 ```javascript
 const elements = {
   // OLD: fileName: document.getElementById("file-name"),
@@ -618,6 +742,7 @@ const elements = {
 ```
 
 **Update state handlers**:
+
 ```javascript
 // Helper: Extract workflow name from file path
 function getWorkflowName(filePath) {
@@ -644,10 +769,13 @@ function updateWorkflowStatus(filePath, executionState) {
 
 // Update Load button state (disable when running/paused)
 function updateLoadButtonState() {
-  if (state.executionState === EXECUTION_STATES.RUNNING ||
-      state.executionState === EXECUTION_STATES.PAUSED) {
+  if (
+    state.executionState === EXECUTION_STATES.RUNNING ||
+    state.executionState === EXECUTION_STATES.PAUSED
+  ) {
     elements.loadFileBtn.disabled = true;
-    elements.loadFileBtn.title = "Cannot load while workflow is running (stop first)";
+    elements.loadFileBtn.title =
+      "Cannot load while workflow is running (stop first)";
   } else {
     elements.loadFileBtn.disabled = false;
     elements.loadFileBtn.title = "Load a prompt file to start a new workflow";
@@ -662,7 +790,8 @@ function updateAppendButtonState() {
   if (!hasQueue) {
     elements.appendFileBtn.title = "No workflow loaded (load a file first)";
   } else {
-    elements.appendFileBtn.title = "Append prompts from a file to the current queue";
+    elements.appendFileBtn.title =
+      "Append prompts from a file to the current queue";
   }
 }
 
@@ -716,6 +845,7 @@ function handleExecutionStopped() {
 ```
 
 **Event listeners**:
+
 ```javascript
 // OLD: elements.selectFileBtn.addEventListener(...)
 // NEW:
@@ -740,12 +870,14 @@ elements.newWorkflowBtn.addEventListener("click", () => {
 **Goal**: Simplify UI, remove confusing buttons
 
 **Changes**:
+
 1. Remove **Edit** button from `dashboard.html`
 2. Remove **New Prompt** button from `dashboard.html`
 3. Remove event handlers in `dashboard.js`
 4. Remove `EDIT_FILE` and `NEW_PROMPT` from message map (or mark deprecated)
 
 **Testing**:
+
 - Verify dashboard loads without errors
 - Verify no broken references to removed elements
 
@@ -756,12 +888,14 @@ elements.newWorkflowBtn.addEventListener("click", () => {
 **Goal**: Align terminology with context menu
 
 **Changes**:
+
 1. Update button text: `Select` → `Load`
 2. Update tooltip: "Select a different prompt file" → "Load a prompt file"
 3. Update button ID: `select-file` → `load-file` (or keep for backward compat)
 4. Update element reference in `dashboard.js`
 
 **Testing**:
+
 - Verify Load button triggers file picker
 - Verify file loads correctly
 - Verify tooltip shows correct text
@@ -775,6 +909,7 @@ elements.newWorkflowBtn.addEventListener("click", () => {
 **Changes**:
 
 **A. Backend (extension.ts)**:
+
 ```typescript
 // New command: Append From Dashboard
 const appendFromDashboardCommand = vscode.commands.registerCommand(
@@ -792,14 +927,14 @@ const appendFromDashboardCommand = vscode.commands.registerCommand(
       "**/node_modules/**"
     );
 
-    const items = promptFiles.map(file => ({
+    const items = promptFiles.map((file) => ({
       label: path.basename(file.fsPath),
       description: path.dirname(file.fsPath),
-      uri: file
+      uri: file,
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: "Select a prompt file to append to queue"
+      placeHolder: "Select a prompt file to append to queue",
     });
 
     if (selected) {
@@ -813,6 +948,7 @@ context.subscriptions.push(appendFromDashboardCommand);
 ```
 
 **B. Message Type (DashboardConstants.ts)**:
+
 ```typescript
 export const MESSAGE_TYPES = {
   // ... existing types ...
@@ -821,6 +957,7 @@ export const MESSAGE_TYPES = {
 ```
 
 **C. Dashboard Provider (FlightPathDashboardProvider.ts)**:
+
 ```typescript
 private readonly messageCommandMap = new Map<string, string>([
   // ... existing mappings ...
@@ -829,6 +966,7 @@ private readonly messageCommandMap = new Map<string, string>([
 ```
 
 **D. Dashboard HTML (dashboard.html)**:
+
 ```html
 <button
   id="append-file"
@@ -841,6 +979,7 @@ private readonly messageCommandMap = new Map<string, string>([
 ```
 
 **E. Dashboard JS (dashboard.js)**:
+
 ```javascript
 // Add to elements object
 elements.appendFileBtn = document.getElementById("append-file");
@@ -869,6 +1008,7 @@ function handleFileLoaded(message) {
 ```
 
 **Testing**:
+
 - Load a workflow, verify Append button becomes enabled
 - Click Append, verify file picker appears
 - Select file, verify prompts append to queue
@@ -882,6 +1022,7 @@ function handleFileLoaded(message) {
 **Goal**: Reflect UI changes in all docs
 
 **Changes**:
+
 1. Update screenshots in README.md (if any)
 2. Update QUEUE_APPEND_FEATURE.md references to dashboard buttons
 3. Update IN_PANEL_PROMPT_EDITOR.md (note removal of New Prompt button)
@@ -892,6 +1033,7 @@ function handleFileLoaded(message) {
 **Goal**: Enhance UX with visual feedback
 
 **Enhancements**:
+
 - Add icons to buttons (📂 Load, ➕ Append, ✨ New Workflow)
 - Add loading spinner when file picker is open
 - Add success toast: "Loaded 5 prompts from workflow.flightpath.json"
@@ -909,6 +1051,7 @@ function handleFileLoaded(message) {
 ### User Impact
 
 **Low** - Removed buttons have better alternatives:
+
 - **Edit** → In-panel editor (planned)
 - **New Prompt** → In-panel editor (planned)
 
@@ -917,6 +1060,7 @@ function handleFileLoaded(message) {
 ### Rollback Plan
 
 If users complain about missing buttons:
+
 1. Revert HTML changes (restore Edit/New Prompt buttons)
 2. Revert JS event handlers
 3. Keep Append button (improvement regardless)
@@ -924,6 +1068,7 @@ If users complain about missing buttons:
 ### Deprecation Timeline
 
 Since extension is **pre-release** (not yet v1.0):
+
 - **No deprecation period needed**
 - Can make breaking UI changes freely
 - Document changes in CHANGELOG.md
@@ -951,6 +1096,7 @@ All key design questions have been approved:
 **Approved**: `[Buttons] → [Workflow Name - State] → [Controls]`
 
 **Rationale**:
+
 - Removes confusing "File:" label (working file ≠ original file)
 - Workflow name is the conceptual identifier
 - More space for full workflow names
@@ -1023,137 +1169,75 @@ Show working file path on hover over workflow name.
 
 ## Implementation Checklist
 
-### Phase 1: Remove Buttons
-- [ ] Remove Edit button HTML
-- [ ] Remove New Prompt button HTML
-- [ ] Remove Edit button event listener
-- [ ] Remove New Prompt button event listener
-- [ ] Remove `editFileBtn` from elements object
-- [ ] Remove `newPromptBtn` from elements object
-- [ ] Test dashboard loads without errors
+### Phase 1: Remove Buttons ✅
 
-### Phase 2: Redesign Header Layout
-- [ ] **HTML Structure Changes** (dashboard.html):
-  - [ ] Remove `#file-info` div wrapper
-  - [ ] Create new `#action-buttons` div for Load/Append/New Workflow
-  - [ ] Create new `#workflow-status` div for workflow name + execution state
-  - [ ] Move execution state into `#workflow-status`
-  - [ ] Update header flexbox layout (left → center → right)
-- [ ] **JavaScript Changes** (dashboard.js):
-  - [ ] Add `workflowName` element reference
-  - [ ] Update `elements.fileName` → `elements.workflowName`
-  - [ ] Update all state handlers to set workflow name (extract from file path)
-  - [ ] Add separator logic between workflow name and state
-  - [ ] Handle "No workflow loaded" when `state.fileName === null`
-- [ ] **CSS Changes** (dashboard.css):
-  - [ ] Update `#header` flexbox layout (space-between → three sections)
-  - [ ] Add `#action-buttons` styles (grouped buttons on left)
-  - [ ] Add `#workflow-status` styles (center alignment, text overflow handling)
-  - [ ] Add `.status-separator` styles (dash between name and state)
-  - [ ] Ensure responsive behavior (text truncation for long workflow names)
-- [ ] **Test**:
-  - [ ] Verify header layout matches design (buttons left, status center, controls right)
-  - [ ] Test with short workflow names ("test")
-  - [ ] Test with long workflow names ("implement-authentication-feature-with-tests")
-  - [ ] Test "No workflow loaded" state display
-  - [ ] Test all execution states (IDLE, RUNNING, PAUSED, COMPLETED, ERROR)
+- [x] Remove Edit button HTML
+- [x] Remove New Prompt button HTML (moved to split dropdown)
+- [x] Remove Edit button event listener
+- [x] Remove New Prompt button event listener
+- [x] Remove `editFileBtn` from elements object
+- [x] Remove `newPromptBtn` from elements object
+- [x] Test dashboard loads without errors
 
-### Phase 3: Rename Select → Load & Add Append Button
-- [ ] Update "Select" button text to "Load"
-- [ ] Update button tooltip
-- [ ] Update button ID: `select-file` → `load-file` (or keep for compat)
-- [ ] Update element reference in JS
+### Phase 2: Redesign Header Layout ✅
 
-### Phase 4: Add Append Button Backend
-- [ ] Add `APPEND_FILE` to DashboardConstants.ts
-- [ ] Add `flightpath.appendFromDashboard` command to extension.ts
-- [ ] Add command to message map in FlightPathDashboardProvider.ts
-- [ ] Test command registration
+- [x] **HTML Structure Changes** (dashboard.html):
+  - [x] Remove `#file-info` div wrapper
+  - [x] Create new `#action-buttons` div for split-button dropdown
+  - [x] Create new `#workflow-status` div for workflow name + execution state
+  - [x] Move execution state into `#workflow-status`
+  - [x] Update header flexbox layout (left → center → right)
+- [x] **JavaScript Changes** (workflow-manager.js):
+  - [x] Add `workflowName` element reference
+  - [x] Update all state handlers to set workflow name (extract from file path)
+  - [x] Add separator logic between workflow name and state
+  - [x] Handle "No workflow loaded" when `state.fileName === null`
+- [x] **CSS Changes** (dashboard.css):
+  - [x] Update `#header` flexbox layout (space-between → three sections)
+  - [x] Add `#action-buttons` styles (grouped buttons on left)
+  - [x] Add `#workflow-status` styles (center alignment, text overflow handling)
+  - [x] Add `.status-separator` styles (dash between name and state)
+  - [x] Ensure responsive behavior (text truncation for long workflow names)
+- [x] **Test**:
+  - [x] Verify header layout matches design (buttons left, status center, controls right)
+  - [x] Test with short workflow names ("test")
+  - [x] Test with long workflow names ("implement-authentication-feature-with-tests")
+  - [x] Test "No workflow loaded" state display
+  - [x] Test all execution states (IDLE, RUNNING, PAUSED, COMPLETED, ERROR)
 
-### Phase 5: Add Append Button UI
-- [ ] Add Append button HTML in `#action-buttons` div
-- [ ] Add `appendFileBtn` to elements object
-- [ ] Add event listener for Append button
-- [ ] Add `updateAppendButtonState()` function
-- [ ] Call `updateAppendButtonState()` on relevant events:
-  - [ ] `handleExecutionStarted()`
-  - [ ] `handleFileLoaded()`
-  - [ ] `handleExecutionCompleted()`
-  - [ ] `handleExecutionStopped()`
-- [ ] Test Append button enabled/disabled correctly
-- [ ] Test Append button triggers file picker
-- [ ] Test appended prompts appear in queue
-- [ ] Test button state transitions (idle → loaded → running → completed)
+### Phase 3: Rename Select → Load & Add Append Button ✅
+
+- [x] Implemented as split-button dropdown with menu items
+- [x] "Load from File..." menu item replaces Select button
+- [x] "Queue from File..." menu item provides Append functionality
+- [x] Update element references in JS
+
+### Phase 4: Add Append Button Backend ✅
+
+- [x] Add `APPEND_FILE` to DashboardConstants.ts
+- [x] Add `flightpath.appendFromDashboard` command to extension.ts
+- [x] Add command to message map in FlightPathDashboardProvider.ts
+- [x] Test command registration
+
+### Phase 5: Add Append Button UI ✅
+
+- [x] Implemented as "Queue from File..." menu item in dropdown
+- [x] Add event listener for Queue from File action
+- [x] Add `updateQueueFileButtonState()` function
+- [x] Menu item disabled when no workflow loaded
+- [x] Test appended prompts appear in queue
 
 ### Phase 6: Documentation
-- [ ] Update README.md (if dashboard screenshots exist)
-- [ ] Update QUEUE_APPEND_FEATURE.md (reference new Append button)
-- [ ] Update CHANGELOG.md (document UI changes)
-- [ ] Add/update dashboard screenshot
 
-### Phase 7: Polish (Optional)
+- [x] Update CHANGELOG.md (document UI changes)
+- [ ] Update README.md dashboard screenshots (if needed)
 
-**Note**: Start with text-only buttons (consistent with current Select/Edit/New Prompt buttons). Add icons only if visual enhancement is needed.
+### Phase 7: Polish ✅
 
-#### Option A: No Icons (Recommended for MVP)
-Keep buttons text-only like current implementation:
-```html
-<button id="load-file">Load</button>
-<button id="append-file">Append</button>
-<button id="new-workflow">New Workflow</button>
-```
-
-#### Option B: Add Codicons (Optional Enhancement)
-
-If adding icons, use VS Code codicons (NOT emojis):
-
-**1. Import codicon CSS in dashboard.html `<head>`:**
-```html
-<link rel="stylesheet" href="${codiconUri}">
-```
-
-**2. Add codicon spans to buttons:**
-```html
-<button id="load-file" class="btn-secondary btn-small">
-  <span class="codicon codicon-folder-opened"></span>
-  Load
-</button>
-<button id="append-file" class="btn-secondary btn-small">
-  <span class="codicon codicon-add"></span>
-  Append
-</button>
-<button id="new-workflow" class="btn-secondary btn-small">
-  <span class="codicon codicon-new-file"></span>
-  New Workflow
-</button>
-```
-
-**3. Update FlightPathDashboardProvider.ts to pass codicon URI:**
-```typescript
-const codiconUri = webview.asWebviewUri(
-  vscode.Uri.joinPath(this.context.extensionUri, 'node_modules', '@vscode/codicons', 'dist', 'codicon.css')
-);
-```
-
-**Suggested codicons**:
-- Load: `codicon-folder-opened` (file picker visual)
-- Append: `codicon-add` (adding to queue)
-- New Workflow: `codicon-new-file` (creating new)
-
-**Alternative codicons**:
-- Load: `codicon-file`, `codicon-cloud-download`
-- Append: `codicon-diff-added`, `codicon-arrow-down`
-
-**Tasks**:
-- [ ] Add codicon CSS import to dashboard.html
-- [ ] Add codicon spans to button HTML
-- [ ] Add codiconUri to template variables
-- [ ] Test icons match VS Code theme (light/dark)
-
-**Other polish tasks**:
-- [ ] Add success toasts
-- [ ] Add keyboard shortcuts
-- [ ] Add loading states
+- [x] Layout toggle buttons added (vertical/horizontal/swap)
+- [x] Editable workflow names (click to edit)
+- [x] Recent workflows dropdown (workflow status button)
+- [x] Keyboard shortcuts (Ctrl+Shift+N, Ctrl+Shift+T, Ctrl+Shift+L, Ctrl+Shift+Q)
 
 ---
 
@@ -1184,6 +1268,7 @@ const codiconUri = webview.asWebviewUri(
 **Feature**: Drag `.flightpath.json` files onto dashboard to load/append
 
 **Behavior**:
+
 - Drop on upper area → Load (replace queue)
 - Drop on prompts list → Append to queue
 
@@ -1228,6 +1313,7 @@ const codiconUri = webview.asWebviewUri(
 ## Approval Checklist
 
 **✅ All items approved by user:**
+
 - [x] User confirms button layout preference (Load, Append, New Workflow)
 - [x] User confirms removal of Edit/New Prompt buttons
 - [x] User confirms header redesign (workflow name + state in center)
@@ -1238,7 +1324,15 @@ const codiconUri = webview.asWebviewUri(
 
 ## Changelog
 
+### January 12, 2026 - Marked as Implemented
+
+- **Status changed**: Research → Implemented documentation
+- **Moved**: From `docs/research/` to `docs/`
+- **Updated**: Implementation checklist marked complete
+- **Noted**: Design evolved to split-button dropdown pattern instead of separate buttons
+
 ### December 29, 2024 - Approved for Implementation (v3)
+
 - **Icon strategy update**:
   - Removed emoji suggestions (📂, ➕, ✨)
   - Recommend text-only buttons for MVP (consistent with current UI)
@@ -1246,6 +1340,7 @@ const codiconUri = webview.asWebviewUri(
   - Codicons properly match VS Code theme colors (light/dark)
 
 ### December 29, 2024 - Approved for Implementation (v2)
+
 - **Added two critical UX fixes**:
   - Hide execution state when no workflow loaded (prevents "No workflow loaded - IDLE" redundancy)
   - Disable Load button during execution (RUNNING/PAUSED states)
@@ -1256,6 +1351,7 @@ const codiconUri = webview.asWebviewUri(
 - Updated code examples with `updateWorkflowStatus()` and button state handlers
 
 ### December 29, 2024 - Approved for Implementation (v1)
+
 - **All design decisions approved by user**
 - Added complete header layout redesign (buttons → status → controls)
 - Resolved all 7 open questions
@@ -1264,6 +1360,7 @@ const codiconUri = webview.asWebviewUri(
 - Status changed from 📋 Planning to ✅ Approved
 
 ### December 29, 2024 - Initial Draft
+
 - Analyzed current button functionality
 - Proposed Load/Append/New Workflow layout
 - Documented rationale and implementation plan

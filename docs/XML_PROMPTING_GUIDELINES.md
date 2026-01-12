@@ -17,7 +17,7 @@ This means:
 
 This is a **perfect** solution for embedding automation directives without cluttering the UI!
 
-**Note**: The `<criticalInstruction>` tag is now only used for Dynamic Queue Extension instructions (allowing Copilot to extend workflows by modifying the prompt file). Completion detection is handled via log file monitoring, not tool callbacks.
+**Note**: The `<criticalInstruction>` tag is used for Dynamic Queue Extension instructions when enabled. It informs Copilot about the MCP tools available (`flightpath_queue_status`, `flightpath_append_queue`) for extending workflows. Completion detection for Chat mode is handled via log file monitoring (`ChatLogMonitor.ts`).
 
 ## Why XML?
 
@@ -64,7 +64,7 @@ If you need additional steps to complete this task, you can extend the workflow.
 
 **Completion Detection**: FlightPath now uses **log file monitoring** instead of tool callbacks. The extension monitors `GitHub Copilot Chat.log` for `finish reason: [stop]` markers to detect when Copilot has finished responding.
 
-**Implementation**: See `CopilotChatIntegration.ts` → `waitForLogCompletion()` method
+**Implementation**: See `ChatLogMonitor.ts` → `waitForCompletion()` method
 
 ### Why User Prompts Aren't Wrapped in XML
 
@@ -262,17 +262,17 @@ Please structure your response as:
 If you find prompts without XML structure:
 
 1. **Don't break them**: Old-style prompts still work
-2. **Wrap when updating**: If you're editing a prompt, consider adding XML structure
-3. **Use the pattern**: Follow the `<request>` + `<criticalInstruction>` pattern
+2. **Wrap when updating**: If you're editing a prompt, consider adding XML structure for complex instructions
+3. **Keep user prompts plain text**: Only FlightPath's internal automation uses `<criticalInstruction>` tags - user prompts remain plain text for chat visibility
 
 ## Testing XML Prompts
 
 To verify XML structure works:
 
 1. Check console logs in VS Code Output panel (FlightPath channel)
-2. Look for "Built prompt with XML structure" message
-3. Verify the full prompt shows proper XML tags
-4. Ensure Copilot responds correctly and calls the completion tool
+2. Look for log messages showing the prompt being sent
+3. Verify the full prompt shows proper XML tags when dynamic queue is enabled
+4. For Chat mode, completion is detected via log file monitoring (`finish reason: [stop]`)
 
 ## References
 

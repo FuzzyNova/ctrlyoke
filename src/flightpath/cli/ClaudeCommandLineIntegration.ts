@@ -48,7 +48,11 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
   }
 
   protected getScreenEndPattern(): RegExp {
-    return /─{20,}\r?\n>\s*/g;
+    // Match the separator line (20+ dashes) followed by either:
+    // 1. The mode indicator line (⏵⏵ accept edits, ⏸ pause, etc.)
+    // 2. The prompt character (> or ❯) for the ready state
+    // This pattern needs to catch both the initial ready screen and subsequent response screens
+    return /─{20,}\r?\n\s*(?:⏵⏵|⏸|[>❯])\s*/g;
   }
 
   protected getTuiChromePatterns(): RegExp[] {
@@ -74,7 +78,7 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       // Claude spinner/thinking indicator (UI chrome)
       /^[✻✽✢✶·*]\s*$/, // Spinner alone (any Claude spinner character including *)
-      /^[✻✽✢✶·*]\s+.*\(esc to interrupt.*\)/, // Spinner + text + (esc to interrupt)
+      /^[✻✽✢✶·*]\s+.*\((esc to interrupt|ctrl\+c to interrupt).*\)/, // Spinner + text + interrupt hint
 
       // Claude approval prompts (UI chrome)
       /^Do you want to proceed\?/i, // Approval question
@@ -85,9 +89,12 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
 
       // Claude UI hints and mode indicators
       /ctrl\+b to run in background/i, // Background hint
-      /^>\s*$/, // Empty prompt line
-      /⏵⏵.*\(shift\+tab to cycle\)/, // Mode indicator (accept edits, etc.)
-      /⏸.*\(shift\+tab to cycle\)/, // Pause/plan mode indicator
+      /^[>❯]\s*$/, // Empty prompt line (> or ❯)
+      /^\s*⏵⏵\s*$/, // Mode indicator alone (wraps on narrow terminals)
+      /^\s*⏸\s*$/, // Pause indicator alone
+      /⏵⏵.*\(shift\+tab to cycle\)/, // Mode indicator with full text (accept edits, etc.)
+      /⏸.*\(shift\+tab to cycle\)/, // Pause/plan mode indicator with full text
+      /^accept edits on \(shift\+tab to cycle\)/i, // Mode text continuation (when wrapped)
       /^\s*\?\s+for shortcuts/i, // Shortcuts hint
     ];
   }

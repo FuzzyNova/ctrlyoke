@@ -357,6 +357,7 @@ After research:
 - **Source:** `src/vs/workbench/contrib/scm/browser/scmViewPane.ts#L1884-1949`
 - **Key insight:** SCM uses a **full CodeEditorWidget** instance, not a custom HTML element
 - **Implementation:**
+
   ```typescript
   class SCMInputWidget {
     private readonly inputEditor: CodeEditorWidget;
@@ -380,6 +381,7 @@ After research:
     }
   }
   ```
+
 - **Why it works:** Uses a real `TextModel` with language ID `'scminput'`, so all providers (completion, diagnostics, links) work natively
 - **Model registration:** `src/vs/workbench/contrib/scm/browser/scm.contribution.ts#L53-56`
   ```typescript
@@ -396,6 +398,7 @@ After research:
 - **Source:** `src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts#L1531-1549`
 - **Key insight:** Copilot Chat input uses **CodeEditorWidget** with custom language `'chatinput'`
 - **Implementation:**
+
   ```typescript
   export class ChatInputPart {
     private _inputEditor: CodeEditorWidget;
@@ -418,6 +421,7 @@ After research:
     }
   }
   ```
+
 - **Model creation:** Uses `Schemas.vscodeChatInput` URI scheme with `'chatinput'` language
 - **Completion registration:**
   ```typescript
@@ -468,6 +472,7 @@ After research:
 - **Source:** Git extension (`extensions/git/src/gitEditor.ts#L36-59`)
 - **Key insight:** Git extension uses virtual documents for commit message editing
 - **Implementation:**
+
   ```typescript
   async handle({ commitMessagePath }: GitEditorRequest): Promise<boolean> {
     if (commitMessagePath) {
@@ -486,6 +491,7 @@ After research:
     }
   }
   ```
+
 - **Pattern:** Open virtual document → Get native editor features → Sync on close
 - **Used by:** Git commits, SCM providers, interactive rebases, etc.
 
@@ -525,9 +531,30 @@ After research:
    - No spell check integration
    - Large bundle size (~5MB)
 
-**Next steps for FlightPath:**
+---
 
-1. Implement virtual document approach in `FlightPathDashboardProvider`
-2. Register `'flightpath-prompt'` language ID
-3. Ensure `PromptCompletionProvider` and `PromptLinkProvider` activate for this language
-4. Add bidirectional sync between webview and virtual document
+## Implementation Decision (January 2, 2026)
+
+**Actual approach chosen: CodeMirror 6 in Webview** ✅
+
+FlightPath chose a fourth option not initially recommended: embedding **CodeMirror 6** in the webview instead of Monaco Editor or virtual documents. This approach succeeded because:
+
+1. **Smaller bundle size**: CodeMirror 6 is ~825KB minified vs Monaco's ~5MB
+2. **Modular architecture**: Only include needed features (spellcheck, autocomplete, links)
+3. **Custom completion integration**: Webview ↔ Extension Host message passing enables full completion support
+4. **Spell checking**: Integrated Typo.js directly in the webview
+
+**Implementation details:**
+
+- `src/ui/webview/codemirror-editor.js` - Custom CodeMirror wrapper (420+ lines)
+- `src/ui/webview/codemirror-loader.js` - Module bundling
+- `src/completions/CompletionHelpers.ts` - Shared completion logic between VS Code and webview
+
+**Result**: All original goals achieved:
+
+- ✅ Completions (`@` and `#` triggers) work via message passing
+- ✅ Clickable links with Ctrl+Click navigation
+- ✅ Spell checking via Typo.js
+- ✅ Full VS Code theme integration
+
+See [CODEMIRROR_INTEGRATION_IMPLEMENTATION.md](CODEMIRROR_INTEGRATION_IMPLEMENTATION.md) for full implementation details.

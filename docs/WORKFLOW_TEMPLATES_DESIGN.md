@@ -109,7 +109,7 @@ FlightPath ships with built-in templates available in the "New Workflow" dialog:
   "prompts": [
     {
       "id": "plan",
-      "prompt": "{featureDescription}\n\nCreate an implementation plan for this feature. Identify all files that need changes."
+      "prompt": "{featureDescription}\n\nCreate an implementation plan for this feature. Identify all files that need changes and outline the approach."
     },
     {
       "id": "implement",
@@ -118,7 +118,7 @@ FlightPath ships with built-in templates available in the "New Workflow" dialog:
     },
     {
       "id": "commit",
-      "prompt": "Generate a conventional commit message. Format: feat(scope): description",
+      "prompt": "Generate a conventional commit message for the changes. Format: feat(scope): description",
       "newChatSession": false
     }
   ]
@@ -155,7 +155,7 @@ FlightPath ships with built-in templates available in the "New Workflow" dialog:
   "prompts": [
     {
       "id": "plan",
-      "prompt": "{featureDescription}\n\nAnalyze the codebase and create a detailed implementation plan. Save it to {planDocument}",
+      "prompt": "{featureDescription}\n\nAnalyze the codebase and create a detailed implementation plan. Identify all files that need changes and outline the approach. Create a new document called {planDocument}",
       "endCondition": {
         "script": "test -f {planDocument}",
         "returns": "true",
@@ -165,7 +165,7 @@ FlightPath ships with built-in templates available in the "New Workflow" dialog:
     },
     {
       "id": "implement",
-      "prompt": "Implement the feature according to the plan in #file:{planDocument}. Make all necessary code changes."
+      "prompt": "Implement the feature according to the plan in @{planDocument}. Make all necessary code changes."
     },
     {
       "id": "review",

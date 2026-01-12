@@ -41,12 +41,14 @@ The full Copilot Chat experience requires the Chat window, which has no completi
 
 **Markers discovered**:
 
-| Marker                                   | When It Appears        | Reliability                  |
-| ---------------------------------------- | ---------------------- | ---------------------------- |
-| `finish reason: [stop]`                  | New chat sessions only | ✅ Reliable for new sessions |
-| `\| success \| ... \| [panel/editAgent]` | All responses          | ⚠️ Multiple per response     |
-| `\| cancelled \|`                        | User cancellation      | ✅ Reliable                  |
-| `request done: requestId:`               | New sessions only      | ⚠️ Same as finish reason     |
+| Marker                                   | When It Appears        | Reliability                  | Used by FlightPath |
+| ---------------------------------------- | ---------------------- | ---------------------------- | ------------------ |
+| `finish reason: [stop]`                  | New chat sessions only | ✅ Reliable for new sessions | ✅ Yes             |
+| `\| success \| ... \| [panel/editAgent]` | All responses          | ⚠️ Multiple per response     | ❌ No              |
+| `\| cancelled \|`                        | User cancellation      | ✅ Reliable                  | ✅ Yes             |
+| `request done: requestId:`               | New sessions only      | ⚠️ Same as finish reason     | ❌ No              |
+
+> **Note**: FlightPath only uses `finish reason: [stop]` and `| cancelled |` markers. Other markers were discovered during analysis but deemed unreliable for automation.
 
 **Problems**:
 

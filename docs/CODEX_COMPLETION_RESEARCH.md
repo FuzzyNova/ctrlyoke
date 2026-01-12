@@ -1,6 +1,18 @@
-From online docs: https://github.com/openai/codex/blob/main/docs/config.md#observability-and-telemetry
+# Codex CLI Configuration Reference
 
-Config
+**Source**: [Codex Documentation - Config](https://github.com/openai/codex/blob/main/docs/config.md#observability-and-telemetry)
+
+**Status**: ✅ Notify hook feature implemented  
+**Implementation**: See [CODEX_COMPLETION_DETECTION.md](CODEX_COMPLETION_DETECTION.md) for FlightPath's implementation  
+**Integration**: `CodexCommandLineIntegration.ts` uses the `notify` configuration option
+
+---
+
+This document contains reference material from the official Codex documentation about configuration options. FlightPath uses the **notify hook** for completion detection. The OTEL (OpenTelemetry) features are documented here for future reference.
+
+---
+
+## Config
 
 Codex configuration gives you fine-grained control over the model, execution environment, and integrations available to the CLI. Use this guide alongside the workflows in codex exec, the guardrails in Sandbox & approvals, and project guidance from AGENTS.md discovery.
 Quick navigation

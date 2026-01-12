@@ -1,6 +1,6 @@
 # Queue Append & Dynamic Queue Extension
 
-**Last Updated**: December 27, 2024  
+**Last Updated**: January 12, 2026  
 **Status**: ✅ Production Ready  
 **Related**: [FLIGHTPATH_MCP_IMPLEMENTATION.md](FLIGHTPATH_MCP_IMPLEMENTATION.md)
 
@@ -430,12 +430,10 @@ await fs.rename(tempPath, workingFilePath); // Atomic on most filesystems
 **Solution**: Hash-based identity tracking.
 
 ```typescript
-function hashPromptContent(prompt: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(prompt)
-    .digest("hex")
-    .substring(0, 16);
+function hashPromptContent(promptText: string): string {
+  // Normalize whitespace to make hashing more robust
+  const normalized = promptText.trim().replace(/\s+/g, " ");
+  return crypto.createHash("sha256").update(normalized, "utf8").digest("hex");
 }
 
 // Deduplication logic (in _updateWorkingFileInternal)
@@ -506,28 +504,13 @@ const newPromptsFromDisk = diskPrompts.filter((p) => {
 | `flightpath.unlimitedMode`         | boolean | false   | Ignore size and time limits (use with caution)   |
 | `flightpath.autoLoadRecentSession` | boolean | true    | Auto-load most recent session on VS Code startup |
 
-### MCP Settings
+### Dynamic Queue Settings
 
-| Setting                  | Type    | Default | Description                                     |
-| ------------------------ | ------- | ------- | ----------------------------------------------- |
-| `flightpath.enableMcp`   | boolean | false   | Enable MCP server for AI-driven queue extension |
-| `flightpath.mcpLogLevel` | enum    | "info"  | MCP server log level (debug/info/warn/error)    |
-
-### Dynamic Queue Settings (Legacy)
-
-**Note**: Dynamic Queue was the original implementation approach using instructions instead of MCP tools. It's now **deprecated** in favor of MCP-based queue extension.
-
-| Setting (Deprecated)                      | Type    | Default | Description                                      |
-| ----------------------------------------- | ------- | ------- | ------------------------------------------------ |
-| `flightpath.enableDynamicQueue`           | boolean | false   | Inject queue extension instructions into prompts |
-| `flightpath.dynamicExtensionOnLastPrompt` | boolean | true    | Allow extension on last prompt by default        |
-
-**Migration Path**: Disable `enableDynamicQueue` and use MCP instead. MCP provides:
-
-- ✅ Standardized protocol (works across all AI platforms)
-- ✅ Better error handling (JSON-RPC)
-- ✅ Fine-grained control (two dedicated tools)
-- ✅ No prompt token overhead (tool calls separate from prompts)
+| Setting                                   | Type    | Default | Description                                           |
+| ----------------------------------------- | ------- | ------- | ----------------------------------------------------- |
+| `flightpath.enableDynamicQueue`           | boolean | false   | Allow AI to extend workflow by adding prompts via MCP |
+| `flightpath.dynamicExtensionOnLastPrompt` | boolean | true    | Allow extension on last prompt when no explicit flags |
+| `flightpath.notifyOnQueueExtension`       | boolean | true    | Show notification when AI extends the prompt queue    |
 
 ---
 
@@ -702,12 +685,10 @@ private async _updateWorkingFileInternal(): Promise<void> {
 **Hash-Based**:
 
 ```typescript
-function hashPromptContent(prompt: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(prompt.trim().toLowerCase())
-    .digest("hex")
-    .substring(0, 16);
+function hashPromptContent(promptText: string): string {
+  // Normalize whitespace to make hashing more robust
+  const normalized = promptText.trim().replace(/\s+/g, " ");
+  return crypto.createHash("sha256").update(normalized, "utf8").digest("hex");
 }
 ```
 
@@ -856,59 +837,6 @@ When troubleshooting queue append issues:
 
 ---
 
-## Migration Guide: Dynamic Queue → MCP
-
-**Legacy Feature**: FlightPath originally implemented queue extension by injecting instructions into prompts (Dynamic Queue).
-
-**Current Recommendation**: Use MCP-based queue extension instead.
-
-### Why Migrate?
-
-| Aspect             | Dynamic Queue (Legacy)        | MCP (Current)                             |
-| ------------------ | ----------------------------- | ----------------------------------------- |
-| **Protocol**       | Custom instructions           | Standard MCP protocol                     |
-| **Compatibility**  | Copilot-specific              | All AI platforms (Copilot, Claude, Codex) |
-| **Token Overhead** | ~200 tokens per prompt        | Zero (tool calls separate)                |
-| **Error Handling** | Manual (AI might fail)        | JSON-RPC error responses                  |
-| **Reliability**    | Depends on AI following rules | Standardized tool invocation              |
-| **Debugging**      | Prompt inspection             | MCP server logs                           |
-
-### Migration Steps
-
-**Step 1: Disable Dynamic Queue**
-
-Settings → FlightPath:
-
-- `Enable Dynamic Queue`: false
-
-**Step 2: Set Up MCP**
-
-Follow [MCP Setup Guide](FLIGHTPATH_MCP_IMPLEMENTATION.md#automated-setup).
-
-**Step 3: Test MCP Extension**
-
-1. Start a workflow
-2. Check MCP server logs: `.flightpath/logs/mcp-*.log`
-3. Verify AI can invoke `flightpath_queue_status` and `flightpath_append_queue`
-
-**Step 4: Remove Legacy Settings**
-
-After confirming MCP works, remove from settings:
-
-- `flightpath.enableDynamicQueue`
-- `flightpath.dynamicExtensionOnLastPrompt`
-
-### Backward Compatibility
-
-Dynamic Queue instructions are still supported for users who haven't migrated to MCP. Both systems can coexist:
-
-- **Dynamic Queue** (if enabled): Injects instructions into prompts
-- **MCP** (if configured): AI uses tools instead
-
-**Recommendation**: Disable Dynamic Queue once MCP is working to reduce token usage.
-
----
-
 ## Future Enhancements
 
 ### Planned Features
@@ -978,12 +906,18 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
 
 ## Changelog
 
+### January 12, 2026 - Documentation Accuracy Update
+
+- Removed incorrect "deprecated" label from Dynamic Queue settings (it IS the MCP approach)
+- Removed outdated migration guide section (no migration needed)
+- Added `notifyOnQueueExtension` setting to the settings table
+- Updated last modified date
+
 ### December 27, 2024 - Documentation Consolidation
 
 - Merged QUEUE_APPEND_FEATURE.md, DYNAMIC_QUEUE_IMPLEMENTATION.md, DYNAMIC_QUEUE_USAGE.md
 - Added comprehensive MCP section with cross-references
 - Updated troubleshooting section
-- Added migration guide from Dynamic Queue to MCP
 
 ### December 23, 2024 - Bug Fixes
 

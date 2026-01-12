@@ -75,14 +75,14 @@ End conditions are **optional validation checks** that determine whether a workf
 
 ## Supported Script Types
 
-| Extension      | Interpreter                          |
-| -------------- | ------------------------------------ |
-| `.py`          | `python`                             |
-| `.js`          | `node`                               |
-| `.ts`          | `npx ts-node`                        |
-| `.sh`          | `sh` (or `bash` on Windows)          |
-| `.bat`, `.cmd` | `cmd /c`                             |
-| `.ps1`         | `powershell -ExecutionPolicy Bypass` |
+| Extension      | Interpreter                                |
+| -------------- | ------------------------------------------ |
+| `.py`          | `python`                                   |
+| `.js`          | `node`                                     |
+| `.ts`          | `npx ts-node`                              |
+| `.sh`          | `bash` (Windows) / `sh` (macOS/Linux)      |
+| `.bat`, `.cmd` | `cmd /c` (Windows only)                    |
+| `.ps1`         | `powershell -ExecutionPolicy Bypass -File` |
 
 ---
 

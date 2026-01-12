@@ -99,7 +99,14 @@ await vscode.commands.executeCommand("github.copilot.chat.attachSelection");
 
 ### Problem
 
-We want to support `#file:path:line-line` syntax in prompt files, where users specify exact line ranges to attach. However:
+We want to support multiple context reference syntaxes in prompt files:
+
+- `@path/to/file` - Full file references (CLI-native)
+- `@path/to/dir/` - Directory structure (trailing slash)
+- `#file:path:line-line` - Exact line ranges to attach
+- `#sym:path:symbol:line` - Symbol references (resolves to definition)
+
+However:
 
 1. VS Code commands don't support passing line ranges directly to `attachSelection`
 2. Multiple `#selection` attachments have a bug (see `copilot_selection_bug.md`) - only the last one is included
@@ -110,12 +117,15 @@ We want to support `#file:path:line-line` syntax in prompt files, where users sp
 **Two Approaches Implemented**:
 
 1. **XML Attachment (CLI mode & Chat fallback)**: Construct the attachment XML format that Copilot expects and prepend it to the prompt text.
-   - ✅ Works with Copilot CLI
+   - ✅ Works with Copilot CLI, Claude CLI, Codex CLI
    - ✅ Reliable - no VS Code bugs
    - ✅ Supports multiple file ranges
+   - ✅ Supports symbol references with line resolution
+   - ✅ Supports directory structure listings
+   - ✅ Automatic deduplication of attachments
    - ❌ Shows raw XML text in Chat UI (clunky appearance)
 
-2. **Native Attachments (Chat mode with setting enabled)**: Use VS Code's `attachFile` and `attachSelection` commands.
+2. **Native Attachments (Chat mode with setting enabled)**: Use VS Code's `attachFile`, `attachSelection`, and `attachFolder` commands.
    - ✅ Clean UI in Chat window
    - ✅ Native VS Code experience
    - ⚠️ Subject to VS Code bugs (multiple selections)
@@ -185,52 +195,54 @@ ${content}
 
 ### Workflow Sequence
 
-1. **Parse prompt for `#file:` references**
-   - Use regex: `/#file:([^:\s]+)(?::(\d+)-(\d+))?/g`
-2. **Build attachment XML for each reference**:
+1. **Parse prompt for all context references**
+   - Uses unified `parseAllFileReferences()` from `FileReferenceParser.ts`
+   - Parses `@path`, `@path/dir/`, `#file:path:lines`, `#sym:path:symbol:line`
+
+2. **Resolve symbol references to file locations**
+   - Symbol refs use VS Code's Document Symbol API to find definitions
+
+3. **Build attachment XML for each reference in parallel**:
 
    ```typescript
-   const attachments: string[] = [];
+   const attachmentPromises = fileReferences.map((ref) =>
+     this.buildAttachmentForReference(ref).catch((err) => {
+       Log.error(`Failed to attach ${ref.path}:`, err);
+       return null; // Skip failed attachments
+     })
+   );
 
-   for (const match of fileReferences) {
-     const [, filePath, startLine, endLine] = match;
-     const xml = await buildAttachmentXml(
-       resolveWorkspacePath(filePath),
-       startLine ? parseInt(startLine) : undefined,
-       endLine ? parseInt(endLine) : undefined
-     );
-     attachments.push(xml);
-   }
+   const attachments = await Promise.all(attachmentPromises);
    ```
 
-3. **Construct final prompt**:
+4. **Deduplicate attachments** (same file/range only attached once)
+
+5. **Construct final prompt**:
 
    ```typescript
-   const attachmentsSection = attachments.join("\n\n");
-   const finalPrompt = `${attachmentsSection}\n\n${originalPromptText}\n\n${TOOL_INSTRUCTION}`;
+   const attachmentsSection = validAttachments.join("\n\n");
+   const finalPrompt = `${attachmentsSection}\n\n${promptText}`;
    ```
 
-4. **Keep `#file:` references in prompt text**
+6. **Keep all references in prompt text** (provides positional context to LLM)
 
-5. **Focus Copilot Chat**
-
-6. **Send the final prompt** with attachments prepended
+7. **Send the final prompt** with attachments prepended
 
 ---
 
 ## User Experience Considerations
 
-### Keep `#file:` References in Prompt Text
+### Keep Context References in Prompt Text
 
-**Decision**: **ALWAYS keep the `#file:` syntax in the prompt text**
+**Decision**: **ALWAYS keep context reference syntax in the prompt text**
 
-**⚠️ CRITICAL: NEVER REMOVE `#file:` REFERENCES FROM PROMPT TEXT**
+**⚠️ CRITICAL: NEVER REMOVE CONTEXT REFERENCES FROM PROMPT TEXT**
 
-This applies to **BOTH** XML attachment mode and native attachment mode.
+This applies to ALL reference types (`@path`, `#file:path:lines`, `#sym:path:symbol`) in **BOTH** XML attachment mode and native attachment mode.
 
 **Rationale**:
 
-- ✅ Matches Copilot's native behavior (Copilot keeps `#file:` references in prompts)
+- ✅ Matches Copilot's native behavior (Copilot keeps references in prompts)
 - ✅ Provides LLM with contextual references about WHERE in the prompt you're discussing specific code
 - ✅ Makes prompts self-documenting and easier to understand
 - ✅ Helps LLM correlate prompt text with attached code sections
@@ -314,62 +326,91 @@ This makes the attachment process **instantaneous and invisible to the user**.
 
 ## Code Implementation Location
 
-### Base Class - XML Attachment (CLI & Chat Fallback)
+### XML Attachment (CLI mode & Chat fallback)
 
-**Location**: `src/flightpath/base/CopilotIntegration.ts`
+**Location**: `src/utils/ContextExpander.ts`
 
-**Key Method**: `processPromptAttachments(prompt: string): Promise<string>`
+**Key Class**: `ContextExpander`
+
+**Key Method**: `expandContext(promptText: string): Promise<string>`
 
 **Responsibility**:
 
-1. Parse prompt for `#file:` references using regex
+1. Parse prompt for all reference types using `FileReferenceParser`
 2. Resolve relative paths to absolute workspace paths
-3. Read file content for each reference
-4. Build attachment XML blocks
-5. **Keep `#file:` syntax in prompt text** (do NOT remove)
-6. Prepend attachments to prompt
-7. Return final prompt string ready to send
+3. Resolve symbol references to file locations
+4. Read file content for each reference in parallel
+5. Build attachment XML blocks with deduplication
+6. **Keep reference syntax in prompt text** (do NOT remove)
+7. Prepend attachments to prompt
+8. Return final prompt string ready to send
 
-**Helper Methods** (all protected for subclass access):
+**File Reference Parsing**:
 
-- `parseFileReferences(prompt): Array<FileReference>` - Extracts #file: references
-- `resolveWorkspacePath(relativePath): string` - Converts to absolute path
+**Location**: `src/utils/FileReferenceParser.ts`
+
+**Key Functions**:
+
+- `parseAllFileReferences(prompt): FileReference[]` - Unified parser for all reference types
+- `parseAtReferences(prompt): FileReference[]` - Parses @path references
+- `parseFileReferences(prompt): FileReference[]` - Parses #file:path:line-line references
+- `parseSymbolReferences(prompt): FileReference[]` - Parses #sym:path:symbol:line references
+
+**ContextExpander Helper Methods** (private):
+
+- `resolveSymbolReferences()` - Resolves #sym: references to file locations
+- `buildAttachmentForReference()` - Builds XML with deduplication
+- `buildAttachmentXml()` - Creates XML attachment block
+- `resolveWorkspacePath()` - Converts to absolute path
 
 ### Chat Integration - Native Attachments
 
+**Location**: `src/flightpath/chat/NativeAttachmentHandler.ts`
+
+**Key Class**: `NativeAttachmentHandler`
+
+**Key Method**: `processAttachments(prompt: string): Promise<string>`
+
+**CopilotChatIntegration Override**:
+
 **Location**: `src/flightpath/chat/CopilotChatIntegration.ts`
 
-**Override Method**: `buildPromptText(prompt: PromptItem): Promise<string>`
-
-**Key Method**: `processNativeAttachments(prompt: string): Promise<string>`
+**Method**: `buildPromptText(prompt: PromptItem): Promise<string>`
 
 **Responsibility**:
 
 1. Check `chatUseNativeAttachments` setting
 2. If enabled:
-   - Parse `#file:` references
+   - Delegate to `NativeAttachmentHandler.processAttachments()`
    - For each reference:
      - Whole file: Use `github.copilot.chat.attachFile` command
+     - Directory: Use `workbench.action.chat.attachFolder` command
      - Line range: Open file, set selection, use `github.copilot.chat.attachSelection`
-   - **KEEP `#file:` syntax in prompt text** (provides sequential/positional context)
+   - **KEEP reference syntax in prompt text** (provides sequential/positional context)
    - Return original prompt unchanged
 3. If disabled:
-   - Fall back to XML attachment (calls `super.buildPromptText()`)
+   - Fall back to XML attachment via `ContextExpander`
 
 **Workflow Sequence** (Native Attachments):
 
 ```typescript
-1. Parse #file: references
-2. For each reference:
+1. Parse all references via FileReferenceParser
+2. Resolve symbol references to file locations
+3. For each reference:
    - Resolve absolute path
+   - If directory:
+     await vscode.commands.executeCommand('workbench.action.chat.attachFolder', uri)
    - If whole file:
-     await vscode.commands.executeCommand('github.copilot.chat.attachFile', uri)
+     await withFocusedDocument(uri, async () => {
+       await vscode.commands.executeCommand('github.copilot.chat.attachFile')
+     })
    - If line range:
-     - Open document
-     - Set editor selection
-     - await vscode.commands.executeCommand('github.copilot.chat.attachSelection')
-3. Keep #file: syntax in prompt (CRITICAL for context)
-4. Return original prompt text unchanged
+     await withFocusedDocument(uri, async (editor) => {
+       editor.selection = new vscode.Selection(startLine, 0, endLine, MAX_INT)
+       await vscode.commands.executeCommand('github.copilot.chat.attachSelection')
+     })
+4. Keep reference syntax in prompt (CRITICAL for context)
+5. Return original prompt text unchanged
 ```
 
 ---
@@ -482,9 +523,10 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 
 ## Related Documentation
 
-- [PROMPT_ARCHITECTURE_TRANSITION.md](./PROMPT_ARCHITECTURE_TRANSITION.md) - Phase 1 context removal
-- [COPILOT_INTEGRATION.md](./COPILOT_INTEGRATION.md) - Overall Copilot integration strategy
+- [PROMPT_SYNTAX.md](./PROMPT_SYNTAX.md) - Complete reference syntax documentation
 - [FlightPath Types](../src/types/FlightPathTypes.ts) - PromptItem interface
+- [FileReferenceParser](../src/utils/FileReferenceParser.ts) - Reference parsing logic
+- [ContextExpander](../src/utils/ContextExpander.ts) - XML attachment building
 
 ---
 
@@ -492,10 +534,11 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 
 **What Works**:
 
-- ✅ Manual attachment XML construction
-- ✅ Multiple file attachments (no VS Code bug)
-- ✅ Both whole files and line ranges
-- ✅ Compatible with CLI and VS Code extension
+- ✅ Manual attachment XML construction via `ContextExpander`
+- ✅ Multiple file attachments with automatic deduplication
+- ✅ Full files, line ranges, directory listings, and symbol references
+- ✅ Compatible with Copilot CLI, Claude CLI, Codex CLI, and Chat modes
+- ✅ Native attachments for Chat mode (cleaner UI)
 
 **What Doesn't Work**:
 
@@ -505,27 +548,29 @@ Consider filing a feature request with VS Code team to add parameters to `attach
 
 **Chosen Implementation Path**:
 
-- Parse `#file:` references from prompt text
+- Parse all context references using unified `FileReferenceParser`
+- Resolve symbol references to file locations using VS Code's Document Symbol API
 - Read file content directly via VS Code workspace API
-- Build Copilot's internal attachment XML format
+- Build Copilot's internal attachment XML format with deduplication
 - Prepend attachments to prompt before sending
-- **Keep `#file:` syntax in prompt body** (matches Copilot's native behavior)
-- No editor manipulation required
+- **Keep reference syntax in prompt body** (provides positional context)
+- No editor manipulation required (for CLI mode)
 
 **Key Advantages**:
 
-- 🚀 **Fast**: No editor operations, no delays
+- 🚀 **Fast**: Parallel file reading, no editor operations
 - 🐛 **Bug-free**: Avoids VS Code's multiple selection bug
 - 🎯 **Reliable**: Direct control over attachment format
-- 🔧 **CLI-ready**: Works with Copilot CLI (no command dependency)
+- 🔧 **CLI-ready**: Works with all CLI integrations
 - 👻 **Invisible**: No visible UI changes during attachment
+- 🔄 **Deduplicated**: Same content never attached twice
 
-**Next Steps**:
+**Implementation Status**: ✅ **Complete**
 
-1. ✅ Implemented `processPromptAttachments()` method in `CopilotIntegration.ts`
-2. ✅ Added `parseFileReferences()` regex parser
-3. ✅ Added `buildAttachmentXml()` XML builder
-4. ✅ Added `resolveWorkspacePath()` path resolver (now protected method)
-5. ✅ Integrated into `buildPromptText()` workflow
-6. ✅ Added `flightpath.autoAttachFiles` setting to disable feature
-7. ⏭️ **Ready for testing** - Use the test prompt to verify attachments work correctly
+All features fully implemented:
+
+- `ContextExpander` class for XML-based attachments
+- `FileReferenceParser` for unified reference parsing
+- `NativeAttachmentHandler` for Chat mode native attachments
+- Support for `@path`, `@dir/`, `#file:path:lines`, `#sym:path:symbol:line`
+- `flightpath.autoAttachFiles` and `flightpath.chatUseNativeAttachments` settings

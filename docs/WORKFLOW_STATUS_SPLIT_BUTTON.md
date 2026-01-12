@@ -1,7 +1,7 @@
 # Workflow Status Split Button & Recent Workflows
 
-**Last Updated**: January 11, 2026
-**Status**: 📋 Planning
+**Last Updated**: January 12, 2026
+**Status**: ✅ Implemented
 **Related**:
 
 - [LOAD_BUTTON_SPLIT_DROPDOWN.md](LOAD_BUTTON_SPLIT_DROPDOWN.md) - Split dropdown pattern reference
@@ -88,55 +88,33 @@ The workflow status split button consists of:
    - Current workflow is highlighted
    - Click to load/resume workflow
 
-## Current State Analysis
+## Implementation Overview
 
-### HTML Structure (dashboard.html:86-101)
+> **Note**: This feature was fully implemented as of January 2026. The sections below document both the design and the actual implementation.
 
-```html
-<div id="workflow-status">
-  <span id="workflow-name">New Workflow</span>
-  <span id="status-separator" class="status-separator" style="display: none">
-    -
-  </span>
-  <span id="execution-state" class="execution-state-idle" style="display: none"
-    >Idle</span
-  >
-</div>
-```
+### Implemented HTML Structure (dashboard.html:88-155)
 
-**Current behavior**: Static text display, no interaction
+The workflow status area uses an interactive split button with inline edit and recent workflows dropdown.
 
-### JavaScript State (dashboard.js:247-260)
+### JavaScript Implementation (workflow-manager.js)
 
-```javascript
-function getWorkflowName(fileName) {
-  if (!fileName) return "No workflow loaded";
+The workflow status split button logic is implemented in `workflow-manager.js`:
 
-  const match = fileName.match(/([^/\\]+)\.flightpath\.json$/);
-  if (match) {
-    return match[1]
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  }
+- `startEditingWorkflowName()`: Hides split button, shows text input
+- `saveWorkflowName()`: Saves name to backend via `UPDATE_WORKFLOW_NAME` message
+- `cancelEditingWorkflowName()`: Reverts to display mode
+- `toggleRecentWorkflowsDropdown()`: Shows/hides recent workflows
+- `populateRecentWorkflows()`: Renders workflow list from backend data
 
-  return path.basename(fileName, ".json");
-}
-```
-
-**Current behavior**: Derives display name from filename (kebab-case → Title Case)
-
-### Backend State (PromptQueue.ts)
+### Backend Integration (PromptQueue.ts)
 
 - **Working files**: Stored in `.flightpath/.queue`
 - **Filename pattern**: `{workflow-name}-{timestamp}.flightpath.json`
 - **Structure**: Contains `workflowName`, `originalFile`, `startedAt`, `_runtime`, `prompts`
 
-## Proposed Implementation
+## Implementation Details
 
-### Phase 1: HTML Structure
-
-#### Updated workflow-status div
+### HTML Structure (dashboard.html)
 
 ```html
 <div id="workflow-status">
@@ -211,7 +189,7 @@ function getWorkflowName(fileName) {
 </div>
 ```
 
-### Phase 2: CSS Styling
+### CSS Styling (dashboard.css)
 
 ```css
 /* === Workflow Status Split Button === */
@@ -513,7 +491,7 @@ function getWorkflowName(fileName) {
 }
 ```
 
-### Phase 3: JavaScript Behavior
+### JavaScript Behavior (workflow-manager.js)
 
 #### 1. State Management
 
@@ -854,7 +832,7 @@ window.addEventListener("message", (event) => {
 });
 ```
 
-### Phase 4: Backend Integration
+### Backend Integration (FlightPathDashboardProvider.ts)
 
 #### DashboardConstants.ts
 
@@ -1432,10 +1410,18 @@ getQueueState(): QueueState {
 
 - **LOAD_BUTTON_SPLIT_DROPDOWN.md**: Split dropdown pattern
 - **WORKFLOW_NAME_PLAN.md**: workflowName property implementation
-- **dashboard.html:86-101**: Current workflow-status div
-- **dashboard.js:247-260**: getWorkflowName() function
+- **dashboard.html:88-155**: Workflow status split button HTML
+- **dashboard.css:306-490**: Workflow split button CSS styles
+- **workflow-manager.js:553-750**: Split button JavaScript logic
 
 ## Changelog
+
+### January 12, 2026 - Marked as Implemented
+
+- Moved from `docs/research/` to `docs/`
+- Updated status to ✅ Implemented
+- Renamed "Phase" sections to implementation details
+- Updated file references to match actual implementation
 
 ### January 11, 2026 - Initial Draft
 

@@ -46,12 +46,14 @@ This significantly limits the ability to provide targeted context across multipl
 
 ## Environment
 
-- Copilot Chat Extension Version: 0.32.4
-- VS Code Version: 1.105.1
+- Copilot Chat Extension Version: Originally reported in 0.32.4, still present in 0.36.0
+- VS Code Version: 1.105.1+
 - OS Version: Windows 11 (24H2)
 - Feature: Chat (all modes: agent/edit/ask)
 - Selected model: Sonnet 4.5
 - Logs: Available upon request
+
+**Status**: Upstream bug in VS Code/Copilot Chat - FlightPath works around this using XML attachments (see [CONTEXT_ATTACHMENT.md](CONTEXT_ATTACHMENT.md)).
 
 ## Impact
 

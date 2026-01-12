@@ -1,10 +1,19 @@
 # Load Button Split Dropdown Redesign
 
-**Last Updated**: January 11, 2026
+**Last Updated**: January 12, 2026
 **Status**: ✅ Implemented
 **Related**:
+
 - [DASHBOARD_FILE_ACTIONS_REDESIGN.md](DASHBOARD_FILE_ACTIONS_REDESIGN.md) - Previously approved button layout
 - [IN_PANEL_PROMPT_EDITOR.md](IN_PANEL_PROMPT_EDITOR.md) - Built-in text editor plans
+
+## Implementation Summary
+
+The split dropdown button has been fully implemented in the dashboard:
+
+- **HTML**: [dashboard.html](../src/ui/webview/dashboard.html#L21-L82) - Split button with dropdown menu
+- **CSS**: [dashboard.css](../src/ui/webview/dashboard.css#L1119-L1210) - Split button styling
+- **JS**: [workflow-manager.js](../src/ui/webview/workflow-manager.js#L330-L420) - Dropdown toggle and keyboard navigation
 
 ## Problem Statement
 
@@ -15,6 +24,7 @@ The current dashboard header has multiple buttons for loading workflows, which t
 ```
 
 This can be consolidated into a single split dropdown button similar to VS Code's source control commit button style `[Button]|[⌄]`, where:
+
 - The main button performs the default action (New Workflow)
 - The dropdown provides alternative loading methods
 
@@ -63,12 +73,12 @@ From the attachment provided:
 
 ### Button Functionality Mapping
 
-| Button | Current Behavior | Message Type |
-|--------|-----------------|--------------|
-| **Load** | Opens file picker, loads workflow | `SELECT_FILE` |
-| **Queue File...** | Opens file picker, appends to queue | `APPEND_FILE` |
-| **New Workflow** | Clears current workflow, starts blank | `CLEAR_WORKFLOW` |
-| **From Template...** | Opens template modal | `NEW_WORKFLOW` |
+| Button               | Current Behavior                      | Message Type     |
+| -------------------- | ------------------------------------- | ---------------- |
+| **Load**             | Opens file picker, loads workflow     | `SELECT_FILE`    |
+| **Queue File...**    | Opens file picker, appends to queue   | `APPEND_FILE`    |
+| **New Workflow**     | Clears current workflow, starts blank | `CLEAR_WORKFLOW` |
+| **From Template...** | Opens template modal                  | `NEW_WORKFLOW`   |
 
 ## Proposed Design: Split Dropdown Button
 
@@ -105,9 +115,11 @@ The split button consists of two clickable areas:
 ### Button States
 
 #### State 1: No Workflow Loaded (IDLE)
+
 ```
 [New Workflow |▼]
 ```
+
 - Main button: Enabled (creates new blank workflow)
 - Dropdown options:
   - ✓ New Workflow (redundant with main, but consistent)
@@ -116,9 +128,11 @@ The split button consists of two clickable areas:
   - ✗ Queue from File... (disabled - no queue to append to)
 
 #### State 2: Workflow Loaded (IDLE)
+
 ```
 [New Workflow |▼]
 ```
+
 - Main button: Enabled (shows confirmation: "Clear current workflow?")
 - Dropdown options:
   - ✓ New Workflow (with confirmation)
@@ -127,9 +141,11 @@ The split button consists of two clickable areas:
   - ✓ Queue from File... (enabled - can append to loaded queue)
 
 #### State 3: Running/Paused
+
 ```
 [New Workflow* |▼]
 ```
+
 - Main button: **Disabled** (can't clear during execution)
 - Dropdown trigger: **Enabled** (can still queue)
 - Dropdown options:
@@ -139,9 +155,11 @@ The split button consists of two clickable areas:
   - ✓ Queue from File... (enabled - safe to append to running queue)
 
 #### State 4: Completed/Error
+
 ```
 [New Workflow |▼]
 ```
+
 - Main button: Enabled
 - All dropdown options: Enabled
 
@@ -150,6 +168,7 @@ The split button consists of two clickable areas:
 ### Why Split Dropdown vs. Separate Buttons?
 
 **Pros**:
+
 - ✅ **Saves horizontal space**: 4 buttons → 1 split button
 - ✅ **Clearer hierarchy**: "New Workflow" is the primary action, others are alternatives
 - ✅ **Familiar pattern**: Matches VS Code's commit button UX
@@ -157,11 +176,13 @@ The split button consists of two clickable areas:
 - ✅ **Scalable**: Can add more options (e.g., "Open Recent", "Import from URL") without adding buttons
 
 **Cons**:
+
 - ❌ **Discoverability**: Less obvious that other loading methods exist
 - ❌ **Extra click**: Requires dropdown click for non-default actions
 - ❌ **Implementation complexity**: Custom dropdown logic needed
 
 **Mitigation**:
+
 - Add tooltip to dropdown trigger: "Show more workflow options"
 - Use keyboard shortcuts for power users (Ctrl+Shift+L for Load, etc.)
 - Show dropdown on first use (onboarding hint)
@@ -169,6 +190,7 @@ The split button consists of two clickable areas:
 ### Why "New Workflow" as Default Action?
 
 **Rationale**:
+
 1. **Most common action**: Creating a new workflow is likely the most frequent operation
 2. **Clear intent**: "New Workflow" clearly states what happens (clear queue, start fresh)
 3. **Safe default**: Less destructive than "Load" (which might replace running queue if we didn't disable it)
@@ -179,12 +201,14 @@ The split button consists of two clickable areas:
 ### Dropdown Option Order
 
 **Proposed order** (top to bottom):
+
 1. **New Workflow** (default action, shown for consistency)
 2. **From Template...** (structured workflow creation)
 3. **Load from File...** (load existing workflow)
 4. **Queue from File...** (append to current queue)
 
 **Rationale**:
+
 - Creation actions first (New, Template)
 - Loading actions second (Load, Queue)
 - Most → least destructive (New clears queue, Queue preserves it)
@@ -221,32 +245,15 @@ The split button consists of two clickable areas:
     </button>
 
     <!-- Dropdown menu (hidden by default) -->
-    <div
-      id="workflow-dropdown-menu"
-      class="dropdown-menu"
-      role="menu"
-      hidden
-    >
-      <button
-        class="dropdown-item"
-        data-action="new-workflow"
-        role="menuitem"
-      >
+    <div id="workflow-dropdown-menu" class="dropdown-menu" role="menu" hidden>
+      <button class="dropdown-item" data-action="new-workflow" role="menuitem">
         New Workflow
       </button>
-      <button
-        class="dropdown-item"
-        data-action="from-template"
-        role="menuitem"
-      >
+      <button class="dropdown-item" data-action="from-template" role="menuitem">
         From Template...
       </button>
       <div class="dropdown-divider"></div>
-      <button
-        class="dropdown-item"
-        data-action="load-file"
-        role="menuitem"
-      >
+      <button class="dropdown-item" data-action="load-file" role="menuitem">
         Load from File...
       </button>
       <button
@@ -460,10 +467,18 @@ function updateWorkflowDropdownItems() {
 
   // Get dropdown items by data-action attribute
   const items = {
-    newWorkflow: elements.workflowDropdownMenu.querySelector('[data-action="new-workflow"]'),
-    fromTemplate: elements.workflowDropdownMenu.querySelector('[data-action="from-template"]'),
-    loadFile: elements.workflowDropdownMenu.querySelector('[data-action="load-file"]'),
-    queueFile: elements.workflowDropdownMenu.querySelector('[data-action="queue-file"]'),
+    newWorkflow: elements.workflowDropdownMenu.querySelector(
+      '[data-action="new-workflow"]'
+    ),
+    fromTemplate: elements.workflowDropdownMenu.querySelector(
+      '[data-action="from-template"]'
+    ),
+    loadFile: elements.workflowDropdownMenu.querySelector(
+      '[data-action="load-file"]'
+    ),
+    queueFile: elements.workflowDropdownMenu.querySelector(
+      '[data-action="queue-file"]'
+    ),
   };
 
   // Disable destructive actions during execution
@@ -487,9 +502,11 @@ function updateNewWorkflowButtonState() {
   elements.btnNewWorkflowMain.disabled = isExecuting;
 
   if (isExecuting) {
-    elements.btnNewWorkflowMain.title = "Cannot clear workflow while running (stop first)";
+    elements.btnNewWorkflowMain.title =
+      "Cannot clear workflow while running (stop first)";
   } else {
-    elements.btnNewWorkflowMain.title = "Clear current workflow and start blank";
+    elements.btnNewWorkflowMain.title =
+      "Clear current workflow and start blank";
   }
 
   // Dropdown trigger always enabled (can still queue during execution)
@@ -538,7 +555,10 @@ elements.workflowDropdownMenu.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     const focusedItem = document.activeElement;
-    if (focusedItem.classList.contains("dropdown-item") && !focusedItem.disabled) {
+    if (
+      focusedItem.classList.contains("dropdown-item") &&
+      !focusedItem.disabled
+    ) {
       focusedItem.click();
     }
   }
@@ -548,7 +568,11 @@ elements.workflowDropdownMenu.addEventListener("keydown", (e) => {
  * Navigate dropdown items with keyboard
  */
 function navigateDropdownItems(direction) {
-  const items = Array.from(elements.workflowDropdownMenu.querySelectorAll(".dropdown-item:not(:disabled)"));
+  const items = Array.from(
+    elements.workflowDropdownMenu.querySelectorAll(
+      ".dropdown-item:not(:disabled)"
+    )
+  );
   const currentIndex = items.indexOf(document.activeElement);
 
   let nextIndex = currentIndex + direction;
@@ -621,7 +645,9 @@ function handleLoadFileAction() {
 
   if (hasQueue && (isRunning || isPaused)) {
     // This shouldn't happen (button should be disabled), but extra safety
-    vscode.window.showErrorMessage("Cannot load file while workflow is running");
+    vscode.window.showErrorMessage(
+      "Cannot load file while workflow is running"
+    );
     return;
   }
 
@@ -666,6 +692,7 @@ function handleExecutionStateChanged(executionState) {
 #### DashboardConstants.ts
 
 No new message types needed - reusing existing:
+
 - `CLEAR_WORKFLOW` (New Workflow action)
 - `NEW_WORKFLOW` (From Template action)
 - `SELECT_FILE` (Load from File action)
@@ -757,7 +784,9 @@ function openWorkflowDropdown() {
   updateWorkflowDropdownItems();
 
   // Focus first enabled item
-  const firstItem = elements.workflowDropdownMenu.querySelector(".dropdown-item:not(:disabled)");
+  const firstItem = elements.workflowDropdownMenu.querySelector(
+    ".dropdown-item:not(:disabled)"
+  );
   firstItem?.focus();
 
   document.addEventListener("click", handleDropdownClickOutside);
@@ -769,10 +798,12 @@ function openWorkflowDropdown() {
 ### Flow 1: Create New Blank Workflow (Main Button)
 
 **Before** (with separate buttons):
+
 1. Click **New Workflow** button
 2. Workflow cleared, ready for editor input
 
 **After** (with split button):
+
 1. Click main part of **[New Workflow |▼]** button
 2. If queue exists: Confirmation modal → Click "OK"
 3. Workflow cleared, ready for editor input
@@ -782,10 +813,12 @@ function openWorkflowDropdown() {
 ### Flow 2: Create Workflow from Template (Dropdown)
 
 **Before**:
+
 1. Click **From Template...** button
 2. Template modal opens
 
 **After**:
+
 1. Click dropdown trigger **[|▼]**
 2. Click **From Template...** in menu
 3. Template modal opens
@@ -795,11 +828,13 @@ function openWorkflowDropdown() {
 ### Flow 3: Load Workflow from File (Dropdown)
 
 **Before**:
+
 1. Click **Load** button
 2. File picker opens
 3. Select file → Workflow loads
 
 **After**:
+
 1. Click dropdown trigger **[|▼]**
 2. Click **Load from File...** in menu
 3. If queue exists: Confirmation modal → Click "OK"
@@ -811,11 +846,13 @@ function openWorkflowDropdown() {
 ### Flow 4: Queue Workflow from File (Dropdown)
 
 **Before**:
+
 1. Click **Queue File...** button
 2. File picker opens
 3. Select file → Prompts appended
 
 **After**:
+
 1. Click dropdown trigger **[|▼]**
 2. Click **Queue from File...** in menu
 3. File picker opens
@@ -826,6 +863,7 @@ function openWorkflowDropdown() {
 ### Flow 5: Keyboard Power User (New)
 
 **New capability**:
+
 1. Press **Ctrl+Shift+N** → New Workflow
 2. Press **Ctrl+Shift+T** → From Template
 3. Press **Ctrl+Shift+L** → Load from File
@@ -858,14 +896,14 @@ function openWorkflowDropdown() {
 
 ### State Testing
 
-| State | Main Button | Dropdown Trigger | Dropdown Items |
-|-------|-------------|------------------|----------------|
-| No workflow | Enabled | Enabled | New/Template/Load: enabled, Queue: disabled |
-| IDLE (loaded) | Enabled | Enabled | All enabled |
-| RUNNING | Disabled | Enabled | New/Template/Load: disabled, Queue: enabled |
-| PAUSED | Disabled | Enabled | New/Template/Load: disabled, Queue: enabled |
-| COMPLETED | Enabled | Enabled | All enabled |
-| ERROR | Enabled | Enabled | All enabled |
+| State         | Main Button | Dropdown Trigger | Dropdown Items                              |
+| ------------- | ----------- | ---------------- | ------------------------------------------- |
+| No workflow   | Enabled     | Enabled          | New/Template/Load: enabled, Queue: disabled |
+| IDLE (loaded) | Enabled     | Enabled          | All enabled                                 |
+| RUNNING       | Disabled    | Enabled          | New/Template/Load: disabled, Queue: enabled |
+| PAUSED        | Disabled    | Enabled          | New/Template/Load: disabled, Queue: enabled |
+| COMPLETED     | Enabled     | Enabled          | All enabled                                 |
+| ERROR         | Enabled     | Enabled          | All enabled                                 |
 
 ### Accessibility Testing
 
@@ -896,6 +934,7 @@ function openWorkflowDropdown() {
 ### User Impact
 
 **Low to Medium**:
+
 - **Positive**: Cleaner UI, less clutter, familiar pattern (VS Code commit button)
 - **Negative**: +1 click for non-default actions (Template, Load, Queue)
 - **Mitigation**: Keyboard shortcuts for power users, tooltip hints
@@ -903,6 +942,7 @@ function openWorkflowDropdown() {
 ### Rollback Plan
 
 If users strongly prefer separate buttons:
+
 1. Revert HTML to individual buttons
 2. Revert CSS/JS changes
 3. Keep dropdown styling for potential future use
@@ -910,10 +950,12 @@ If users strongly prefer separate buttons:
 ### Gradual Rollout Option
 
 **Phase 1**: Add split button, keep old buttons (both visible)
+
 - Let users try new pattern
 - Gather feedback via in-app survey
 
 **Phase 2**: Remove old buttons if feedback is positive
+
 - Show migration notice: "We've moved these actions to the dropdown"
 - Add "Don't show again" checkbox
 
@@ -922,6 +964,7 @@ If users strongly prefer separate buttons:
 ### Q1: Should "New Workflow" be the default action?
 
 **Options**:
+
 1. **New Workflow** (current proposal) - Most common action, clear intent
 2. **Load from File** - Alternative if users load more than create blank workflows
 3. **From Template** - Alternative if template-based workflow is primary use case
@@ -931,10 +974,12 @@ If users strongly prefer separate buttons:
 ### Q2: Should we show confirmation modals?
 
 **Current proposal**: Show confirmation when:
+
 - Clearing queue via "New Workflow" (if queue exists)
 - Replacing queue via "Load from File" (if queue exists)
 
 **Alternatives**:
+
 - Never show confirmation (faster but more dangerous)
 - Always show confirmation (safer but annoying for new workflows)
 - Add "Don't ask again" checkbox
@@ -952,6 +997,7 @@ If users strongly prefer separate buttons:
 ### Q4: Should we add icons to dropdown items?
 
 **Options**:
+
 1. **Text only** (current proposal) - Clean, simple
 2. **Icons + text** - More visual, easier to scan
    - New Workflow: `codicon-new-file`
@@ -1046,6 +1092,7 @@ If users strongly prefer separate buttons:
 ### VS Code Examples
 
 **Source Control Commit Button**:
+
 ```
 [Commit |▼]
     ↓
@@ -1060,6 +1107,7 @@ If users strongly prefer separate buttons:
 **Reference**: `src/vs/workbench/contrib/scm/browser/scmViewPaneContainer.ts`
 
 **Terminal New Terminal Button**:
+
 ```
 [New Terminal |▼]
     ↓
@@ -1082,6 +1130,7 @@ If users strongly prefer separate buttons:
 ## Implementation Checklist
 
 ### Phase 1: HTML Structure
+
 - [ ] Remove individual buttons (Load, Queue File, New Workflow, From Template)
 - [ ] Add split button container with `split-button` class
 - [ ] Add main button (`split-button-main`)
@@ -1091,6 +1140,7 @@ If users strongly prefer separate buttons:
 - [ ] Add `role` and `aria-*` attributes for accessibility
 
 ### Phase 2: CSS Styling
+
 - [ ] Add `.split-button` container styles (flexbox layout)
 - [ ] Add `.split-button-main` styles (border-radius, padding)
 - [ ] Add `.split-button-dropdown` styles (border, icon centering)
@@ -1103,6 +1153,7 @@ If users strongly prefer separate buttons:
 - [ ] Test in light and dark themes
 
 ### Phase 3: JavaScript Behavior
+
 - [ ] Update elements object (remove old buttons, add split button elements)
 - [ ] Add `toggleWorkflowDropdown()` function
 - [ ] Add `openWorkflowDropdown()` function
@@ -1120,6 +1171,7 @@ If users strongly prefer separate buttons:
 - [ ] Update state handlers to call `updateNewWorkflowButtonState()`
 
 ### Phase 4: Keyboard Shortcuts
+
 - [ ] Add global keydown listener for Ctrl+Shift+N (New Workflow)
 - [ ] Add global keydown listener for Ctrl+Shift+T (From Template)
 - [ ] Add global keydown listener for Ctrl+Shift+L (Load from File)
@@ -1127,6 +1179,7 @@ If users strongly prefer separate buttons:
 - [ ] Test shortcuts don't conflict with VS Code defaults
 
 ### Phase 5: Accessibility
+
 - [ ] Verify `aria-haspopup="menu"` on dropdown trigger
 - [ ] Verify `aria-expanded` updates on toggle
 - [ ] Verify `role="menu"` on dropdown container
@@ -1136,6 +1189,7 @@ If users strongly prefer separate buttons:
 - [ ] Test keyboard-only navigation (Tab, Arrow keys, Enter, Escape)
 
 ### Phase 6: Testing
+
 - [ ] Test all dropdown items trigger correct actions
 - [ ] Test dropdown closes on click outside
 - [ ] Test dropdown items disable correctly per state
@@ -1147,12 +1201,14 @@ If users strongly prefer separate buttons:
 - [ ] Test with different font sizes
 
 ### Phase 7: Documentation
+
 - [ ] Update DASHBOARD_FILE_ACTIONS_REDESIGN.md (mark as superseded)
 - [ ] Add screenshots of new split button to README
 - [ ] Update CHANGELOG.md with UI change notes
 - [ ] Document keyboard shortcuts in user guide
 
 ### Phase 8: Polish (Optional)
+
 - [ ] Add icons to dropdown items (if Q4 is "yes")
 - [ ] Add tooltips to dropdown items
 - [ ] Add subtle open/close animation
@@ -1162,6 +1218,7 @@ If users strongly prefer separate buttons:
 ## Changelog
 
 ### January 11, 2026 - Implementation Complete ✅
+
 - **Fully implemented split dropdown button** replacing four separate header buttons
 - **HTML Changes**: New split button structure with main action + dropdown trigger
 - **CSS Changes**:
@@ -1183,6 +1240,7 @@ If users strongly prefer separate buttons:
   - `src/ui/webview/dashboard.js` (dropdown logic, event handlers, keyboard shortcuts)
 
 ### January 11, 2026 - Initial Draft
+
 - Analyzed current dashboard button layout from dashboard.html:18-50
 - Proposed split dropdown button design (inspired by VS Code commit button)
 - Documented visual design, states, and behavior

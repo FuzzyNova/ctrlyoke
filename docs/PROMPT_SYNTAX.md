@@ -4,7 +4,7 @@
 
 FlightPath supports rich context references in prompts using a syntax aligned with CLI standards while adding workspace intelligence features. This document defines the syntax, completion behavior, and migration path.
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2026-01-12
 
 ---
 
@@ -521,11 +521,10 @@ _Directory tree context + specific file content_
 1. ✅ Registered both `@` and `#` completion triggers in `extension.ts`
 2. ✅ Added `getAtCompletions()` for full file references
 3. ✅ Updated `getHashCompletions()` to show selections only (no files)
-4. ✅ Added `@path` parsing to all integrations:
-   - `CopilotIntegration.ts` (base class): `parseAtReferences()`, `convertToAtSyntax()`
-   - `CopilotCommandLineIntegration.ts`: `processPromptAttachments()` override
-   - `ClaudeCommandLineIntegration.ts`: `processPromptAttachments()` override
-   - `NativeAttachmentHandler.ts` (Chat): `parseFileReferences()` updated
+4. ✅ Added `@path` parsing via unified `FileReferenceParser.ts` module:
+   - `parseAtReferences()`, `parseFileReferences()`, `parseSymbolReferences()`
+   - `parseAllFileReferences()` combines all syntaxes
+   - Used by all CLI integrations and Chat mode
 
 ### Phase 2: Migration Tooling ✅ COMPLETED
 
@@ -596,7 +595,8 @@ _Directory tree context + specific file content_
 
 ## Version History
 
-| Version | Date       | Changes                                                          |
-| ------- | ---------- | ---------------------------------------------------------------- |
-| 1.0     | 2025-12-08 | Initial specification with `@` and `#` syntax                    |
-| 2.0     | 2025-12-10 | **IMPLEMENTED**: `@path` completions, CLI integration, migration |
+| Version | Date       | Changes                                                              |
+| ------- | ---------- | -------------------------------------------------------------------- |
+| 1.0     | 2025-12-08 | Initial specification with `@` and `#` syntax                        |
+| 2.0     | 2025-12-10 | **IMPLEMENTED**: `@path` completions, CLI integration, migration     |
+| 2.1     | 2026-01-12 | Fixed documentation: parsing functions are in FileReferenceParser.ts |

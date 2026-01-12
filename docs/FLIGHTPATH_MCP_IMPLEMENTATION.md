@@ -1,7 +1,7 @@
 # FlightPath MCP Server Implementation Guide
 
-**Date**: December 26, 2025  
-**Status**: ✅ Core Implementation Complete, Testing In Progress  
+**Date**: January 12, 2026  
+**Status**: ✅ Core Implementation Complete  
 **Related**: [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md)
 
 ## Executive Summary
@@ -39,7 +39,7 @@ Quick reference for MCP configuration across supported CLI platforms:
 
 ---
 
-## Implementation Status (Dec 26, 2025)
+## Implementation Status (Jan 12, 2026)
 
 ### ✅ Completed Features
 
@@ -50,6 +50,8 @@ Quick reference for MCP configuration across supported CLI platforms:
 - ✅ Extensive debug logging for all tool invocations and JSON-RPC messages
 - ✅ Working file read/write with atomic operations
 - ✅ Environment variable support (`FLIGHTPATH_WORKSPACE`)
+- ✅ Hash-based prompt deduplication using shared `PromptIdentity` utilities
+- ✅ Operation queue for concurrent append serialization
 
 **Queue Merge Logic** (`src/flightpath/PromptQueue.ts`):
 
@@ -70,22 +72,23 @@ Quick reference for MCP configuration across supported CLI platforms:
 - ✅ Two-scenario handling: IDLE (new file) vs EXECUTING (MCP append)
 - ✅ Dashboard notifications for queue extensions
 
-**CLI Configuration**:
+**CLI Configuration** (`src/flightpath/cli/shared/CliMcpConfigGenerator.ts`):
 
 - ✅ Correct Copilot CLI config format: `{"type": "local", "tools": ["*"], ...}`
 - ✅ Correct Claude CLI config format: `{"type": "stdio", ...}`
+- ✅ Codex CLI inline TOML generation: `mcp_servers.flightpath={...}`
 - ✅ BaseCliIntegration differentiates between Copilot and Claude type fields
 
-### 🚧 In Progress
+**VS Code Integration** (`src/extension.ts`):
 
-- Manual testing across all CLI platforms (Copilot, Claude, Codex)
-- End-to-end workflow validation with MCP tool calls
-- Error recovery scenarios
+- ✅ Language Model Tools API registration
+- ✅ `flightpath_queue_status` and `flightpath_append_queue` tools registered
+- ✅ Shared `QueueOperations.ts` for MCP and LM Tools consistency
 
 ### 📋 Planned
 
 - Automated tests for MCP server tools
-- VS Code Language Model Tools API integration
+- Additional read-only tools (workflow templates, prompt library)
 - User documentation and setup guides
 
 ---
@@ -209,7 +212,7 @@ MCP supports three transport types:
 │  └─ flightpath_queue_status() [READ]        │
 ├─────────────────────────────────────────────┤
 │  Queue Operations:                          │
-│  ├─ Read working file (.queue.json)         │
+│  ├─ Read working file (.flightpath.json)    │
 │  ├─ Validate & merge prompts                │
 │  ├─ Atomic write (temp + rename)            │
 │  └─ Return combined status + prompts        │
@@ -1101,10 +1104,20 @@ class FlightPathMCPServer {
   }
 
   private setupHandlers() {
-    // List available tools
+    // List available tools (2 core tools - matches actual mcp-server.ts implementation)
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
-        // Tool 1: Append to queue (write operation)
+        // Tool 1: Queue status (read operation)
+        {
+          name: "flightpath_queue_status",
+          description:
+            "Get comprehensive status of the current FlightPath workflow queue, including metadata and all prompts with their execution state",
+          inputSchema: {
+            type: "object",
+            properties: {},
+          },
+        },
+        // Tool 2: Append to queue (write operation)
         {
           name: "flightpath_append_queue",
           description:
@@ -1139,22 +1152,6 @@ class FlightPathMCPServer {
             required: ["prompts", "position"],
           },
         },
-        {
-          name: "flightpath_get_queue_status",
-          description: "Get the current status of the FlightPath queue",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
-        {
-          name: "flightpath_list_queue",
-          description: "List all prompts in the queue with their status",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
       ],
     }));
 
@@ -1164,12 +1161,10 @@ class FlightPathMCPServer {
 
       try {
         switch (name) {
+          case "flightpath_queue_status":
+            return await this.handleQueueStatus();
           case "flightpath_append_queue":
             return await this.handleQueueAppend(args);
-          case "flightpath_get_queue_status":
-            return await this.handleQueueStatus();
-          case "flightpath_list_queue":
-            return await this.handleQueueList();
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -1255,42 +1250,19 @@ class FlightPathMCPServer {
       await fs.readFile(workingFile, "utf8")
     );
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            {
-              workflowName: queueState.workflowName,
-              currentIndex: queueState.currentIndex,
-              totalPrompts: queueState.prompts.length,
-              completedPrompts: queueState.completed.length,
-              workingFile,
-            },
-            null,
-            2
-          ),
-        },
-      ],
+    const runtime = queueState._runtime || {
+      currentIndex: 0,
+      completedPrompts: [],
+      state: "idle",
     };
-  }
 
-  private async handleQueueList() {
-    const workingFile = await this.findActiveWorkingFile();
-    if (!workingFile) {
-      throw new Error("No active FlightPath workflow found");
-    }
-
-    const queueState: WorkingQueueFile = JSON.parse(
-      await fs.readFile(workingFile, "utf8")
-    );
-
+    // Combined response with metadata AND prompts (single tool instead of two)
     const prompts = queueState.prompts.map((p, index) => ({
       index,
       prompt: p.prompt,
-      status: queueState.completed.includes(index)
+      status: runtime.completedPrompts?.includes(index)
         ? "completed"
-        : index === queueState.currentIndex
+        : index === runtime.currentIndex
           ? "running"
           : "pending",
       model: p.model,
@@ -1300,7 +1272,23 @@ class FlightPathMCPServer {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ prompts }, null, 2),
+          text: JSON.stringify(
+            {
+              metadata: {
+                workflowName: queueState.workflowName,
+                currentIndex: runtime.currentIndex,
+                totalPrompts: queueState.prompts.length,
+                completedPrompts: runtime.completedPrompts?.length || 0,
+                executionState: runtime.state,
+                maxQueueSize: 100,
+                remainingSlots: 100 - queueState.prompts.length,
+                workingFile,
+              },
+              prompts,
+            },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -1311,7 +1299,7 @@ class FlightPathMCPServer {
 
     try {
       const files = await fs.readdir(queueDir);
-      const queueFiles = files.filter((f) => f.endsWith(".queue.json"));
+      const queueFiles = files.filter((f) => f.endsWith(".flightpath.json"));
 
       if (queueFiles.length === 0) return null;
 
@@ -1331,20 +1319,27 @@ class FlightPathMCPServer {
   }
 
   private generateId(): string {
-    return Math.random().toString(36).substr(2, 9);
+    return `${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
 
   async start() {
+    log("===================================");
+    log("FlightPath MCP Server Starting");
+    log("Log file:", logFile);
+    log("Workspace:", this.workspaceRoot);
+    log("===================================");
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error("FlightPath MCP Server started"); // stderr for logging
+    log("FlightPath MCP Server STARTED");
   }
 }
 
-// Start server
+// Start server with file-based logging
+log("Initializing FlightPath MCP Server...");
 const server = new FlightPathMCPServer();
 server.start().catch((error) => {
-  console.error("Failed to start MCP server:", error);
+  log("FATAL ERROR: Failed to start MCP server");
+  log("Error:", error);
   process.exit(1);
 });
 ```
@@ -1732,7 +1727,7 @@ if (!mcpConfigured && (usingCopilotCLI || usingClaudeCLI || usingCodexCLI)) {
 FlightPath: Run bugfix-authentication.flightpath.json
 
 # FlightPath creates working file:
-.flightpath/.queue/bugfix-123.queue.json
+.flightpath/.queue/bugfix-123.flightpath.json
 ```
 
 **3. User Starts Copilot CLI (or FlightPath launches it automatically)**:
@@ -1768,7 +1763,7 @@ Copilot (thinking):
   → AUTO-APPROVED (FlightPath MCP tools are pre-approved)
 
 MCP Server:
-- Reads .flightpath/.queue/bugfix-123.queue.json
+- Reads .flightpath/.queue/bugfix-123.flightpath.json
 - Inserts prompt at position 3
 - Writes atomically
 - Returns: {success: true, promptsAdded: 1}
@@ -1878,36 +1873,36 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 
 ### MVP Scope
 
-**Phase 1: Core MCP Server** ✅ **COMPLETED (Dec 26, 2025)**
+**Phase 1: Core MCP Server** ✅ **COMPLETED**
 
-| Feature                        | Status             | Notes                                   |
-| ------------------------------ | ------------------ | --------------------------------------- |
-| Schema extension               | ✅ **Complete**    | `_runtime` object in prompt-schema      |
-| MCP SDK integration            | ✅ **Complete**    | `@modelcontextprotocol/sdk` installed   |
-| `flightpath_queue_status` tool | ✅ **Complete**    | Combined metadata + prompts read        |
-| `flightpath_append_queue` tool | ✅ **Complete**    | Append with position control            |
-| Working file read/write        | ✅ **Complete**    | Atomic operations (temp + rename)       |
-| File-based logging             | ✅ **Complete**    | `.flightpath/logs/` with timestamps     |
-| Queue merge logic              | ✅ **Complete**    | `mergePromptsFromDisk()` implementation |
-| File watcher integration       | ✅ **Complete**    | Reloads during execution states         |
-| Manual testing                 | 🚧 **In Progress** | JSON-RPC validation across CLIs         |
+| Feature                        | Status          | Notes                                   |
+| ------------------------------ | --------------- | --------------------------------------- |
+| Schema extension               | ✅ **Complete** | `_runtime` object in prompt-schema      |
+| MCP SDK integration            | ✅ **Complete** | `@modelcontextprotocol/sdk` installed   |
+| `flightpath_queue_status` tool | ✅ **Complete** | Combined metadata + prompts read        |
+| `flightpath_append_queue` tool | ✅ **Complete** | Append with position control            |
+| Working file read/write        | ✅ **Complete** | Atomic operations (temp + rename)       |
+| File-based logging             | ✅ **Complete** | `.flightpath/logs/` with timestamps     |
+| Queue merge logic              | ✅ **Complete** | `mergePromptsFromDisk()` implementation |
+| File watcher integration       | ✅ **Complete** | Reloads during execution states         |
+| Manual testing                 | ✅ **Complete** | JSON-RPC validation across CLIs         |
 
-**Phase 2: Auto-Configuration** 🚧 **IN PROGRESS**
+**Phase 2: Auto-Configuration** ✅ **COMPLETED**
 
-| Feature                       | Status             | Notes                                   |
-| ----------------------------- | ------------------ | --------------------------------------- |
-| Copilot CLI config generation | ✅ **Complete**    | Generates temp JSON with correct format |
-| Codex CLI inline TOML         | ⭐ **Planned**     | Generate TOML string (no file!)         |
-| Claude CLI config generation  | ✅ **Complete**    | Similar to Copilot                      |
-| Setup UI prompts              | ⏸ **Deferred**    | Notify user on first use                |
-| End-to-end testing            | 🚧 **In Progress** | Testing all CLI platforms               |
+| Feature                       | Status          | Notes                                          |
+| ----------------------------- | --------------- | ---------------------------------------------- |
+| Copilot CLI config generation | ✅ **Complete** | Generates temp JSON with correct format        |
+| Codex CLI inline TOML         | ✅ **Complete** | Generate TOML string via CliMcpConfigGenerator |
+| Claude CLI config generation  | ✅ **Complete** | Similar to Copilot                             |
+| Setup UI prompts              | ⏸ **Deferred** | Notify user on first use                       |
+| End-to-end testing            | ✅ **Complete** | Testing all CLI platforms                      |
 
-**Phase 3: VS Code Chat Integration** (Future)
+**Phase 3: VS Code Chat Integration** ✅ **COMPLETED**
 
-| Feature                  | Status    | Notes                        |
-| ------------------------ | --------- | ---------------------------- |
-| Language Model Tools API | ⏸ Future | Better than MCP for VS Code  |
-| Tool registration        | ⏸ Future | Direct extension integration |
+| Feature                  | Status          | Notes                        |
+| ------------------------ | --------------- | ---------------------------- |
+| Language Model Tools API | ✅ **Complete** | Better than MCP for VS Code  |
+| Tool registration        | ✅ **Complete** | Direct extension integration |
 
 ### What to Defer
 
@@ -1917,44 +1912,29 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 - ❌ `flightpath_modify_prompt` - Complex, risky (defer)
 - ❌ `flightpath_reorder_prompts` - Complex state management (defer)
 - ❌ Expanded prompt resolution - Return raw prompts only
-- ❌ VS Code Chat integration - Focus on CLI first
 - ❌ Persistent global config - Session-specific only
 - ❌ Multi-workspace support - Single workspace only
 - ❌ MCP Resources API - Tools only, no resources/prompts/sampling
 
 ### Implementation Priorities
 
-**✅ Week 1 Complete** (Dec 19-26, 2025):
+**✅ All Phases Complete**:
 
 1. ✅ Implemented `src/mcp-server.ts` with 2 tools
 2. ✅ Added file-based logging system
 3. ✅ Implemented queue merge logic
 4. ✅ Fixed Copilot CLI config format (`type: "local"`, `tools: ["*"]`)
 5. ✅ Compiled to `out/mcp-server.js`
+6. ✅ Implemented `CliMcpConfigGenerator` for shared config generation
+7. ✅ VS Code Language Model Tools API integration in `extension.ts`
+8. ✅ Shared `QueueOperations.ts` for MCP and LM Tools consistency
 
-**🚧 Current Focus** (Week 2):
+**📋 Future Enhancements**:
 
-1. Manual testing with all CLI platforms:
-   - Copilot CLI: Test tool invocations with `--additional-mcp-config`
-   - Claude CLI: Test with `--mcp-config`
-   - Codex CLI: Test with inline `-c` TOML
-2. Debug and fix any issues found during testing
-3. Validate end-to-end workflows with MCP extensions
-4. Document known issues and workarounds
-
-**📋 Next Steps**:
-
-1. Auto-generate Codex CLI config (inline TOML)
-2. Add error messages for missing MCP setup
-3. Write user documentation and setup guides
-4. Create example workflows demonstrating MCP usage
-
-**🔮 Future Enhancements**:
-
-- VS Code Language Model Tools API integration
 - Additional read-only tools (workflow templates, prompt library)
 - MCP Resources for prompt templates
 - Automated tests for MCP server
+- User documentation and setup guides
 
 ### Success Criteria
 
@@ -1963,7 +1943,7 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 ✅ **DONE** - AI agent can read current queue status (metadata + all prompts)
 ✅ **DONE** - AI agent can append prompts to queue (next or end position)
 ✅ **DONE** - Copilot CLI config generation with correct format (`type: "local"`, `tools: ["*"]`)
-🚧 **TESTING** - Codex CLI users can use inline TOML (zero config file)
+✅ **DONE** - Codex CLI users can use inline TOML (via `CliMcpConfigGenerator`)
 ✅ **DONE** - Queue state remains consistent via merge logic (no corruption)
 ✅ **DONE** - All operations respect queue size limits
 ✅ **VERIFIED** - User approval required for all tool invocations (CLI behavior)
@@ -1971,11 +1951,11 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 ✅ **DONE** - Working file persists queue state across sessions
 ✅ **DONE** - File-based logging for debugging MCP interactions
 ✅ **DONE** - Queue extensions trigger dashboard updates
+✅ **DONE** - VS Code Language Model Tools API integration
 
 **MVP is NOT required to**:
 
 ❌ Automatically configure global CLI settings
-❌ Support VS Code Chat (Language Model Tools)
 ❌ Provide destructive operations (clear, delete)
 ❌ Expand file references or variables
 ❌ Support multiple simultaneous workflows
@@ -1996,27 +1976,25 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 7. ✅ **Universal solution**: Same server works for Copilot CLI and Claude CLI
 8. ⚠️ **Copilot CLI ≠ Copilot Coding Agent**: Different systems with different configuration approaches
 
-**Implementation Status** (Dec 26, 2025):
+**Implementation Status** (Jan 12, 2026):
 
-- ✅ **Week 1 Complete**: MCP server with 2 core tools, logging, merge logic
-- 🚧 **Week 2 In Progress**: Testing across all CLI platforms, bug fixes
-- 📋 **Week 3 Planned**: Documentation, VS Code Chat integration, polish
+- ✅ **Completed**: MCP server with 2 core tools, logging, merge logic
+- ✅ **Completed**: CLI platform testing (Copilot, Claude, Codex)
+- ✅ **Completed**: VS Code Language Model Tools API integration
+- 📋 **Planned**: Automated tests, additional user documentation
 
 **Key Achievements**:
 
 1. ✅ **Functional MCP server** with comprehensive logging
 2. ✅ **Intelligent queue merging** preserving execution state
-3. ✅ **Correct CLI configuration** for Copilot and Claude
+3. ✅ **Correct CLI configuration** for Copilot, Claude, and Codex
 4. ✅ **Dynamic queue extension** during workflow execution
 5. ✅ **File watcher integration** with two-scenario handling
+6. ✅ **VS Code Language Model Tools** registration in extension.ts
+7. ✅ **Shared QueueOperations.ts** for MCP and LM Tools consistency
+8. ✅ **CliMcpConfigGenerator** for provider-agnostic config generation
 
-**Known Issues**:
-
-- 🚧 End-to-end testing in progress (manual validation needed)
-- 📋 Codex CLI TOML generation not yet implemented
-- 📋 User documentation incomplete
-
-The MCP approach provides **predictable, standardized tool invocation** with **automatic error handling** and **type safety**, making it superior to custom scripts for AI-driven queue extension. The implementation is now **feature-complete for core functionality** and ready for comprehensive testing.
+The MCP approach provides **predictable, standardized tool invocation** with **automatic error handling** and **type safety**, making it superior to custom scripts for AI-driven queue extension. The implementation is **feature-complete** and working across all CLI platforms.
 
 ---
 
@@ -2026,5 +2004,4 @@ The MCP approach provides **predictable, standardized tool invocation** with **a
 - [MCP SDK Documentation](https://github.com/modelcontextprotocol/sdk)
 - [Copilot CLI MCP Setup](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli#add-an-mcp-server)
 - [Claude CLI MCP Setup](https://code.claude.com/docs/en/mcp)
-- [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md)
 - [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md) - User-driven and MCP-driven queue extension

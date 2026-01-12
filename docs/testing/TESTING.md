@@ -12,10 +12,10 @@ FlightPath uses a hybrid testing approach:
 
 ## Automated Tests
 
-### Current Coverage (222 passing tests)
+### Current Coverage (230 passing tests)
 
 ```
-✨ 222 passing (~650ms)
+✨ 230 passing (~640ms)
 ⏸️ 0 pending
 ❌ 0 failing
 ```
@@ -228,9 +228,9 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 
 ### Future Testing (Phase 2+)
 
-- [ ] CLI output parsing tests (mock child_process.spawn)
-- [ ] PromptFileParser with various JSON formats
-- [ ] EndConditionEvaluator script execution
+- [x] CLI output parsing tests (token-parsing.test.ts)
+- [x] PromptFileParser with various JSON/YAML formats (promptFileParser.test.ts)
+- [x] EndConditionEvaluator script execution (endConditionEvaluator.test.ts)
 - [ ] End-to-end workflow tests
 - [ ] Coverage reporting with nyc/istanbul
 - [ ] GitHub Actions CI/CD workflow
@@ -241,8 +241,8 @@ Ctrl+Shift+P → FlightPath: Open FlightPath Panel
 
 **Automated Tests:**
 
-- 100% pass rate (222/222 tests)
-- Fast execution (~650ms)
+- 100% pass rate (230/230 tests)
+- Fast execution (~640ms)
 - Comprehensive coverage of core utilities, CLI integrations, and business logic
 
 **Manual Tests:**

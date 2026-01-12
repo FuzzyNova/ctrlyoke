@@ -1,7 +1,9 @@
 # Workflow Name Implementation Plan
 
 ## Overview
+
 Add `workflowName` as an **optional, user-editable display name** for workflows that:
+
 1. Can be set when creating new workflows (via prompt name input or modal)
 2. Is stored in both source prompt files and working files
 3. Can be edited inline by double-clicking the workflow title in the dashboard
@@ -10,11 +12,13 @@ Add `workflowName` as an **optional, user-editable display name** for workflows 
 ## Current State Analysis
 
 ### Schema (Already Exists - Needs Enhancement)
+
 - `workflowName` currently exists in schema but marked as "working files only"
 - Currently derived from filename, not user-editable
 - No UI for editing after creation
 
 ### TypeScript Types (FlightPathTypes.ts)
+
 ```typescript
 export interface WorkingFile extends PromptFile {
   originalFile: string;
@@ -25,6 +29,7 @@ export interface WorkingFile extends PromptFile {
 ```
 
 ### Current Usage
+
 1. **PromptQueue.ts** (line 1045): Sets `workflowName` from filename
 2. **QueueOperations.ts** (line 91-99): Extracts from working file path
 3. **Dashboard.js** (line 247-251): `getWorkflowName()` extracts from file path
@@ -36,6 +41,7 @@ export interface WorkingFile extends PromptFile {
 **Goal**: Make `workflowName` available in both source files AND working files
 
 #### Option A: Top-level property (RECOMMENDED)
+
 Add `workflowName` at the top level alongside `prompts`:
 
 ```json
@@ -67,17 +73,20 @@ Add `workflowName` at the top level alongside `prompts`:
 ```
 
 **Rationale**:
+
 - Allows users to set workflow name in source `.flightpath.json` files
 - Carries over to working files automatically
 - Provides better IntelliSense in VS Code
 - Clear separation from runtime-only properties
 
 #### Option B: Keep working-files-only, add to PromptItem
+
 Add `workflowName` to individual prompt items (NOT RECOMMENDED - too granular)
 
 ### 2. TypeScript Type Updates
 
 #### FlightPathTypes.ts
+
 ```typescript
 export interface PromptFile {
   prompt?: string;
@@ -94,6 +103,7 @@ export interface WorkingFile extends PromptFile {
 ```
 
 #### DashboardConstants.ts
+
 Add new message types for workflow name editing:
 
 ```typescript
@@ -107,6 +117,7 @@ export const MESSAGE_TYPES = {
 ### 3. Dashboard UI Updates
 
 #### HTML (dashboard.html - line 285)
+
 Make workflow name editable on double-click:
 
 ```html
@@ -124,12 +135,17 @@ Make workflow name editable on double-click:
     style="display: none"
     maxlength="100"
   />
-  <span id="status-separator" class="status-separator" style="display: none">-</span>
-  <span id="execution-state" class="execution-state-idle" style="display: none">Idle</span>
+  <span id="status-separator" class="status-separator" style="display: none"
+    >-</span
+  >
+  <span id="execution-state" class="execution-state-idle" style="display: none"
+    >Idle</span
+  >
 </div>
 ```
 
 #### CSS (dashboard.css)
+
 ```css
 .workflow-name-editable {
   cursor: pointer;
@@ -157,6 +173,7 @@ Make workflow name editable on double-click:
 #### JavaScript (dashboard.js)
 
 **1. Add elements to DOM references (line 36)**
+
 ```javascript
 const elements = {
   workflowName: document.getElementById("workflow-name"),
@@ -166,6 +183,7 @@ const elements = {
 ```
 
 **2. Add state for workflow name editing**
+
 ```javascript
 let workflowNameEditState = {
   isEditing: false,
@@ -174,6 +192,7 @@ let workflowNameEditState = {
 ```
 
 **3. Add event listeners for inline editing**
+
 ```javascript
 // Double-click to edit workflow name
 elements.workflowName.addEventListener("dblclick", () => {
@@ -200,6 +219,7 @@ elements.workflowNameEdit.addEventListener("blur", () => {
 ```
 
 **4. Add helper functions**
+
 ```javascript
 function startEditingWorkflowName() {
   workflowNameEditState.isEditing = true;
@@ -246,6 +266,7 @@ function saveWorkflowName() {
 ```
 
 **5. Update state initialization handler**
+
 ```javascript
 case MESSAGE_TYPES.STATE_UPDATE:
   state.fileName = message.fileName || null;
@@ -270,6 +291,7 @@ case MESSAGE_TYPES.STATE_UPDATE:
 #### FlightPathDashboardProvider.ts
 
 **1. Add message handler**
+
 ```typescript
 private async handleWebviewMessage(message: any): Promise<void> {
   // ... existing handlers ...
@@ -301,6 +323,7 @@ private async handleUpdateWorkflowName(message: any): Promise<void> {
 ```
 
 **2. Include workflowName in state updates**
+
 ```typescript
 private getStateUpdateMessage(): any {
   const state = this.flightPathManager?.getQueueState();
@@ -319,6 +342,7 @@ private getStateUpdateMessage(): any {
 #### FlightPathManager.ts
 
 **1. Add updateWorkflowName method**
+
 ```typescript
 async updateWorkflowName(workflowName: string): Promise<void> {
   if (!this.promptQueue) {
@@ -331,6 +355,7 @@ async updateWorkflowName(workflowName: string): Promise<void> {
 ```
 
 **2. Update executeEphemeralPrompt to use promptName as workflowName**
+
 ```typescript
 async executeEphemeralPrompt(
   text: string,
@@ -352,6 +377,7 @@ async executeEphemeralPrompt(
 #### PromptQueue.ts
 
 **1. Add workflowName to QueueState**
+
 ```typescript
 interface QueueState {
   prompts: PromptItem[];
@@ -365,6 +391,7 @@ interface QueueState {
 ```
 
 **2. Add updateWorkflowName method**
+
 ```typescript
 async updateWorkflowName(workflowName: string): Promise<void> {
   if (!this.state.workingFilePath) {
@@ -380,6 +407,7 @@ async updateWorkflowName(workflowName: string): Promise<void> {
 ```
 
 **3. Update createWorkingFile to include workflowName from source**
+
 ```typescript
 private async createWorkingFile(
   promptFile: PromptFile,
@@ -409,6 +437,7 @@ private async createWorkingFile(
 ```
 
 **4. Update loadWorkingFile to extract workflowName**
+
 ```typescript
 async loadWorkingFile(filePath: string): Promise<void> {
   // ... existing code ...
@@ -432,6 +461,7 @@ async loadWorkingFile(filePath: string): Promise<void> {
 #### PromptFileParser.ts
 
 **1. Update parsePromptFile to preserve workflowName**
+
 ```typescript
 async parsePromptFile(filePath: string): Promise<PromptFile> {
   // ... existing parsing logic ...
@@ -448,6 +478,7 @@ async parsePromptFile(filePath: string): Promise<PromptFile> {
 ### 5. User Flow Examples
 
 #### Flow 1: Create with Prompt Name
+
 1. User opens dashboard
 2. User types prompt name "refactor auth"
 3. User types prompt text
@@ -458,6 +489,7 @@ async parsePromptFile(filePath: string): Promise<PromptFile> {
    - Dashboard title: "refactor auth"
 
 #### Flow 2: Edit Existing Workflow Name
+
 1. User has active workflow "fix tests"
 2. User double-clicks workflow title
 3. Inline input appears with "fix tests" selected
@@ -468,6 +500,7 @@ async parsePromptFile(filePath: string): Promise<PromptFile> {
 8. Filename stays: `fix-tests-20260105-182500.flightpath.json`
 
 #### Flow 3: Load Workflow with Custom Name
+
 1. User has source file with:
    ```json
    {
@@ -479,52 +512,58 @@ async parsePromptFile(filePath: string): Promise<PromptFile> {
 3. Dashboard shows "My Feature Implementation"
 4. Working file inherits workflowName
 
-## Implementation Phases
+## Implementation Status
+
+> **✅ FULLY IMPLEMENTED** - All phases completed.
 
 ### Phase 1: Schema & Types (Foundation)
-- [ ] Update `prompt-schema.json` to add `workflowName` at top level
-- [ ] Regenerate YAML schema
-- [ ] Update `FlightPathTypes.ts` interfaces
-- [ ] Update `DashboardConstants.ts` with new message types
+
+- [x] Update `prompt-schema.json` to add `workflowName` at top level
+- [x] Regenerate YAML schema
+- [x] Update `FlightPathTypes.ts` interfaces
+- [x] Update `DashboardConstants.ts` with new message types
 
 ### Phase 2: Backend Logic
-- [ ] Update `PromptFileParser.ts` to extract/preserve `workflowName`
-- [ ] Update `PromptQueue.ts`:
-  - [ ] Add `workflowName` to QueueState
-  - [ ] Add `updateWorkflowName()` method
-  - [ ] Update `createWorkingFile()` to use source workflowName
-  - [ ] Update `loadWorkingFile()` to extract workflowName
-  - [ ] Update `saveWorkingFile()` to persist workflowName
-- [ ] Update `FlightPathManager.ts`:
-  - [ ] Add `updateWorkflowName()` method
-  - [ ] Update `executeEphemeralPrompt()` to set workflowName from promptName
-  - [ ] Update `getQueueState()` to include workflowName
-- [ ] Update `FlightPathDashboardProvider.ts`:
-  - [ ] Add `handleUpdateWorkflowName()` handler
-  - [ ] Include workflowName in state updates
+
+- [x] Update `PromptFileParser.ts` to extract/preserve `workflowName`
+- [x] Update `PromptQueue.ts`:
+  - [x] Add `workflowName` to QueueState
+  - [x] Add `updateWorkflowName()` method
+  - [x] Update `createWorkingFile()` to use source workflowName
+  - [x] Update `loadWorkingFile()` to extract workflowName
+  - [x] Update `saveWorkingFile()` to persist workflowName
+- [x] Update `FlightPathManager.ts`:
+  - [x] Add `updateWorkflowName()` method
+  - [x] Update `executeEphemeralPrompt()` to set workflowName from promptName
+  - [x] Update `getQueueState()` to include workflowName
+- [x] Update `FlightPathDashboardProvider.ts`:
+  - [x] Add `handleUpdateWorkflowName()` handler
+  - [x] Include workflowName in state updates
 
 ### Phase 3: Dashboard UI
-- [ ] Update `dashboard.html`:
-  - [ ] Add inline edit input element
-  - [ ] Add title/cursor hints
-- [ ] Update `dashboard.css`:
-  - [ ] Style editable workflow name
-  - [ ] Style inline input
-- [ ] Update `dashboard.js`:
-  - [ ] Add workflow name editing state
-  - [ ] Add event listeners (dblclick, keydown, blur)
-  - [ ] Add helper functions (start/cancel/save edit)
-  - [ ] Update state handler to use workflowName from backend
-  - [ ] Update `updateWorkflowStatus()` to prefer workflowName over filename
+
+- [x] Update `dashboard.html`:
+  - [x] Add inline edit input element
+  - [x] Add title/cursor hints
+- [x] Update `dashboard.css`:
+  - [x] Style editable workflow name
+  - [x] Style inline input
+- [x] Update `dashboard.js` (now `workflow-manager.js`):
+  - [x] Add workflow name editing state
+  - [x] Add event listeners (dblclick, keydown, blur)
+  - [x] Add helper functions (start/cancel/save edit)
+  - [x] Update state handler to use workflowName from backend
+  - [x] Update `updateWorkflowStatus()` to prefer workflowName over filename
 
 ### Phase 4: Testing & Polish
-- [ ] Test ephemeral prompt creation with name
-- [ ] Test inline editing during execution (should work when paused)
-- [ ] Test inline editing when workflow completed
-- [ ] Test loading workflow with custom workflowName
-- [ ] Test loading workflow without workflowName (falls back to filename)
-- [ ] Test workflow name persistence across pause/resume
-- [ ] Update user documentation
+
+- [x] Test ephemeral prompt creation with name
+- [x] Test inline editing during execution (should work when paused)
+- [x] Test inline editing when workflow completed
+- [x] Test loading workflow with custom workflowName
+- [x] Test loading workflow without workflowName (falls back to filename)
+- [x] Test workflow name persistence across pause/resume
+- [x] Update user documentation
 
 ## Edge Cases & Considerations
 

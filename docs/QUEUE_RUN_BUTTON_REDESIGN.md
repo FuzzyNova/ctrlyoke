@@ -1,6 +1,6 @@
 # Queue and Run Button Redesign
 
-**Status:** Planning  
+**Status:** ✅ Implemented  
 **Date:** 2026-01-10  
 **Goal:** Differentiate Queue/Run buttons and add "New Workflow" branching feature
 
@@ -149,15 +149,15 @@ Scenario 2: User wants to quickly iterate on completed workflow
 
 ### Phase 1: ID Renames
 
-- [ ] Rename `btn-editor-add` → `btn-editor-queue` in HTML
-- [ ] Update all references in dashboard.js
-- [ ] Rename `btn-editor-send` → `btn-editor-run` in HTML
-- [ ] Update all references in dashboard.js
-- [ ] Test: Verify buttons still work
+- [x] Rename `btn-editor-add` → `btn-editor-queue` in HTML
+- [x] Update all references in dashboard.js
+- [x] Rename `btn-editor-send` → `btn-editor-run` in HTML
+- [x] Update all references in dashboard.js
+- [x] Test: Verify buttons still work
 
 ### Phase 2: Queue/Run Differentiation
 
-- [ ] Add `position` parameter to `ACTION_TYPES` in DashboardConstants.ts
+- [x] Add `position` parameter to `ACTION_TYPES` in DashboardConstants.ts
   ```typescript
   export const ACTION_TYPES = {
     QUEUE: "queue", // Append to end
@@ -166,7 +166,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
     RUN_NEXT: "runNext", // Append next + ensure runs (new)
   } as const;
   ```
-- [ ] Update dashboard.js `executePrompt()` to send position based on state:
+- [x] Update dashboard.js `executePrompt()` to send position based on state:
 
   ```javascript
   function executePrompt(action) {
@@ -186,12 +186,12 @@ Scenario 2: User wants to quickly iterate on completed workflow
   }
   ```
 
-- [ ] Update `FlightPathManager.executeEphemeralPrompt()` to handle positions:
+- [x] Update `FlightPathManager.executeEphemeralPrompt()` to handle positions:
   - `QUEUE`: Always `position: "end"`
   - `QUEUE_NEXT`: Always `position: "next"`
   - `RUN`: `position: "end"` (except when running)
   - `RUN_NEXT`: `position: "next"` + ensure execution
-- [ ] Update button text and tooltips dynamically:
+- [x] Update button text and tooltips dynamically:
   - **Queue button** (always):
     - Text: "Queue"
     - Tooltip: "Add prompt to end of queue"
@@ -201,7 +201,7 @@ Scenario 2: User wants to quickly iterate on completed workflow
   - **Run button** (running):
     - Text: "Run Next"
     - Tooltip: "Add prompt next in queue (high priority)"
-- [ ] Implement dynamic button text in dashboard.js:
+- [x] Implement dynamic button text in dashboard.js (see `editor-manager.js` `updateEditorButtons()`):
 
   ```javascript
   function updateEditorButtons() {
@@ -223,9 +223,9 @@ Scenario 2: User wants to quickly iterate on completed workflow
   }
   ```
 
-- [ ] Call `updateEditorButtons()` on state changes (STATE_UPDATE message)
-- [ ] Test: Verify button text changes when workflow starts/stops
-- [ ] Test: Verify position behavior in all states
+- [x] Call `updateEditorButtons()` on state changes (STATE_UPDATE message)
+- [x] Test: Verify button text changes when workflow starts/stops
+- [x] Test: Verify position behavior in all states
 
 ### Phase 3: New Workflow Checkbox
 
@@ -237,58 +237,21 @@ Scenario 2: User wants to quickly iterate on completed workflow
   - Enabled with descriptive tooltip otherwise
 - [x] Call `updateNewWorkflowCheckbox()` on state changes: ✅
 - [x] Update `executePrompt()` to read checkbox: ✅
-- [ ] Update `FlightPathManager.executeEphemeralPrompt()`:
-
-  ```typescript
-  async executeEphemeralPrompt(
-    text: string,
-    properties: any,
-    action: ActionType,
-    promptName?: string,
-    forceNewWorkflow: boolean = false // NEW parameter
-  ): Promise<void> {
-    // If forceNewWorkflow is true, always create new workflow
-    // regardless of current state
-
-    if (forceNewWorkflow) {
-      // Clear current workflow
-      this.clearWorkflow();
-      // Then proceed with normal logic (will create new)
-    }
-
-    // ... rest of existing logic
-  }
-  ```
-
-- [ ] Update `FlightPathDashboardProvider.handleExecutePrompt()`:
-
-  ```typescript
-  private async handleExecutePrompt(message: any): Promise<void> {
-    const { text, properties, action, promptName, forceNewWorkflow } = message;
-
-    await this.flightPathManager.executeEphemeralPrompt(
-      text,
-      properties,
-      action,
-      promptName,
-      forceNewWorkflow // Pass through
-    );
-  }
-  ```
-
-- [ ] Test: All checkbox states and behaviors
+- [x] Update `FlightPathManager.executeEphemeralPrompt()` - `forceNewWorkflow` parameter implemented at line 1245
+- [x] Update `FlightPathDashboardProvider.handleExecutePrompt()` - passes `forceNewWorkflow` at line 856-864
+- [x] Test: All checkbox states and behaviors
 
 ### Phase 4: Integration Testing
 
-- [ ] Test: Queue button on completed workflow (stays STOPPED)
-- [ ] Test: Run button on completed workflow (resumes)
-- [ ] Test: Queue appends to end when running
-- [ ] Test: Run appends next when running
-- [ ] Test: New Workflow checkbox hidden when no workflow
-- [ ] Test: New Workflow checkbox disabled when running
-- [ ] Test: New Workflow checkbox creates new workflow
-- [ ] Test: Setting persists across reloads
-- [ ] Test: All edge cases (paused, stopped, empty queue, etc.)
+- [x] Test: Queue button on completed workflow (stays STOPPED)
+- [x] Test: Run button on completed workflow (resumes)
+- [x] Test: Queue appends to end when running
+- [x] Test: Run appends next when running
+- [x] Test: New Workflow checkbox hidden when no workflow
+- [x] Test: New Workflow checkbox disabled when running
+- [x] Test: New Workflow checkbox creates new workflow
+- [x] Test: Setting persists across reloads
+- [x] Test: All edge cases (paused, stopped, empty queue, etc.)
 
 ## Edge Cases
 

@@ -1,5 +1,26 @@
 # In-Panel Prompt Editor Design
 
+## ✅ Implementation Status: COMPLETE
+
+**Implemented:** January 2026
+
+The in-panel prompt editor is fully implemented using CodeMirror with custom JavaScript completions. Key implementation files:
+
+- [codemirror-editor.js](../src/ui/webview/codemirror-editor.js) - CodeMirror editor with completions, spell check, link decorations
+- [editor-manager.js](../src/ui/webview/editor-manager.js) - Editor state management and event handling
+- [FlightPathDashboardProvider.ts](../src/ui/FlightPathDashboardProvider.ts) - Extension host completion handling
+- [typo.js](../src/ui/webview/typo.js) - Hunspell-based spell checking (Typo.js library)
+- [dictionaries/](../src/ui/webview/dictionaries/) - en_US dictionary files
+
+**Implementation notes vs. original design:**
+
+- Used **CodeMirror** instead of `contenteditable` for richer editor features (undo/redo, selections, search)
+- Used **Typo.js** with hunspell dictionaries instead of native browser spell check (more accurate, custom dictionary support)
+- Single editor section (not tabbed Output/Editor) - editor is always visible below output
+- Properties drawer slides in from the right for model/provider/agent settings
+
+---
+
 ## Overview
 
 This document describes the design and implementation plan for adding an in-panel text editor to the FlightPath dashboard. This feature will allow users to create and edit prompts directly within the custom webview panel, eliminating the need to switch to the VS Code text editor for basic prompt editing tasks.
@@ -198,25 +219,25 @@ async handleEditInVSCode(promptIndex: number): Promise<void> {
 }
 ```
 
-### ✅ RECOMMENDED: Option 5 (Custom JavaScript Completions)
+### ✅ IMPLEMENTED: Option 5 (Custom JavaScript Completions with CodeMirror)
 
 **Based on research of GitHub Copilot Chat, Claude Code, and Codex extensions**
 
 **Key Discovery:** Chat extensions don't use native VS Code completions - they build **custom JavaScript completions** in webviews!
 
-**Architecture:**
+**Actual Implementation Architecture:**
 
 ```
 ┌─────────────────────────────────────────────┐
-│ Dashboard Editor Tab (Webview)              │
+│ Dashboard Editor Section (Webview)          │
 │  ┌─────────────────────────────────────┐   │
-│  │ contenteditable Editor              │   │
-│  │ - Spell check: spellcheck="true"    │   │
-│  │ - Links: Ctrl+Click with CSS        │   │
-│  │ - Completions: Custom JS dropdown   │   │
+│  │ CodeMirror Editor                   │   │
+│  │ - Spell check: Typo.js (hunspell)   │   │
+│  │ - Links: Decoration + Ctrl+Click    │   │
+│  │ - Completions: CodeMirror dropdown  │   │
 │  └─────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────┐   │
-│  │ Completion Dropdown (@ or # typed)  │   │
+│  │ Native Completion Dropdown          │   │
 │  │ > 📄 src/extension.ts               │   │
 │  │   📁 src/flightpath/                │   │
 │  │   📍 Current selection              │   │
@@ -225,38 +246,39 @@ async handleEditInVSCode(promptIndex: number): Promise<void> {
            ↕ postMessage
 ┌─────────────────────────────────────────────┐
 │ Extension Host                              │
-│ - Reuses PromptCompletionProvider logic    │
-│ - Reuses PromptLinkProvider patterns       │
+│ - Reuses CompletionHelpers for shared logic │
+│ - handleCompletionRequest in Provider      │
 │ - Sends completion data to webview         │
 └─────────────────────────────────────────────┘
 ```
 
-**How It Works:**
+**How It Actually Works:**
 
-1. `contenteditable` div with `spellcheck="true"` (browser spell check FREE)
-2. Detect @ and # trigger characters with JavaScript event listeners
-3. Request completion data from extension host (reuses PromptCompletionProvider logic)
-4. Show custom dropdown with keyboard navigation (↑↓, Enter, Escape)
-5. Detect links with regex patterns (reuses PromptLinkProvider patterns)
-6. Style links with CSS, handle Ctrl+Click to open files/selections
+1. CodeMirror editor with full undo/redo, multi-selection, search capabilities
+2. Typo.js spell checker with hunspell en_US dictionary (not browser spellcheck)
+3. Detect @ and # trigger characters via CodeMirror's autocompletion extension
+4. Request completion data from extension host via postMessage
+5. Display CodeMirror's native completion dropdown with keyboard navigation
+6. Link decorations via ViewPlugin, Ctrl+Click opens files in VS Code
 
-**Advantages:**
+**Advantages (confirmed in implementation):**
 
-- ✅ **Stays in sidebar panel** - No split-pane or separate editor needed
-- ✅ **Browser spell check FREE** - Native `spellcheck` attribute (red squiggly lines work!)
+- ✅ **Stays in dashboard panel** - No split-pane or separate editor needed
+- ✅ **Rich spell check** - Typo.js with custom dictionary support
 - ✅ **Full UX control** - Match VS Code completion styling exactly
-- ✅ **Reuses existing logic** - Extension host provides same data as PromptCompletionProvider
+- ✅ **Reuses existing logic** - Extension host uses CompletionHelpers
 - ✅ **No API limitations** - All custom code, no Extension API restrictions
 - ✅ **Same as Copilot/Claude/Codex** - Proven pattern used by all major chat extensions
+- ✅ **CodeMirror bonuses** - Undo/redo, search, multiple selections, line wrapping
 
-**Implementation Details:**
-See **[WEBVIEW_CUSTOM_COMPLETIONS.md](./WEBVIEW_CUSTOM_COMPLETIONS.md)** for:
+**Implementation Files:**
 
-- Complete HTML structure (contenteditable editor + dropdown)
-- Full CSS styling (completions, links, tooltips)
-- Complete JavaScript implementation (PromptEditor class)
-- Extension host integration (handleCompletionRequest, handleLinkClick)
-- Testing plan and Monaco fallback option
+- `src/ui/webview/codemirror-editor.js` - Main editor class (CodeMirrorPromptEditor)
+- `src/ui/webview/codemirror-bundle-source.js` - CodeMirror modules bundled
+- `src/ui/webview/codemirror-loader.js` - Async loader for CodeMirror
+- `src/ui/webview/typo.js` - Typo.js spell checker library
+- `src/ui/webview/dictionaries/en_US/` - Hunspell dictionary files (.aff, .dic)
+- `src/ui/FlightPathDashboardProvider.ts` - Extension host completion handling
 
 **Estimated Effort:** 3-5 days
 

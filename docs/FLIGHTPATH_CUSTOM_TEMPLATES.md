@@ -57,8 +57,11 @@ src/templates/
 ├── workflows/
 │   ├── manifest.json
 │   ├── simple-feature.flightpath.json
+│   ├── simple-feature.flightpath.yaml
 │   ├── fix-tests.flightpath.json
-│   └── full-feature.flightpath.json
+│   ├── fix-tests.flightpath.yaml
+│   ├── full-feature.flightpath.json
+│   └── full-feature.flightpath.yaml
 ├── check_condition.js
 ├── check_condition.py
 ├── check_condition.sh
@@ -153,15 +156,15 @@ The `manifest.json` lists available agents:
 ```json
 {
   "version": "1.0",
-  "description": "FlightPath custom agents",
+  "description": "FlightPath custom agents for Copilot CLI and Claude CLI",
   "agents": [
     {
       "id": "flightpath-orchestrator",
       "label": "FlightPath Orchestrator",
-      "description": "Creates workflow files from feature requests",
+      "description": "Creates structured FlightPath workflow files from feature requests. Converts your task into a Plan→Implement→Review→Docs→Commit workflow.",
       "file": "flightpath-orchestrator.agent.md",
       "tags": ["workflow", "planning", "automation"],
-      "icon": "$(rocket)"
+      "icon": "$(compass)"
     }
   ]
 }
@@ -179,12 +182,11 @@ Agent templates are stored in:
 
 ## Build System
 
-Templates are copied during build via esbuild plugins:
+Templates are copied during build via a single esbuild plugin:
 
 ```javascript
-// copyTemplatesPlugin - copies scripts
-// copyAgentTemplatesPlugin - copies agents
-// copyWorkflowTemplatesPlugin - copies workflows (future)
+// copyTemplatesPlugin - copies entire src/templates/ directory recursively
+// Includes: scripts, agents/, workflows/ subdirectories
 ```
 
 Source files in `src/templates/` → Output in `out/templates/`

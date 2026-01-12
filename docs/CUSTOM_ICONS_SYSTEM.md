@@ -181,7 +181,7 @@ Where `{filename}` is the SVG filename without extension:
 
 ```bash
 # 1. Download SVG from Streamline (or create your own)
-# 2. Save to src/ui/webview/icons/my-icon.svg
+# 2. Save to src/ui/icons/my-icon.svg
 # 3. Run build
 npm run generate-icons
 
