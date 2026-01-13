@@ -17,6 +17,8 @@
  * - togglePropertiesDrawer: Toggle properties drawer open/closed
  * - toggleEditorSection: Toggle editor section collapse
  * - restoreEditorCollapseState: Restore collapse state from localStorage
+ * - refreshModelDropdown: Refresh model dropdown with current provider's models
+ * - cancelEdit: Cancel editing and return to new prompt mode (also used when workflow changes)
  */
 (function () {
   // Import constants and utilities from global scope
@@ -1121,5 +1123,6 @@
     toggleEditorSection,
     restoreEditorCollapseState,
     refreshModelDropdown,
+    cancelEdit,
   };
 })();

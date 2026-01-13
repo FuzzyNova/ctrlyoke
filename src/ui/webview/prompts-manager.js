@@ -154,6 +154,11 @@
       hasActiveQueue: prompts.length > 0,
     });
 
+    // Reset editor to new prompt mode (workflow context changed)
+    if (editorManager && editorManager.cancelEdit) {
+      editorManager.cancelEdit();
+    }
+
     // Reset prompt counter
     elements.promptCounter.textContent = "";
 
@@ -200,6 +205,11 @@
     stateManager.updateEditorState({
       hasActiveQueue: prompts.length > 0,
     });
+
+    // Reset editor to new prompt mode (workflow context changed)
+    if (editorManager && editorManager.cancelEdit) {
+      editorManager.cancelEdit();
+    }
 
     // Update prompt counter
     updatePromptCounter();
