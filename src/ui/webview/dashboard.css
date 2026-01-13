@@ -239,12 +239,30 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300px;
+  flex: 1 1 auto;
+  min-width: 0; /* Required for text-overflow to work in flex items */
+}
+
+#workflow-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0; /* Required for text-overflow to work */
+  overflow: hidden;
+  flex: 1;
 }
 
 .status-separator {
   color: var(--vscode-descriptionForeground);
   opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* Hide separator on narrow screens */
+@media (max-width: 600px) {
+  .status-separator {
+    display: none;
+  }
 }
 
 /* Override shared btn-small for dashboard - match control button height */
@@ -263,6 +281,36 @@ body {
   letter-spacing: 0.5px;
   flex-shrink: 0;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.execution-state-icon {
+  font-size: 13px;
+}
+
+/* Hide text on narrow screens, show icon only */
+@media (max-width: 600px) {
+  #execution-state {
+    padding: 4px 8px;
+  }
+  .execution-state-text {
+    display: none;
+  }
+}
+
+/* On very narrow screens, shrink workflow name to ~1 word */
+@media (max-width: 400px) {
+  #workflow-name {
+    max-width: 50px; /* Allow roughly 1 word to show */
+  }
+  #execution-state {
+    padding: 4px 6px;
+  }
+  #workflow-display {
+    gap: 4px; /* Reduce gap to save space */
+  }
 }
 
 .execution-state-idle {
@@ -337,10 +385,25 @@ body {
   max-width: 400px;
   text-align: left;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive sizing for narrow screens */
+@media (max-width: 600px) {
+  .workflow-button-main {
+    min-width: 100px;
+    padding: 4px 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .workflow-button-main {
+    min-width: 30px;
+    padding: 4px 6px;
+  }
 }
 
 .workflow-button-main:hover {

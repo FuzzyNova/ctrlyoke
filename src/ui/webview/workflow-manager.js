@@ -209,10 +209,7 @@
 
     // Window resize handler - reposition dropdown if open
     window.addEventListener("resize", () => {
-      if (
-        elements.workflowRecentMenu &&
-        !elements.workflowRecentMenu.hidden
-      ) {
+      if (elements.workflowRecentMenu && !elements.workflowRecentMenu.hidden) {
         positionDropdown();
       }
     });
@@ -527,8 +524,21 @@
         elements.statusSeparator.style.display = "inline";
       }
       if (elements.executionState) {
-        elements.executionState.style.display = "inline";
-        elements.executionState.textContent = executionState;
+        elements.executionState.style.display = "inline-flex";
+
+        // Map execution state to codicon
+        const stateIconMap = {
+          [EXECUTION_STATES.IDLE]: "circle-outline",
+          [EXECUTION_STATES.RUNNING]: "play",
+          [EXECUTION_STATES.PAUSED]: "debug-pause",
+          [EXECUTION_STATES.STOPPED]: "circle-slash",
+          [EXECUTION_STATES.CANCELLING]: "close",
+          [EXECUTION_STATES.COMPLETED]: "check",
+          [EXECUTION_STATES.ERROR]: "error",
+        };
+
+        const iconName = stateIconMap[executionState] || "circle-outline";
+        elements.executionState.innerHTML = `<i class="codicon codicon-${iconName} execution-state-icon"></i><span class="execution-state-text">${executionState}</span>`;
         elements.executionState.className = `execution-state-${executionState.toLowerCase()}`;
       }
     } else {
