@@ -381,13 +381,12 @@ export class CliResponseParser {
   /**
    * Parse Copilot CLI text output
    *
-   * Copilot outputs plain text with statistics appended:
-   * "Response text here
+   * Copilot CLI outputs:
+   * - Response to stdout: "Response text here\n\n"
+   * - Statistics to stderr: "Total usage est: ...\nUsage by model: ..."
    *
-   * Total usage est: 1234 prompt + 5678 completion"
-   *
-   * @param stdout CLI stdout
-   * @param stderr CLI stderr
+   * @param stdout CLI stdout (response only)
+   * @param stderr CLI stderr (statistics + errors)
    * @param exitCode Process exit code
    * @returns Parsed CLI result
    */
@@ -396,13 +395,12 @@ export class CliResponseParser {
     stderr: string,
     exitCode: number
   ): CopilotCliResult {
-    // Split on statistics section (starts with "Total usage est:")
-    const parts = stdout.split(/\n\n(?=Total usage est:)/);
-
+    // Statistics are written to stderr (not stdout!)
+    // Response is in stdout, statistics in stderr
     return {
       success: exitCode === 0,
-      response: parts[0]?.trim() || "",
-      statistics: parts[1]?.trim() || "",
+      response: stdout.trim(),
+      statistics: stderr.trim(), // Statistics are in stderr!
       error: exitCode !== 0 ? stderr : undefined,
       exitCode,
     };

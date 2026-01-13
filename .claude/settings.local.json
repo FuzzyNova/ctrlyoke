@@ -26,7 +26,8 @@
       "WebFetch(domain:codemirror.net)",
       "WebFetch(domain:github.com)",
       "Bash(grep:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(copilot:*)"
     ],
     "deny": [],
     "ask": []
