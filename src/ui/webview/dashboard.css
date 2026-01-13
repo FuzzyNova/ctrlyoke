@@ -699,6 +699,12 @@ button:disabled {
   order: 1;
 }
 
+/* Vertical swapped mode - editor is now on top, needs bottom border instead */
+#output-editor-container.swapped:not(.layout-horizontal) #editor-section {
+  border-top: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
 /* Horizontal layout mode - only on wide screens */
 @media (min-width: 800px) {
   #output-editor-container.layout-horizontal {
@@ -720,9 +726,10 @@ button:disabled {
   }
 
   /* When swapped in horizontal mode, adjust borders */
+  /* Editor on left, Output on right - only one border between them */
   #output-editor-container.layout-horizontal.swapped #output-section {
     border-right: none;
-    border-left: 1px solid var(--border-color);
+    border-left: none;
   }
 
   #output-editor-container.layout-horizontal.swapped #editor-section {
