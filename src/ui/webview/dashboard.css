@@ -1846,7 +1846,7 @@ button:disabled {
 }
 
 .properties-drawer.open {
-  transform: translateY(0);
+  transform: translateY(2px);
 }
 
 .drawer-content {
@@ -1860,7 +1860,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-md);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   background: var(--bg-secondary);
@@ -1881,8 +1881,6 @@ button:disabled {
   background: none;
   border: none;
   color: var(--vscode-foreground);
-  font-size: 24px;
-  line-height: 1;
   cursor: pointer;
   padding: 0;
   width: 28px;
