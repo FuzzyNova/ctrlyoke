@@ -237,6 +237,7 @@
    */
   function openPropertiesDrawer() {
     elements.propertiesDrawer.classList.add("open");
+    elements.btnProperties.classList.add("active");
   }
 
   /**
@@ -244,6 +245,7 @@
    */
   function closePropertiesDrawer() {
     elements.propertiesDrawer.classList.remove("open");
+    elements.btnProperties.classList.remove("active");
   }
 
   // ============================================================================
@@ -591,26 +593,19 @@
    */
   function updateEditorButtons() {
     const pendingPrompts = hasPendingPrompts();
+    const runTextSpan = elements.btnEditorRun.querySelector(".btn-text");
 
     if (pendingPrompts) {
       // When there are pending prompts: Run button shows "Run Next" (insert next, run ASAP)
-      elements.btnEditorRun.innerHTML =
-        '<i class="codicon codicon-send"></i>\n                  Run Next';
+      if (runTextSpan) {
+        runTextSpan.textContent = "Run Next";
+      }
       elements.btnEditorRun.title = "Insert next in queue and run immediately";
-
-      // Queue button stays the same (append to end)
-      elements.btnEditorQueue.innerHTML =
-        '<i class="codicon codicon-add"></i>\n                  Queue';
-      elements.btnEditorQueue.title = "Add prompt to end of queue";
     } else {
       // No pending prompts: Run button shows "Run" (create/append to end + run)
-      elements.btnEditorRun.innerHTML =
-        '<i class="codicon codicon-send"></i>\n                  Run';
-
-      // Update tooltip based on state (handled by updateButtonTooltips)
-      // Queue button stays the same
-      elements.btnEditorQueue.innerHTML =
-        '<i class="codicon codicon-add"></i>\n                  Queue';
+      if (runTextSpan) {
+        runTextSpan.textContent = "Run";
+      }
 
       // Let updateButtonTooltips handle the detailed tooltip text
       updateButtonTooltips();

@@ -1761,6 +1761,30 @@ button:disabled {
   border-top: 1px solid var(--border-color);
   background: var(--bg-secondary);
   min-height: auto;
+  container-type: inline-size;
+}
+
+/* Hide button text in editor footer when width < 440px */
+@container (max-width: 439px) {
+  .editor-footer .btn-text {
+    display: none;
+  }
+
+  /* Adjust button padding when text is hidden */
+  .editor-footer button {
+    padding: 4px 8px;
+    min-width: 32px;
+  }
+
+  /* Properties button - ensure icon-only layout */
+  #btn-properties .codicon {
+    margin-right: 0;
+  }
+
+  /* Editor action buttons - icon-only layout */
+  .editor-actions button .codicon {
+    margin-right: 0;
+  }
 }
 
 .editor-footer-left {
@@ -1824,6 +1848,22 @@ button:disabled {
   vertical-align: middle;
   margin-right: 2px;
   transform: translateY(-1px);
+}
+
+/* Properties button - align icon */
+#btn-properties .codicon {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* Properties button active state (when drawer is open) */
+#btn-properties.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+#btn-properties.active:hover {
+  background: var(--vscode-button-hoverBackground);
 }
 
 /* ============================================================================
