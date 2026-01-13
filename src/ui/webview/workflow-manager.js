@@ -207,6 +207,16 @@
       }
     });
 
+    // Window resize handler - reposition dropdown if open
+    window.addEventListener("resize", () => {
+      if (
+        elements.workflowRecentMenu &&
+        !elements.workflowRecentMenu.hidden
+      ) {
+        positionDropdown();
+      }
+    });
+
     // Modal event listeners
     elements.modalOverlay.addEventListener("click", () => {
       closeModal();
@@ -648,10 +658,68 @@
     elements.workflowRecentMenu.hidden = false;
     elements.btnWorkflowStatusDropdown.setAttribute("aria-expanded", "true");
 
+    // Position dropdown relative to button
+    positionDropdown();
+
     // Add click-outside listener
     setTimeout(() => {
       document.addEventListener("click", handleRecentWorkflowsClickOutside);
     }, 0);
+  }
+
+  /**
+   * Position the dropdown menu to stay within viewport bounds
+   */
+  function positionDropdown() {
+    if (!elements.workflowRecentMenu || !elements.workflowSplitButton) return;
+
+    const dropdown = elements.workflowRecentMenu;
+    const button = elements.workflowSplitButton;
+
+    // Get button position relative to viewport
+    const buttonRect = button.getBoundingClientRect();
+
+    // Calculate available space
+    const spaceBelow = window.innerHeight - buttonRect.bottom;
+    const spaceAbove = buttonRect.top;
+    const viewportWidth = window.innerWidth;
+
+    // Determine if dropdown should appear above or below button
+    const dropdownHeight = Math.min(400, window.innerHeight * 0.7);
+    const showAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+    // Position vertically
+    if (showAbove) {
+      // Position above button
+      dropdown.style.top = "auto";
+      dropdown.style.bottom = `${window.innerHeight - buttonRect.top + 4}px`;
+      dropdown.style.maxHeight = `${Math.min(400, spaceAbove - 8)}px`;
+    } else {
+      // Position below button (default)
+      dropdown.style.top = `${buttonRect.bottom + 4}px`;
+      dropdown.style.bottom = "auto";
+      dropdown.style.maxHeight = `${Math.min(400, spaceBelow - 8)}px`;
+    }
+
+    // Position horizontally - center on button
+    const buttonCenter = buttonRect.left + buttonRect.width / 2;
+    const dropdownWidth = Math.min(500, viewportWidth * 0.9);
+
+    // Calculate left position to center dropdown
+    let leftPosition = buttonCenter;
+
+    // Adjust if dropdown would go off screen
+    const halfWidth = dropdownWidth / 2;
+    if (leftPosition - halfWidth < 8) {
+      // Too far left
+      leftPosition = halfWidth + 8;
+    } else if (leftPosition + halfWidth > viewportWidth - 8) {
+      // Too far right
+      leftPosition = viewportWidth - halfWidth - 8;
+    }
+
+    dropdown.style.left = `${leftPosition}px`;
+    dropdown.style.width = `${dropdownWidth}px`;
   }
 
   /**

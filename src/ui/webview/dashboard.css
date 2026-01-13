@@ -389,12 +389,13 @@ body {
 /* === Dropdown Menu === */
 
 .workflow-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed; /* Changed from absolute to fixed for viewport-aware positioning */
+  /* Position will be set dynamically via JavaScript */
+  left: 50%;
+  transform: translateX(-50%);
   min-width: 300px;
-  max-width: 500px;
-  max-height: 400px;
+  max-width: min(500px, 90vw); /* Responsive to viewport width */
+  max-height: min(400px, 70vh); /* Responsive to viewport height */
   background-color: var(--vscode-dropdown-background);
   border: 1px solid var(--vscode-dropdown-border);
   border-radius: 4px;
@@ -424,7 +425,9 @@ body {
 /* Menu items container (scrollable) */
 .workflow-menu-items {
   overflow-y: auto;
-  max-height: 320px;
+  overflow-x: hidden;
+  flex: 1; /* Allow to fill available space */
+  min-height: 0; /* Enable flex shrinking */
   padding: 4px 0;
 }
 
