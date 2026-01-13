@@ -575,6 +575,7 @@ export class TuiStreamProcessor {
 
     // Second pass: emit lines that are NEW or appear MORE times than before
     const emittedInCurrentPass = new Map<string, number>();
+    const occurrenceInCurrentPass = new Map<string, number>(); // Track which occurrence number (1st, 2nd, 3rd...)
     for (const line of lines) {
       const trimmed = line.trim();
 
@@ -599,25 +600,27 @@ export class TuiStreamProcessor {
         this.consecutiveBlankLines = 0;
       }
 
-      // Check if we've already emitted this line in this pass
+      // Track occurrence number (which instance of this line we're seeing: 1st, 2nd, 3rd...)
+      const occurrenceNum = (occurrenceInCurrentPass.get(trimmed) || 0) + 1;
+      occurrenceInCurrentPass.set(trimmed, occurrenceNum);
+
       const emittedCount = emittedInCurrentPass.get(trimmed) || 0;
       const prevCount = prevScreenCounts.get(trimmed) || 0;
 
-      // Emit if: this is a NEW occurrence beyond what was in previous screen
-      if (
-        emittedCount < currentScreenCounts.get(trimmed)! &&
-        emittedCount >= prevCount
-      ) {
+      // Emit if: this occurrence is BEYOND what existed in the previous screen
+      // Example: prevCount=1, currentCount=3 → emit occurrences 2 and 3 (occurrenceNum > prevCount)
+      if (occurrenceNum > prevCount) {
         newLines.push(line);
         emittedInCurrentPass.set(trimmed, emittedCount + 1);
       }
     }
 
     // Update emittedContent for next screen comparison
-    // Replace with current screen's line counts
-    emittedContent.clear();
+    // ACCUMULATE counts across screens (don't clear existing counts!)
+    // Keep the maximum count seen for each line across all screens
     currentScreenCounts.forEach((count, line) => {
-      emittedContent.set(line, count);
+      const prevCount = emittedContent.get(line) || 0;
+      emittedContent.set(line, Math.max(prevCount, count));
     });
 
     if (newLines.length === 0) {
