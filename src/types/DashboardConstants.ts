@@ -66,6 +66,7 @@ export const MESSAGE_TYPES = {
   CHANGE_EXECUTION_MODE: "changeExecutionMode",
   CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
   CHANGE_NEW_CHAT_SESSION: "changeNewChatSession",
+  OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
 

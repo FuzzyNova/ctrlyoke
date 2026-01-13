@@ -85,3 +85,39 @@ body {
   color: var(--fg-secondary);
   font-style: italic;
 }
+
+/* More Settings Button */
+.more-settings-container {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.more-settings-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 12px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.more-settings-btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.more-settings-btn:active {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.more-settings-btn i {
+  font-size: 14px;
+}

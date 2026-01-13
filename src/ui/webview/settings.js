@@ -65,6 +65,7 @@
       "new-chat-session-checkbox"
     ),
     dynamicQueueCheckbox: document.getElementById("dynamic-queue-checkbox"),
+    moreSettingsBtn: document.getElementById("more-settings-btn"),
   };
 
   // Event listeners
@@ -116,6 +117,12 @@
     vscode.postMessage({
       type: MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE,
       enabled: state.dynamicQueueEnabled,
+    });
+  });
+
+  elements.moreSettingsBtn.addEventListener("click", () => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.OPEN_SETTINGS,
     });
   });
 

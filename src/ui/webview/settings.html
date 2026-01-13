@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}};"
+      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}};"
     />
+    <link rel="stylesheet" href="{{codiconsUri}}" />
     <link rel="stylesheet" href="{{sharedStyleUri}}" />
     <link rel="stylesheet" href="{{styleUri}}" />
     <title>FlightPath Settings</title>
@@ -82,6 +83,14 @@
             >Allow prompts to extend the workflow queue</span
           >
         </div>
+      </div>
+
+      <!-- More Settings Button (centered at bottom) -->
+      <div class="more-settings-container">
+        <button id="more-settings-btn" class="more-settings-btn" title="Open FlightPath settings in VS Code">
+          <i class="codicon codicon-settings-gear"></i>
+          <span>More Settings</span>
+        </button>
       </div>
     </div>
 

@@ -153,6 +153,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE:
         this.handleDynamicQueueChange(message.enabled);
         break;
+      case MESSAGE_TYPES.OPEN_SETTINGS:
+        this.handleOpenSettings();
+        break;
     }
   }
 
@@ -432,7 +435,13 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
-    const validAgents = ["default", "workspace", "vscode", "terminal", "github"];
+    const validAgents = [
+      "default",
+      "workspace",
+      "vscode",
+      "terminal",
+      "github",
+    ];
     if (!validAgents.includes(agent)) {
       Log.error(`Invalid agent: ${agent}`);
       return;
@@ -486,6 +495,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private handleOpenSettings(): void {
+    // Open VS Code settings focused on FlightPath extension
+    vscode.commands.executeCommand(
+      "workbench.action.openSettings",
+      "@flightpath"
+    );
+    Log.info("📋 Opened VS Code settings for FlightPath");
+  }
+
   private getHtmlContent(webview: vscode.Webview): string {
     const constantsUri = webview.asWebviewUri(
       this.getWebviewPath("DashboardConstants.js")
@@ -494,6 +512,10 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     const styleUri = webview.asWebviewUri(this.getWebviewPath("settings.css"));
     const sharedStyleUri = webview.asWebviewUri(
       this.getWebviewPath("shared.css")
+    );
+    // Get codicon CSS from copied files in webview directory
+    const codiconsUri = webview.asWebviewUri(
+      this.getWebviewPath("codicons", "codicon.css")
     );
 
     // Read HTML template and replace placeholders
@@ -518,6 +540,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())
+      .replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString())
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;
