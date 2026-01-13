@@ -203,8 +203,8 @@ body {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  flex: 1 1 0;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: visible; /* Allow dropdown to overflow action buttons container */
 }
 
@@ -212,7 +212,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  flex: 1 1 0;
+  flex: 1 1 auto;
   justify-content: center;
   min-width: 0;
 }
@@ -594,8 +594,9 @@ body {
 #controls {
   display: flex;
   gap: var(--spacing-xs);
-  flex: 1 1 0;
+  flex: 1 1 auto;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 /* Override shared button styles for dashboard */
@@ -845,38 +846,10 @@ button:disabled {
     min-height: 0;
   }
 
-  #header {
-    padding: var(--spacing-sm);
-    gap: var(--spacing-xs) var(--spacing-sm);
-  }
-
-  #action-buttons {
-    flex: 1 1 100%;
-    order: 1;
-  }
-
-  #workflow-status {
-    order: 2;
-  }
-
-  #controls {
-    order: 3;
-  }
-
   /* Hide layout toggle and its divider on narrow screens */
   #layout-toggle,
   #layout-toggle + .button-divider {
     display: none;
-  }
-
-  .btn-small {
-    padding: 2px 6px;
-    font-size: 11px;
-  }
-
-  #controls button {
-    min-width: 26px;
-    padding: 3px 6px;
   }
 
   #output-section {
