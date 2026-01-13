@@ -552,45 +552,18 @@ export class FlightPathManager {
       if (currentSize === 0) {
         Log.info("Empty workflow, creating new workflow in IDLE state");
 
-        // Check if there's already a working file (from a custom-named workflow)
-        let workingFilePath = queueState.workingFilePath;
+        // Use custom workflow name if it exists, otherwise use filename
+        const displayName = queueState.workflowName || path.basename(filePath);
+        const workflowType = queueState.workflowName
+          ? `workflow "${queueState.workflowName}"`
+          : "new workflow";
 
-        // Only create a new working file if one doesn't exist
-        if (!workingFilePath) {
-          const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-          if (workspaceFolder) {
-            try {
-              workingFilePath = await this.promptQueue.createWorkingFile(
-                path.basename(filePath),
-                parsed.prompts,
-                workspaceFolder
-              );
-              Log.info(`Created working file: ${workingFilePath}`);
-            } catch (error) {
-              Log.error("Failed to create working file:", error);
-            }
-          }
-        } else {
-          Log.info(`Reusing existing working file: ${workingFilePath}`);
-        }
-
-        // Load prompts in IDLE state (don't execute)
-        this.promptQueue.loadPrompts(parsed.prompts, workingFilePath);
-
-        // Update dashboard
-        if (this.dashboardProvider) {
-          // Use custom workflow name if it exists, otherwise use filename
-          const displayName = queueState.workflowName || path.basename(filePath);
-          this.dashboardProvider.updateFileSelected(displayName, parsed.prompts);
-        }
-
-        // Set current prompt file
-        this.currentPromptFile = { filePath, promptFile: parsed };
-        this.setupPromptFileWatcher(filePath);
-
-        // Show notification
-        const workflowType = queueState.workflowName ? `workflow "${queueState.workflowName}"` : "new workflow";
-        vscode.window.showInformationMessage(
+        // Use single-sourced initialization logic
+        await this.initializeNewWorkflow(
+          parsed.prompts,
+          path.basename(filePath),
+          filePath,
+          true, // reuseExistingWorkingFile
           `Queued ${parsed.prompts.length} prompt(s) to ${workflowType}`
         );
         return;
@@ -1217,6 +1190,86 @@ export class FlightPathManager {
   }
 
   /**
+   * Initialize a new workflow with prompts
+   * Handles working file creation, queue loading, and dashboard updates
+   * Single source of truth for workflow initialization across all entry points
+   *
+   * @param prompts - Array of prompt items
+   * @param displayName - Display name for dashboard
+   * @param originalFilePath - Original file path (for file-based workflows)
+   * @param reuseExistingWorkingFile - Check for existing working file first
+   * @param notificationMessage - Optional notification to show user
+   * @returns Created working file path (if successful)
+   */
+  private async initializeNewWorkflow(
+    prompts: PromptItem[],
+    displayName: string,
+    originalFilePath?: string,
+    reuseExistingWorkingFile: boolean = false,
+    notificationMessage?: string
+  ): Promise<string | undefined> {
+    // Check for existing working file (appendFromFile scenario)
+    let workingFilePath: string | undefined;
+    if (reuseExistingWorkingFile) {
+      const queueState = this.promptQueue.getState();
+      workingFilePath = queueState.workingFilePath;
+      if (workingFilePath) {
+        Log.info(`Reusing existing working file: ${workingFilePath}`);
+      }
+    }
+
+    // Create new working file if needed
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workingFilePath && workspaceFolder) {
+      try {
+        workingFilePath = await this.promptQueue.createWorkingFile(
+          displayName,
+          prompts,
+          workspaceFolder
+        );
+        Log.info(`✅ Created working file: ${workingFilePath}`);
+      } catch (error) {
+        Log.error("Failed to create working file:", error);
+        // Continue without working file (MCP won't work but execution can proceed)
+      }
+    } else if (!workingFilePath) {
+      Log.warn(
+        "No workspace folder, skipping working file creation (MCP won't work)"
+      );
+    }
+
+    // Load prompts into queue
+    this.promptQueue.loadPrompts(prompts, workingFilePath);
+
+    // Update dashboard
+    if (this.dashboardProvider) {
+      this.dashboardProvider.updateFileSelected(displayName, prompts);
+    }
+
+    // Set current prompt file for tracking
+    if (originalFilePath) {
+      this.currentPromptFile = {
+        filePath: originalFilePath,
+        promptFile: { prompts },
+      };
+      this.setupPromptFileWatcher(originalFilePath);
+    } else {
+      // Ephemeral prompts use generated filename as tracking ID
+      this.currentPromptFile = {
+        filePath: displayName,
+        promptFile: { prompts },
+      };
+    }
+
+    // Show notification if provided
+    if (notificationMessage) {
+      vscode.window.showInformationMessage(notificationMessage);
+    }
+
+    return workingFilePath;
+  }
+
+  /**
    * Execute an ephemeral prompt from the dashboard editor
    * @param text - Prompt text
    * @param properties - PromptItem properties (provider, model, etc.)
@@ -1343,147 +1396,50 @@ export class FlightPathManager {
           : QUEUE_POSITION.END;
     }
 
-    if (shouldRun) {
-      // RUN or RUN_NEXT: Append + ensure workflow runs
-      if (!hasWorkflow) {
-        // No workflow: Create new workflow + run immediately
-        let workingFilePath: string | undefined;
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!hasWorkflow) {
+      // No workflow exists: Create new workflow (DRY - single code path)
+      await this.initializeNewWorkflow([promptItem], generatedFileName);
 
-        if (workspaceFolder) {
-          try {
-            workingFilePath = await this.promptQueue.createWorkingFile(
-              generatedFileName,
-              [promptItem],
-              workspaceFolder
-            );
-            Log.info(
-              `✅ Created working file for ephemeral prompt: ${workingFilePath}`
-            );
-          } catch (error) {
-            Log.error(
-              "Failed to create working file for ephemeral prompt:",
-              error
-            );
-          }
-        } else {
-          Log.warn(
-            "No workspace folder, skipping working file creation (MCP won't work)"
-          );
-        }
-
-        // Create new single-prompt workflow
-        this.promptQueue.loadPrompts([promptItem], workingFilePath);
-
-        // Update dashboard
-        if (this.dashboardProvider) {
-          this.dashboardProvider.updateFileSelected(generatedFileName, [
-            promptItem,
-          ]);
-        }
-
-        // Set current prompt file
-        this.currentPromptFile = {
-          filePath: generatedFileName,
-          promptFile: { prompts: [promptItem] },
-        };
-
-        // Execute immediately
+      // Execute immediately if shouldRun=true
+      if (shouldRun) {
         await this.executeLoadedPromptFile();
-      } else {
-        // Workflow exists: Append with specified position (end or next)
-        await this.promptQueue.appendPrompts(
-          [promptItem],
-          "Dashboard editor",
-          position
+        Log.info(
+          `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
         );
+      } else {
+        Log.info(
+          `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
+        );
+      }
+    } else {
+      // Workflow exists: Append with specified position
+      await this.promptQueue.appendPrompts(
+        [promptItem],
+        "Dashboard editor",
+        position
+      );
 
-        // Notify dashboard
-        if (this.dashboardProvider) {
-          const updatedState = this.promptQueue.getState();
-          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
-        }
+      // Notify dashboard
+      if (this.dashboardProvider) {
+        const updatedState = this.promptQueue.getState();
+        this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+      }
 
-        // If idle (never started): Start from beginning
-        // If completed: Resume execution (continueFromCurrent=true preserves history)
-        // If stopped (from Queue button on completed queue): Resume from current
-        // If running: Continue (appending automatically continues)
+      // Execute if shouldRun=true and queue is idle/completed/stopped
+      if (shouldRun) {
         const isStopped = currentState.status === EXECUTION_STATES.STOPPED;
         if (isIdle || isCompleted || isStopped) {
           // When resuming completed/stopped queue or continuing idle queue, preserve existing state
           await this.executeLoadedPromptFile(undefined, true);
         }
-      }
-
-      Log.info(
-        `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
-      );
-    } else {
-      // QUEUE or QUEUE_NEXT: Append only, preserve current state
-      if (!hasWorkflow) {
-        // No workflow: Create new workflow (idle, don't run)
-        let workingFilePath: string | undefined;
-        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-
-        if (workspaceFolder) {
-          try {
-            workingFilePath = await this.promptQueue.createWorkingFile(
-              generatedFileName,
-              [promptItem],
-              workspaceFolder
-            );
-            Log.info(
-              `✅ Created working file for ephemeral prompt: ${workingFilePath}`
-            );
-          } catch (error) {
-            Log.error(
-              "Failed to create working file for ephemeral prompt:",
-              error
-            );
-          }
-        } else {
-          Log.warn(
-            "No workspace folder, skipping working file creation (MCP won't work)"
-          );
-        }
-
-        // Create new single-prompt workflow (idle)
-        this.promptQueue.loadPrompts([promptItem], workingFilePath);
-
-        // Update dashboard
-        if (this.dashboardProvider) {
-          this.dashboardProvider.updateFileSelected(generatedFileName, [
-            promptItem,
-          ]);
-        }
-
-        // Set current prompt file
-        this.currentPromptFile = {
-          filePath: generatedFileName,
-          promptFile: { prompts: [promptItem] },
-        };
-
-        // Don't execute - leave in idle state
-      } else {
-        // Workflow exists: Append with specified position (preserve current state)
-        await this.promptQueue.appendPrompts(
-          [promptItem],
-          "Dashboard editor",
-          position
+        Log.info(
+          `Send prompt (run, position=${position}): ${text.substring(0, 50)}...`
         );
-
-        // Notify dashboard
-        if (this.dashboardProvider) {
-          const updatedState = this.promptQueue.getState();
-          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
-        }
-
-        // Don't change execution state - just append
+      } else {
+        Log.info(
+          `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
+        );
       }
-
-      Log.info(
-        `Add prompt (no run, position=${position}): ${text.substring(0, 50)}...`
-      );
     }
   }
 
