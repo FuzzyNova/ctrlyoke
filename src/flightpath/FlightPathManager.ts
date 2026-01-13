@@ -547,12 +547,52 @@ export class FlightPathManager {
       // 2. Check queue state
       const queueState = this.promptQueue.getState();
       const currentSize = queueState.prompts.length;
-      const isCompleted = queueState.status === EXECUTION_STATES.COMPLETED;
 
-      // If no workflow is loaded (truly empty queue), treat as "Run with FlightPath"
+      // If no workflow is loaded (truly empty queue), create new workflow in IDLE state
       if (currentSize === 0) {
-        Log.info("Empty workflow, treating queue as run");
-        await this.executePromptFile(filePath);
+        Log.info("Empty workflow, creating new workflow in IDLE state");
+
+        // Check if there's already a working file (from a custom-named workflow)
+        let workingFilePath = queueState.workingFilePath;
+
+        // Only create a new working file if one doesn't exist
+        if (!workingFilePath) {
+          const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+          if (workspaceFolder) {
+            try {
+              workingFilePath = await this.promptQueue.createWorkingFile(
+                path.basename(filePath),
+                parsed.prompts,
+                workspaceFolder
+              );
+              Log.info(`Created working file: ${workingFilePath}`);
+            } catch (error) {
+              Log.error("Failed to create working file:", error);
+            }
+          }
+        } else {
+          Log.info(`Reusing existing working file: ${workingFilePath}`);
+        }
+
+        // Load prompts in IDLE state (don't execute)
+        this.promptQueue.loadPrompts(parsed.prompts, workingFilePath);
+
+        // Update dashboard
+        if (this.dashboardProvider) {
+          // Use custom workflow name if it exists, otherwise use filename
+          const displayName = queueState.workflowName || path.basename(filePath);
+          this.dashboardProvider.updateFileSelected(displayName, parsed.prompts);
+        }
+
+        // Set current prompt file
+        this.currentPromptFile = { filePath, promptFile: parsed };
+        this.setupPromptFileWatcher(filePath);
+
+        // Show notification
+        const workflowType = queueState.workflowName ? `workflow "${queueState.workflowName}"` : "new workflow";
+        vscode.window.showInformationMessage(
+          `Queued ${parsed.prompts.length} prompt(s) to ${workflowType}`
+        );
         return;
       }
 
@@ -592,23 +632,11 @@ export class FlightPathManager {
         );
       }
 
-      // 6. If queue was completed, trigger execution to continue (preserves history)
-      if (isCompleted) {
-        Log.info(
-          "Queue was completed, resuming execution with appended prompts"
-        );
-
-        // If no prompt file is loaded, update context WITHOUT clearing dashboard
-        if (!this.currentPromptFile) {
-          Log.info("No prompt file loaded, updating context (append mode)");
-          // Store the loaded file without calling loadPromptFile (which clears dashboard)
-          this.currentPromptFile = { filePath, promptFile: parsed };
-          // Set up file watcher for live reload
-          this.setupPromptFileWatcher(filePath);
-        }
-
-        // Continue execution from current position (preserves history)
-        await this.executeLoadedPromptFile(undefined, true);
+      // 6. Update prompt file context if needed (without executing)
+      if (!this.currentPromptFile) {
+        Log.info("No prompt file loaded, updating context (append mode)");
+        this.currentPromptFile = { filePath, promptFile: parsed };
+        this.setupPromptFileWatcher(filePath);
       }
 
       // 7. Show notification
