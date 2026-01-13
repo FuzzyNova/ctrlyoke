@@ -1,6 +1,7 @@
 const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
+const sass = require("sass");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -173,6 +174,21 @@ const copyWebviewPlugin = {
             console.log(
               `[copy] ${entry.name}/ -> out/ui/webview/${entry.name}/`
             );
+          } else if (entry.name.endsWith(".scss")) {
+            // Compile SCSS to CSS
+            try {
+              const result = sass.compile(srcPath);
+              const cssPath = outPath.replace(/\.scss$/, ".css");
+              fs.writeFileSync(cssPath, result.css);
+              console.log(
+                `[scss] ${entry.name} -> out/ui/webview/${entry.name.replace(/\.scss$/, ".css")}`
+              );
+            } catch (err) {
+              console.error(
+                `[scss] Error compiling ${entry.name}:`,
+                err.message
+              );
+            }
           } else {
             fs.copyFileSync(srcPath, outPath);
             console.log(`[copy] ${entry.name} -> out/ui/webview/${entry.name}`);

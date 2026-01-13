@@ -1,6 +1,16 @@
 /* FlightPath Dashboard Styles */
 /* Extends shared.css (linked in HTML) */
 
+/* ============================================================================
+   RESPONSIVE BREAKPOINTS - Single source of truth
+   Based on 2024 responsive design standards
+   ============================================================================ */
+:root {
+  /* Breakpoint values for media queries and container queries */
+  --breakpoint-mobile: 480px; /* Mobile devices */
+  --breakpoint-tablet: 768px; /* Tablets and larger screens */
+}
+
 /* Dashboard-specific overrides */
 html,
 body {
@@ -121,7 +131,8 @@ body {
 }
 
 /* Prompts section collapsed - wide screen (horizontal collapse) */
-@media (min-width: 800px) {
+@media (min-width: 768px) {
+  /* var(--breakpoint-tablet) */
   #prompts-section.collapsed {
     flex: 0 0 auto;
     min-width: auto;
@@ -152,7 +163,8 @@ body {
 }
 
 /* Prompts section collapsed - narrow screen (vertical collapse) */
-@media (max-width: 799px) {
+@media (max-width: 767px) {
+  /* Below var(--breakpoint-tablet) */
   #prompts-section.collapsed {
     flex: 0 0 auto;
     min-height: auto;
@@ -209,8 +221,9 @@ body {
   overflow: visible; /* Allow dropdown to overflow action buttons container */
 }
 
-/* Hide button text in action-buttons when width < 440px */
-@container (max-width: 439px) {
+/* Hide button text in action-buttons when width < 480px */
+@container (max-width: 479px) {
+  /* var(--breakpoint-mobile) - 1px */
   #action-buttons .btn-text {
     display: none;
   }
@@ -259,7 +272,8 @@ body {
 }
 
 /* Hide separator on narrow screens */
-@media (max-width: 600px) {
+@media (max-width: 767px) {
+  /* Below var(--breakpoint-tablet) */
   .status-separator {
     display: none;
   }
@@ -291,7 +305,8 @@ body {
 }
 
 /* Hide text on narrow screens, show icon only */
-@media (max-width: 600px) {
+@media (max-width: 767px) {
+  /* Below var(--breakpoint-tablet) */
   #execution-state {
     padding: 4px 8px;
   }
@@ -301,7 +316,8 @@ body {
 }
 
 /* On very narrow screens, shrink workflow name to ~1 word */
-@media (max-width: 400px) {
+@media (max-width: 479px) {
+  /* Below var(--breakpoint-mobile) */
   #workflow-name {
     max-width: 50px; /* Allow roughly 1 word to show */
   }
@@ -392,14 +408,16 @@ body {
 }
 
 /* Responsive sizing for narrow screens */
-@media (max-width: 600px) {
+@media (max-width: 767px) {
+  /* Below var(--breakpoint-tablet) */
   .workflow-button-main {
     min-width: 100px;
     padding: 4px 8px;
   }
 }
 
-@media (max-width: 400px) {
+@media (max-width: 479px) {
+  /* Below var(--breakpoint-mobile) */
   .workflow-button-main {
     min-width: 30px;
     padding: 4px 6px;
@@ -910,13 +928,15 @@ button:disabled {
   position: relative;
 }
 
-/* Wide layout: side-by-side (>= 800px) */
-@media (min-width: 800px) {
+/* Wide layout: side-by-side (>= 768px) */
+@media (min-width: 768px) {
+  /* var(--breakpoint-tablet) */
   /* Already defined above */
 }
 
-/* Narrow layout: stack everything (< 800px) */
-@media (max-width: 799px) {
+/* Narrow layout: stack everything (< 768px) */
+@media (max-width: 767px) {
+  /* Below var(--breakpoint-tablet) */
   #main-content {
     flex-direction: column;
   }
@@ -1836,8 +1856,9 @@ button:disabled {
   container-type: inline-size;
 }
 
-/* Hide button text in editor footer when width < 440px */
-@container (max-width: 439px) {
+/* Hide button text in editor footer when width < 480px */
+@container (max-width: 479px) {
+  /* var(--breakpoint-mobile) - 1px */
   .editor-footer .btn-text {
     display: none;
   }

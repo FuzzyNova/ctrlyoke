@@ -1,6 +1,50 @@
 /* FlightPath Shared Styles */
 /* Base styles for consistent look across all FlightPath webviews */
 
+/* ============================================================================
+   RESPONSIVE BREAKPOINTS - Shared across all webviews
+   ============================================================================ */
+$breakpoint-mobile: 480px; /* Mobile devices */
+$breakpoint-tablet: 768px; /* Tablets and larger screens */
+
+/* ============================================================================
+   MIXINS - Reusable patterns
+   ============================================================================ */
+
+/* Flexbox utilities */
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+}
+
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+@mixin flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Text utilities */
+@mixin truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@mixin no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Visual utilities */
+@mixin smooth-transition($properties: all, $duration: 0.2s) {
+  transition: $properties $duration ease;
+}
+
 :root {
   /* Theme colors from VS Code */
   --bg-primary: var(--vscode-editor-background);

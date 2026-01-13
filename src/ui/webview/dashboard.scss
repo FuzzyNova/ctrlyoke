@@ -1,0 +1,2007 @@
+/* FlightPath Dashboard Styles */
+/* Extends shared.scss (linked in HTML) */
+@use "shared" as *;
+
+/* Dashboard-specific overrides */
+html,
+body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  @include flex-column;
+  gap: 0;
+  height: 100vh;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+#header {
+  @include flex-center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: var(--spacing-sm) var(--spacing-md);
+  overflow: visible; /* Allow dropdown to overflow header */
+  max-width: 100%;
+  box-sizing: border-box;
+  container-type: inline-size;
+}
+
+/* Section headers with counters - override shared */
+.section-header {
+  @include flex-between;
+  margin-bottom: var(--spacing-xs);
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Section title group (h3 + collapse button) */
+.section-title-group {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  flex-shrink: 0;
+}
+
+/* Section icon (hidden by default, shown when collapsed) */
+.section-icon {
+  display: none;
+  font-size: 16px;
+  color: var(--fg-secondary);
+}
+
+/* Collapse button */
+.btn-collapse {
+  background: none;
+  border: none;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  padding: 2px 4px;
+  @include flex-center;
+  display: inline-flex;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 2px;
+  @include smooth-transition(background transform);
+
+  &:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+    color: var(--fg-primary);
+  }
+}
+
+.collapse-icon {
+  display: inline-block;
+  font-size: 12px;
+}
+
+/* Collapsed state - rotate icon */
+#output-section.collapsed .collapse-icon,
+#editor-section.collapsed .collapse-icon,
+#prompts-section.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+/* Hide content when collapsed */
+#prompts-section.collapsed #prompts-list,
+#output-section.collapsed #output-content,
+#editor-section.collapsed .prompt-editor-wrapper,
+#editor-section.collapsed .editor-footer,
+#editor-section.collapsed .editor-controls {
+  display: none;
+}
+
+/* Adjust section sizing when collapsed */
+#output-section.collapsed,
+#editor-section.collapsed,
+#prompts-section.collapsed {
+  flex: 0 0 auto;
+}
+
+/* When output is collapsed and editor is open, editor expands to fill space */
+#output-section.collapsed ~ #editor-section:not(.collapsed) {
+  flex: 1;
+  max-height: none;
+}
+
+/* Prompts section collapsed - wide screen (horizontal collapse) */
+@media (min-width: $breakpoint-tablet) {
+  #prompts-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  /* Stack icon below chevron for narrowest collapse */
+  #prompts-section.collapsed .section-title-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Show icon, hide text and counter in wide collapsed state */
+  #prompts-section.collapsed .section-icon {
+    display: inline-block;
+  }
+
+  #prompts-section.collapsed h3,
+  #prompts-section.collapsed .prompt-counter {
+    display: none;
+  }
+
+  /* When prompts collapsed, output-editor-container expands to fill space */
+  #prompts-section.collapsed ~ #output-editor-container {
+    flex: 1;
+  }
+}
+
+/* Prompts section collapsed - narrow screen (vertical collapse) */
+@media (max-width: $breakpoint-tablet - 1px) {
+  #prompts-section.collapsed {
+    flex: 0 0 auto;
+    min-height: auto;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  /* When prompts collapsed, output-editor-container expands upward */
+  #prompts-section.collapsed ~ #output-editor-container {
+    flex: 1;
+  }
+}
+
+.prompt-counter {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  font-weight: 500;
+}
+
+/* Autoscroll toggle */
+.autoscroll-toggle {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  font-size: 11px;
+  color: var(--fg-secondary);
+  cursor: pointer;
+  @include no-select;
+  flex-shrink: 0;
+  white-space: nowrap;
+
+  input[type="checkbox"] {
+    cursor: pointer;
+  }
+
+  &:hover {
+    color: var(--fg-primary);
+  }
+}
+
+/* Output controls container */
+.output-controls {
+  @include flex-center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+}
+
+#action-buttons {
+  @include flex-center;
+  gap: var(--spacing-sm);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible; /* Allow dropdown to overflow action buttons container */
+}
+
+/* Hide button text in action-buttons when width < 480px */
+@container (max-width: $breakpoint-mobile - 1px) {
+  #action-buttons .btn-text {
+    display: none;
+  }
+
+  /* Adjust button padding and gap when text is hidden */
+  #action-buttons .split-button-main {
+    padding: 4px 8px;
+    min-width: 32px;
+    gap: 0;
+  }
+}
+
+#workflow-status {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+}
+
+#workflow-name {
+  @include truncate;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--vscode-foreground);
+  flex: 1 1 auto;
+  min-width: 0; /* Required for text-overflow to work in flex items */
+}
+
+#workflow-display {
+  @include flex-center;
+  gap: 8px;
+  min-width: 0; /* Required for text-overflow to work */
+  overflow: hidden;
+  flex: 1;
+}
+
+.status-separator {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* Hide separator on narrow screens */
+@media (max-width: $breakpoint-tablet - 1px) {
+  .status-separator {
+    display: none;
+  }
+}
+
+/* Override shared btn-small for dashboard - match control button height */
+.btn-small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+/* Execution state badge */
+#execution-state {
+  @include flex-center;
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  gap: 4px;
+}
+
+.execution-state-icon {
+  font-size: 13px;
+}
+
+/* Hide text on narrow screens, show icon only */
+@media (max-width: $breakpoint-tablet - 1px) {
+  #execution-state {
+    padding: 4px 8px;
+  }
+  .execution-state-text {
+    display: none;
+  }
+}
+
+/* On very narrow screens, shrink workflow name to ~1 word */
+@media (max-width: $breakpoint-mobile - 1px) {
+  #workflow-name {
+    max-width: 50px; /* Allow roughly 1 word to show */
+  }
+  #execution-state {
+    padding: 4px 6px;
+  }
+  #workflow-display {
+    gap: 4px; /* Reduce gap to save space */
+  }
+}
+
+.execution-state-idle {
+  background: var(
+    --vscode-statusBarItem-prominentBackground,
+    rgba(128, 128, 128, 0.2)
+  );
+  color: var(--vscode-statusBarItem-prominentForeground, var(--fg-secondary));
+}
+
+.execution-state-running {
+  background: var(--vscode-progressBar-background, rgba(14, 99, 156, 0.8));
+  color: var(--vscode-button-foreground);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.execution-state-paused {
+  background: var(--vscode-editorWarning-foreground, rgba(252, 175, 62, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+.execution-state-stopped {
+  background: var(--vscode-editorInfo-foreground, rgba(150, 150, 150, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+.execution-state-cancelling {
+  background: var(--vscode-editorWarning-foreground, rgba(255, 140, 0, 0.8));
+  color: var(--vscode-button-foreground);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.execution-state-completed {
+  background: var(--vscode-testing-iconPassed, rgba(115, 191, 105, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+.execution-state-error {
+  background: var(--vscode-testing-iconFailed, rgba(241, 96, 103, 0.8));
+  color: var(--vscode-button-foreground);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* === Workflow Status Split Button === */
+
+/* Split button container */
+.workflow-split-button {
+  display: inline-flex;
+  position: relative;
+  border-radius: var(--vscode-button-border-radius, 2px);
+  overflow: visible; /* Allow dropdown to overflow */
+  max-width: 500px; /* Prevent excessive width */
+}
+
+/* Main button (workflow name + state) */
+.workflow-button-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+  padding: 4px 12px;
+  flex: 1;
+  min-width: 150px;
+  max-width: 400px;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive sizing for narrow screens */
+@media (max-width: $breakpoint-tablet - 1px) {
+  .workflow-button-main {
+    min-width: 100px;
+    padding: 4px 8px;
+  }
+}
+
+@media (max-width: $breakpoint-mobile - 1px) {
+  .workflow-button-main {
+    min-width: 30px;
+    padding: 4px 6px;
+  }
+}
+
+.workflow-button-main:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+/* Dropdown trigger */
+.workflow-button-dropdown {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid var(--vscode-button-border, rgba(255, 255, 255, 0.1));
+  padding: 4px 8px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: relative;
+}
+
+.workflow-button-dropdown:hover:not(:disabled) {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.workflow-button-dropdown[aria-expanded="true"] {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.workflow-button-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Workflow count badge */
+.workflow-count-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--vscode-badge-foreground);
+  background-color: var(--vscode-badge-background);
+  border-radius: 10px;
+  padding: 2px 5px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* === Dropdown Menu === */
+
+.workflow-dropdown-menu {
+  position: fixed; /* Changed from absolute to fixed for viewport-aware positioning */
+  /* Position will be set dynamically via JavaScript */
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 300px;
+  max-width: min(500px, 90vw); /* Responsive to viewport width */
+  max-height: min(400px, 70vh); /* Responsive to viewport height */
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  z-index: 9999;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workflow-dropdown-menu[hidden] {
+  display: none;
+}
+
+/* Menu header */
+.workflow-menu-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--vscode-dropdown-border);
+  background-color: var(--vscode-editor-background);
+}
+
+/* Menu items container (scrollable) */
+.workflow-menu-items {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1; /* Allow to fill available space */
+  min-height: 0; /* Enable flex shrinking */
+  padding: 4px 0;
+}
+
+/* Workflow menu item */
+.workflow-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--vscode-dropdown-foreground);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+  gap: 8px;
+}
+
+.workflow-menu-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+
+.workflow-menu-item.current {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+  font-weight: 600;
+}
+
+/* Workflow name in menu item */
+.workflow-menu-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Workflow state badge in menu item */
+.workflow-menu-item-state {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* State colors (match execution-state classes) */
+.workflow-menu-item-state.state-idle {
+  background-color: var(--vscode-inputValidation-infoBackground);
+  color: var(--vscode-inputValidation-infoForeground);
+}
+
+.workflow-menu-item-state.state-running {
+  background-color: var(--vscode-inputValidation-warningBackground);
+  color: var(--vscode-inputValidation-warningForeground);
+}
+
+.workflow-menu-item-state.state-paused {
+  background-color: var(--vscode-editorWarning-background);
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.workflow-menu-item-state.state-completed {
+  background-color: var(--vscode-inputValidation-infoBackground);
+  color: var(--vscode-inputValidation-infoForeground);
+}
+
+.workflow-menu-item-state.state-error {
+  background-color: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+/* Menu footer */
+.workflow-menu-footer {
+  padding: 4px;
+  border-top: 1px solid var(--vscode-dropdown-border);
+  background-color: var(--vscode-editor-background);
+}
+
+.workflow-menu-action {
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  text-align: center;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 2px;
+}
+
+.workflow-menu-action:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+/* Empty state */
+.workflow-menu-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-size: 13px;
+}
+
+/* === Inline Edit Input === */
+
+.workflow-name-edit-input {
+  font-family: var(--vscode-font-family);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-focusBorder);
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border-radius: 3px;
+  outline: none;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.workflow-name-edit-input:focus {
+  border-color: var(--vscode-focusBorder);
+  box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+}
+
+/* === Empty State === */
+
+.workflow-empty-state {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  font-size: 14px;
+}
+
+#layout-toggle {
+  display: flex;
+  gap: 0;
+  align-items: center;
+}
+
+.btn-layout {
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--border-color);
+  color: var(--fg-primary);
+  cursor: pointer;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 1;
+  transition:
+    opacity 0.2s,
+    background 0.2s,
+    background 0.2s,
+    color 0.2s;
+}
+
+.btn-layout:first-child {
+  border-radius: 2px 0 0 2px;
+  border-right: none;
+}
+
+.btn-layout:last-child {
+  border-radius: 0 2px 2px 0;
+}
+
+.btn-layout:hover:not(.active) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn-layout.active {
+  background: var(--bg-secondary);
+  color: var(--vscode-focusBorder, rgb(0, 122, 204));
+  opacity: 0.85;
+}
+
+.btn-layout .codicon {
+  font-size: 14px;
+}
+
+#controls {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Override shared button styles for dashboard */
+button {
+  padding: 4px var(--spacing-md);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.btn-rerun {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.btn-rerun:hover:not(:disabled) {
+  background: var(--vscode-button-hoverBackground);
+}
+
+/* Control buttons consistent sizing */
+#controls button {
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+/* ============================================================================
+   MAIN LAYOUT SECTIONS
+   ============================================================================ */
+
+/* Main content area - prompts on left, output+editor stacked on right */
+#main-content {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Left side: Prompts section */
+#prompts-section {
+  flex: 0 0 350px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Right side: Output + Editor container (stacked vertically) */
+#output-editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Swapped panel order (CSS order property) */
+#output-editor-container.swapped #output-section {
+  order: 2;
+}
+
+#output-editor-container.swapped #editor-section {
+  order: 1;
+}
+
+/* Vertical swapped mode - editor is now on top, needs bottom border instead */
+#output-editor-container.swapped:not(.layout-horizontal) #editor-section {
+  border-top: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Horizontal layout mode - only on wide screens */
+@media (min-width: $breakpoint-tablet) {
+  #output-editor-container.layout-horizontal {
+    flex-direction: row;
+  }
+
+  #output-editor-container.layout-horizontal #output-section {
+    flex: 1 1 50%;
+    min-width: 30px;
+    border-top: none;
+    border-right: 1px solid var(--border-color);
+  }
+
+  #output-editor-container.layout-horizontal #editor-section {
+    flex: 1 1 50%;
+    min-width: 30px;
+    border-top: none;
+    max-height: none;
+  }
+
+  /* When swapped in horizontal mode, adjust borders */
+  /* Editor on left, Output on right - only one border between them */
+  #output-editor-container.layout-horizontal.swapped #output-section {
+    border-right: none;
+    border-left: none;
+  }
+
+  #output-editor-container.layout-horizontal.swapped #editor-section {
+    border-right: 1px solid var(--border-color);
+  }
+
+  /* Horizontal collapse behavior - similar to prompts-section */
+  #output-editor-container.layout-horizontal #output-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  #output-editor-container.layout-horizontal #editor-section.collapsed {
+    flex: 0 0 auto;
+    min-width: auto;
+    width: auto;
+  }
+
+  /* Stack icon below chevron for horizontal collapsed state */
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .section-title-group,
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    .section-title-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* Show icon, hide text in horizontal collapsed state */
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .section-icon,
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    .section-icon {
+    display: inline-block;
+  }
+
+  #output-editor-container.layout-horizontal #output-section.collapsed h3,
+  #output-editor-container.layout-horizontal #editor-section.collapsed h3 {
+    display: none;
+  }
+
+  /* Hide controls when output section is collapsed in horizontal mode */
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    .output-controls {
+    display: none;
+  }
+
+  /* When output collapsed, editor expands to fill space */
+  #output-editor-container.layout-horizontal
+    #output-section.collapsed
+    ~ #editor-section:not(.collapsed) {
+    flex: 1;
+  }
+
+  /* When editor collapsed, output expands to fill space */
+  #output-editor-container.layout-horizontal
+    #editor-section.collapsed
+    ~ #output-section:not(.collapsed) {
+    flex: 1;
+  }
+}
+
+/* Output section - takes remaining space after editor */
+#output-section {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: none;
+  min-height: 30px; /* Prevent shrinking below header height */
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Editor section - auto-height based on content */
+#editor-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: none;
+  border-top: 1px solid var(--border-color);
+  max-height: 60vh;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Wide layout: side-by-side (>= 768px) */
+@media (min-width: $breakpoint-tablet) {
+  /* Already defined above */
+}
+
+/* Narrow layout: stack everything (< 768px) */
+@media (max-width: $breakpoint-tablet - 1px) {
+  #main-content {
+    flex-direction: column;
+  }
+
+  #prompts-section {
+    flex: 0 1 auto;
+    max-height: 200px;
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  #output-editor-container {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Hide layout toggle and its divider on narrow screens */
+  #layout-toggle,
+  #layout-toggle + .button-divider {
+    display: none;
+  }
+
+  #output-section {
+    flex: 1;
+    width: 100%;
+    min-height: 30px;
+  }
+}
+
+/* ============================================================================
+   SECTION CONTENT STYLES
+   ============================================================================ */
+
+/* Section headers override shared.css h3 */
+.section-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-secondary);
+}
+
+#prompts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.prompt-item {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-primary);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.prompt-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.prompt-icon {
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.prompt-icon .codicon {
+  font-size: 14px;
+}
+
+.prompt-detail {
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
+  color: var(--fg-secondary);
+  padding-left: 20px;
+}
+
+.prompt-retry {
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-editorWarning-foreground);
+  padding-left: 20px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.prompt-retry .codicon {
+  font-size: 12px;
+}
+
+.prompt-status-msg {
+  margin-top: var(--spacing-xs);
+  font-size: 11px;
+  font-style: italic;
+  padding-left: 20px;
+}
+
+.status-completed .prompt-icon {
+  color: var(--status-success);
+}
+
+.status-failed .prompt-icon {
+  color: var(--status-error);
+}
+
+.status-running .prompt-icon {
+  color: var(--status-running);
+}
+
+.status-pending .prompt-icon {
+  color: var(--status-pending);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--fg-secondary);
+  font-style: italic;
+  padding: var(--spacing-lg);
+  font-size: 12px;
+}
+
+#output-content {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.cli-output-item {
+  background: var(--bg-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: 0;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cli-output-item:last-child {
+  margin-bottom: 0;
+}
+
+.output-header {
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+  color: var(--fg-secondary);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+}
+
+.output-prompt,
+.output-response,
+.output-cli-command {
+  padding: var(--spacing-sm);
+  margin: var(--spacing-sm) 0;
+  border-left: 3px solid var(--border-color);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.output-prompt {
+  background: rgba(100, 100, 255, 0.1);
+  border-left-color: rgb(100, 100, 255);
+}
+
+.output-cli-command {
+  background: rgba(255, 200, 100, 0.1);
+  border-left-color: rgb(255, 200, 100);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  color: rgb(255, 200, 100);
+}
+
+.output-response {
+  background: rgba(100, 255, 100, 0.1);
+  border-left-color: rgb(100, 255, 100);
+}
+
+.output-stats {
+  font-size: 10px;
+  color: var(--fg-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.status-message {
+  padding: var(--spacing-xs) var(--spacing-md);
+  margin: var(--spacing-xs) 0;
+  border-left: 3px solid;
+  border-radius: 2px;
+  font-size: 11px;
+  color: var(--fg-primary);
+}
+
+/* Info severity (default - blue) */
+.status-message.status-info {
+  background: rgba(156, 220, 254, 0.15);
+  border-left-color: rgb(156, 220, 254);
+}
+
+.status-message.status-info .status-text {
+  color: rgb(156, 220, 254);
+}
+
+/* Warning severity (yellow/orange) */
+.status-message.status-warning {
+  background: rgba(252, 175, 62, 0.15);
+  border-left-color: rgb(252, 175, 62);
+}
+
+.status-message.status-warning .status-text {
+  color: rgb(252, 175, 62);
+}
+
+/* Error severity (red) */
+.status-message.status-error {
+  background: rgba(244, 71, 71, 0.15);
+  border-left-color: rgb(244, 71, 71);
+}
+
+.status-message.status-error .status-text {
+  color: rgb(244, 71, 71);
+}
+
+.status-time {
+  color: var(--fg-secondary);
+  font-size: 10px;
+  margin-right: var(--spacing-sm);
+}
+
+.status-text {
+  /* Color set by severity class */
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Button Divider - Separates button groups
+   ============================================================================ */
+.button-divider {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background-color: var(--vscode-widget-border, var(--border-color));
+  margin: 0 8px;
+  vertical-align: middle;
+}
+
+/* ============================================================================
+   Split Button Component - New Workflow dropdown button
+   ============================================================================ */
+
+/* Split button container */
+.split-button {
+  display: inline-flex;
+  position: relative;
+  border-radius: var(--vscode-button-border-radius, 2px);
+  overflow: visible;
+  z-index: 1; /* Ensure split button stacking context */
+}
+
+/* Main button (left side) */
+.split-button-main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+  padding: 4px 8px 4px 12px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Dropdown trigger (right side) */
+.split-button-dropdown {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid var(--vscode-button-border, rgba(255, 255, 255, 0.1));
+  padding: 4px 6px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hover states */
+.split-button-main:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.split-button-dropdown:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Active/pressed states */
+.split-button-main:active:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.split-button-dropdown:active:not(:disabled),
+.split-button-dropdown[aria-expanded="true"] {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Disabled state */
+.split-button-main:disabled,
+.split-button-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+  z-index: 9999; /* Very high z-index to appear above all dashboard content */
+  padding: 4px 0;
+}
+
+.dropdown-menu[hidden] {
+  display: none;
+}
+
+/* Dropdown item */
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--vscode-dropdown-foreground);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Icon spacing in dropdown items */
+.dropdown-item .codicon,
+.dropdown-item .custom-icon {
+  flex-shrink: 0;
+}
+
+.dropdown-item:hover:not(:disabled) {
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+
+.dropdown-item:focus {
+  outline: none;
+  background-color: var(--vscode-list-focusBackground);
+}
+
+.dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dropdown divider */
+.dropdown-divider {
+  display: block;
+  width: 100%;
+  height: 0;
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid
+    var(--vscode-menu-separatorBackground, var(--vscode-dropdown-border));
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Modal Styles - New Workflow Modal
+   ============================================================================ */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  animation: modalFadeIn 0.15s ease-out;
+}
+
+/* Smaller modal variant for confirmations */
+.modal-content-small {
+  max-width: 400px;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-primary);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--fg-secondary);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.modal-close:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  color: var(--fg-primary);
+}
+
+.modal-body {
+  padding: var(--spacing-md);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+/* Template Section */
+.template-section {
+  margin-bottom: var(--spacing-md);
+}
+
+.template-section label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.template-section select {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.template-section select:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.default-template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.confirmation-message {
+  font-size: 11px;
+  color: var(--status-success);
+  animation: fadeInOut 2s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: 1;
+  }
+}
+
+.template-description {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  margin: var(--spacing-sm) 0 var(--spacing-md);
+  font-style: italic;
+}
+
+/* Variables Section */
+.variables-section {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.variable-input {
+  margin-bottom: var(--spacing-md);
+}
+
+.variable-input:last-child {
+  margin-bottom: 0;
+}
+
+.variable-input label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.variable-input input {
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 2px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.variable-input input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Filename Section */
+.filename-section {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.filename-section label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.filename-input-group {
+  display: flex;
+  align-items: center;
+}
+
+.filename-input-group input {
+  flex: 1;
+  padding: var(--spacing-sm);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-radius: 2px 0 0 2px;
+  font-size: 13px;
+}
+
+.filename-input-group input:focus {
+  outline: none;
+  border-color: var(--vscode-focusBorder);
+}
+
+.filename-extension {
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+  color: var(--fg-secondary);
+  border: 1px solid var(--vscode-input-border, var(--border-color));
+  border-left: none;
+  border-radius: 0 2px 2px 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.save-path-preview {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  margin-top: var(--spacing-xs);
+  font-style: italic;
+}
+
+.save-path-preview::before {
+  content: "→ ";
+}
+
+.error-message {
+  font-size: 11px;
+  color: var(--status-error);
+  margin-top: var(--spacing-xs);
+}
+
+/* Template dropdown optgroup styling */
+.template-section select optgroup {
+  font-weight: 600;
+  font-style: normal;
+  color: var(--fg-secondary);
+}
+
+.template-section select option {
+  font-weight: normal;
+  padding: var(--spacing-xs);
+}
+
+.template-section select option[data-action="true"] {
+  color: var(--vscode-textLink-foreground);
+  font-style: italic;
+}
+/* ==================================================================
+   EDITOR SECTION STYLES
+   ================================================================== */
+
+/* Editor header - extends section-header */
+.editor-header {
+  /* No additional styles needed - inherits from section-header */
+}
+
+/* Editor controls container (matches output-controls pattern) */
+.editor-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+}
+
+.editor-mode-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+#editor-mode-indicator {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prompt-name-input {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  color: var(--input-fg);
+  font-size: 12px;
+  outline: none;
+  max-width: 250px;
+}
+
+.prompt-name-input:focus {
+  border-color: var(--input-focus-border);
+}
+
+#btn-new-prompt {
+  flex-shrink: 0;
+}
+
+/* Prompt editor wrapper - contains editor and properties drawer */
+.prompt-editor-wrapper {
+  flex: 1;
+  position: relative; /* Position relative for drawer positioning */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Prompt editor (CodeMirror 6) - auto-expands with content */
+.prompt-editor {
+  flex: 1;
+  height: 200px;
+  min-height: 150px;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.prompt-editor .cm-editor {
+  height: 100%;
+}
+
+.prompt-editor .cm-scroller {
+  overflow: auto;
+}
+
+.prompt-editor:focus-within {
+  border-color: var(--input-focus-border);
+}
+
+/* Property controls - REMOVED (now in drawer) */
+
+.property-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.property-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.property-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.property-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+}
+
+.property-input {
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  color: var(--input-fg);
+  font-size: 12px;
+  outline: none;
+  cursor: text;
+}
+
+.property-input:focus {
+  border-color: var(--input-focus-border);
+}
+
+.property-select {
+  padding: 6px 8px;
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--border-color));
+  border-radius: 2px;
+  color: var(--vscode-dropdown-foreground);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.property-select option,
+.property-select optgroup {
+  background: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+}
+
+.property-select:focus {
+  border-color: var(--input-focus-border);
+}
+
+.property-textarea {
+  padding: 6px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  color: var(--input-fg);
+  font-size: 12px;
+  font-family: var(--vscode-editor-font-family), monospace;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.property-textarea:focus {
+  border-color: var(--input-focus-border);
+}
+
+/* End condition section (collapsible within drawer) */
+.end-condition-section {
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--bg-primary);
+  margin-top: var(--spacing-md);
+}
+
+.end-condition-section summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.end-condition-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.end-condition-section summary::before {
+  content: "▶";
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 9px;
+}
+
+.end-condition-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.end-condition-section[open] summary {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.end-condition-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--bg-primary);
+}
+
+/* Editor footer - three-part layout (left, center, right) */
+.editor-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  min-height: auto;
+  container-type: inline-size;
+}
+
+/* Hide button text in editor footer when width < 480px */
+@container (max-width: $breakpoint-mobile - 1px) {
+  .editor-footer .btn-text {
+    display: none;
+  }
+
+  /* Adjust button padding when text is hidden */
+  .editor-footer button {
+    padding: 4px 8px;
+    min-width: 32px;
+  }
+
+  /* Properties button - ensure icon-only layout */
+  #btn-properties .codicon {
+    margin-right: 0;
+  }
+
+  /* Editor action buttons - icon-only layout */
+  .editor-actions button .codicon {
+    margin-right: 0;
+  }
+}
+
+.editor-footer-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+/* Editor metadata (character/word count) */
+.editor-metadata {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  font-size: 11px;
+  color: var(--fg-secondary);
+}
+
+.metadata-separator {
+  opacity: 0.5;
+}
+
+/* Editor action buttons */
+.editor-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* New Workflow checkbox */
+.new-workflow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  margin-right: var(--spacing-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.new-workflow-toggle[hidden] {
+  display: none;
+}
+
+.new-workflow-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.new-workflow-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.new-workflow-toggle input[type="checkbox"]:disabled + span {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Align codicons with text in buttons */
+.editor-actions button .codicon {
+  vertical-align: middle;
+  margin-right: 2px;
+  transform: translateY(-1px);
+}
+
+/* Properties button - align icon */
+#btn-properties .codicon {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* Properties button active state (when drawer is open) */
+#btn-properties.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+#btn-properties.active:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+/* ============================================================================
+   PROPERTIES DRAWER
+   ============================================================================ */
+.properties-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 1px; /* Inset to show prompt-editor border */
+  right: 1px; /* Inset to show prompt-editor border */
+  background: var(--vscode-sideBar-background);
+  border-top: 2px solid var(--border-color);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+  max-height: 100%; /* Can cover entire editor area */
+  display: flex;
+  flex-direction: column;
+}
+
+.properties-drawer.open {
+  transform: translateY(2px);
+}
+
+.drawer-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.drawer-header h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+}
+
+.btn-close-drawer {
+  background: none;
+  border: none;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
+  border-radius: 2px;
+}
+
+.btn-close-drawer:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--spacing-md);
+}
