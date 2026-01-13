@@ -33,6 +33,7 @@ body {
   overflow: visible; /* Allow dropdown to overflow header */
   max-width: 100%;
   box-sizing: border-box;
+  container-type: inline-size;
 }
 
 /* Section headers with counters - override shared */
@@ -206,6 +207,20 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   overflow: visible; /* Allow dropdown to overflow action buttons container */
+}
+
+/* Hide button text in action-buttons when width < 440px */
+@container (max-width: 439px) {
+  #action-buttons .btn-text {
+    display: none;
+  }
+
+  /* Adjust button padding and gap when text is hidden */
+  #action-buttons .split-button-main {
+    padding: 4px 8px;
+    min-width: 32px;
+    gap: 0;
+  }
 }
 
 #workflow-status {
@@ -1111,6 +1126,9 @@ button:disabled {
   border-right: none;
   padding: 4px 8px 4px 12px;
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Dropdown trigger (right side) */
@@ -1171,7 +1189,9 @@ button:disabled {
 
 /* Dropdown item */
 .dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   padding: 6px 12px;
   border: none;
@@ -1181,6 +1201,12 @@ button:disabled {
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* Icon spacing in dropdown items */
+.dropdown-item .codicon,
+.dropdown-item .custom-icon {
+  flex-shrink: 0;
 }
 
 .dropdown-item:hover:not(:disabled) {

@@ -71,6 +71,8 @@
 
     // Dropdown menu item clicks
     elements.workflowDropdownMenu.addEventListener("click", (e) => {
+      e.stopPropagation(); // Prevent clicks inside menu from closing it
+
       const item = e.target.closest(".dropdown-item");
       if (!item || item.disabled) return;
 
@@ -125,6 +127,8 @@
     // Workflow dropdown menu item clicks
     if (elements.workflowRecentMenu) {
       elements.workflowRecentMenu.addEventListener("click", (e) => {
+        e.stopPropagation(); // Prevent clicks inside menu from closing it
+
         // Check for clear history action
         const actionBtn = e.target.closest(".workflow-menu-action");
         if (actionBtn && actionBtn.dataset.action === "clear-history") {
@@ -306,8 +310,10 @@
     );
     firstItem?.focus();
 
-    // Close dropdown when clicking outside
-    document.addEventListener("click", handleDropdownClickOutside);
+    // Close dropdown when clicking outside (use setTimeout to avoid immediate closure)
+    setTimeout(() => {
+      document.addEventListener("click", handleDropdownClickOutside);
+    }, 0);
   }
 
   /**
@@ -346,9 +352,6 @@
 
     // Get dropdown items by data-action attribute
     const items = {
-      newWorkflow: elements.workflowDropdownMenu.querySelector(
-        '[data-action="new-workflow"]'
-      ),
       fromTemplate: elements.workflowDropdownMenu.querySelector(
         '[data-action="from-template"]'
       ),
@@ -361,7 +364,6 @@
     };
 
     // Disable destructive actions during execution
-    items.newWorkflow.disabled = isExecuting;
     items.fromTemplate.disabled = isExecuting;
     items.loadFile.disabled = isExecuting;
 

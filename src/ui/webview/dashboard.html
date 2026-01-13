@@ -25,7 +25,8 @@
               class="split-button-main btn-secondary btn-small"
               title="Clear current workflow and start blank"
             >
-              New Workflow
+              <i class="codicon codicon-new-file"></i>
+              <span class="btn-text">Create Workflow</span>
             </button>
 
             <!-- Dropdown trigger (right side) -->
@@ -51,16 +52,10 @@
             >
               <button
                 class="dropdown-item"
-                data-action="new-workflow"
-                role="menuitem"
-              >
-                New Workflow
-              </button>
-              <button
-                class="dropdown-item"
                 data-action="from-template"
                 role="menuitem"
               >
+                <i class="custom-icon icon-from-template"></i>
                 From Template...
               </button>
               <div class="dropdown-divider"></div>
@@ -69,6 +64,7 @@
                 data-action="load-file"
                 role="menuitem"
               >
+                <i class="custom-icon icon-load-from-file"></i>
                 Load from File...
               </button>
               <button
@@ -77,6 +73,7 @@
                 role="menuitem"
                 disabled
               >
+                <i class="custom-icon icon-queue-from-file"></i>
                 Queue from File...
               </button>
             </div>
