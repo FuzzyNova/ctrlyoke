@@ -133,13 +133,15 @@
    * Handle FILE_SELECTED message - new file selected (IDLE state only)
    * @param {string} fileName - File name
    * @param {Array} prompts - Array of prompts
+   * @param {string} workflowName - Custom workflow name (optional)
    */
-  function handleMessageFileSelected(fileName, prompts) {
+  function handleMessageFileSelected(fileName, prompts, workflowName) {
     console.log(`Dashboard: New file selected (${fileName}), resetting state`);
 
     const state = stateManager.getState();
     stateManager.updateState({
       fileName,
+      workflowName: workflowName || null,
       prompts: prompts.map((p, i) => createPromptItem(p, i)),
       executionState: EXECUTION_STATES.IDLE,
       currentStep: 0,
@@ -173,13 +175,15 @@
    * @param {Array} results - Array of results with status
    * @param {string} executionState - Execution state
    * @param {number} currentIndex - Current step index
+   * @param {string} workflowName - Custom workflow name (optional)
    */
   function handleMessageSessionRestored(
     fileName,
     prompts,
     results,
     executionState,
-    currentIndex
+    currentIndex,
+    workflowName
   ) {
     console.log(
       `Dashboard: Session restored (${fileName}), ${prompts.length} prompts, state: ${executionState}, currentIndex: ${currentIndex}`
@@ -192,6 +196,7 @@
 
     stateManager.updateState({
       fileName,
+      workflowName: workflowName || null,
       executionState,
       currentStep: currentIndex,
       totalSteps: prompts.length,

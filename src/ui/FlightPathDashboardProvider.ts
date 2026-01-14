@@ -205,8 +205,17 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   // Public methods to send updates from FlightPathManager
-  public updateFileSelected(fileName: string, prompts: any[]): void {
-    this.postMessage({ type: MESSAGE_TYPES.FILE_SELECTED, fileName, prompts });
+  public updateFileSelected(
+    fileName: string,
+    prompts: any[],
+    workflowName?: string
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.FILE_SELECTED,
+      fileName,
+      prompts,
+      workflowName,
+    });
   }
 
   public updateSessionRestored(
@@ -214,7 +223,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     prompts: any[],
     results: any[],
     executionState: string,
-    currentIndex: number
+    currentIndex: number,
+    workflowName?: string
   ): void {
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -223,6 +233,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       results,
       executionState,
       currentIndex,
+      workflowName,
     });
   }
 
@@ -387,7 +398,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     this.flightPathManager.clearWorkflow();
 
     // Update dashboard to show empty state
-    this.updateFileSelected("New Workflow", []);
+    this.updateFileSelected("New Workflow", [], undefined);
 
     Log.info("Workflow cleared, ready for new prompts");
   }

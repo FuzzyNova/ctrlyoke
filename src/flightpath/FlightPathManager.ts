@@ -655,9 +655,11 @@ export class FlightPathManager {
             this.promptQueue.loadPrompts(promptFile.prompts);
 
             if (this.dashboardProvider) {
+              const queueState = this.promptQueue.getState();
               this.dashboardProvider.updateFileSelected(
                 fileName,
-                promptFile.prompts // Send full prompt objects with all properties
+                promptFile.prompts, // Send full prompt objects with all properties
+                queueState.workflowName || undefined
               );
             }
 
@@ -1144,7 +1146,11 @@ export class FlightPathManager {
 
       // Show in dashboard with placeholder
       if (this.dashboardProvider) {
-        this.dashboardProvider.updateFileSelected(result.fileName, []);
+        this.dashboardProvider.updateFileSelected(
+          result.fileName,
+          [],
+          undefined
+        );
       }
     }
   }
@@ -1243,7 +1249,12 @@ export class FlightPathManager {
 
     // Update dashboard
     if (this.dashboardProvider) {
-      this.dashboardProvider.updateFileSelected(displayName, prompts);
+      const queueState = this.promptQueue.getState();
+      this.dashboardProvider.updateFileSelected(
+        displayName,
+        prompts,
+        queueState.workflowName || undefined
+      );
     }
 
     // Set current prompt file for tracking

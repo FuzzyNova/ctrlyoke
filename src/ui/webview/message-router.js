@@ -87,7 +87,8 @@
     messageHandlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {
       promptsManager.handleMessageFileSelected(
         message.fileName,
-        message.prompts
+        message.prompts,
+        message.workflowName
       );
       updateWorkflowUI();
     };
@@ -97,7 +98,8 @@
         message.prompts,
         message.results,
         message.executionState,
-        message.currentIndex
+        message.currentIndex,
+        message.workflowName
       );
       updateWorkflowUI();
     };

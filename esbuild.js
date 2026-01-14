@@ -160,9 +160,11 @@ const copyWebviewPlugin = {
       // Copy all webview files and directories
       if (fs.existsSync(srcWebview)) {
         const entries = fs.readdirSync(srcWebview, { withFileTypes: true });
-        
+
         // Validate: Check for .css files that have .scss equivalents (likely a mistake)
-        const cssFiles = entries.filter(e => e.isFile() && e.name.endsWith(".css"));
+        const cssFiles = entries.filter(
+          (e) => e.isFile() && e.name.endsWith(".css")
+        );
         cssFiles.forEach((cssFile) => {
           const scssName = cssFile.name.replace(/\.css$/, ".scss");
           const scssPath = path.join(srcWebview, scssName);
@@ -178,7 +180,7 @@ const copyWebviewPlugin = {
             );
           }
         });
-        
+
         entries.forEach((entry) => {
           // Skip gpt-tokenizer-bundle.js - it's bundled separately
           if (entry.name === "gpt-tokenizer-bundle.js") {
@@ -196,7 +198,9 @@ const copyWebviewPlugin = {
           } else if (entry.name.endsWith(".scss")) {
             // Compile SCSS to CSS
             try {
-              const result = sass.compile(srcPath);
+              const result = sass.compile(srcPath, {
+                loadPaths: [srcWebview], // Allow @use and @import to resolve from webview directory
+              });
               const cssPath = outPath.replace(/\.scss$/, ".css");
               fs.writeFileSync(cssPath, result.css);
               console.log(

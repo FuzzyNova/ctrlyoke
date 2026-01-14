@@ -198,7 +198,8 @@ export class PromptFileLoader {
             restoredState.prompts,
             restoredState.results,
             restoredState.status,
-            restoredState.currentIndex
+            restoredState.currentIndex,
+            restoredState.workflowName || undefined
           );
         }
       } else {

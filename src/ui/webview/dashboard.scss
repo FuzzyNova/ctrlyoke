@@ -35,6 +35,23 @@ body {
   container-type: inline-size;
 }
 
+/* Responsive header layout - keep action-buttons and controls together */
+/* 315px was found by experimenting with VS Code resizing, may need to change*/
+@container (max-width: 315px) {
+  #workflow-status {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  #action-buttons {
+    order: 1;
+  }
+
+  #controls {
+    order: 1;
+  }
+}
+
 /* Section headers with counters - override shared */
 .section-header {
   @include flex-between;
@@ -200,7 +217,7 @@ body {
 }
 
 /* Hide button text in action-buttons when width < 480px */
-@container (max-width: $breakpoint-mobile - 1px) {
+@container (max-width: #{$breakpoint-mobile - 1px}) {
   #action-buttons .btn-text {
     display: none;
   }
@@ -1836,7 +1853,7 @@ button:disabled {
 }
 
 /* Hide button text in editor footer when width < 480px */
-@container (max-width: $breakpoint-mobile - 1px) {
+@container (max-width: #{$breakpoint-mobile - 1px}) {
   .editor-footer .btn-text {
     display: none;
   }
