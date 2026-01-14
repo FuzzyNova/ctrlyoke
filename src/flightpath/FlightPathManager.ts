@@ -1287,46 +1287,38 @@ export class FlightPathManager {
    * @param action - 'send' (append + run) or 'add' (append only)
    */
   /**
-   * Generate a workflow name from prompt text
-   * Takes first 5 words, converts to kebab-case, adds timestamp
+   * Generate a clean workflow name from prompt text or prompt name
+   * Takes first 5 words from text (if no prompt name), converts to kebab-case
+   * Note: Does NOT include timestamp - that's added by generateWorkingFilePath for the file on disk
    */
   private generateWorkflowNameFromPrompt(
     text: string,
     promptName?: string
   ): string {
-    let baseName: string;
-
     // Prefer user-provided prompt name if available
     if (promptName && promptName.trim().length > 0) {
-      baseName = promptName
+      return promptName
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
         .replace(/^-+|-+$/g, ""); // Remove leading/trailing dashes
-    } else {
-      // Fallback: Extract first 5 words from prompt text
-      const words = text
-        .trim()
-        .split(/\s+/)
-        .slice(0, 5)
-        .map(
-          (word) =>
-            word
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
-              .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
-        )
-        .filter((word) => word.length > 0);
-
-      baseName = words.length > 0 ? words.join("-") : "ephemeral-prompt";
     }
 
-    // Add timestamp for uniqueness
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
-    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
+    // Fallback: Extract first 5 words from prompt text
+    const words = text
+      .trim()
+      .split(/\s+/)
+      .slice(0, 5)
+      .map(
+        (word) =>
+          word
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
+            .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
+      )
+      .filter((word) => word.length > 0);
 
-    return `${baseName}-${dateStr}-${timeStr}.flightpath.json`;
+    return words.length > 0 ? words.join("-") : "ephemeral-prompt";
   }
 
   async executeEphemeralPrompt(
@@ -1342,7 +1334,7 @@ export class FlightPathManager {
     const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
 
     // Generate a meaningful workflow name from prompt name (if provided) or prompt text
-    const generatedFileName = this.generateWorkflowNameFromPrompt(
+    const generatedWorkflowName = this.generateWorkflowNameFromPrompt(
       text,
       promptName
     );
@@ -1410,7 +1402,7 @@ export class FlightPathManager {
     if (!hasWorkflow) {
       // No workflow exists: Create new workflow (DRY - single code path)
       // Use existing workflow name if user has set one, otherwise use generated name
-      const workflowName = currentState.workflowName || generatedFileName;
+      const workflowName = currentState.workflowName || generatedWorkflowName;
       await this.initializeNewWorkflow([promptItem], workflowName);
 
       // Execute immediately if shouldRun=true
