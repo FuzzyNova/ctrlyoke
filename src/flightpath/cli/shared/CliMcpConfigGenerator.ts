@@ -46,7 +46,6 @@ export interface McpConfigResult {
  * Each provider integration calls the appropriate methods directly.
  */
 export class CliMcpConfigGenerator {
-
   /**
    * Generate JSON MCP configuration
    *

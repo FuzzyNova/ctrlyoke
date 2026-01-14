@@ -313,7 +313,13 @@
               const wordTo = wordFrom + word.length;
 
               // Skip spell checking if word is within a completion range
-              if (this.isInExcludedRange(match.index, match.index + word.length, excludedRanges)) {
+              if (
+                this.isInExcludedRange(
+                  match.index,
+                  match.index + word.length,
+                  excludedRanges
+                )
+              ) {
                 continue;
               }
 
@@ -333,14 +339,16 @@
                   get actions() {
                     if (!this._cachedActions) {
                       const suggestions = this._typoChecker.suggest(this._word);
-                      this._cachedActions = suggestions.slice(0, 5).map((suggestion) => ({
-                        name: `Change to "${suggestion}"`,
-                        apply: (view, from, to) => {
-                          view.dispatch({
-                            changes: { from, to, insert: suggestion },
-                          });
-                        },
-                      }));
+                      this._cachedActions = suggestions
+                        .slice(0, 5)
+                        .map((suggestion) => ({
+                          name: `Change to "${suggestion}"`,
+                          apply: (view, from, to) => {
+                            view.dispatch({
+                              changes: { from, to, insert: suggestion },
+                            });
+                          },
+                        }));
                     }
                     return this._cachedActions;
                   },

@@ -82,9 +82,8 @@ export class WorkspaceSessionManager {
     workspaceFolder: vscode.WorkspaceFolder
   ): Promise<string[]> {
     try {
-      const promptFiles = await this.promptFileParser.discoverPromptFiles(
-        workspaceFolder
-      );
+      const promptFiles =
+        await this.promptFileParser.discoverPromptFiles(workspaceFolder);
       console.log(`FlightPath: Discovered ${promptFiles.length} prompt files`);
       return promptFiles;
     } catch (error) {
@@ -154,14 +153,14 @@ export class WorkspaceSessionManager {
    * @param workspaceFolder Current workspace folder
    * @returns Array of session info objects or empty array if none found
    */
-  async discoverSessions(
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<Array<{
-    label: string;
-    description: string;
-    detail: string;
-    filePath: string;
-  }>> {
+  async discoverSessions(workspaceFolder: vscode.WorkspaceFolder): Promise<
+    Array<{
+      label: string;
+      description: string;
+      detail: string;
+      filePath: string;
+    }>
+  > {
     try {
       const queueDir = path.join(
         workspaceFolder.uri.fsPath,

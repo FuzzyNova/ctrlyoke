@@ -218,10 +218,7 @@ export class CliToolPermissionMapper {
     const filteredTools: string[] = [];
 
     // Add allow mode first
-    if (
-      config.mode === "dangerouslyAllowAll" ||
-      config.mode === "allowAll"
-    ) {
+    if (config.mode === "dangerouslyAllowAll" || config.mode === "allowAll") {
       args.push("--allow-all-tools");
     } else {
       // Custom mode - convert and add specific allow patterns

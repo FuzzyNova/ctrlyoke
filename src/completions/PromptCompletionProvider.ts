@@ -139,7 +139,6 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     return new vscode.CompletionList(items, true);
   }
 
-
   /**
    * Check if we should provide completions based on file type and cursor position
    */

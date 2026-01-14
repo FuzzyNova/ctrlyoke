@@ -51,7 +51,9 @@ export class TemplateImporter {
    * Update workspace folder reference
    * @param workspaceFolder New workspace folder
    */
-  setWorkspaceFolder(workspaceFolder: vscode.WorkspaceFolder | undefined): void {
+  setWorkspaceFolder(
+    workspaceFolder: vscode.WorkspaceFolder | undefined
+  ): void {
     this.currentWorkspaceFolder = workspaceFolder;
   }
 
@@ -208,12 +210,14 @@ export class TemplateImporter {
         "workflows"
       );
 
-      const { importedAgents: importedWorkflows, failedAgents: failedWorkflows } =
-        await this.copyTemplateFiles(
-          selectedWorkflows.map((s) => s.workflow),
-          templatesPath,
-          targetDir
-        );
+      const {
+        importedAgents: importedWorkflows,
+        failedAgents: failedWorkflows,
+      } = await this.copyTemplateFiles(
+        selectedWorkflows.map((s) => s.workflow),
+        templatesPath,
+        targetDir
+      );
 
       // Show result
       await this.showImportResult(
@@ -236,7 +240,9 @@ export class TemplateImporter {
    * @param type Type of manifest ("agents" or "workflows")
    * @returns Parsed manifest or undefined if failed
    */
-  private async loadManifest<T>(type: "agents" | "workflows"): Promise<T | undefined> {
+  private async loadManifest<T>(
+    type: "agents" | "workflows"
+  ): Promise<T | undefined> {
     const manifestPath = path.join(
       this.context.extensionPath,
       "out",
@@ -299,10 +305,7 @@ export class TemplateImporter {
         const content = await vscode.workspace.fs.readFile(
           vscode.Uri.file(srcPath)
         );
-        await vscode.workspace.fs.writeFile(
-          vscode.Uri.file(destPath),
-          content
-        );
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(destPath), content);
         importedAgents.push(item.label);
       } catch (error) {
         console.error(`FlightPath: Failed to import ${item.id}:`, error);
@@ -350,7 +353,9 @@ export class TemplateImporter {
 
     // Show error message for failures
     if (failed.length > 0) {
-      vscode.window.showErrorMessage(`❌ Failed to import: ${failed.join(", ")}`);
+      vscode.window.showErrorMessage(
+        `❌ Failed to import: ${failed.join(", ")}`
+      );
     }
   }
 }

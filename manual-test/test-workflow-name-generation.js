@@ -9,11 +9,12 @@ function generateWorkflowNameFromPrompt(text) {
     .trim()
     .split(/\s+/)
     .slice(0, 5)
-    .map((word) =>
-      word
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
-        .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
+    .map(
+      (word) =>
+        word
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-") // Replace non-alphanumeric with dashes
+          .replace(/^-+|-+$/g, "") // Remove leading/trailing dashes
     )
     .filter((word) => word.length > 0);
 
@@ -35,7 +36,7 @@ const testPrompts = [
   "Analyze the FlightPath extension architecture and suggest improvements",
   "Help me understand how the dashboard works",
   "Debug",
-  "   ",  // Empty prompt
+  "   ", // Empty prompt
   "@workspace /explain #file:src/extension.ts",
   "Review code & implement feature!!! (with #special-chars)",
 ];
@@ -44,7 +45,9 @@ console.log("Workflow Name Generation Test\n" + "=".repeat(60) + "\n");
 
 testPrompts.forEach((prompt) => {
   const name = generateWorkflowNameFromPrompt(prompt);
-  console.log(`Prompt: ${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}`);
+  console.log(
+    `Prompt: ${prompt.substring(0, 50)}${prompt.length > 50 ? "..." : ""}`
+  );
   console.log(`Name:   ${name}`);
   console.log("");
 });

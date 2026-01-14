@@ -1,5 +1,10 @@
 import Ajv, { JSONSchemaType, ValidateFunction } from "ajv";
-import { PromptFile, PromptItem, EndCondition, Provider } from "../types/FlightPathTypes";
+import {
+  PromptFile,
+  PromptItem,
+  EndCondition,
+  Provider,
+} from "../types/FlightPathTypes";
 import { Log } from "./Log";
 
 /**

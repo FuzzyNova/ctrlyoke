@@ -40,12 +40,14 @@ if (!shouldStartNewSession && this.sessionId) {
 ```
 
 **How it works:**
+
 1. After prompt completes, extract `sessionId` from CLI output
 2. Store in `this.sessionId` (memory only)
 3. Next prompt checks `newChatSession` setting
 4. If `newChatSession=false`, pass `--resume` with `this.sessionId`
 
 **Problems:**
+
 - Session IDs lost on extension reload
 - Can't resume different sessions for different prompts
 - Falls back to `-c` when no `sessionId` exists (uses provider's global session)
@@ -64,6 +66,7 @@ shouldStartNewSessionForPrompt(promptNewChatSession: boolean | undefined): boole
 ```
 
 **Behavior:**
+
 - `newChatSession: true` → Always start new session
 - `newChatSession: false` → Try to resume (use `this.sessionId` or fall back to `-c`)
 - `newChatSession: undefined` → Check global `newChatSessionPerPrompt` setting
@@ -93,6 +96,7 @@ export interface WorkingFileRuntime {
 ```
 
 **Missing:**
+
 - No `sessionId` field in `PromptItem`
 - No per-prompt execution metadata (provider, model, sessionId used)
 - No way to reference another prompt's session
@@ -175,6 +179,7 @@ export interface PromptItem {
 ```
 
 **Benefits:**
+
 - Session IDs persist in working files
 - Can inspect which sessions were used for each prompt
 - Enables cross-prompt session references
@@ -189,6 +194,7 @@ export interface PromptItem {
 Users can specify `sessionId` in two ways:
 
 #### Format 1: Prompt Number Reference
+
 ```yaml
 prompts:
   - id: analyze
@@ -198,23 +204,24 @@ prompts:
   - id: implement
     prompt: "Implement the changes"
     newChatSession: false
-    sessionId: 1  # Use session from prompt 1 (analyze)
+    sessionId: 1 # Use session from prompt 1 (analyze)
 
   - id: test
     prompt: "Run the tests"
     newChatSession: false
-    sessionId: 1  # Also use session from prompt 1
+    sessionId: 1 # Also use session from prompt 1
 ```
 
 **Resolution:** `sessionId: 1` → Look up `prompts[0]._runtime.sessionId`
 
 #### Format 2: Exact Session ID
+
 ```yaml
 prompts:
   - id: resume-old
     prompt: "Continue previous work"
     newChatSession: false
-    sessionId: "ses_abc123xyz"  # Direct session ID
+    sessionId: "ses_abc123xyz" # Direct session ID
 ```
 
 **Resolution:** Pass `"ses_abc123xyz"` directly to `--resume`
@@ -242,14 +249,14 @@ function resolveSessionId(
   // 2. If sessionId is specified
   if (prompt.sessionId !== undefined) {
     // 2a. Numeric reference (prompt number)
-    if (typeof prompt.sessionId === 'number') {
+    if (typeof prompt.sessionId === "number") {
       const refIndex = prompt.sessionId - 1; // 1-based to 0-based
 
       // Validate reference
       if (refIndex < 0 || refIndex >= promptIndex) {
         throw new Error(
           `Invalid sessionId reference: ${prompt.sessionId}. ` +
-          `Must reference a completed prompt (1-${promptIndex}).`
+            `Must reference a completed prompt (1-${promptIndex}).`
         );
       }
 
@@ -257,10 +264,13 @@ function resolveSessionId(
       const sessionId = referencedPrompt._runtime?.sessionId;
 
       // Validate provider compatibility
-      if (sessionId && referencedPrompt._runtime?.provider !== prompt.provider) {
+      if (
+        sessionId &&
+        referencedPrompt._runtime?.provider !== prompt.provider
+      ) {
         Log.warn(
           `Session ID from prompt ${prompt.sessionId} uses different provider ` +
-          `(${referencedPrompt._runtime?.provider}). Falling back to no resume.`
+            `(${referencedPrompt._runtime?.provider}). Falling back to no resume.`
         );
         return undefined;
       }
@@ -310,18 +320,20 @@ function shouldStartNewSession(prompt: PromptItem): boolean {
 ### 3.3 Edge Cases & Validation
 
 #### Case 1: Reference to Uncompleted Prompt
+
 ```yaml
 prompts:
   - id: step1
     prompt: "First step"
   - id: step2
     prompt: "Second step"
-    sessionId: 3  # ERROR: Prompt 3 hasn't run yet
+    sessionId: 3 # ERROR: Prompt 3 hasn't run yet
 ```
 
 **Handling:** Throw error with clear message before execution
 
 #### Case 2: Cross-Provider Reference
+
 ```yaml
 prompts:
   - id: copilot-analyze
@@ -332,7 +344,7 @@ prompts:
   - id: claude-implement
     prompt: "Implement changes"
     provider: claude-cli
-    sessionId: 1  # References copilot session
+    sessionId: 1 # References copilot session
 ```
 
 **Handling:** Log warning, fall back to no resume (start new session)
@@ -343,15 +355,16 @@ prompts:
 ```
 
 #### Case 3: Referenced Prompt Has No Session
+
 ```yaml
 prompts:
   - id: step1
     prompt: "First step"
-    newChatSession: true  # Forces new session, sessionId not saved
+    newChatSession: true # Forces new session, sessionId not saved
 
   - id: step2
     prompt: "Second step"
-    sessionId: 1  # References prompt with no sessionId
+    sessionId: 1 # References prompt with no sessionId
 ```
 
 **Handling:** Log warning, fall back to no resume
@@ -361,6 +374,7 @@ prompts:
 ```
 
 #### Case 4: Invalid Session ID (Provider Rejects)
+
 ```yaml
 prompts:
   - id: resume
@@ -386,17 +400,17 @@ prompts:
 
 ### 4.2 Updated Behavior Matrix
 
-| Global Setting | Prompt Setting | `sessionId` Set? | Behavior |
-|---------------|---------------|------------------|----------|
-| `true` | `undefined` | Any | New session, warn if `sessionId` set |
-| `true` | `true` | Any | New session, warn if `sessionId` set |
-| `true` | `false` | Yes | Resume specified session |
-| `true` | `false` | No | Auto-resume workflow session |
-| `false` | `undefined` | Yes | Resume specified session |
-| `false` | `undefined` | No | Auto-resume workflow session |
-| `false` | `true` | Any | New session, warn if `sessionId` set |
-| `false` | `false` | Yes | Resume specified session |
-| `false` | `false` | No | Auto-resume workflow session |
+| Global Setting | Prompt Setting | `sessionId` Set? | Behavior                             |
+| -------------- | -------------- | ---------------- | ------------------------------------ |
+| `true`         | `undefined`    | Any              | New session, warn if `sessionId` set |
+| `true`         | `true`         | Any              | New session, warn if `sessionId` set |
+| `true`         | `false`        | Yes              | Resume specified session             |
+| `true`         | `false`        | No               | Auto-resume workflow session         |
+| `false`        | `undefined`    | Yes              | Resume specified session             |
+| `false`        | `undefined`    | No               | Auto-resume workflow session         |
+| `false`        | `true`         | Any              | New session, warn if `sessionId` set |
+| `false`        | `false`        | Yes              | Resume specified session             |
+| `false`        | `false`        | No               | Auto-resume workflow session         |
 
 ### 4.3 Warning Messages
 
@@ -416,11 +430,13 @@ Session ID will be ignored. Starting new session.
 ### Phase 1: Schema & Type Updates
 
 **Files to modify:**
+
 - `schemas/prompt-schema.json` - Add `sessionId` field to `promptItem`
 - `src/types/FlightPathTypes.ts` - Add `PromptRuntimeMetadata` interface
 - Run `npm run generate-schema` to regenerate YAML schema
 
 **Testing:**
+
 - Validate schema accepts `sessionId` as string or number
 - Validate `_runtime` metadata structure
 
@@ -462,6 +478,7 @@ export class SessionResolver {
 ```
 
 **Testing:**
+
 - Unit tests for all edge cases in section 3.3
 - Test prompt number references (1-based indexing)
 - Test cross-provider validation
@@ -470,6 +487,7 @@ export class SessionResolver {
 ### Phase 3: Integration Updates
 
 **Files to modify:**
+
 - `src/flightpath/cli/BaseCliIntegration.ts`
   - Replace `this.sessionId` with dynamic resolution
   - Call `SessionResolver.resolve()` before building CLI args
@@ -537,6 +555,7 @@ protected async onPromptComplete(
 ### Phase 4: Working File Persistence
 
 **Files to modify:**
+
 - `src/flightpath/PromptQueue.ts`
   - Ensure `_runtime` metadata is saved to working file
   - Load `_runtime` metadata when reloading queue
@@ -589,6 +608,7 @@ protected async onPromptComplete(
 ### Phase 5: Remove Global Session Fallback
 
 **Current behavior:**
+
 ```typescript
 if (!shouldStartNewSession && this.sessionId) {
   args.push("--resume", this.sessionId);
@@ -598,6 +618,7 @@ if (!shouldStartNewSession && this.sessionId) {
 ```
 
 **New behavior:**
+
 ```typescript
 const sessionId = SessionResolver.resolve(prompt, index, allPrompts);
 if (sessionId) {
@@ -606,18 +627,20 @@ if (sessionId) {
 } else if (!SessionResolver.shouldStartNewSession(prompt)) {
   Log.debug(
     `ℹ️ No FlightPath session available. Starting new session ` +
-    `(not using -c to avoid resuming non-FlightPath sessions).`
+      `(not using -c to avoid resuming non-FlightPath sessions).`
   );
 }
 ```
 
 **Rationale:**
+
 - `-c` flag uses provider's built-in session tracking
 - Provider may have sessions from outside FlightPath
 - Resuming non-FlightPath sessions could cause unexpected behavior
 - Better to explicitly track all sessions FlightPath uses
 
 **Migration path:**
+
 - Add setting: `flightpath.allowProviderSessionFallback` (default: `false`)
 - When `true`, keeps old `-c` fallback behavior
 - Warn in logs when using fallback
@@ -626,6 +649,7 @@ if (sessionId) {
 ### Phase 6: Documentation & Examples
 
 **Files to create/update:**
+
 - `docs/SESSION_MANAGEMENT.md` - Complete session management guide
 - `manual-test/session-examples/` - Example workflows
   - `multi-session.flightpath.yaml` - Different sessions for different prompts
@@ -633,6 +657,7 @@ if (sessionId) {
   - `cross-provider.flightpath.yaml` - Mixed providers (demonstrates validation)
 
 **Update existing docs:**
+
 - `README.md` - Add session management section
 - `docs/COPILOT_CLI_DESIGN.md` - Update session handling docs
 
@@ -651,6 +676,7 @@ if (sessionId) {
 **For users:** No action required unless using `-c` fallback behavior
 
 **Gradual rollout:**
+
 1. Phase 1-4: Add new features, keep `-c` fallback with warning
 2. Phase 5: Add `allowProviderSessionFallback` setting (default: `false`)
 3. Future: Remove `-c` fallback entirely
@@ -662,6 +688,7 @@ if (sessionId) {
 ### Unit Tests
 
 **SessionResolver.ts:**
+
 - `resolve()` with prompt number references
 - `resolve()` with exact session IDs
 - `resolve()` with auto-resume
@@ -669,6 +696,7 @@ if (sessionId) {
 - `shouldStartNewSession()` logic matrix
 
 **Integration tests:**
+
 - Copilot CLI session extraction and persistence
 - Claude CLI session extraction and persistence
 - Codex CLI session extraction and persistence
@@ -678,6 +706,7 @@ if (sessionId) {
 ### Manual Tests
 
 **Test workflows:**
+
 1. Multi-session workflow (prompts 1-3 use session A, prompts 4-6 use session B)
 2. Session reuse (all prompts use session from prompt 1)
 3. Mixed providers (validate warnings and fallback)
@@ -691,6 +720,7 @@ if (sessionId) {
 ### 8.1 Session Management UI
 
 **Dashboard enhancements:**
+
 - Show session IDs for completed prompts
 - Visual indicators for session continuity (e.g., line connecting prompts in same session)
 - Session selector dropdown when adding prompts
@@ -699,6 +729,7 @@ if (sessionId) {
 ### 8.2 Intelligent Session Recovery
 
 **When provider rejects session ID:**
+
 ```typescript
 try {
   await executeWithSession(sessionId);
@@ -713,6 +744,7 @@ try {
 ### 8.3 Session Metadata Export
 
 **Export session history:**
+
 ```typescript
 // Generate session report
 {
@@ -733,6 +765,7 @@ try {
 ### 8.4 Session Cleanup
 
 **Auto-cleanup old sessions:**
+
 - Track session age in `_runtime` metadata
 - Offer command to clear old sessions from working files
 - Warn when referencing sessions older than X days
@@ -742,12 +775,14 @@ try {
 ## 9. Implementation Checklist
 
 ### Schema & Types
+
 - [ ] Update `prompt-schema.json` with `sessionId` field
 - [ ] Add `PromptRuntimeMetadata` interface to `FlightPathTypes.ts`
 - [ ] Generate YAML schema
 - [ ] Update JSON schema documentation
 
 ### Core Logic
+
 - [ ] Create `SessionResolver.ts` with resolution logic
 - [ ] Add validation for prompt number references
 - [ ] Add cross-provider validation
@@ -755,6 +790,7 @@ try {
 - [ ] Unit tests for `SessionResolver`
 
 ### Integration Updates
+
 - [ ] Update `BaseCliIntegration` to use `SessionResolver`
 - [ ] Update `CopilotCommandLineIntegration` session extraction
 - [ ] Update `ClaudeCommandLineIntegration` session extraction
@@ -762,17 +798,20 @@ try {
 - [ ] Remove `-c` fallback (or add setting to control it)
 
 ### Persistence
+
 - [ ] Update `PromptQueue` to save `_runtime` metadata
 - [ ] Update `WorkspaceSessionManager` to load `_runtime` metadata
 - [ ] Test working file format with new fields
 - [ ] Ensure backward compatibility with old working files
 
 ### Configuration
+
 - [ ] Add warning when `newChatSession=true` and `sessionId` set
 - [ ] Update `ConfigurationUtils` if needed
 - [ ] Consider adding `allowProviderSessionFallback` setting
 
 ### Testing
+
 - [ ] Unit tests for session resolution
 - [ ] Integration tests for CLI session tracking
 - [ ] Manual test: Multi-session workflow
@@ -781,6 +820,7 @@ try {
 - [ ] Manual test: Invalid references
 
 ### Documentation
+
 - [ ] Create `docs/SESSION_MANAGEMENT.md`
 - [ ] Add example workflows to `manual-test/session-examples/`
 - [ ] Update `README.md` with session management overview
@@ -794,6 +834,7 @@ try {
 ### Q1: Should we support session ID wildcards?
 
 **Example:**
+
 ```yaml
 sessionId: "last"  # Use most recent session
 sessionId: "last:copilot-cli"  # Use most recent copilot-cli session
@@ -806,6 +847,7 @@ sessionId: "last:copilot-cli"  # Use most recent copilot-cli session
 **Current:** Chat mode doesn't have session IDs (UI-based, uses existing chat panel)
 
 **Options:**
+
 1. Track chat panel instance ID (if VS Code API exposes it)
 2. Don't track (mark as N/A in `_runtime`)
 
@@ -816,6 +858,7 @@ sessionId: "last:copilot-cli"  # Use most recent copilot-cli session
 **Problem:** Can't validate exact session IDs without calling CLI
 
 **Options:**
+
 1. Pre-validate by calling `copilot list-sessions` (if such command exists)
 2. Let CLI fail and handle error
 3. Cache known valid sessions and warn if not in cache
@@ -825,8 +868,9 @@ sessionId: "last:copilot-cli"  # Use most recent copilot-cli session
 ### Q4: Should `sessionId` accept arrays for "try these sessions in order"?
 
 **Example:**
+
 ```yaml
-sessionId: [3, 1, "ses_backup"]  # Try prompt 3's session, then prompt 1's, then exact ID
+sessionId: [3, 1, "ses_backup"] # Try prompt 3's session, then prompt 1's, then exact ID
 ```
 
 **Decision:** Not in initial implementation. Complex and edge-case. Re-evaluate if users request it.
@@ -836,18 +880,21 @@ sessionId: [3, 1, "ses_backup"]  # Try prompt 3's session, then prompt 1's, then
 ## 11. Success Metrics
 
 ### User Experience
+
 - [ ] Users can create workflows with multiple sessions
 - [ ] Sessions persist across VS Code restarts
 - [ ] Clear error messages for invalid session references
 - [ ] Auto-resume works intuitively for common workflows
 
 ### Technical
+
 - [ ] Zero session IDs lost during normal operation
 - [ ] Working files correctly save/load `_runtime` metadata
 - [ ] Cross-provider validation prevents invalid resumes
 - [ ] Session resolution completes in <10ms per prompt
 
 ### Code Quality
+
 - [ ] 90%+ test coverage for `SessionResolver`
 - [ ] Clear separation of concerns (resolution vs extraction vs persistence)
 - [ ] No hardcoded session logic in CLI integrations
@@ -872,22 +919,22 @@ prompts:
   - id: analyze-tests
     prompt: "Analyze test coverage"
     newChatSession: false
-    sessionId: 1  # Continue analysis session
+    sessionId: 1 # Continue analysis session
 
   # Session 2: Implementation
   - id: implement-fixes
     prompt: "Implement security fixes based on analysis"
-    newChatSession: true  # Start fresh implementation session
+    newChatSession: true # Start fresh implementation session
 
   - id: add-tests
     prompt: "Add tests for the security fixes"
     newChatSession: false
-    sessionId: 3  # Continue implementation session
+    sessionId: 3 # Continue implementation session
 
   # Session 3: Review
   - id: review-changes
     prompt: "Review all changes and suggest improvements"
-    newChatSession: true  # Fresh review session
+    newChatSession: true # Fresh review session
 ```
 
 ### Example 2: Parallel Investigation Streams
@@ -923,7 +970,7 @@ prompts:
   # Merge
   - id: verify-all
     prompt: "Verify both performance and memory improvements"
-    newChatSession: true  # Fresh verification session
+    newChatSession: true # Fresh verification session
 ```
 
 ### Example 3: Auto-Resume Workflow
@@ -933,16 +980,16 @@ prompts:
 
 prompts:
   - prompt: "Step 1: Setup"
-    newChatSession: false  # Will start new (no previous session)
+    newChatSession: false # Will start new (no previous session)
 
   - prompt: "Step 2: Implement"
-    newChatSession: false  # Auto-resumes step 1's session
+    newChatSession: false # Auto-resumes step 1's session
 
   - prompt: "Step 3: Test"
-    newChatSession: false  # Auto-resumes step 2's session
+    newChatSession: false # Auto-resumes step 2's session
 
   - prompt: "Step 4: Deploy"
-    newChatSession: false  # Auto-resumes step 3's session
+    newChatSession: false # Auto-resumes step 3's session
 ```
 
 ---
@@ -952,6 +999,7 @@ prompts:
 Different providers use different session ID formats:
 
 ### Copilot CLI
+
 ```
 Format: UUID v4
 Example: "550e8400-e29b-41d4-a716-446655440000"
@@ -959,6 +1007,7 @@ Extracted from: Process logs (debug level)
 ```
 
 ### Claude CLI
+
 ```
 Format: Custom string (varies)
 Example: "proj_abc123_session_xyz789"
@@ -966,6 +1015,7 @@ Extracted from: JSON streaming output (sessionId field)
 ```
 
 ### Codex CLI
+
 ```
 Format: Thread ID
 Example: "thread_123456789"
@@ -973,6 +1023,7 @@ Extracted from: JSONL events or notify hook data
 ```
 
 ### Storage
+
 All formats stored as strings in `_runtime.sessionId`. Provider-specific parsing handled by integration classes.
 
 ---
@@ -980,28 +1031,32 @@ All formats stored as strings in `_runtime.sessionId`. Provider-specific parsing
 ## Appendix C: Migration from Current System
 
 ### Step 1: Identify Current Behavior
+
 If you currently rely on `-c` flag behavior:
+
 ```yaml
 # OLD: Implicitly uses -c for session continuity
 prompts:
   - prompt: "Step 1"
-    newChatSession: false  # Uses -c
+    newChatSession: false # Uses -c
   - prompt: "Step 2"
-    newChatSession: false  # Uses -c
+    newChatSession: false # Uses -c
 ```
 
 ### Step 2: Explicit Session References
+
 ```yaml
 # NEW: Explicitly reference session
 prompts:
   - prompt: "Step 1"
-    newChatSession: false  # Starts new, saves sessionId
+    newChatSession: false # Starts new, saves sessionId
   - prompt: "Step 2"
     newChatSession: false
-    sessionId: 1  # Explicit reference (or omit for auto-resume)
+    sessionId: 1 # Explicit reference (or omit for auto-resume)
 ```
 
 ### Step 3: Enable Fallback (Temporary)
+
 ```json
 // settings.json (temporary migration aid)
 {

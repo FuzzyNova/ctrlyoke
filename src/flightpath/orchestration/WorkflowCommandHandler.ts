@@ -30,7 +30,9 @@ export class WorkflowCommandHandler {
    * Update workspace folder reference
    * @param workspaceFolder New workspace folder
    */
-  setWorkspaceFolder(workspaceFolder: vscode.WorkspaceFolder | undefined): void {
+  setWorkspaceFolder(
+    workspaceFolder: vscode.WorkspaceFolder | undefined
+  ): void {
     this.currentWorkspaceFolder = workspaceFolder;
   }
 
@@ -129,7 +131,9 @@ export class WorkflowCommandHandler {
    * Create a new draft prompt file with timestamp-based name
    * Opens in editor and ready for the user to edit
    */
-  async createDraftPrompt(): Promise<{ filePath: string; fileName: string } | undefined> {
+  async createDraftPrompt(): Promise<
+    { filePath: string; fileName: string } | undefined
+  > {
     try {
       if (!this.currentWorkspaceFolder) {
         vscode.window.showErrorMessage("FlightPath: No workspace folder found");

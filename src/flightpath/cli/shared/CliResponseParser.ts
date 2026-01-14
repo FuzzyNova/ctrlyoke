@@ -249,7 +249,10 @@ export class CliResponseParser {
           (item: any) => item.type === "tool_use"
         );
         if (toolUse) {
-          fullResponse += this.formatClaudeToolCall(toolUse.name, toolUse.input);
+          fullResponse += this.formatClaudeToolCall(
+            toolUse.name,
+            toolUse.input
+          );
         }
       }
 

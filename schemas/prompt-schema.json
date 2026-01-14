@@ -33,9 +33,7 @@
           "$ref": "#/definitions/runtimeMetadata"
         }
       },
-      "required": [
-        "prompts"
-      ],
+      "required": ["prompts"],
       "additionalProperties": false
     }
   ],
@@ -56,12 +54,7 @@
         "provider": {
           "type": "string",
           "description": "AI provider to use for this prompt. Determines which CLI or chat integration to use. Optional - defaults to flightpath.provider setting.",
-          "enum": [
-            "copilot-cli",
-            "copilot-chat",
-            "claude-cli",
-            "codex-cli"
-          ]
+          "enum": ["copilot-cli", "copilot-chat", "claude-cli", "codex-cli"]
         },
         "model": {
           "type": "string",
@@ -112,9 +105,7 @@
           "$ref": "#/definitions/endCondition"
         }
       },
-      "required": [
-        "prompt"
-      ]
+      "required": ["prompt"]
     },
     "endCondition": {
       "type": "object",
@@ -142,10 +133,7 @@
           "description": "Template for retry prompt with placeholders: {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}"
         }
       },
-      "required": [
-        "script",
-        "returns"
-      ]
+      "required": ["script", "returns"]
     },
     "runtimeMetadata": {
       "type": "object",
@@ -182,11 +170,7 @@
           "description": "Track all queue append operations"
         }
       },
-      "required": [
-        "currentIndex",
-        "completedPrompts",
-        "executionState"
-      ],
+      "required": ["currentIndex", "completedPrompts", "executionState"],
       "additionalProperties": false
     },
     "appendSegment": {
@@ -217,13 +201,7 @@
           "description": "Indices of prompts in this segment"
         }
       },
-      "required": [
-        "id",
-        "timestamp",
-        "source",
-        "promptCount",
-        "promptIndices"
-      ],
+      "required": ["id", "timestamp", "source", "promptCount", "promptIndices"],
       "additionalProperties": false
     }
   }

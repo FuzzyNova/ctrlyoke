@@ -208,12 +208,16 @@ export class CliNotificationMonitor {
               fs.unlinkSync(notifyFile);
               Log.debug(`🗑️ Cleaned up notification file: ${file}`);
             } catch (cleanupError) {
-              Log.debug(`Failed to clean up notification file: ${cleanupError}`);
+              Log.debug(
+                `Failed to clean up notification file: ${cleanupError}`
+              );
             }
 
             return { completed: true, data: notifyData };
           } catch (parseError) {
-            Log.debug(`Failed to parse notification file ${file}: ${parseError}`);
+            Log.debug(
+              `Failed to parse notification file ${file}: ${parseError}`
+            );
             // Continue checking other files
           }
         }
