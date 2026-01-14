@@ -852,20 +852,6 @@
   }
 
   // ============================================================================
-  // WORKFLOW STATUS DISPLAY (LEGACY - for backward compatibility)
-  // ============================================================================
-
-  /**
-   * Update workflow name and state display (legacy function)
-   * @param {string} filePath - Workflow file path
-   * @param {string} executionState - Current execution state
-   * @deprecated Use updateWorkflowStatus with workflowName parameter instead
-   */
-  function updateWorkflowStatusLegacy(filePath, executionState) {
-    updateWorkflowStatus(filePath, executionState, null);
-  }
-
-  // ============================================================================
   // MODAL FUNCTIONS
   // ============================================================================
 

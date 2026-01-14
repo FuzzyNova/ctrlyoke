@@ -463,27 +463,32 @@
       !hasFile ||
       isCancelling ||
       (isRunning && !isCompleted && !isPaused && !isStopped);
-    // Change button text and class based on state
+    // Change button icon and class based on state
     // Show restart icon when paused, stopped, or completed
-    elements.runBtn.textContent =
-      isCompleted || isPaused || isStopped ? "↻" : "▶";
-    elements.runBtn.title =
-      isCompleted || isPaused || isStopped ? "Restart from beginning" : "Run";
-    elements.runBtn.className =
-      isCompleted || isPaused || isStopped ? "btn-rerun" : "btn-primary";
+    const runIcon = elements.runBtn.querySelector("i");
+    if (isCompleted || isPaused || isStopped) {
+      runIcon.className = "codicon codicon-debug-restart";
+      elements.runBtn.title = "Restart from beginning";
+      elements.runBtn.className = "btn-rerun";
+    } else {
+      runIcon.className = "codicon codicon-debug-start";
+      elements.runBtn.title = "Run";
+      elements.runBtn.className = "btn-primary";
+    }
 
     // Pause button becomes resume button when paused or stopped
     // Disable during cancellation
     // PAUSED: Resumes to next prompt (current one completed)
     // STOPPED: Resumes to restart current prompt (cancelled)
+    const pauseIcon = elements.pauseBtn.querySelector("i");
     if (isPaused || isStopped) {
-      elements.pauseBtn.textContent = "▶";
+      pauseIcon.className = "codicon codicon-debug-continue";
       elements.pauseBtn.title = isStopped
         ? "Resume (restart current prompt)"
         : "Resume";
       elements.pauseBtn.disabled = false;
     } else {
-      elements.pauseBtn.textContent = "⏸";
+      pauseIcon.className = "codicon codicon-debug-pause";
       elements.pauseBtn.title = "Pause";
       elements.pauseBtn.disabled = !isRunning || isCancelling;
     }
