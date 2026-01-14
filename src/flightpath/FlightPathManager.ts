@@ -1409,7 +1409,9 @@ export class FlightPathManager {
 
     if (!hasWorkflow) {
       // No workflow exists: Create new workflow (DRY - single code path)
-      await this.initializeNewWorkflow([promptItem], generatedFileName);
+      // Use existing workflow name if user has set one, otherwise use generated name
+      const workflowName = currentState.workflowName || generatedFileName;
+      await this.initializeNewWorkflow([promptItem], workflowName);
 
       // Execute immediately if shouldRun=true
       if (shouldRun) {

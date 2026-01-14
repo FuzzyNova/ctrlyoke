@@ -120,8 +120,9 @@ export class PromptQueue {
       queueExtensions: 0,
       totalPausedDuration: 0,
       appendSegments: [],
-      // Clear working file path
+      // Clear working file path and workflow name
       workingFilePath: undefined,
+      workflowName: undefined,
     };
 
     this.emitStateChange();
@@ -150,6 +151,7 @@ export class PromptQueue {
       totalPausedDuration: 0,
       appendSegments: [],
       workingFilePath,
+      workflowName: this.state.workflowName, // Preserve workflow name across reloads
     };
 
     this.emitStateChange();
