@@ -228,6 +228,7 @@ body {
   color: var(--vscode-foreground);
   flex: 1 1 auto;
   min-width: 0; /* Required for text-overflow to work in flex items */
+  text-align: center; /* Center workflow name */
 }
 
 #workflow-display {
@@ -238,16 +239,14 @@ body {
   flex: 1;
 }
 
-.status-separator {
-  color: var(--vscode-descriptionForeground);
-  opacity: 0.6;
-  flex-shrink: 0;
-}
-
-/* Hide separator on narrow screens */
+/* Constrain workflow name on narrow screens */
 @media (max-width: $breakpoint-tablet - 1px) {
-  .status-separator {
-    display: none;
+  #workflow-name {
+    max-width: 120px; /* Start truncating earlier */
+  }
+
+  #workflow-display {
+    gap: 6px; /* Reduce gap to save space */
   }
 }
 
@@ -286,16 +285,16 @@ body {
   }
 }
 
-/* On very narrow screens, shrink workflow name to ~1 word */
+/* On very narrow screens, shrink workflow name to minimum */
 @media (max-width: $breakpoint-mobile - 1px) {
   #workflow-name {
-    max-width: 50px; /* Allow roughly 1 word to show */
+    max-width: 60px; /* Allow minimal text to show */
   }
   #execution-state {
     padding: 4px 6px;
   }
   #workflow-display {
-    gap: 4px; /* Reduce gap to save space */
+    gap: 4px; /* Further reduce gap */
   }
 }
 
@@ -358,6 +357,21 @@ body {
   border-radius: var(--vscode-button-border-radius, 2px);
   overflow: visible; /* Allow dropdown to overflow */
   max-width: 500px; /* Prevent excessive width */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Responsive sizing for split button */
+@media (max-width: $breakpoint-tablet - 1px) {
+  .workflow-split-button {
+    max-width: 300px;
+  }
+}
+
+@media (max-width: $breakpoint-mobile - 1px) {
+  .workflow-split-button {
+    max-width: 200px;
+  }
 }
 
 /* Main button (workflow name + state) */
@@ -380,14 +394,16 @@ body {
 /* Responsive sizing for narrow screens */
 @media (max-width: $breakpoint-tablet - 1px) {
   .workflow-button-main {
-    min-width: 100px;
+    min-width: 80px;
+    max-width: 250px;
     padding: 4px 8px;
   }
 }
 
 @media (max-width: $breakpoint-mobile - 1px) {
   .workflow-button-main {
-    min-width: 30px;
+    min-width: 40px;
+    max-width: 150px;
     padding: 4px 6px;
   }
 }
@@ -1599,10 +1615,7 @@ button:disabled {
    EDITOR SECTION STYLES
    ================================================================== */
 
-/* Editor header - extends section-header */
-.editor-header {
-  /* No additional styles needed - inherits from section-header */
-}
+/* Editor header - extends section-header (no additional styles - inherits from section-header) */
 
 /* Editor controls container (matches output-controls pattern) */
 .editor-controls {

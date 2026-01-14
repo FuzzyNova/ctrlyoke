@@ -32,7 +32,6 @@
   const elements = {
     // Workflow header
     workflowName: document.getElementById("workflow-name"),
-    statusSeparator: document.getElementById("status-separator"),
     executionState: document.getElementById("execution-state"),
 
     // Split button elements (New Workflow dropdown)
