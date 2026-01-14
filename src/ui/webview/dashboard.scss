@@ -54,23 +54,6 @@ body {
   padding-right: 10px;
 }
 
-/* Responsive header layout - keep action-buttons and controls together */
-/* 315px was found by experimenting with VS Code resizing, may need to change*/
-@container (max-width: 315px) {
-  #workflow-status {
-    order: 2;
-    flex-basis: 100%;
-  }
-
-  #action-buttons {
-    order: 1;
-  }
-
-  #controls {
-    order: 1;
-  }
-}
-
 /* Section headers with counters - override shared */
 .section-header {
   @include flex-between;
@@ -275,17 +258,6 @@ body {
   flex: 1;
 }
 
-/* Constrain workflow name on narrow screens */
-@media (max-width: #{$breakpoint-tablet - 1px}) {
-  #workflow-name {
-    max-width: 120px; /* Start truncating earlier */
-  }
-
-  #workflow-display {
-    gap: 6px; /* Reduce gap to save space */
-  }
-}
-
 /* Override shared btn-small for dashboard - match control button height */
 .btn-small {
   padding: 4px 8px;
@@ -315,23 +287,12 @@ body {
 /* Hide text on narrow screens, show icon only */
 @media (max-width: #{$breakpoint-tablet - 1px}) {
   #execution-state {
-    padding: 2px 8px;
+    margin-left: auto;
+    gap: 0;
+    padding: 2px 6px;
   }
   .execution-state-text {
     display: none;
-  }
-}
-
-/* On very narrow screens, shrink workflow name to minimum */
-@media (max-width: #{$breakpoint-mobile - 1px}) {
-  #workflow-name {
-    max-width: 60px; /* Allow minimal text to show */
-  }
-  #execution-state {
-    padding: 2px 6px;
-  }
-  #workflow-display {
-    gap: 4px; /* Further reduce gap */
   }
 }
 
@@ -398,19 +359,6 @@ body {
   min-width: 0;
 }
 
-/* Responsive sizing for split button */
-@media (max-width: #{$breakpoint-tablet - 1px}) {
-  .workflow-split-button {
-    max-width: 300px;
-  }
-}
-
-@media (max-width: #{$breakpoint-mobile - 1px}) {
-  .workflow-split-button {
-    max-width: 200px;
-  }
-}
-
 /* Main button (workflow name + state) */
 .workflow-button-main {
   border-top-right-radius: 0;
@@ -418,31 +366,13 @@ body {
   border-right: none;
   padding: 0 12px;
   flex: 1;
-  min-width: 150px;
-  max-width: 400px;
+  min-width: 250px;
   text-align: left;
   overflow: hidden;
   cursor: pointer;
   transition: background-color 0.15s;
   display: flex;
   align-items: center;
-}
-
-/* Responsive sizing for narrow screens */
-@media (max-width: #{$breakpoint-tablet - 1px}) {
-  .workflow-button-main {
-    min-width: 80px;
-    max-width: 250px;
-    padding: 0 8px;
-  }
-}
-
-@media (max-width: #{$breakpoint-mobile - 1px}) {
-  .workflow-button-main {
-    min-width: 40px;
-    max-width: 150px;
-    padding: 0 6px;
-  }
 }
 
 .workflow-button-main:hover {
@@ -662,6 +592,48 @@ body {
   color: var(--vscode-descriptionForeground);
   font-style: italic;
   font-size: 14px;
+}
+
+/* On narrow screens, let the workflow name use available space */
+@media (max-width: #{$breakpoint-tablet - 1px}) {
+  #workflow-status {
+    order: 2;
+    flex-basis: 100%;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  #action-buttons {
+    order: 1;
+  }
+
+  #controls {
+    order: 1;
+  }
+
+  /* Make workflow split button take full width when on its own row */
+  .workflow-split-button {
+    max-width: none;
+    width: 100%;
+  }
+
+  /* Let the workflow name use the full row width */
+  .workflow-button-main {
+    max-width: none;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  /* Move the state icon to the far right (near the chevron) */
+  #workflow-display {
+    justify-content: flex-start;
+    width: 100%;
+    gap: 2px;
+  }
+
+  #workflow-name {
+    max-width: none;
+  }
 }
 
 #layout-toggle {
