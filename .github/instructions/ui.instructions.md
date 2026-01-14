@@ -30,7 +30,7 @@ Status bar, dashboard WebView, settings panel, template management. Three-panel 
 <webviewAssets>
 **Source:** `src/ui/webview/` → `out/ui/webview/` (build copies all)
 **HTML templates:** dashboard.html, settings.html (placeholders replaced at runtime)
-**Styles:** shared.css (common), dashboard.css/settings.css (specific), custom-icons.css (auto-generated from SVG)
+**Styles:** shared.scss (common), dashboard.scss/settings.scss (specific, compiled to CSS), custom-icons.css (auto-generated from SVG)
 **Scripts:** dashboard.js, settings.js, codemirror-editor.js, codemirror-loader.js, gpt-tokenizer-bundle.js, typo.js
 **Assets:** dictionaries/ (spell check), codicons/ (VS Code icons)
 **DashboardConstants.ts:** Compiled separately (no VS Code imports), shared by TypeScript and JavaScript

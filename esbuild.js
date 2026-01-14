@@ -166,6 +166,18 @@ const copyWebviewPlugin = {
             return;
           }
 
+          // Skip .css files if a corresponding .scss file exists (SCSS takes precedence)
+          if (entry.name.endsWith(".css")) {
+            const scssName = entry.name.replace(/\.css$/, ".scss");
+            const scssPath = path.join(srcWebview, scssName);
+            if (fs.existsSync(scssPath)) {
+              console.log(
+                `[skip] ${entry.name} (${scssName} takes precedence)`
+              );
+              return;
+            }
+          }
+
           const srcPath = path.join(srcWebview, entry.name);
           const outPath = path.join(outWebview, entry.name);
 

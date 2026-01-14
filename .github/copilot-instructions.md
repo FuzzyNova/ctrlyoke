@@ -113,11 +113,11 @@ src/
 │   │   └── README.md             # Icon system documentation
 │   └── webview/                  # Webview assets (copied to output)
 │       ├── dashboard.html        # Dashboard template
-│       ├── dashboard.css         # Dashboard styles
+│       ├── dashboard.scss        # Dashboard styles (compiled to CSS)
 │       ├── dashboard.js          # Dashboard logic
 │       ├── custom-icons.css      # Generated from icons/ (auto-created)
 │       ├── settings.html         # Settings template
-│       ├── settings.css          # Settings styles
+│       ├── settings.scss         # Settings styles (compiled to CSS)
 │       └── settings.js           # Settings logic
 ├── utils/
 │   ├── BuildConfig.ts            # Build-time constants (IS_DEV_MODE, BUILD_DATE)
