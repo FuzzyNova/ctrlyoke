@@ -160,22 +160,29 @@ const copyWebviewPlugin = {
       // Copy all webview files and directories
       if (fs.existsSync(srcWebview)) {
         const entries = fs.readdirSync(srcWebview, { withFileTypes: true });
+        
+        // Validate: Check for .css files that have .scss equivalents (likely a mistake)
+        const cssFiles = entries.filter(e => e.isFile() && e.name.endsWith(".css"));
+        cssFiles.forEach((cssFile) => {
+          const scssName = cssFile.name.replace(/\.css$/, ".scss");
+          const scssPath = path.join(srcWebview, scssName);
+          if (fs.existsSync(scssPath)) {
+            console.error(
+              `❌ ERROR: Found both ${cssFile.name} and ${scssName} in src/ui/webview/`
+            );
+            console.error(
+              `   Delete ${cssFile.name} - SCSS files should be the only source.`
+            );
+            throw new Error(
+              `Conflicting CSS/SCSS files: ${cssFile.name} and ${scssName}`
+            );
+          }
+        });
+        
         entries.forEach((entry) => {
           // Skip gpt-tokenizer-bundle.js - it's bundled separately
           if (entry.name === "gpt-tokenizer-bundle.js") {
             return;
-          }
-
-          // Skip .css files if a corresponding .scss file exists (SCSS takes precedence)
-          if (entry.name.endsWith(".css")) {
-            const scssName = entry.name.replace(/\.css$/, ".scss");
-            const scssPath = path.join(srcWebview, scssName);
-            if (fs.existsSync(scssPath)) {
-              console.log(
-                `[skip] ${entry.name} (${scssName} takes precedence)`
-              );
-              return;
-            }
           }
 
           const srcPath = path.join(srcWebview, entry.name);
