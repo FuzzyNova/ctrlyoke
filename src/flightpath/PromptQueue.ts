@@ -8,7 +8,6 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   WorkingFile,
-  AppendSegment,
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -100,7 +99,6 @@ export class PromptQueue {
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
-      appendSegments: [],
     };
   }
 
@@ -119,7 +117,6 @@ export class PromptQueue {
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
-      appendSegments: [],
       // Clear working file path and workflow name
       workingFilePath: undefined,
       workflowName: undefined,
@@ -149,7 +146,6 @@ export class PromptQueue {
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
-      appendSegments: [],
       workingFilePath,
       workflowName: this.state.workflowName, // Preserve workflow name across reloads
     };
@@ -188,7 +184,6 @@ export class PromptQueue {
         totalExecutionTime: 0,
         queueExtensions: 0,
         totalPausedDuration: 0,
-        appendSegments: runtime?.appendSegments || [],
         workingFilePath,
         workflowName: workingFile.workflowName, // Restore workflow name from working file
       };
@@ -952,21 +947,8 @@ export class PromptQueue {
         insertIndex = this.state.prompts.length;
       }
 
-      // Generate append segment for tracking
-      const segment: AppendSegment = {
-        id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        timestamp: Date.now(),
-        source,
-        promptCount: prompts.length,
-        promptIndices: Array.from(
-          { length: prompts.length },
-          (_, i) => insertIndex + i
-        ),
-      };
-
       // Insert prompts at the specified position
       this.state.prompts.splice(insertIndex, 0, ...prompts);
-      this.state.appendSegments.push(segment);
 
       // Create new results for the inserted prompts
       const newResults: PromptResult[] = prompts.map((prompt) => ({
@@ -1093,7 +1075,6 @@ export class PromptQueue {
         currentIndex: 0,
         completedPrompts: [],
         executionState: EXECUTION_STATES.IDLE,
-        appendSegments: [],
       },
     };
 
@@ -1290,7 +1271,6 @@ export class PromptQueue {
         currentIndex: this.state.currentIndex,
         completedPrompts: Array.from(this.state.completedIds),
         executionState: this.state.status,
-        appendSegments: this.state.appendSegments,
       };
 
       // Write atomically

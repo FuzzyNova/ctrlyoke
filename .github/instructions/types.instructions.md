@@ -12,7 +12,7 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 <flightPathTypes>
 **File: FlightPathTypes.ts**
 
-**Core types:** `PromptFile`, `PromptItem` (id, prompt, provider?, model?, agent?, newChatSession?, allowDynamicExtension?, endCondition?), `EndCondition`, `QueueState` (completedIds, timing, extensions, workingFilePath, appendSegments), `PromptResult`, `WorkingFile`, `WorkingFileRuntime`, `AppendSegment`, `DynamicQueueConfig`
+**Core types:** `PromptFile`, `PromptItem` (id, prompt, provider?, model?, agent?, newChatSession?, allowDynamicExtension?, endCondition?), `EndCondition`, `QueueState` (completedIds, timing, extensions, workingFilePath), `PromptResult`, `WorkingFile`, `WorkingFileRuntime`, `DynamicQueueConfig`
 
 **Provider enum:** "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
 

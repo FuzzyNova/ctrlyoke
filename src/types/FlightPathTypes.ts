@@ -32,18 +32,6 @@ export interface WorkingFileRuntime {
   currentIndex: number;
   completedPrompts: string[]; // IDs and hashes of completed prompts
   executionState: ExecutionState;
-  appendSegments?: AppendSegment[];
-}
-
-/**
- * Tracks each queue append operation for audit and visual separation
- */
-export interface AppendSegment {
-  id: string; // Unique segment identifier (UUID)
-  timestamp: number;
-  source: string; // File path or description (e.g., "User append: fix-tests.prompt.md")
-  promptCount: number;
-  promptIndices: number[]; // Which prompts in the queue belong to this segment
 }
 
 /**
@@ -91,7 +79,6 @@ export interface QueueState {
   totalPausedDuration: number; // Total time spent paused (milliseconds)
   workingFilePath?: string; // Path to working file (source of truth)
   workflowName?: string; // Custom workflow name (from working file)
-  appendSegments: AppendSegment[]; // Track all append operations
 }
 
 /**

@@ -25,7 +25,6 @@ import * as fsSync from "fs";
 import * as path from "path";
 import type {
   PromptItem,
-  AppendSegment,
   WorkingFile,
   WorkingFileRuntime,
 } from "./types/FlightPathTypes";
@@ -267,7 +266,6 @@ class FlightPathMCPServer {
       currentIndex: 0,
       completedPrompts: [],
       executionState: EXECUTION_STATES.IDLE,
-      appendSegments: [],
     };
 
     const prompts = (queueData.prompts || []).map((p, index) => ({
@@ -360,7 +358,6 @@ class FlightPathMCPServer {
       currentIndex: 0,
       completedPrompts: [],
       executionState: EXECUTION_STATES.IDLE,
-      appendSegments: [],
     };
     log("Current runtime state:", {
       currentIndex: runtime.currentIndex,
@@ -429,25 +426,6 @@ class FlightPathMCPServer {
     );
     queueData.prompts.splice(insertIndex, 0, ...validPrompts);
     log("New queue size:", queueData.prompts.length);
-
-    // Track segment metadata (only for prompts that were actually added)
-    const segment: AppendSegment = {
-      id: this.generateId(),
-      timestamp: Date.now(),
-      source: reason ? `${source}: ${reason}` : source,
-      promptCount: validPrompts.length,
-      promptIndices: Array.from(
-        { length: validPrompts.length },
-        (_, i) => insertIndex + i
-      ),
-    };
-    log("Created append segment:", segment);
-
-    if (!runtime.appendSegments) {
-      runtime.appendSegments = [];
-    }
-    runtime.appendSegments.push(segment);
-    log("Total append segments:", runtime.appendSegments.length);
 
     // Update runtime metadata
     queueData._runtime = runtime;
