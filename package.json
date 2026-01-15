@@ -612,29 +612,15 @@
           "description": "[Chat Mode] Force chat to switch to default agent mode before sending prompts",
           "markdownDescription": "**Chat Mode Only.** When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices."
         },
-        "flightpath.copilotAgent": {
-          "order": 102.5,
+        "flightpath.customAgent": {
+          "order": 103,
           "type": "string",
-          "enum": [
-            "default",
-            "workspace",
-            "vscode",
-            "terminal",
-            "github"
-          ],
-          "enumDescriptions": [
-            "Default agent mode (general purpose)",
-            "@workspace - Workspace-aware agent with full codebase context",
-            "@vscode - VS Code extension and API expert",
-            "@terminal - Terminal and command-line expert",
-            "@github - GitHub and Git expert"
-          ],
-          "default": "default",
-          "description": "[All Modes] Default Copilot agent to use",
-          "markdownDescription": "Select which Copilot agent to use by default. Available agents: **default** (general), **@workspace** (codebase context), **@vscode** (extension API), **@terminal** (CLI), **@github** (Git)."
+          "default": "",
+          "description": "[All Modes] Custom agent to use (discovered from .agent.md files)",
+          "markdownDescription": "Select a custom agent (`.agent.md` file) to use for prompts. Agents are discovered from:\n- User prompts: `%APPDATA%\\Code\\User\\prompts\\` (Windows) or `~/.config/Code/User/prompts/` (Linux/Mac)\n- Workspace GitHub: `.github/agents/`\n- Workspace Claude: `.claude/agents/`\n\nLeave empty for default behavior. See [Custom Agents documentation](https://code.visualstudio.com/docs/copilot/customization/custom-agents) for more info."
         },
         "flightpath.chatInactivityTimeout": {
-          "order": 103,
+          "order": 104,
           "type": "number",
           "default": 300,
           "minimum": 30,
@@ -643,7 +629,7 @@
           "markdownDescription": "**Chat Mode Only.** How long to wait (in seconds) without log activity before considering the Copilot Chat response as timed out. Default is 300 seconds (5 minutes). Increase for very long-running responses."
         },
         "flightpath.treatChatTimeoutAsSuccess": {
-          "order": 104,
+          "order": 105,
           "type": "boolean",
           "default": true,
           "description": "[Chat Mode] Treat inactivity timeout as successful completion",

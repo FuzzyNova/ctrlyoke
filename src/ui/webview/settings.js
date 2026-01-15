@@ -139,6 +139,9 @@
       case MESSAGE_TYPES.PROVIDER_STATUS_UPDATE:
         handleProviderStatusUpdate(message.data);
         break;
+      case MESSAGE_TYPES.AGENTS_UPDATE:
+        handleAgentsUpdate(message.data);
+        break;
     }
   });
 
@@ -161,7 +164,13 @@
 
     updateModelDropdownOptions(state.provider);
     elements.modelDropdown.value = state.model;
-    elements.agentDropdown.value = state.agent || "default";
+
+    // Update agent dropdown with discovered agents
+    if (data.availableAgents) {
+      updateAgentDropdownOptions(data.availableAgents);
+    }
+    elements.agentDropdown.value = state.agent || "";
+
     elements.executionModeDropdown.value = state.executionMode;
     updateExecutionModeVisibility(state.provider);
     elements.newChatSessionCheckbox.checked = state.newChatSessionPerPrompt;
@@ -272,7 +281,57 @@
       // Remove inline override so `.setting-group` flex layout applies
       elements.executionModeGroup.style.removeProperty("display");
     } else {
+      // Set display none to hide completely
       elements.executionModeGroup.style.display = "none";
+    }
+  }
+
+  /**
+   * Update agent dropdown with discovered agents
+   * @param {Array} agents - Array of AgentInfo objects from AgentDiscovery
+   */
+  function updateAgentDropdownOptions(agents) {
+    if (!agents || agents.length === 0) {
+      // Show empty state
+      elements.agentDropdown.innerHTML = `<option value="">None (default behavior)</option>`;
+      return;
+    }
+
+    // Build dropdown options from discovered agents
+    elements.agentDropdown.innerHTML = agents
+      .map((agent) => {
+        // agent.name is empty string for "None" option
+        const value = agent.name || "";
+        const label = agent.displayName || "None (default behavior)";
+
+        // Add source indicator for non-None options
+        let suffix = "";
+        if (agent.name) {
+          // Only add suffix for actual agents, not "None"
+          if (agent.source === "user") {
+            suffix = " (User)";
+          } else if (agent.source === "workspace-github") {
+            suffix = " (.github)";
+          } else if (agent.source === "workspace-claude") {
+            suffix = " (.claude)";
+          }
+        }
+
+        return `<option value="${value}">${label}${suffix}</option>`;
+      })
+      .join("");
+  }
+
+  /**
+   * Handle agents list update from extension
+   */
+  function handleAgentsUpdate(data) {
+    if (data.availableAgents) {
+      updateAgentDropdownOptions(data.availableAgents);
+      // Restore selected agent if still valid
+      if (state.agent) {
+        elements.agentDropdown.value = state.agent;
+      }
     }
   }
 

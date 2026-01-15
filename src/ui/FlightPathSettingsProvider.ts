@@ -18,6 +18,7 @@ import {
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Provider } from "../types/FlightPathTypes";
 import { Log } from "../utils/Log";
+import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 
 const execAsync = promisify(exec);
 
@@ -38,6 +39,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
+
+  // Discovered agents
+  private availableAgents: AgentInfo[] = [];
 
   // Provider availability status
   private providerStatus: Record<string, ProviderStatus> = {
@@ -86,6 +90,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     // Check provider availability in background
     this.checkProviderAvailability();
+
+    // Discover available agents
+    this.discoverAgents();
   }
 
   /**
@@ -166,7 +173,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     const provider = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForProvider(provider);
-    const agent = ConfigurationUtils.getCopilotAgent();
+    const agent = ConfigurationUtils.getCustomAgent(); // Use new getCustomAgent()
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const newChatSessionPerPrompt =
       ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
@@ -179,6 +186,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     // Include provider status
     const providerStatus = this.providerStatus;
 
+    // Include available agents
+    const availableAgents = this.availableAgents;
+
     this.view.webview.postMessage({
       type: MESSAGE_TYPES.INIT,
       data: {
@@ -190,6 +200,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         dynamicQueueEnabled,
         modelOptions,
         providerStatus,
+        availableAgents,
       },
     });
   }
@@ -435,23 +446,12 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
-    const validAgents = [
-      "default",
-      "workspace",
-      "vscode",
-      "terminal",
-      "github",
-    ];
-    if (!validAgents.includes(agent)) {
-      Log.error(`Invalid agent: ${agent}`);
-      return;
-    }
-
+    // No validation - accept any discovered agent name (or empty string)
     try {
-      await ConfigurationUtils.updateSetting("copilotAgent", agent);
-      Log.info(`✅ Agent changed to: ${agent}`);
+      await ConfigurationUtils.updateSetting("customAgent", agent);
+      Log.info(`✅ Custom agent changed to: ${agent || "(none)"}`);
     } catch (error) {
-      Log.error("Failed to update agent setting:", error);
+      Log.error("Failed to update custom agent setting:", error);
     }
   }
 
@@ -502,6 +502,43 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       "@flightpath"
     );
     Log.info("📋 Opened VS Code settings for FlightPath");
+  }
+
+  /**
+   * Discover available agents from all supported locations
+   * Called on initialization and workspace folder changes
+   */
+  private async discoverAgents(): Promise<void> {
+    try {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      this.availableAgents =
+        await AgentDiscovery.discoverAgents(workspaceFolder);
+
+      Log.info(
+        `Discovered ${this.availableAgents.length - 1} custom agents` // -1 for "None" option
+      );
+
+      // Send updated agents to webview if it's ready
+      if (this.view) {
+        this.sendAgentsUpdate();
+      }
+    } catch (error) {
+      Log.error("Error discovering agents:", error);
+    }
+  }
+
+  /**
+   * Send updated agents list to the webview
+   */
+  private sendAgentsUpdate(): void {
+    if (!this.view) {
+      return;
+    }
+
+    this.view.webview.postMessage({
+      type: MESSAGE_TYPES.AGENTS_UPDATE,
+      data: { availableAgents: this.availableAgents },
+    });
   }
 
   private getHtmlContent(webview: vscode.Webview): string {

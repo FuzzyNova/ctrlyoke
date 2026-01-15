@@ -42,14 +42,13 @@
       <div class="settings-row">
         <div class="setting-group">
           <label for="agent-dropdown">Agent</label>
-          <select id="agent-dropdown" title="Select Copilot agent">
-            <option value="default">Default</option>
-            <option value="workspace">@workspace</option>
-            <option value="vscode">@vscode</option>
-            <option value="terminal">@terminal</option>
-            <option value="github">@github</option>
+          <select id="agent-dropdown" title="Select custom agent">
+            <!-- Populated dynamically from discovered .agent.md files -->
           </select>
-          <span class="setting-description">Copilot agent to use</span>
+          <span class="setting-description"
+            >Custom agent files from .github/agents/, .claude/agents/, or user
+            prompts directory</span
+          >
         </div>
 
         <div class="setting-group">

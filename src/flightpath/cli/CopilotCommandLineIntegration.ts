@@ -419,12 +419,25 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
     }
 
     // Agent handling
-    if (prompt.agent) {
-      const agentName = prompt.agent.endsWith(".agent")
-        ? prompt.agent
-        : `${prompt.agent}.agent`;
-      args.push("--agent", agentName);
-      Log.info(`🤖 Using agent: ${agentName}`);
+    // Use prompt-specific agent, or fall back to global custom agent setting
+    // NOTE: Copilot CLI only accepts agent NAMES (not paths)
+    // Agents must be in .github/agents/ or user prompts directory
+    // The agent name should NOT include the .agent or .agent.md extension
+    const agentName = prompt.agent || ConfigurationUtils.getCustomAgent();
+    if (agentName) {
+      // Remove any path components and extensions - Copilot only accepts bare names
+      const bareAgentName = agentName
+        .replace(/\\/g, "/") // Normalize path separators
+        .split("/")
+        .pop() // Get just the filename
+        ?.replace(/\.agent(\.md)?$/, ""); // Remove .agent or .agent.md extension
+
+      if (bareAgentName) {
+        args.push("--agent", bareAgentName);
+        Log.info(
+          `🤖 Using agent: ${bareAgentName} (Copilot CLI only supports agent names, not paths)`
+        );
+      }
     }
 
     // Session resumption

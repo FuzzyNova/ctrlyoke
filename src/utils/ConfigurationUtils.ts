@@ -386,10 +386,11 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the default Copilot agent
+   * Get the custom agent filename (without .agent.md extension)
+   * Returns empty string if no custom agent is selected
    */
-  getCopilotAgent(): string {
-    return getConfig().get<string>("copilotAgent", "default");
+  getCustomAgent(): string {
+    return getConfig().get<string>("customAgent", "");
   },
 
   /**

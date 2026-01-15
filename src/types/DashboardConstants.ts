@@ -69,6 +69,7 @@ export const MESSAGE_TYPES = {
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
+  AGENTS_UPDATE: "agentsUpdate", // Update available agents list
 
   // New Workflow Modal - Extension -> Webview
   OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",

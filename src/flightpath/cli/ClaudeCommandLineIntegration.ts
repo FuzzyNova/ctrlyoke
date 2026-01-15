@@ -486,6 +486,22 @@ export class ClaudeCommandLineIntegration extends BaseCliIntegration {
     const model = this.validateAndGetModel(prompt.model);
     args.push("--model", model);
 
+    // Agent handling
+    // NOTE: Claude CLI agent support is currently BROKEN (as of v2.1.7):
+    // - Agents in .claude/agents/ are NOT automatically loaded (GitHub issue #9930)
+    // - The --agent flag does not load agents from .claude/agents/
+    // - The --agents JSON flag is intended for "subagents" (different concept)
+    // - Workaround requires reading agent file and using --append-system-prompt
+    //
+    // Keeping minimal code for future when this is fixed
+    const agentName = prompt.agent || ConfigurationUtils.getCustomAgent();
+    if (agentName) {
+      Log.warn(
+        `⚠️ Claude CLI agent support is currently non-functional (known bug #9930). Agent "${agentName}" will be ignored.`
+      );
+      Log.warn(`   See: https://github.com/anthropics/claude-code/issues/9930`);
+    }
+
     // Add workspace directories
     const workspaceDirs = this.getWorkspaceDirs();
     workspaceDirs.forEach((dir) => {
