@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; connect-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}}; img-src data:;"
+      content="default-src 'none'; connect-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'; script-src {{cspSource}}; font-src {{cspSource}}; img-src {{cspSource}} data:;"
     />
     <link rel="stylesheet" href="{{codiconsUri}}" />
     <link rel="stylesheet" href="{{customIconsUri}}" />
@@ -220,6 +220,12 @@
 
         <!-- Right side: Output + Editor (chat-like layout) -->
         <div id="output-editor-container">
+          <!-- Background logo (visible when sections are collapsed) -->
+          <div
+            class="background-logo"
+            style="--logo-url: url('{{logoUri}}')"
+            aria-hidden="true"
+          ></div>
           <!-- Output section (always visible, top) -->
           <div id="output-section">
             <div class="section-header">

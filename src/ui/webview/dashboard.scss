@@ -756,6 +756,31 @@ button:disabled {
   box-sizing: border-box;
 }
 
+/* Background logo - visible when sections are collapsed */
+/* Uses CSS mask to make SVG adapt to theme colors */
+.background-logo {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 0;
+  pointer-events: none;
+  width: min(80%, 500px);
+  height: min(80%, 500px);
+  opacity: 0.08;
+
+  /* Use mask to apply foreground color to SVG shape */
+  background-color: var(--vscode-foreground);
+  -webkit-mask-image: var(--logo-url);
+  mask-image: var(--logo-url);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center bottom;
+  mask-position: center bottom;
+}
+
 /* Left side: Prompts section */
 #prompts-section {
   flex: 0 0 350px;
@@ -780,6 +805,7 @@ button:disabled {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative; /* For background logo positioning */
 }
 
 /* Swapped panel order (CSS order property) */
@@ -902,6 +928,8 @@ button:disabled {
   min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1; /* Above background logo */
 }
 
 /* Editor section - auto-height based on content */
@@ -919,6 +947,7 @@ button:disabled {
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
+  z-index: 1; /* Above background logo */
 }
 
 /* Wide layout: side-by-side (>= 768px) */

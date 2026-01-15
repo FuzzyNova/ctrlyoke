@@ -91,7 +91,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this.getWebviewPath()],
+      localResourceRoots: [
+        this.getWebviewPath(),
+        vscode.Uri.joinPath(this.context.extensionUri, "images"),
+      ],
     };
 
     webviewView.webview.html = this.getHtmlContent(webviewView.webview);
@@ -811,6 +814,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const dicUri = webview
       .asWebviewUri(this.getWebviewPath("dictionaries", "en_US", "en_US.dic"))
       .toString();
+    // Get logo URI from images folder (for background watermark)
+    const logoUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, "images", "flightpath-sidebar-icon.svg")
+    );
 
     // Read HTML template and replace placeholders
     const htmlPath = this.getWebviewFsPath("dashboard.html");
@@ -849,6 +856,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{messageRouterUri\}\}/g, messageRouterUri.toString())
       .replace(/\{\{affUri\}\}/g, affUri)
       .replace(/\{\{dicUri\}\}/g, dicUri)
+      .replace(/\{\{logoUri\}\}/g, logoUri.toString())
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;
