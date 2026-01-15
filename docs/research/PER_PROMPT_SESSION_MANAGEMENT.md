@@ -4,24 +4,17 @@
 **Created:** 2026-01-13
 **Author:** FlightPath Team
 
-## Executive Summary
+## Overview
 
-Refine FlightPath's session management to support per-prompt session tracking, enabling workflows where different prompts can resume different conversation sessions. This eliminates the current limitation of one global session per provider and enables true multi-session workflow orchestration.
+Enable per-prompt session tracking so different prompts in a workflow can resume different CLI sessions. Currently, all prompts share one global session ID per provider, which is lost on VS Code restart.
 
-### Current Limitations
+**Changes required:**
 
-1. **Single session per provider:** All prompts in a workflow use the same `this.sessionId` stored in the integration instance
-2. **Lost on restart:** Session IDs are stored in memory and lost when VS Code closes
-3. **No workflow-aware resumption:** New prompts can't intelligently resume previous prompts' sessions within the same workflow
-4. **Global session fallback:** Falls back to `-c` flag (provider's built-in session tracking) which may reference sessions outside FlightPath
-
-### Proposed Improvements
-
-1. **Per-prompt session tracking:** Each prompt gets its own `sessionId` field in schema
-2. **Persistent storage:** Session IDs saved in working files survive VS Code restarts
-3. **Smart session resolution:** Prompts can reference other prompts' sessions by number
-4. **Workflow-scoped sessions:** Automatic session continuity within workflows
-5. **Remove global session fallback:** Only use sessions FlightPath explicitly tracks
+1. Add `sessionId` field to prompt schema (string or number reference)
+2. Store session IDs in `_runtime` metadata within working files
+3. Implement session resolution logic (numeric references, auto-resume, validation)
+4. Update CLI integrations to populate/use per-prompt session IDs
+5. Remove `-c` fallback to provider's global session
 
 ---
 
@@ -382,9 +375,65 @@ prompts:
     sessionId: "invalid_session_xyz"
 ```
 
-**Handling:** CLI will fail with error. FlightPath logs the failure and continues with next prompt (or retries if end condition configured).
+**Behavior by provider:**
 
-**Future improvement:** Could catch specific error patterns and automatically retry without `--resume`.
+1. **Copilot CLI:** Silently ignores invalid session IDs and starts a new session. No error thrown, but session continuity is lost.
+2. **Claude CLI:** Two-stage validation:
+   - **Format validation:** Rejects non-UUID formats immediately:
+     ```
+     Error: --resume requires a valid session ID when used with --print
+     Session IDs must be in UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000)
+     ```
+   - **Existence validation:** Rejects valid UUIDs that don't exist in Claude's system:
+     ```
+     No conversation found with session ID: 550e8400-e29b-41d4-a716-446655440000
+     ```
+   - Both cases exit with code 1 (error)
+
+3. **Codex CLI:** Silently ignores invalid session IDs and starts a new session (creates new thread_id). No error thrown.
+
+**Handling strategy:**
+
+- **Detection:** Claude CLI errors can be caught via exit code + stderr parsing
+- **Fallback:** On invalid session error, retry without `--resume` flag (automatic recovery)
+- **Logging:** Warn user when session ID is invalid but execution continues
+- **Copilot/Codex:** No way to detect silently invalid sessions - they just start fresh
+  - Risk: User thinks session is resumed but it's actually a new conversation
+  - Mitigation: Validate session ID format before passing to CLI (UUID check)
+
+**Implementation approach:**
+
+```typescript
+// Pre-validation before CLI execution
+function validateSessionIdFormat(
+  sessionId: string,
+  provider: Provider
+): boolean {
+  if (provider === Provider.ClaudeCli) {
+    // Claude requires UUID format
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(sessionId);
+  }
+  // Copilot/Codex: No strict format validation available
+  // (they silently ignore invalid IDs)
+  return true;
+}
+
+// Error recovery during execution
+async function executeWithSessionRecovery(args: string[], sessionId: string) {
+  try {
+    return await execute(args);
+  } catch (error) {
+    if (isInvalidSessionError(error)) {
+      Log.warn(`Session ${sessionId} invalid. Starting new session.`);
+      const argsWithoutResume = removeResumeFlags(args);
+      return await execute(argsWithoutResume);
+    }
+    throw error;
+  }
+}
+```
 
 ---
 
@@ -491,17 +540,23 @@ export class SessionResolver {
 - `src/flightpath/cli/BaseCliIntegration.ts`
   - Replace `this.sessionId` with dynamic resolution
   - Call `SessionResolver.resolve()` before building CLI args
+  - Add pre-validation for session ID format (provider-specific)
+  - Add error recovery for invalid session errors (Claude CLI)
 
 - `src/flightpath/cli/CopilotCommandLineIntegration.ts`
   - Update session extraction to populate `prompt._runtime.sessionId`
   - Remove fallback to `-c` flag
+  - Add UUID format validation before passing `--resume`
 
 - `src/flightpath/cli/ClaudeCommandLineIntegration.ts`
   - Update session extraction to populate `prompt._runtime.sessionId`
   - Remove fallback to `-c` flag
+  - Add error recovery for "invalid session ID" errors (exit code + stderr)
+  - Pre-validate UUID format before passing `-r`
 
 - `src/flightpath/cli/CodexCommandLineIntegration.ts`
   - Update session extraction to populate `prompt._runtime.sessionId`
+  - Add UUID format validation before passing `resume` subcommand
 
 **Key changes:**
 
@@ -525,12 +580,74 @@ protected resolveAndApplySession(
   );
 
   if (sessionId) {
+    // Validate session ID format before using it
+    if (!this.validateSessionIdFormat(sessionId)) {
+      Log.warn(
+        `⚠️ Session ID "${sessionId}" has invalid format for ${this.getCliName()}. ` +
+        `Starting new session instead.`
+      );
+      return; // Don't add resume flags
+    }
+
     // Provider-specific resume flag
     this.applyResumeFlag(args, sessionId);
     Log.debug(`✅ Resuming session: ${sessionId}`);
   } else if (!SessionResolver.shouldStartNewSession(prompt)) {
     Log.debug(`ℹ️ Resume requested but no session available. Starting new.`);
   }
+}
+
+/**
+ * Validate session ID format for this provider
+ * Override in subclasses for provider-specific validation
+ */
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // Base implementation: accept any non-empty string
+  return sessionId.trim().length > 0;
+}
+
+// CopilotCommandLineIntegration.ts override
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // Copilot CLI session IDs should be UUIDs
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(sessionId);
+}
+
+// ClaudeCommandLineIntegration.ts override
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // Claude CLI requires strict UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(sessionId);
+}
+
+// ClaudeCommandLineIntegration.ts error recovery
+protected async executeHeadless(...) {
+  try {
+    return await super.executeHeadless(...);
+  } catch (error) {
+    // Check for invalid session ID error from Claude CLI
+    if (this.isInvalidSessionError(error)) {
+      const sessionId = this.sessionId;
+      Log.warn(
+        `⚠️ Claude CLI rejected session ID "${sessionId}". ` +
+        `Retrying without resume flag.`
+      );
+
+      // Clear session and retry
+      this.sessionId = undefined;
+      return await super.executeHeadless(...);
+    }
+    throw error;
+  }
+}
+
+private isInvalidSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("--resume requires a valid session ID") ||
+    message.includes("Session IDs must be in UUID format") ||
+    message.includes("No conversation found with session ID")
+  );
 }
 
 // After completion:
@@ -683,7 +800,172 @@ if (sessionId) {
 
 ---
 
-## 7. Testing Strategy
+## 8. Error Handling & Recovery Strategy
+
+### Summary of Provider Behaviors
+
+| Provider        | Invalid Format                | Valid Format, Non-Existent ID | Recovery Strategy                          |
+| --------------- | ----------------------------- | ----------------------------- | ------------------------------------------ |
+| **Copilot CLI** | Silent fallback (new session) | Silent fallback (new session) | Pre-validate UUID format, warn on mismatch |
+| **Claude CLI**  | Error exit code 1 + stderr    | Error exit code 1 + stderr    | Catch error, retry without `-r`            |
+| **Codex CLI**   | Silent fallback (new session) | Silent fallback (new session) | Pre-validate UUID format, warn on mismatch |
+
+### Implementation Strategy
+
+**1. Pre-Validation (Proactive)**
+
+Validate session ID format before passing to CLI to catch obvious errors early:
+
+```typescript
+// BaseCliIntegration.ts
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // Default: accept any non-empty string
+  return sessionId.trim().length > 0;
+}
+
+// CopilotCommandLineIntegration.ts & CodexCommandLineIntegration.ts
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // UUID format expected (though silently ignored if invalid)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(sessionId)) {
+    Log.warn(
+      `⚠️ Session ID "${sessionId}" is not a valid UUID. ` +
+      `${this.getCliName()} may silently ignore this and start a new session.`
+    );
+    // Still return true to allow execution (CLI will handle it)
+    return true;
+  }
+  return true;
+}
+
+// ClaudeCommandLineIntegration.ts
+protected validateSessionIdFormat(sessionId: string): boolean {
+  // Claude CLI requires strict UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(sessionId)) {
+    Log.error(
+      `❌ Session ID "${sessionId}" is not a valid UUID. ` +
+      `Claude CLI requires UUID format.`
+    );
+    return false; // Block execution - Claude will definitely fail
+  }
+  return true;
+}
+```
+
+**2. Error Recovery (Reactive)**
+
+Catch runtime errors from Claude CLI and retry without session resume:
+
+```typescript
+// ClaudeCommandLineIntegration.ts
+protected async executeHeadless(
+  args: string[],
+  promptText: string,
+  workflowContext?: any
+): Promise<boolean> {
+  try {
+    return await super.executeHeadless(args, promptText, workflowContext);
+  } catch (error) {
+    // Check for invalid session ID errors from Claude CLI
+    if (this.isInvalidSessionError(error)) {
+      const sessionId = this.getAttemptedSessionId(args);
+      Log.warn(
+        `⚠️ Claude CLI rejected session ID "${sessionId}". ` +
+        `Retrying without resume flag.`
+      );
+
+      // Remove resume flags and retry
+      const argsWithoutResume = this.removeResumeFlags(args);
+      return await super.executeHeadless(argsWithoutResume, promptText, workflowContext);
+    }
+    throw error; // Re-throw other errors
+  }
+}
+
+private isInvalidSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("--resume requires a valid session ID") ||
+    message.includes("Session IDs must be in UUID format") ||
+    message.includes("No conversation found with session ID")
+  );
+}
+
+private removeResumeFlags(args: string[]): string[] {
+  // Remove -r <session-id> and -c flags
+  return args.filter((arg, i, arr) => {
+    if (arg === "-r" && i + 1 < arr.length) {
+      return false; // Remove -r flag
+    }
+    if (i > 0 && arr[i - 1] === "-r") {
+      return false; // Remove session ID argument
+    }
+    if (arg === "-c") {
+      return false; // Remove -c flag
+    }
+    return true;
+  });
+}
+```
+
+**3. User Communication**
+
+Provide clear feedback about session handling:
+
+```typescript
+// When pre-validation fails
+Log.warn(`⚠️ Invalid session ID format. Starting new session instead.`);
+vscode.window.showWarningMessage(
+  `FlightPath: Session ID "${sessionId}" has invalid format. Starting new session.`
+);
+
+// When Claude CLI rejects session
+Log.warn(`⚠️ Session not found in Claude CLI. Starting new session.`);
+// No user notification needed - automatic recovery
+
+// When Copilot/Codex silently falls back
+Log.info(
+  `ℹ️ Session ID may be invalid. If ${this.getCliName()} doesn't resume the ` +
+    `expected conversation, the session ID may not exist.`
+);
+```
+
+**4. Testing Strategy**
+
+Create manual test workflows to verify error handling:
+
+```yaml
+# manual-test/invalid-session-recovery.flightpath.yaml
+prompts:
+  - id: test-invalid-format
+    prompt: "Test with invalid format"
+    sessionId: "not-a-uuid-12345"
+    # Should warn and start new session
+
+  - id: test-nonexistent-uuid
+    prompt: "Test with non-existent UUID"
+    sessionId: "550e8400-e29b-41d4-a716-446655440000"
+    # Claude: Should error and retry
+    # Copilot/Codex: Should silently start new
+
+  - id: test-cross-provider
+    prompt: "Test cross-provider reference"
+    provider: claude-cli
+    sessionId: 1 # References Copilot session
+    # Should warn about provider mismatch and start new
+```
+
+### Expected Outcomes
+
+1. **Claude CLI:** Robust with automatic retry on invalid session
+2. **Copilot/Codex CLI:** Graceful degradation with user warnings
+3. **All providers:** Clear logging for debugging session issues
+4. **User experience:** Workflow continues even when session IDs are invalid
+
+---
+
+## 9. Testing Strategy
 
 ### Unit Tests
 
@@ -715,64 +997,7 @@ if (sessionId) {
 
 ---
 
-## 8. Future Enhancements
-
-### 8.1 Session Management UI
-
-**Dashboard enhancements:**
-
-- Show session IDs for completed prompts
-- Visual indicators for session continuity (e.g., line connecting prompts in same session)
-- Session selector dropdown when adding prompts
-- "Resume session" button to quickly add prompt with `sessionId: N`
-
-### 8.2 Intelligent Session Recovery
-
-**When provider rejects session ID:**
-
-```typescript
-try {
-  await executeWithSession(sessionId);
-} catch (error) {
-  if (isInvalidSessionError(error)) {
-    Log.warn(`Session ${sessionId} no longer valid. Starting new session.`);
-    await executeWithoutSession();
-  }
-}
-```
-
-### 8.3 Session Metadata Export
-
-**Export session history:**
-
-```typescript
-// Generate session report
-{
-  "workflow": "analyze-and-fix",
-  "sessions": [
-    {
-      "sessionId": "ses_abc123",
-      "provider": "copilot-cli",
-      "model": "claude-sonnet-4.5",
-      "prompts": [1, 2, 3],
-      "duration": 450000,
-      "created": 1705170000000
-    }
-  ]
-}
-```
-
-### 8.4 Session Cleanup
-
-**Auto-cleanup old sessions:**
-
-- Track session age in `_runtime` metadata
-- Offer command to clear old sessions from working files
-- Warn when referencing sessions older than X days
-
----
-
-## 9. Implementation Checklist
+## 8. Implementation Checklist
 
 ### Schema & Types
 
@@ -792,9 +1017,14 @@ try {
 ### Integration Updates
 
 - [ ] Update `BaseCliIntegration` to use `SessionResolver`
+- [ ] Add `validateSessionIdFormat()` method to base class
 - [ ] Update `CopilotCommandLineIntegration` session extraction
+- [ ] Add UUID validation for Copilot CLI
 - [ ] Update `ClaudeCommandLineIntegration` session extraction
+- [ ] Add UUID validation and error recovery for Claude CLI
+- [ ] Add `isInvalidSessionError()` and `removeResumeFlags()` helpers
 - [ ] Update `CodexCommandLineIntegration` session extraction
+- [ ] Add UUID validation for Codex CLI
 - [ ] Remove `-c` fallback (or add setting to control it)
 
 ### Persistence
@@ -818,6 +1048,10 @@ try {
 - [ ] Manual test: VS Code restart persistence
 - [ ] Manual test: Cross-provider validation
 - [ ] Manual test: Invalid references
+- [ ] Manual test: Invalid session ID format (non-UUID)
+- [ ] Manual test: Non-existent session ID (valid UUID)
+- [ ] Manual test: Claude CLI error recovery
+- [ ] Verify Copilot/Codex silent fallback behavior
 
 ### Documentation
 
@@ -829,85 +1063,30 @@ try {
 
 ---
 
-## 10. Open Questions
+## 9. Open Questions
 
-### Q1: Should we support session ID wildcards?
-
-**Example:**
-
-```yaml
-sessionId: "last"  # Use most recent session
-sessionId: "last:copilot-cli"  # Use most recent copilot-cli session
-```
-
-**Decision:** Not in initial implementation. Can add later if users request it.
-
-### Q2: Should we track session IDs for Chat mode?
+### Should we track session IDs for Chat mode?
 
 **Current:** Chat mode doesn't have session IDs (UI-based, uses existing chat panel)
 
-**Options:**
-
-1. Track chat panel instance ID (if VS Code API exposes it)
-2. Don't track (mark as N/A in `_runtime`)
-
-**Decision:** Start with option 2. Chat mode session management is fundamentally different (UI-based). Defer until Chat mode limitations are addressed.
-
-### Q3: Should we validate session IDs before execution?
-
-**Problem:** Can't validate exact session IDs without calling CLI
-
-**Options:**
-
-1. Pre-validate by calling `copilot list-sessions` (if such command exists)
-2. Let CLI fail and handle error
-3. Cache known valid sessions and warn if not in cache
-
-**Decision:** Option 2 for initial implementation. Option 3 could be added later for better UX.
-
-### Q4: Should `sessionId` accept arrays for "try these sessions in order"?
-
-**Example:**
-
-```yaml
-sessionId: [3, 1, "ses_backup"] # Try prompt 3's session, then prompt 1's, then exact ID
-```
-
-**Decision:** Not in initial implementation. Complex and edge-case. Re-evaluate if users request it.
+**Decision:** Not in initial implementation. Chat mode session management is fundamentally different (UI-based). Defer until Chat mode limitations are addressed.
 
 ---
 
-## 11. Success Metrics
+## 10. Success Metrics
 
-### User Experience
-
-- [ ] Users can create workflows with multiple sessions
-- [ ] Sessions persist across VS Code restarts
-- [ ] Clear error messages for invalid session references
-- [ ] Auto-resume works intuitively for common workflows
-
-### Technical
-
-- [ ] Zero session IDs lost during normal operation
-- [ ] Working files correctly save/load `_runtime` metadata
-- [ ] Cross-provider validation prevents invalid resumes
-- [ ] Session resolution completes in <10ms per prompt
-
-### Code Quality
-
-- [ ] 90%+ test coverage for `SessionResolver`
-- [ ] Clear separation of concerns (resolution vs extraction vs persistence)
-- [ ] No hardcoded session logic in CLI integrations
-- [ ] Comprehensive inline documentation
+- Session IDs persist across VS Code restarts (working file storage)
+- Session resolution completes in <10ms per prompt
+- Working files correctly save/load `_runtime` metadata
+- Cross-provider validation prevents invalid resumes
+- Claude CLI automatic error recovery functions correctly
 
 ---
 
-## Appendix A: Example Workflows
-
-### Example 1: Multi-Session Workflow
+## Appendix A: Example Multi-Session Workflow
 
 ```yaml
-# Use different sessions for analysis vs implementation
+# Different sessions for analysis vs implementation
 
 prompts:
   # Session 1: Initial analysis
@@ -930,66 +1109,6 @@ prompts:
     prompt: "Add tests for the security fixes"
     newChatSession: false
     sessionId: 3 # Continue implementation session
-
-  # Session 3: Review
-  - id: review-changes
-    prompt: "Review all changes and suggest improvements"
-    newChatSession: true # Fresh review session
-```
-
-### Example 2: Parallel Investigation Streams
-
-```yaml
-# Two parallel investigation threads, later merged
-
-prompts:
-  # Thread A: Performance
-  - id: perf-analyze
-    prompt: "Analyze performance bottlenecks"
-
-  - id: perf-profile
-    prompt: "Profile the hot paths identified"
-    sessionId: 1
-
-  - id: perf-optimize
-    prompt: "Optimize the bottlenecks"
-    sessionId: 1
-
-  # Thread B: Memory
-  - id: mem-analyze
-    prompt: "Analyze memory usage patterns"
-
-  - id: mem-profile
-    prompt: "Profile memory allocations"
-    sessionId: 4
-
-  - id: mem-optimize
-    prompt: "Optimize memory usage"
-    sessionId: 4
-
-  # Merge
-  - id: verify-all
-    prompt: "Verify both performance and memory improvements"
-    newChatSession: true # Fresh verification session
-```
-
-### Example 3: Auto-Resume Workflow
-
-```yaml
-# Simplest case: all prompts share one session automatically
-
-prompts:
-  - prompt: "Step 1: Setup"
-    newChatSession: false # Will start new (no previous session)
-
-  - prompt: "Step 2: Implement"
-    newChatSession: false # Auto-resumes step 1's session
-
-  - prompt: "Step 3: Test"
-    newChatSession: false # Auto-resumes step 2's session
-
-  - prompt: "Step 4: Deploy"
-    newChatSession: false # Auto-resumes step 3's session
 ```
 
 ---
@@ -1028,44 +1147,4 @@ All formats stored as strings in `_runtime.sessionId`. Provider-specific parsing
 
 ---
 
-## Appendix C: Migration from Current System
-
-### Step 1: Identify Current Behavior
-
-If you currently rely on `-c` flag behavior:
-
-```yaml
-# OLD: Implicitly uses -c for session continuity
-prompts:
-  - prompt: "Step 1"
-    newChatSession: false # Uses -c
-  - prompt: "Step 2"
-    newChatSession: false # Uses -c
-```
-
-### Step 2: Explicit Session References
-
-```yaml
-# NEW: Explicitly reference session
-prompts:
-  - prompt: "Step 1"
-    newChatSession: false # Starts new, saves sessionId
-  - prompt: "Step 2"
-    newChatSession: false
-    sessionId: 1 # Explicit reference (or omit for auto-resume)
-```
-
-### Step 3: Enable Fallback (Temporary)
-
-```json
-// settings.json (temporary migration aid)
-{
-  "flightpath.allowProviderSessionFallback": true
-}
-```
-
-This keeps old behavior while you update workflows.
-
----
-
-**End of Planning Document**
+**End of Implementation Plan**

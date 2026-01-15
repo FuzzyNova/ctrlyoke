@@ -90,3 +90,29 @@ This will:
 
 - Format files with Prettier on save
 - Auto-fix ESLint issues on save
+
+## Developer Chores
+
+Regular maintenance tasks are documented in **[CHORES.md](./CHORES.md)**:
+
+- Updating CLI tools (Copilot, Claude, Codex)
+- Syncing model registries
+- Updating VS Code command references
+- Dependency updates and security audits
+
+**Quick reference**:
+
+```bash
+# Run automated chores
+npm run chores -- --task all
+
+# Run specific task
+npm run chores -- --task update-deps
+npm run chores -- --task sync-models
+npm run chores -- --task check-all
+
+# See all available tasks
+npm run chores -- --help
+```
+
+See [CHORES.md](./CHORES.md) for complete documentation.
