@@ -69,6 +69,27 @@ Optional overrides: `shouldStreamHeadlessOutput()` (false for JSON/JSONL), `proc
 Key settings: `cliExecutionMode`, `*CliModel` (per provider), `cliToolPermissions` (shared), `cliAllowedTools/DeniedTools` (shared, Copilot format auto-converted)
 See package.json for full list.
 
+<copilotCompletion>
+**Copilot CLI Completion Detection** (CopilotCommandLineIntegration):
+
+**Headless Mode**: Process completion is deterministic (exit code based). Session ID extracted from log files.
+
+**Interactive TUI Mode**: Uses Copilot's **sessionEnd hook** for reliable completion detection (as of 2026-01):
+
+- Creates: `.github/hooks/flightpath.json` with sessionEnd hook configuration
+- Hook format: Includes both `bash` and `powershell` fields for cross-platform support (Windows uses powershell)
+- Script: `out/scripts/flightpath-copilot-hook.js` writes `completion-{timestamp}.json` to notification directory
+- Monitors: Wildcard mode - detects ANY new file in `.flightpath/temp/copilot-notifications/`
+- Timeout: 10 seconds for hook execution
+- **Important**: Copilot CLI hooks do NOT provide session ID - hook data only contains `{timestamp, cwd, reason}`
+- Benefits: Future-proof (official API), won't break with TUI output format changes
+- Monitoring delegated to `CliNotificationMonitor` shared utility (wildcard mode)
+
+**Session ID Tracking**: Both modes use log-based extraction - reads `process-{timestamp}-{pid}.log` files for "Flushed X events to session {GUID}". Requires `--log-level debug`. Hooks do NOT provide session ID.
+
+**Previous approach** (deprecated for interactive mode): Relied solely on TUI output parsing and log file monitoring. Hook approach is cleaner and more reliable.
+</copilotCompletion>
+
 <codexCompletion>
 **Codex CLI Completion Detection** (CodexCommandLineIntegration):
 
@@ -93,8 +114,8 @@ CliProcessManager, TuiStreamProcessor, CliResponseParser, CliToolPermissionMappe
 See individual utility files for details.
 
 <cliSpecificDetails>
-Copilot: Log-based session tracking, plain text stats
-Claude: stream-json, JSON events, model aliases (sonnet/opus/haiku)
+Copilot: sessionEnd hook (interactive), log-based session tracking (headless fallback), plain text stats
+Claude: stream-json, JSON events, Stop hook, model aliases (sonnet/opus/haiku)
 Codex: JSONL, notify hook completion, 5 GPT models
 See source files for full details.
 

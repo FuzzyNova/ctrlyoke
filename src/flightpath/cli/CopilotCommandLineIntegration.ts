@@ -13,12 +13,17 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { CliResponseParser } from "./shared/CliResponseParser";
 import { CliToolPermissionMapper } from "./shared/CliToolPermissionMapper";
+import {
+  CliNotificationMonitor,
+  NotificationResult,
+} from "./shared/CliNotificationMonitor";
 
 /**
  * GitHub Copilot CLI Integration
  *
  * CLI-specific features:
- * - Log directory for session ID tracking
+ * - Interactive mode: sessionEnd hook for completion detection
+ * - Headless mode: Log-based session ID tracking (fallback)
  * - Statistics parsing: "Total usage est: X prompt + Y completion"
  * - Tool permission conversion from Claude format
  */
@@ -250,6 +255,12 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       const mode = this.getExecutionMode();
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
 
+      // Interactive mode: Ensure hook configuration file exists
+      if (isInteractive) {
+        await this.ensureHookConfigFile();
+        Log.debug("🔔 Configured sessionEnd hook for completion detection");
+      }
+
       // Build CLI arguments (without prompt - handled by execution methods)
       const args = await this.buildCliArgs(
         prompt,
@@ -272,7 +283,7 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
         );
 
         if (success) {
-          // Extract session ID for future resumption
+          // Extract session ID from logs (hooks don't provide it)
           const sessionId = await this.extractSessionIdFromLogs();
           if (sessionId) {
             this.sessionId = sessionId;
@@ -567,7 +578,11 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
 
   /**
    * Extract session ID from process log files in log directory
-   * New log format (as of CLI v0.0.377+): process-{timestamp}-{pid}.log
+   *
+   * NOTE: Only used for HEADLESS mode as a fallback.
+   * Interactive mode uses sessionEnd hook for session ID extraction.
+   *
+   * Log format (as of CLI v0.0.377+): process-{timestamp}-{pid}.log
    * Session ID appears in log lines: "Flushed X events to session {GUID}"
    * Requires --log-level debug or higher to capture session ID
    * Returns the session ID from the most recently modified log file
@@ -623,5 +638,197 @@ export class CopilotCommandLineIntegration extends BaseCliIntegration {
       Log.error("❌ Failed to extract session ID from logs", error);
       return undefined;
     }
+  }
+
+  /**
+   * Execute Copilot CLI in interactive terminal with dual monitoring:
+   * - Screen-based TUI output extraction
+   * - sessionEnd hook completion detection
+   *
+   * This overrides BaseCliIntegration's executeInTerminal to add
+   * Copilot's sessionEnd hook notification monitoring for reliable completion.
+   */
+  protected async executeInTerminal(
+    args: string[],
+    promptText: string,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.withInteractiveTuiExecution(
+        args,
+        promptText,
+        workflowContext,
+        async ({
+          terminal,
+          execution,
+          promptWithInstruction,
+          tuiProcessor,
+          timeoutMs,
+        }) => {
+          const tuiAbortController = new AbortController();
+          const startTime = new Date();
+
+          Log.info(
+            "⏳ Starting Copilot TUI processing with sessionEnd hook monitoring..."
+          );
+          const tuiPromise = tuiProcessor.processStream(
+            execution,
+            terminal,
+            promptWithInstruction,
+            timeoutMs,
+            this.lastSanitizedPrompt,
+            tuiAbortController
+          );
+
+          // Monitor for completion notification (wildcard mode - no session ID)
+          const notifyPromise = this.monitorNotificationFile(
+            undefined, // Copilot hooks don't provide session ID - use wildcard monitoring
+            startTime,
+            timeoutMs
+          );
+
+          const notifyResult = await Promise.race([
+            notifyPromise,
+            tuiPromise.then((tuiResult) => ({
+              completed: tuiResult.success,
+              error: tuiResult.errorMessage,
+            })),
+          ]);
+
+          if (notifyResult.completed) {
+            Log.debug(
+              "🛑 sessionEnd hook detected completion - aborting TUI stream"
+            );
+            tuiAbortController.abort();
+            // Note: Hook doesn't provide session ID - extracted from logs in sendPrompt
+          }
+
+          const tuiResult = await tuiPromise;
+
+          if (!notifyResult.completed) {
+            this.lastFailureReason =
+              notifyResult.error || "Completion detection failed";
+            Log.error(`❌ Copilot execution failed: ${this.lastFailureReason}`);
+            return { success: false, errorMessage: this.lastFailureReason };
+          }
+
+          if (!tuiResult.success && tuiResult.errorMessage) {
+            this.lastFailureReason = tuiResult.errorMessage;
+            Log.warn(
+              `⚠️ TUI processor detected error: ${tuiResult.errorMessage}`
+            );
+          }
+
+          return { success: true };
+        }
+      );
+
+      return result.success;
+    } catch (error) {
+      this.lastFailureReason =
+        error instanceof Error ? error.message : String(error);
+      Log.error(`❌ Copilot execution error: ${this.lastFailureReason}`);
+      return false;
+    }
+  }
+
+  // ============================================================
+  // COPILOT-SPECIFIC: HOOK-BASED COMPLETION DETECTION
+  // ============================================================
+
+  /**
+   * Get path to FlightPath's Copilot hook handler script.
+   * This script is called by Copilot CLI when sessionEnd events occur.
+   */
+  private getHookScriptPath(): string {
+    return path.join(
+      this.context.extensionPath,
+      "out",
+      "scripts",
+      "flightpath-copilot-hook.js"
+    );
+  }
+
+  /**
+   * Get path to workspace .github/hooks directory
+   */
+  private getHooksDirectory(): string | undefined {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return undefined;
+    }
+    return path.join(workspaceRoot, ".github", "hooks");
+  }
+
+  /**
+   * Create .github/hooks/flightpath.json with sessionEnd hook configuration
+   */
+  private async ensureHookConfigFile(): Promise<void> {
+    const hooksDir = this.getHooksDirectory();
+    if (!hooksDir) {
+      throw new Error("Cannot determine workspace root for hooks directory");
+    }
+
+    // Ensure .github/hooks directory exists
+    await fs.mkdir(hooksDir, { recursive: true });
+
+    const hookFilePath = path.join(hooksDir, "flightpath.json");
+    const scriptPath = this.getHookScriptPath();
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("Cannot determine workspace root for notification path");
+    }
+
+    const notifyDir = CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "copilot"
+    );
+
+    const hookConfig = CliNotificationMonitor.buildCopilotHookConfig(
+      scriptPath,
+      notifyDir
+    );
+
+    // Write hook configuration file
+    await fs.writeFile(
+      hookFilePath,
+      JSON.stringify(hookConfig, null, 2),
+      "utf-8"
+    );
+
+    Log.debug(`📁 Created hook config: ${hookFilePath}`);
+  }
+
+  /**
+   * Monitor notification file for completion (delegated to shared utility)
+   */
+  private async monitorNotificationFile(
+    sessionId: string | undefined,
+    startTime: Date,
+    timeoutMs: number
+  ): Promise<NotificationResult> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return {
+        completed: false,
+        error: "Cannot determine workspace root for notification monitoring",
+      };
+    }
+
+    const notifyDir = CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "copilot"
+    );
+
+    return CliNotificationMonitor.monitorForCompletion(
+      { directory: notifyDir, timeoutMs },
+      sessionId,
+      startTime,
+      () => this.isCancelling
+    );
   }
 }

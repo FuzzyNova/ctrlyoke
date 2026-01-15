@@ -30,10 +30,9 @@ export interface NotificationResult {
  * Shared hook/notification file monitoring utilities
  *
  * Used by CLI integrations that support hooks for completion detection:
+ * - Copilot CLI: sessionEnd hook (writes session-{id}.json when session completes)
  * - Claude CLI: Stop hook (writes session-{id}.json when agent stops)
  * - Codex CLI: Notify hook (writes thread-{id}.json on agent-turn-complete)
- *
- * NOT used by Copilot CLI (uses log file approach instead)
  */
 export class CliNotificationMonitor {
   /**
@@ -360,5 +359,56 @@ export class CliNotificationMonitor {
     // TOML array format with single quotes (avoids escaping complexity)
     // Format: notify=['node','path']
     return `notify=['node','${normalizedPath}']`;
+  }
+
+  /**
+   * Build hook configuration object for Copilot CLI
+   *
+   * Creates .github/hooks/flightpath.json with sessionEnd hook for
+   * reliable completion detection.
+   *
+   * NOTE: Copilot CLI hooks do NOT provide session ID in any hook event.
+   * Session ID must be extracted from log files (see extractSessionIdFromLogs).
+   * Hooks are ONLY used for completion detection, not session tracking.
+   *
+   * Hook data format (discovered via debugging):
+   * {
+   *   "timestamp": 1768452916108,
+   *   "cwd": "C:\\dev\\FlightPath",
+   *   "reason": "complete"
+   * }
+   *
+   * Includes both bash and powershell commands for cross-platform support.
+   * Windows uses powershell field, Unix-like systems use bash field.
+   *
+   * @param scriptPath Path to hook handler script
+   * @param notifyDir Notification directory
+   * @returns Hook configuration object ready to write to .github/hooks/*.json
+   */
+  static buildCopilotHookConfig(
+    scriptPath: string,
+    notifyDir: string
+  ): object {
+    // Bash: Forward slashes (works on Windows and Unix)
+    const bashScriptPath = scriptPath.replace(/\\/g, "/");
+    const bashNotifyDir = notifyDir.replace(/\\/g, "/");
+
+    // PowerShell: Backslashes escaped for JSON (Windows standard)
+    const psScriptPath = scriptPath.replace(/\\/g, "\\\\");
+    const psNotifyDir = notifyDir.replace(/\\/g, "\\\\");
+
+    return {
+      version: 1,
+      hooks: {
+        sessionEnd: [
+          {
+            type: "command",
+            bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionEnd"`,
+            powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionEnd"`,
+            timeoutSec: 10,
+          },
+        ],
+      },
+    };
   }
 }
