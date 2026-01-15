@@ -462,10 +462,14 @@ async function testCopilotAutomation(): Promise<boolean> {
 
 /**
  * Helper function to list and display VS Code commands
+ * @param title Title for the command list
+ * @param filterFn Optional filter function to select specific commands
+ * @param outputFilePath Optional file path to save the output (relative to workspace root)
  */
 async function listAndDisplayCommands(
   title: string,
-  filterFn?: (cmd: string) => boolean
+  filterFn?: (cmd: string) => boolean,
+  outputFilePath?: string
 ): Promise<void> {
   const allCommands = await vscode.commands.getCommands(true);
   const filteredCommands = filterFn
@@ -476,12 +480,57 @@ async function listAndDisplayCommands(
   Log.info(`Found ${filteredCommands.length} commands:\n`);
   filteredCommands.forEach((cmd) => Log.info(`  ${cmd}`));
 
-  // Create a document to show the commands
-  const doc = await vscode.workspace.openTextDocument({
-    content: `FlightPath: ${title} (${filteredCommands.length} found)\n\n${filteredCommands.join("\n")}`,
-    language: "plaintext",
-  });
-  await vscode.window.showTextDocument(doc);
+  // Generate markdown content
+  const timestamp = new Date().toISOString();
+  const content = `# ${title}
+
+**Generated:** ${timestamp}  
+**Total Commands:** ${filteredCommands.length}
+
+---
+
+${filteredCommands.map((cmd) => `- \`${cmd}\``).join("\n")}
+`;
+
+  if (outputFilePath) {
+    // Save to file
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      vscode.window.showErrorMessage("No workspace folder open");
+      return;
+    }
+
+    const fullPath = path.join(workspaceFolders[0].uri.fsPath, outputFilePath);
+    const dir = path.dirname(fullPath);
+
+    // Ensure directory exists
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    try {
+      fs.writeFileSync(fullPath, content, "utf8");
+      Log.info(`✅ Saved to ${fullPath}`);
+
+      // Open the file
+      const doc = await vscode.workspace.openTextDocument(fullPath);
+      await vscode.window.showTextDocument(doc);
+
+      vscode.window.showInformationMessage(
+        `Saved ${filteredCommands.length} commands to ${outputFilePath}`
+      );
+    } catch (error) {
+      Log.error(`❌ Failed to save to ${fullPath}:`, error);
+      vscode.window.showErrorMessage(`Failed to save commands: ${error}`);
+    }
+  } else {
+    // Create a temporary document to show the commands
+    const doc = await vscode.workspace.openTextDocument({
+      content: `FlightPath: ${title} (${filteredCommands.length} found)\n\n${filteredCommands.join("\n")}`,
+      language: "plaintext",
+    });
+    await vscode.window.showTextDocument(doc);
+  }
 }
 
 /**
@@ -623,7 +672,8 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
           cmd.includes("copilot-chat") ||
           cmd.includes("copilot") ||
           cmd.includes("workbench.action.chat") ||
-          cmd.includes("github.copilot")
+          cmd.includes("github.copilot"),
+        "docs/reference/CHAT_COMMANDS.md"
       );
     })
   );
@@ -631,7 +681,11 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
   // List all available VS Code commands (debugging tool)
   context.subscriptions.push(
     vscode.commands.registerCommand("flightpath.listAllCommands", async () => {
-      await listAndDisplayCommands("All Available VS Code Commands");
+      await listAndDisplayCommands(
+        "All Available VS Code Commands",
+        undefined,
+        "docs/reference/VSCODE_COMMANDS.md"
+      );
     })
   );
 
