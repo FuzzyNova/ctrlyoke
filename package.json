@@ -203,12 +203,6 @@
           "command": "flightpath.debugState"
         },
         {
-          "command": "flightpath.test.copilotAutomation"
-        },
-        {
-          "command": "flightpath.test.fileAttachment"
-        },
-        {
           "command": "flightpath.showCopilotStatus"
         },
         {

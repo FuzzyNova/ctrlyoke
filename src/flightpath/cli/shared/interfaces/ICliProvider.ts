@@ -26,6 +26,17 @@ export interface ProviderConfig {
 
   /** Whether to stream headless output in real-time */
   shouldStreamHeadlessOutput: boolean;
+
+  /**
+   * Whether this provider uses notification-based completion detection in interactive mode.
+   * When true, CliIntegration will use dual monitoring (TUI + notification file).
+   * When false or undefined, only TUI-based completion detection is used.
+   *
+   * - Claude: true (uses Stop hook for reliable completion)
+   * - Copilot: true (uses sessionEnd hook for reliable completion)
+   * - Codex: true (uses notify hook for reliable completion)
+   */
+  usesInteractiveNotificationMonitor?: boolean;
 }
 
 /**
@@ -61,6 +72,38 @@ export interface ICliProvider {
 
   /** Tool permission mapper component */
   readonly toolPermissionMapper: IToolPermissionMapper;
+
+  /**
+   * Build complete CLI arguments array for execution
+   *
+   * This is the main method for constructing CLI-specific arguments including:
+   * - Model selection
+   * - Tool permissions
+   * - Session management
+   * - Workspace directories
+   * - Provider-specific flags (e.g., -p, --output-format for Claude)
+   * - Hooks/notifications for interactive mode
+   *
+   * @param prompt The prompt item with model/agent/session settings
+   * @param isInteractive Whether this is interactive TUI or headless mode
+   * @param context Extension context for accessing scripts/paths
+   * @param workspaceRoot Workspace root directory
+   * @param sessionId Current session ID for resumption (if any)
+   * @param workflowContext Optional workflow context for MCP configuration
+   * @returns Complete CLI arguments array (without prompt - that's handled separately)
+   */
+  buildCliArgs(
+    prompt: any,
+    isInteractive: boolean,
+    context: any,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: any[];
+      filePath?: string;
+    }
+  ): Promise<string[]>;
 
   /**
    * Build CLI arguments for headless mode with file reference
@@ -117,4 +160,19 @@ export interface ICliProvider {
    * @returns Version string if available
    */
   getVersion?(): Promise<string | undefined>;
+
+  /**
+   * Extract session ID from log files (optional)
+   *
+   * For CLIs that don't include session ID in their output (like Copilot),
+   * this method provides an alternative way to extract session IDs from
+   * log files written by the CLI.
+   *
+   * Called by CliIntegration after execution if:
+   * - parsed.sessionId is undefined (no session ID in output)
+   * - This method is implemented by the provider
+   *
+   * @returns Session ID if found in logs, undefined otherwise
+   */
+  extractSessionIdFromLogs?(): Promise<string | undefined>;
 }

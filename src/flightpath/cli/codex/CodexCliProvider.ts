@@ -1,5 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as vscode from "vscode";
+import * as path from "path";
 import {
   ICliProvider,
   ProviderConfig,
@@ -11,6 +13,8 @@ import { CodexResponseParser } from "./CodexResponseParser";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { CODEX_CLI_MODELS } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
 
 const execAsync = promisify(exec);
@@ -94,6 +98,9 @@ export class CodexCliProvider implements ICliProvider {
       /\d+s\s*[•·]\s*esc to interr?upt/i, // Timer with escape indicator (handles missing opening paren)
     ],
     shouldStreamHeadlessOutput: true,
+
+    // Codex uses notify hook for reliable completion detection in interactive mode
+    usesInteractiveNotificationMonitor: true,
   };
 
   readonly responseParser: IResponseParser = new CodexResponseParser();
@@ -101,6 +108,204 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
+
+  /**
+   * Build complete CLI arguments array for Codex CLI execution
+   *
+   * Handles all Codex-specific arguments including:
+   * - MCP configuration (when dynamic queue extension enabled)
+   * - Exec mode and output format (--json for headless)
+   * - Model selection (with validation and fallback)
+   * - Workspace directories (--add-dir)
+   * - Session management (resume subcommand with session ID)
+   * - Tool permissions (sandbox mode, approval policy, --full-auto)
+   * - Notify hook settings (interactive mode only)
+   *
+   * @param prompt The prompt item with model/agent/session settings
+   * @param isInteractive Whether this is interactive TUI or headless mode
+   * @param context Extension context for accessing scripts/paths
+   * @param workspaceRoot Workspace root directory
+   * @param sessionId Current session ID for resumption (if any)
+   * @param workflowContext Optional workflow context for MCP configuration
+   * @returns Complete CLI arguments array (without prompt - that's handled separately)
+   */
+  async buildCliArgs(
+    prompt: any,
+    isInteractive: boolean,
+    context: vscode.ExtensionContext,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: any[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
+    const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext && workspaceRoot) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
+          const mcpArgs = await this.getMcpConfigArgs(
+            mcpServerPath,
+            workspaceRoot
+          );
+          if (mcpArgs) {
+            args.push(...mcpArgs);
+            Log.info("🔧 MCP server config added for dynamic queue extension");
+          }
+        }
+      }
+    }
+
+    // Headless mode: add exec command and --json flag
+    if (!isInteractive) {
+      args.push("exec");
+      args.push("--json");
+    }
+
+    // Model selection with validation
+    const model = this.validateAndGetModel(prompt.model);
+    args.push("--model", model);
+
+    // Add workspace directories
+    if (workspaceRoot) {
+      const workspaceDirs = this.getWorkspaceDirs(workspaceRoot);
+      workspaceDirs.forEach((dir) => {
+        args.push("--add-dir", dir);
+      });
+    }
+
+    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    if (!isInteractive) {
+      const permissionConfig = {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+
+      // Use Codex-specific permission mapper with sandbox/approval settings
+      const sandboxMode = ConfigurationUtils.getCodexSandboxMode();
+      const approvalPolicy = ConfigurationUtils.getCodexApprovalPolicy();
+      const toolPermissionArgs = (
+        this.toolPermissionMapper as CodexToolPermissionMapper
+      ).buildCodexSpecificArgs(permissionConfig, sandboxMode, approvalPolicy);
+      args.push(...toolPermissionArgs);
+
+      // Add additional allowed directories (only in headless mode when not dangerous mode)
+      if (permissionConfig.mode !== "dangerouslyAllowAll") {
+        const additionalDirs = ConfigurationUtils.getCodexAllowedDirs();
+        additionalDirs.forEach((dir: string) => {
+          args.push("--add-dir", dir);
+        });
+      }
+    } else {
+      // Interactive mode: Configure notify hook for completion detection
+      if (workspaceRoot) {
+        const scriptPath = path.join(
+          context.extensionPath,
+          "out",
+          "scripts",
+          "flightpath-codex-notify.js"
+        );
+        const notifyDir =
+          this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+        const hookConfig = this.notificationMonitor.buildHookConfig(
+          scriptPath,
+          notifyDir,
+          workspaceRoot
+        );
+
+        // Codex uses --config flag with TOML inline format
+        if (hookConfig.type === "toml-inline") {
+          args.push("--config", hookConfig.config);
+          Log.debug(`🔔 Configured notify hook for completion detection`);
+        }
+      }
+    }
+
+    // Session management: resume subcommand and session ID
+    // MUST come after other flags since 'resume' is a subcommand, not a flag
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    Log.debug(
+      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+    );
+
+    if (!shouldStartNewSession && sessionId) {
+      // Resume existing session: codex [exec] [--json] ... resume <session-id>
+      args.push("resume");
+      args.push(sessionId);
+      Log.debug(`✅ Added resume subcommand with session: ${sessionId}`);
+    } else if (!shouldStartNewSession) {
+      Log.debug(`⚠️ Resume requested but no session ID available`);
+    } else {
+      Log.debug(
+        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+      );
+    }
+
+    // Note: Prompt is NOT included here - it's a positional argument
+    // handled by the execution methods (buildHeadlessArgs, etc.)
+
+    return args;
+  }
+
+  /**
+   * Get workspace directories for --add-dir arguments
+   */
+  private getWorkspaceDirs(workspaceRoot: string): string[] {
+    const workspaceDirs: string[] = [];
+
+    // Add primary workspace folder
+    if (vscode.workspace.workspaceFolders) {
+      vscode.workspace.workspaceFolders.forEach((folder) => {
+        workspaceDirs.push(folder.uri.fsPath);
+      });
+    }
+
+    return workspaceDirs;
+  }
+
+  /**
+   * Validate model is supported by Codex CLI, fallback to default if not
+   */
+  private validateAndGetModel(requestedModel?: string): string {
+    const defaultModel = ConfigurationUtils.getCodexCliModel();
+
+    if (!requestedModel) {
+      return defaultModel;
+    }
+
+    // Check if model is in the supported list
+    if (CODEX_CLI_MODELS.includes(requestedModel as any)) {
+      return requestedModel;
+    }
+
+    // Model not supported - warn user and fallback
+    const message = `Model "${requestedModel}" not supported by Codex CLI. Using default: ${defaultModel}`;
+    Log.warn(`⚠️ ${message}`);
+    vscode.window.showWarningMessage(
+      `FlightPath: ${message}\n\nCodex-supported models: ${CODEX_CLI_MODELS.join(", ")}`
+    );
+
+    return defaultModel;
+  }
 
   /**
    * Build CLI arguments for headless mode with file reference

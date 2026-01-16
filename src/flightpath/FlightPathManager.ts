@@ -215,6 +215,14 @@ export class FlightPathManager {
     try {
       Log.info("Initializing manager...");
 
+      // Initialize all integrations (check CLI availability)
+      await Promise.all([
+        this.copilotCliIntegration.initialize(),
+        this.chatIntegration.initialize(),
+        this.claudeCliIntegration.initialize(),
+        this.codexCliIntegration.initialize(),
+      ]);
+
       // Discover existing prompt files (delegated to WorkspaceSessionManager)
       if (this.currentWorkspaceFolder) {
         await this.workspaceSessionManager.discoverPromptFiles(
@@ -224,9 +232,6 @@ export class FlightPathManager {
 
       // Note: Auto-load recent session is deferred until dashboard is ready
       // (see setDashboardReady() method)
-
-      // Note: Copilot integration starts background polling automatically in constructor
-      // Status bar will update via onDidChangeStatus event listener
 
       Log.info("Manager initialization complete");
     } catch (error) {

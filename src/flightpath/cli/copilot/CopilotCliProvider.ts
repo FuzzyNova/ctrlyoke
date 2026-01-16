@@ -1,5 +1,9 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as vscode from "vscode";
+import * as path from "path";
+import * as fs from "fs/promises";
+import * as os from "os";
 import {
   ICliProvider,
   ProviderConfig,
@@ -11,6 +15,12 @@ import { CopilotResponseParser } from "./CopilotResponseParser";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import {
+  getCliSupportedModelIds,
+  isCliModelSupported,
+} from "../../../utils/ModelRegistry";
+import { Log } from "../../../utils/Log";
 
 const execAsync = promisify(exec);
 
@@ -84,6 +94,9 @@ export class CopilotCliProvider implements ICliProvider {
       /No, and tell Copilot what to do differently/i, // Option text
     ],
     shouldStreamHeadlessOutput: true,
+
+    // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
+    usesInteractiveNotificationMonitor: true,
   };
 
   readonly responseParser: IResponseParser = new CopilotResponseParser();
@@ -92,8 +105,356 @@ export class CopilotCliProvider implements ICliProvider {
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
 
+  /** Log directory for session ID tracking */
+  private logDirectory?: string;
+
+  constructor() {
+    this.initializeLogDirectory();
+  }
+
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Initialize log directory for session ID tracking.
+   * Uses configured directory or falls back to OS temp directory + FlightPath subdirectory.
+   */
+  private initializeLogDirectory(): void {
+    const configuredDir = ConfigurationUtils.getCopilotCliLogDir();
+
+    if (configuredDir) {
+      this.logDirectory = configuredDir;
+    } else {
+      // Fallback: Create FlightPath-specific log directory in OS temp folder
+      // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
+      this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
+    }
+    Log.info(`📁 Copilot log directory: ${this.logDirectory}`);
+  }
+
+  /**
+   * Build complete CLI arguments array for Copilot CLI execution
+   *
+   * Handles all Copilot-specific arguments including:
+   * - MCP configuration (when dynamic queue extension enabled)
+   * - Tool permissions (--allow-all-tools, --allow-tool, --deny-tool)
+   * - Path permissions (--allow-all-paths)
+   * - Logging configuration (--log-dir, --log-level)
+   * - Workspace directories (--add-dir)
+   * - Model selection (--model)
+   * - Agent handling (--agent)
+   * - Session management (--resume)
+   * - sessionEnd hook (interactive mode only)
+   *
+   * @param prompt The prompt item with model/agent/session settings
+   * @param isInteractive Whether this is interactive TUI or headless mode
+   * @param context Extension context for accessing scripts/paths
+   * @param workspaceRoot Workspace root directory
+   * @param sessionId Current session ID for resumption (if any)
+   * @param workflowContext Optional workflow context for MCP configuration
+   * @returns Complete CLI arguments array (without prompt - that's handled separately)
+   */
+  async buildCliArgs(
+    prompt: any,
+    isInteractive: boolean,
+    context: vscode.ExtensionContext,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: any[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
+    const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext && workspaceRoot) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
+          const mcpArgs = await this.getMcpConfigArgs(
+            mcpServerPath,
+            workspaceRoot
+          );
+          if (mcpArgs) {
+            args.push(...mcpArgs);
+            // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+            args.push("--allow-tool", "flightpath");
+            Log.info(
+              "🔧 MCP server config added for dynamic queue extension (FlightPath tools auto-approved)"
+            );
+          }
+        }
+      }
+    }
+
+    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    if (!isInteractive) {
+      const permissionConfig = {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+      const toolPermissionArgs =
+        this.toolPermissionMapper.buildArgs(permissionConfig);
+      args.push(...toolPermissionArgs);
+    } else {
+      // Interactive mode: Configure sessionEnd hook for completion detection
+      if (workspaceRoot) {
+        const hookArgs = this.buildSessionEndHookArgs(context, workspaceRoot);
+        args.push(...hookArgs);
+        Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
+      }
+    }
+
+    // Path permissions
+    if (ConfigurationUtils.shouldAllowAllPaths()) {
+      args.push("--allow-all-paths");
+    }
+
+    // Logging configuration
+    if (this.logDirectory) {
+      args.push("--log-dir", this.logDirectory);
+    }
+    const logLevel = ConfigurationUtils.getCopilotCliLogLevel();
+    if (logLevel !== "default") {
+      args.push("--log-level", logLevel);
+    }
+
+    // Workspace directories
+    if (workspaceRoot) {
+      const workspaceDirs = this.getWorkspaceDirs(workspaceRoot);
+      workspaceDirs.forEach((dir) => {
+        args.push("--add-dir", dir);
+      });
+    }
+
+    // Model selection with validation
+    const model = this.validateAndGetModel(prompt.model);
+    if (model) {
+      args.push("--model", model);
+    }
+
+    // Agent handling
+    if (prompt.agent) {
+      const agentName = prompt.agent.endsWith(".agent")
+        ? prompt.agent
+        : `${prompt.agent}.agent`;
+      args.push("--agent", agentName);
+      Log.info(`🤖 Using agent: ${agentName}`);
+    }
+
+    // Session resumption
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    Log.debug(
+      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+    );
+    if (!shouldStartNewSession && sessionId) {
+      args.push("--resume", sessionId);
+      Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
+    } else if (shouldStartNewSession) {
+      Log.debug(
+        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+      );
+    }
+
+    Log.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);
+
+    return args;
+  }
+
+  /**
+   * Get workspace directories for --add-dir arguments
+   */
+  private getWorkspaceDirs(workspaceRoot: string): string[] {
+    const workspaceDirs: string[] = [];
+
+    // Add primary workspace folder
+    if (vscode.workspace.workspaceFolders) {
+      vscode.workspace.workspaceFolders.forEach((folder) => {
+        workspaceDirs.push(folder.uri.fsPath);
+      });
+    }
+
+    // Add configured allowed directories
+    const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
+    allowedDirs.forEach((dir: string) => {
+      const absolutePath = path.isAbsolute(dir)
+        ? dir
+        : path.join(workspaceRoot, dir);
+      if (!workspaceDirs.includes(absolutePath)) {
+        workspaceDirs.push(absolutePath);
+      }
+    });
+
+    return workspaceDirs;
+  }
+
+  /**
+   * Validate model is supported by Copilot CLI, fallback to default if not
+   */
+  private validateAndGetModel(requestedModel?: string): string {
+    const defaultModel = ConfigurationUtils.getCliModel();
+
+    if (!requestedModel) {
+      return defaultModel;
+    }
+
+    // Check if model is supported by CLI (using dynamically discovered models)
+    if (isCliModelSupported(requestedModel)) {
+      return requestedModel;
+    }
+
+    // Model not supported - warn user and fallback
+    const supportedModels = getCliSupportedModelIds();
+    const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
+    Log.warn(`⚠️ ${message}`);
+
+    vscode.window.showWarningMessage(
+      `FlightPath: ${message}\n\nCLI-supported models: ${supportedModels.join(", ")}`
+    );
+
+    return defaultModel;
+  }
+
+  /**
+   * Build sessionEnd hook arguments for interactive mode.
+   * Returns CLI arguments to configure the hook.
+   *
+   * @param context Extension context for accessing hook script path
+   * @param workspaceRoot Workspace root directory
+   * @returns CLI arguments array
+   */
+  private buildSessionEndHookArgs(
+    context: vscode.ExtensionContext,
+    workspaceRoot: string
+  ): string[] {
+    // Get notification directory from notification monitor
+    const notifyDir =
+      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+    // Get hook script path from extension
+    const hookScriptPath = context.asAbsolutePath(
+      "out/scripts/flightpath-copilot-hook.js"
+    );
+
+    // Build hook config using notification monitor
+    const hookConfig = this.notificationMonitor.buildHookConfig(
+      hookScriptPath,
+      notifyDir,
+      workspaceRoot
+    );
+
+    // For Copilot, the hook config is written to .github/hooks/flightpath.json
+    // However, we can also pass inline JSON via --hook argument if supported
+    // For now, we'll create the hook file and let Copilot discover it automatically
+
+    // Create the hook file
+    this.createHookFile(hookConfig, workspaceRoot);
+
+    // No additional CLI args needed - Copilot auto-discovers hooks in .github/hooks/
+    return [];
+  }
+
+  /**
+   * Create the sessionEnd hook file for Copilot
+   */
+  private async createHookFile(
+    hookConfig: any,
+    workspaceRoot: string
+  ): Promise<void> {
+    try {
+      const hookDir = path.join(workspaceRoot, ".github", "hooks");
+      await fs.mkdir(hookDir, { recursive: true });
+
+      const hookPath = path.join(hookDir, "flightpath.json");
+      await fs.writeFile(
+        hookPath,
+        JSON.stringify(hookConfig.config, null, 2),
+        "utf-8"
+      );
+
+      Log.debug(`📁 Created hook file: ${hookPath}`);
+    } catch (error) {
+      Log.warn(`⚠️ Failed to create hook file: ${error}`);
+    }
+  }
+
+  /**
+   * Extract session ID from Copilot CLI process log files.
+   *
+   * New log format (as of CLI v0.0.377+): process-{timestamp}-{pid}.log
+   * Session ID appears in log lines: "Flushed X events to session {GUID}"
+   * Requires --log-level debug or higher to capture session ID.
+   * Returns the session ID from the most recently modified log file.
+   *
+   * @returns Session ID if found, undefined otherwise
+   */
+  async extractSessionIdFromLogs(): Promise<string | undefined> {
+    if (!this.logDirectory) {
+      return undefined;
+    }
+
+    try {
+      // Ensure log directory exists
+      await fs.mkdir(this.logDirectory, { recursive: true });
+
+      // Read all files in log directory
+      const files = await fs.readdir(this.logDirectory);
+
+      // Filter for process log files (process-{timestamp}-{pid}.log)
+      const processFiles = files.filter((file) =>
+        file.match(/^process-\d+-\d+\.log$/i)
+      );
+
+      if (processFiles.length === 0) {
+        return undefined;
+      }
+
+      // Get file stats to find most recent
+      const fileStats = await Promise.all(
+        processFiles.map(async (file) => {
+          const filePath = path.join(this.logDirectory!, file);
+          const stats = await fs.stat(filePath);
+          return { file, filePath, mtime: stats.mtime };
+        })
+      );
+
+      // Sort by modification time (most recent first)
+      fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+      // Read the most recent log file and search for session ID
+      const logContent = await fs.readFile(fileStats[0].filePath, "utf-8");
+
+      // Pattern: "Flushed X events to session {GUID}"
+      // Example: "2026-01-12T20:11:10.385Z [DEBUG] Flushed 3 events to session 4f59192e-65ed-4fdb-aed7-ce69a263dd7b"
+      const match = logContent.match(
+        /Flushed \d+ events to session ([a-f0-9-]+)/i
+      );
+
+      if (match && match[1]) {
+        return match[1];
+      }
+
+      return undefined;
+    } catch (error) {
+      Log.error("❌ Failed to extract session ID from logs", error);
+      return undefined;
+    }
+  }
+
+  /**   * Build CLI arguments for headless mode with file reference
    *
    * Copilot requires --prompt flag to specify file references.
    * Format: copilot --prompt "@path/to/file" [other args]
@@ -162,9 +523,6 @@ export class CopilotCliProvider implements ICliProvider {
     workspaceRoot: string
   ): Promise<string[] | null> {
     try {
-      const fs = require("fs/promises");
-      const path = require("path");
-
       // Generate MCP config JSON using shared utility
       // Copilot CLI requires "type": "local" and "tools" field
       const configJson = CliMcpConfigGenerator.generateJsonConfig(

@@ -1,5 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as vscode from "vscode";
+import * as path from "path";
 import {
   ICliProvider,
   ProviderConfig,
@@ -11,6 +13,9 @@ import { ClaudeResponseParser } from "./ClaudeResponseParser";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
+import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
+import { getClaudeModelName } from "../../../utils/ModelConstants";
+import { Log } from "../../../utils/Log";
 
 const execAsync = promisify(exec);
 
@@ -85,6 +90,9 @@ export class ClaudeCliProvider implements ICliProvider {
       /^\s*\?\s+for shortcuts/i, // Shortcuts hint
     ],
     shouldStreamHeadlessOutput: true,
+
+    // Claude uses Stop hook for reliable completion detection in interactive mode
+    usesInteractiveNotificationMonitor: true,
   };
 
   readonly responseParser: IResponseParser = new ClaudeResponseParser();
@@ -94,12 +102,251 @@ export class ClaudeCliProvider implements ICliProvider {
     new ClaudeToolPermissionMapper();
 
   /**
+   * Build complete CLI arguments array for Claude CLI execution
+   *
+   * Handles all Claude-specific arguments including:
+   * - MCP configuration (when dynamic queue extension enabled)
+   * - Print mode and output format (-p, --output-format stream-json, --verbose)
+   * - Model selection (with validation and fallback)
+   * - Workspace directories (--add-dir)
+   * - Session management (-r resume, -c continue)
+   * - Tool permissions (headless mode only)
+   * - Stop hook settings (interactive mode only)
+   *
+   * @param prompt The prompt item with model/agent/session settings
+   * @param isInteractive Whether this is interactive TUI or headless mode
+   * @param context Extension context for accessing scripts/paths
+   * @param workspaceRoot Workspace root directory
+   * @param sessionId Current session ID for resumption (if any)
+   * @param workflowContext Optional workflow context for MCP configuration
+   * @returns Complete CLI arguments array (without prompt - that's handled separately)
+   */
+  async buildCliArgs(
+    prompt: any,
+    isInteractive: boolean,
+    context: vscode.ExtensionContext,
+    workspaceRoot: string | undefined,
+    sessionId: string | undefined,
+    workflowContext?: {
+      promptIndex: number;
+      allPrompts: any[];
+      filePath?: string;
+    }
+  ): Promise<string[]> {
+    const args: string[] = [];
+
+    // MCP configuration (when dynamic queue extension is enabled)
+    if (workflowContext && workspaceRoot) {
+      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      if (dynamicQueueConfig.enabled) {
+        const {
+          shouldInjectExtensionInstructions,
+        } = require("../../../utils/PromptIdentity");
+        const shouldInject = shouldInjectExtensionInstructions(
+          prompt,
+          workflowContext.promptIndex,
+          workflowContext.allPrompts,
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+        );
+
+        if (shouldInject) {
+          const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
+          const mcpArgs = await this.getMcpConfigArgs(
+            mcpServerPath,
+            workspaceRoot
+          );
+          if (mcpArgs) {
+            args.push(...mcpArgs);
+            // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+            // Claude uses mcp__servername pattern to match all tools from a server
+            args.push("--allowed-tools", "mcp__flightpath");
+            Log.info(
+              "🔧 MCP server config added for dynamic queue extension (FlightPath tools auto-approved)"
+            );
+          }
+        }
+      }
+    }
+
+    // Only add print mode for headless (non-interactive) execution
+    // Interactive mode should allow user input, so we skip -p
+    if (!isInteractive) {
+      args.push("-p");
+
+      // Always use stream-json format with verbose flag for headless mode
+      args.push("--output-format", "stream-json");
+      args.push("--verbose");
+    }
+
+    // Model selection with validation
+    const model = this.validateAndGetModel(prompt.model);
+    args.push("--model", model);
+
+    // Agent handling
+    // NOTE: Claude CLI agent support is currently BROKEN (as of v2.1.7):
+    // - Agents in .claude/agents/ are NOT automatically loaded (GitHub issue #9930)
+    // - The --agent flag does not load agents from .claude/agents/
+    // - The --agents JSON flag is intended for "subagents" (different concept)
+    // - Workaround requires reading agent file and using --append-system-prompt
+    //
+    // Keeping minimal code for future when this is fixed
+    const agentName = prompt.agent || ConfigurationUtils.getCustomAgent();
+    if (agentName) {
+      Log.warn(
+        `⚠️ Claude CLI agent support is currently non-functional (known bug #9930). Agent "${agentName}" will be ignored.`
+      );
+      Log.warn(`   See: https://github.com/anthropics/claude-code/issues/9930`);
+    }
+
+    // Add workspace directories
+    if (workspaceRoot) {
+      const workspaceDirs = this.getWorkspaceDirs(workspaceRoot);
+      workspaceDirs.forEach((dir) => {
+        args.push("--add-dir", dir);
+      });
+    }
+
+    // Session management (MUST come BEFORE tool permissions to avoid being consumed by variadic --disallowedTools)
+    // Check prompt's explicit setting first, then fall back to global setting
+    const shouldStartNewSession =
+      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    Log.debug(
+      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+    );
+    if (!shouldStartNewSession && sessionId) {
+      args.push("-r", sessionId);
+      Log.debug(`✅ Added resume flag: -r ${sessionId}`);
+    } else if (!shouldStartNewSession) {
+      args.push("-c");
+      Log.debug(`✅ Added continue flag: -c`);
+    } else {
+      Log.debug(
+        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+      );
+    }
+
+    // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
+    // IMPORTANT: This MUST come after session management because --disallowedTools is variadic
+    // and will consume any flags after it (including -r <sessionId>)
+    if (!isInteractive) {
+      const permissionConfig = {
+        mode: ConfigurationUtils.getCliToolPermissions(),
+        allowedTools: ConfigurationUtils.getCliAllowedTools(),
+        deniedTools: ConfigurationUtils.getCliDeniedTools(),
+      };
+      const toolPermissionArgs =
+        this.toolPermissionMapper.buildArgs(permissionConfig);
+      args.push(...toolPermissionArgs);
+    } else {
+      // Interactive mode: Configure stop hook for completion detection
+      if (workspaceRoot) {
+        const hookSettings = this.buildStopHookSettings(context, workspaceRoot);
+        // Wrap JSON in single quotes for shell safety (PowerShell/bash)
+        args.push("--settings", `'${hookSettings}'`);
+        Log.debug(`🔔 Configured stop hook for completion detection`);
+      }
+    }
+
+    // Note: Prompt is NOT included here - it's a positional argument
+    // handled by the execution methods
+
+    return args;
+  }
+
+  /**
+   * Get workspace directories for --add-dir arguments
+   */
+  private getWorkspaceDirs(workspaceRoot: string): string[] {
+    const workspaceDirs: string[] = [];
+
+    // Add primary workspace folder
+    if (vscode.workspace.workspaceFolders) {
+      vscode.workspace.workspaceFolders.forEach((folder) => {
+        workspaceDirs.push(folder.uri.fsPath);
+      });
+    }
+
+    // Add configured allowed directories
+    const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
+    allowedDirs.forEach((dir: string) => {
+      const absolutePath = path.isAbsolute(dir)
+        ? dir
+        : path.join(workspaceRoot, dir);
+      if (!workspaceDirs.includes(absolutePath)) {
+        workspaceDirs.push(absolutePath);
+      }
+    });
+
+    return workspaceDirs;
+  }
+
+  /**
+   * Validate model is supported by Claude CLI, fallback to default if not
+   */
+  private validateAndGetModel(requestedModel?: string): string {
+    const defaultModel = ConfigurationUtils.getClaudeCliModel();
+
+    if (!requestedModel) {
+      // Return full model name for default
+      const fullName = getClaudeModelName(defaultModel);
+      return fullName || defaultModel;
+    }
+
+    // Try to look up the model in our comprehensive map
+    const fullModelName = getClaudeModelName(requestedModel);
+    if (fullModelName) {
+      return fullModelName;
+    }
+
+    // Model not recognized - warn user and fallback
+    const supportedFormats =
+      "aliases (sonnet, opus, haiku), generic names (claude-sonnet-4.5), or full names";
+    const message = `Model "${requestedModel}" not recognized for Claude CLI. Using default: ${defaultModel}`;
+    Log.warn(`⚠️ ${message}`);
+    Log.warn(`   Accepted formats: ${supportedFormats}`);
+
+    vscode.window.showWarningMessage(`FlightPath: ${message}`);
+
+    const defaultFullName = getClaudeModelName(defaultModel);
+    return defaultFullName || defaultModel;
+  }
+
+  /**
+   * Build settings JSON string with Stop hook configuration
+   */
+  private buildStopHookSettings(
+    context: vscode.ExtensionContext,
+    workspaceRoot: string
+  ): string {
+    const scriptPath = path.join(
+      context.extensionPath,
+      "out",
+      "scripts",
+      "flightpath-claude-stop-hook.js"
+    );
+    const notifyDir =
+      this.notificationMonitor.getNotificationDirectory(workspaceRoot);
+
+    const hookConfig = this.notificationMonitor.buildHookConfig(
+      scriptPath,
+      notifyDir,
+      workspaceRoot
+    );
+
+    // Extract JSON string from hook config (type guard for json-string variant)
+    if (hookConfig.type === "json-string") {
+      return hookConfig.config;
+    }
+    throw new Error("Unexpected hook config type for Claude CLI");
+  }
+
+  /**
    * Build CLI arguments for headless mode with file reference
    *
    * Claude CLI expects the prompt as the FIRST positional argument (right after command name).
    * This is critical because variadic flags like --disallowedTools will consume any args after them.
    *
-   * Format: claude "@path/to/file" -p [other args]
+   * Format: claude "@path/to/file" -p --output-format stream-json --verbose [other args]
    *
    * @param baseArgs Base arguments array
    * @param promptFileRef File reference (e.g., "@.flightpath/temp/prompt.md")
@@ -107,14 +354,21 @@ export class ClaudeCliProvider implements ICliProvider {
    */
   buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
     // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
-    return [`"${promptFileRef}"`, ...baseArgs];
+    return [
+      `"${promptFileRef}"`,
+      "-p", // Print mode (non-interactive)
+      "--output-format",
+      "stream-json", // JSON streaming for parsing
+      "--verbose", // Include detailed information
+      ...baseArgs,
+    ];
   }
 
   /**
    * Build CLI arguments for headless mode with direct prompt
    *
    * Simple prompts: pass as FIRST positional argument.
-   * Format: claude "your question here" -p [other args]
+   * Format: claude "your question here" -p --output-format stream-json --verbose [other args]
    *
    * @param baseArgs Base arguments array
    * @param promptText Prompt text
@@ -125,7 +379,14 @@ export class ClaudeCliProvider implements ICliProvider {
     promptText: string
   ): string[] {
     // Note: Quotes handle spaces and special chars
-    return [`"${promptText}"`, ...baseArgs];
+    return [
+      `"${promptText}"`,
+      "-p", // Print mode (non-interactive)
+      "--output-format",
+      "stream-json", // JSON streaming for parsing
+      "--verbose", // Include detailed information
+      ...baseArgs,
+    ];
   }
 
   /**
