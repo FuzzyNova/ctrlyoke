@@ -174,6 +174,60 @@
         "title": "Queue Next with FlightPath",
         "category": "FlightPath",
         "icon": "$(insert)"
+      },
+      {
+        "command": "flightpath.test.copilotAutomation",
+        "title": "Test Copilot Automation",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "flightpath.test.fileAttachment",
+        "title": "Test File Attachment",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "flightpath.test.chatModelSelection",
+        "title": "Test Chat Model Selection",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "flightpath.test.chatAgentSelection",
+        "title": "Test Chat Agent Selection",
+        "category": "FlightPath Test",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "flightpath.listChatCommands",
+        "title": "List Chat Commands",
+        "category": "FlightPath Test",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "flightpath.listAllCommands",
+        "title": "List All Commands",
+        "category": "FlightPath Test",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "flightpath.investigateChatLogs",
+        "title": "Investigate Chat Logs",
+        "category": "FlightPath Test",
+        "icon": "$(search)"
+      },
+      {
+        "command": "flightpath.showLanguageId",
+        "title": "Show Language ID",
+        "category": "FlightPath Test",
+        "icon": "$(symbol-text)"
+      },
+      {
+        "command": "flightpath.exportDiscoveredModels",
+        "title": "Export Discovered Models",
+        "category": "FlightPath Test",
+        "icon": "$(export)"
       }
     ],
     "menus": {
@@ -579,6 +633,7 @@
           "order": 110,
           "type": "string",
           "enum": [
+            "gpt-5.2-codex",
             "gpt-5-mini",
             "gpt-5",
             "gpt-4o-mini",
@@ -708,10 +763,13 @@
             "claude-haiku-4.5",
             "claude-opus-4.5",
             "claude-sonnet-4",
-            "gpt-5",
-            "gpt-5.1",
-            "gpt-5.1-codex-mini",
+            "gpt-5.2-codex",
+            "gpt-5.1-codex-max",
             "gpt-5.1-codex",
+            "gpt-5.2",
+            "gpt-5.1",
+            "gpt-5",
+            "gpt-5.1-codex-mini",
             "gpt-5-mini",
             "gpt-4.1",
             "gemini-3-pro-preview"
@@ -767,11 +825,10 @@
           "order": 410,
           "type": "string",
           "enum": [
+            "gpt-5.2-codex",
             "gpt-5.1-codex-max",
-            "gpt-5.1-codex",
             "gpt-5.1-codex-mini",
-            "gpt-5.2",
-            "gpt-5.1"
+            "gpt-5.2"
           ],
           "enumDescriptions": [
             "GPT-5.1 Codex Max - Most capable for deep reasoning",
@@ -928,9 +985,9 @@
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "vscode:prepublish": "npm run package",
-    "build:prod": "npm run check-types && node scripts/strip-dev-commands.mjs && node esbuild.js --production",
-    "package": "npm run build:prod && node scripts/strip-dev-commands.mjs --restore",
+    "vscode:prepublish": "npm run check-types && node scripts/strip-dev-commands.mjs && node esbuild.js --production",
+    "build:prod": "npm run vscode:prepublish && node scripts/strip-dev-commands.mjs --restore",
+    "package": "vsce package && node scripts/strip-dev-commands.mjs --restore",
     "strip-dev-commands": "node scripts/strip-dev-commands.mjs",
     "restore-package": "node scripts/strip-dev-commands.mjs --restore",
     "pretest": "npm run compile && npm run compile-tests",

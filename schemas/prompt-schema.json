@@ -33,7 +33,9 @@
           "$ref": "#/definitions/runtimeMetadata"
         }
       },
-      "required": ["prompts"],
+      "required": [
+        "prompts"
+      ],
       "additionalProperties": false
     }
   ],
@@ -54,7 +56,12 @@
         "provider": {
           "type": "string",
           "description": "AI provider to use for this prompt. Determines which CLI or chat integration to use. Optional - defaults to flightpath.provider setting.",
-          "enum": ["copilot-cli", "copilot-chat", "claude-cli", "codex-cli"]
+          "enum": [
+            "copilot-cli",
+            "copilot-chat",
+            "claude-cli",
+            "codex-cli"
+          ]
         },
         "model": {
           "type": "string",
@@ -80,6 +87,7 @@
             "gpt-5.1-codex-max",
             "gpt-5.1-codex-mini",
             "gpt-5.2",
+            "gpt-5.2-codex",
             "grok-code-fast-1",
             "haiku",
             "opus",
@@ -105,7 +113,9 @@
           "$ref": "#/definitions/endCondition"
         }
       },
-      "required": ["prompt"]
+      "required": [
+        "prompt"
+      ]
     },
     "endCondition": {
       "type": "object",
@@ -133,7 +143,10 @@
           "description": "Template for retry prompt with placeholders: {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}"
         }
       },
-      "required": ["script", "returns"]
+      "required": [
+        "script",
+        "returns"
+      ]
     },
     "runtimeMetadata": {
       "type": "object",
@@ -163,7 +176,11 @@
           "description": "Current execution state"
         }
       },
-      "required": ["currentIndex", "completedPrompts", "executionState"],
+      "required": [
+        "currentIndex",
+        "completedPrompts",
+        "executionState"
+      ],
       "additionalProperties": false
     }
   }

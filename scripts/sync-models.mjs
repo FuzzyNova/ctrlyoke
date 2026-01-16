@@ -179,6 +179,126 @@ function parseModelConstants() {
 }
 
 /**
+ * Auto-derive CODEX_CLI_DEFAULT_MODEL and CODEX_CLI_MODEL_LABELS from CODEX_CLI_MODELS
+ *
+ * This ensures you only need to update CODEX_CLI_MODELS array, and the
+ * default and labels are automatically generated.
+ */
+function updateCodexDerivedConstants(checkOnly = false) {
+  console.log("\nUpdating Codex derived constants...");
+
+  let content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
+  const codexModels = parseCodexModels(content);
+
+  if (codexModels.length === 0) {
+    console.log("  ⚠ No Codex models found, skipping");
+    return;
+  }
+
+  let needsUpdate = false;
+
+  // === Update CODEX_CLI_DEFAULT_MODEL (first model in array) ===
+  const expectedDefault = codexModels[0];
+  const defaultMatch = content.match(
+    /export\s+const\s+CODEX_CLI_DEFAULT_MODEL\s*=\s*["']([^"']+)["']\s*as\s+const/
+  );
+  const currentDefault = defaultMatch ? defaultMatch[1] : null;
+
+  if (currentDefault !== expectedDefault) {
+    needsUpdate = true;
+    console.log(`  CODEX_CLI_DEFAULT_MODEL: "${currentDefault}" → "${expectedDefault}"`);
+
+    if (!checkOnly) {
+      content = content.replace(
+        /export\s+const\s+CODEX_CLI_DEFAULT_MODEL\s*=\s*["'][^"']+["']\s*as\s+const/,
+        `export const CODEX_CLI_DEFAULT_MODEL = "${expectedDefault}" as const`
+      );
+    }
+  } else {
+    console.log(`  CODEX_CLI_DEFAULT_MODEL: ✓ already "${expectedDefault}"`);
+  }
+
+  // === Update CODEX_CLI_MODEL_LABELS (auto-generate from model IDs) ===
+  const expectedLabels = {};
+  codexModels.forEach((id) => {
+    expectedLabels[id] = generateDisplayName(id);
+  });
+
+  // Parse current labels
+  const labelsMatch = content.match(
+    /export\s+const\s+CODEX_CLI_MODEL_LABELS[^=]*=\s*\{([^}]+)\}/s
+  );
+  const currentLabels = {};
+  if (labelsMatch) {
+    const kvRegex = /["']([^"']+)["']\s*:\s*["']([^"']+)["']/g;
+    let match;
+    while ((match = kvRegex.exec(labelsMatch[1])) !== null) {
+      currentLabels[match[1]] = match[2];
+    }
+  }
+
+  // Check if labels match
+  const labelsDiffer =
+    Object.keys(expectedLabels).length !== Object.keys(currentLabels).length ||
+    Object.entries(expectedLabels).some(
+      ([id, label]) => currentLabels[id] !== label
+    );
+
+  if (labelsDiffer) {
+    needsUpdate = true;
+    console.log(
+      `  CODEX_CLI_MODEL_LABELS: ${Object.keys(currentLabels).length} → ${Object.keys(expectedLabels).length} entries`
+    );
+
+    if (!checkOnly) {
+      const labelEntries = Object.entries(expectedLabels)
+        .map(([id, label]) => `  "${id}": "${label}"`)
+        .join(",\n");
+      const newLabelsBlock = `export const CODEX_CLI_MODEL_LABELS: Record<string, string> = {\n${labelEntries},\n}`;
+
+      content = content.replace(
+        /export\s+const\s+CODEX_CLI_MODEL_LABELS[^=]*=\s*\{[^}]+\}/s,
+        newLabelsBlock
+      );
+    }
+  } else {
+    console.log(`  CODEX_CLI_MODEL_LABELS: ✓ already in sync`);
+  }
+
+  if (needsUpdate && !checkOnly) {
+    writeFileSync(MODEL_CONSTANTS_PATH, content);
+    console.log("  ✓ ModelConstants.ts updated");
+  } else if (needsUpdate && checkOnly) {
+    console.log("\n✗ Codex derived constants are out of sync");
+    process.exit(1);
+  }
+}
+
+/**
+ * Generate display name from model ID (used for auto-derivation)
+ * Moved to module scope so it can be used by both import and sync functions
+ */
+function generateDisplayName(modelId, existingLabels = {}) {
+  // Check if we already have a label
+  if (existingLabels[modelId]) {
+    return existingLabels[modelId];
+  }
+
+  // Generate from ID
+  return modelId
+    .split("-")
+    .map((part) => {
+      // Keep version numbers as-is
+      if (/^\d/.test(part)) return part;
+      // GPT should be uppercase
+      if (part.toLowerCase() === "gpt") return "GPT";
+      // Capitalize first letter
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(" ");
+}
+
+/**
  * Update enum arrays in package.json
  */
 function updatePackageJson(
@@ -335,7 +455,9 @@ async function discoverFromCli() {
  * Import models from discovered-models.json and update ModelConstants.ts
  *
  * This reads the JSON file exported by the "FlightPath: Export Discovered Models"
- * command and updates the COPILOT_MODELS object in ModelConstants.ts.
+ * command and updates:
+ * - COPILOT_MODELS object (chat models with display names)
+ * - COPILOT_CLI_MODEL_IDS array (CLI-supported subset)
  */
 function importDiscoveredModels() {
   console.log("Importing models from discovered-models.json...\n");
@@ -361,16 +483,15 @@ function importDiscoveredModels() {
   }
 
   // Read current ModelConstants.ts
-  const content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
+  let content = readFileSync(MODEL_CONSTANTS_PATH, "utf-8");
 
-  // Build new COPILOT_MODELS object
-  // We'll preserve display names where possible, generate new ones for new models
+  // === Update COPILOT_MODELS ===
+  // Extract existing display names to preserve them
   const existingLabels = {};
   const labelMatch = content.match(
     /export\s+const\s+COPILOT_MODELS[^=]*=\s*\{([^}]+(?:\{[^}]*\}[^}]*)*)\}/s
   );
   if (labelMatch) {
-    // Extract existing key-value pairs
     const kvRegex = /["']?([^"'\s:]+)["']?\s*:\s*["']([^"']+)["']/g;
     let match;
     while ((match = kvRegex.exec(labelMatch[1])) !== null) {
@@ -378,52 +499,75 @@ function importDiscoveredModels() {
     }
   }
 
-  // Generate display names for new models
-  function generateDisplayName(modelId) {
-    // Check if we already have a label
-    if (existingLabels[modelId]) {
-      return existingLabels[modelId];
-    }
-
-    // Generate from ID: claude-sonnet-4.5 -> Claude Sonnet 4.5
-    return modelId
-      .split("-")
-      .map((part) => {
-        // Keep version numbers as-is
-        if (/^\d/.test(part)) return part;
-        // Capitalize first letter
-        return part.charAt(0).toUpperCase() + part.slice(1);
-      })
-      .join(" ");
-  }
-
-  // Build the new object entries
-  const entries = discovered.chatModelIds.map((id) => {
-    const label = generateDisplayName(id);
+  // Build the new COPILOT_MODELS entries
+  const chatEntries = discovered.chatModelIds.map((id) => {
+    const label = generateDisplayName(id, existingLabels);
     return `  "${id}": "${label}"`;
   });
 
-  // Create the new COPILOT_MODELS block
-  const newBlock = `export const COPILOT_MODELS: Record<string, string> = {\n${entries.join(",\n")},\n}`;
+  const newCopilotModelsBlock = `export const COPILOT_MODELS: Record<string, string> = {\n${chatEntries.join(",\n")},\n}`;
 
-  // Replace in content
-  const newContent = content.replace(
+  content = content.replace(
     /export\s+const\s+COPILOT_MODELS[^=]*=\s*\{[^}]+(?:\{[^}]*\}[^}]*)*\}/s,
-    newBlock
+    newCopilotModelsBlock
   );
-
-  // Write back
-  writeFileSync(MODEL_CONSTANTS_PATH, newContent);
 
   console.log(
     `\n✓ Updated COPILOT_MODELS with ${discovered.chatModelIds.length} models`
   );
-  console.log("\nNew models added:");
-  discovered.chatModelIds.forEach((id) => {
-    if (!existingLabels[id]) {
-      console.log(`  + ${id}`);
+  const newChatModels = discovered.chatModelIds.filter(
+    (id) => !existingLabels[id]
+  );
+  if (newChatModels.length > 0) {
+    console.log("  New chat models:");
+    newChatModels.forEach((id) => console.log(`    + ${id}`));
+  }
+
+  // === Update COPILOT_CLI_MODEL_IDS ===
+  if (discovered.cliModelIds && discovered.cliModelIds.length > 0) {
+    // Get current CLI model IDs for comparison
+    const currentCliMatch = content.match(
+      /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[([\s\S]*?)\]\s*as\s+const/
+    );
+    const currentCliIds = [];
+    if (currentCliMatch) {
+      const stringRegex = /["']([^"']+)["']/g;
+      let match;
+      while ((match = stringRegex.exec(currentCliMatch[1])) !== null) {
+        currentCliIds.push(match[1]);
+      }
     }
-  });
+
+    // Build new CLI model IDs array
+    const cliEntries = discovered.cliModelIds.map((id) => `  "${id}"`);
+    const newCliBlock = `export const COPILOT_CLI_MODEL_IDS = [\n${cliEntries.join(",\n")},\n] as const`;
+
+    content = content.replace(
+      /export\s+const\s+COPILOT_CLI_MODEL_IDS\s*=\s*\[[\s\S]*?\]\s*as\s+const/,
+      newCliBlock
+    );
+
+    console.log(
+      `\n✓ Updated COPILOT_CLI_MODEL_IDS with ${discovered.cliModelIds.length} models`
+    );
+    const newCliModels = discovered.cliModelIds.filter(
+      (id) => !currentCliIds.includes(id)
+    );
+    const removedCliModels = currentCliIds.filter(
+      (id) => !discovered.cliModelIds.includes(id)
+    );
+    if (newCliModels.length > 0) {
+      console.log("  New CLI models:");
+      newCliModels.forEach((id) => console.log(`    + ${id}`));
+    }
+    if (removedCliModels.length > 0) {
+      console.log("  Removed CLI models:");
+      removedCliModels.forEach((id) => console.log(`    - ${id}`));
+    }
+  }
+
+  // Write back
+  writeFileSync(MODEL_CONSTANTS_PATH, content);
 
   console.log("\nNext step: Run 'npm run sync-models' to update package.json");
 }
@@ -448,6 +592,11 @@ async function main() {
   }
 
   try {
+    // First, auto-derive Codex constants from CODEX_CLI_MODELS
+    // This ensures you only need to update the CODEX_CLI_MODELS array
+    updateCodexDerivedConstants(checkOnly);
+
+    // Then parse and sync all models to package.json and schema
     const models = parseModelConstants();
     updatePackageJson(models, checkOnly);
     updateSchema(models, checkOnly);
