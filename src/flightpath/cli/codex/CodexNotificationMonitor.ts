@@ -6,6 +6,7 @@ import {
   HookConfig,
   NotificationMonitorBase,
 } from "../shared/interfaces/INotificationMonitor";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -34,7 +35,7 @@ export class CodexNotificationMonitor
   /**
    * Monitor for completion notification
    *
-   * Polls notification directory for files matching session ID.
+   * Delegates to shared CliNotificationMonitor utility.
    * Supports wildcard mode (sessionId = undefined) to detect any completion.
    *
    * @param config Monitoring configuration
@@ -49,94 +50,12 @@ export class CodexNotificationMonitor
     startTime: Date,
     onCancel?: () => boolean
   ): Promise<NotificationResult> {
-    const fs = require("fs/promises");
-    const pollInterval = config.pollMs || 250; // Default 250ms
-    const startTimeMs = startTime.getTime();
-    const timeoutMs = config.timeoutMs;
-
-    Log.debug(`🔍 Monitoring for Codex completion: ${sessionId || "wildcard"}`);
-    Log.debug(`   Directory: ${config.directory}`);
-    Log.debug(`   Timeout: ${timeoutMs}ms`);
-
-    // Ensure notification directory exists
-    try {
-      await fs.mkdir(config.directory, { recursive: true });
-    } catch (error) {
-      return {
-        completed: false,
-        error: `Failed to create notification directory: ${error}`,
-      };
-    }
-
-    while (true) {
-      // Check for cancellation
-      if (onCancel?.()) {
-        Log.debug("⏹️ Notification monitoring cancelled");
-        return { completed: false, error: "Cancelled by user" };
-      }
-
-      // Check timeout
-      const elapsedMs = Date.now() - startTimeMs;
-      if (elapsedMs >= timeoutMs) {
-        Log.debug("⏱️ Notification monitoring timed out");
-        return {
-          completed: false,
-          error: `Timeout after ${timeoutMs}ms`,
-        };
-      }
-
-      // Scan for notification files
-      try {
-        const files = await fs.readdir(config.directory);
-        const notifyFiles = files.filter((f: string) =>
-          f.startsWith("notify-")
-        );
-
-        for (const file of notifyFiles) {
-          const filePath = path.join(config.directory, file);
-          let fileContent: string;
-
-          try {
-            fileContent = await fs.readFile(filePath, "utf-8");
-          } catch (readError) {
-            Log.debug(`Failed to read notification file: ${readError}`);
-            continue;
-          }
-
-          // Parse notification data
-          let data: any;
-          try {
-            data = JSON.parse(fileContent);
-          } catch (parseError) {
-            Log.debug(`Failed to parse notification file: ${parseError}`);
-            continue;
-          }
-
-          // Check if this notification matches our session (or wildcard mode)
-          if (sessionId === undefined || data.sessionId === sessionId) {
-            Log.debug(`✅ Found matching notification: ${file}`);
-            Log.debug(`   Session ID: ${data.sessionId}`);
-
-            // Clean up notification file
-            try {
-              await fs.unlink(filePath);
-            } catch (unlinkError) {
-              Log.debug(`Failed to clean up notification file: ${unlinkError}`);
-            }
-
-            return {
-              completed: true,
-              data,
-            };
-          }
-        }
-      } catch (error) {
-        Log.debug(`Error scanning notification directory: ${error}`);
-      }
-
-      // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
-    }
+    return CliNotificationMonitor.monitorForCompletion(
+      config,
+      sessionId,
+      startTime,
+      onCancel
+    );
   }
 
   /**
@@ -174,11 +93,16 @@ export class CodexNotificationMonitor
   /**
    * Get notification directory for Codex CLI
    *
+   * Uses shared pattern: {workspace}/.flightpath/temp/codex-notifications/
+   *
    * @param workspaceRoot Workspace root
    * @returns Notification directory path
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(workspaceRoot, ".flightpath", "notify", "codex");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "codex"
+    );
   }
 
   /**

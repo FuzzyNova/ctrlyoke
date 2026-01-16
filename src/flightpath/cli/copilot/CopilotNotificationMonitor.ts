@@ -6,6 +6,7 @@ import {
   NotificationResult,
   HookConfig,
 } from "../shared/interfaces/INotificationMonitor";
+import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -24,7 +25,7 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
    * Monitor for completion notification
    *
-   * Polls notification directory for files created by sessionEnd hook.
+   * Delegates to shared CliNotificationMonitor utility.
    * Uses wildcard mode (sessionId = undefined) since Copilot hooks don't provide session IDs.
    *
    * @param config Monitoring configuration
@@ -39,76 +40,12 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
     startTime: Date,
     onCancel?: () => boolean
   ): Promise<NotificationResult> {
-    const pollMs = config.pollMs || 100;
-    const endTime = new Date(startTime.getTime() + config.timeoutMs);
-
-    Log.debug(
-      `🔔 Monitoring ${config.directory} for completion notifications...`
+    return CliNotificationMonitor.monitorForCompletion(
+      config,
+      sessionId,
+      startTime,
+      onCancel
     );
-
-    while (new Date() < endTime) {
-      // Check cancellation
-      if (onCancel?.()) {
-        return {
-          completed: false,
-          error: "Monitoring cancelled by user",
-        };
-      }
-
-      // Look for notification files in directory
-      try {
-        if (!fs.existsSync(config.directory)) {
-          await this.delay(pollMs);
-          continue;
-        }
-
-        const files = fs.readdirSync(config.directory);
-
-        // Filter for JSON files created after start time
-        for (const file of files) {
-          if (!file.endsWith(".json")) {
-            continue;
-          }
-
-          const filePath = path.join(config.directory, file);
-          const stats = fs.statSync(filePath);
-
-          // Only consider files created after execution started
-          if (stats.mtime < startTime) {
-            continue;
-          }
-
-          // Read notification data
-          const data = await this.readNotificationFile(filePath);
-          if (!data) {
-            continue;
-          }
-
-          // Wildcard mode: Accept any notification file
-          // (Copilot hooks don't provide session IDs)
-          if (!sessionId) {
-            Log.debug(`✅ Completion detected (wildcard mode): ${file}`);
-            return { completed: true, data };
-          }
-
-          // Session ID mode: Match specific session (if provided)
-          const notificationSessionId = this.extractSessionId?.(data);
-          if (notificationSessionId === sessionId) {
-            Log.debug(`✅ Completion detected for session: ${sessionId}`);
-            return { completed: true, data };
-          }
-        }
-      } catch (error) {
-        Log.debug(`⚠️ Error reading notification directory: ${error}`);
-      }
-
-      await this.delay(pollMs);
-    }
-
-    return {
-      completed: false,
-      error: "Timeout waiting for completion notification",
-    };
   }
 
   /**
@@ -156,11 +93,16 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
    * Get notification directory for Copilot CLI
    *
+   * Uses shared pattern: {workspace}/.flightpath/temp/copilot-notifications/
+   *
    * @param workspaceRoot Workspace root directory
-   * @returns Notification directory path (.flightpath/notify-copilot/)
+   * @returns Notification directory path
    */
   getNotificationDirectory(workspaceRoot: string): string {
-    return path.join(workspaceRoot, ".flightpath", "notify-copilot");
+    return CliNotificationMonitor.getNotificationDirectory(
+      workspaceRoot,
+      "copilot"
+    );
   }
 
   /**
@@ -175,28 +117,5 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   extractSessionId?(data: any): string | undefined {
     // Copilot hooks don't include session IDs in notifications
     return undefined;
-  }
-
-  /**
-   * Simple delay utility
-   * @param ms Milliseconds to wait
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Read and parse JSON notification file
-   * @param filePath Path to notification file
-   * @returns Parsed JSON data or null if error
-   */
-  private async readNotificationFile(filePath: string): Promise<any | null> {
-    try {
-      const content = fs.readFileSync(filePath, "utf-8");
-      return JSON.parse(content);
-    } catch (error) {
-      Log.debug(`Failed to read notification file: ${filePath}`);
-      return null;
-    }
   }
 }
