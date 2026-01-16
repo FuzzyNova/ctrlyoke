@@ -401,6 +401,20 @@ export class CliIntegration extends CopilotIntegration {
           timeoutMs,
         }) => {
           if (useNotificationMonitoring) {
+            // Clear session ID if starting a new session
+            if (workflowContext) {
+              const currentPrompt =
+                workflowContext.allPrompts[workflowContext.promptIndex];
+              const shouldStartNewSession =
+                ConfigurationUtils.shouldStartNewSessionForPrompt(
+                  currentPrompt.newChatSession
+                );
+              if (shouldStartNewSession) {
+                Log.debug("🔄 Clearing session ID for new session");
+                this.sessionId = undefined;
+              }
+            }
+
             // Dual monitoring: TUI + notification file (Claude, Copilot, Codex)
             return this.executeDualMonitoring(
               execution,
