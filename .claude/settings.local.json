@@ -27,7 +27,8 @@
       "WebFetch(domain:github.com)",
       "Bash(grep:*)",
       "Bash(wc:*)",
-      "Bash(copilot:*)"
+      "Bash(copilot:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

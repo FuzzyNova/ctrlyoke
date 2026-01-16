@@ -385,34 +385,46 @@
 
   /**
    * Get current property values from the UI
+   * @param {boolean} includeNullsForDefaults - If true, send null for default values (used for updates to clear overrides)
    * @returns {Object} Property values
    */
-  function getPropertyValues() {
+  function getPropertyValues(includeNullsForDefaults = false) {
     const properties = {};
     const propertyDefaults = stateManager.getPropertyDefaults();
 
-    // Only include non-default values - use shared property name constants
+    // For non-default values, include the actual value
+    // For default values, include null if includeNullsForDefaults is true (to clear overrides)
     if (elements.propProvider.value !== propertyDefaults.PROVIDER) {
       properties[PROMPT_PROPERTIES.PROVIDER] = elements.propProvider.value;
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.PROVIDER] = null;
     }
 
     if (elements.propModel.value !== propertyDefaults.MODEL) {
       properties[PROMPT_PROPERTIES.MODEL] = elements.propModel.value;
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.MODEL] = null;
     }
 
     const agent = elements.propAgent.value.trim();
     if (agent && agent !== propertyDefaults.AGENT) {
       properties[PROMPT_PROPERTIES.AGENT] = agent;
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.AGENT] = null;
     }
 
     if (elements.propNewChat.value !== propertyDefaults.NEW_CHAT) {
       properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] =
         elements.propNewChat.value === "yes";
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] = null;
     }
 
     if (elements.propAllowDynamic.value !== propertyDefaults.ALLOW_DYNAMIC) {
       properties[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION] =
         elements.propAllowDynamic.value === "yes";
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION] = null;
     }
 
     // Build end condition from controls (extracted helper)
@@ -422,6 +434,8 @@
     );
     if (endCondition) {
       properties[PROMPT_PROPERTIES.END_CONDITION] = endCondition;
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.END_CONDITION] = null;
     }
 
     return properties;
@@ -785,7 +799,8 @@
       return; // Don't save empty prompts
     }
 
-    const properties = getPropertyValues();
+    // Pass true to include nulls for default values, enabling clearing of property overrides
+    const properties = getPropertyValues(true);
 
     vscode.postMessage({
       type: MESSAGE_TYPES.UPDATE_PROMPT,

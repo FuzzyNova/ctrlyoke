@@ -247,12 +247,26 @@
       const existing = existingPromptsMap.get(i);
 
       if (existing && i < oldLength) {
-        // Existing prompt - preserve ALL its state (status, details, outputs, etc.)
-        // Update the text in case it changed (e.g., via MCP edit)
+        // Existing prompt - preserve runtime state (status, details, outputs, etc.)
+        // but merge in ALL updated properties from backend (text, provider, model, etc.)
+        // MCP only adds new prompts (never updates existing ones), so we don't need to
+        // worry about undefined properties accidentally clearing overrides.
         const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
+
+        // Extract all properties from incoming prompt (including undefined to clear overrides)
+        const updatedProps = typeof p === "string" ? {} : {
+          [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
+          [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
+          [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
+          [PROMPT_PROPERTIES.NEW_CHAT_SESSION]: p[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+          [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]: p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+          [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
+        };
+
         return {
           ...existing,
-          text, // Update text to reflect any MCP edits
+          text, // Update text to reflect any edits
+          ...updatedProps, // Merge in all updated properties
         };
       } else {
         // New prompt (appended) - create fresh item

@@ -1177,31 +1177,58 @@ export class FlightPathManager {
 
   /**
    * Build PromptItem properties from dashboard properties object
-   * Only includes explicitly set values (filters out "default" placeholders)
+   * Handles three cases for each property:
+   * - null: Clear the override (set to undefined to remove from prompt)
+   * - value: Set the override
+   * - undefined (not in object): Don't change (not included in updates)
    * @param properties - Raw properties from dashboard
-   * @returns Partial PromptItem with only explicitly set properties
+   * @returns Partial PromptItem with properties to update
    */
   private buildPromptItemProperties(properties: any): Partial<PromptItem> {
     const updates: Partial<PromptItem> = {};
 
-    // Only add properties that aren't "default"
-    if (properties.provider) {
-      updates.provider = properties.provider as Provider;
+    // Handle provider: null clears, value sets, undefined skips
+    if (properties.provider !== undefined) {
+      updates.provider =
+        properties.provider === null
+          ? undefined
+          : (properties.provider as Provider);
     }
-    if (properties.model) {
-      updates.model = properties.model;
+
+    // Handle model: null clears, value sets, undefined skips
+    if (properties.model !== undefined) {
+      updates.model =
+        properties.model === null ? undefined : properties.model;
     }
-    if (properties.agent) {
-      updates.agent = properties.agent;
+
+    // Handle agent: null clears, value sets, undefined skips
+    if (properties.agent !== undefined) {
+      updates.agent =
+        properties.agent === null ? undefined : properties.agent;
     }
+
+    // Handle newChatSession: null clears, boolean sets, undefined skips
     if (properties.newChatSession !== undefined) {
-      updates.newChatSession = properties.newChatSession;
+      updates.newChatSession =
+        properties.newChatSession === null
+          ? undefined
+          : properties.newChatSession;
     }
+
+    // Handle allowDynamicExtension: null clears, boolean sets, undefined skips
     if (properties.allowDynamicExtension !== undefined) {
-      updates.allowDynamicExtension = properties.allowDynamicExtension;
+      updates.allowDynamicExtension =
+        properties.allowDynamicExtension === null
+          ? undefined
+          : properties.allowDynamicExtension;
     }
-    if (properties.endCondition) {
-      updates.endCondition = properties.endCondition;
+
+    // Handle endCondition: null clears, object sets, undefined skips
+    if (properties.endCondition !== undefined) {
+      updates.endCondition =
+        properties.endCondition === null
+          ? undefined
+          : properties.endCondition;
     }
 
     return updates;
