@@ -1,18 +1,19 @@
 import * as assert from "assert";
-import { CopilotCommandLineIntegration } from "../../flightpath/cli/CopilotCommandLineIntegration";
-import { ClaudeCommandLineIntegration } from "../../flightpath/cli/ClaudeCommandLineIntegration";
+import { CliIntegration } from "../../flightpath/cli/CliIntegration";
+import { CopilotCliProvider } from "../../flightpath/cli/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "../../flightpath/cli/claude/ClaudeCliProvider";
 import * as vscode from "vscode";
 
 suite("Token Parsing Integration Tests", () => {
-  let copilotIntegration: CopilotCommandLineIntegration;
-  let claudeIntegration: ClaudeCommandLineIntegration;
+  let copilotIntegration: CliIntegration;
+  let claudeIntegration: CliIntegration;
 
   setup(() => {
     const context = {
       subscriptions: [],
     } as unknown as vscode.ExtensionContext;
-    copilotIntegration = new CopilotCommandLineIntegration(context);
-    claudeIntegration = new ClaudeCommandLineIntegration(context);
+    copilotIntegration = new CliIntegration(new CopilotCliProvider(), context);
+    claudeIntegration = new CliIntegration(new ClaudeCliProvider(), context);
   });
 
   suite("Copilot CLI Token Parsing", () => {

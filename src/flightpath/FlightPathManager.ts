@@ -4,9 +4,10 @@ import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
 import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
-import { CopilotCommandLineIntegration } from "./cli/CopilotCommandLineIntegration";
-import { ClaudeCommandLineIntegration } from "./cli/ClaudeCommandLineIntegration";
-import { CodexCommandLineIntegration } from "./cli/CodexCommandLineIntegration";
+import { CliIntegration } from "./cli/CliIntegration";
+import { CopilotCliProvider } from "./cli/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "./cli/claude/ClaudeCliProvider";
+import { CodexCliProvider } from "./cli/codex/CodexCliProvider";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
 import { WorkflowExecutor, WorkflowContext } from "./WorkflowExecutor";
@@ -38,10 +39,10 @@ import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
   private promptQueue: PromptQueue;
-  private copilotCliIntegration: CopilotCommandLineIntegration;
+  private copilotCliIntegration: CliIntegration;
   private chatIntegration: CopilotChatIntegration;
-  private claudeCliIntegration: ClaudeCommandLineIntegration;
-  private codexCliIntegration: CodexCommandLineIntegration;
+  private claudeCliIntegration: CliIntegration;
+  private codexCliIntegration: CliIntegration;
   private endConditionEvaluator: EndConditionEvaluator;
   private endConditionHandler: EndConditionHandler;
   private workflowExecutor: WorkflowExecutor;
@@ -72,10 +73,16 @@ export class FlightPathManager {
     this.promptQueue = new PromptQueue();
 
     // Initialize ALL integrations so they're always ready to use
-    this.copilotCliIntegration = new CopilotCommandLineIntegration(context);
+    // Phase 3: Use composition-based CliIntegration for Copilot (pilot implementation)
+    // Phase 4: Use composition-based CliIntegration for Claude (refactored)
+    // Phase 5: Use composition-based CliIntegration for Codex (refactored)
+    const copilotProvider = new CopilotCliProvider();
+    this.copilotCliIntegration = new CliIntegration(copilotProvider, context);
     this.chatIntegration = new CopilotChatIntegration(context);
-    this.claudeCliIntegration = new ClaudeCommandLineIntegration(context);
-    this.codexCliIntegration = new CodexCommandLineIntegration(context);
+    const claudeProvider = new ClaudeCliProvider();
+    this.claudeCliIntegration = new CliIntegration(claudeProvider, context);
+    const codexProvider = new CodexCliProvider();
+    this.codexCliIntegration = new CliIntegration(codexProvider, context);
 
     this.endConditionEvaluator = new EndConditionEvaluator(context);
     this.endConditionHandler = new EndConditionHandler(

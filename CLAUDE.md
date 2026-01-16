@@ -19,7 +19,7 @@ When editing or analyzing files, read the corresponding instruction file:
 | `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md` | FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
 | `src/flightpath/base/**`               | `.github/instructions/flightpath-base.instructions.md` | CopilotIntegration abstract base class                                  |
 | `src/flightpath/chat/**`               | `.github/instructions/flightpath-chat.instructions.md` | CopilotChatIntegration (UI automation)                                  |
-| `src/flightpath/cli/**`                | `.github/instructions/flightpath-cli.instructions.md`  | CopilotCommandLineIntegration, ClaudeCommandLineIntegration             |
+| `src/flightpath/cli/**`                | `.github/instructions/flightpath-cli.instructions.md`  | CliIntegration, CLI providers (Copilot, Claude, Codex)                  |
 | `src/ui/**`                            | `.github/instructions/ui.instructions.md`              | Status bar, dashboard, settings webview providers                       |
 | `src/types/**`                         | `.github/instructions/types.instructions.md`           | Type definitions and data structures                                    |
 | `src/templates/**`                     | `.github/instructions/templates.instructions.md`       | End condition script templates                                          |

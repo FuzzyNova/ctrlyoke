@@ -74,30 +74,6 @@
         "category": "FlightPath"
       },
       {
-        "command": "flightpath.test.copilotAutomation",
-        "title": "Test Copilot Chat Automation (POC)",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.test.fileAttachment",
-        "title": "Test File Attachment Commands",
-        "category": "FlightPath Test",
-        "icon": "$(link)"
-      },
-      {
-        "command": "flightpath.test.chatModelSelection",
-        "title": "Test Chat Model Selection",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.test.chatAgentSelection",
-        "title": "Test Chat Agent Selection",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
         "command": "flightpath.showCopilotStatus",
         "title": "Show Copilot Integration Status",
         "category": "FlightPath",
@@ -114,36 +90,6 @@
         "title": "Retry Copilot Detection",
         "category": "FlightPath",
         "icon": "$(refresh)"
-      },
-      {
-        "command": "flightpath.listChatCommands",
-        "title": "List All Chat Commands",
-        "category": "FlightPath Test",
-        "icon": "$(list-unordered)"
-      },
-      {
-        "command": "flightpath.listAllCommands",
-        "title": "List All VS Code Commands",
-        "category": "FlightPath Test",
-        "icon": "$(symbol-keyword)"
-      },
-      {
-        "command": "flightpath.investigateChatLogs",
-        "title": "Investigate Chat Log Access",
-        "category": "FlightPath Test",
-        "icon": "$(search)"
-      },
-      {
-        "command": "flightpath.exportDiscoveredModels",
-        "title": "Export Discovered Models",
-        "category": "FlightPath Test",
-        "icon": "$(export)"
-      },
-      {
-        "command": "flightpath.showLanguageId",
-        "title": "Show Document Language ID",
-        "category": "FlightPath Test",
-        "icon": "$(info)"
       },
       {
         "command": "flightpath.createEndConditionScript",
@@ -995,7 +941,7 @@
     "restore-package": "node scripts/strip-dev-commands.mjs --restore",
     "pretest": "npm run compile && npm run compile-tests",
     "test": "node ./out/test/runTest.js",
-    "test:unit": "node ./out/test/runTest.js --grep \"^(CopilotCommandLineIntegration|CopilotChatIntegration)\"",
+    "test:unit": "node ./out/test/runTest.js --grep \"^(CliIntegration|CopilotChatIntegration)\"",
     "test:integration": "cross-env COPILOT_CLI_INTEGRATION_TESTS=1 npm test",
     "test:watch": "npm run compile && npm test -- --watch",
     "test:coverage": "nyc npm test",
