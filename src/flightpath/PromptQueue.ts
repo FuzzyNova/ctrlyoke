@@ -1070,6 +1070,7 @@ export class PromptQueue {
         this.state.workflowName ||
         path.basename(originalFilePath, path.extname(originalFilePath)),
       startedAt: Date.now(),
+      lastModifiedAt: Date.now(),
       prompts: prompts,
       _runtime: {
         currentIndex: 0,
@@ -1265,6 +1266,9 @@ export class PromptQueue {
       if (this.state.workflowName) {
         workingFile.workflowName = this.state.workflowName;
       }
+
+      // Update last modified timestamp
+      workingFile.lastModifiedAt = Date.now();
 
       // Update runtime state
       workingFile._runtime = {

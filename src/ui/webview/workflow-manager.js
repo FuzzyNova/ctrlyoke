@@ -16,7 +16,7 @@
 (function () {
   // Import constants and utilities from global scope
   const { MESSAGE_TYPES, EXECUTION_STATES } = window.FlightPathConstants;
-  const { getWorkflowName } = window.FlightPathUtilities;
+  const { getWorkflowName, formatRelativeTime } = window.FlightPathUtilities;
 
   // Dependencies (injected via init)
   let vscode = null;
@@ -796,6 +796,9 @@
         workflow.filePath === workflowStatusState.currentFilePath;
       const stateClass = `state-${workflow.executionState.toLowerCase()}`;
 
+      // Format relative time for last modified timestamp
+      const timeAgo = formatRelativeTime(workflow.lastModifiedAt || workflow.startedAt);
+
       const item = document.createElement("button");
       item.className = `workflow-menu-item ${isCurrent ? "current" : ""}`;
       item.dataset.filePath = workflow.filePath;
@@ -807,6 +810,7 @@
         <span class="workflow-menu-item-state ${stateClass}">
           ${workflow.executionState}
         </span>
+        <span class="workflow-menu-item-time">${timeAgo}</span>
       `;
 
       elements.workflowMenuItems.appendChild(item);

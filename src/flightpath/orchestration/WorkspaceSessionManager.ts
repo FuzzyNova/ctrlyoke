@@ -94,7 +94,7 @@ export class WorkspaceSessionManager {
 
   /**
    * Find the most recent working file in the queue directory
-   * Sorted by timestamp in filename (newest first)
+   * Sorted by lastModifiedAt timestamp (or startedAt if not available)
    *
    * @param queueDir Path to .flightpath/.queue/ directory
    * @returns Most recent filename or undefined if none found
@@ -120,10 +120,31 @@ export class WorkspaceSessionManager {
         return undefined;
       }
 
-      // Sort by timestamp in filename (newest first)
-      // Format: workflow-2024-12-22T15-30-00.flightpath.json
-      const sorted = workingFiles.sort().reverse();
-      return sorted[0];
+      // Read each file to get lastModifiedAt timestamp
+      const filesWithTimestamps = await Promise.all(
+        workingFiles.map(async (filename) => {
+          try {
+            const filePath = path.join(queueDir, filename);
+            const content = await vscode.workspace.fs.readFile(
+              vscode.Uri.file(filePath)
+            );
+            const workingFile = JSON.parse(content.toString());
+
+            // Use lastModifiedAt if available, fall back to startedAt
+            const timestamp = workingFile.lastModifiedAt || workingFile.startedAt || 0;
+
+            return { filename, timestamp };
+          } catch (error) {
+            console.warn(`Failed to read ${filename}:`, error);
+            return { filename, timestamp: 0 };
+          }
+        })
+      );
+
+      // Sort by timestamp (newest first)
+      filesWithTimestamps.sort((a, b) => b.timestamp - a.timestamp);
+
+      return filesWithTimestamps[0]?.filename;
     } catch (error) {
       console.error(
         "FlightPath: Failed to find most recent working file:",

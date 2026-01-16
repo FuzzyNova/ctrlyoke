@@ -42,6 +42,7 @@ export interface WorkingFile extends PromptFile {
   originalFile: string; // Path to original prompt file
   workflowName: string; // Derived from original filename
   startedAt: number; // Timestamp when workflow started
+  lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
 }
 

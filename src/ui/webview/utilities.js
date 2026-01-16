@@ -5,7 +5,7 @@
  * These functions can be used across all dashboard modules.
  *
  * Exports:
- * - Time utilities: getTimestamp, formatTime
+ * - Time utilities: getTimestamp, formatTime, formatRelativeTime
  * - String utilities: escapeHtml, truncate, getWorkflowName
  * - End condition utilities: getEndConditionValue, buildEndConditionFromControls, setEndConditionControls
  * - Prompt item factory: createPromptItem
@@ -28,6 +28,34 @@
    */
   function formatTime(timestampMs) {
     return new Date(timestampMs).toLocaleTimeString();
+  }
+
+  /**
+   * Format timestamp as relative time ago
+   * Examples: "1 min", "43 min", "2 hr", "5 days"
+   * @param {number} timestampMs - Timestamp in milliseconds
+   * @returns {string} Relative time string
+   */
+  function formatRelativeTime(timestampMs) {
+    const now = Date.now();
+    const diffMs = now - timestampMs;
+
+    // Calculate time units
+    const seconds = Math.floor(diffMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    // Format based on largest unit
+    if (days > 0) {
+      return `${days} day${days !== 1 ? 's' : ''}`;
+    } else if (hours > 0) {
+      return `${hours} hr`;
+    } else if (minutes > 0) {
+      return `${minutes} min`;
+    } else {
+      return 'just now';
+    }
   }
 
   /**
@@ -205,6 +233,7 @@
   window.FlightPathUtilities = {
     getTimestamp,
     formatTime,
+    formatRelativeTime,
     escapeHtml,
     truncate,
     getWorkflowName,

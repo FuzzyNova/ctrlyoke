@@ -508,6 +508,14 @@ body {
   flex-shrink: 0;
 }
 
+/* Workflow time indicator in menu item */
+.workflow-menu-item-time {
+  font-size: 11px;
+  color: var(--fg-secondary);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* State colors (match execution-state classes) */
 .workflow-menu-item-state.state-idle {
   background-color: var(--vscode-inputValidation-infoBackground);

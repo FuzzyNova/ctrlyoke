@@ -1141,6 +1141,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
             const content = await fs.readFile(filePath, "utf8");
             const workingFile = JSON.parse(content);
 
+            // Use lastModifiedAt if available, fall back to startedAt
+            const lastModified = workingFile.lastModifiedAt || workingFile.startedAt || 0;
+
             return {
               filePath,
               workflowName:
@@ -1148,6 +1151,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
                 file.replace(".flightpath.json", ""),
               executionState: workingFile._runtime?.executionState || "IDLE",
               startedAt: workingFile.startedAt || 0,
+              lastModifiedAt: lastModified,
             };
           } catch (error) {
             Log.warn(`Failed to parse workflow file ${file}:`, error);
@@ -1156,10 +1160,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         })
       );
 
-      // Filter out nulls and sort by most recent
+      // Filter out nulls and sort by most recent modification
       const validWorkflows = workflows
         .filter((w) => w !== null)
-        .sort((a, b) => b!.startedAt - a!.startedAt);
+        .sort((a, b) => b!.lastModifiedAt - a!.lastModifiedAt);
 
       this.postMessage({
         type: MESSAGE_TYPES.RECENT_WORKFLOWS,
