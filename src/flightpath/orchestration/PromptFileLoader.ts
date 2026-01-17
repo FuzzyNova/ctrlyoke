@@ -74,6 +74,47 @@ export class PromptFileLoader {
             promptFile.prompts,
             workspaceFolder
           );
+
+          // Copy workflow-level properties from loaded file to working file
+          // This ensures file properties take precedence over pending/global settings
+          if (workingFilePath) {
+            const workingFile =
+              await this.promptQueue.readWorkingFile(workingFilePath);
+
+            // Copy workflow-level properties (if defined in loaded file)
+            const propertiesToCopy = [
+              "provider",
+              "model",
+              "agent",
+              "newChatSession",
+              "allowDynamicExtension",
+              "endCondition",
+            ] as const;
+
+            let modified = false;
+            for (const key of propertiesToCopy) {
+              if ((promptFile as any)[key] !== undefined) {
+                (workingFile as any)[key] = (promptFile as any)[key];
+                modified = true;
+                Log.info(
+                  `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify((promptFile as any)[key])}`
+                );
+              }
+            }
+
+            // Write back to working file if any properties were copied
+            if (modified) {
+              const fs = await import("fs/promises");
+              await fs.writeFile(
+                workingFilePath,
+                JSON.stringify(workingFile, null, 2),
+                "utf-8"
+              );
+              Log.info(
+                "Persisted workflow-level properties from loaded file to working file"
+              );
+            }
+          }
         } catch (error) {
           Log.error("Failed to create working file:", error);
           // Continue without working file (fallback to in-memory queue)

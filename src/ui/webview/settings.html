@@ -32,7 +32,6 @@
             <select
               id="workflow-provider"
               title="Select AI provider for prompt execution"
-              disabled
             >
               <!-- Populated dynamically with availability status -->
             </select>
@@ -52,7 +51,7 @@
         <div class="setting-group">
           <label for="workflow-model">Model</label>
           <div class="setting-input-row">
-            <select id="workflow-model" title="Select AI model" disabled>
+            <select id="workflow-model" title="Select AI model">
               <!-- Populated dynamically based on provider -->
             </select>
             <button
@@ -71,7 +70,7 @@
         <div class="setting-group">
           <label for="workflow-agent">Agent</label>
           <div class="setting-input-row">
-            <select id="workflow-agent" title="Select custom agent" disabled>
+            <select id="workflow-agent" title="Select custom agent">
               <option value="">None</option>
               <!-- Populated dynamically from discovered .agent.md files -->
             </select>
@@ -91,7 +90,7 @@
         <div class="setting-group">
           <label for="workflow-new-chat">New Chat Session Per Prompt</label>
           <div class="setting-input-row">
-            <select id="workflow-new-chat" title="New chat session" disabled>
+            <select id="workflow-new-chat" title="New chat session">
               <option value="true">Yes</option>
               <option value="false">No</option>
             </select>
@@ -116,7 +115,6 @@
             <select
               id="workflow-dynamic-ext"
               title="Allow dynamic extension"
-              disabled
             >
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -138,7 +136,7 @@
         <!-- Workflow-Wide End Condition -->
         <div class="setting-group end-condition-group">
           <label class="checkbox-label">
-            <input type="checkbox" id="workflow-end-enabled" disabled />
+            <input type="checkbox" id="workflow-end-enabled" />
             <span>Apply end condition to all prompts</span>
           </label>
 
@@ -154,7 +152,6 @@
               type="text"
               id="workflow-end-script"
               placeholder="npm test"
-              disabled
             />
 
             <label for="workflow-end-returns">Returns:</label>
@@ -162,7 +159,6 @@
               type="text"
               id="workflow-end-returns"
               placeholder="true"
-              disabled
             />
 
             <label for="workflow-end-timeout">Timeout (ms):</label>
@@ -171,7 +167,6 @@
               id="workflow-end-timeout"
               value="30000"
               min="1000"
-              disabled
             />
 
             <label for="workflow-end-retries">Max Retries:</label>
@@ -180,7 +175,6 @@
               id="workflow-end-retries"
               value="0"
               min="-1"
-              disabled
             />
 
             <label for="workflow-end-retry-prompt">Retry Prompt:</label>
@@ -188,7 +182,6 @@
               id="workflow-end-retry-prompt"
               rows="3"
               placeholder="Validation failed: {error}&#10;&#10;Please fix the issues."
-              disabled
             ></textarea>
           </div>
         </div>

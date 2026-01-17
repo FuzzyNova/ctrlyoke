@@ -3,6 +3,7 @@ import {
   PromptItem,
   DynamicQueueConfig,
   EXECUTION_STATES,
+  Provider,
 } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
@@ -38,7 +39,10 @@ export interface WorkflowContext {
   /** Dynamic queue configuration */
   dynamicQueueConfig: DynamicQueueConfig;
   /** Integration resolver - gets the appropriate integration for a prompt */
-  getIntegrationForPrompt: (prompt: PromptItem) => CopilotIntegration;
+  getIntegrationForPrompt: (
+    prompt: PromptItem,
+    providerOverride?: Provider
+  ) => CopilotIntegration;
 }
 
 /**
@@ -106,9 +110,6 @@ export class WorkflowExecutor {
       const prompt = state.prompts[i];
       const dynamicConfig = context.dynamicQueueConfig;
 
-      // Resolve the integration for this prompt (supports per-prompt provider override)
-      const integration = context.getIntegrationForPrompt(prompt);
-
       // Check if paused or stopped before starting new prompt
       const currentStatus = this.promptQueue.getState().status;
       if (currentStatus === EXECUTION_STATES.PAUSED) {
@@ -134,6 +135,16 @@ export class WorkflowExecutor {
       if (shouldStop) {
         break;
       }
+
+      // Resolve properties with three-tier precedence (prompt → workflow → settings)
+      const workflowFile = this.promptQueue.getWorkflowFile();
+      const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+
+      // Resolve the integration for this prompt (supports per-prompt and workflow-level provider)
+      const integration = context.getIntegrationForPrompt(
+        prompt,
+        resolvedProperties.provider
+      );
 
       // Update dashboard step status to running
       this.updateDashboardForPromptStart(context, prompt, i);
@@ -193,10 +204,6 @@ export class WorkflowExecutor {
           context.dashboardProvider?.updateCliStreamingChunk(i, chunk);
         });
       }
-
-      // Resolve properties with three-tier precedence (prompt → workflow → settings)
-      const workflowFile = this.promptQueue.getWorkflowFile();
-      const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
 
       // Log resolved properties for debugging
       Log.info(

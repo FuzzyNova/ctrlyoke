@@ -282,8 +282,8 @@
     // Update "Set as Default" button visibility
     updateAllSetAsDefaultButtons();
 
-    // Enable/disable fields based on workflow loaded state
-    setFieldsEnabled(workflowLoaded);
+    // Always enable fields (allow setting workflow properties even without a loaded workflow)
+    setFieldsEnabled(true);
   }
 
   function handleWorkflowPropertiesUpdate(data) {
@@ -302,6 +302,8 @@
 
   function handleWorkflowUnloaded() {
     workflowLoaded = false;
+
+    // Clear workflow properties (extension maintains pending state)
     workflowProperties = {
       provider: undefined,
       model: undefined,
@@ -310,7 +312,12 @@
       allowDynamicExtension: undefined,
       endCondition: undefined,
     };
-    setFieldsEnabled(false);
+
+    // Keep fields enabled so users can set properties before creating a workflow
+    setFieldsEnabled(true);
+
+    // Reload UI with global defaults
+    loadWorkflowPropertiesIntoUI();
   }
 
   function handleModelOptionsUpdate(data) {
@@ -493,7 +500,7 @@
 
   function updateSetAsDefaultButton(property) {
     const btn = document.querySelector(`[data-property="${property}"]`);
-    if (!btn || !workflowLoaded) {
+    if (!btn) {
       return;
     }
 
@@ -507,10 +514,6 @@
   }
 
   function updateAllSetAsDefaultButtons() {
-    if (!workflowLoaded) {
-      return;
-    }
-
     updateSetAsDefaultButton("provider");
     updateSetAsDefaultButton("model");
     updateSetAsDefaultButton("agent");
@@ -558,10 +561,12 @@
   // ============================================================================
 
   function saveWorkflowProperty(property, value) {
-    if (!workflowLoaded) {
-      return;
-    }
+    // Update local state for UI consistency
+    workflowProperties[property] = value;
 
+    // Always send to extension - it will decide whether to:
+    // - Update working file (if workflow loaded)
+    // - Store in pending properties (if no workflow yet)
     vscode.postMessage({
       type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
       property: property,

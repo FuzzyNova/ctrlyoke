@@ -73,6 +73,16 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   // Reference to dashboard provider for workflow property updates
   private dashboardProvider?: any;
 
+  // Pending workflow properties (set before workflow is created)
+  private pendingWorkflowProperties: {
+    provider?: string;
+    model?: string;
+    agent?: string;
+    newChatSession?: boolean;
+    allowDynamicExtension?: boolean;
+    endCondition?: any;
+  } = {};
+
   constructor(private readonly context: vscode.ExtensionContext) {
     // Listen for configuration changes to sync settings view
     this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
@@ -566,16 +576,21 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   /**
    * Handle workflow property update from webview
-   * Forwards property update to Dashboard provider which handles working file saves
+   * Stores in pending properties and forwards to Dashboard provider
    */
   private async handleUpdateWorkflowProperty(
     property: string,
     value: any
   ): Promise<void> {
-    // Forward to Dashboard provider for working file updates
-    // Dashboard provider has access to FlightPathManager and working file paths
+    // Store in pending properties (will be used when workflow is created)
+    if (value === undefined) {
+      delete (this.pendingWorkflowProperties as any)[property];
+    } else {
+      (this.pendingWorkflowProperties as any)[property] = value;
+    }
+
     Log.info(
-      `Forwarding workflow property update to Dashboard: ${property} = ${JSON.stringify(value)}`
+      `Stored pending workflow property '${property}': ${JSON.stringify(value)}`
     );
 
     if (!this.dashboardProvider) {
@@ -583,16 +598,40 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Forward the message to Dashboard provider's handleWebviewMessage
-    // Dashboard provider has a public method to receive messages
+    // Forward to Dashboard provider for immediate working file update (if workflow loaded)
+    // Dashboard provider has access to FlightPathManager and working file paths
     await (this.dashboardProvider as any).handleWebviewMessage({
       type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
       property,
       value,
     });
+  }
 
-    // Dashboard provider will handle the update and send confirmation back
-    // via WORKFLOW_PROPERTIES_UPDATE message
+  /**
+   * Get pending workflow properties and clear them
+   * Called by Dashboard provider when creating/loading a workflow
+   */
+  public getPendingPropertiesAndClear(): Record<string, any> {
+    const pending = { ...this.pendingWorkflowProperties };
+    this.pendingWorkflowProperties = {};
+    Log.info(
+      `Returning pending properties: ${JSON.stringify(pending)} (cleared)`
+    );
+    return pending;
+  }
+
+  /**
+   * Get pending workflow properties without clearing them
+   */
+  public getPendingProperties(): Record<string, any> {
+    return { ...this.pendingWorkflowProperties };
+  }
+
+  /**
+   * Clear all pending workflow properties
+   */
+  public clearPendingProperties(): void {
+    this.pendingWorkflowProperties = {};
   }
 
   /**

@@ -721,13 +721,17 @@ export class FlightPathManager {
         shouldShowCliCommand: this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
-        getIntegrationForPrompt: (prompt: PromptItem) => {
-          // If prompt has a provider override, use it; otherwise use the active integration
-          if (prompt.provider) {
+        getIntegrationForPrompt: (
+          prompt: PromptItem,
+          providerOverride?: Provider
+        ) => {
+          const resolvedProvider = providerOverride || prompt.provider;
+          // If prompt or workflow has a provider override, use it; otherwise use the active integration
+          if (resolvedProvider) {
             Log.info(
-              `🔀 Prompt ${prompt.id || "unnamed"} using provider override: ${prompt.provider}`
+              `🔀 Prompt ${prompt.id || "unnamed"} using provider override: ${resolvedProvider}`
             );
-            return this.createIntegrationForMode(prompt.provider);
+            return this.createIntegrationForMode(resolvedProvider);
           }
           return activeIntegration;
         },
@@ -1288,6 +1292,12 @@ export class FlightPathManager {
           workspaceFolder
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
+
+        // Apply pending workflow properties IMMEDIATELY after creating working file
+        // This ensures properties are in place BEFORE prompt execution resolves them
+        if (this.dashboardProvider) {
+          await this.dashboardProvider.applyPendingWorkflowProperties();
+        }
       } catch (error) {
         Log.error("Failed to create working file:", error);
         // Continue without working file (MCP won't work but execution can proceed)
@@ -1299,8 +1309,16 @@ export class FlightPathManager {
     }
 
     // Load prompts into queue
-    // Convert prompts array to PromptFile for backward compatibility
-    const promptFile: PromptFile = { prompts };
+    // If working file exists, reload it to get workflow properties (including pending properties just applied)
+    // Otherwise, use minimal PromptFile with just prompts
+    let promptFile: PromptFile;
+    if (workingFilePath) {
+      // Reload working file to get complete PromptFile with workflow properties
+      promptFile = await this.promptQueue.readWorkingFile(workingFilePath);
+    } else {
+      // No working file - use minimal PromptFile
+      promptFile = { prompts };
+    }
     this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
     // Update dashboard

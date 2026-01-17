@@ -29,6 +29,7 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { FlightPathManager } from "../flightpath/FlightPathManager";
+import { FlightPathSettingsProvider } from "./FlightPathSettingsProvider";
 import { Provider } from "../types/FlightPathTypes";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
@@ -54,7 +55,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   ]);
 
   // Reference to settings provider for workflow property coordination
-  private settingsProvider?: vscode.WebviewViewProvider;
+  private settingsProvider?: FlightPathSettingsProvider;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.templateManager = new TemplateManager(context);
@@ -217,17 +218,20 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   // Public methods to send updates from FlightPathManager
-  public updateFileSelected(
+  public async updateFileSelected(
     fileName: string,
     prompts: any[],
     workflowName?: string
-  ): void {
+  ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.FILE_SELECTED,
       fileName,
       prompts,
       workflowName,
     });
+
+    // Apply any pending workflow properties (set before workflow creation)
+    await this.applyPendingWorkflowProperties();
 
     // Extract and send workflow properties to settings panel
     this.sendWorkflowPropertiesToSettings();
@@ -531,6 +535,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       // Load the workflow into the dashboard
       if (this.flightPathManager) {
         await this.flightPathManager.loadPromptFile(filePath);
+
+        // Apply pending workflow properties (if any were set before workflow creation)
+        await this.applyPendingWorkflowProperties();
 
         // Optionally run the workflow
         if (runAfter) {
@@ -1284,7 +1291,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       const workingFilePath =
         this.flightPathManager.getQueueState()?.workingFilePath;
       if (!workingFilePath) {
-        Log.warn("No working file loaded, cannot update workflow property");
+        // No working file yet - pending properties are managed by SettingsProvider
+        Log.debug(
+          `No working file yet, property '${property}' stored in pending by SettingsProvider`
+        );
         return;
       }
 
@@ -1330,6 +1340,106 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage(
         `Failed to update workflow property: ${error instanceof Error ? error.message : String(error)}`
       );
+    }
+  }
+
+  /**
+   * Apply pending workflow properties to the current working file
+   * Called after a workflow is created to inject user-configured properties
+   *
+   * Precedence:
+   * 1. Properties from loaded file (highest priority - never overwritten)
+   * 2. Pending workflow properties (fill in undefined properties)
+   * 3. VS Code global settings (fallback - handled by PropertyResolver)
+   */
+  public async applyPendingWorkflowProperties(): Promise<void> {
+    if (!this.flightPathManager || !this.settingsProvider) {
+      return;
+    }
+
+    try {
+      const workingFilePath =
+        this.flightPathManager.getQueueState()?.workingFilePath;
+      if (!workingFilePath) {
+        Log.warn("No working file to apply pending properties to");
+        return;
+      }
+
+      // Get pending properties from settings provider (without clearing yet)
+      const pendingProperties = this.settingsProvider.getPendingProperties();
+
+      // Check if there are any pending properties
+      const hasPendingProperties = Object.keys(pendingProperties).some(
+        (key) => pendingProperties[key] !== undefined
+      );
+
+      if (!hasPendingProperties) {
+        Log.debug("No pending workflow properties to apply");
+        return;
+      }
+
+      // Read working file
+      const workingFile =
+        await this.flightPathManager.readWorkingFile(workingFilePath);
+
+      // Apply pending properties ONLY if they are undefined in the working file
+      // This respects properties from loaded files while filling in gaps
+      let modified = false;
+      const appliedProperties: string[] = [];
+
+      for (const [key, value] of Object.entries(pendingProperties)) {
+        if (value !== undefined) {
+          // Only apply if the property is undefined in the loaded file
+          if ((workingFile as any)[key] === undefined) {
+            (workingFile as any)[key] = value;
+            modified = true;
+            appliedProperties.push(key);
+            Log.info(
+              `Applied pending workflow property '${key}': ${JSON.stringify(value)} (file had no value)`
+            );
+          } else {
+            Log.debug(
+              `Skipping pending property '${key}' - file already has value: ${JSON.stringify((workingFile as any)[key])}`
+            );
+          }
+        }
+      }
+
+      if (modified) {
+        // Write back to working file
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2),
+          "utf-8"
+        );
+
+        // Update in-memory queue with new properties (only applied ones)
+        for (const key of appliedProperties) {
+          const value = pendingProperties[key];
+          if (value !== undefined) {
+            this.flightPathManager.updateWorkflowPropertyInQueue(key, value);
+          }
+        }
+
+        // Send updated properties to settings panel
+        this.sendWorkflowPropertiesToSettings();
+
+        Log.info(
+          `Applied ${appliedProperties.length} pending properties to working file (${appliedProperties.join(", ")})`
+        );
+      } else {
+        Log.debug(
+          "No pending properties applied - file already has all values"
+        );
+      }
+
+      // Clear pending properties only after a successful apply attempt
+      this.settingsProvider.clearPendingProperties();
+      Log.info(
+        `Returning pending properties: ${JSON.stringify(pendingProperties)} (cleared)`
+      );
+    } catch (error) {
+      Log.error("Failed to apply pending workflow properties:", error);
     }
   }
 
@@ -1425,7 +1535,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   /**
    * Set settings provider reference (called from extension.ts)
    */
-  public setSettingsProvider(provider: vscode.WebviewViewProvider): void {
+  public setSettingsProvider(provider: FlightPathSettingsProvider): void {
     this.settingsProvider = provider;
   }
 }

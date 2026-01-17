@@ -72,7 +72,7 @@ export const MESSAGE_TYPES = {
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
 
   // Workflow Properties - Settings Panel <-> Extension
-  UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property to working file
+  UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)
   SET_AS_DEFAULT: "setAsDefault", // Webview -> Extension: Update VS Code global setting
   WORKFLOW_PROPERTIES_UPDATE: "workflowPropertiesUpdate", // Extension -> Webview: Send updated workflow properties
   WORKFLOW_LOADED: "workflowLoaded", // Extension -> Webview: Workflow loaded, enable UI
