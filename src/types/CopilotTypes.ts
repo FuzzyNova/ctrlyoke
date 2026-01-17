@@ -36,7 +36,11 @@ export interface CopilotCliOptions {
   noCustomInstructions?: boolean;
 }
 
-export interface CopilotCliResult {
+/**
+ * Generic CLI result interface used by ALL CLI providers
+ * (Copilot, Claude, Codex, etc.)
+ */
+export interface CliResult {
   success: boolean;
   response: string;
   statistics: string;

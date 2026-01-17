@@ -63,6 +63,7 @@ export class TuiStreamProcessor {
   private maxConsecutiveBlankLines: number;
   private recentLinesBuffer: Set<string> = new Set();
   private consecutiveBlankLines: number = 0; // Persistent counter across chunks
+  private accumulatedResponse: string = ""; // Track full AI response for later retrieval
 
   constructor(private config: TuiStreamConfig) {
     this.fileSilenceMs = config.fileSilenceMs || DEFAULT_FILE_SILENCE_MS;
@@ -96,6 +97,9 @@ export class TuiStreamProcessor {
     lastSanitizedPrompt?: string,
     abortController?: AbortController
   ): Promise<TuiProcessResult> {
+    // Reset accumulated response for new execution
+    this.accumulatedResponse = "";
+
     let tuiReady = false;
     let promptTextSent = false;
     let promptSubmitted = false;
@@ -368,6 +372,7 @@ export class TuiStreamProcessor {
               );
               if (delta.trim().length > 0) {
                 this.config.streamingEmitter.fire(delta);
+                this.accumulatedResponse += delta;
               }
 
               // Check for escape indicator in this screen
@@ -420,6 +425,7 @@ export class TuiStreamProcessor {
         );
         if (delta.trim().length > 0) {
           this.config.streamingEmitter.fire(delta);
+          this.accumulatedResponse += delta;
         }
       }
 
@@ -484,6 +490,16 @@ export class TuiStreamProcessor {
       this.config.responseCompleteEmitter.fire("Error during streaming");
       return { success: false, errorMessage: errorMsg };
     }
+  }
+
+  /**
+   * Get the accumulated AI response text from the last execution.
+   * Used to extract the response when notify hook fires before TUI completion.
+   *
+   * @returns Full AI response text
+   */
+  getAccumulatedOutput(): string {
+    return this.accumulatedResponse;
   }
 
   /**

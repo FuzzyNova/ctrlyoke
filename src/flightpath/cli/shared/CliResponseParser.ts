@@ -1,4 +1,4 @@
-import { CopilotCliResult } from "../../../types/CopilotTypes";
+import { CliResult } from "../../../types/CopilotTypes";
 import { Log } from "../../../utils/Log";
 
 /**

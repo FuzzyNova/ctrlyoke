@@ -1,4 +1,4 @@
-import { CopilotCliResult } from "../../../types/CopilotTypes";
+import { CliResult } from "../../../types/CopilotTypes";
 import {
   IResponseParser,
   ResponseParserBase,
@@ -34,7 +34,7 @@ export class ClaudeResponseParser
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CopilotCliResult & { sessionId?: string } {
+  ): CliResult & { sessionId?: string } {
     let fullResponse = "";
     let sessionId: string | undefined;
     let usage:
@@ -191,6 +191,8 @@ export class ClaudeResponseParser
     }
     return undefined;
   }
+
+  // parseInteractiveResponse() inherited from ResponseParserBase
 
   // ============================================================
   // PRIVATE HELPER METHODS

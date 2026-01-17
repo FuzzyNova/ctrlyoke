@@ -1,5 +1,8 @@
-import { CopilotCliResult } from "../../../types/CopilotTypes";
-import { IResponseParser } from "../shared/interfaces/IResponseParser";
+import { CliResult } from "../../../types/CopilotTypes";
+import {
+  IResponseParser,
+  ResponseParserBase,
+} from "../shared/interfaces/IResponseParser";
 
 /**
  * Copilot CLI Response Parser
@@ -16,7 +19,10 @@ import { IResponseParser } from "../shared/interfaces/IResponseParser";
  *     capi-...-gpt-5-mini-... 25.7k input, 223 output, 6.1k cache read (Est. 1 Premium request)
  * ```
  */
-export class CopilotResponseParser implements IResponseParser {
+export class CopilotResponseParser
+  extends ResponseParserBase
+  implements IResponseParser
+{
   /**
    * Parse Copilot CLI text output
    *
@@ -29,7 +35,7 @@ export class CopilotResponseParser implements IResponseParser {
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CopilotCliResult & { sessionId?: string } {
+  ): CliResult & { sessionId?: string } {
     // Statistics are written to stderr (not stdout!)
     // Response is in stdout, statistics in stderr
     return {
@@ -79,4 +85,6 @@ export class CopilotResponseParser implements IResponseParser {
       completion: parseValue(match[3], match[4]),
     };
   }
+
+  // parseInteractiveResponse() inherited from ResponseParserBase
 }

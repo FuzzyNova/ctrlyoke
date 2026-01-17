@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ChildProcess } from "child_process";
-import { CopilotCliResult } from "../../types/CopilotTypes";
+import { CliResult } from "../../types/CopilotTypes";
 import { PromptItem } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -88,7 +88,7 @@ export class CliIntegration extends CopilotIntegration {
   protected initializationStatus: CopilotStatus = CopilotStatus.Initializing;
 
   /** Last CLI execution result */
-  protected lastResult?: CopilotCliResult;
+  protected lastResult?: CliResult;
 
   /** Last CLI command executed (for debugging) */
   protected lastCliCommand?: string;
@@ -646,6 +646,26 @@ export class CliIntegration extends CopilotIntegration {
       Log.warn(`⚠️ TUI processor reported: ${tuiResult.errorMessage}`);
     }
 
+    // CRITICAL: Extract and store response from terminal output
+    // Interactive mode doesn't parse output automatically like headless mode does.
+    // We need to extract the response text from the terminal stream for WorkflowExecutor.
+    const terminalOutput = tuiProcessor.getAccumulatedOutput();
+    if (terminalOutput) {
+      // Parse the terminal output to extract response and statistics
+      const parsed = this.provider.responseParser.parseInteractiveResponse(
+        terminalOutput,
+        this.lastSanitizedPrompt || ""
+      );
+
+      // Store the result so getLastResult() works
+      this.lastResult = parsed;
+
+      // Log the response for visibility
+      this.logResponse(parsed.response, parsed.statistics);
+    } else {
+      Log.warn("⚠️ No terminal output captured - lastResult may be incomplete");
+    }
+
     return { success: true };
   }
 
@@ -997,7 +1017,7 @@ export class CliIntegration extends CopilotIntegration {
   /**
    * Get the last CLI result
    */
-  getLastResult(): CopilotCliResult | undefined {
+  getLastResult(): CliResult | undefined {
     return this.lastResult;
   }
 

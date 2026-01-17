@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem } from "../../types/FlightPathTypes";
-import { CopilotCliResult } from "../../types/CopilotTypes";
+import { CliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { Log } from "../../utils/Log";
@@ -334,7 +334,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Get the last execution result (CLI-specific, returns undefined for Chat)
    * Includes response text, statistics, and exit code
    */
-  getLastResult(): CopilotCliResult | undefined {
+  getLastResult(): CliResult | undefined {
     return undefined;
   }
 
