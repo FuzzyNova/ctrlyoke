@@ -13,6 +13,7 @@ import {
 } from "../../utils/TuiStreamProcessor";
 import { Log } from "../../utils/Log";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
+import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 
 /**
  * Execution mode for CLI integrations
@@ -34,6 +35,17 @@ export const CLI_WARNING_MESSAGES = {
   HEADLESS_WITHOUT_PERMISSIONS:
     "Headless mode without full permissions: CLI will auto-deny tool/file access. Workflow may not make progress.",
 } as const;
+
+/**
+ * Result of creating prompt file(s) with reference instruction
+ */
+interface PromptFileResult {
+  /** Array of temp file paths (for cleanup) */
+  tempFilePaths: string[];
+
+  /** Instruction prompt that references all files */
+  promptWithInstruction: string;
+}
 
 /**
  * Generic CLI integration class using composition.
@@ -309,39 +321,107 @@ export class CliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Create a temp file for the prompt and return file reference with instruction.
-   * Returns both the temp file path (for cleanup) and the instructional prompt text
-   * that tells the LLM to follow instructions in the file.
+   * Create temp file(s) for the prompt and return file reference instruction.
    *
-   * @param promptText The full prompt text to write to the file
+   * For large prompts (>20K tokens or >1800 lines), splits into multiple files
+   * with decimal notation (e.g., prompt-1.1.md, prompt-1.2.md, prompt-1.3.md).
+   *
+   * Returns both temp file paths (for cleanup) and instruction prompt that
+   * references all files.
+   *
+   * @param promptText The full prompt text to write
    * @param workflowContext Optional workflow context for meaningful filename
-   * @returns Object with tempFilePath for cleanup and promptWithInstruction for CLI
+   * @returns Object with tempFilePaths array and promptWithInstruction
    */
   protected async createPromptFileWithReference(
     promptText: string,
     workflowContext?: WorkflowContext
-  ): Promise<{ tempFilePath: string; promptWithInstruction: string }> {
+  ): Promise<PromptFileResult> {
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
       throw new Error("No workspace root available for temp file");
     }
 
     const tempMgr = new TempFileManager(workspaceRoot);
-    const tempFilePath = await tempMgr.createPromptFile(
-      promptText,
+
+    // Check if splitting is needed
+    const splitter = new PromptFileSplitter();
+    const splitResult = splitter.split(promptText);
+
+    if (!splitResult.needsSplit) {
+      // Single file path (backward compatible)
+      const tempFilePath = await tempMgr.createPromptFile(
+        promptText,
+        workflowContext?.filePath,
+        workflowContext ? workflowContext.promptIndex + 1 : undefined
+      );
+      const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
+      const fileReference = this.provider.formatFileReference(relativeFilePath);
+      const promptWithInstruction = `Follow instructions in ${fileReference} `;
+
+      Log.info(`📁 Temp file created: ${relativeFilePath}`);
+      Log.info(
+        `📊 Prompt stats: ${splitResult.tokenCounts[0]} tokens, ${splitResult.lineCounts[0]} lines`
+      );
+
+      return {
+        tempFilePaths: [tempFilePath],
+        promptWithInstruction,
+      };
+    }
+
+    // Multiple files needed
+    const tempFilePaths = await tempMgr.createSplitPromptFiles(
+      splitResult.chunks,
       workflowContext?.filePath,
       workflowContext ? workflowContext.promptIndex + 1 : undefined
     );
-    const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-    const fileReference = this.provider.formatFileReference(relativeFilePath);
 
-    // Prepend instruction so LLMs understand the file contains the prompt
-    // Add trailing space to prevent TUI file picker from activating
-    const promptWithInstruction = `Follow instructions in ${fileReference} `;
+    // Build instruction referencing all files
+    const fileReferences = tempFilePaths.map((fp) => {
+      const relativePath = tempMgr.getRelativePath(fp);
+      return this.provider.formatFileReference(relativePath);
+    });
 
-    Log.info(`📁 Temp file created: ${relativeFilePath}`);
+    // Format: "Follow instructions in @file1, @file2, and @file3 "
+    const promptWithInstruction =
+      this.formatMultipleFileReferences(fileReferences);
 
-    return { tempFilePath, promptWithInstruction };
+    // Log split statistics
+    Log.info(`📁 Prompt split into ${splitResult.chunks.length} files:`);
+    splitResult.chunks.forEach((_, idx) => {
+      const relativePath = tempMgr.getRelativePath(tempFilePaths[idx]);
+      Log.info(
+        `   ${idx + 1}. ${relativePath} (${splitResult.tokenCounts[idx]} tokens, ${splitResult.lineCounts[idx]} lines)`
+      );
+    });
+
+    return {
+      tempFilePaths,
+      promptWithInstruction,
+    };
+  }
+
+  /**
+   * Format multiple file references into instructional prompt
+   * Uses natural language formatting: "file1, file2, and file3"
+   *
+   * @param fileRefs Array of file references (already formatted with @ prefix if needed)
+   * @returns Instruction prompt with trailing space
+   */
+  private formatMultipleFileReferences(fileRefs: string[]): string {
+    if (fileRefs.length === 1) {
+      return `Follow instructions in ${fileRefs[0]} `;
+    }
+
+    if (fileRefs.length === 2) {
+      return `Follow instructions in ${fileRefs[0]} and ${fileRefs[1]} `;
+    }
+
+    // 3+ files: "file1, file2, and file3"
+    const allButLast = fileRefs.slice(0, -1).join(", ");
+    const last = fileRefs[fileRefs.length - 1];
+    return `Follow instructions in ${allButLast}, and ${last} `;
   }
 
   // ============================================================
@@ -613,7 +693,7 @@ export class CliIntegration extends CopilotIntegration {
     const execution = shellIntegration.executeCommand(tuiCommand);
     this.currentExecution = execution;
 
-    let tempFilePath: string | undefined;
+    let tempFilePaths: string[] = [];
 
     try {
       let promptToSend: string;
@@ -623,10 +703,10 @@ export class CliIntegration extends CopilotIntegration {
         promptToSend = promptText;
         this.lastSanitizedPrompt = promptText;
       } else {
-        // Complex prompt: create temp file with instruction
-        const { tempFilePath: path, promptWithInstruction } =
+        // Complex prompt: create temp file(s) with instruction
+        const { tempFilePaths: paths, promptWithInstruction } =
           await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePath = path;
+        tempFilePaths = paths;
         promptToSend = promptWithInstruction;
         this.lastSanitizedPrompt = promptText;
       }
@@ -654,12 +734,12 @@ export class CliIntegration extends CopilotIntegration {
         timeoutMs,
       });
     } finally {
-      if (tempFilePath) {
+      if (tempFilePaths.length > 0) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {
           const tempMgr = new TempFileManager(workspaceRoot);
-          await tempMgr.deleteFile(tempFilePath);
-          Log.debug(`🗑️ Cleaned up temp file: ${tempFilePath}`);
+          await tempMgr.deleteFiles(tempFilePaths);
+          Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
         }
       }
     }
@@ -704,7 +784,7 @@ export class CliIntegration extends CopilotIntegration {
       exitCode: number;
     }) => Promise<boolean>
   ): Promise<boolean> {
-    let tempFilePath: string | undefined;
+    let tempFilePaths: string[] = [];
 
     try {
       const useDirectPrompt = this.isSimplePrompt(promptText);
@@ -721,17 +801,17 @@ export class CliIntegration extends CopilotIntegration {
         Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
         Log.info(`📝 Prompt length: ${promptText.length} characters`);
       } else {
-        // Complex prompt: create temp file
-        const { tempFilePath: path, promptWithInstruction } =
+        // Complex prompt: create temp file(s)
+        const { tempFilePaths: paths, promptWithInstruction } =
           await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePath = path;
+        tempFilePaths = paths;
         headlessArgs = this.provider.buildHeadlessArgs(
           args,
           promptWithInstruction
         );
         displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
-        Log.info(`🚀 Starting headless mode with file reference`);
-        Log.info(`📝 Prompt length: ${promptText.length} characters`);
+        Log.info(`🚀 Starting headless mode with ${paths.length} file(s)`);
+        Log.info(`📝 Total prompt length: ${promptText.length} characters`);
       }
 
       this.lastCliCommand = displayCommand;
@@ -788,13 +868,13 @@ export class CliIntegration extends CopilotIntegration {
       Log.error(`❌ Headless execution error`, error);
       return false;
     } finally {
-      // Cleanup temp file (if used)
-      if (tempFilePath) {
+      // Cleanup temp file(s) (if used)
+      if (tempFilePaths.length > 0) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {
           const tempMgr = new TempFileManager(workspaceRoot);
-          await tempMgr.deleteFile(tempFilePath);
-          Log.debug(`🗑️ Cleaned up temp file`);
+          await tempMgr.deleteFiles(tempFilePaths);
+          Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
         }
       }
     }

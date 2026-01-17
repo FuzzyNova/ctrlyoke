@@ -106,6 +106,77 @@ export class TempFileManager {
   }
 
   /**
+   * Create multiple prompt files for a split prompt
+   * Returns array of absolute paths in order
+   *
+   * Format:
+   * - Single chunk: <timestamp>-<basename>-<step>.prompt.md
+   * - Split files: <timestamp>-<basename>-<step>.1.prompt.md
+   *               <timestamp>-<basename>-<step>.2.prompt.md
+   *               <timestamp>-<basename>-<step>.3.prompt.md
+   *
+   * @param chunks Array of prompt text chunks
+   * @param originalFilePath Optional path to original .flightpath file
+   * @param stepNumber Optional step number for multi-step workflows (1-indexed)
+   * @returns Array of absolute file paths
+   */
+  async createSplitPromptFiles(
+    chunks: string[],
+    originalFilePath?: string,
+    stepNumber?: number
+  ): Promise<string[]> {
+    // Validate input
+    if (!chunks || chunks.length === 0) {
+      throw new Error("Cannot create split files: no chunks provided");
+    }
+
+    // Filter out empty chunks
+    const validChunks = chunks.filter((chunk) => chunk.trim().length > 0);
+    if (validChunks.length === 0) {
+      throw new Error("Cannot create split files: all chunks are empty");
+    }
+
+    // Ensure directory exists
+    await this.ensureTempDir();
+
+    // Build base filename
+    const timestamp = Math.floor(Date.now() / 1000);
+    let basename = "prompt";
+
+    if (originalFilePath) {
+      const originalBasename = path.basename(originalFilePath);
+      basename = originalBasename
+        .replace(/\.flightpath\.(json|yaml|yml)$/, "")
+        .replace(/\.prompt\.(json|md)$/, "");
+    }
+
+    const stepSuffix = stepNumber ? `-${stepNumber}` : "";
+    const filePaths: string[] = [];
+
+    // Create files with cleanup on partial failure
+    try {
+      for (let i = 0; i < validChunks.length; i++) {
+        // Add split index only if there are multiple chunks
+        const splitIndex = validChunks.length > 1 ? `.${i + 1}` : "";
+        const filename = `${timestamp}-${basename}${stepSuffix}${splitIndex}${this.PROMPT_EXTENSION}`;
+        const filePath = path.join(this.tempDir, filename);
+
+        await fs.promises.writeFile(filePath, validChunks[i], "utf-8");
+        filePaths.push(filePath);
+      }
+
+      return filePaths;
+    } catch (err) {
+      // Clean up any files created before the error
+      Log.error(`Failed to create split prompt files: ${err}`);
+      await this.deleteFiles(filePaths); // Clean up partial files
+      throw new Error(
+        `Cannot create split temp files: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  /**
    * Delete a specific temp file
    * Does not throw on failure (logs error instead)
    *
@@ -118,6 +189,16 @@ export class TempFileManager {
       // Log but don't throw - cleanup is best-effort
       Log.warn(`Failed to delete temp file ${filePath}: ${err}`);
     }
+  }
+
+  /**
+   * Delete multiple temp files
+   * Does not throw on failure (logs warnings for individual failures)
+   *
+   * @param filePaths Array of absolute paths to files to delete
+   */
+  async deleteFiles(filePaths: string[]): Promise<void> {
+    await Promise.all(filePaths.map((fp) => this.deleteFile(fp)));
   }
 
   /**

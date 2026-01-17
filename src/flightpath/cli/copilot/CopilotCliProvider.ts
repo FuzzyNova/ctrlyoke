@@ -82,6 +82,8 @@ export class CopilotCliProvider implements ICliProvider {
 
       // Copilot bottom navigation bar (already in screenEndPattern, but keep for safety)
       /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand/i, // Bottom status bar
+      /·\s*Ctrl\+t\s+Show\s+reasoning/i, // Bottom actions: "· Ctrl+t Show reasoning"
+      /·\s*Ctrl\+d\s+Enqueue/i, // Bottom actions: "· Ctrl+d Enqueue"
 
       // Copilot prompt hints (UI chrome)
       /Enter @ to mention files/i, // Prompt hint (distinctive part)
