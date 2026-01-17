@@ -29,7 +29,6 @@ oneOf:
             $ref: '#/definitions/runtimeMetadata'
         required:
           - prompts
-        additionalProperties: false
 definitions:
   executionProperties:
     type: object

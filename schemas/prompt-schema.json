@@ -38,8 +38,7 @@
               "$ref": "#/definitions/runtimeMetadata"
             }
           },
-          "required": ["prompts"],
-          "additionalProperties": false
+          "required": ["prompts"]
         }
       ]
     }
