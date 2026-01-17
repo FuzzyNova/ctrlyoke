@@ -28,7 +28,9 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(copilot:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:discuss.codemirror.net)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": [],
     "ask": []

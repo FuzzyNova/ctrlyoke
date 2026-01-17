@@ -58,7 +58,7 @@
     }
 
     buildExtensions() {
-      const { EditorView, keymap, ViewPlugin, Decoration } = CM;
+      const { EditorView, keymap, ViewPlugin, Decoration, placeholder } = CM;
       const { minimalSetup } = CM;
       const { autocompletion, completionKeymap } = CM;
       const { history, historyKeymap } = CM;
@@ -69,6 +69,7 @@
         EditorView.lineWrapping,
         history(),
         keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
+        placeholder("Use @ for directory and file completions. Use # for selection and symbol completions."),
         this.themeExtension(),
         this.linterThemeExtension(),
         this.spellCheckExtension(),
@@ -133,6 +134,11 @@
           },
           "&.cm-focused": {
             outline: "1px solid var(--vscode-focusBorder)",
+          },
+          // Placeholder text styling
+          ".cm-placeholder": {
+            color: "var(--vscode-input-placeholderForeground)",
+            fontStyle: "italic",
           },
           // Autocomplete dropdown styling with VS Code theme colors
           ".cm-tooltip-autocomplete": {
