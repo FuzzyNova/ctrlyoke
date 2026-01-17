@@ -180,6 +180,10 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     console.log("FlightPath: Settings provider registered");
 
+    // Connect dashboard and settings providers (bidirectional)
+    dashboardProvider.setSettingsProvider(settingsProvider);
+    settingsProvider.setDashboardProvider(dashboardProvider);
+
     // Initialize FlightPath manager with dashboard provider
     flightPathManager = new FlightPathManager(context, dashboardProvider);
 

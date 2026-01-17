@@ -20,13 +20,47 @@ export enum Provider {
  */
 export type ClaudeCliStatus = "Initializing" | "Ready" | "Unavailable";
 
-export interface PromptFile {
+/**
+ * Shared execution properties for prompts, workflows, and runtime metadata.
+ * Using this interface ensures consistency across all levels of the execution hierarchy.
+ *
+ * Precedence order:
+ * 1. Prompt-level properties (highest priority)
+ * 2. Workflow-level properties
+ * 3. VS Code global settings (lowest priority/fallback)
+ */
+export interface ExecutionProperties {
+  /** AI provider for execution */
+  provider?: Provider;
+
+  /** AI model to use */
+  model?: string;
+
+  /** Custom agent file (.agent.md) */
+  agent?: string;
+
+  /** Start new chat session */
+  newChatSession?: boolean;
+
+  /** Allow dynamic queue extension */
+  allowDynamicExtension?: boolean;
+
+  /** Session ID for resuming CLI conversations */
+  sessionId?: string | number;
+
+  /** End condition validation */
+  endCondition?: EndCondition;
+}
+
+export interface PromptFile extends ExecutionProperties {
   prompt?: string;
   prompts?: PromptItem[];
 }
 
 /**
  * Runtime metadata for working files (optional, not required for user-created files)
+ * Tracks workflow execution state only - does NOT include execution properties
+ * (those are tracked at workflow root and per-prompt _runtime)
  */
 export interface WorkingFileRuntime {
   currentIndex: number;
@@ -46,15 +80,26 @@ export interface WorkingFile extends PromptFile {
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
 }
 
-export interface PromptItem {
+export interface PromptItem extends ExecutionProperties {
   id?: string; // Optional unique identifier for tracking across queue reloads
   prompt: string;
-  provider?: Provider; // Provider to use for this prompt (overrides global setting if specified)
-  model?: string; // Model ID (dynamically discovered). CLI validates and falls back if unsupported.
-  agent?: string; // Custom agent name for CLI mode (e.g., 'flightpath-orchestrator'). Ignored in Chat mode.
-  newChatSession?: boolean; // Whether to start a new chat session (default: true in multi-prompt workflows)
-  allowDynamicExtension?: boolean; // If true, inject queue extension instructions
-  endCondition?: EndCondition;
+  sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for legacy chat)
+  _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
+}
+
+/**
+ * Per-prompt runtime execution metadata.
+ * Tracks execution state for individual prompts within a workflow.
+ */
+export interface PromptRuntimeMetadata extends ExecutionProperties {
+  /** Timestamp when prompt started */
+  startedAt: number;
+
+  /** Timestamp when prompt completed */
+  completedAt?: number;
+
+  /** Retry count if applicable */
+  retryCount?: number;
 }
 
 export interface EndCondition {

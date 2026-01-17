@@ -1,0 +1,89 @@
+# Mixed Precedence Example
+#
+# This workflow demonstrates the three-tier precedence system:
+# 1. Prompt-level properties (highest priority)
+# 2. Workflow-level properties
+# 3. VS Code global settings (lowest priority/fallback)
+#
+# Use Case: Educational example showing how precedence resolution works
+# - First prompt uses all workflow defaults
+# - Second prompt overrides model only
+# - Third prompt overrides all workflow defaults
+
+# Workflow-level properties (tier 2)
+# These provide defaults for all prompts
+provider: copilot-cli
+model: claude-sonnet-4.5
+newChatSession: false
+
+# Prompts
+prompts:
+  # Prompt 1: No overrides - uses all workflow defaults
+  - id: analyze
+    prompt: |
+      Analyze the codebase architecture and identify potential improvements.
+
+      Focus on:
+      - Separation of concerns
+      - SOLID principles
+      - Code organization
+      - Design patterns
+      - Dependencies and coupling
+
+      Provide a structured analysis with specific recommendations.
+    # Effective properties:
+    #   provider: copilot-cli (from workflow)
+    #   model: claude-sonnet-4.5 (from workflow)
+    #   newChatSession: false (from workflow)
+
+  # Prompt 2: Model override only - demonstrates partial override
+  - id: implement
+    prompt: |
+      Based on the analysis, implement the following architectural improvements:
+
+      1. Extract common functionality into shared utilities
+      2. Apply dependency injection where appropriate
+      3. Improve error handling consistency
+      4. Add missing abstraction layers
+
+      Follow the project's coding standards and maintain backward compatibility.
+    model: gpt-5 # Override: Use different model for implementation
+    # Effective properties:
+    #   provider: copilot-cli (from workflow)
+    #   model: gpt-5 (PROMPT OVERRIDE - highest priority)
+    #   newChatSession: false (from workflow)
+
+  # Prompt 3: Complete override - demonstrates all properties overridden
+  - id: review
+    prompt: |
+      Review the architectural changes for compliance and quality:
+
+      1. Verify SOLID principles are properly applied
+      2. Check for regression risks
+      3. Assess performance impact
+      4. Review error handling
+      5. Validate documentation completeness
+
+      Provide approval or detailed feedback for improvements.
+    provider: claude-cli # Override: Different provider
+    model: opus # Override: Most capable Claude model
+    newChatSession: true # Override: Fresh session for review
+    # Effective properties:
+    #   provider: claude-cli (PROMPT OVERRIDE)
+    #   model: opus (PROMPT OVERRIDE)
+    #   newChatSession: true (PROMPT OVERRIDE)
+    # All workflow defaults overridden at prompt level
+
+# Precedence Summary Table:
+#
+# | Prompt     | Provider      | Model            | New Session | Source          |
+# |------------|---------------|------------------|-------------|-----------------|
+# | analyze    | copilot-cli   | claude-sonnet-4.5| false       | All workflow    |
+# | implement  | copilot-cli   | gpt-5            | false       | Mixed (model)   |
+# | review     | claude-cli    | opus             | true        | All prompt      |
+#
+# Key Insights:
+# - Workflow properties provide sensible defaults
+# - Prompts can selectively override specific properties
+# - Complete override possible when needed
+# - First defined value wins (prompt > workflow > settings)

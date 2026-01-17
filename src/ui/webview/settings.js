@@ -2,7 +2,6 @@
   const vscode = acquireVsCodeApi();
 
   // Import constants from compiled DashboardConstants.js (loaded via script tag in HTML)
-  // Single source of truth - these match src/types/DashboardConstants.ts
   const {
     MESSAGE_TYPES,
     PROVIDER_IDS,
@@ -14,11 +13,7 @@
     UI_STRINGS,
   } = window.FlightPathConstants;
 
-  // Model options per provider - populated dynamically from ModelRegistry via INIT message
-  // Chat models come from VS Code LM API (full list)
-  // CLI models come from `copilot help config` (subset)
-  // Claude CLI models are static (no programmatic way to query)
-  // Codex CLI models are static (from codex /model command)
+  // Model options per provider - populated dynamically from ModelRegistry
   let modelOptions = {
     [PROVIDER_IDS.COPILOT_CLI]: [],
     [PROVIDER_IDS.COPILOT_CHAT]: [],
@@ -46,92 +41,190 @@
     },
   };
 
-  let state = {
+  // Workflow properties (from working file)
+  let workflowProperties = {
+    provider: undefined,
+    model: undefined,
+    agent: undefined,
+    newChatSession: undefined,
+    allowDynamicExtension: undefined,
+    endCondition: undefined,
+  };
+
+  // Global settings (from VS Code)
+  let globalSettings = {
     provider: PROVIDER_IDS.COPILOT_CLI,
     model: DEFAULT_MODELS[PROVIDER_IDS.COPILOT_CLI],
-    agent: "default",
+    agent: "",
+    newChatSession: true,
+    allowDynamicExtension: false,
     executionMode: "interactive",
-    newChatSessionPerPrompt: true,
-    dynamicQueueEnabled: false,
   };
+
+  // Available agents
+  let availableAgents = [];
+
+  // Workflow loaded state
+  let workflowLoaded = false;
 
   const elements = {
-    providerDropdown: document.getElementById("provider-dropdown"),
-    modelDropdown: document.getElementById("model-dropdown"),
-    agentDropdown: document.getElementById("agent-dropdown"),
-    executionModeDropdown: document.getElementById("execution-mode-dropdown"),
-    executionModeGroup: document.getElementById("execution-mode-group"),
-    newChatSessionCheckbox: document.getElementById(
-      "new-chat-session-checkbox"
+    // Workflow properties
+    workflowProvider: document.getElementById("workflow-provider"),
+    workflowModel: document.getElementById("workflow-model"),
+    workflowAgent: document.getElementById("workflow-agent"),
+    workflowNewChat: document.getElementById("workflow-new-chat"),
+    workflowDynamicExt: document.getElementById("workflow-dynamic-ext"),
+
+    // End condition
+    workflowEndEnabled: document.getElementById("workflow-end-enabled"),
+    workflowEndDetails: document.getElementById("workflow-end-details"),
+    workflowEndScript: document.getElementById("workflow-end-script"),
+    workflowEndReturns: document.getElementById("workflow-end-returns"),
+    workflowEndTimeout: document.getElementById("workflow-end-timeout"),
+    workflowEndRetries: document.getElementById("workflow-end-retries"),
+    workflowEndRetryPrompt: document.getElementById(
+      "workflow-end-retry-prompt"
     ),
-    dynamicQueueCheckbox: document.getElementById("dynamic-queue-checkbox"),
+
+    // Session settings
+    executionModeRadios: document.querySelectorAll(
+      'input[name="execution-mode"]'
+    ),
+
+    // Buttons
     moreSettingsBtn: document.getElementById("more-settings-btn"),
+    setDefaultButtons: document.querySelectorAll(".btn-set-default"),
   };
 
-  // Event listeners
-  elements.providerDropdown.addEventListener("change", (e) => {
-    state.provider = e.target.value;
-    updateModelDropdownOptions(state.provider);
-    updateExecutionModeVisibility(state.provider);
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_PROVIDER,
-      provider: state.provider,
+  // ============================================================================
+  // EVENT LISTENERS
+  // ============================================================================
+
+  // Workflow property changes
+  elements.workflowProvider.addEventListener("change", (e) => {
+    workflowProperties.provider = e.target.value;
+    updateModelDropdownOptions(e.target.value);
+    updateSetAsDefaultButton("provider");
+    saveWorkflowProperty("provider", e.target.value);
+  });
+
+  elements.workflowModel.addEventListener("change", (e) => {
+    workflowProperties.model = e.target.value;
+    updateSetAsDefaultButton("model");
+    saveWorkflowProperty("model", e.target.value);
+  });
+
+  elements.workflowAgent.addEventListener("change", (e) => {
+    workflowProperties.agent = e.target.value;
+    updateSetAsDefaultButton("agent");
+    saveWorkflowProperty("agent", e.target.value);
+  });
+
+  elements.workflowNewChat.addEventListener("change", (e) => {
+    workflowProperties.newChatSession = e.target.value === "true";
+    updateSetAsDefaultButton("newChatSession");
+    saveWorkflowProperty("newChatSession", e.target.value === "true");
+  });
+
+  elements.workflowDynamicExt.addEventListener("change", (e) => {
+    workflowProperties.allowDynamicExtension = e.target.value === "true";
+    updateSetAsDefaultButton("allowDynamicExtension");
+    saveWorkflowProperty("allowDynamicExtension", e.target.value === "true");
+  });
+
+  // End condition
+  elements.workflowEndEnabled.addEventListener("change", (e) => {
+    const enabled = e.target.checked;
+    elements.workflowEndDetails.hidden = !enabled;
+
+    if (enabled) {
+      // Collect end condition values
+      const endCondition = {
+        script: elements.workflowEndScript.value || undefined,
+        returns: elements.workflowEndReturns.value || undefined,
+        timeout: parseInt(elements.workflowEndTimeout.value) || undefined,
+        maxRetries: parseInt(elements.workflowEndRetries.value) || undefined,
+        retryPrompt: elements.workflowEndRetryPrompt.value || undefined,
+      };
+      workflowProperties.endCondition = endCondition;
+    } else {
+      workflowProperties.endCondition = undefined;
+    }
+
+    saveWorkflowProperty("endCondition", workflowProperties.endCondition);
+  });
+
+  // End condition fields
+  const endConditionFields = [
+    elements.workflowEndScript,
+    elements.workflowEndReturns,
+    elements.workflowEndTimeout,
+    elements.workflowEndRetries,
+    elements.workflowEndRetryPrompt,
+  ];
+
+  endConditionFields.forEach((field) => {
+    field.addEventListener("change", () => {
+      if (elements.workflowEndEnabled.checked) {
+        const endCondition = {
+          script: elements.workflowEndScript.value || undefined,
+          returns: elements.workflowEndReturns.value || undefined,
+          timeout: parseInt(elements.workflowEndTimeout.value) || undefined,
+          maxRetries: parseInt(elements.workflowEndRetries.value) || undefined,
+          retryPrompt: elements.workflowEndRetryPrompt.value || undefined,
+        };
+        workflowProperties.endCondition = endCondition;
+        saveWorkflowProperty("endCondition", endCondition);
+      }
     });
   });
 
-  elements.modelDropdown.addEventListener("change", (e) => {
-    state.model = e.target.value;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_MODEL,
-      model: state.model,
-      provider: state.provider,
+  // Execution mode (updates global setting, not workflow)
+  elements.executionModeRadios.forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      if (e.target.checked) {
+        globalSettings.executionMode = e.target.value;
+        vscode.postMessage({
+          type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
+          executionMode: e.target.value,
+        });
+      }
     });
   });
 
-  elements.agentDropdown.addEventListener("change", (e) => {
-    state.agent = e.target.value;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_AGENT,
-      agent: state.agent,
+  // "Set as Default" buttons
+  elements.setDefaultButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const property = e.target.dataset.property;
+      handleSetAsDefault(property, e.target);
     });
   });
 
-  elements.executionModeDropdown.addEventListener("change", (e) => {
-    state.executionMode = e.target.value;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_EXECUTION_MODE,
-      executionMode: state.executionMode,
-    });
-  });
-
-  elements.newChatSessionCheckbox.addEventListener("change", (e) => {
-    state.newChatSessionPerPrompt = e.target.checked;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_NEW_CHAT_SESSION,
-      enabled: state.newChatSessionPerPrompt,
-    });
-  });
-
-  elements.dynamicQueueCheckbox.addEventListener("change", (e) => {
-    state.dynamicQueueEnabled = e.target.checked;
-    vscode.postMessage({
-      type: MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE,
-      enabled: state.dynamicQueueEnabled,
-    });
-  });
-
+  // More Settings button
   elements.moreSettingsBtn.addEventListener("click", () => {
     vscode.postMessage({
       type: MESSAGE_TYPES.OPEN_SETTINGS,
     });
   });
 
-  // Message handler
+  // ============================================================================
+  // MESSAGE HANDLER
+  // ============================================================================
+
   window.addEventListener("message", (event) => {
     const message = event.data;
     switch (message.type) {
       case MESSAGE_TYPES.INIT:
         handleInit(message.data);
+        break;
+      case MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE:
+        handleWorkflowPropertiesUpdate(message.data);
+        break;
+      case MESSAGE_TYPES.WORKFLOW_LOADED:
+        handleWorkflowLoaded(message.data);
+        break;
+      case MESSAGE_TYPES.WORKFLOW_UNLOADED:
+        handleWorkflowUnloaded();
         break;
       case MESSAGE_TYPES.MODEL_OPTIONS_UPDATE:
         handleModelOptionsUpdate(message.data);
@@ -156,60 +249,148 @@
       providerStatus = { ...providerStatus, ...data.providerStatus };
     }
 
-    state = { ...state, ...data };
-
-    // Update provider dropdown with availability status
-    updateProviderDropdownOptions();
-    elements.providerDropdown.value = state.provider;
-
-    updateModelDropdownOptions(state.provider);
-    elements.modelDropdown.value = state.model;
-
-    // Update agent dropdown with discovered agents
-    if (data.availableAgents) {
-      updateAgentDropdownOptions(data.availableAgents);
+    // Update global settings
+    if (data.globalSettings) {
+      globalSettings = { ...globalSettings, ...data.globalSettings };
     }
-    elements.agentDropdown.value = state.agent || "";
 
-    elements.executionModeDropdown.value = state.executionMode;
-    updateExecutionModeVisibility(state.provider);
-    elements.newChatSessionCheckbox.checked = state.newChatSessionPerPrompt;
-    elements.dynamicQueueCheckbox.checked = state.dynamicQueueEnabled;
+    // Update workflow properties (if workflow loaded)
+    if (data.workflowProperties) {
+      workflowProperties = {
+        ...workflowProperties,
+        ...data.workflowProperties,
+      };
+      workflowLoaded = true;
+    }
+
+    // Update available agents
+    if (data.availableAgents) {
+      availableAgents = data.availableAgents;
+    }
+
+    // Initialize UI
+    updateProviderDropdownOptions();
+    updateModelDropdownOptions(
+      workflowProperties.provider || globalSettings.provider
+    );
+    updateAgentDropdownOptions();
+    updateExecutionModeRadios();
+
+    // Load workflow properties or use global defaults
+    loadWorkflowPropertiesIntoUI();
+
+    // Update "Set as Default" button visibility
+    updateAllSetAsDefaultButtons();
+
+    // Enable/disable fields based on workflow loaded state
+    setFieldsEnabled(workflowLoaded);
   }
 
-  /**
-   * Handle model options update from extension (when ModelRegistry finishes loading)
-   */
+  function handleWorkflowPropertiesUpdate(data) {
+    workflowProperties = { ...workflowProperties, ...data.workflowProperties };
+    loadWorkflowPropertiesIntoUI();
+    updateAllSetAsDefaultButtons();
+  }
+
+  function handleWorkflowLoaded(data) {
+    workflowLoaded = true;
+    workflowProperties = { ...workflowProperties, ...data.workflowProperties };
+    loadWorkflowPropertiesIntoUI();
+    updateAllSetAsDefaultButtons();
+    setFieldsEnabled(true);
+  }
+
+  function handleWorkflowUnloaded() {
+    workflowLoaded = false;
+    workflowProperties = {
+      provider: undefined,
+      model: undefined,
+      agent: undefined,
+      newChatSession: undefined,
+      allowDynamicExtension: undefined,
+      endCondition: undefined,
+    };
+    setFieldsEnabled(false);
+  }
+
   function handleModelOptionsUpdate(data) {
     if (data.modelOptions) {
       modelOptions = { ...modelOptions, ...data.modelOptions };
-      // Refresh current provider's model dropdown
-      updateModelDropdownOptions(state.provider);
-      // Try to restore selected model if still valid
-      const options = modelOptions[state.provider] || [];
-      const matchingOption = options.find((opt) => opt.value === state.model);
-      if (matchingOption) {
-        elements.modelDropdown.value = state.model;
-      } else if (options.length > 0) {
-        elements.modelDropdown.value = options[0].value;
-      }
+      updateModelDropdownOptions(
+        workflowProperties.provider || globalSettings.provider
+      );
     }
   }
 
-  /**
-   * Handle provider status update from extension
-   */
   function handleProviderStatusUpdate(data) {
     if (data.providerStatus) {
       providerStatus = { ...providerStatus, ...data.providerStatus };
       updateProviderDropdownOptions();
-      elements.providerDropdown.value = state.provider;
     }
   }
 
-  /**
-   * Update provider dropdown to show availability status
-   */
+  function handleAgentsUpdate(data) {
+    if (data.availableAgents) {
+      availableAgents = data.availableAgents;
+      updateAgentDropdownOptions();
+    }
+  }
+
+  // ============================================================================
+  // UI UPDATE FUNCTIONS
+  // ============================================================================
+
+  function loadWorkflowPropertiesIntoUI() {
+    // Provider
+    const provider = workflowProperties.provider || globalSettings.provider;
+    elements.workflowProvider.value = provider;
+
+    // Model
+    updateModelDropdownOptions(provider);
+    const model = workflowProperties.model || globalSettings.model;
+    elements.workflowModel.value = model;
+
+    // Agent
+    const agent =
+      workflowProperties.agent !== undefined
+        ? workflowProperties.agent
+        : globalSettings.agent;
+    elements.workflowAgent.value = agent || "";
+
+    // New Chat Session
+    const newChat =
+      workflowProperties.newChatSession !== undefined
+        ? workflowProperties.newChatSession
+        : globalSettings.newChatSession;
+    elements.workflowNewChat.value = String(newChat);
+
+    // Allow Dynamic Extension
+    const dynamicExt =
+      workflowProperties.allowDynamicExtension !== undefined
+        ? workflowProperties.allowDynamicExtension
+        : globalSettings.allowDynamicExtension;
+    elements.workflowDynamicExt.value = String(dynamicExt);
+
+    // End Condition
+    if (workflowProperties.endCondition) {
+      elements.workflowEndEnabled.checked = true;
+      elements.workflowEndDetails.hidden = false;
+      elements.workflowEndScript.value =
+        workflowProperties.endCondition.script || "";
+      elements.workflowEndReturns.value =
+        workflowProperties.endCondition.returns || "";
+      elements.workflowEndTimeout.value =
+        workflowProperties.endCondition.timeout || 30000;
+      elements.workflowEndRetries.value =
+        workflowProperties.endCondition.maxRetries || 0;
+      elements.workflowEndRetryPrompt.value =
+        workflowProperties.endCondition.retryPrompt || "";
+    } else {
+      elements.workflowEndEnabled.checked = false;
+      elements.workflowEndDetails.hidden = true;
+    }
+  }
+
   function updateProviderDropdownOptions() {
     const providers = [
       PROVIDER_IDS.COPILOT_CLI,
@@ -218,7 +399,7 @@
       PROVIDER_IDS.CODEX_CLI,
     ];
 
-    elements.providerDropdown.innerHTML = providers
+    elements.workflowProvider.innerHTML = providers
       .map((id) => {
         const info = PROVIDER_INFO[id];
         const status = providerStatus[id];
@@ -240,74 +421,29 @@
   function updateModelDropdownOptions(provider) {
     const options = modelOptions[provider] || [];
 
-    // Show loading state if no models yet
     if (options.length === 0) {
-      elements.modelDropdown.innerHTML = `<option value="" disabled>${UI_STRINGS.LOADING_MODELS}</option>`;
+      elements.workflowModel.innerHTML = `<option value="" disabled>${UI_STRINGS.LOADING_MODELS}</option>`;
       return;
     }
 
-    elements.modelDropdown.innerHTML = options
+    elements.workflowModel.innerHTML = options
       .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
       .join("");
-
-    // Try to keep current model if available in new provider
-    const matchingOption = options.find((opt) => opt.value === state.model);
-    if (matchingOption) {
-      elements.modelDropdown.value = state.model;
-    } else if (options.length > 0) {
-      // Default to first option for this provider
-      state.model = DEFAULT_MODELS[provider] || options[0].value;
-      elements.modelDropdown.value = state.model;
-      // Notify extension of model change due to provider switch
-      vscode.postMessage({
-        type: MESSAGE_TYPES.CHANGE_MODEL,
-        model: state.model,
-        provider: state.provider,
-      });
-    }
   }
 
-  /**
-   * Show/hide execution mode dropdown based on provider
-   * Only CLI providers (copilot-cli, claude-cli, codex-cli) support execution mode
-   */
-  function updateExecutionModeVisibility(provider) {
-    const isCli =
-      provider === PROVIDER_IDS.COPILOT_CLI ||
-      provider === PROVIDER_IDS.CLAUDE_CLI ||
-      provider === PROVIDER_IDS.CODEX_CLI;
-
-    if (isCli) {
-      // Remove inline override so `.setting-group` flex layout applies
-      elements.executionModeGroup.style.removeProperty("display");
-    } else {
-      // Set display none to hide completely
-      elements.executionModeGroup.style.display = "none";
-    }
-  }
-
-  /**
-   * Update agent dropdown with discovered agents
-   * @param {Array} agents - Array of AgentInfo objects from AgentDiscovery
-   */
-  function updateAgentDropdownOptions(agents) {
-    if (!agents || agents.length === 0) {
-      // Show empty state
-      elements.agentDropdown.innerHTML = `<option value="">None (default behavior)</option>`;
+  function updateAgentDropdownOptions() {
+    if (!availableAgents || availableAgents.length === 0) {
+      elements.workflowAgent.innerHTML = `<option value="">None (default behavior)</option>`;
       return;
     }
 
-    // Build dropdown options from discovered agents
-    elements.agentDropdown.innerHTML = agents
+    elements.workflowAgent.innerHTML = availableAgents
       .map((agent) => {
-        // agent.name is empty string for "None" option
         const value = agent.name || "";
         const label = agent.displayName || "None (default behavior)";
 
-        // Add source indicator for non-None options
         let suffix = "";
         if (agent.name) {
-          // Only add suffix for actual agents, not "None"
           if (agent.source === "user") {
             suffix = " (User)";
           } else if (agent.source === "workspace-github") {
@@ -322,17 +458,113 @@
       .join("");
   }
 
-  /**
-   * Handle agents list update from extension
-   */
-  function handleAgentsUpdate(data) {
-    if (data.availableAgents) {
-      updateAgentDropdownOptions(data.availableAgents);
-      // Restore selected agent if still valid
-      if (state.agent) {
-        elements.agentDropdown.value = state.agent;
-      }
+  function updateExecutionModeRadios() {
+    const mode = globalSettings.executionMode || "interactive";
+    elements.executionModeRadios.forEach((radio) => {
+      radio.checked = radio.value === mode;
+    });
+  }
+
+  function setFieldsEnabled(enabled) {
+    // Enable/disable all workflow property fields
+    elements.workflowProvider.disabled = !enabled;
+    elements.workflowModel.disabled = !enabled;
+    elements.workflowAgent.disabled = !enabled;
+    elements.workflowNewChat.disabled = !enabled;
+    elements.workflowDynamicExt.disabled = !enabled;
+    elements.workflowEndEnabled.disabled = !enabled;
+    elements.workflowEndScript.disabled = !enabled;
+    elements.workflowEndReturns.disabled = !enabled;
+    elements.workflowEndTimeout.disabled = !enabled;
+    elements.workflowEndRetries.disabled = !enabled;
+    elements.workflowEndRetryPrompt.disabled = !enabled;
+
+    // Hide all "Set as Default" buttons when no workflow
+    if (!enabled) {
+      elements.setDefaultButtons.forEach((btn) => {
+        btn.hidden = true;
+      });
     }
+  }
+
+  // ============================================================================
+  // "SET AS DEFAULT" BUTTON LOGIC
+  // ============================================================================
+
+  function updateSetAsDefaultButton(property) {
+    const btn = document.querySelector(`[data-property="${property}"]`);
+    if (!btn || !workflowLoaded) {
+      return;
+    }
+
+    const workflowValue = workflowProperties[property];
+    const globalValue = globalSettings[property];
+
+    // Show button if workflow value differs from global setting
+    const isDifferent =
+      workflowValue !== undefined && workflowValue !== globalValue;
+    btn.hidden = !isDifferent;
+  }
+
+  function updateAllSetAsDefaultButtons() {
+    if (!workflowLoaded) {
+      return;
+    }
+
+    updateSetAsDefaultButton("provider");
+    updateSetAsDefaultButton("model");
+    updateSetAsDefaultButton("agent");
+    updateSetAsDefaultButton("newChatSession");
+    updateSetAsDefaultButton("allowDynamicExtension");
+  }
+
+  function handleSetAsDefault(property, buttonElement) {
+    const value = workflowProperties[property];
+
+    // Send message to extension to update VS Code setting
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SET_AS_DEFAULT,
+      property: property,
+      value: value,
+    });
+
+    // Update global settings in local state
+    globalSettings[property] = value;
+
+    // Animate button
+    animateSetAsDefaultButton(buttonElement);
+  }
+
+  function animateSetAsDefaultButton(buttonElement) {
+    // Change button text to show checkmark
+    buttonElement.textContent = "✓ Default";
+    buttonElement.classList.add("success");
+
+    // After 2 seconds, fade out and hide
+    setTimeout(() => {
+      buttonElement.classList.add("fade-out");
+      setTimeout(() => {
+        buttonElement.hidden = true;
+        buttonElement.classList.remove("success", "fade-out");
+        buttonElement.textContent = "Set as Default";
+      }, 300);
+    }, 2000);
+  }
+
+  // ============================================================================
+  // SAVE WORKFLOW PROPERTY
+  // ============================================================================
+
+  function saveWorkflowProperty(property, value) {
+    if (!workflowLoaded) {
+      return;
+    }
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+      property: property,
+      value: value,
+    });
   }
 
   // Request initial state

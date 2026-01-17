@@ -9,21 +9,35 @@ body {
 
 #settings-app {
   @include flex-column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
   max-width: 100%;
 }
 
-/* Settings row - stacks on narrow screens, grid on wide screens */
-.settings-row {
+/* Panel Header */
+.panel-header {
+  @include flex-column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--fg-primary);
+  }
+
+  .panel-description {
+    margin: 0;
+    font-size: 12px;
+    color: var(--fg-secondary);
+    line-height: 1.5;
+  }
+}
+
+/* Workflow Properties Section */
+.workflow-properties {
   @include flex-column;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-
-  /* Two-column grid layout for wider screens */
-  @media (min-width: 400px) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 .setting-group {
@@ -37,14 +51,74 @@ body {
     text-transform: uppercase;
   }
 
-  select {
+  select,
+  input[type="text"],
+  input[type="number"],
+  textarea {
     width: 100%;
     font-size: 12px;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     option:disabled {
       color: var(--fg-secondary);
       font-style: italic;
     }
+  }
+}
+
+/* Setting Input Row - Contains select/input + "Set as Default" button */
+.setting-input-row {
+  @include flex-center;
+  gap: var(--spacing-sm);
+  align-items: center;
+
+  select,
+  input {
+    flex: 1;
+  }
+}
+
+/* "Set as Default" Button */
+.btn-set-default {
+  @include flex-center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 11px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+  }
+
+  &:active {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+
+  // Success state (after click)
+  &.success {
+    background-color: var(--vscode-charts-green);
+    color: white;
+    border-color: var(--vscode-charts-green);
+  }
+
+  // Fade out animation
+  &.fade-out {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &[hidden] {
+    display: none;
   }
 }
 
@@ -72,6 +146,114 @@ body {
     width: 14px;
     height: 14px;
     accent-color: var(--vscode-checkbox-background);
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  span {
+    @include no-select;
+  }
+}
+
+/* End Condition Group */
+.end-condition-group {
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.end-condition-details {
+  @include flex-column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+
+  label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg-secondary);
+    margin-top: var(--spacing-xs);
+
+    &:first-of-type {
+      margin-top: 0;
+    }
+  }
+
+  input,
+  textarea {
+    margin-bottom: var(--spacing-xs);
+  }
+}
+
+.end-condition-help {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  font-size: 11px;
+  color: var(--fg-secondary);
+  padding: var(--spacing-xs);
+  background-color: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  margin-bottom: var(--spacing-sm);
+
+  i {
+    font-size: 14px;
+  }
+}
+
+/* Session Settings Section */
+.session-settings {
+  @include flex-column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+
+  h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-primary);
+  }
+
+  .section-description {
+    @include flex-center;
+    gap: var(--spacing-xs);
+    margin: 0;
+    font-size: 11px;
+    color: var(--fg-secondary);
+    line-height: 1.4;
+
+    i {
+      font-size: 14px;
+      color: var(--vscode-charts-blue);
+    }
+  }
+}
+
+/* Radio Group */
+.radio-group {
+  @include flex-center;
+  gap: var(--spacing-lg);
+}
+
+.radio-label {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: 12px;
+
+  input[type="radio"] {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--vscode-checkbox-background);
   }
 
   span {
@@ -83,7 +265,7 @@ body {
 .more-settings-container {
   @include flex-center;
   justify-content: center;
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-md);
   padding-top: var(--spacing-md);
   border-top: 1px solid var(--border-color);
 }

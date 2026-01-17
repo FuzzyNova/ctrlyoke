@@ -377,6 +377,69 @@ Analyze the FlightPath extension architecture and suggest improvements for bette
     - Chat mode: Switches model using `workbench.action.chat.changeModel` before sending prompt
   - **Default**: If omitted, uses `flightpath.copilotCliModel` setting (CLI) or current chat model (Chat)
 
+### Workflow-Level Properties
+
+FlightPath supports **workflow-level properties** that provide default values for all prompts. This enables:
+
+- **Reproducibility**: Workflows include their own defaults, ensuring consistent behavior
+- **DRY Principle**: Define shared settings once instead of repeating per prompt
+- **Common End Conditions**: Apply workflow-wide validation (e.g., "all prompts must pass tests")
+- **Better Sharing**: Workflows with embedded defaults work consistently across users
+
+**Three-Tier Precedence:**
+
+```
+Prompt-level properties (highest)
+  ↓
+Workflow-level properties
+  ↓
+VS Code global settings (fallback)
+```
+
+**Available Workflow Properties:**
+
+- `provider` - AI provider for execution (`copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`)
+- `model` - AI model to use (provider-specific)
+- `agent` - Custom agent file (`.agent.md`)
+- `newChatSession` - Start new session per prompt (boolean)
+- `allowDynamicExtension` - Allow dynamic queue extension (boolean)
+- `endCondition` - Validation that applies to all prompts (can be overridden per prompt)
+
+**YAML Example:**
+
+```yaml
+# Workflow-level defaults
+provider: copilot-cli
+model: claude-sonnet-4.5
+endCondition:
+  script: npm test
+  returns: "true"
+
+prompts:
+  - prompt: "Implement feature"
+    # Inherits: copilot-cli, claude-sonnet-4.5, npm test validation
+
+  - prompt: "Update docs"
+    endCondition: null # Override: Skip validation for docs
+```
+
+**Property Resolution:**
+
+When executing a prompt, FlightPath resolves each property by checking:
+
+1. Prompt-level property (if defined) → **USE THIS**
+2. Workflow-level property (if defined) → **USE THIS**
+3. VS Code global setting → **FALLBACK**
+
+The first defined value wins (highest priority takes precedence).
+
+**Working File:**
+
+- Provider and model **always saved** to working file (required for execution)
+- Other properties saved when explicitly set by user
+- Working file is single source of truth for both runtime state AND workflow configuration
+- See [docs/WORKFLOW_PROPERTIES.md](../docs/WORKFLOW_PROPERTIES.md) for complete guide
+
 **File naming conventions:**
 
 - `.prompt.md` - Single markdown-based prompts (no YAML/JSON, simplest format)

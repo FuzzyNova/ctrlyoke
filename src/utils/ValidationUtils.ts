@@ -88,6 +88,48 @@ export class ValidationUtils {
         required: ["script", "returns"],
         nullable: true,
       },
+      sessionId: {
+        type: ["string", "number"] as any, // Allow both string and number for session IDs
+        nullable: true,
+      },
+      _runtime: {
+        type: "object",
+        properties: {
+          sessionId: { type: "string", nullable: true },
+          startedAt: { type: "number" },
+          completedAt: { type: "number", nullable: true },
+          retryCount: { type: "number", nullable: true },
+          // Runtime can also inherit ExecutionProperties
+          provider: {
+            type: "string",
+            enum: [
+              Provider.CopilotCli,
+              Provider.CopilotChat,
+              Provider.ClaudeCli,
+              Provider.CodexCli,
+            ],
+            nullable: true,
+          },
+          model: { type: "string", nullable: true },
+          agent: { type: "string", nullable: true },
+          newChatSession: { type: "boolean", nullable: true },
+          allowDynamicExtension: { type: "boolean", nullable: true },
+          endCondition: {
+            type: "object",
+            properties: {
+              script: { type: "string" },
+              returns: { type: "string" },
+              timeout: { type: "number", nullable: true },
+              maxRetries: { type: "number", nullable: true },
+              retryPrompt: { type: "string", nullable: true },
+            },
+            required: ["script", "returns"],
+            nullable: true,
+          },
+        },
+        required: ["startedAt"],
+        nullable: true,
+      },
     },
     required: ["prompt"],
     additionalProperties: false,

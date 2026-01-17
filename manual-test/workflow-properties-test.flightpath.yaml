@@ -1,0 +1,58 @@
+# Workflow-Level Properties Integration Test
+# This file demonstrates the three-tier precedence system
+
+# Workflow-level defaults (apply to all prompts unless overridden)
+provider: copilot-cli
+model: claude-sonnet-4.5
+newChatSession: false
+allowDynamicExtension: false
+
+prompts:
+  - id: step1-inherit-all
+    prompt: |
+      Echo "Step 1: I should inherit all workflow properties"
+      # Expected resolved properties:
+      # - provider: copilot-cli (workflow)
+      # - model: claude-sonnet-4.5 (workflow)
+      # - newChatSession: false (workflow)
+      # - allowDynamicExtension: false (workflow)
+
+  - id: step2-override-model
+    prompt: |
+      Echo "Step 2: I override the model but inherit other properties"
+    model: claude-haiku-4.5 # Prompt-level override
+    # Expected resolved properties:
+    # - provider: copilot-cli (workflow)
+    # - model: claude-haiku-4.5 (prompt override)
+    # - newChatSession: false (workflow)
+    # - allowDynamicExtension: false (workflow)
+
+  - id: step3-override-session
+    prompt: |
+      Echo "Step 3: I start a new session but inherit model and provider"
+    newChatSession: true # Prompt-level override
+    # Expected resolved properties:
+    # - provider: copilot-cli (workflow)
+    # - model: claude-sonnet-4.5 (workflow)
+    # - newChatSession: true (prompt override)
+    # - allowDynamicExtension: false (workflow)
+
+  - id: step4-multiple-overrides
+    prompt: |
+      Echo "Step 4: I override multiple properties"
+    model: gpt-5
+    newChatSession: true
+    allowDynamicExtension: true
+    # Expected resolved properties:
+    # - provider: copilot-cli (workflow)
+    # - model: gpt-5 (prompt override)
+    # - newChatSession: true (prompt override)
+    # - allowDynamicExtension: true (prompt override)
+
+# Instructions for testing:
+# 1. Open FlightPath dashboard
+# 2. Load this file
+# 3. Check the logs for "📋 Resolved properties for prompt X:" messages
+# 4. Verify each prompt uses the expected resolved values
+# 5. Confirm workflow-level properties are being inherited correctly
+# 6. Confirm prompt-level overrides take precedence

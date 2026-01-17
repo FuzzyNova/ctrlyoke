@@ -4,6 +4,14 @@ import { PromptFileParser } from "../flightpath/PromptFileParser";
 import { PromptQueue } from "../flightpath/PromptQueue";
 import { ValidationUtils } from "../utils/ValidationUtils";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
+import { PromptFile } from "../types/FlightPathTypes";
+
+/**
+ * Helper to wrap prompts array into PromptFile for tests
+ */
+function createPromptFile(prompts: any[]): PromptFile {
+  return { prompts };
+}
 
 suite("FlightPath Core Tests", () => {
   test("PromptFileParser should be instantiable", () => {
@@ -67,7 +75,7 @@ suite("FlightPath Core Tests", () => {
     const queue = new PromptQueue();
     const prompts = [{ prompt: "First prompt" }, { prompt: "Second prompt" }];
 
-    queue.loadPrompts(prompts);
+    queue.loadPrompts(createPromptFile(prompts));
     const state = queue.getState();
 
     assert.strictEqual(state.prompts.length, 2);
@@ -83,7 +91,7 @@ suite("FlightPath Core Tests", () => {
       { prompt: "Third prompt" },
     ];
 
-    queue.loadPrompts(prompts);
+    queue.loadPrompts(createPromptFile(prompts));
     const progress = queue.getProgress();
 
     assert.strictEqual(progress.total, 3);

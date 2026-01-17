@@ -70,6 +70,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     [PROVIDER_IDS.CODEX_CLI]: "gpt-5.1-codex",
   };
 
+  // Reference to dashboard provider for workflow property updates
+  private dashboardProvider?: any;
+
   constructor(private readonly context: vscode.ExtensionContext) {
     // Listen for configuration changes to sync settings view
     this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
@@ -163,6 +166,12 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.OPEN_SETTINGS:
         this.handleOpenSettings();
         break;
+      case MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY:
+        this.handleUpdateWorkflowProperty(message.property, message.value);
+        break;
+      case MESSAGE_TYPES.SET_AS_DEFAULT:
+        this.handleSetAsDefault(message.property, message.value);
+        break;
     }
   }
 
@@ -173,12 +182,22 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     const provider = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForProvider(provider);
-    const agent = ConfigurationUtils.getCustomAgent(); // Use new getCustomAgent()
+    const agent = ConfigurationUtils.getCustomAgent();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const newChatSessionPerPrompt =
       ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
     const dynamicQueueEnabled =
       ConfigurationUtils.getDynamicQueueConfig().enabled;
+
+    // Global settings (from VS Code)
+    const globalSettings = {
+      provider,
+      model,
+      agent,
+      executionMode,
+      newChatSession: newChatSessionPerPrompt,
+      allowDynamicExtension: dynamicQueueEnabled,
+    };
 
     // Build dynamic model options from ModelRegistry
     const modelOptions = this.buildModelOptions();
@@ -189,15 +208,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     // Include available agents
     const availableAgents = this.availableAgents;
 
+    // Workflow properties will be sent separately when workflow is loaded
+    // Dashboard provider sends WORKFLOW_LOADED message with properties
+    const workflowProperties = {};
+
     this.view.webview.postMessage({
       type: MESSAGE_TYPES.INIT,
       data: {
-        provider,
-        model,
-        agent,
-        executionMode,
-        newChatSessionPerPrompt,
-        dynamicQueueEnabled,
+        globalSettings,
+        workflowProperties,
         modelOptions,
         providerStatus,
         availableAgents,
@@ -541,6 +560,83 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  /**
+   * Handle workflow property update from webview
+   * Forwards property update to Dashboard provider which handles working file saves
+   */
+  private async handleUpdateWorkflowProperty(
+    property: string,
+    value: any
+  ): Promise<void> {
+    // Forward to Dashboard provider for working file updates
+    // Dashboard provider has access to FlightPathManager and working file paths
+    Log.info(
+      `Forwarding workflow property update to Dashboard: ${property} = ${JSON.stringify(value)}`
+    );
+
+    if (!this.dashboardProvider) {
+      Log.warn("Dashboard provider not set - cannot update workflow property");
+      return;
+    }
+
+    // Forward the message to Dashboard provider's handleWebviewMessage
+    // Dashboard provider has a public method to receive messages
+    await (this.dashboardProvider as any).handleWebviewMessage({
+      type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+      property,
+      value,
+    });
+
+    // Dashboard provider will handle the update and send confirmation back
+    // via WORKFLOW_PROPERTIES_UPDATE message
+  }
+
+  /**
+   * Handle "Set as Default" button click
+   * Updates VS Code global setting with workflow property value
+   */
+  private async handleSetAsDefault(
+    property: string,
+    value: any
+  ): Promise<void> {
+    try {
+      // Map property names to VS Code setting keys
+      const settingMap: Record<string, string> = {
+        provider: "provider",
+        model: this.getModelSettingKey(
+          value.provider || ConfigurationUtils.getIntegrationMode()
+        ),
+        agent: "customAgent",
+        newChatSession: "newChatSessionPerPrompt",
+        allowDynamicExtension: "enableDynamicQueue",
+      };
+
+      const settingKey = settingMap[property];
+      if (!settingKey) {
+        Log.error(`Unknown property for setAsDefault: ${property}`);
+        return;
+      }
+
+      await ConfigurationUtils.updateSetting(settingKey, value);
+      Log.info(`✅ Set as default: ${property} = ${JSON.stringify(value)}`);
+
+      // Refresh UI to reflect new global setting
+      this.sendInitialState();
+    } catch (error) {
+      Log.error(`Failed to set ${property} as default:`, error);
+    }
+  }
+
+  /**
+   * Get the appropriate model setting key for a given provider
+   */
+  private getModelSettingKey(provider: string): string {
+    return (
+      FlightPathSettingsProvider.MODEL_SETTING_MAP[provider] ||
+      "copilotCliModel"
+    );
+  }
+
   private getHtmlContent(webview: vscode.Webview): string {
     const constantsUri = webview.asWebviewUri(
       this.getWebviewPath("DashboardConstants.js")
@@ -581,5 +677,22 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       .replace(/\{\{cspSource\}\}/g, webview.cspSource);
 
     return html;
+  }
+
+  /**
+   * Post message to settings webview (called from dashboard provider)
+   */
+  public postMessageToWebview(message: any): void {
+    if (!this.view) {
+      return;
+    }
+    this.view.webview.postMessage(message);
+  }
+
+  /**
+   * Set reference to dashboard provider for bidirectional communication
+   */
+  public setDashboardProvider(provider: any): void {
+    this.dashboardProvider = provider;
   }
 }

@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import {
   PromptItem,
+  PromptFile,
   QueueState,
   PromptResult,
   EXECUTION_STATES,
@@ -78,6 +79,7 @@ function getEffectiveRetryPrompt(
 
 export class PromptQueue {
   private state: QueueState;
+  private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
   private onStateChanged: vscode.EventEmitter<QueueState> =
     new vscode.EventEmitter<QueueState>();
   private isPaused: boolean = false;
@@ -122,16 +124,20 @@ export class PromptQueue {
       workflowName: undefined,
     };
 
+    this.workflowFile = undefined; // Clear workflow file reference
+
     this.emitStateChange();
     Log.info("Queue cleared - ready for new workflow");
   }
 
   /**
    * Load prompts into the queue
-   * @param prompts Prompts to load
+   * @param promptFile Complete workflow file with prompts and workflow-level properties
    * @param workingFilePath Optional path to working file (source of truth)
    */
-  loadPrompts(prompts: PromptItem[], workingFilePath?: string): void {
+  loadPrompts(promptFile: PromptFile, workingFilePath?: string): void {
+    const prompts = promptFile.prompts || [];
+
     this.state = {
       currentIndex: 0,
       status: EXECUTION_STATES.IDLE,
@@ -149,6 +155,9 @@ export class PromptQueue {
       workingFilePath,
       workflowName: this.state.workflowName, // Preserve workflow name across reloads
     };
+
+    // Store complete workflow file for property resolution
+    this.workflowFile = promptFile;
 
     this.emitStateChange();
     Log.info(`Loaded ${prompts.length} prompts into queue`);
@@ -187,6 +196,9 @@ export class PromptQueue {
         workingFilePath,
         workflowName: workingFile.workflowName, // Restore workflow name from working file
       };
+
+      // Store complete workflow file for property resolution
+      this.workflowFile = workingFile;
 
       // Rebuild results array with proper status based on completion state
       this.state.results = workingFile.prompts.map((prompt, index) => {
@@ -535,6 +547,25 @@ export class PromptQueue {
     return this.state.results.filter(
       (result) => result.status === STEP_STATUS.COMPLETED
     ).length;
+  }
+
+  /**
+   * Get the current workflow name
+   * Returns undefined if no workflow is loaded
+   */
+  getWorkflowName(): string | undefined {
+    return this.state.workflowName;
+  }
+
+  /**
+   * Get the complete workflow file with workflow-level properties.
+   * Used by PropertyResolver to apply three-tier property precedence.
+   *
+   * @returns Complete PromptFile with workflow-level properties, or empty object if not loaded
+   */
+  getWorkflowFile(): PromptFile {
+    // Return the stored workflow file, or an empty object with just prompts if not available
+    return this.workflowFile || { prompts: this.state.prompts };
   }
 
   /**

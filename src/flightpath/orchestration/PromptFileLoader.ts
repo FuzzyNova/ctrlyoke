@@ -83,7 +83,7 @@ export class PromptFileLoader {
       }
 
       // Load prompts into queue with working file path
-      this.promptQueue.loadPrompts(promptFile.prompts, workingFilePath);
+      this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
       // Notify dashboard about file selection
       if (this.dashboardProvider) {

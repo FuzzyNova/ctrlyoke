@@ -5,6 +5,7 @@ import { CopilotCliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { Log } from "../../utils/Log";
+import { ResolvedProperties } from "../../utils/PropertyResolver";
 
 /**
  * Copilot initialization status
@@ -79,6 +80,7 @@ export abstract class CopilotIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      resolvedProperties?: ResolvedProperties; // Resolved properties from PropertyResolver
     }
   ): Promise<boolean>;
 

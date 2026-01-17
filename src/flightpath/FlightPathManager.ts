@@ -28,6 +28,10 @@ import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import {
+  PropertyResolver,
+  ResolvedProperties,
+} from "../utils/PropertyResolver";
 
 // Import new orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -664,7 +668,7 @@ export class FlightPathManager {
               filePath: this.currentPromptFile.filePath,
               promptFile,
             };
-            this.promptQueue.loadPrompts(promptFile.prompts);
+            this.promptQueue.loadPrompts(promptFile);
 
             if (this.dashboardProvider) {
               const queueState = this.promptQueue.getState();
@@ -919,6 +923,13 @@ export class FlightPathManager {
         prompt: p.prompt,
       })),
     };
+  }
+
+  /**
+   * Read working file (delegated to PromptQueue)
+   */
+  async readWorkingFile(workingFilePath: string): Promise<any> {
+    return this.promptQueue.readWorkingFile(workingFilePath);
   }
 
   /**
@@ -1197,14 +1208,12 @@ export class FlightPathManager {
 
     // Handle model: null clears, value sets, undefined skips
     if (properties.model !== undefined) {
-      updates.model =
-        properties.model === null ? undefined : properties.model;
+      updates.model = properties.model === null ? undefined : properties.model;
     }
 
     // Handle agent: null clears, value sets, undefined skips
     if (properties.agent !== undefined) {
-      updates.agent =
-        properties.agent === null ? undefined : properties.agent;
+      updates.agent = properties.agent === null ? undefined : properties.agent;
     }
 
     // Handle newChatSession: null clears, boolean sets, undefined skips
@@ -1226,9 +1235,7 @@ export class FlightPathManager {
     // Handle endCondition: null clears, object sets, undefined skips
     if (properties.endCondition !== undefined) {
       updates.endCondition =
-        properties.endCondition === null
-          ? undefined
-          : properties.endCondition;
+        properties.endCondition === null ? undefined : properties.endCondition;
     }
 
     return updates;
@@ -1284,7 +1291,9 @@ export class FlightPathManager {
     }
 
     // Load prompts into queue
-    this.promptQueue.loadPrompts(prompts, workingFilePath);
+    // Convert prompts array to PromptFile for backward compatibility
+    const promptFile: PromptFile = { prompts };
+    this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
     // Update dashboard
     if (this.dashboardProvider) {

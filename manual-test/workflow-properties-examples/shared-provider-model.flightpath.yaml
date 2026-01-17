@@ -1,0 +1,70 @@
+# Shared Provider/Model Example
+#
+# This workflow demonstrates reproducible configuration using workflow-level
+# provider, model, and agent settings. Ensures consistent behavior across
+# all team members.
+#
+# Use Case: Standardized Code Review Process
+# - Security review with full-power model
+# - Performance review with fast model
+# - Style review with fast model
+# All use same provider and custom code-reviewer agent
+
+# Workflow-level properties
+# These ensure the workflow behaves identically for all team members
+provider: claude-cli
+model: sonnet # Default: Powerful model for complex analysis
+agent: .github/agents/code-reviewer.agent.md
+newChatSession: true # Fresh context for each review phase
+
+# Prompts
+prompts:
+  # Phase 1: Security Review
+  - id: security-review
+    prompt: |
+      Review the latest code changes for security vulnerabilities.
+
+      Focus on:
+      - Authentication and authorization flaws
+      - Input validation and sanitization
+      - SQL injection, XSS, CSRF risks
+      - Sensitive data exposure
+      - Cryptographic weaknesses
+      - Dependency vulnerabilities
+
+      Provide specific remediation steps for each issue found.
+    # Uses: claude-cli, sonnet, code-reviewer agent, new session
+    # Full-power model needed for security analysis
+
+  # Phase 2: Performance Review
+  - id: performance-review
+    prompt: |
+      Analyze performance implications of the code changes.
+
+      Identify:
+      - Algorithm efficiency issues (O(n²) → O(n log n))
+      - Database query optimization opportunities
+      - Memory leaks or excessive allocations
+      - Unnecessary synchronous operations
+      - Resource cleanup issues
+
+      Suggest specific optimizations with expected impact.
+    model: haiku # Override: Fast model sufficient for performance checks
+    # Uses: claude-cli, haiku (overridden), code-reviewer agent, new session
+
+  # Phase 3: Style Review
+  - id: style-review
+    prompt: |
+      Review code style, naming conventions, and best practices.
+
+      Check for:
+      - Consistent naming conventions (camelCase, PascalCase, etc.)
+      - Code organization and modularity
+      - Comment quality and documentation
+      - DRY principle violations
+      - SOLID principles adherence
+      - Language-specific idioms and patterns
+
+      Suggest improvements for readability and maintainability.
+    model: haiku # Override: Fast model sufficient for style checks
+    # Uses: claude-cli, haiku (overridden), code-reviewer agent, new session

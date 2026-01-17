@@ -131,9 +131,16 @@ export class ClaudeCliProvider implements ICliProvider {
       promptIndex: number;
       allPrompts: any[];
       filePath?: string;
+      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
     }
   ): Promise<string[]> {
     const args: string[] = [];
+
+    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    const resolvedModel = workflowContext?.resolvedProperties?.model;
+    const resolvedAgent = workflowContext?.resolvedProperties?.agent;
+    const resolvedNewChatSession =
+      workflowContext?.resolvedProperties?.newChatSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -178,11 +185,11 @@ export class ClaudeCliProvider implements ICliProvider {
       args.push("--verbose");
     }
 
-    // Model selection with validation
-    const model = this.validateAndGetModel(prompt.model);
+    // Model selection with validation - use resolved property if available
+    const model = this.validateAndGetModel(resolvedModel);
     args.push("--model", model);
 
-    // Agent handling
+    // Agent handling - use resolved property if available
     // NOTE: Claude CLI agent support is currently BROKEN (as of v2.1.7):
     // - Agents in .claude/agents/ are NOT automatically loaded (GitHub issue #9930)
     // - The --agent flag does not load agents from .claude/agents/
@@ -190,10 +197,9 @@ export class ClaudeCliProvider implements ICliProvider {
     // - Workaround requires reading agent file and using --append-system-prompt
     //
     // Keeping minimal code for future when this is fixed
-    const agentName = prompt.agent || ConfigurationUtils.getCustomAgent();
-    if (agentName) {
+    if (resolvedAgent) {
       Log.warn(
-        `⚠️ Claude CLI agent support is currently non-functional (known bug #9930). Agent "${agentName}" will be ignored.`
+        `⚠️ Claude CLI agent support is currently non-functional (known bug #9930). Agent "${resolvedAgent}" will be ignored.`
       );
       Log.warn(`   See: https://github.com/anthropics/claude-code/issues/9930`);
     }
@@ -206,12 +212,10 @@ export class ClaudeCliProvider implements ICliProvider {
       });
     }
 
-    // Session management (MUST come BEFORE tool permissions to avoid being consumed by variadic --disallowedTools)
-    // Check prompt's explicit setting first, then fall back to global setting
-    const shouldStartNewSession =
-      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    // Session management - use resolved property if available
+    const shouldStartNewSession = resolvedNewChatSession ?? false;
     Log.debug(
-      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
     if (!shouldStartNewSession && sessionId) {
       args.push("-r", sessionId);
@@ -221,7 +225,7 @@ export class ClaudeCliProvider implements ICliProvider {
       Log.debug(`✅ Added continue flag: -c`);
     } else {
       Log.debug(
-        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
       );
     }
 

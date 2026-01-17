@@ -288,6 +288,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
     }
   ): Promise<boolean> {
     try {
@@ -303,11 +304,16 @@ export class CopilotChatIntegration extends CopilotIntegration {
         return false;
       }
 
+      // Use resolved properties if available (from PropertyResolver three-tier precedence)
+      const resolvedModel = workflowContext?.resolvedProperties?.model;
+      const resolvedNewChatSession =
+        workflowContext?.resolvedProperties?.newChatSession;
+
       // Start new chat session if requested
-      // When newChatSession is true (default from user setting), start fresh session
-      // When newChatSession is false, continue in existing chat session for context continuity
-      // Note: Retries should always use the same chat session (handled by retry logic setting newChatSession=false)
-      if (prompt.newChatSession === true) {
+      // Use resolved property if available, otherwise fall back to prompt property
+      const shouldStartNewSession =
+        resolvedNewChatSession ?? prompt.newChatSession === true;
+      if (shouldStartNewSession) {
         await this.startNewChatSession();
       }
 
@@ -318,8 +324,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
         await this.ensureAgentMode();
       }
 
-      // Switch model if specified in prompt
-      await this.switchModelIfNeeded(prompt.model);
+      // Switch model if specified - use resolved property if available
+      await this.switchModelIfNeeded(resolvedModel);
 
       // Determine if completion detection is needed:
       // - If explicitly provided, use that value

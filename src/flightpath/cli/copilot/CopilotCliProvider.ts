@@ -163,9 +163,17 @@ export class CopilotCliProvider implements ICliProvider {
       promptIndex: number;
       allPrompts: any[];
       filePath?: string;
+      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
     }
   ): Promise<string[]> {
     const args: string[] = [];
+
+    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    // This ensures workflow-level defaults are respected
+    const resolvedModel = workflowContext?.resolvedProperties?.model;
+    const resolvedAgent = workflowContext?.resolvedProperties?.agent;
+    const resolvedNewChatSession =
+      workflowContext?.resolvedProperties?.newChatSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -240,34 +248,32 @@ export class CopilotCliProvider implements ICliProvider {
       });
     }
 
-    // Model selection with validation
-    const model = this.validateAndGetModel(prompt.model);
+    // Model selection with validation - use resolved property if available
+    const model = this.validateAndGetModel(resolvedModel);
     if (model) {
       args.push("--model", model);
     }
 
-    // Agent handling
-    if (prompt.agent) {
-      const agentName = prompt.agent.endsWith(".agent")
-        ? prompt.agent
-        : `${prompt.agent}.agent`;
+    // Agent handling - use resolved property if available
+    if (resolvedAgent) {
+      const agentName = resolvedAgent.endsWith(".agent")
+        ? resolvedAgent
+        : `${resolvedAgent}.agent`;
       args.push("--agent", agentName);
       Log.info(`🤖 Using agent: ${agentName}`);
     }
 
-    // Session resumption
-    // Check prompt's explicit setting first, then fall back to global setting
-    const shouldStartNewSession =
-      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    // Session resumption - use resolved property if available
+    const shouldStartNewSession = resolvedNewChatSession ?? false;
     Log.debug(
-      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
     if (!shouldStartNewSession && sessionId) {
       args.push("--resume", sessionId);
       Log.debug(`✅ Added resume flag: --resume ${sessionId}`);
     } else if (shouldStartNewSession) {
       Log.debug(
-        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
       );
     }
 

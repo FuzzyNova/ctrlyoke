@@ -18,6 +18,7 @@ import {
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { Log } from "../utils/Log";
+import { PropertyResolver } from "../utils/PropertyResolver";
 
 /**
  * Context provided by FlightPathManager for workflow execution.
@@ -193,6 +194,21 @@ export class WorkflowExecutor {
         });
       }
 
+      // Resolve properties with three-tier precedence (prompt → workflow → settings)
+      const workflowFile = this.promptQueue.getWorkflowFile();
+      const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+
+      // Log resolved properties for debugging
+      Log.info(
+        `📋 Resolved properties for prompt ${i + 1}: ` +
+          `provider=${resolvedProperties.provider}, ` +
+          `model=${resolvedProperties.model}, ` +
+          `agent=${resolvedProperties.agent || "(none)"}, ` +
+          `newChatSession=${resolvedProperties.newChatSession}, ` +
+          `allowDynamicExtension=${resolvedProperties.allowDynamicExtension}, ` +
+          `endCondition=${resolvedProperties.endCondition ? "defined" : "none"}`
+      );
+
       // Send prompt to integration
       const success = await integration.sendPrompt(
         prompt,
@@ -201,6 +217,7 @@ export class WorkflowExecutor {
           promptIndex: i,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          resolvedProperties, // Pass resolved properties to integration
         }
       );
 

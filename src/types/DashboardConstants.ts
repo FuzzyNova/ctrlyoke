@@ -71,6 +71,13 @@ export const MESSAGE_TYPES = {
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
 
+  // Workflow Properties - Settings Panel <-> Extension
+  UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property to working file
+  SET_AS_DEFAULT: "setAsDefault", // Webview -> Extension: Update VS Code global setting
+  WORKFLOW_PROPERTIES_UPDATE: "workflowPropertiesUpdate", // Extension -> Webview: Send updated workflow properties
+  WORKFLOW_LOADED: "workflowLoaded", // Extension -> Webview: Workflow loaded, enable UI
+  WORKFLOW_UNLOADED: "workflowUnloaded", // Extension -> Webview: Workflow unloaded, disable UI
+
   // New Workflow Modal - Extension -> Webview
   OPEN_NEW_WORKFLOW_MODAL: "openNewWorkflowModal",
   TEMPLATE_INFO: "templateInfo",

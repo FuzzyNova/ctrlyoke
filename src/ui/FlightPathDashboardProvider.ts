@@ -9,6 +9,7 @@ import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   StatusMessageSeverity,
+  DEFAULT_MODELS,
 } from "../types/DashboardConstants";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -28,6 +29,7 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { FlightPathManager } from "../flightpath/FlightPathManager";
+import { Provider } from "../types/FlightPathTypes";
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -50,6 +52,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     [MESSAGE_TYPES.STOP, "flightpath.stop"],
     [MESSAGE_TYPES.SHOW_OUTPUT, "flightpath.showOutputPanel"],
   ]);
+
+  // Reference to settings provider for workflow property coordination
+  private settingsProvider?: vscode.WebviewViewProvider;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.templateManager = new TemplateManager(context);
@@ -192,6 +197,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       this.handleClearWorkflowHistory();
       return;
     }
+    if (message.type === MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY) {
+      this.handleUpdateWorkflowProperty(message);
+      return;
+    }
 
     const commandId = this.messageCommandMap.get(message.type);
     if (commandId) {
@@ -219,6 +228,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       prompts,
       workflowName,
     });
+
+    // Extract and send workflow properties to settings panel
+    this.sendWorkflowPropertiesToSettings();
   }
 
   public updateSessionRestored(
@@ -238,6 +250,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       currentIndex,
       workflowName,
     });
+
+    // Extract and send workflow properties to settings panel
+    this.sendWorkflowPropertiesToSettings();
   }
 
   public updateExecutionStarted(fileName: string, totalSteps: number): void {
@@ -396,6 +411,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       Log.error("FlightPathManager not initialized");
       return;
     }
+
+    // Notify settings panel that workflow is unloaded
+    this.sendWorkflowUnloadedToSettings();
 
     // Clear workflow state in FlightPathManager
     this.flightPathManager.clearWorkflow();
@@ -816,7 +834,11 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       .toString();
     // Get logo URI from images folder (for background watermark)
     const logoUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "images", "flightpath-sidebar-icon.svg")
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "images",
+        "flightpath-sidebar-icon.svg"
+      )
     );
 
     // Read HTML template and replace placeholders
@@ -1142,7 +1164,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
             const workingFile = JSON.parse(content);
 
             // Use lastModifiedAt if available, fall back to startedAt
-            const lastModified = workingFile.lastModifiedAt || workingFile.startedAt || 0;
+            const lastModified =
+              workingFile.lastModifiedAt || workingFile.startedAt || 0;
 
             return {
               filePath,
@@ -1242,5 +1265,164 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         `Failed to clear history: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * Handle UPDATE_WORKFLOW_PROPERTY message from settings panel
+   * Update workflow property in working file
+   */
+  private async handleUpdateWorkflowProperty(message: any): Promise<void> {
+    const { property, value } = message;
+
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    try {
+      // Get current working file path
+      const workingFilePath =
+        this.flightPathManager.getQueueState()?.workingFilePath;
+      if (!workingFilePath) {
+        Log.warn("No working file loaded, cannot update workflow property");
+        return;
+      }
+
+      // Read working file
+      const workingFile =
+        await this.flightPathManager.readWorkingFile(workingFilePath);
+
+      // Update the property
+      if (value === undefined) {
+        // Remove property if value is undefined
+        delete (workingFile as any)[property];
+      } else {
+        (workingFile as any)[property] = value;
+      }
+
+      // Ensure provider and model are always present (required for execution)
+      if (!workingFile.provider) {
+        workingFile.provider = ConfigurationUtils.getIntegrationMode();
+      }
+      if (!workingFile.model) {
+        const provider = workingFile.provider;
+        workingFile.model = this.getModelForProvider(provider);
+      }
+
+      // Write back to working file
+      await fs.writeFile(
+        workingFilePath,
+        JSON.stringify(workingFile, null, 2),
+        "utf-8"
+      );
+
+      Log.info(
+        `Updated workflow property '${property}' in working file: ${workingFilePath}`
+      );
+
+      // Send updated properties back to settings panel (confirmation)
+      this.sendWorkflowPropertiesToSettings();
+    } catch (error) {
+      Log.error("Failed to update workflow property:", error);
+      vscode.window.showErrorMessage(
+        `Failed to update workflow property: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  /**
+   * Extract workflow properties from working file and send to settings panel
+   */
+  private sendWorkflowPropertiesToSettings(): void {
+    if (!this.flightPathManager) {
+      return;
+    }
+
+    try {
+      const workingFilePath =
+        this.flightPathManager.getQueueState()?.workingFilePath;
+      if (!workingFilePath) {
+        return;
+      }
+
+      // Read working file synchronously (we need properties immediately)
+      const workingFileContent = fsSync.readFileSync(workingFilePath, "utf-8");
+      const workingFile = JSON.parse(workingFileContent);
+
+      // Extract workflow-level properties
+      const workflowProperties = {
+        provider: workingFile.provider,
+        model: workingFile.model,
+        agent: workingFile.agent,
+        newChatSession: workingFile.newChatSession,
+        allowDynamicExtension: workingFile.allowDynamicExtension,
+        endCondition: workingFile.endCondition,
+      };
+
+      // Send WORKFLOW_LOADED message to settings panel
+      this.sendMessageToSettings({
+        type: MESSAGE_TYPES.WORKFLOW_LOADED,
+        data: { workflowProperties },
+      });
+
+      Log.info("Sent workflow properties to settings panel");
+    } catch (error) {
+      Log.error("Failed to send workflow properties to settings:", error);
+    }
+  }
+
+  /**
+   * Send WORKFLOW_UNLOADED message to settings panel
+   */
+  private sendWorkflowUnloadedToSettings(): void {
+    this.sendMessageToSettings({
+      type: MESSAGE_TYPES.WORKFLOW_UNLOADED,
+    });
+    Log.info("Sent workflow unloaded to settings panel");
+  }
+
+  /**
+   * Send message to settings panel webview
+   */
+  private sendMessageToSettings(message: any): void {
+    if (this.settingsProvider) {
+      (this.settingsProvider as any).postMessageToWebview(message);
+    }
+  }
+
+  /**
+   * Get model for a provider
+   */
+  private getModelForProvider(provider: Provider): string {
+    const config = vscode.workspace.getConfiguration("flightpath");
+
+    switch (provider) {
+      case Provider.CopilotCli:
+        return (
+          config.get<string>("copilotCliModel") || DEFAULT_MODELS["copilot-cli"]
+        );
+      case Provider.CopilotChat:
+        return (
+          config.get<string>("copilotChatModel") ||
+          DEFAULT_MODELS["copilot-chat"]
+        );
+      case Provider.ClaudeCli:
+        return (
+          config.get<string>("claudeCliModel") || DEFAULT_MODELS["claude-cli"]
+        );
+      case Provider.CodexCli:
+        return (
+          config.get<string>("codexCliModel") || DEFAULT_MODELS["codex-cli"]
+        );
+      default:
+        return DEFAULT_MODELS["copilot-cli"];
+    }
+  }
+
+  /**
+   * Set settings provider reference (called from extension.ts)
+   */
+  public setSettingsProvider(provider: vscode.WebviewViewProvider): void {
+    this.settingsProvider = provider;
   }
 }

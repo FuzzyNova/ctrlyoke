@@ -139,9 +139,15 @@ export class CodexCliProvider implements ICliProvider {
       promptIndex: number;
       allPrompts: any[];
       filePath?: string;
+      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
     }
   ): Promise<string[]> {
     const args: string[] = [];
+
+    // Use resolved properties if available (from PropertyResolver three-tier precedence)
+    const resolvedModel = workflowContext?.resolvedProperties?.model;
+    const resolvedNewChatSession =
+      workflowContext?.resolvedProperties?.newChatSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -177,8 +183,8 @@ export class CodexCliProvider implements ICliProvider {
       args.push("--json");
     }
 
-    // Model selection with validation
-    const model = this.validateAndGetModel(prompt.model);
+    // Model selection with validation - use resolved property if available
+    const model = this.validateAndGetModel(resolvedModel);
     args.push("--model", model);
 
     // Add workspace directories
@@ -238,13 +244,10 @@ export class CodexCliProvider implements ICliProvider {
       }
     }
 
-    // Session management: resume subcommand and session ID
-    // MUST come after other flags since 'resume' is a subcommand, not a flag
-    // Check prompt's explicit setting first, then fall back to global setting
-    const shouldStartNewSession =
-      ConfigurationUtils.shouldStartNewSessionForPrompt(prompt.newChatSession);
+    // Session management - use resolved property if available
+    const shouldStartNewSession = resolvedNewChatSession ?? false;
     Log.debug(
-      `🔍 Session check: newChatSession=${prompt.newChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
 
     if (!shouldStartNewSession && sessionId) {
@@ -256,7 +259,7 @@ export class CodexCliProvider implements ICliProvider {
       Log.debug(`⚠️ Resume requested but no session ID available`);
     } else {
       Log.debug(
-        `🆕 Starting new session (shouldStartNewSession=${shouldStartNewSession})`
+        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
       );
     }
 

@@ -47,6 +47,36 @@ FlightPath is a VS Code extension that enables developers to create automated, s
 - **JSON Schema Validation**: IntelliSense and validation in VS Code for both YAML and JSON
 - **Example Files**: Ready-to-use YAML and JSON templates in `.flightpath/examples/`
 
+### Workflow Properties
+
+**Define defaults once, use everywhere** - Set provider, model, agent, and other execution settings at the workflow level:
+
+- **Three-Tier Precedence**: Prompt > Workflow > Global Settings
+- **Reproducibility**: Workflows include their own defaults, ensuring consistent behavior across team members
+- **Workflow-Wide Validation**: Apply end conditions to all prompts with selective overrides
+- **DRY Principle**: Define shared settings once instead of repeating for each prompt
+- **Better Sharing**: Share workflows with embedded configuration, reducing setup required
+
+**Quick Example:**
+
+```yaml
+# Workflow defaults apply to all prompts
+provider: copilot-cli
+model: claude-sonnet-4.5
+endCondition:
+  script: npm test
+  returns: "true"
+
+prompts:
+  - prompt: "Implement feature"
+    # Inherits provider, model, and end condition
+
+  - prompt: "Update docs"
+    endCondition: null # Override: Skip tests for docs
+```
+
+📚 **[Complete Workflow Properties Guide](./docs/WORKFLOW_PROPERTIES.md)** | 📁 **[Example Workflows](./manual-test/workflow-properties-examples/)**
+
 ### Safety & Control
 
 - **Script Validation**: Path validation and security checks for end condition scripts

@@ -14,6 +14,7 @@ import {
 import { Log } from "../../utils/Log";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
+import { ResolvedProperties } from "../../utils/PropertyResolver";
 
 /**
  * Execution mode for CLI integrations
@@ -1175,6 +1176,7 @@ export class CliIntegration extends CopilotIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      resolvedProperties?: ResolvedProperties;
     }
   ): Promise<boolean> {
     try {

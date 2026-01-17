@@ -9,45 +9,34 @@ oneOf:
   - title: Single Prompt
     $ref: '#/definitions/promptItem'
   - title: Multiple Prompts (or Working File)
-    properties:
-      prompts:
-        type: array
-        items:
-          $ref: '#/definitions/promptItem'
-      originalFile:
-        type: string
-        description: Path to original prompt file (working files only)
-      workflowName:
-        type: string
-        description: Derived workflow name (working files only)
-      startedAt:
-        type: number
-        description: Timestamp when workflow started (working files only)
-      _runtime:
-        $ref: '#/definitions/runtimeMetadata'
-    required:
-      - prompts
-    additionalProperties: false
+    allOf:
+      - $ref: '#/definitions/executionProperties'
+      - properties:
+          prompts:
+            type: array
+            items:
+              $ref: '#/definitions/promptItem'
+          originalFile:
+            type: string
+            description: Path to original prompt file (working files only)
+          workflowName:
+            type: string
+            description: Derived workflow name (working files only)
+          startedAt:
+            type: number
+            description: Timestamp when workflow started (working files only)
+          _runtime:
+            $ref: '#/definitions/runtimeMetadata'
+        required:
+          - prompts
+        additionalProperties: false
 definitions:
-  promptItem:
+  executionProperties:
     type: object
+    description: >-
+      Shared execution configuration properties used across workflow-level defaults, prompt-level
+      overrides, and runtime metadata
     properties:
-      id:
-        type: string
-        description: >-
-          Optional unique identifier for this prompt. Used for tracking completion across queue
-          reloads. If omitted, a content hash is used automatically.
-        pattern: ^[a-zA-Z0-9-_]+$
-        maxLength: 50
-      prompt:
-        type: string
-        description: >-
-          The prompt to send to GitHub Copilot. Can be either: (1) Final-form prompt text with
-          context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix,
-          /explain, etc.) directly in the text, OR (2) A file path to a .prompt.md, .md, or .txt
-          file containing the prompt. File paths are resolved relative to the prompt file's
-          directory, then workspace root, then .flightpath directory. Absolute paths are also
-          supported.
       provider:
         type: string
         description: >-
@@ -120,10 +109,43 @@ definitions:
           Language Model Tools API. When false, no MCP config or instructions are provided. When
           omitted, defaults to true for last prompt only (when no other prompts have explicit
           flags).
+      sessionId:
+        type:
+          - string
+          - number
+        description: >-
+          Session ID for resuming CLI conversations. Can be a string (exact CLI session ID to
+          resume) or number (prompt reference: 1 = use session from first prompt). When omitted and
+          newChatSession=false, automatically resumes previous prompt's session. Working file
+          runtime metadata stores the actual session ID used during execution.
       endCondition:
         $ref: '#/definitions/endCondition'
-    required:
-      - prompt
+  promptItem:
+    type: object
+    allOf:
+      - $ref: '#/definitions/executionProperties'
+      - properties:
+          id:
+            type: string
+            description: >-
+              Optional unique identifier for this prompt. Used for tracking completion across queue
+              reloads. If omitted, a content hash is used automatically.
+            pattern: ^[a-zA-Z0-9-_]+$
+            maxLength: 50
+          prompt:
+            type: string
+            description: >-
+              The prompt to send to GitHub Copilot. Can be either: (1) Final-form prompt text with
+              context variables (@workspace, #file:path:line-line, etc.) and slash commands (/fix,
+              /explain, etc.) directly in the text, OR (2) A file path to a .prompt.md, .md, or .txt
+              file containing the prompt. File paths are resolved relative to the prompt file's
+              directory, then workspace root, then .flightpath directory. Absolute paths are also
+              supported.
+          _runtime:
+            $ref: '#/definitions/promptRuntimeMetadata'
+            description: Per-prompt runtime execution metadata (optional, added automatically during execution)
+        required:
+          - prompt
   endCondition:
     type: object
     properties:
@@ -157,11 +179,28 @@ definitions:
     required:
       - script
       - returns
+  promptRuntimeMetadata:
+    type: object
+    description: Per-prompt runtime execution metadata (optional, added automatically during execution)
+    allOf:
+      - $ref: '#/definitions/executionProperties'
+      - properties:
+          startedAt:
+            type: number
+            description: Timestamp when this prompt started execution
+          completedAt:
+            type: number
+            description: Timestamp when this prompt completed execution
+          retryCount:
+            type: number
+            description: Number of retry attempts for this prompt
+        required:
+          - startedAt
   runtimeMetadata:
     type: object
     description: >-
-      Runtime execution state for working files (optional, added automatically by FlightPath during
-      execution)
+      Workflow-level runtime execution state for working files (optional, added automatically by
+      FlightPath during execution)
     properties:
       currentIndex:
         type: number

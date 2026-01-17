@@ -1,0 +1,74 @@
+# Shared End Condition Example
+#
+# This workflow demonstrates workflow-wide validation that applies to all prompts.
+# All implementation prompts must pass tests before proceeding.
+#
+# Use Case: Test-Driven Development workflow
+# - Implement feature → Tests run → Retry if failed
+# - Add tests → Tests run → Retry if failed
+# - Update docs → Skip validation (end condition disabled)
+
+# Workflow-level properties
+provider: copilot-cli
+model: claude-sonnet-4.5
+
+# Workflow-wide end condition
+# This validation applies to ALL prompts unless overridden
+endCondition:
+  script: npm test
+  returns: "true"
+  timeout: 60000
+  maxRetries: 2
+  retryPrompt: |
+    Tests failed with the following error:
+    {error}
+
+    Please fix the failing tests before moving to the next step.
+    Focus on:
+    - Syntax errors
+    - Logic errors
+    - Missing edge cases
+    - Test assertions
+
+# Prompts
+prompts:
+  # Step 1: Implement authentication feature
+  - id: implement-auth
+    prompt: |
+      Implement a user authentication feature with the following requirements:
+
+      1. Email/password login
+      2. JWT token generation
+      3. Password hashing with bcrypt
+      4. Session management
+      5. Logout functionality
+
+      Follow security best practices and write clean, maintainable code.
+    # Inherits workflow end condition - tests will run after completion
+
+  # Step 2: Add comprehensive tests
+  - id: add-auth-tests
+    prompt: |
+      Add comprehensive tests for the authentication feature:
+
+      1. Unit tests for authentication logic
+      2. Integration tests for login/logout flow
+      3. Edge cases: invalid credentials, expired tokens, etc.
+      4. Security tests: SQL injection, XSS prevention
+
+      Ensure 80%+ code coverage.
+    # Inherits workflow end condition - tests will run after completion
+
+  # Step 3: Update documentation
+  - id: update-docs
+    prompt: |
+      Update the project documentation for the new authentication feature:
+
+      1. Add API documentation for auth endpoints
+      2. Update README with authentication setup instructions
+      3. Add security considerations section
+      4. Document environment variables needed
+
+      Keep documentation clear and concise.
+    endCondition: null # Override: Disable validation for documentation
+    # No tests run for this prompt (documentation doesn't need code validation)

@@ -41,9 +41,9 @@ export interface PromptFile {
 export interface PromptItem {
   id?: string;
   prompt: string;
-  provider?: Provider;     // Prompt override
-  model?: string;          // Prompt override
-  agent?: string;          // Prompt override
+  provider?: Provider; // Prompt override
+  model?: string; // Prompt override
+  agent?: string; // Prompt override
   newChatSession?: boolean;
   allowDynamicExtension?: boolean;
   endCondition?: EndCondition;
@@ -64,16 +64,19 @@ export interface PromptItem {
 ### Current UI Structure
 
 **Settings Panel** (`settings.html`):
+
 - Global VS Code settings only
 - Provider, Model, Agent, NewChatSession, ExecutionMode, DynamicQueue
 - Changes update workspace/user settings
 
 **Prompt Properties Drawer** (`dashboard.html`):
+
 - Per-prompt overrides
 - Same fields as settings panel
 - Changes update only the current prompt in the queue
 
 **Problem:**
+
 - Adding workflow-level properties would create a third UI location with duplicate fields
 - User confusion: "Which dropdown is which?"
 
@@ -292,16 +295,16 @@ export class PropertyResolver {
    * @param workflow The parent workflow file
    * @returns Fully resolved properties
    */
-  static resolve(
-    prompt: PromptItem,
-    workflow: PromptFile
-  ): ResolvedProperties {
+  static resolve(prompt: PromptItem, workflow: PromptFile): ResolvedProperties {
     return {
       provider: this.resolveProvider(prompt, workflow),
       model: this.resolveModel(prompt, workflow),
       agent: this.resolveAgent(prompt, workflow),
       newChatSession: this.resolveNewChatSession(prompt, workflow),
-      allowDynamicExtension: this.resolveAllowDynamicExtension(prompt, workflow),
+      allowDynamicExtension: this.resolveAllowDynamicExtension(
+        prompt,
+        workflow
+      ),
     };
   }
 
@@ -452,16 +455,12 @@ const workflowFile = this.queue.getWorkflowFile();
 const resolved = PropertyResolver.resolve(currentPrompt, workflowFile);
 
 // Pass resolved properties to integration
-await this.integration.sendPrompt(
-  currentPrompt,
-  true,
-  {
-    promptIndex: this.queue.getCurrentIndex(),
-    allPrompts: this.queue.getAllPrompts(),
-    filePath: this.queue.getWorkflowFilePath(),
-    resolvedProperties: resolved, // NEW
-  }
-);
+await this.integration.sendPrompt(currentPrompt, true, {
+  promptIndex: this.queue.getCurrentIndex(),
+  allPrompts: this.queue.getAllPrompts(),
+  filePath: this.queue.getWorkflowFilePath(),
+  resolvedProperties: resolved, // NEW
+});
 ```
 
 ---
@@ -471,6 +470,7 @@ await this.integration.sendPrompt(
 ### 4.1 Problem Statement
 
 Adding workflow-level properties creates UI confusion:
+
 - **VS Code Settings**: Global defaults for all workflows
 - **Prompt Drawer**: Per-prompt overrides
 - **Workflow Properties**: ??? (new, unclear where to put)
@@ -482,11 +482,12 @@ Adding workflow-level properties creates UI confusion:
 **Transform `settings.html` into a workflow-focused configuration panel:**
 
 - **Purpose**: Configure THIS workflow's default properties
-- **Scope**: Properties save to workflow file (not VS Code settings)
+- **Scope**: Properties save to working file (single source of truth for workflow state)
 - **Global Settings**: Accessible via "More Settings..." button (opens VS Code settings UI)
 - **Special Case**: Execution Mode gets quick access (frequently toggled, updates global setting)
 
 **Clear Mental Model:**
+
 - **settings.html** → Workflow Properties (what applies to THIS workflow)
 - **VS Code Settings** → Global Defaults (what applies to ALL workflows)
 - **Prompt Drawer** → Per-Prompt Overrides (what applies to ONE prompt)
@@ -540,6 +541,7 @@ Adding workflow-level properties creates UI confusion:
 **Shows when:** Workflow property value differs from current VS Code global setting
 
 **Click action:**
+
 1. Updates VS Code setting to match workflow value
 2. Button changes to "✓ Default" with checkmark animation (2 seconds)
 3. Button fades out and disappears (now matches global)
@@ -565,11 +567,13 @@ User clicks "Set as Default":
 ### 4.5 Execution Mode (Special Case)
 
 **Why it's special:**
-- NOT a workflow property (doesn't save to workflow file)
+
+- NOT a workflow property (doesn't save to working file)
 - Frequently toggled during development (interactive ↔ headless)
 - Session-specific preference, not workflow-specific
 
 **Behavior:**
+
 - Radio buttons for quick toggle
 - Updates VS Code global setting immediately
 - Applies to all future executions (across all workflows)
@@ -578,33 +582,39 @@ User clicks "Set as Default":
 ### 4.6 Benefits of This Approach
 
 ✅ **Clear Separation of Concerns**
-   - settings.html = workflow configuration
-   - VS Code settings = global defaults
-   - No confusion about "which settings am I editing?"
+
+- settings.html = workflow configuration
+- VS Code settings = global defaults
+- No confusion about "which settings am I editing?"
 
 ✅ **Leverage VS Code's Built-in Settings UI**
-   - Powerful search, categories, descriptions
-   - Users already know how to use it
-   - Don't duplicate effort building advanced settings UI
+
+- Powerful search, categories, descriptions
+- Users already know how to use it
+- Don't duplicate effort building advanced settings UI
 
 ✅ **"Set as Default" is Familiar Pattern**
-   - Browsers: "Make default browser"
-   - Apps: "Set as default program"
-   - Clear, actionable, well-understood
+
+- Browsers: "Make default browser"
+- Apps: "Set as default program"
+- Clear, actionable, well-understood
 
 ✅ **Contextual Button Visibility**
-   - Button only appears when needed (differs from global)
-   - Reduces visual clutter
-   - Provides clear path to sync workflow ↔ global
+
+- Button only appears when needed (differs from global)
+- Reduces visual clutter
+- Provides clear path to sync workflow ↔ global
 
 ✅ **Execution Mode Quick Access**
-   - Frequently used, stays accessible
-   - Clear that it updates global setting (not workflow)
+
+- Frequently used, stays accessible
+- Clear that it updates global setting (not workflow)
 
 ✅ **Simplified Implementation**
-   - No tab switching logic
-   - Simple comparison: workflow value vs global value
-   - Conditional button rendering
+
+- No tab switching logic
+- Simple comparison: workflow value vs global value
+- Conditional button rendering
 
 ### 4.7 HTML Structure
 
@@ -613,8 +623,8 @@ User clicks "Set as Default":
   <div class="panel-header">
     <h2>Workflow Properties</h2>
     <p class="panel-description">
-      Configure defaults for all prompts in this workflow.
-      Changes save to the workflow file.
+      Configure defaults for all prompts in this workflow. Changes save to the
+      working file.
     </p>
   </div>
 
@@ -734,23 +744,15 @@ User clicks "Set as Default":
 
       <div id="workflow-end-details" class="end-condition-details" hidden>
         <div class="end-condition-help">
-          Validation runs after each prompt completes.
-          Individual prompts can override or disable this.
+          Validation runs after each prompt completes. Individual prompts can
+          override or disable this.
         </div>
 
         <label for="workflow-end-script">Script:</label>
-        <input
-          type="text"
-          id="workflow-end-script"
-          placeholder="npm test"
-        />
+        <input type="text" id="workflow-end-script" placeholder="npm test" />
 
         <label for="workflow-end-returns">Returns:</label>
-        <input
-          type="text"
-          id="workflow-end-returns"
-          placeholder="true"
-        />
+        <input type="text" id="workflow-end-returns" placeholder="true" />
 
         <label for="workflow-end-timeout">Timeout (ms):</label>
         <input
@@ -761,12 +763,7 @@ User clicks "Set as Default":
         />
 
         <label for="workflow-end-retries">Max Retries:</label>
-        <input
-          type="number"
-          id="workflow-end-retries"
-          value="0"
-          min="-1"
-        />
+        <input type="number" id="workflow-end-retries" value="0" min="-1" />
 
         <label for="workflow-end-retry-prompt">Retry Prompt:</label>
         <textarea
@@ -855,7 +852,7 @@ prompts:
 
   - id: update-docs
     prompt: "Update documentation"
-    endCondition: null  # Override: No validation for docs
+    endCondition: null # Override: No validation for docs
 ```
 
 ### 5.2 Workflow with Shared Provider/Model
@@ -867,7 +864,7 @@ prompts:
 provider: claude-cli
 model: sonnet
 agent: code-reviewer
-newChatSession: true  # Fresh session per prompt
+newChatSession: true # Fresh session per prompt
 
 prompts:
   - id: security-review
@@ -880,7 +877,7 @@ prompts:
 
   - id: style-review
     prompt: "Check code style and best practices"
-    model: haiku  # Override: Use faster model for style checks
+    model: haiku # Override: Use faster model for style checks
     # Uses: claude-cli, haiku (overridden), code-reviewer agent
 ```
 
@@ -899,14 +896,14 @@ prompts:
 
   - id: implement
     prompt: "Implement improvements"
-    model: gpt-5  # Override model
+    model: gpt-5 # Override model
     # Effective: copilot-cli, gpt-5 (overridden), newChatSession=false
 
   - id: review
     prompt: "Review changes"
-    provider: claude-cli  # Override provider
-    model: opus  # Override model
-    newChatSession: true  # Override session
+    provider: claude-cli # Override provider
+    model: opus # Override model
+    newChatSession: true # Override session
     # Effective: claude-cli (overridden), opus (overridden), newChatSession=true (overridden)
     # All workflow defaults overridden at prompt level
 ```
@@ -934,6 +931,7 @@ prompts:
 3. Run `npm run generate-schema` to regenerate YAML schema
 
 **Testing:**
+
 - Validate schema accepts workflow-level properties
 - Test `$ref` inheritance works correctly
 - Ensure backward compatibility (old files without workflow properties)
@@ -943,6 +941,7 @@ prompts:
 **New file:** `src/utils/PropertyResolver.ts`
 
 Implement:
+
 - `resolve()` - Main resolution with three-tier precedence
 - `resolveProvider()` - Provider resolution
 - `resolveModel()` - Model resolution
@@ -952,6 +951,7 @@ Implement:
 - `resolveEndCondition()` - End condition resolution
 
 **Testing:**
+
 - Unit tests for all resolution paths
 - Test precedence order (prompt > workflow > settings)
 - Test undefined/null handling at each level
@@ -975,6 +975,7 @@ Implement:
    - Validate workflow properties against schema
 
 **Testing:**
+
 - Test property resolution in real workflow execution
 - Test workflow file parsing with properties
 - Test backward compatibility (files without workflow properties)
@@ -993,12 +994,14 @@ Implement:
 
 2. `src/ui/webview/settings.js`
    - Remove global settings logic (moved to VS Code native settings)
-   - Load workflow properties from active workflow file
+   - Load workflow properties from active working file
    - Implement "Set as Default" button logic:
      - Compare workflow value vs global setting
      - Show button when different, hide when same
      - On click: update VS Code setting, animate button, fade out
-   - Save workflow property changes to workflow file (not VS Code settings)
+   - Save workflow property changes to working file (single source of truth)
+   - **Always write provider and model** to working file (required for execution)
+   - Other properties written when explicitly set by user
    - Handle Execution Mode separately (updates global setting, not workflow)
    - Disable all fields when no workflow loaded
 
@@ -1015,6 +1018,7 @@ Implement:
    - On workflow change: Send updated workflow properties
 
 **Testing:**
+
 - Test "Set as Default" button shows/hides correctly
 - Test "Set as Default" updates VS Code setting
 - Test button animation and fade out
@@ -1028,23 +1032,28 @@ Implement:
 **Files to modify:**
 
 1. `src/ui/webview/dashboard.js`
-   - When loading workflow, send workflow properties to settings panel
-   - When saving workflow, include workflow properties
-   - Update "New Workflow" modal to optionally set workflow defaults
+   - When loading workflow, send workflow properties from working file to settings panel
+   - When saving workflow, always include provider and model in working file
+   - When creating new workflow, initialize working file with provider and model from global settings
    - Notify settings panel when workflow changes (re-enable fields)
 
 2. `src/ui/FlightPathDashboardProvider.ts`
    - Message handler: Forward workflow properties to settings panel
-   - Save workflow file with properties (includes workflow-level properties)
-   - On workflow load: Send workflow properties to settings webview
-   - On workflow create: Initialize with workflow properties if specified
+   - Save working file with provider/model always included (required for execution)
+   - Other properties included when explicitly set
+   - On workflow load: Send workflow properties from working file to settings webview
+   - On workflow create: Initialize working file with provider and model from globals
 
 **Testing:**
-- Test workflow load includes properties and enables settings panel
-- Test workflow save includes workflow-level properties
-- Test new workflow creation with optional defaults
-- Test settings panel reflects current workflow properties
+
+- Test workflow load includes properties from working file and enables settings panel
+- Test workflow save always includes provider and model
+- Test new workflow creation initializes with provider and model from globals
+- Test optional properties (agent, endCondition) only written when set
+- Test settings panel reflects current working file properties
 - Test settings panel disabled when no workflow loaded
+- Test property changes write to working file immediately
+- Test working file remains complete source of truth during execution
 
 ### Phase 6: Documentation & Examples
 
@@ -1070,7 +1079,7 @@ Implement:
 
 1. **New workflow-level properties** - Optional, existing files work without them
 2. **Property resolution** - Falls back gracefully to current behavior
-3. **UI changes** - Tabbed panel is still settings panel, just enhanced
+3. **UI changes** - Settings panel is still settings panel, just enhanced
 
 ### Migration Strategy
 
@@ -1093,12 +1102,17 @@ Implement:
 
 **Current:** Working files store runtime state, not configuration
 
-**Decision:** No, workflow properties stay in the source workflow file (`.flightpath.yaml`). Working files only track runtime state.
+**Decision:** YES, working files are the single source of truth for ALL properties (both runtime state AND workflow configuration).
 
 **Reasoning:**
-- Workflow file is the source of truth for configuration
-- Working file is transient (can be deleted and regenerated)
-- Keeps separation of concerns clear
+
+- Working file represents complete state of the workflow execution
+- Enables LLMs to modify workflow properties during execution
+- **Always includes provider and model** (required for execution)
+- Other properties (agent, endCondition, newChatSession, allowDynamicExtension) included when set
+- Source file (`.flightpath.yaml`) is template, working file is active state
+- Users can use templates for workflows with pre-configured end conditions
+- Future: May add MCP function for changing workflow properties programmatically
 
 ### Q: Should "More Settings" button still open VS Code settings?
 
@@ -1107,21 +1121,16 @@ Implement:
 **Decision:** Yes, keep this behavior. Workflow tab handles common settings, VS Code settings handles advanced settings (tool permissions, timeouts, etc.)
 
 **Reasoning:**
+
 - Many advanced settings don't make sense at workflow level
 - VS Code settings is still the canonical location for global config
 - Workflow properties are convenience layer for reproducibility
 
 ### Q: Should workflow properties override be visualized in prompt drawer?
 
-**Proposal:** Show resolved value in prompt drawer with tooltip explaining source
+**Decision:** Out of scope for initial implementation.
 
-Example:
-```
-Provider: [Copilot CLI ▼]  ℹ️ (from workflow defaults)
-Model:    [GPT-5 ▼]         ℹ️ (override)
-```
-
-**Decision:** Yes, implement in Phase 5. Helps users understand precedence.
+**Note:** Prompt properties drawer already has "default" as an option for each field. When "default" is selected, the prompt uses workflow-level or global settings. Showing resolved hints is deferred to future enhancement.
 
 ---
 
@@ -1129,11 +1138,14 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 
 - ✅ Workflow files can include provider, model, agent, newChatSession, allowDynamicExtension, endCondition
 - ✅ Property resolution follows three-tier precedence correctly
-- ✅ Settings panel has clear tabs for global vs workflow settings
-- ✅ Workflow properties persist in workflow file (not working file)
+- ✅ Settings panel transforms into workflow properties editor
+- ✅ Working file is single source of truth for ALL properties (runtime + configuration)
+- ✅ Working file always includes provider and model (required for execution)
+- ✅ Optional properties included when explicitly set by user
 - ✅ Backward compatibility: Old workflows work without changes
 - ✅ Shared workflows are more reproducible (include their own defaults)
-- ✅ Common end conditions can be set once for entire workflow
+- ✅ Workflow templates support pre-configured end conditions
+- ✅ LLMs can modify workflow properties by editing working file
 
 ---
 
@@ -1144,11 +1156,13 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 **Description:** Transform settings panel into dual-purpose UI with "Global Settings" and "Workflow Defaults" tabs
 
 **Pros:**
+
 - Clear context (tab labels)
 - Familiar pattern (tabs)
 - Can see which settings apply where
 
 **Cons:**
+
 - Duplicates fields across tabs (same dropdowns in two places)
 - Adds complexity (tab switching logic)
 - Confusing: "Am I editing global or workflow settings?"
@@ -1162,10 +1176,12 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 **Description:** Add a third drawer (like prompt properties) that opens from workflow header
 
 **Pros:**
+
 - Clear separation from global settings
 - Familiar pattern (same as prompt drawer)
 
 **Cons:**
+
 - Three separate UI locations for similar fields (confusing)
 - Workflow header is already crowded
 - Drawer positioning unclear (workflow-level, not prompt-level)
@@ -1178,10 +1194,12 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 **Description:** Add dropdown menus directly in workflow header/status area
 
 **Pros:**
+
 - Always visible
 - Quick access
 
 **Cons:**
+
 - Clutters header area
 - Doesn't scale (can't fit all fields)
 - No room for descriptions/help text
@@ -1194,10 +1212,12 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 **Description:** Click workflow name → opens modal with all workflow properties
 
 **Pros:**
+
 - Clear context (modal title: "Workflow Properties")
 - Can fit all fields with descriptions
 
 **Cons:**
+
 - Modal interrupts workflow (not inline)
 - Extra click to open/close
 - Can't see settings and workflow side-by-side
@@ -1208,33 +1228,39 @@ Model:    [GPT-5 ▼]         ℹ️ (override)
 ### Why "Set as Default" Button Pattern Won
 
 ✅ **Clear Separation of Concerns**
-   - settings.html = workflow (one purpose)
-   - VS Code settings = global (familiar, powerful)
-   - No confusion about "which UI am I using?"
+
+- settings.html = workflow (one purpose)
+- VS Code settings = global (familiar, powerful)
+- No confusion about "which UI am I using?"
 
 ✅ **Leverage Existing VS Code UI**
-   - Built-in settings UI is feature-rich (search, categories, validation)
-   - Don't duplicate effort
-   - Users already know how to use it
+
+- Built-in settings UI is feature-rich (search, categories, validation)
+- Don't duplicate effort
+- Users already know how to use it
 
 ✅ **Familiar Pattern**
-   - "Set as Default" is well-understood (browsers, apps, OS)
-   - Clear action: "I like this workflow's settings, use them everywhere"
+
+- "Set as Default" is well-understood (browsers, apps, OS)
+- Clear action: "I like this workflow's settings, use them everywhere"
 
 ✅ **Contextual Visibility**
-   - Button only appears when workflow ≠ global
-   - Reduces visual clutter
-   - Clear path to sync settings
+
+- Button only appears when workflow ≠ global
+- Reduces visual clutter
+- Clear path to sync settings
 
 ✅ **Simpler Implementation**
-   - No tab logic
-   - Simple value comparison
-   - Conditional button rendering
+
+- No tab logic
+- Simple value comparison
+- Conditional button rendering
 
 ✅ **Better User Experience**
-   - Execution Mode quick access (frequently toggled)
-   - Clear explanations (which settings affect what)
-   - Progressive disclosure (end condition details)
+
+- Execution Mode quick access (frequently toggled)
+- Clear explanations (which settings affect what)
+- Progressive disclosure (end condition details)
 
 ---
 

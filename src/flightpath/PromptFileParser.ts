@@ -359,9 +359,24 @@ export class PromptFileParser {
         parsed.prompt,
         promptFilePath
       );
-      return {
+
+      // Build PromptFile with workflow-level properties and single prompt
+      const promptFile: PromptFile = {
         prompts: [this.buildPromptItem(resolvedPrompt, parsed)],
       };
+
+      // Copy workflow-level properties (if present)
+      if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
+      if (parsed.model !== undefined) promptFile.model = parsed.model;
+      if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
+      if (parsed.newChatSession !== undefined)
+        promptFile.newChatSession = parsed.newChatSession;
+      if (parsed.allowDynamicExtension !== undefined)
+        promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
+      if (parsed.endCondition !== undefined)
+        promptFile.endCondition = parsed.endCondition;
+
+      return promptFile;
     }
 
     // Handle multiple prompts format
@@ -375,9 +390,24 @@ export class PromptFileParser {
           return this.buildPromptItem(resolvedPrompt, item);
         })
       );
-      return {
+
+      // Build PromptFile with workflow-level properties and prompts array
+      const promptFile: PromptFile = {
         prompts: resolvedPrompts,
       };
+
+      // Copy workflow-level properties (if present)
+      if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
+      if (parsed.model !== undefined) promptFile.model = parsed.model;
+      if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
+      if (parsed.newChatSession !== undefined)
+        promptFile.newChatSession = parsed.newChatSession;
+      if (parsed.allowDynamicExtension !== undefined)
+        promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
+      if (parsed.endCondition !== undefined)
+        promptFile.endCondition = parsed.endCondition;
+
+      return promptFile;
     }
 
     throw new Error("Invalid prompt file format");
