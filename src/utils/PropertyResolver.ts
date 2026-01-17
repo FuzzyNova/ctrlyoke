@@ -222,18 +222,13 @@ export class PropertyResolver {
     prompt: PromptItem,
     workflow: PromptFile
   ): boolean {
-    // 1. Prompt-level override (highest priority)
-    if (prompt.allowDynamicExtension !== undefined) {
-      return prompt.allowDynamicExtension;
-    }
-
-    // 2. Workflow-level default
-    if (workflow.allowDynamicExtension !== undefined) {
-      return workflow.allowDynamicExtension;
-    }
-
-    // 3. No VS Code setting - default to false
-    return false;
+    // Allow if ANY source enables it (prompt, workflow, or VS Code setting)
+    const globalEnabled = ConfigurationUtils.getDynamicQueueConfig().enabled;
+    return Boolean(
+      prompt.allowDynamicExtension ||
+        workflow.allowDynamicExtension ||
+        globalEnabled
+    );
   }
 
   /**

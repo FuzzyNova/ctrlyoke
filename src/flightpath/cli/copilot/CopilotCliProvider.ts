@@ -178,7 +178,11 @@ export class CopilotCliProvider implements ICliProvider {
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
       const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-      if (dynamicQueueConfig.enabled) {
+      const allowDynamicExtension =
+        workflowContext?.resolvedProperties?.allowDynamicExtension ??
+        dynamicQueueConfig.enabled;
+
+      if (allowDynamicExtension) {
         const {
           shouldInjectExtensionInstructions,
         } = require("../../../utils/PromptIdentity");
@@ -186,7 +190,8 @@ export class CopilotCliProvider implements ICliProvider {
           prompt,
           workflowContext.promptIndex,
           workflowContext.allPrompts,
-          dynamicQueueConfig.dynamicExtensionOnLastPrompt
+          dynamicQueueConfig.dynamicExtensionOnLastPrompt,
+          allowDynamicExtension
         );
 
         if (shouldInject) {

@@ -1187,7 +1187,8 @@ export class CliIntegration extends CopilotIntegration {
         prompt,
         workflowContext?.promptIndex ?? 0,
         workflowContext?.allPrompts ?? [prompt],
-        workflowContext?.filePath
+        workflowContext?.filePath,
+        workflowContext?.resolvedProperties?.allowDynamicExtension
       );
 
       this.lastFullPrompt = finalPromptText;

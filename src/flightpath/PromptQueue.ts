@@ -569,6 +569,23 @@ export class PromptQueue {
   }
 
   /**
+   * Update workflow-level property in the cached workflow file.
+   * Ensures property resolution uses the latest values during execution.
+   */
+  updateWorkflowProperty(property: string, value: unknown): void {
+    if (!this.workflowFile) {
+      this.workflowFile = { prompts: this.state.prompts };
+    }
+
+    if (value === undefined) {
+      delete (this.workflowFile as any)[property];
+      return;
+    }
+
+    (this.workflowFile as any)[property] = value;
+  }
+
+  /**
    * Get failed prompts count
    */
   getFailedCount(): number {

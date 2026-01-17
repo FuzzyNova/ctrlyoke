@@ -1316,6 +1316,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         "utf-8"
       );
 
+      // Update in-memory workflow properties for immediate resolution
+      this.flightPathManager.updateWorkflowPropertyInQueue(property, value);
+
       Log.info(
         `Updated workflow property '${property}' in working file: ${workingFilePath}`
       );

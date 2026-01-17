@@ -520,12 +520,14 @@
 
   function handleSetAsDefault(property, buttonElement) {
     const value = workflowProperties[property];
+    const provider = workflowProperties.provider || globalSettings.provider;
 
     // Send message to extension to update VS Code setting
     vscode.postMessage({
       type: MESSAGE_TYPES.SET_AS_DEFAULT,
       property: property,
       value: value,
+      provider: property === "model" ? provider : undefined,
     });
 
     // Update global settings in local state

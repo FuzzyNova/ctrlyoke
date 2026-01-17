@@ -496,6 +496,15 @@ export class WorkflowExecutor {
 
       // Send retry prompt with workflow context
       const state = this.promptQueue.getState();
+      const workflowFile = this.promptQueue.getWorkflowFile();
+      const resolvedProperties = PropertyResolver.resolve(
+        retryPromptItem,
+        workflowFile
+      );
+      const resolvedRetryProperties = {
+        ...resolvedProperties,
+        newChatSession: false,
+      };
       const success = await integration.sendPrompt(
         retryPromptItem,
         true, // needsCompletionDetection
@@ -503,6 +512,7 @@ export class WorkflowExecutor {
           promptIndex: currentIndex,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          resolvedProperties: resolvedRetryProperties,
         }
       );
 

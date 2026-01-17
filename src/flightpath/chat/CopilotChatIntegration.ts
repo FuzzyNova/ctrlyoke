@@ -348,7 +348,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Pass whether this is a new chat session for submit verification logic
       const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        prompt.newChatSession === true
+        shouldStartNewSession
       );
 
       if (!sent) {
@@ -643,6 +643,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      resolvedProperties?: any;
     }
   ): Promise<string> {
     const promptText = workflowContext
@@ -650,7 +651,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
           prompt,
           workflowContext.promptIndex,
           workflowContext.allPrompts,
-          workflowContext.filePath
+          workflowContext.filePath,
+          workflowContext.resolvedProperties?.allowDynamicExtension
         )
       : await this.buildPromptText(prompt);
 

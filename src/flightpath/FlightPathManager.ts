@@ -933,6 +933,14 @@ export class FlightPathManager {
   }
 
   /**
+   * Update workflow-level property in the queue cache.
+   * Ensures property resolution uses the latest working file values.
+   */
+  updateWorkflowPropertyInQueue(property: string, value: unknown): void {
+    this.promptQueue.updateWorkflowProperty(property, value);
+  }
+
+  /**
    * Open the currently loaded prompt file in the editor
    * Delegates to WorkflowCommandHandler
    */

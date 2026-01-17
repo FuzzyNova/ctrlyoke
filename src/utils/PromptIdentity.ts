@@ -71,18 +71,32 @@ export function shouldInjectExtensionInstructions(
   prompt: PromptItem,
   index: number,
   allPrompts: PromptItem[],
-  dynamicExtensionOnLastPrompt: boolean = true
+  dynamicExtensionOnLastPrompt: boolean = true,
+  allowDynamicExtension?: boolean
 ): boolean {
-  // Explicit flag takes precedence
+  // Legacy behavior when no global/workflow allow flag is provided
+  if (allowDynamicExtension === undefined) {
+    if (prompt.allowDynamicExtension === true) return true;
+    if (prompt.allowDynamicExtension === false) return false;
+
+    const isLastPrompt = index === allPrompts.length - 1;
+    const anyExplicitFlag = allPrompts.some(
+      (p) => p.allowDynamicExtension !== undefined
+    );
+    return isLastPrompt && !anyExplicitFlag && dynamicExtensionOnLastPrompt;
+  }
+
+  if (!allowDynamicExtension) return false;
+
+  // Explicit enable takes precedence
   if (prompt.allowDynamicExtension === true) return true;
-  if (prompt.allowDynamicExtension === false) return false;
 
   // Default: inject ONLY on last prompt if:
   // 1. No prompts have explicit flags, AND
   // 2. Global setting allows extension on last prompt
   const isLastPrompt = index === allPrompts.length - 1;
   const anyExplicitFlag = allPrompts.some(
-    (p) => p.allowDynamicExtension !== undefined
+    (p) => p.allowDynamicExtension === true
   );
 
   return isLastPrompt && !anyExplicitFlag && dynamicExtensionOnLastPrompt;

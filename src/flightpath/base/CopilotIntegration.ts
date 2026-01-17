@@ -145,15 +145,18 @@ export abstract class CopilotIntegration {
     prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    filePath?: string
+    filePath?: string,
+    allowDynamicExtension?: boolean
   ): Promise<string> {
     // Build base prompt text (with attachments)
     let promptText = await this.buildPromptText(prompt);
 
     // Check if we should inject dynamic queue instructions
     const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
+    const shouldEnableDynamicExtension =
+      allowDynamicExtension ?? dynamicQueueConfig.enabled;
 
-    if (!dynamicQueueConfig.enabled) {
+    if (!shouldEnableDynamicExtension) {
       return promptText; // Dynamic queue disabled
     }
 
@@ -166,7 +169,8 @@ export abstract class CopilotIntegration {
       prompt,
       promptIndex,
       allPrompts,
-      dynamicQueueConfig.dynamicExtensionOnLastPrompt
+      dynamicQueueConfig.dynamicExtensionOnLastPrompt,
+      shouldEnableDynamicExtension
     );
 
     if (!shouldInject) {

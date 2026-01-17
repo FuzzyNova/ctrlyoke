@@ -170,7 +170,11 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         this.handleUpdateWorkflowProperty(message.property, message.value);
         break;
       case MESSAGE_TYPES.SET_AS_DEFAULT:
-        this.handleSetAsDefault(message.property, message.value);
+        this.handleSetAsDefault(
+          message.property,
+          message.value,
+          message.provider
+        );
         break;
     }
   }
@@ -597,14 +601,15 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
    */
   private async handleSetAsDefault(
     property: string,
-    value: any
+    value: any,
+    provider?: string
   ): Promise<void> {
     try {
       // Map property names to VS Code setting keys
       const settingMap: Record<string, string> = {
         provider: "provider",
         model: this.getModelSettingKey(
-          value.provider || ConfigurationUtils.getIntegrationMode()
+          provider || ConfigurationUtils.getIntegrationMode()
         ),
         agent: "customAgent",
         newChatSession: "newChatSessionPerPrompt",
