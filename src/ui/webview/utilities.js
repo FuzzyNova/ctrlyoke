@@ -99,21 +99,34 @@
 
   /**
    * Build end condition object from current property control values
-   * Only returns an object if BOTH required fields (script AND returns) are present
+   *
+   * Logic:
+   * - Checkbox UNCHECKED: Returns undefined (inherit from workflow)
+   * - Checkbox CHECKED + empty fields: Returns null (explicitly disable workflow end condition)
+   * - Checkbox CHECKED + filled fields: Returns end condition object (override workflow)
+   *
    * @param {Object} elements - DOM elements object
    * @param {Object} propertyDefaults - Default values for properties
-   * @returns {Object|undefined} End condition object or undefined if required fields missing
+   * @returns {Object|null|undefined} End condition object, null (explicit disable), or undefined (inherit)
    */
   function buildEndConditionFromControls(elements, propertyDefaults) {
+    const isEnabled = elements.propEndEnabled && elements.propEndEnabled.checked;
+
+    // If checkbox is unchecked, return undefined to inherit from workflow
+    if (!isEnabled) {
+      return undefined;
+    }
+
+    // Checkbox is checked - check if fields are filled
     const script = elements.propEndScript.value.trim();
     const returns = elements.propEndReturns.value.trim();
     const retryPrompt = elements.propEndRetryPrompt.value.trim();
     const timeout = parseInt(elements.propEndTimeout.value, 10);
     const maxRetries = parseInt(elements.propEndRetries.value, 10);
 
-    // Return undefined if required fields are missing (schema requires both script AND returns)
+    // If checked but required fields are empty, return null to explicitly disable
     if (!script || !returns) {
-      return undefined;
+      return null;
     }
 
     // Build end condition with required fields and optional fields
@@ -138,44 +151,100 @@
 
   /**
    * Set end condition controls from end condition object
+   *
+   * Logic:
+   * - endCondition is object: Check checkbox, fill fields (override workflow)
+   * - endCondition is null: Check checkbox, clear fields (explicitly disable)
+   * - endCondition is undefined: Uncheck checkbox (inherit from workflow)
+   *
    * @param {Object} elements - DOM elements object
    * @param {Object} propertyDefaults - Default values for properties
-   * @param {Object} endCondition - End condition object or undefined
+   * @param {Object|null|undefined} endCondition - End condition object, null, or undefined
    */
   function setEndConditionControls(elements, propertyDefaults, endCondition) {
-    if (endCondition) {
-      elements.propEndScript.value = getEndConditionValue(
-        endCondition,
-        END_CONDITION_PROPERTIES.SCRIPT,
-        propertyDefaults.END_SCRIPT
-      );
-      elements.propEndReturns.value = getEndConditionValue(
-        endCondition,
-        END_CONDITION_PROPERTIES.RETURNS,
-        propertyDefaults.END_RETURNS
-      );
-      elements.propEndTimeout.value = getEndConditionValue(
-        endCondition,
-        END_CONDITION_PROPERTIES.TIMEOUT,
-        propertyDefaults.END_TIMEOUT
-      );
-      elements.propEndRetries.value = getEndConditionValue(
-        endCondition,
-        END_CONDITION_PROPERTIES.MAX_RETRIES,
-        propertyDefaults.END_RETRIES
-      );
-      elements.propEndRetryPrompt.value = getEndConditionValue(
-        endCondition,
-        END_CONDITION_PROPERTIES.RETRY_PROMPT,
-        propertyDefaults.END_RETRY_PROMPT
-      );
-    } else {
-      // Reset to defaults
-      elements.propEndScript.value = propertyDefaults.END_SCRIPT;
-      elements.propEndReturns.value = propertyDefaults.END_RETURNS;
-      elements.propEndTimeout.value = propertyDefaults.END_TIMEOUT_STRING;
-      elements.propEndRetries.value = propertyDefaults.END_RETRIES_STRING;
-      elements.propEndRetryPrompt.value = propertyDefaults.END_RETRY_PROMPT;
+    // Get the collapsible details element (for dashboard properties drawer)
+    const propEndDetails = document.getElementById("prop-end-details");
+
+    // Handle checkbox state
+    if (elements.propEndEnabled) {
+      if (endCondition === undefined) {
+        // Undefined: Uncheck checkbox (inherit from workflow)
+        elements.propEndEnabled.checked = false;
+        // Collapse the section
+        if (propEndDetails) {
+          propEndDetails.classList.add("collapsed");
+        }
+        // Disable all fields
+        elements.propEndScript.disabled = true;
+        elements.propEndReturns.disabled = true;
+        elements.propEndTimeout.disabled = true;
+        elements.propEndRetries.disabled = true;
+        elements.propEndRetryPrompt.disabled = true;
+        // Reset to defaults
+        elements.propEndScript.value = propertyDefaults.END_SCRIPT;
+        elements.propEndReturns.value = propertyDefaults.END_RETURNS;
+        elements.propEndTimeout.value = propertyDefaults.END_TIMEOUT_STRING;
+        elements.propEndRetries.value = propertyDefaults.END_RETRIES_STRING;
+        elements.propEndRetryPrompt.value = propertyDefaults.END_RETRY_PROMPT;
+      } else if (endCondition === null) {
+        // Null: Check checkbox but clear fields (explicitly disable)
+        elements.propEndEnabled.checked = true;
+        // Expand the section
+        if (propEndDetails) {
+          propEndDetails.classList.remove("collapsed");
+        }
+        // Enable all fields
+        elements.propEndScript.disabled = false;
+        elements.propEndReturns.disabled = false;
+        elements.propEndTimeout.disabled = false;
+        elements.propEndRetries.disabled = false;
+        elements.propEndRetryPrompt.disabled = false;
+        // Clear fields to show explicit disable
+        elements.propEndScript.value = "";
+        elements.propEndReturns.value = "";
+        elements.propEndTimeout.value = propertyDefaults.END_TIMEOUT_STRING;
+        elements.propEndRetries.value = propertyDefaults.END_RETRIES_STRING;
+        elements.propEndRetryPrompt.value = "";
+      } else {
+        // Object: Check checkbox and fill fields (override workflow)
+        elements.propEndEnabled.checked = true;
+        // Expand the section
+        if (propEndDetails) {
+          propEndDetails.classList.remove("collapsed");
+        }
+        // Enable all fields
+        elements.propEndScript.disabled = false;
+        elements.propEndReturns.disabled = false;
+        elements.propEndTimeout.disabled = false;
+        elements.propEndRetries.disabled = false;
+        elements.propEndRetryPrompt.disabled = false;
+        // Fill fields
+        elements.propEndScript.value = getEndConditionValue(
+          endCondition,
+          END_CONDITION_PROPERTIES.SCRIPT,
+          propertyDefaults.END_SCRIPT
+        );
+        elements.propEndReturns.value = getEndConditionValue(
+          endCondition,
+          END_CONDITION_PROPERTIES.RETURNS,
+          propertyDefaults.END_RETURNS
+        );
+        elements.propEndTimeout.value = getEndConditionValue(
+          endCondition,
+          END_CONDITION_PROPERTIES.TIMEOUT,
+          propertyDefaults.END_TIMEOUT
+        );
+        elements.propEndRetries.value = getEndConditionValue(
+          endCondition,
+          END_CONDITION_PROPERTIES.MAX_RETRIES,
+          propertyDefaults.END_RETRIES
+        );
+        elements.propEndRetryPrompt.value = getEndConditionValue(
+          endCondition,
+          END_CONDITION_PROPERTIES.RETRY_PROMPT,
+          propertyDefaults.END_RETRY_PROMPT
+        );
+      }
     }
   }
 

@@ -381,9 +381,18 @@
                     </div>
 
 
-                    <details class="end-condition-section">
-                      <summary>End Condition (optional)</summary>
-                      <div class="end-condition-controls">
+                    <div class="end-condition-section">
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="prop-end-enabled" />
+                        <span>Enable End Condition</span>
+                      </label>
+
+                      <div id="prop-end-details" class="end-condition-details collapsed">
+                        <div class="end-condition-help">
+                          <i class="codicon codicon-info"></i>
+                          <span>Check to override workflow end condition. Uncheck to inherit from workflow (if configured).</span>
+                        </div>
+
                         <div class="property-group">
                           <label for="prop-end-script">Script:</label>
                           <input
@@ -391,6 +400,7 @@
                             id="prop-end-script"
                             class="property-input"
                             placeholder="npm test"
+                            disabled
                           />
                         </div>
                         <div class="property-group">
@@ -400,6 +410,7 @@
                             id="prop-end-returns"
                             class="property-input"
                             placeholder="true"
+                            disabled
                           />
                         </div>
                         <div class="property-group">
@@ -410,6 +421,7 @@
                             class="property-input"
                             value="30000"
                             min="1000"
+                            disabled
                           />
                         </div>
                         <div class="property-group">
@@ -420,6 +432,7 @@
                             class="property-input"
                             value="0"
                             min="-1"
+                            disabled
                           />
                         </div>
                         <div class="property-group full-width">
@@ -433,10 +446,11 @@
                             placeholder="Validation failed: {error}
 
 Please fix the issues."
+                            disabled
                           ></textarea>
                         </div>
                       </div>
-                    </details>
+                    </div>
                   </div>
                 </div>
               </div>

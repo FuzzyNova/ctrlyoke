@@ -236,11 +236,15 @@ export class PropertyResolver {
    *
    * Precedence order:
    * 1. Prompt-level override (prompt.endCondition)
+   *    - Object: Use this end condition (override workflow)
+   *    - null: Explicitly disable end condition (even if workflow has one)
+   *    - undefined: Inherit from workflow
    * 2. Workflow-level default (workflow.endCondition)
    * 3. No fallback - returns undefined
    *
    * Note: End conditions are NOT inherited from VS Code settings.
    * They must be explicitly defined at the prompt or workflow level.
+   * Use null at prompt level to explicitly disable a workflow-level end condition.
    *
    * @param prompt The prompt to resolve end condition for
    * @param workflow The parent workflow file
@@ -251,12 +255,19 @@ export class PropertyResolver {
     workflow: PromptFile
   ): EndCondition | undefined {
     // 1. Prompt-level override (highest priority)
-    if (prompt.endCondition !== undefined) {
-      return prompt.endCondition;
+    // Check for property existence, not just truthiness, to distinguish null from undefined
+    if (Object.prototype.hasOwnProperty.call(prompt, 'endCondition')) {
+      const promptEndCondition = prompt.endCondition;
+      // null means "explicitly disabled" - return undefined to skip validation
+      if (promptEndCondition === null) {
+        return undefined;
+      }
+      // Object means "override workflow" - use prompt's end condition
+      return promptEndCondition;
     }
 
     // 2. Workflow-level default
-    if (workflow.endCondition !== undefined) {
+    if (workflow.endCondition !== undefined && workflow.endCondition !== null) {
       return workflow.endCondition;
     }
 

@@ -215,6 +215,22 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 3px;
 
+  /* Animation properties */
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.25s ease-out, margin-top 0.3s ease-out, padding 0.3s ease-out;
+
+  /* Collapsed state */
+  &.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+  }
+
   label {
     font-size: 11px;
     font-weight: 600;

@@ -207,6 +207,28 @@
       saveEditorState();
     });
 
+    // End condition checkbox - enable/disable fields and toggle collapse
+    elements.propEndEnabled.addEventListener("change", (e) => {
+      const isChecked = e.target.checked;
+      const propEndDetails = document.getElementById("prop-end-details");
+
+      // Toggle collapsed class with smooth animation
+      if (isChecked) {
+        propEndDetails.classList.remove("collapsed");
+      } else {
+        propEndDetails.classList.add("collapsed");
+      }
+
+      // Enable/disable all end condition fields based on checkbox
+      elements.propEndScript.disabled = !isChecked;
+      elements.propEndReturns.disabled = !isChecked;
+      elements.propEndTimeout.disabled = !isChecked;
+      elements.propEndRetries.disabled = !isChecked;
+      elements.propEndRetryPrompt.disabled = !isChecked;
+
+      saveEditorState();
+    });
+
     // Save state when property controls change
     elements.propProvider.addEventListener("change", saveEditorState);
     elements.propModel.addEventListener("change", saveEditorState);

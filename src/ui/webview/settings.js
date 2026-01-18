@@ -173,7 +173,13 @@
   // End condition
   elements.workflowEndEnabled.addEventListener("change", (e) => {
     const enabled = e.target.checked;
-    elements.workflowEndDetails.hidden = !enabled;
+
+    // Toggle collapsed class with smooth animation
+    if (enabled) {
+      elements.workflowEndDetails.classList.remove("collapsed");
+    } else {
+      elements.workflowEndDetails.classList.add("collapsed");
+    }
 
     if (enabled) {
       // Collect end condition values
@@ -431,7 +437,7 @@
     // End Condition
     if (workflowProperties.endCondition) {
       elements.workflowEndEnabled.checked = true;
-      elements.workflowEndDetails.hidden = false;
+      elements.workflowEndDetails.classList.remove("collapsed");
       elements.workflowEndScript.value =
         workflowProperties.endCondition.script || "";
       elements.workflowEndReturns.value =
@@ -444,7 +450,7 @@
         workflowProperties.endCondition.retryPrompt || "";
     } else {
       elements.workflowEndEnabled.checked = false;
-      elements.workflowEndDetails.hidden = true;
+      elements.workflowEndDetails.classList.add("collapsed");
     }
   }
 

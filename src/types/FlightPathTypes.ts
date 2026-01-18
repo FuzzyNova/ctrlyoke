@@ -48,8 +48,12 @@ export interface ExecutionProperties {
   /** Session ID for resuming CLI conversations */
   sessionId?: string | number;
 
-  /** End condition validation */
-  endCondition?: EndCondition;
+  /** End condition validation
+   * - EndCondition object: Run validation after prompt completion
+   * - null: Explicitly disable workflow-level end condition for this prompt
+   * - undefined: Inherit from workflow-level end condition (if configured)
+   */
+  endCondition?: EndCondition | null;
 }
 
 export interface PromptFile extends ExecutionProperties {

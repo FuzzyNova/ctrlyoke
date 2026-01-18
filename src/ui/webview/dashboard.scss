@@ -1853,54 +1853,50 @@ button:disabled {
 
 /* End condition section (collapsible within drawer) */
 .end-condition-section {
-  border: 1px solid var(--border-color);
-  border-radius: 2px;
-  overflow: hidden;
-  background: var(--bg-primary);
   margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
 }
 
-.end-condition-section summary {
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--fg-secondary);
-  text-transform: uppercase;
-  user-select: none;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-sm);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.end-condition-section summary::-webkit-details-marker {
-  display: none;
-}
-
-.end-condition-section summary::before {
-  content: "▶";
-  display: inline-block;
-  transition: transform 0.2s;
-  font-size: 9px;
-}
-
-.end-condition-section[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.end-condition-section[open] summary {
-  border-bottom: 1px solid var(--border-color);
-}
-
-.end-condition-controls {
-  display: flex;
-  flex-direction: column;
+.end-condition-details {
+  @include flex-column;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
   padding: var(--spacing-md);
-  background: var(--bg-primary);
+  background-color: var(--vscode-editor-background);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+
+  /* Animation properties */
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, opacity 0.25s ease-out, margin-top 0.3s ease-out, padding 0.3s ease-out;
+
+  /* Collapsed state */
+  &.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+  }
+}
+
+.end-condition-help {
+  @include flex-center;
+  gap: var(--spacing-xs);
+  font-size: 11px;
+  color: var(--fg-secondary);
+  padding: var(--spacing-xs);
+  background-color: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  margin-bottom: var(--spacing-sm);
+
+  i {
+    font-size: 14px;
+  }
 }
 
 /* Editor footer - three-part layout (left, center, right) */
