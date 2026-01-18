@@ -9,6 +9,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   WorkingFile,
+  Provider,
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -20,6 +21,7 @@ import {
   ConfigurationUtils,
   PATH_CONSTANTS,
 } from "../utils/ConfigurationUtils";
+import { withFileLock } from "../utils/FileLockUtils";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -1162,26 +1164,36 @@ export class PromptQueue {
    */
   private async writeWorkingFileAtomic(
     workingFilePath: string,
-    workingFile: WorkingFile
+    workingFile: WorkingFile,
+    options: { skipLock?: boolean } = {}
   ): Promise<void> {
     const tempPath = `${workingFilePath}.tmp`;
 
-    try {
-      // Write to temp file
-      await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
-
-      // Atomic rename
-      await fs.rename(tempPath, workingFilePath);
-    } catch (error) {
-      // Clean up temp file on error
+    const writeAction = async () => {
       try {
-        await fs.unlink(tempPath);
-      } catch {}
+        // Write to temp file
+        await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
 
-      throw new Error(
-        `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
-      );
+        // Atomic rename
+        await fs.rename(tempPath, workingFilePath);
+      } catch (error) {
+        // Clean up temp file on error
+        try {
+          await fs.unlink(tempPath);
+        } catch {}
+
+        throw new Error(
+          `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    };
+
+    if (options.skipLock) {
+      await writeAction();
+      return;
     }
+
+    await withFileLock(workingFilePath, writeAction);
   }
 
   /**
@@ -1215,125 +1227,235 @@ export class PromptQueue {
     }
 
     try {
-      // Read current working file from disk
-      const workingFile = await this.readWorkingFile(
-        this.state.workingFilePath!
-      );
+      await withFileLock(this.state.workingFilePath!, async () => {
+        // Read current working file from disk
+        const workingFile = await this.readWorkingFile(
+          this.state.workingFilePath!
+        );
 
-      // CRITICAL FIX: Merge prompts from disk instead of blindly overwriting
-      // This preserves MCP-appended prompts that may have been added while we were running
-      // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
-      if (!skipMerge) {
-        const diskPrompts = workingFile.prompts || [];
-        const memoryPrompts = this.state.prompts;
+        // CRITICAL FIX: Merge prompts from disk instead of blindly overwriting
+        // This preserves MCP-appended prompts that may have been added while we were running
+        // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
+        if (!skipMerge) {
+          const diskPrompts = workingFile.prompts || [];
+          const memoryPrompts = this.state.prompts;
 
-        // Build a map of prompts we have in memory (by ID and hash)
-        const memoryPromptMap = new Map<string, PromptItem>();
-        for (const prompt of memoryPrompts) {
-          const hash = hashPromptContent(prompt.prompt);
-          memoryPromptMap.set(hash, prompt);
-          if (prompt.id) {
-            memoryPromptMap.set(prompt.id, prompt);
-          }
-        }
-
-        // Check if disk has prompts we don't have in memory
-        const newPromptsFromDisk: PromptItem[] = [];
-        for (const diskPrompt of diskPrompts) {
-          const hash = hashPromptContent(diskPrompt.prompt);
-          const existsInMemory =
-            memoryPromptMap.has(hash) ||
-            (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
-
-          if (!existsInMemory) {
-            // This prompt exists on disk but not in memory (MCP must have added it)
-            newPromptsFromDisk.push(diskPrompt);
-          }
-        }
-
-        // If disk has new prompts, merge them PRESERVING DISK ORDER
-        if (newPromptsFromDisk.length > 0) {
-          Log.info(
-            `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
-          );
-
-          // CRITICAL: Use disk order as source of truth, not memory order
-          // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-          this.state.prompts = diskPrompts;
-
-          // Rebuild results array to match new prompt order
-          // Preserve existing results where we have them, add pending for new prompts
-          const newResults: PromptResult[] = diskPrompts.map(
-            (prompt, index) => {
-              const hash = hashPromptContent(prompt.prompt);
-              const promptId = prompt.id || hash;
-
-              // Find existing result for this prompt
-              const existingResultIndex = this.state.results.findIndex((r) => {
-                const resultHash = hashPromptContent(r.prompt);
-                return resultHash === hash || r.prompt === prompt.prompt;
-              });
-
-              if (existingResultIndex >= 0) {
-                // Use existing result (preserves completion status)
-                return this.state.results[existingResultIndex];
-              } else {
-                // New prompt - create pending result
-                return {
-                  prompt: prompt.prompt,
-                  status: STEP_STATUS.PENDING,
-                  timestamp: new Date(),
-                };
-              }
+          // Build a map of prompts we have in memory (by ID and hash)
+          const memoryPromptMap = new Map<string, PromptItem>();
+          for (const prompt of memoryPrompts) {
+            const hash = hashPromptContent(prompt.prompt);
+            memoryPromptMap.set(hash, prompt);
+            if (prompt.id) {
+              memoryPromptMap.set(prompt.id, prompt);
             }
-          );
+          }
 
-          this.state.results = newResults;
+          // Check if disk has prompts we don't have in memory
+          const newPromptsFromDisk: PromptItem[] = [];
+          for (const diskPrompt of diskPrompts) {
+            const hash = hashPromptContent(diskPrompt.prompt);
+            const existsInMemory =
+              memoryPromptMap.has(hash) ||
+              (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
 
-          // Emit state change so dashboard updates
-          this.emitStateChange();
+            if (!existsInMemory) {
+              // This prompt exists on disk but not in memory (MCP must have added it)
+              newPromptsFromDisk.push(diskPrompt);
+            }
+          }
+
+          // If disk has new prompts, merge them PRESERVING DISK ORDER
+          if (newPromptsFromDisk.length > 0) {
+            Log.info(
+              `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
+            );
+
+            // CRITICAL: Use disk order as source of truth, not memory order
+            // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
+            this.state.prompts = diskPrompts;
+
+            // Rebuild results array to match new prompt order
+            // Preserve existing results where we have them, add pending for new prompts
+            const newResults: PromptResult[] = diskPrompts.map(
+              (prompt, index) => {
+                const hash = hashPromptContent(prompt.prompt);
+                const promptId = prompt.id || hash;
+
+                // Find existing result for this prompt
+                const existingResultIndex = this.state.results.findIndex(
+                  (r) => {
+                    const resultHash = hashPromptContent(r.prompt);
+                    return (
+                      resultHash === hash || r.prompt === prompt.prompt
+                    );
+                  }
+                );
+
+                if (existingResultIndex >= 0) {
+                  // Use existing result (preserves completion status)
+                  return this.state.results[existingResultIndex];
+                } else {
+                  // New prompt - create pending result
+                  return {
+                    prompt: prompt.prompt,
+                    status: STEP_STATUS.PENDING,
+                    timestamp: new Date(),
+                  };
+                }
+              }
+            );
+
+            this.state.results = newResults;
+
+            // Emit state change so dashboard updates
+            this.emitStateChange();
+          }
+        } // End skipMerge check
+
+        // Now write back the prompts array (merged or direct from memory)
+        // Update prompts without explicit IDs to include their generated hash IDs
+        workingFile.prompts = this.state.prompts.map((prompt) => {
+          if (!prompt.id) {
+            return {
+              ...prompt,
+              id: hashPromptContent(prompt.prompt),
+            };
+          }
+          return prompt;
+        });
+        Log.info(
+          `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
+        );
+
+        // Update workflow name if set in state
+        if (this.state.workflowName) {
+          workingFile.workflowName = this.state.workflowName;
         }
-      } // End skipMerge check
 
-      // Now write back the prompts array (merged or direct from memory)
-      // Update prompts without explicit IDs to include their generated hash IDs
-      workingFile.prompts = this.state.prompts.map((prompt) => {
-        if (!prompt.id) {
-          return {
-            ...prompt,
-            id: hashPromptContent(prompt.prompt),
-          };
-        }
-        return prompt;
+        // Update last modified timestamp
+        workingFile.lastModifiedAt = Date.now();
+
+        // Update runtime state
+        workingFile._runtime = {
+          currentIndex: this.state.currentIndex,
+          completedPrompts: Array.from(this.state.completedIds),
+          executionState: this.state.status,
+        };
+
+        // Write atomically while holding lock
+        await this.writeWorkingFileAtomic(
+          this.state.workingFilePath!,
+          workingFile,
+          { skipLock: true }
+        );
       });
-      Log.info(
-        `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
-      );
-
-      // Update workflow name if set in state
-      if (this.state.workflowName) {
-        workingFile.workflowName = this.state.workflowName;
-      }
-
-      // Update last modified timestamp
-      workingFile.lastModifiedAt = Date.now();
-
-      // Update runtime state
-      workingFile._runtime = {
-        currentIndex: this.state.currentIndex,
-        completedPrompts: Array.from(this.state.completedIds),
-        executionState: this.state.status,
-      };
-
-      // Write atomically
-      await this.writeWorkingFileAtomic(
-        this.state.workingFilePath!,
-        workingFile
-      );
       Log.info(`updateWorkingFile - Successfully wrote working file`);
     } catch (error) {
       console.error("FlightPath: Failed to update working file:", error);
       // Don't throw - this is a background operation
+    }
+  }
+
+  /**
+   * Update workflow-level properties in the working file (atomic + serialized).
+   */
+  public async updateWorkingFileProperties(
+    properties: Record<string, unknown>,
+    options: {
+      onlyIfUndefined?: boolean;
+      ensureProviderAndModel?: boolean;
+      allowDeletes?: boolean;
+    } = {}
+  ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
+    if (!this.state.workingFilePath) {
+      return null;
+    }
+
+    let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
+      null;
+
+    this.operationQueue = this.operationQueue.then(async () => {
+      const appliedKeys: string[] = [];
+
+      await withFileLock(this.state.workingFilePath!, async () => {
+        const workingFile = await this.readWorkingFile(
+          this.state.workingFilePath!
+        );
+
+        let modified = false;
+        for (const [key, value] of Object.entries(properties)) {
+          if (value === undefined) {
+            if (options.allowDeletes && (workingFile as any)[key] !== undefined) {
+              delete (workingFile as any)[key];
+              modified = true;
+              appliedKeys.push(key);
+            }
+            continue;
+          }
+
+          if (
+            options.onlyIfUndefined &&
+            (workingFile as any)[key] !== undefined
+          ) {
+            continue;
+          }
+
+          if ((workingFile as any)[key] !== value) {
+            (workingFile as any)[key] = value;
+            modified = true;
+            appliedKeys.push(key);
+          }
+        }
+
+        if (options.ensureProviderAndModel) {
+          if (!workingFile.provider) {
+            workingFile.provider = ConfigurationUtils.getIntegrationMode();
+            modified = true;
+            appliedKeys.push("provider");
+          }
+
+          if (!workingFile.model) {
+            workingFile.model = this.getDefaultModelForProvider(
+              workingFile.provider
+            );
+            modified = true;
+            appliedKeys.push("model");
+          }
+        }
+
+        if (modified) {
+          workingFile.lastModifiedAt = Date.now();
+          await this.writeWorkingFileAtomic(
+            this.state.workingFilePath!,
+            workingFile,
+            { skipLock: true }
+          );
+        }
+
+        for (const key of appliedKeys) {
+          this.updateWorkflowProperty(key, (workingFile as any)[key]);
+        }
+
+        result = { workingFile, appliedKeys };
+      });
+    });
+
+    await this.operationQueue;
+    return result;
+  }
+
+  private getDefaultModelForProvider(provider: Provider): string {
+    switch (provider) {
+      case Provider.CopilotCli:
+        return ConfigurationUtils.getCliModel();
+      case Provider.CopilotChat:
+        return ConfigurationUtils.getCopilotChatModel();
+      case Provider.ClaudeCli:
+        return ConfigurationUtils.getClaudeCliModel();
+      case Provider.CodexCli:
+        return ConfigurationUtils.getCodexCliModel();
+      default:
+        return ConfigurationUtils.getCliModel();
     }
   }
 

@@ -378,7 +378,7 @@
         {
           "type": "webview",
           "id": "flightpath.settings",
-          "name": "Settings",
+          "name": "Workflow Settings",
           "icon": "$(settings-gear)"
         }
       ]

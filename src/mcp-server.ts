@@ -34,6 +34,7 @@ import {
   type QueuePosition,
 } from "./types/DashboardConstants";
 import { hashPromptContent, isPromptCompleted } from "./utils/PromptIdentity";
+import { withFileLock } from "./utils/FileLockUtils";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
 const FLIGHTPATH_DIR = ".flightpath";
@@ -348,127 +349,148 @@ class FlightPathMCPServer {
       );
     }
 
-    // Read current queue state
-    log("Reading current queue state...");
-    const fileContent = await fs.readFile(workingFile, "utf8");
-    const queueData: WorkingFile = JSON.parse(fileContent);
-    log("Current queue size:", queueData.prompts?.length || 0);
+    let response: {
+      success: boolean;
+      promptsAdded: number;
+      promptsRejected: number;
+      newQueueSize: number;
+      insertIndex: number;
+      workingFile: string;
+      rejectionDetails?: Array<{
+        prompt: string;
+        id?: string;
+        reason?: string;
+      }>;
+    } | null = null;
 
-    const runtime = queueData._runtime || {
-      currentIndex: 0,
-      completedPrompts: [],
-      executionState: EXECUTION_STATES.IDLE,
-    };
-    log("Current runtime state:", {
-      currentIndex: runtime.currentIndex,
-      executionState: runtime.executionState,
-      completedCount: runtime.completedPrompts?.length || 0,
-    });
+    await withFileLock(workingFile, async () => {
+      // Read current queue state
+      log("Reading current queue state...");
+      const fileContent = await fs.readFile(workingFile, "utf8");
+      const queueData: WorkingFile = JSON.parse(fileContent);
+      log("Current queue size:", queueData.prompts?.length || 0);
 
-    // Calculate insert index
-    const insertIndex =
-      position === QUEUE_POSITION.NEXT
-        ? runtime.currentIndex + 1
-        : (queueData.prompts || []).length;
-    log("Insert index calculated:", insertIndex);
+      const runtime = queueData._runtime || {
+        currentIndex: 0,
+        completedPrompts: [],
+        executionState: EXECUTION_STATES.IDLE,
+      };
+      log("Current runtime state:", {
+        currentIndex: runtime.currentIndex,
+        executionState: runtime.executionState,
+        completedCount: runtime.completedPrompts?.length || 0,
+      });
 
-    // Deduplicate prompts using shared identity logic
-    log("Starting deduplication validation...");
-    const validationResults = this.validatePrompts(
-      prompts,
-      queueData.prompts || [],
-      new Set(runtime.completedPrompts || [])
-    );
-    log("Validation results:", validationResults);
+      // Calculate insert index
+      const insertIndex =
+        position === QUEUE_POSITION.NEXT
+          ? runtime.currentIndex + 1
+          : (queueData.prompts || []).length;
+      log("Insert index calculated:", insertIndex);
 
-    const validPrompts = validationResults
-      .filter((r) => r.accepted)
-      .map((r) => r.prompt);
-    const rejectedPrompts = validationResults.filter((r) => !r.accepted);
-
-    if (validPrompts.length === 0) {
-      log("All prompts rejected, returning error response");
-      const rejectionReasons = rejectedPrompts
-        .map((r) => `"${r.prompt.prompt.substring(0, 50)}...": ${r.reason}`)
-        .join("; ");
-      throw new Error(
-        `All ${prompts.length} prompts rejected. Reasons: ${rejectionReasons}`
+      // Deduplicate prompts using shared identity logic
+      log("Starting deduplication validation...");
+      const validationResults = this.validatePrompts(
+        prompts,
+        queueData.prompts || [],
+        new Set(runtime.completedPrompts || [])
       );
-    }
+      log("Validation results:", validationResults);
 
-    // Validate queue size limit (only for prompts that will actually be added)
-    const maxQueueSize = 100; // TODO: Read from config
-    const newTotalSize = (queueData.prompts || []).length + validPrompts.length;
-    log("Queue size check:", {
-      current: (queueData.prompts || []).length,
-      adding: validPrompts.length,
-      rejected: rejectedPrompts.length,
-      newTotal: newTotalSize,
-      max: maxQueueSize,
-    });
+      const validPrompts = validationResults
+        .filter((r) => r.accepted)
+        .map((r) => r.prompt);
+      const rejectedPrompts = validationResults.filter((r) => !r.accepted);
 
-    if (newTotalSize > maxQueueSize) {
-      throw new Error(
-        `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
-      );
-    }
+      if (validPrompts.length === 0) {
+        log("All prompts rejected, returning error response");
+        const rejectionReasons = rejectedPrompts
+          .map((r) => `"${r.prompt.prompt.substring(0, 50)}...": ${r.reason}`)
+          .join("; ");
+        throw new Error(
+          `All ${prompts.length} prompts rejected. Reasons: ${rejectionReasons}`
+        );
+      }
 
-    // Insert valid prompts at calculated position
-    if (!queueData.prompts) {
-      log("Initializing empty prompts array");
-      queueData.prompts = [];
-    }
-    log(
-      "Inserting",
-      validPrompts.length,
-      "valid prompts at index",
-      insertIndex
-    );
-    queueData.prompts.splice(insertIndex, 0, ...validPrompts);
-    log("New queue size:", queueData.prompts.length);
+      // Validate queue size limit (only for prompts that will actually be added)
+      const maxQueueSize = 100; // TODO: Read from config
+      const newTotalSize =
+        (queueData.prompts || []).length + validPrompts.length;
+      log("Queue size check:", {
+        current: (queueData.prompts || []).length,
+        adding: validPrompts.length,
+        rejected: rejectedPrompts.length,
+        newTotal: newTotalSize,
+        max: maxQueueSize,
+      });
 
-    // Update runtime metadata
-    queueData._runtime = runtime;
+      if (newTotalSize > maxQueueSize) {
+        throw new Error(
+          `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
+        );
+      }
 
-    // If queue is completed/idle, set to running state
-    if (
-      runtime.executionState === EXECUTION_STATES.COMPLETED ||
-      runtime.executionState === EXECUTION_STATES.IDLE
-    ) {
+      // Insert valid prompts at calculated position
+      if (!queueData.prompts) {
+        log("Initializing empty prompts array");
+        queueData.prompts = [];
+      }
       log(
-        "Updating execution state from",
-        runtime.executionState,
-        "to",
-        EXECUTION_STATES.RUNNING
+        "Inserting",
+        validPrompts.length,
+        "valid prompts at index",
+        insertIndex
       );
-      runtime.executionState = EXECUTION_STATES.RUNNING;
+      queueData.prompts.splice(insertIndex, 0, ...validPrompts);
+      log("New queue size:", queueData.prompts.length);
+
+      // Update runtime metadata
+      queueData._runtime = runtime;
+
+      // If queue is completed/idle, set to running state
+      if (
+        runtime.executionState === EXECUTION_STATES.COMPLETED ||
+        runtime.executionState === EXECUTION_STATES.IDLE
+      ) {
+        log(
+          "Updating execution state from",
+          runtime.executionState,
+          "to",
+          EXECUTION_STATES.RUNNING
+        );
+        runtime.executionState = EXECUTION_STATES.RUNNING;
+      }
+
+      // Write atomically (temp file + rename)
+      const tempFile = workingFile + ".tmp";
+      log("Writing to temp file:", tempFile);
+      await fs.writeFile(tempFile, JSON.stringify(queueData, null, 2), "utf8");
+      log("Renaming temp file to working file...");
+      await fs.rename(tempFile, workingFile);
+      log("File write completed successfully");
+
+      response = {
+        success: true,
+        promptsAdded: validPrompts.length,
+        promptsRejected: rejectedPrompts.length,
+        newQueueSize: queueData.prompts.length,
+        insertIndex,
+        workingFile: path.relative(this.workspaceRoot, workingFile),
+        ...(rejectedPrompts.length > 0 && {
+          rejectionDetails: rejectedPrompts.map((r) => ({
+            prompt:
+              r.prompt.prompt.substring(0, 100) +
+              (r.prompt.prompt.length > 100 ? "..." : ""),
+            id: r.prompt.id,
+            reason: r.reason,
+          })),
+        }),
+      };
+    });
+
+    if (!response) {
+      throw new Error("Failed to append prompts: no response generated");
     }
-
-    // Write atomically (temp file + rename)
-    const tempFile = workingFile + ".tmp";
-    log("Writing to temp file:", tempFile);
-    await fs.writeFile(tempFile, JSON.stringify(queueData, null, 2), "utf8");
-    log("Renaming temp file to working file...");
-    await fs.rename(tempFile, workingFile);
-    log("File write completed successfully");
-
-    const response = {
-      success: true,
-      promptsAdded: validPrompts.length,
-      promptsRejected: rejectedPrompts.length,
-      newQueueSize: queueData.prompts.length,
-      insertIndex,
-      workingFile: path.relative(this.workspaceRoot, workingFile),
-      ...(rejectedPrompts.length > 0 && {
-        rejectionDetails: rejectedPrompts.map((r) => ({
-          prompt:
-            r.prompt.prompt.substring(0, 100) +
-            (r.prompt.prompt.length > 100 ? "..." : ""),
-          id: r.prompt.id,
-          reason: r.reason,
-        })),
-      }),
-    };
 
     return {
       content: [

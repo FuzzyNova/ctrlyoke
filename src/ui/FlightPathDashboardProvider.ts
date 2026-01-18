@@ -1298,36 +1298,21 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Read working file
-      const workingFile =
-        await this.flightPathManager.readWorkingFile(workingFilePath);
+      const updates: Record<string, unknown> = {
+        [property]: value,
+      };
 
-      // Update the property
-      if (value === undefined) {
-        // Remove property if value is undefined
-        delete (workingFile as any)[property];
-      } else {
-        (workingFile as any)[property] = value;
-      }
-
-      // Ensure provider and model are always present (required for execution)
-      if (!workingFile.provider) {
-        workingFile.provider = ConfigurationUtils.getIntegrationMode();
-      }
-      if (!workingFile.model) {
-        const provider = workingFile.provider;
-        workingFile.model = this.getModelForProvider(provider);
-      }
-
-      // Write back to working file
-      await fs.writeFile(
-        workingFilePath,
-        JSON.stringify(workingFile, null, 2),
-        "utf-8"
+      const result = await this.flightPathManager.updateWorkingFileProperties(
+        updates,
+        { ensureProviderAndModel: true, allowDeletes: true }
       );
 
-      // Update in-memory workflow properties for immediate resolution
-      this.flightPathManager.updateWorkflowPropertyInQueue(property, value);
+      if (!result) {
+        Log.warn(
+          `Failed to update workflow property '${property}' - no working file result`
+        );
+        return;
+      }
 
       Log.info(
         `Updated workflow property '${property}' in working file: ${workingFilePath}`
@@ -1378,47 +1363,35 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Read working file
-      const workingFile =
-        await this.flightPathManager.readWorkingFile(workingFilePath);
-
-      // Apply pending properties ONLY if they are undefined in the working file
-      // This respects properties from loaded files while filling in gaps
-      let modified = false;
-      const appliedProperties: string[] = [];
-
+      const updates: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(pendingProperties)) {
         if (value !== undefined) {
-          // Only apply if the property is undefined in the loaded file
-          if ((workingFile as any)[key] === undefined) {
-            (workingFile as any)[key] = value;
-            modified = true;
-            appliedProperties.push(key);
-            Log.info(
-              `Applied pending workflow property '${key}': ${JSON.stringify(value)} (file had no value)`
-            );
-          } else {
-            Log.debug(
-              `Skipping pending property '${key}' - file already has value: ${JSON.stringify((workingFile as any)[key])}`
-            );
-          }
+          updates[key] = value;
         }
       }
 
-      if (modified) {
-        // Write back to working file
-        await fs.writeFile(
-          workingFilePath,
-          JSON.stringify(workingFile, null, 2),
-          "utf-8"
-        );
+      if (Object.keys(updates).length === 0) {
+        Log.debug("No pending workflow properties to apply");
+        return;
+      }
 
-        // Update in-memory queue with new properties (only applied ones)
+      const result = await this.flightPathManager.updateWorkingFileProperties(
+        updates,
+        { onlyIfUndefined: true, ensureProviderAndModel: true }
+      );
+
+      if (!result) {
+        Log.warn("Failed to apply pending workflow properties");
+        return;
+      }
+
+      const appliedProperties = result.appliedKeys;
+      if (appliedProperties.length > 0) {
         for (const key of appliedProperties) {
           const value = pendingProperties[key];
-          if (value !== undefined) {
-            this.flightPathManager.updateWorkflowPropertyInQueue(key, value);
-          }
+          Log.info(
+            `Applied pending workflow property '${key}': ${JSON.stringify(value)} (file had no value)`
+          );
         }
 
         // Send updated properties to settings panel

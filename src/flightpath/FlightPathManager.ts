@@ -17,6 +17,7 @@ import {
   QueueState,
   Provider,
   EXECUTION_STATES,
+  WorkingFile,
 } from "../types/FlightPathTypes";
 import {
   ACTION_TYPES,
@@ -942,6 +943,20 @@ export class FlightPathManager {
    */
   updateWorkflowPropertyInQueue(property: string, value: unknown): void {
     this.promptQueue.updateWorkflowProperty(property, value);
+  }
+
+  /**
+   * Update workflow-level properties in the working file using the queue writer.
+   */
+  async updateWorkingFileProperties(
+    properties: Record<string, unknown>,
+    options: {
+      onlyIfUndefined?: boolean;
+      ensureProviderAndModel?: boolean;
+      allowDeletes?: boolean;
+    } = {}
+  ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
+    return this.promptQueue.updateWorkingFileProperties(properties, options);
   }
 
   /**

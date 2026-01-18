@@ -102,10 +102,24 @@
 
   // Workflow property changes
   elements.workflowProvider.addEventListener("change", (e) => {
-    workflowProperties.provider = e.target.value;
-    updateModelDropdownOptions(e.target.value);
+    const newProvider = e.target.value;
+    workflowProperties.provider = newProvider;
+    updateModelDropdownOptions(newProvider);
+
+    // Select the default model for the new provider
+    const defaultModel = DEFAULT_MODELS[newProvider];
+    if (
+      defaultModel &&
+      elements.workflowModel.querySelector(`option[value="${defaultModel}"]`)
+    ) {
+      elements.workflowModel.value = defaultModel;
+      workflowProperties.model = defaultModel;
+      updateSetAsDefaultButton("model");
+      saveWorkflowProperty("model", defaultModel);
+    }
+
     updateSetAsDefaultButton("provider");
-    saveWorkflowProperty("provider", e.target.value);
+    saveWorkflowProperty("provider", newProvider);
   });
 
   elements.workflowModel.addEventListener("change", (e) => {
@@ -436,6 +450,21 @@
     elements.workflowModel.innerHTML = options
       .map((opt) => `<option value="${opt.value}">${opt.label}</option>`)
       .join("");
+
+    // After populating, ensure a valid model is selected
+    // If current value is not in the options, select the default for this provider
+    const currentValue = elements.workflowModel.value;
+    const isValidOption = options.some((opt) => opt.value === currentValue);
+
+    if (!isValidOption || !currentValue) {
+      const defaultModel = DEFAULT_MODELS[provider];
+      if (defaultModel && options.some((opt) => opt.value === defaultModel)) {
+        elements.workflowModel.value = defaultModel;
+      } else if (options.length > 0) {
+        // Fallback to first option if default not available
+        elements.workflowModel.value = options[0].value;
+      }
+    }
   }
 
   function updateAgentDropdownOptions() {

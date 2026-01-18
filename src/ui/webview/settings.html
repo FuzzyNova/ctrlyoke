@@ -14,15 +14,6 @@
   </head>
   <body>
     <div id="settings-app">
-      <!-- Panel Header -->
-      <div class="panel-header">
-        <h2>Workflow Properties</h2>
-        <p class="panel-description">
-          Configure defaults for all prompts in this workflow. Changes save to
-          the working file.
-        </p>
-      </div>
-
       <!-- Workflow Properties Section -->
       <div class="workflow-properties">
         <!-- Provider -->
@@ -112,10 +103,7 @@
         <div class="setting-group">
           <label for="workflow-dynamic-ext">Allow Dynamic Extension</label>
           <div class="setting-input-row">
-            <select
-              id="workflow-dynamic-ext"
-              title="Allow dynamic extension"
-            >
+            <select id="workflow-dynamic-ext" title="Allow dynamic extension">
               <option value="true">Yes</option>
               <option value="false">No</option>
             </select>
@@ -155,11 +143,7 @@
             />
 
             <label for="workflow-end-returns">Returns:</label>
-            <input
-              type="text"
-              id="workflow-end-returns"
-              placeholder="true"
-            />
+            <input type="text" id="workflow-end-returns" placeholder="true" />
 
             <label for="workflow-end-timeout">Timeout (ms):</label>
             <input
@@ -170,12 +154,7 @@
             />
 
             <label for="workflow-end-retries">Max Retries:</label>
-            <input
-              type="number"
-              id="workflow-end-retries"
-              value="0"
-              min="-1"
-            />
+            <input type="number" id="workflow-end-retries" value="0" min="-1" />
 
             <label for="workflow-end-retry-prompt">Retry Prompt:</label>
             <textarea

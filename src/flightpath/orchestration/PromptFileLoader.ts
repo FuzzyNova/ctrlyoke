@@ -78,9 +78,6 @@ export class PromptFileLoader {
           // Copy workflow-level properties from loaded file to working file
           // This ensures file properties take precedence over pending/global settings
           if (workingFilePath) {
-            const workingFile =
-              await this.promptQueue.readWorkingFile(workingFilePath);
-
             // Copy workflow-level properties (if defined in loaded file)
             const propertiesToCopy = [
               "provider",
@@ -91,28 +88,28 @@ export class PromptFileLoader {
               "endCondition",
             ] as const;
 
-            let modified = false;
+            const updates: Record<string, unknown> = {};
             for (const key of propertiesToCopy) {
               if ((promptFile as any)[key] !== undefined) {
-                (workingFile as any)[key] = (promptFile as any)[key];
-                modified = true;
-                Log.info(
-                  `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify((promptFile as any)[key])}`
-                );
+                updates[key] = (promptFile as any)[key];
               }
             }
 
-            // Write back to working file if any properties were copied
-            if (modified) {
-              const fs = await import("fs/promises");
-              await fs.writeFile(
-                workingFilePath,
-                JSON.stringify(workingFile, null, 2),
-                "utf-8"
+            if (Object.keys(updates).length > 0) {
+              const result = await this.promptQueue.updateWorkingFileProperties(
+                updates
               );
-              Log.info(
-                "Persisted workflow-level properties from loaded file to working file"
-              );
+
+              if (result?.appliedKeys.length) {
+                for (const key of result.appliedKeys) {
+                  Log.info(
+                    `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify((promptFile as any)[key])}`
+                  );
+                }
+                Log.info(
+                  "Persisted workflow-level properties from loaded file to working file"
+                );
+              }
             }
           }
         } catch (error) {

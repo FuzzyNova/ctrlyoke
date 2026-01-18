@@ -173,7 +173,7 @@ export const DEFAULT_MODELS = {
   [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
   [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
   [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
-  [PROVIDER_IDS.CODEX_CLI]: "gpt-5.1-codex",
+  [PROVIDER_IDS.CODEX_CLI]: "gpt-5.2-codex",
 } as const;
 
 // ============================================================================
@@ -190,14 +190,10 @@ export const CLAUDE_CLI_MODELS = [
 // CODEX CLI MODELS - Static options (from codex /model command)
 // ============================================================================
 export const CODEX_CLI_MODELS = [
-  {
-    value: "gpt-5.1-codex-max",
-    label: "GPT-5.1 Codex Max",
-  },
-  { value: "gpt-5.1-codex", label: "GPT-5.1 Codex" },
-  { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
-  { value: "gpt-5.2", label: "GPT-5.2" },
-  { value: "gpt-5.1", label: "GPT-5.1" },
+  { value: "gpt-5.2-codex", label: "GPT 5.2 Codex" },
+  { value: "gpt-5.1-codex-max", label: "GPT 5.1 Codex Max" },
+  { value: "gpt-5.1-codex-mini", label: "GPT 5.1 Codex Mini" },
+  { value: "gpt-5.2", label: "GPT 5.2" },
 ] as const;
 
 // ============================================================================
