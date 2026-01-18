@@ -357,6 +357,9 @@
 
     // Reload UI with global defaults
     loadWorkflowPropertiesIntoUI();
+
+    // Update "Set as Default" button visibility
+    updateAllSetAsDefaultButtons();
   }
 
   function handleModelOptionsUpdate(data) {

@@ -584,6 +584,11 @@ export class CliIntegration extends CopilotIntegration {
     const notifyDir =
       this.provider.notificationMonitor.getNotificationDirectory(workspaceRoot);
 
+    // Track whether the race has resolved - used to cancel notification monitor
+    // when TUI finishes first, preventing stale monitors from stealing hook files
+    // from subsequent runs
+    let raceResolved = false;
+
     // Start notification monitoring
     const notifyPromise =
       this.provider.notificationMonitor.monitorForCompletion(
@@ -593,7 +598,7 @@ export class CliIntegration extends CopilotIntegration {
         },
         resolvedSessionId, // undefined = wildcard mode for first prompt
         startTime,
-        () => this.isCancelling
+        () => this.isCancelling || raceResolved // Cancel when user cancels OR race resolved
       );
 
     // Race: TUI completion vs notification file
@@ -606,6 +611,10 @@ export class CliIntegration extends CopilotIntegration {
         error: tuiResult.errorMessage,
       })),
     ]);
+
+    // Mark race as resolved to stop the notification monitor if it's still running
+    // This prevents the monitor from stealing hook files from subsequent runs
+    raceResolved = true;
 
     let extractedSessionId: string | undefined;
 
