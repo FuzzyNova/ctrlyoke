@@ -1,0 +1,144 @@
+# Session Reuse Example
+#
+# Demonstrates multiple prompts sharing a single session for continuous context.
+# This pattern is ideal for iterative development workflows where each step
+# builds directly on the previous work.
+#
+# Session Strategy:
+# - Single session throughout entire workflow
+# - Each prompt has full context from all previous prompts
+# - Ideal for test-driven development, incremental feature building
+
+provider: copilot-cli
+model: claude-sonnet-4.5
+newChatSession: false # Workflow default: Continue sessions
+
+prompts:
+  # ============================================================
+  # TDD Workflow: Write Tests → Implement → Refactor
+  # ============================================================
+
+  - id: write-tests
+    prompt: |
+      Write comprehensive unit tests for a new PromptSessionResolver utility.
+
+      Requirements:
+      - Test numeric session references (1, 2, 3)
+      - Test exact session ID strings
+      - Test auto-resume logic
+      - Test validation (invalid references, cross-provider, etc.)
+      - Test workflow-level precedence
+
+      Use Mocha test framework matching FlightPath conventions.
+    # No sessionId → Starts new session (Session 1)
+    # This is the first prompt, so it creates the initial context
+
+  - id: implement-resolver
+    prompt: |
+      Implement the PromptSessionResolver class to pass all the tests.
+
+      Requirements:
+      - Follow SOLID principles
+      - Use PropertyResolver for precedence logic
+      - Comprehensive error handling
+      - TypeScript strict mode compliance
+
+      Create src/flightpath/orchestration/PromptSessionResolver.ts
+    # No sessionId, newChatSession: false (workflow default)
+    # Auto-resumes from write-tests
+    # Copilot has full context of the test requirements
+
+  - id: refactor-for-clarity
+    prompt: |
+      Refactor the PromptSessionResolver implementation for better clarity.
+
+      Focus on:
+      - Extract complex validation logic to private methods
+      - Add JSDoc comments for public methods
+      - Improve error messages for better debugging
+      - Consider edge cases and add defensive checks
+    # Auto-resumes from implement-resolver
+    # Copilot knows the implementation details and test requirements
+
+  - id: add-integration-tests
+    prompt: |
+      Add integration tests that verify PromptSessionResolver works with:
+      - Real working file examples
+      - PropertyResolver integration
+      - All three provider types (Copilot, Claude, Codex)
+
+      Create tests in src/test/suite/PromptSessionResolver.test.ts
+    # Auto-resumes - full context of tests, implementation, and refactoring
+    # Copilot can reference all previous decisions
+
+  - id: update-documentation
+    prompt: |
+      Update documentation to reflect the new PromptSessionResolver:
+
+      1. Add implementation note to docs/SESSION_MANAGEMENT.md
+      2. Update .github/instructions/flightpath-core.instructions.md
+      3. Add code examples showing session resolution in action
+
+      Keep documentation style consistent with existing FlightPath docs.
+    # Auto-resumes - complete context for accurate documentation
+
+# Why Single Session Works Here:
+# - Each step builds directly on previous work
+# - Tests inform implementation
+# - Implementation informs refactoring
+# - Refactoring informs integration tests
+# - Everything informs documentation
+# - No need to reset context - continuous development flow
+
+# Alternative Using Explicit References:
+# If you don't want to rely on workflow-level default, you can be explicit:
+#
+# prompts:
+#   - id: write-tests
+#     # Starts new session
+#
+#   - id: implement-resolver
+#     sessionId: 1  # Explicit: Use session from write-tests
+#
+#   - id: refactor-for-clarity
+#     sessionId: 1  # Explicit: Use session from write-tests
+#
+#   - id: add-integration-tests
+#     sessionId: 1  # Explicit: Use session from write-tests
+#
+#   - id: update-documentation
+#     sessionId: 1  # Explicit: Use session from write-tests
+
+# Expected Session Flow:
+# 1. write-tests           → Starts Session 1
+# 2. implement-resolver    → Uses Session 1 (auto-resume)
+# 3. refactor-for-clarity  → Uses Session 1 (auto-resume)
+# 4. add-integration-tests → Uses Session 1 (auto-resume)
+# 5. update-documentation  → Uses Session 1 (auto-resume)
+
+# Runtime Metadata Example (after execution):
+# All prompts will have the SAME sessionId in _runtime:
+#
+# prompts:
+#   - id: write-tests
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"
+#   - id: implement-resolver
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"
+#   - id: refactor-for-clarity
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"
+#   - id: add-integration-tests
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"
+#   - id: update-documentation
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"
+
+# Benefits of This Pattern:
+# ✅ Copilot has full conversation history
+# ✅ No need to repeat context in each prompt
+# ✅ Can reference "the tests we wrote" or "the implementation"
+# ✅ Natural iterative development flow
+# ✅ Minimal configuration (one workflow-level setting)

@@ -1,0 +1,118 @@
+# Multi-Session Workflow Example
+#
+# Demonstrates using different sessions for different workflow phases.
+# This pattern is useful when you want to isolate context between analysis,
+# implementation, and verification phases.
+#
+# Session Strategy:
+# - Session 1: Code analysis (security + performance share context)
+# - Session 2: Implementation (fresh context for coding)
+# - Session 3: Verification (independent review)
+
+provider: copilot-cli
+model: claude-sonnet-4.5
+
+prompts:
+  # ============================================================
+  # PHASE 1: Analysis (Session 1)
+  # ============================================================
+
+  - id: analyze-security
+    prompt: |
+      Analyze the FlightPath codebase for potential security vulnerabilities.
+
+      Focus on:
+      - Input validation and sanitization
+      - File system access controls
+      - Script execution security
+      - Session management security
+    # No sessionId or newChatSession → Starts new session (Session 1)
+
+  - id: analyze-performance
+    prompt: |
+      Based on the security analysis, also review performance characteristics.
+
+      Focus on:
+      - Response time for workflow execution
+      - Memory usage during CLI operations
+      - File I/O optimization opportunities
+      - Dashboard rendering performance
+    sessionId: 1 # Continue from security analysis (Session 1)
+    # This prompt shares context with security analysis, so it knows
+    # about the codebase structure and any issues already identified
+
+  # ============================================================
+  # PHASE 2: Implementation (Session 2 - Fresh Context)
+  # ============================================================
+  - id: implement-security-fixes
+    prompt: |
+      Implement fixes for the security vulnerabilities identified in the analysis.
+
+      Requirements:
+      - Address all critical and high-priority issues
+      - Maintain backward compatibility
+      - Add appropriate error handling
+      - Update documentation for security changes
+    newChatSession: true # Start fresh implementation session (Session 2)
+    # We want a clean slate for implementation, without the analysis
+    # context potentially biasing the implementation approach
+
+  - id: implement-performance-improvements
+    prompt: |
+      Implement the performance improvements identified in the analysis.
+
+      Requirements:
+      - Optimize critical paths first
+      - Maintain code readability
+      - Add performance benchmarks if needed
+      - Update CHANGELOG with performance gains
+    sessionId: 3 # Continue from security implementation (Session 2)
+    # Share implementation context - security fixes might affect
+    # performance optimization strategy
+
+  # ============================================================
+  # PHASE 3: Verification (Session 3 - Independent Review)
+  # ============================================================
+  - id: verify-changes
+    prompt: |
+      Independently verify that all changes meet requirements.
+
+      Verification checklist:
+      - Security vulnerabilities addressed?
+      - Performance improvements measurable?
+      - Tests passing?
+      - Documentation updated?
+      - No regressions introduced?
+    newChatSession: true # Start fresh verification session (Session 3)
+    # Independent review should not be influenced by implementation
+    # decisions or analysis bias
+
+# Expected Session Flow:
+# 1. analyze-security      → Starts Session 1 (new)
+# 2. analyze-performance   → Uses Session 1 (sessionId: 1)
+# 3. implement-security    → Starts Session 2 (newChatSession: true)
+# 4. implement-performance → Uses Session 2 (sessionId: 3)
+# 5. verify-changes        → Starts Session 3 (newChatSession: true)
+
+# Session Continuity Benefits:
+# - Analysis prompts share findings and context
+# - Implementation prompts coordinate security and performance work
+# - Verification gets unbiased fresh perspective
+
+# Runtime Metadata Example (after execution):
+# prompts:
+#   - id: analyze-security
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Session 1
+#   - id: analyze-performance
+#     _runtime:
+#       sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Session 1 (same)
+#   - id: implement-security
+#     _runtime:
+#       sessionId: "a1b2c3d4-e5f6-7890-1234-567890abcdef"  # Session 2 (new)
+#   - id: implement-performance
+#     _runtime:
+#       sessionId: "a1b2c3d4-e5f6-7890-1234-567890abcdef"  # Session 2 (same)
+#   - id: verify-changes
+#     _runtime:
+#       sessionId: "9876fedc-ba98-7654-3210-fedcba987654"  # Session 3 (new)

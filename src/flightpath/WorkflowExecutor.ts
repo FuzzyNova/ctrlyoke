@@ -225,6 +225,8 @@ export class WorkflowExecutor {
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
           resolvedProperties, // Pass resolved properties to integration
+          workflowFile, // Pass workflow file for session resolution
+          promptQueue: this.promptQueue, // Pass queue for working file updates
         }
       );
 
@@ -520,6 +522,8 @@ export class WorkflowExecutor {
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
           resolvedProperties: resolvedRetryProperties,
+          workflowFile, // Pass workflow file for session resolution
+          promptQueue: this.promptQueue, // Pass queue for working file updates
         }
       );
 

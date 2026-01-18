@@ -185,10 +185,16 @@ export class PromptQueue {
       const completedIds = new Set<string>(runtime?.completedPrompts || []);
 
       // Restore prompts and basic state
+      // CRITICAL: Preserve _runtime metadata during load (Phase 4: Per-Prompt Session Management)
+      // Each prompt's _runtime contains: provider, model, agent, sessionId, startedAt, completedAt
       this.state = {
         currentIndex: runtime?.currentIndex || 0,
         status: runtime?.executionState || EXECUTION_STATES.IDLE,
-        prompts: [...workingFile.prompts],
+        prompts: workingFile.prompts.map((prompt) => ({
+          ...prompt,
+          // Backward compatibility: _runtime is optional, old files won't have it
+          // The spread operator preserves _runtime if it exists
+        })),
         results: [],
         stopped: false,
         completedIds,
@@ -232,11 +238,17 @@ export class PromptQueue {
       });
 
       this.emitStateChange();
+
+      // Log runtime metadata restoration (Phase 4: Session Management)
+      const promptsWithRuntime = this.state.prompts.filter(
+        (p) => p._runtime
+      ).length;
       Log.info(
         `Restored queue from working file: ${workingFile.prompts.length} prompts, ` +
           `currentIndex=${this.state.currentIndex}, ` +
           `completed=${this.state.completedIds.size}, ` +
-          `status=${this.state.status}`
+          `status=${this.state.status}, ` +
+          `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
       );
     } catch (error) {
       Log.error("Failed to restore from working file:", error as Error);
@@ -1285,9 +1297,7 @@ export class PromptQueue {
                 const existingResultIndex = this.state.results.findIndex(
                   (r) => {
                     const resultHash = hashPromptContent(r.prompt);
-                    return (
-                      resultHash === hash || r.prompt === prompt.prompt
-                    );
+                    return resultHash === hash || r.prompt === prompt.prompt;
                   }
                 );
 
@@ -1314,17 +1324,25 @@ export class PromptQueue {
 
         // Now write back the prompts array (merged or direct from memory)
         // Update prompts without explicit IDs to include their generated hash IDs
+        // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
         workingFile.prompts = this.state.prompts.map((prompt) => {
           if (!prompt.id) {
             return {
               ...prompt,
               id: hashPromptContent(prompt.prompt),
+              // _runtime is preserved via spread operator
             };
           }
+          // Return prompt with all properties including _runtime
           return prompt;
         });
+        // Count prompts with _runtime metadata (Phase 4: Session Management)
+        const promptsWithRuntime = workingFile.prompts.filter(
+          (p) => p._runtime
+        ).length;
         Log.info(
-          `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}`
+          `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}, ` +
+            `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
         );
 
         // Update workflow name if set in state
@@ -1335,7 +1353,7 @@ export class PromptQueue {
         // Update last modified timestamp
         workingFile.lastModifiedAt = Date.now();
 
-        // Update runtime state
+        // Update workflow-level runtime state
         workingFile._runtime = {
           currentIndex: this.state.currentIndex,
           completedPrompts: Array.from(this.state.completedIds),
@@ -1385,7 +1403,10 @@ export class PromptQueue {
         let modified = false;
         for (const [key, value] of Object.entries(properties)) {
           if (value === undefined) {
-            if (options.allowDeletes && (workingFile as any)[key] !== undefined) {
+            if (
+              options.allowDeletes &&
+              (workingFile as any)[key] !== undefined
+            ) {
               delete (workingFile as any)[key];
               modified = true;
               appliedKeys.push(key);

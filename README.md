@@ -77,6 +77,35 @@ prompts:
 
 📚 **[Complete Workflow Properties Guide](./docs/WORKFLOW_PROPERTIES.md)** | 📁 **[Example Workflows](./manual-test/workflow-properties-examples/)**
 
+### Session Management
+
+**Resume conversations across prompts** - Control which prompts share context and which start fresh:
+
+- **Numeric References**: `sessionId: 1` reuses session from prompt 1
+- **Auto-Resume**: `newChatSession: false` continues previous conversation
+- **Exact Session IDs**: Resume specific sessions with UUID strings
+- **Cross-Restart Persistence**: Sessions survive VS Code restarts (saved in working files)
+- **Provider-Aware**: Validates session compatibility across Copilot CLI, Claude CLI, and Codex CLI
+
+**Quick Example:**
+
+```yaml
+prompts:
+  - id: analyze
+    prompt: "Analyze security issues"
+    # Starts new session
+
+  - id: implement
+    prompt: "Fix the issues"
+    sessionId: 1 # Continue from analyze session
+
+  - id: verify
+    prompt: "Verify fixes"
+    newChatSession: true # Start fresh for independent review
+```
+
+📚 **[Complete Session Management Guide](./docs/SESSION_MANAGEMENT.md)** | 📁 **[Session Examples](./manual-test/session-examples/)**
+
 ### Safety & Control
 
 - **Script Validation**: Path validation and security checks for end condition scripts

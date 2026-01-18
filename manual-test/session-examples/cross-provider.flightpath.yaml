@@ -1,0 +1,179 @@
+# Cross-Provider Session Examples
+#
+# Demonstrates how FlightPath handles session management with mixed providers.
+# This file shows validation warnings and limitations when switching providers.
+#
+# Key Concepts:
+# - Sessions are provider-specific (Copilot sessions don't work with Claude)
+# - FlightPath validates session references and warns about incompatibilities
+# - Each provider has different session ID formats
+
+prompts:
+  # ============================================================
+  # Example 1: Cross-Provider Warning (Incompatible)
+  # ============================================================
+
+  - id: copilot-analysis
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    prompt: |
+      Analyze the session management implementation in FlightPath.
+      Focus on the SessionResolver architecture.
+    # Creates Copilot CLI session (UUID format)
+    # Example sessionId: "550e8400-e29b-41d4-a716-446655440000"
+
+  - id: claude-implementation
+    provider: claude-cli
+    model: sonnet
+    prompt: |
+      Based on the analysis, implement session validation logic.
+    sessionId: 1 # ⚠️ WARNING: References Copilot session from prompt 1
+    # FlightPath behavior:
+    # 1. Detects provider mismatch (copilot-cli → claude-cli)
+    # 2. Logs warning: "Session reference incompatible with provider change"
+    # 3. Ignores sessionId, starts new Claude session instead
+    # 4. Workflow continues successfully (graceful degradation)
+
+  # Expected Output:
+  # ⚠️ Warning: sessionId references prompt with different provider
+  #    (copilot-cli vs claude-cli). Starting new session instead.
+  # Runtime Metadata After Execution:
+  # - id: copilot-analysis
+  #   _runtime:
+  #     provider: copilot-cli
+  #     sessionId: "550e8400-e29b-41d4-a716-446655440000"  # Copilot UUID
+  #
+  # - id: claude-implementation
+  #   _runtime:
+  #     provider: claude-cli
+  #     sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"  # Claude UUID (NEW)
+  #     # Note: Different session ID because cross-provider reference ignored
+  # ============================================================
+  # Example 2: Same Provider - Valid Session Sharing
+  # ============================================================
+  - id: copilot-step1
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    prompt: "First step with Copilot"
+    # Creates Copilot session
+
+  - id: copilot-step2
+    provider: copilot-cli
+    model: gpt-5
+    prompt: "Second step with Copilot"
+    sessionId: 3 # ✅ Valid: Both use copilot-cli provider
+    # Successfully resumes Copilot session from step1
+    # Note: Different models (sonnet vs gpt-5) but same provider is OK
+
+  # Runtime Metadata After Execution:
+  # - id: copilot-step1
+  #   _runtime:
+  #     provider: copilot-cli
+  #     model: claude-sonnet-4.5
+  #     sessionId: "abc-123-copilot"
+  #
+  # - id: copilot-step2
+  #   _runtime:
+  #     provider: copilot-cli
+  #     model: gpt-5
+  #     sessionId: "abc-123-copilot"  # ✅ Same session ID
+  # ============================================================
+  # Example 3: Provider-Specific Session Formats
+  # ============================================================
+  - id: codex-step
+    provider: codex-cli
+    model: gpt-5.1-codex
+    prompt: "Implement feature with Codex"
+    # Creates Codex session (thread_xxx format)
+    # Example sessionId: "thread_abc123xyz789"
+
+  - id: copilot-step
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    prompt: "Review with Copilot"
+    sessionId: "thread_abc123xyz789" # ⚠️ Invalid format for Copilot
+    # FlightPath behavior:
+    # 1. Validates session ID format against provider
+    # 2. Detects "thread_xxx" format incompatible with copilot-cli
+    # 3. Logs error: "Invalid session ID format for copilot-cli"
+    # 4. Ignores sessionId, starts new session
+
+  # Expected Output:
+  # ❌ Error: Invalid session ID format for copilot-cli: 'thread_abc123xyz789'
+  #    Expected: UUID v4 format
+  #    Starting new session instead.
+  # ============================================================
+  # Example 4: Correct Mixed-Provider Workflow
+  # ============================================================
+  - id: analysis-phase
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    prompt: "Analyze codebase structure"
+    # Copilot session 1
+
+  - id: continued-analysis
+    provider: copilot-cli
+    model: claude-sonnet-4.5
+    prompt: "Deep dive into session management"
+    sessionId: 7 # ✅ Valid: Same provider (copilot-cli)
+    # Resumes Copilot session 1
+
+  - id: implementation-phase
+    provider: claude-cli
+    model: opus
+    prompt: "Implement the improvements"
+    newChatSession: true # ✅ Explicit: Start fresh with Claude
+    # Creates new Claude session (not trying to reuse Copilot session)
+
+  - id: continued-implementation
+    provider: claude-cli
+    model: sonnet
+    prompt: "Add tests for the implementation"
+    sessionId: 9 # ✅ Valid: Same provider (claude-cli)
+    # Resumes Claude session from implementation-phase
+
+# Key Takeaways:
+#
+# 1. Session IDs are provider-specific:
+#    - Copilot CLI: UUID v4 ("550e8400-e29b-41d4-a716-446655440000")
+#    - Claude CLI: UUID v4 ("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+#    - Codex CLI: Thread ID ("thread_abc123xyz789")
+#
+# 2. Cross-provider session references are invalid:
+#    - FlightPath detects and warns
+#    - Gracefully falls back to new session
+#    - Workflow continues (no fatal error)
+#
+# 3. Format validation prevents errors:
+#    - Each provider expects specific format
+#    - FlightPath validates before passing to CLI
+#    - Invalid formats trigger new session
+#
+# 4. Best practice for mixed providers:
+#    - Use newChatSession: true when switching providers
+#    - Don't rely on cross-provider session references
+#    - Group related prompts with same provider
+#
+# 5. Model changes within same provider are OK:
+#    - Provider matters, not model
+#    - Can switch sonnet → gpt-5 within copilot-cli
+#    - Session continuity maintained
+
+# Validation Rules Summary:
+# ✅ Same provider + numeric reference → Valid (resumes session)
+# ✅ Same provider + exact UUID → Valid (resumes session)
+# ✅ Same provider + model change → Valid (session works across models)
+# ⚠️ Different provider + numeric reference → Warning (starts new session)
+# ⚠️ Different provider + exact UUID → Warning (format may be invalid)
+# ❌ Wrong format for provider → Error (starts new session)
+
+# Testing This Workflow:
+# Run this workflow and check the Output panel for:
+# - Warning messages for cross-provider references
+# - Error messages for invalid session formats
+# - Session resolution logs showing fallback behavior
+#
+# Check working file after execution:
+# - Verify _runtime.sessionId values
+# - Confirm cross-provider prompts have different session IDs
+# - Confirm same-provider prompts share session IDs

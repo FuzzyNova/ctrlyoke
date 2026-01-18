@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ChildProcess } from "child_process";
 import { CliResult } from "../../types/CopilotTypes";
-import { PromptItem } from "../../types/FlightPathTypes";
+import { PromptItem, Provider, PromptFile } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
@@ -14,7 +14,13 @@ import {
 import { Log } from "../../utils/Log";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
-import { ResolvedProperties } from "../../utils/PropertyResolver";
+import {
+  ResolvedProperties,
+  PropertyResolver,
+} from "../../utils/PropertyResolver";
+import { SessionResolver } from "../../utils/SessionResolver";
+import { SessionValidator } from "../../utils/SessionValidator";
+import type { PromptQueue } from "../PromptQueue";
 
 /**
  * Execution mode for CLI integrations
@@ -80,9 +86,6 @@ interface PromptFileResult {
 export class CliIntegration extends CopilotIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
   private readonly provider: ICliProvider;
-
-  /** Session ID for resumption across prompts */
-  protected sessionId?: string;
 
   /** Initialization status */
   protected initializationStatus: CopilotStatus = CopilotStatus.Initializing;
@@ -449,13 +452,15 @@ export class CliIntegration extends CopilotIntegration {
    * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
    * @param workflowContext Optional workflow context for temp file naming
-   * @returns Promise<boolean> indicating success
+   * @param resolvedSessionId Resolved session ID for notification monitoring
+   * @returns Promise with success flag and optional sessionId
    */
   protected async executeInTerminal(
     args: string[],
     promptText: string,
-    workflowContext?: WorkflowContext
-  ): Promise<boolean> {
+    workflowContext?: WorkflowContext,
+    resolvedSessionId?: string
+  ): Promise<{ success: boolean; sessionId?: string }> {
     try {
       // Check if prompt is simple enough for direct passing
       const useDirectPrompt = this.isSimplePrompt(promptText);
@@ -482,27 +487,14 @@ export class CliIntegration extends CopilotIntegration {
           timeoutMs,
         }) => {
           if (useNotificationMonitoring) {
-            // Clear session ID if starting a new session
-            if (workflowContext) {
-              const currentPrompt =
-                workflowContext.allPrompts[workflowContext.promptIndex];
-              const shouldStartNewSession =
-                ConfigurationUtils.shouldStartNewSessionForPrompt(
-                  currentPrompt.newChatSession
-                );
-              if (shouldStartNewSession) {
-                Log.debug("🔄 Clearing session ID for new session");
-                this.sessionId = undefined;
-              }
-            }
-
             // Dual monitoring: TUI + notification file (Claude, Copilot, Codex)
             return this.executeDualMonitoring(
               execution,
               terminal,
               promptWithInstruction,
               tuiProcessor,
-              timeoutMs
+              timeoutMs,
+              resolvedSessionId // Pass resolved session for notification monitoring
             );
           } else {
             // TUI-only monitoring (fallback)
@@ -523,7 +515,7 @@ export class CliIntegration extends CopilotIntegration {
         this.lastFailureReason = result.errorMessage;
       }
 
-      return result.success;
+      return { success: result.success, sessionId: result.sessionId };
     } catch (error) {
       Log.error(`❌ TUI execution error`, error);
       throw error;
@@ -550,6 +542,7 @@ export class CliIntegration extends CopilotIntegration {
    * @param promptWithInstruction Prompt text to send
    * @param tuiProcessor TUI stream processor
    * @param timeoutMs Execution timeout in milliseconds
+   * @param resolvedSessionId Resolved session ID for monitoring (undefined = wildcard mode)
    * @returns TuiProcessResult with success flag and optional error
    */
   private async executeDualMonitoring(
@@ -557,8 +550,9 @@ export class CliIntegration extends CopilotIntegration {
     terminal: vscode.Terminal,
     promptWithInstruction: string,
     tuiProcessor: TuiStreamProcessor,
-    timeoutMs: number
-  ): Promise<{ success: boolean; errorMessage?: string }> {
+    timeoutMs: number,
+    resolvedSessionId?: string
+  ): Promise<{ success: boolean; errorMessage?: string; sessionId?: string }> {
     const tuiAbortController = new AbortController();
     const startTime = new Date();
     const workspaceRoot = this.getWorkspaceRoot();
@@ -597,7 +591,7 @@ export class CliIntegration extends CopilotIntegration {
           directory: notifyDir,
           timeoutMs,
         },
-        this.sessionId, // undefined = wildcard mode for first prompt
+        resolvedSessionId, // undefined = wildcard mode for first prompt
         startTime,
         () => this.isCancelling
       );
@@ -613,6 +607,8 @@ export class CliIntegration extends CopilotIntegration {
       })),
     ]);
 
+    let extractedSessionId: string | undefined;
+
     if (notifyResult.completed) {
       Log.debug("🛑 Notification detected completion - aborting TUI stream");
       tuiAbortController.abort();
@@ -623,11 +619,11 @@ export class CliIntegration extends CopilotIntegration {
         notifyResult.data &&
         this.provider.notificationMonitor.extractSessionId
       ) {
-        const extractedSessionId =
-          this.provider.notificationMonitor.extractSessionId(notifyResult.data);
+        extractedSessionId = this.provider.notificationMonitor.extractSessionId(
+          notifyResult.data
+        );
         if (extractedSessionId) {
-          this.sessionId = extractedSessionId;
-          Log.debug(`💾 Session ID: ${this.sessionId}`);
+          Log.debug(`💾 Session ID from notification: ${extractedSessionId}`);
         }
       }
     }
@@ -666,7 +662,7 @@ export class CliIntegration extends CopilotIntegration {
       Log.warn("⚠️ No terminal output captured - lastResult may be incomplete");
     }
 
-    return { success: true };
+    return { success: true, sessionId: extractedSessionId };
   }
 
   /**
@@ -678,7 +674,7 @@ export class CliIntegration extends CopilotIntegration {
    * @param execute Execution callback
    * @param tuiConfigOverrides Optional TUI config overrides
    * @param useDirectPrompt Whether to send prompt directly (no temp file)
-   * @returns Success/failure result
+   * @returns Success/failure result with optional sessionId
    */
   protected async withInteractiveTuiExecution(
     args: string[],
@@ -690,10 +686,14 @@ export class CliIntegration extends CopilotIntegration {
       promptWithInstruction: string;
       tuiProcessor: TuiStreamProcessor;
       timeoutMs: number;
-    }) => Promise<{ success: boolean; errorMessage?: string }>,
+    }) => Promise<{
+      success: boolean;
+      errorMessage?: string;
+      sessionId?: string;
+    }>,
     tuiConfigOverrides?: Partial<TuiStreamConfig>,
     useDirectPrompt: boolean = false
-  ): Promise<{ success: boolean; errorMessage?: string }> {
+  ): Promise<{ success: boolean; errorMessage?: string; sessionId?: string }> {
     const tuiCommand = this.provider.buildInteractiveTuiCommand(args);
     const displayCommand = `${this.provider.config.name} [TUI mode] "<prompt>"`;
 
@@ -1197,10 +1197,37 @@ export class CliIntegration extends CopilotIntegration {
       allPrompts: PromptItem[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties;
+      workflowFile?: PromptFile;
+      promptQueue?: PromptQueue;
     }
   ): Promise<boolean> {
     try {
       this.resetCancellationFlag();
+
+      // Resolve session ID for current prompt using SessionResolver
+      let resolvedSessionId = SessionResolver.resolve(
+        prompt,
+        workflowContext?.promptIndex ?? 0,
+        workflowContext?.allPrompts ?? [prompt],
+        workflowContext?.workflowFile
+      );
+
+      // Resolve execution properties (provider, model, agent)
+      const resolvedProperties = workflowContext?.workflowFile
+        ? PropertyResolver.resolve(prompt, workflowContext.workflowFile)
+        : workflowContext?.resolvedProperties;
+
+      // Validate session ID format before passing to CLI (Phase 5)
+      if (resolvedSessionId) {
+        const provider =
+          resolvedProperties?.provider ??
+          (this.getIntegrationMode() as Provider);
+        if (!SessionValidator.validate(resolvedSessionId, provider)) {
+          // Invalid format - start new session instead
+          Log.info(`🔄 Starting new session due to invalid session ID format`);
+          resolvedSessionId = undefined;
+        }
+      }
 
       // Build prompt with optional dynamic queue instructions
       const finalPromptText = await this.buildPromptWithInstructions(
@@ -1208,7 +1235,7 @@ export class CliIntegration extends CopilotIntegration {
         workflowContext?.promptIndex ?? 0,
         workflowContext?.allPrompts ?? [prompt],
         workflowContext?.filePath,
-        workflowContext?.resolvedProperties?.allowDynamicExtension
+        resolvedProperties?.allowDynamicExtension
       );
 
       this.lastFullPrompt = finalPromptText;
@@ -1227,73 +1254,149 @@ export class CliIntegration extends CopilotIntegration {
         isInteractive,
         this.context,
         workspaceRoot,
-        this.sessionId,
+        resolvedSessionId, // Use resolved session instead of this.sessionId
         workflowContext
       );
 
       // Execute based on mode
       let success = false;
+      let extractedSessionId: string | undefined;
 
       if (mode === CLI_EXECUTION_MODE.INTERACTIVE) {
-        success = await this.executeInTerminal(
+        const result = await this.executeInTerminal(
           baseArgs,
           finalPromptText,
-          workflowContext
+          workflowContext,
+          resolvedSessionId
         );
+        success = result.success;
+        extractedSessionId = result.sessionId;
       } else {
         // Headless mode
         this.warnIfHeadlessWithoutPermissions();
 
-        success = await this.executeHeadlessWithPromptFile(
-          baseArgs,
-          finalPromptText,
-          workflowContext,
-          async (result) => {
-            // Parse result using provider's response parser
-            const parsed = this.provider.responseParser.parse(
-              result.stdout,
-              result.stderr,
-              result.exitCode
-            );
+        // Claude CLI error recovery wrapper (Phase 5)
+        const executeWithRecovery = async (
+          args: string[],
+          promptText: string
+        ): Promise<boolean> => {
+          try {
+            return await this.executeHeadlessWithPromptFile(
+              args,
+              promptText,
+              workflowContext,
+              async (result) => {
+                // Parse result using provider's response parser
+                const parsed = this.provider.responseParser.parse(
+                  result.stdout,
+                  result.stderr,
+                  result.exitCode
+                );
 
-            // Extract session ID if available from output
-            if (parsed.sessionId) {
-              this.sessionId = parsed.sessionId;
-              Log.debug(`📝 Session ID from output: ${this.sessionId}`);
-            } else if (this.provider.extractSessionIdFromLogs) {
-              // For CLIs that store session ID in log files (e.g., Copilot)
-              const logSessionId =
-                await this.provider.extractSessionIdFromLogs();
-              if (logSessionId) {
-                this.sessionId = logSessionId;
-                Log.debug(`📝 Session ID from logs: ${this.sessionId}`);
+                // Extract session ID if available from output or logs
+                if (parsed.sessionId) {
+                  extractedSessionId = parsed.sessionId;
+                  Log.debug(`📝 Session ID from output: ${extractedSessionId}`);
+                } else if (this.provider.extractSessionIdFromLogs) {
+                  // For CLIs that store session ID in log files (e.g., Copilot)
+                  const logSessionId =
+                    await this.provider.extractSessionIdFromLogs();
+                  if (logSessionId) {
+                    extractedSessionId = logSessionId;
+                    Log.debug(`📝 Session ID from logs: ${extractedSessionId}`);
+                  }
+                }
+
+                // Store result
+                this.lastResult = parsed;
+
+                // Log response
+                this.logResponse(parsed.response, parsed.statistics);
+
+                // Fire response complete event
+                this.responseCompleteEmitter.fire(parsed.response);
+
+                return parsed.exitCode === 0;
+              }
+            );
+          } catch (error) {
+            // Check for Claude CLI invalid session errors (Phase 5)
+            if (this.isClaudeInvalidSessionError(error)) {
+              const currentProvider =
+                resolvedProperties?.provider ??
+                (this.getIntegrationMode() as Provider);
+
+              if (currentProvider === Provider.ClaudeCli) {
+                Log.warn(
+                  `⚠️ Claude CLI rejected session ID "${resolvedSessionId}". ` +
+                    `Retrying without resume flag.`
+                );
+
+                // Rebuild args without session ID
+                const argsWithoutResume = await this.provider.buildCliArgs(
+                  prompt,
+                  false, // headless mode
+                  this.context,
+                  this.getWorkspaceRoot() || "",
+                  undefined, // no session ID - start new session
+                  workflowContext
+                );
+
+                // Retry with new args
+                return await this.executeHeadlessWithPromptFile(
+                  argsWithoutResume,
+                  promptText,
+                  workflowContext,
+                  async (result) => {
+                    const parsed = this.provider.responseParser.parse(
+                      result.stdout,
+                      result.stderr,
+                      result.exitCode
+                    );
+
+                    if (parsed.sessionId) {
+                      extractedSessionId = parsed.sessionId;
+                      Log.debug(
+                        `📝 New session ID from retry: ${extractedSessionId}`
+                      );
+                    }
+
+                    this.lastResult = parsed;
+                    this.logResponse(parsed.response, parsed.statistics);
+                    this.responseCompleteEmitter.fire(parsed.response);
+
+                    return parsed.exitCode === 0;
+                  }
+                );
               }
             }
-
-            // Store result
-            this.lastResult = parsed;
-
-            // Log response
-            this.logResponse(parsed.response, parsed.statistics);
-
-            // Fire response complete event
-            this.responseCompleteEmitter.fire(parsed.response);
-
-            return parsed.exitCode === 0;
+            // Re-throw if not a recoverable error
+            throw error;
           }
-        );
+        };
+
+        success = await executeWithRecovery(baseArgs, finalPromptText);
       }
 
-      // For interactive mode, also try log-based session extraction if no ID yet
-      if (
-        success &&
-        !this.sessionId &&
-        this.provider.extractSessionIdFromLogs
-      ) {
-        const logSessionId = await this.provider.extractSessionIdFromLogs();
-        if (logSessionId) {
-          this.sessionId = logSessionId;
-          Log.debug(`📝 Session ID from logs (interactive): ${this.sessionId}`);
+      // Store session ID in prompt's _runtime metadata (both modes)
+      if (success && extractedSessionId) {
+        if (!prompt._runtime) {
+          prompt._runtime = {
+            provider:
+              resolvedProperties?.provider ??
+              (this.getIntegrationMode() as Provider),
+            model: resolvedProperties?.model ?? "",
+            agent: resolvedProperties?.agent,
+            startedAt: Date.now(),
+          };
+        }
+        prompt._runtime.sessionId = extractedSessionId;
+        prompt._runtime.completedAt = Date.now();
+
+        // Persist runtime metadata to working file
+        if (workflowContext?.promptQueue) {
+          await workflowContext.promptQueue.updateWorkingFile();
+          Log.debug(`💾 Saved runtime metadata to working file`);
         }
       }
 
@@ -1304,5 +1407,31 @@ export class CliIntegration extends CopilotIntegration {
         error instanceof Error ? error.message : "Unknown error";
       return false;
     }
+  }
+
+  // ============================================================
+  // ERROR RECOVERY (PHASE 5)
+  // ============================================================
+
+  /**
+   * Check if error is a Claude CLI invalid session error.
+   *
+   * Claude CLI validates UUIDs strictly and rejects invalid formats with specific error messages:
+   * - "--resume requires a valid session ID"
+   * - "Session IDs must be in UUID format"
+   * - "No conversation found with session ID"
+   *
+   * When detected, we can retry without the resume flag to start a new session.
+   *
+   * @param error The error to check
+   * @returns True if this is a Claude CLI invalid session error
+   */
+  private isClaudeInvalidSessionError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes("--resume requires a valid session ID") ||
+      message.includes("Session IDs must be in UUID format") ||
+      message.includes("No conversation found with session ID")
+    );
   }
 }

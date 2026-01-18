@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PromptItem } from "../../types/FlightPathTypes";
+import { PromptItem, PromptFile } from "../../types/FlightPathTypes";
 import { CliResult } from "../../types/CopilotTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { Log } from "../../utils/Log";
 import { ResolvedProperties } from "../../utils/PropertyResolver";
+import type { PromptQueue } from "../PromptQueue";
 
 /**
  * Copilot initialization status
@@ -70,7 +71,7 @@ export abstract class CopilotIntegration {
    * Must be implemented by subclasses
    * @param prompt The prompt item to send
    * @param needsCompletionDetection If true, set up completion detection mechanisms (default: true)
-   * @param workflowContext Optional workflow context for dynamic queue instructions and temp file naming
+   * @param workflowContext Optional workflow context for dynamic queue instructions, temp file naming, and session resolution
    * @returns True if prompt was sent successfully
    */
   abstract sendPrompt(
@@ -81,6 +82,8 @@ export abstract class CopilotIntegration {
       allPrompts: PromptItem[];
       filePath?: string;
       resolvedProperties?: ResolvedProperties; // Resolved properties from PropertyResolver
+      workflowFile?: PromptFile; // For session resolution
+      promptQueue?: PromptQueue; // For runtime metadata persistence
     }
   ): Promise<boolean>;
 

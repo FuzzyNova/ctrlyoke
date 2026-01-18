@@ -131,7 +131,8 @@ export class WorkspaceSessionManager {
             const workingFile = JSON.parse(content.toString());
 
             // Use lastModifiedAt if available, fall back to startedAt
-            const timestamp = workingFile.lastModifiedAt || workingFile.startedAt || 0;
+            const timestamp =
+              workingFile.lastModifiedAt || workingFile.startedAt || 0;
 
             return { filename, timestamp };
           } catch (error) {
@@ -231,6 +232,11 @@ export class WorkspaceSessionManager {
           const totalCount = workingFile.prompts?.length || 0;
           const currentIndex = runtime?.currentIndex || 0;
 
+          // Phase 4: Count prompts with session IDs (per-prompt _runtime metadata)
+          const promptsWithSessions =
+            workingFile.prompts?.filter((p: any) => p._runtime?.sessionId)
+              .length || 0;
+
           // Format timestamp
           const timestamp = new Date(workingFile.startedAt).toLocaleString();
 
@@ -244,10 +250,16 @@ export class WorkspaceSessionManager {
             statusIcon = "▶";
           }
 
+          // Build detail string with optional session info
+          let detail = `Started: ${timestamp} • Current: Step ${currentIndex + 1}/${totalCount}`;
+          if (promptsWithSessions > 0) {
+            detail += ` • Sessions: ${promptsWithSessions}`;
+          }
+
           sessions.push({
             label: `${statusIcon} ${workingFile.workflowName}`,
             description: `${completedCount}/${totalCount} completed`,
-            detail: `Started: ${timestamp} • Current: Step ${currentIndex + 1}/${totalCount}`,
+            detail,
             filePath,
           });
         } catch (error) {

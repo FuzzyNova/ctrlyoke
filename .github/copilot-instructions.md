@@ -232,6 +232,27 @@ Queries available Copilot models via `vscode.lm.selectChatModels({ vendor: "copi
 
 Executes validation scripts with timeout and process isolation. Template system for creating sample scripts.
 
+## Session Management
+
+**Per-prompt session tracking** enables different prompts to resume different CLI sessions:
+
+- **PromptSessionResolver**: Resolves session IDs using three-tier precedence (prompt > workflow > global settings)
+- **Three session ID formats**:
+  - Numeric references: `sessionId: 1` → Reuse session from prompt 1
+  - Exact session IDs: `sessionId: "550e8400-e29b-41d4-a716-446655440000"` → Resume specific session
+  - Auto-resume: `newChatSession: false` → Continue from previous prompt
+- **Runtime metadata**: `_runtime` tracks actual provider, model, and session ID used
+- **Working file persistence**: Session IDs survive VS Code restarts (stored in `.flightpath/.working/`)
+- **Provider-aware validation**: Prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
+- **Session resolution algorithm**:
+  1. Check `prompt.sessionId` (highest priority)
+  2. Check `prompt.newChatSession`
+  3. Check `workflow.newChatSession`
+  4. Check global setting `flightpath.newChatSessionPerPrompt`
+- **Integration**: CliIntegration uses resolved session IDs, passing to `provider.buildCliArgs()` for resume flags
+
+See [docs/SESSION_MANAGEMENT.md](../docs/SESSION_MANAGEMENT.md) for complete user guide.
+
 </coreComponents>
 
 ## File Formats & Schema

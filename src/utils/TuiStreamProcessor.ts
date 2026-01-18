@@ -32,12 +32,14 @@ export interface TuiStreamConfig {
 }
 
 /**
- * Optional workflow context for temp file naming
+ * Optional workflow context for temp file naming and session resolution
  */
 export interface WorkflowContext {
   promptIndex: number;
   allPrompts: PromptItem[];
   filePath?: string;
+  workflowFile?: import("../types/FlightPathTypes").PromptFile;
+  promptQueue?: import("../flightpath/PromptQueue").PromptQueue;
 }
 
 /**

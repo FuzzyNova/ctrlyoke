@@ -2,19 +2,21 @@
 
 **Status:** Planning Phase - Updated January 2026
 **Created:** 2026-01-13
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-17
 **Author:** FlightPath Team
 
 ## Overview
 
 Enable per-prompt session tracking so different prompts in a workflow can resume different CLI sessions. Currently, all prompts share one global session ID per provider instance stored in `CliIntegration.sessionId`, which is lost on VS Code restart.
 
+This plan is updated after workflow-level properties landed. `executionProperties` now includes `sessionId`, so per-prompt `_runtime` can reuse the same schema definition via `$ref`.
+
 **Changes required:**
 
-1. Add `sessionId` field to prompt schema (string or number reference)
-2. Add `_runtime` metadata to prompt schema for tracking execution state
+1. Add per-prompt `_runtime` metadata to schema and types, referencing `executionProperties`
+2. Ensure `executionProperties` includes `sessionId` (string | number) for prompt/workflow/runtime reuse
 3. Store session IDs and execution metadata in working files
-4. Implement session resolution logic (numeric references, auto-resume, validation)
+4. Implement session resolution logic (numeric references, auto-resume, validation) with workflow-level precedence
 5. Update `CliIntegration` to use resolved session IDs instead of instance-level `sessionId`
 6. Provider-agnostic implementation (works with Copilot, Claude, Codex, and future providers)
 
@@ -27,6 +29,7 @@ Enable per-prompt session tracking so different prompts in a workflow can resume
 **Composition-based CLI Integration:**
 
 FlightPath now uses a composition-based architecture where:
+
 - **CliIntegration** is a generic class that works with ANY CLI provider
 - Each provider (Copilot, Claude, Codex) lives in its own directory: `src/flightpath/cli/{provider}/`
 - Provider-specific logic is encapsulated in implementations of **ICliProvider** interface
@@ -78,16 +81,21 @@ const baseArgs = await this.provider.buildCliArgs(
 ### Current Schema Structure
 
 ```typescript
-// FlightPathTypes.ts:49-58
-export interface PromptItem {
-  id?: string;
-  prompt: string;
+// FlightPathTypes.ts (simplified)
+export interface ExecutionProperties {
   provider?: Provider;
   model?: string;
   agent?: string;
-  newChatSession?: boolean; // Boolean only - no session reference
+  newChatSession?: boolean;
   allowDynamicExtension?: boolean;
   endCondition?: EndCondition;
+  sessionId?: string | number; // Shared, now part of executionProperties
+}
+
+export interface PromptItem extends ExecutionProperties {
+  id?: string;
+  prompt: string;
+  _runtime?: PromptRuntimeMetadata; // Not yet wired for persistence
 }
 
 // FlightPathTypes.ts:31-36
@@ -100,9 +108,9 @@ export interface WorkingFileRuntime {
 
 **Missing:**
 
-- No `sessionId` field in `PromptItem`
-- No per-prompt execution metadata (provider, model, sessionId used)
-- No way to reference another prompt's session
+- Per-prompt `_runtime` metadata (provider, model, sessionId used)
+- No persistence of per-prompt session IDs across restarts
+- No way to reference another prompt's session using runtime data
 
 ---
 
@@ -110,14 +118,15 @@ export interface WorkingFileRuntime {
 
 ### 2.1 Schema Architecture Recommendation
 
-**Problem:** Both `PromptItem` and `_runtime` need to store the same properties (provider, model, agent), but with different semantics:
+**Problem:** Both `PromptItem` and `_runtime` need to store the same properties (provider, model, agent, sessionId), but with different semantics:
 
 - **PromptItem properties:** User-specified overrides for execution ("what I want to run")
-- **_runtime properties:** Actual execution metadata ("what actually ran")
+- **\_runtime properties:** Actual execution metadata ("what actually ran")
 
 **Recommendation: Use `$ref` pattern for shared properties**
 
 This approach:
+
 - ✅ Eliminates duplication in schema definition
 - ✅ Makes it clear which properties are shared between prompt and runtime
 - ✅ Ensures consistency when adding new properties
@@ -133,7 +142,8 @@ This approach:
       "properties": {
         "provider": { ... },
         "model": { ... },
-        "agent": { ... }
+        "agent": { ... },
+        "sessionId": { ... }
       }
     },
     "promptItem": {
@@ -143,7 +153,6 @@ This approach:
           "properties": {
             "id": { ... },
             "prompt": { ... },
-            "sessionId": { ... },
             "newChatSession": { ... },
             "endCondition": { ... },
             "_runtime": { "$ref": "#/definitions/promptRuntimeMetadata" }
@@ -156,7 +165,6 @@ This approach:
         { "$ref": "#/definitions/executionProperties" },
         {
           "properties": {
-            "sessionId": { ... },
             "startedAt": { ... },
             "completedAt": { ... },
             "retryCount": { ... }
@@ -169,9 +177,9 @@ This approach:
 }
 ```
 
-### 2.2 Add `sessionId` Field to PromptItem
+### 2.2 Confirm `sessionId` in `executionProperties`
 
-**Location:** `schemas/prompt-schema.json` → `definitions/promptItem/properties`
+**Location:** `schemas/prompt-schema.json` → `definitions/executionProperties/properties`
 
 ```json
 {
@@ -187,17 +195,20 @@ This approach:
 
 ```typescript
 // src/types/FlightPathTypes.ts
-export interface PromptItem {
-  id?: string;
-  prompt: string;
+export interface ExecutionProperties {
   provider?: Provider;
   model?: string;
   agent?: string;
   newChatSession?: boolean;
-  sessionId?: string | number; // NEW: Session reference
+  sessionId?: string | number; // Session reference shared at prompt/workflow/runtime
   allowDynamicExtension?: boolean;
   endCondition?: EndCondition;
-  _runtime?: PromptRuntimeMetadata; // NEW: Runtime metadata
+}
+
+export interface PromptItem extends ExecutionProperties {
+  id?: string;
+  prompt: string;
+  _runtime?: PromptRuntimeMetadata; // Runtime metadata
 }
 ```
 
@@ -212,16 +223,7 @@ export interface PromptItem {
  * Per-prompt execution metadata tracked in working files
  * Enables session continuity and debugging
  */
-export interface PromptRuntimeMetadata {
-  /** Provider used for this prompt's execution */
-  provider: Provider;
-
-  /** Model used for this prompt's execution */
-  model: string;
-
-  /** Agent used (if any) */
-  agent?: string;
-
+export interface PromptRuntimeMetadata extends ExecutionProperties {
   /** Session ID returned by CLI after completion */
   sessionId?: string;
 
@@ -309,7 +311,8 @@ prompts:
 **New file:** `src/utils/SessionResolver.ts`
 
 ```typescript
-import { PromptItem, Provider } from "../types/FlightPathTypes";
+import { PromptFile, PromptItem, Provider } from "../types/FlightPathTypes";
+import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
 
 /**
@@ -337,15 +340,21 @@ export class SessionResolver {
    * @param prompt The prompt to resolve session for
    * @param promptIndex Current prompt's index in queue
    * @param allPrompts All prompts in queue (with runtime metadata)
+   * @param workflow Workflow file for workflow-level defaults
    * @returns Resolved session ID or undefined
    */
   static resolve(
     prompt: PromptItem,
     promptIndex: number,
-    allPrompts: PromptItem[]
+    allPrompts: PromptItem[],
+    workflow?: PromptFile
   ): string | undefined {
+    const resolved = workflow
+      ? PropertyResolver.resolve(prompt, workflow)
+      : undefined;
+
     // 1. Check if new session is explicitly requested
-    if (this.shouldStartNewSession(prompt)) {
+    if (this.shouldStartNewSession(prompt, workflow)) {
       return undefined;
     }
 
@@ -357,7 +366,8 @@ export class SessionResolver {
           prompt,
           prompt.sessionId,
           promptIndex,
-          allPrompts
+          allPrompts,
+          resolved?.provider
         );
       }
 
@@ -366,7 +376,12 @@ export class SessionResolver {
     }
 
     // 3. Auto-resume previous prompt in same workflow
-    return this.autoResumeFromPrevious(prompt, promptIndex, allPrompts);
+    return this.autoResumeFromPrevious(
+      prompt,
+      promptIndex,
+      allPrompts,
+      resolved?.provider
+    );
   }
 
   /**
@@ -376,7 +391,8 @@ export class SessionResolver {
     prompt: PromptItem,
     refNumber: number,
     promptIndex: number,
-    allPrompts: PromptItem[]
+    allPrompts: PromptItem[],
+    resolvedProvider?: Provider
   ): string | undefined {
     const refIndex = refNumber - 1; // 1-based to 0-based
 
@@ -402,7 +418,7 @@ export class SessionResolver {
 
     // Validate provider compatibility
     const refProvider = referencedPrompt._runtime?.provider;
-    const currentProvider = prompt.provider;
+    const currentProvider = resolvedProvider ?? prompt.provider;
 
     if (refProvider && currentProvider && refProvider !== currentProvider) {
       Log.warn(
@@ -422,7 +438,8 @@ export class SessionResolver {
   private static autoResumeFromPrevious(
     prompt: PromptItem,
     promptIndex: number,
-    allPrompts: PromptItem[]
+    allPrompts: PromptItem[],
+    resolvedProvider?: Provider
   ): string | undefined {
     if (promptIndex === 0) {
       return undefined; // First prompt, no previous
@@ -433,7 +450,7 @@ export class SessionResolver {
       const prevPrompt = allPrompts[i];
       const prevProvider = prevPrompt._runtime?.provider;
       const prevSessionId = prevPrompt._runtime?.sessionId;
-      const currentProvider = prompt.provider;
+      const currentProvider = resolvedProvider ?? prompt.provider;
 
       // Match provider if specified, otherwise any previous session
       const providersMatch =
@@ -455,19 +472,23 @@ export class SessionResolver {
    *
    * Priority order:
    * 1. Prompt-level newChatSession setting
-   * 2. Global flightpath.newChatSessionPerPrompt setting
+   * 2. Workflow-level newChatSession setting
+   * 3. Global flightpath.newChatSessionPerPrompt setting
    */
-  static shouldStartNewSession(prompt: PromptItem): boolean {
-    // Explicit prompt setting takes precedence
+  static shouldStartNewSession(
+    prompt: PromptItem,
+    workflow?: PromptFile
+  ): boolean {
+    if (workflow) {
+      return PropertyResolver.resolve(prompt, workflow).newChatSession;
+    }
+
+    // Fallback when workflow is unavailable (should be rare)
     if (prompt.newChatSession !== undefined) {
       return prompt.newChatSession;
     }
 
-    // Fall back to global setting
-    // Note: ConfigurationUtils import will be added when implementing
     // return ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
-
-    // Default to true (start new session) if no setting specified
     return true;
   }
 
@@ -478,16 +499,18 @@ export class SessionResolver {
    * @param prompt The prompt to validate
    * @param promptIndex Current prompt's index
    * @param allPrompts All prompts in queue
+   * @param workflow Workflow file for workflow-level defaults
    * @returns Validation result
    */
   static validate(
     prompt: PromptItem,
     promptIndex: number,
-    allPrompts: PromptItem[]
+    allPrompts: PromptItem[],
+    workflow?: PromptFile
   ): SessionValidationResult {
     // Check for conflicting settings
     if (
-      this.shouldStartNewSession(prompt) &&
+      this.shouldStartNewSession(prompt, workflow) &&
       prompt.sessionId !== undefined
     ) {
       return {
@@ -542,8 +565,13 @@ export class SessionResolver {
 const resolvedSessionId = SessionResolver.resolve(
   prompt,
   workflowContext?.promptIndex ?? 0,
-  workflowContext?.allPrompts ?? [prompt]
+  workflowContext?.allPrompts ?? [prompt],
+  workflowContext?.workflowFile
 );
+
+const resolvedProperties = workflowContext?.workflowFile
+  ? PropertyResolver.resolve(prompt, workflowContext.workflowFile)
+  : undefined;
 
 // Pass resolved session to provider
 const baseArgs = await this.provider.buildCliArgs(
@@ -551,7 +579,7 @@ const baseArgs = await this.provider.buildCliArgs(
   isInteractive,
   this.context,
   workspaceRoot,
-  resolvedSessionId,  // <-- Use resolved session instead of this.sessionId
+  resolvedSessionId, // <-- Use resolved session instead of this.sessionId
   workflowContext
 );
 
@@ -560,9 +588,9 @@ const baseArgs = await this.provider.buildCliArgs(
 if (extractedSessionId) {
   if (!prompt._runtime) {
     prompt._runtime = {
-      provider: prompt.provider || this.getDefaultProvider(),
-      model: prompt.model || this.getDefaultModel(),
-      agent: prompt.agent,
+      provider: resolvedProperties?.provider ?? this.getDefaultProvider(),
+      model: resolvedProperties?.model ?? this.getDefaultModel(),
+      agent: resolvedProperties?.agent,
       startedAt: Date.now(),
     };
   }
@@ -629,10 +657,7 @@ All formats stored as strings in `_runtime.sessionId`. Provider-specific formatt
 
 ```typescript
 // In CliIntegration or SessionResolver
-function validateSessionFormat(
-  sessionId: string,
-  provider: Provider
-): boolean {
+function validateSessionFormat(sessionId: string, provider: Provider): boolean {
   switch (provider) {
     case Provider.CopilotCli:
     case Provider.ClaudeCli:
@@ -748,15 +773,16 @@ if (refProvider && currentProvider && refProvider !== currentProvider) {
 **Files to modify:**
 
 1. `schemas/prompt-schema.json`
-   - Add `sessionId` field to `promptItem` definition
-   - Define `executionProperties` for shared properties
-   - Define `promptRuntimeMetadata` using `$ref` to `executionProperties`
-   - Update `promptItem` to include `_runtime` field
+
+- Confirm `executionProperties` includes `sessionId` (string | number)
+- Define `promptRuntimeMetadata` using `$ref` to `executionProperties`
+- Update `promptItem` to include `_runtime` field
 
 2. `src/types/FlightPathTypes.ts`
-   - Add `PromptRuntimeMetadata` interface
-   - Add `sessionId?: string | number` to `PromptItem`
-   - Add `_runtime?: PromptRuntimeMetadata` to `PromptItem`
+
+- Add `PromptRuntimeMetadata` interface extending `ExecutionProperties`
+- Ensure `ExecutionProperties` includes `sessionId?: string | number`
+- Add `_runtime?: PromptRuntimeMetadata` to `PromptItem`
 
 3. Run `npm run generate-schema` to regenerate YAML schema
 
@@ -771,10 +797,11 @@ if (refProvider && currentProvider && refProvider !== currentProvider) {
 **New file:** `src/utils/SessionResolver.ts`
 
 Implement:
+
 - `resolve()` - Main resolution logic
 - `resolveNumericReference()` - Handle prompt number references
 - `autoResumeFromPrevious()` - Auto-resume logic
-- `shouldStartNewSession()` - Check newChatSession setting
+- `shouldStartNewSession()` - Check newChatSession with workflow-level precedence
 - `validate()` - Pre-execution validation
 
 **Testing:**
@@ -782,6 +809,7 @@ Implement:
 - Unit tests for all resolution paths
 - Test numeric references (1-based indexing)
 - Test auto-resume logic
+- Test workflow-level `newChatSession` precedence
 - Test validation edge cases
 - Test cross-provider validation
 
@@ -790,11 +818,13 @@ Implement:
 **File:** `src/flightpath/cli/CliIntegration.ts`
 
 Changes:
+
 1. Remove `protected sessionId?: string` instance variable
-2. Add `SessionResolver.resolve()` call in `sendPrompt()`
-3. Pass resolved session to `provider.buildCliArgs()`
-4. After execution, store session in `prompt._runtime.sessionId`
-5. Call `saveWorkingFile()` to persist runtime metadata
+2. Add `SessionResolver.resolve()` call in `sendPrompt()` (with workflow file)
+3. Use `PropertyResolver.resolve()` for provider/model/agent when writing `_runtime`
+4. Pass resolved session to `provider.buildCliArgs()`
+5. After execution, store session in `prompt._runtime.sessionId`
+6. Call `saveWorkingFile()` to persist runtime metadata
 
 **Provider updates (if needed):**
 
