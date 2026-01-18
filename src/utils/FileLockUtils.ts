@@ -30,10 +30,23 @@ async function acquireLock(lockPath: string): Promise<void> {
       try {
         const stats = await fs.stat(lockPath);
         if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) {
-          await fs.unlink(lockPath);
+          // Try to delete stale lock - ignore if another process beat us to it
+          try {
+            await fs.unlink(lockPath);
+          } catch (unlinkError) {
+            if ((unlinkError as NodeJS.ErrnoException).code !== "ENOENT") {
+              throw unlinkError; // Re-throw unexpected errors
+            }
+          }
           continue;
         }
-      } catch {}
+      } catch (statError) {
+        // Lock might have been deleted between EEXIST and stat - retry
+        if ((statError as NodeJS.ErrnoException).code === "ENOENT") {
+          continue;
+        }
+        // Other stat errors shouldn't happen, but continue trying
+      }
 
       await sleep(LOCK_RETRY_DELAY_MS);
     }
@@ -45,7 +58,15 @@ async function acquireLock(lockPath: string): Promise<void> {
 async function releaseLock(lockPath: string): Promise<void> {
   try {
     await fs.unlink(lockPath);
-  } catch {}
+  } catch (error) {
+    // Ignore ENOENT (already deleted by another process) but log other errors
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(
+        `[FileLockUtils] Failed to release lock ${lockPath}:`,
+        error
+      );
+    }
+  }
 }
 
 export async function withFileLock<T>(
