@@ -623,6 +623,8 @@ export class CliIntegration extends CopilotIntegration {
       tuiAbortController.abort();
 
       // Extract session ID from notification data if available
+      // Note: Copilot hooks currently don't provide session IDs (known limitation).
+      // This code is kept for future compatibility when Copilot adds session ID support.
       if (
         "data" in notifyResult &&
         notifyResult.data &&
@@ -1280,6 +1282,17 @@ export class CliIntegration extends CopilotIntegration {
         );
         success = result.success;
         extractedSessionId = result.sessionId;
+
+        // Fallback: Extract session ID from logs if not available from notification
+        // Note: For Copilot CLI, this is currently the ONLY working method since hooks
+        // don't provide session IDs yet. For Claude/Codex, this is a true fallback.
+        if (success && !extractedSessionId && this.provider.extractSessionIdFromLogs) {
+          const logSessionId = await this.provider.extractSessionIdFromLogs();
+          if (logSessionId) {
+            extractedSessionId = logSessionId;
+            Log.debug(`📝 Session ID from logs (interactive): ${extractedSessionId}`);
+          }
+        }
       } else {
         // Headless mode
         this.warnIfHeadlessWithoutPermissions();
@@ -1389,8 +1402,8 @@ export class CliIntegration extends CopilotIntegration {
         success = await executeWithRecovery(baseArgs, finalPromptText);
       }
 
-      // Store session ID in prompt's _runtime metadata (both modes)
-      if (success && extractedSessionId) {
+      // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
+      if (success) {
         if (!prompt._runtime) {
           prompt._runtime = {
             provider:
@@ -1401,13 +1414,20 @@ export class CliIntegration extends CopilotIntegration {
             startedAt: Date.now(),
           };
         }
-        prompt._runtime.sessionId = extractedSessionId;
+        
+        // Add session ID if available (may be undefined for first prompt or if extraction failed)
+        if (extractedSessionId) {
+          prompt._runtime.sessionId = extractedSessionId;
+        }
+        
         prompt._runtime.completedAt = Date.now();
 
         // Persist runtime metadata to working file
         if (workflowContext?.promptQueue) {
           await workflowContext.promptQueue.updateWorkingFile();
-          Log.debug(`💾 Saved runtime metadata to working file`);
+          Log.debug(
+            `💾 Saved runtime metadata to working file (sessionId: ${extractedSessionId || "none"})`
+          );
         }
       }
 

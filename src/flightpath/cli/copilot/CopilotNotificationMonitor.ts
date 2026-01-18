@@ -108,14 +108,20 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
    * Extract session ID from notification data
    *
-   * Note: Copilot sessionEnd hooks do NOT provide session IDs in notifications.
-   * Always returns undefined. Session IDs must be extracted from log files.
+   * KNOWN LIMITATION: Copilot sessionEnd hooks currently do NOT provide session IDs
+   * in notifications. This is a known issue we're waiting for Copilot to address.
+   * 
+   * For now, session IDs must be extracted from log files via 
+   * CopilotCliProvider.extractSessionIdFromLogs().
+   * 
+   * This method is kept for future compatibility when Copilot adds session ID support
+   * to their hook notifications.
    *
    * @param data Notification file content
-   * @returns Always undefined (session IDs not in Copilot notifications)
+   * @returns Always undefined (session IDs not in Copilot notifications YET)
    */
   extractSessionId?(data: any): string | undefined {
-    // Copilot hooks don't include session IDs in notifications
+    // Copilot hooks don't include session IDs in notifications (yet)
     return undefined;
   }
 }
