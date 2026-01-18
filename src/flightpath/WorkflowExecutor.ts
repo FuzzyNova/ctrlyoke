@@ -183,7 +183,7 @@ export class WorkflowExecutor {
         // Listen for prompt ready event (fires when full prompt and command are built)
         promptReadyDisposable = integration.onPromptReady((data) => {
           context.dashboardProvider?.updateCliOutput(i, {
-            prompt: data.fullPrompt,
+            prompt: prompt.prompt, // Use unexpanded prompt to avoid flooding output with large attachments
             response: "",
             elapsed: 0,
             tokens: undefined,
@@ -549,11 +549,9 @@ export class WorkflowExecutor {
           ? integration.getLastCliCommand()
           : undefined;
 
-        const fullPrompt =
-          integration.getLastFullPrompt() || retryPromptItem.prompt;
-
+        // Use unexpanded prompt to avoid flooding output with large attachments
         context.dashboardProvider.updateCliOutput(currentIndex, {
-          prompt: fullPrompt,
+          prompt: retryPromptItem.prompt,
           response: retryResponseText,
           elapsed: parseFloat(retryDuration),
           tokens,
@@ -814,11 +812,9 @@ export class WorkflowExecutor {
       ? integration.getLastCliCommand()
       : undefined;
 
-    // Get full prompt text (with all context and instructions)
-    const fullPrompt = integration.getLastFullPrompt() || prompt.prompt;
-
+    // Use unexpanded prompt to avoid flooding output with large attachments
     context.dashboardProvider.updateCliOutput(currentIndex, {
-      prompt: fullPrompt,
+      prompt: prompt.prompt,
       response: responseText,
       elapsed: duration,
       tokens,
