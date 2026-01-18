@@ -104,7 +104,16 @@
   elements.workflowProvider.addEventListener("change", (e) => {
     const newProvider = e.target.value;
     workflowProperties.provider = newProvider;
-    updateModelDropdownOptions(newProvider); // ← Handles model selection automatically
+    updateModelDropdownOptions(newProvider);
+
+    // After dropdown populated, select and save default model for new provider
+    const newModel = elements.workflowModel.value; // updateModelDropdownOptions sets this
+    if (newModel) {
+      workflowProperties.model = newModel;
+      updateSetAsDefaultButton("model");
+      saveWorkflowProperty("model", newModel);
+    }
+
     updateSetAsDefaultButton("provider");
     saveWorkflowProperty("provider", newProvider);
   });
