@@ -1762,6 +1762,42 @@ button:disabled {
   text-transform: uppercase;
 }
 
+/* Session control layout - table-like with aligned columns */
+.session-property-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-md);
+}
+
+.session-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.session-column label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  text-transform: uppercase;
+}
+
+.session-column .label-hint {
+  font-weight: 400;
+  text-transform: none;
+  opacity: 0.8;
+}
+
+.session-column input[type="checkbox"] {
+  width: fit-content;
+  margin: 0;
+  cursor: pointer;
+}
+
+.session-column input[type="text"] {
+  width: 100%;
+}
+
 .property-input {
   padding: 6px 8px;
   background: var(--input-bg);

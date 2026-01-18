@@ -47,6 +47,7 @@
     model: undefined,
     agent: undefined,
     newChatSession: undefined,
+    sessionId: undefined,
     allowDynamicExtension: undefined,
     endCondition: undefined,
   };
@@ -73,6 +74,7 @@
     workflowModel: document.getElementById("workflow-model"),
     workflowAgent: document.getElementById("workflow-agent"),
     workflowNewChat: document.getElementById("workflow-new-chat"),
+    workflowSessionId: document.getElementById("workflow-session-id"),
     workflowDynamicExt: document.getElementById("workflow-dynamic-ext"),
 
     // End condition
@@ -131,9 +133,35 @@
   });
 
   elements.workflowNewChat.addEventListener("change", (e) => {
-    workflowProperties.newChatSession = e.target.value === "true";
+    const isChecked = e.target.checked;
+    workflowProperties.newChatSession = isChecked;
+
+    // Enable/disable session ID input based on checkbox state
+    elements.workflowSessionId.disabled = isChecked;
+    elements.workflowSessionId.placeholder = isChecked
+      ? "disable New Chat to input session ID"
+      : "enter session ID or prompt number";
+
+    // Clear session ID when New Chat is enabled
+    if (isChecked) {
+      elements.workflowSessionId.value = "";
+      workflowProperties.sessionId = undefined;
+      saveWorkflowProperty("sessionId", undefined);
+    }
+
     updateSetAsDefaultButton("newChatSession");
-    saveWorkflowProperty("newChatSession", e.target.value === "true");
+    saveWorkflowProperty("newChatSession", isChecked);
+  });
+
+  elements.workflowSessionId.addEventListener("input", (e) => {
+    const value = e.target.value.trim();
+
+    // Parse as number if it's a valid integer, otherwise keep as string
+    const parsedValue = /^\d+$/.test(value) ? parseInt(value, 10) : value || undefined;
+
+    workflowProperties.sessionId = parsedValue;
+    updateSetAsDefaultButton("sessionId");
+    saveWorkflowProperty("sessionId", parsedValue);
   });
 
   elements.workflowDynamicExt.addEventListener("change", (e) => {
@@ -319,6 +347,7 @@
       model: undefined,
       agent: undefined,
       newChatSession: undefined,
+      sessionId: undefined,
       allowDynamicExtension: undefined,
       endCondition: undefined,
     };
@@ -379,7 +408,15 @@
       workflowProperties.newChatSession !== undefined
         ? workflowProperties.newChatSession
         : globalSettings.newChatSession;
-    elements.workflowNewChat.value = String(newChat);
+    elements.workflowNewChat.checked = newChat;
+
+    // Session ID
+    const sessionId = workflowProperties.sessionId;
+    elements.workflowSessionId.value = sessionId !== undefined ? String(sessionId) : "";
+    elements.workflowSessionId.disabled = newChat;
+    elements.workflowSessionId.placeholder = newChat
+      ? "disable New Chat to input session ID"
+      : "enter session ID or prompt number";
 
     // Allow Dynamic Extension
     const dynamicExt =
@@ -543,6 +580,7 @@
     updateSetAsDefaultButton("model");
     updateSetAsDefaultButton("agent");
     updateSetAsDefaultButton("newChatSession");
+    updateSetAsDefaultButton("sessionId");
     updateSetAsDefaultButton("allowDynamicExtension");
   }
 

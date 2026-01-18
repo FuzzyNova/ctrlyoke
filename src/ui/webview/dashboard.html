@@ -350,17 +350,6 @@
                         />
                       </div>
 
-                      <div class="property-group">
-                        <label for="prop-new-chat">New Chat Session:</label>
-                        <select id="prop-new-chat" class="property-select">
-                          <option value="default" selected>Default</option>
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div class="property-row">
                       <div class="property-group full-width">
                         <label for="prop-allow-dynamic"
                           >Allow Dynamic Extension:</label
@@ -372,6 +361,25 @@
                         </select>
                       </div>
                     </div>
+
+                    <div class="property-row session-property-row">
+                      <div class="session-column">
+                        <label for="prop-new-chat">New Chat</label>
+                        <input type="checkbox" id="prop-new-chat" />
+                      </div>
+                      <div class="session-column">
+                        <label for="prop-session-id">Session ID <span class="label-hint">(disabled while New Chat is checked)</span></label>
+                        <input
+                          type="text"
+                          id="prop-session-id"
+                          class="property-input"
+                          placeholder="disable New Chat to input session ID"
+                          disabled
+                          title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                        />
+                      </div>
+                    </div>
+
 
                     <details class="end-condition-section">
                       <summary>End Condition (optional)</summary>

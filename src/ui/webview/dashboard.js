@@ -84,6 +84,7 @@
     propModel: document.getElementById("prop-model"),
     propAgent: document.getElementById("prop-agent"),
     propNewChat: document.getElementById("prop-new-chat"),
+    propSessionId: document.getElementById("prop-session-id"),
     propAllowDynamic: document.getElementById("prop-allow-dynamic"),
     propEndScript: document.getElementById("prop-end-script"),
     propEndReturns: document.getElementById("prop-end-returns"),

@@ -189,11 +189,29 @@
       }
     });
 
+    // New Chat checkbox - enable/disable session ID input
+    elements.propNewChat.addEventListener("change", (e) => {
+      const isChecked = e.target.checked;
+
+      // Enable/disable session ID input based on checkbox state
+      elements.propSessionId.disabled = isChecked;
+      elements.propSessionId.placeholder = isChecked
+        ? "disable New Chat to input session ID"
+        : "enter session ID or prompt number";
+
+      // Clear session ID when New Chat is enabled
+      if (isChecked) {
+        elements.propSessionId.value = "";
+      }
+
+      saveEditorState();
+    });
+
     // Save state when property controls change
     elements.propProvider.addEventListener("change", saveEditorState);
     elements.propModel.addEventListener("change", saveEditorState);
     elements.propAgent.addEventListener("input", saveEditorState);
-    elements.propNewChat.addEventListener("change", saveEditorState);
+    elements.propSessionId.addEventListener("input", saveEditorState);
     elements.propAllowDynamic.addEventListener("change", saveEditorState);
     elements.propEndScript.addEventListener("input", saveEditorState);
     elements.propEndReturns.addEventListener("input", saveEditorState);
@@ -334,12 +352,18 @@
           props[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
       const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
-      elements.propNewChat.value =
+      elements.propNewChat.checked =
         newChatSession === undefined
-          ? propertyDefaults.NEW_CHAT
-          : newChatSession
-            ? "yes"
-            : "no";
+          ? propertyDefaults.NEW_CHAT === "yes"
+          : newChatSession;
+
+      // Session ID
+      const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
+      elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
+      elements.propSessionId.disabled = elements.propNewChat.checked;
+      elements.propSessionId.placeholder = elements.propNewChat.checked
+        ? "disable New Chat to input session ID"
+        : "enter session ID or prompt number";
 
       const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
       elements.propAllowDynamic.value =
@@ -413,11 +437,28 @@
       properties[PROMPT_PROPERTIES.AGENT] = null;
     }
 
-    if (elements.propNewChat.value !== propertyDefaults.NEW_CHAT) {
-      properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] =
-        elements.propNewChat.value === "yes";
+    const isNewChatChecked = elements.propNewChat.checked;
+    const defaultNewChat = propertyDefaults.NEW_CHAT === "yes";
+    if (isNewChatChecked !== defaultNewChat) {
+      properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] = isNewChatChecked;
     } else if (includeNullsForDefaults) {
       properties[PROMPT_PROPERTIES.NEW_CHAT_SESSION] = null;
+    }
+
+    // Session ID (only include if not empty and New Chat is unchecked)
+    if (!isNewChatChecked) {
+      const sessionIdValue = elements.propSessionId.value.trim();
+      if (sessionIdValue) {
+        // Parse as number if it's a valid integer, otherwise keep as string
+        const parsedValue = /^\d+$/.test(sessionIdValue)
+          ? parseInt(sessionIdValue, 10)
+          : sessionIdValue;
+        properties[PROMPT_PROPERTIES.SESSION_ID] = parsedValue;
+      } else if (includeNullsForDefaults) {
+        properties[PROMPT_PROPERTIES.SESSION_ID] = null;
+      }
+    } else if (includeNullsForDefaults) {
+      properties[PROMPT_PROPERTIES.SESSION_ID] = null;
     }
 
     if (elements.propAllowDynamic.value !== propertyDefaults.ALLOW_DYNAMIC) {
@@ -449,7 +490,12 @@
     elements.propProvider.value = propertyDefaults.PROVIDER;
     elements.propModel.value = propertyDefaults.MODEL;
     elements.propAgent.value = propertyDefaults.AGENT;
-    elements.propNewChat.value = propertyDefaults.NEW_CHAT;
+    elements.propNewChat.checked = propertyDefaults.NEW_CHAT === "yes";
+    elements.propSessionId.value = "";
+    elements.propSessionId.disabled = elements.propNewChat.checked;
+    elements.propSessionId.placeholder = elements.propNewChat.checked
+      ? "disable New Chat to input session ID"
+      : "enter session ID or prompt number";
     elements.propAllowDynamic.value = propertyDefaults.ALLOW_DYNAMIC;
     setEndConditionControls(elements, propertyDefaults, undefined);
   }
@@ -506,12 +552,18 @@
       prompt[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
     const newChatSession = prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
-    elements.propNewChat.value =
+    elements.propNewChat.checked =
       newChatSession === undefined
-        ? propertyDefaults.NEW_CHAT
-        : newChatSession
-          ? "yes"
-          : "no";
+        ? propertyDefaults.NEW_CHAT === "yes"
+        : newChatSession;
+
+    // Session ID
+    const sessionId = prompt[PROMPT_PROPERTIES.SESSION_ID];
+    elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
+    elements.propSessionId.disabled = elements.propNewChat.checked;
+    elements.propSessionId.placeholder = elements.propNewChat.checked
+      ? "disable New Chat to input session ID"
+      : "enter session ID or prompt number";
 
     const allowDynamic = prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
     elements.propAllowDynamic.value =
@@ -863,12 +915,17 @@
             props[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
           const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
-          elements.propNewChat.value =
+          elements.propNewChat.checked =
             newChatSession === undefined
-              ? propertyDefaults.NEW_CHAT
-              : newChatSession
-                ? "yes"
-                : "no";
+              ? propertyDefaults.NEW_CHAT === "yes"
+              : newChatSession;
+
+          const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
+          elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
+          elements.propSessionId.disabled = elements.propNewChat.checked;
+          elements.propSessionId.placeholder = elements.propNewChat.checked
+            ? "disable New Chat to input session ID"
+            : "enter session ID or prompt number";
 
           const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
           elements.propAllowDynamic.value =

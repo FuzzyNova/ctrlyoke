@@ -77,25 +77,48 @@
           <span class="setting-description">Custom agent file</span>
         </div>
 
-        <!-- New Chat Session -->
+        <!-- New Chat Session & Session ID -->
         <div class="setting-group">
-          <label for="workflow-new-chat">New Chat Session Per Prompt</label>
-          <div class="setting-input-row">
-            <select id="workflow-new-chat" title="New chat session">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-            <button
-              class="btn-set-default"
-              data-property="newChatSession"
-              title="Set this as the default for all workflows"
-              hidden
-            >
-              Set as Default
-            </button>
+          <div class="session-control-row">
+            <div class="session-column">
+              <label for="workflow-new-chat">New Chat</label>
+              <div class="session-control-with-button">
+                <input type="checkbox" id="workflow-new-chat" />
+                <button
+                  class="btn-set-default"
+                  data-property="newChatSession"
+                  title="Set this as the default for all workflows"
+                  hidden
+                >
+                  Set as Default
+                </button>
+              </div>
+            </div>
+            <div class="session-column">
+              <label for="workflow-session-id">Session ID <span class="label-hint">(disabled while New Chat is checked)</span></label>
+              <div class="session-control-with-button">
+                <input
+                  type="text"
+                  id="workflow-session-id"
+                  class="session-id-input"
+                  placeholder="disable New Chat to input session ID"
+                  disabled
+                  title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                />
+                <button
+                  class="btn-set-default"
+                  data-property="sessionId"
+                  title="Set this as the default for all workflows"
+                  hidden
+                >
+                  Set as Default
+                </button>
+              </div>
+            </div>
           </div>
           <span class="setting-description"
-            >Start fresh chat session for each prompt</span
+            >New Chat starts fresh session; Session ID resumes specific session or
+            reuses another prompt's session (by number)</span
           >
         </div>
 

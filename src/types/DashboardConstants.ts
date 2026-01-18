@@ -239,6 +239,7 @@ export const PROMPT_PROPERTIES = {
 
   // Session properties
   NEW_CHAT_SESSION: "newChatSession",
+  SESSION_ID: "sessionId",
   ALLOW_DYNAMIC_EXTENSION: "allowDynamicExtension",
 
   // End condition root
