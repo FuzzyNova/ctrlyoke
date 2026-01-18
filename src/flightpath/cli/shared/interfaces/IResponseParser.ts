@@ -58,6 +58,17 @@ export interface IResponseParser {
     terminalOutput: string,
     sanitizedPrompt: string
   ): CliResult;
+
+  /**
+   * Check if an error is a recoverable session error that should trigger retry without resume flag
+   *
+   * Some providers (e.g., Claude CLI) reject invalid session IDs with specific error messages.
+   * When detected, FlightPath can retry the same prompt without the --resume flag to start a new session.
+   *
+   * @param error The error to check (Error object or string)
+   * @returns True if this is a recoverable session error (retry without resume), false otherwise
+   */
+  isRecoverableSessionError?(error: unknown): boolean;
 }
 
 /**
@@ -161,5 +172,18 @@ export abstract class ResponseParserBase implements IResponseParser {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Default implementation: No recoverable session errors
+   *
+   * Most providers don't have special error recovery logic.
+   * Override this method in provider-specific parsers to implement custom recovery.
+   *
+   * @param error The error to check
+   * @returns False by default (no recovery)
+   */
+  isRecoverableSessionError(error: unknown): boolean {
+    return false;
   }
 }

@@ -1320,8 +1320,10 @@ export class CliIntegration extends CopilotIntegration {
               }
             );
           } catch (error) {
-            // Check for Claude CLI invalid session errors (Phase 5)
-            if (this.isClaudeInvalidSessionError(error)) {
+            // Check for recoverable session errors using provider's response parser (Phase 5)
+            if (
+              this.provider.responseParser.isRecoverableSessionError?.(error)
+            ) {
               const currentProvider =
                 resolvedProperties?.provider ??
                 (this.getIntegrationMode() as Provider);
@@ -1412,26 +1414,6 @@ export class CliIntegration extends CopilotIntegration {
   // ============================================================
   // ERROR RECOVERY (PHASE 5)
   // ============================================================
-
-  /**
-   * Check if error is a Claude CLI invalid session error.
-   *
-   * Claude CLI validates UUIDs strictly and rejects invalid formats with specific error messages:
-   * - "--resume requires a valid session ID"
-   * - "Session IDs must be in UUID format"
-   * - "No conversation found with session ID"
-   *
-   * When detected, we can retry without the resume flag to start a new session.
-   *
-   * @param error The error to check
-   * @returns True if this is a Claude CLI invalid session error
-   */
-  private isClaudeInvalidSessionError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return (
-      message.includes("--resume requires a valid session ID") ||
-      message.includes("Session IDs must be in UUID format") ||
-      message.includes("No conversation found with session ID")
-    );
-  }
+  // NOTE: Error recovery logic is now provider-specific.
+  // See IResponseParser.isRecoverableSessionError() for implementation.
 }

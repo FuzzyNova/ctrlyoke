@@ -347,4 +347,26 @@ export class ClaudeResponseParser
     summary += "]\n\n";
     return summary;
   }
+
+  /**
+   * Check if error is a Claude CLI invalid session error
+   *
+   * Claude CLI validates UUIDs strictly and rejects invalid formats with specific error messages:
+   * - "--resume requires a valid session ID"
+   * - "Session IDs must be in UUID format"
+   * - "No conversation found with session ID"
+   *
+   * When detected, FlightPath can retry without the resume flag to start a new session.
+   *
+   * @param error The error to check (Error object or string)
+   * @returns True if this is a recoverable Claude CLI session error
+   */
+  isRecoverableSessionError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes("--resume requires a valid session ID") ||
+      message.includes("Session IDs must be in UUID format") ||
+      message.includes("No conversation found with session ID")
+    );
+  }
 }
