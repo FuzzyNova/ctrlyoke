@@ -70,45 +70,41 @@ body {
   }
 }
 
-/* Setting Input Row - Contains select/input + "Set as Default" button */
-.setting-input-row {
-  @include flex-center;
+/* Label with link row - Contains label + "Set as Default" link */
+.label-with-link {
+  @include flex-center; // Sets display: flex and align-items: center
+  justify-content: space-between;
   gap: var(--spacing-sm);
-  align-items: center;
-
-  select,
-  input {
-    flex: 1;
-  }
+  min-height: 18px; // Reserve space to prevent layout shift (accounts for link padding)
 }
 
-/* "Set as Default" Button */
-.btn-set-default {
-  @include flex-center;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: 11px;
-  background-color: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border: 1px solid var(--border-color);
-  border-radius: 2px;
+/* "Set as Default" Link */
+.link-set-default {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 14px; // Fixed line height for consistent spacing
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  padding: 2px 4px;
+  border-radius: 2px;
 
   &:hover {
-    background-color: var(--vscode-button-secondaryHoverBackground);
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+    background-color: var(--vscode-list-hoverBackground);
   }
 
   &:active {
-    background-color: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-textLink-activeForeground);
   }
 
   // Success state (after click)
   &.success {
-    background-color: var(--vscode-charts-green);
-    color: white;
-    border-color: var(--vscode-charts-green);
+    color: var(--vscode-charts-green);
   }
 
   // Fade out animation
@@ -117,8 +113,9 @@ body {
     transition: opacity 0.3s ease;
   }
 
+  // Use visibility instead of display to prevent layout shift
   &[hidden] {
-    display: none;
+    visibility: hidden;
   }
 }
 

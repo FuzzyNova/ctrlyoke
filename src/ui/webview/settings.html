@@ -18,62 +18,62 @@
       <div class="workflow-properties">
         <!-- Provider -->
         <div class="setting-group">
-          <label for="workflow-provider">Provider</label>
-          <div class="setting-input-row">
-            <select
-              id="workflow-provider"
-              title="Select AI provider for prompt execution"
-            >
-              <!-- Populated dynamically with availability status -->
-            </select>
-            <button
-              class="btn-set-default"
+          <div class="label-with-link">
+            <label for="workflow-provider">Provider</label>
+            <a
+              class="link-set-default"
               data-property="provider"
               title="Set this as the default for all workflows"
               hidden
             >
               Set as Default
-            </button>
+            </a>
           </div>
+          <select
+            id="workflow-provider"
+            title="Select AI provider for prompt execution"
+          >
+            <!-- Populated dynamically with availability status -->
+          </select>
           <span class="setting-description">AI provider for execution</span>
         </div>
 
         <!-- Model -->
         <div class="setting-group">
-          <label for="workflow-model">Model</label>
-          <div class="setting-input-row">
-            <select id="workflow-model" title="Select AI model">
-              <!-- Populated dynamically based on provider -->
-            </select>
-            <button
-              class="btn-set-default"
+          <div class="label-with-link">
+            <label for="workflow-model">Model</label>
+            <a
+              class="link-set-default"
               data-property="model"
               title="Set this as the default for all workflows"
               hidden
             >
               Set as Default
-            </button>
+            </a>
           </div>
+          <select id="workflow-model" title="Select AI model">
+            <!-- Populated dynamically based on provider -->
+          </select>
           <span class="setting-description">AI model for execution</span>
         </div>
 
         <!-- Agent -->
         <div class="setting-group">
-          <label for="workflow-agent">Agent</label>
-          <div class="setting-input-row">
-            <select id="workflow-agent" title="Select custom agent">
-              <option value="">None</option>
-              <!-- Populated dynamically from discovered .agent.md files -->
-            </select>
-            <button
-              class="btn-set-default"
+          <div class="label-with-link">
+            <label for="workflow-agent">Agent</label>
+            <a
+              class="link-set-default"
               data-property="agent"
               title="Set this as the default for all workflows"
               hidden
             >
               Set as Default
-            </button>
+            </a>
           </div>
+          <select id="workflow-agent" title="Select custom agent">
+            <option value="">None</option>
+            <!-- Populated dynamically from discovered .agent.md files -->
+          </select>
           <span class="setting-description">Custom agent file</span>
         </div>
 
@@ -84,36 +84,36 @@
               <label for="workflow-new-chat">New Chat</label>
               <div class="session-control-with-button">
                 <input type="checkbox" id="workflow-new-chat" />
-                <button
-                  class="btn-set-default"
+                <a
+                  class="link-set-default"
                   data-property="newChatSession"
                   title="Set this as the default for all workflows"
                   hidden
                 >
                   Set as Default
-                </button>
+                </a>
               </div>
             </div>
             <div class="session-column">
-              <label for="workflow-session-id">Session ID <span class="label-hint">(disabled while New Chat is checked)</span></label>
-              <div class="session-control-with-button">
-                <input
-                  type="text"
-                  id="workflow-session-id"
-                  class="session-id-input"
-                  placeholder="disable New Chat to input session ID"
-                  disabled
-                  title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
-                />
-                <button
-                  class="btn-set-default"
+              <div class="label-with-link">
+                <label for="workflow-session-id">Session ID</label>
+                <a
+                  class="link-set-default"
                   data-property="sessionId"
                   title="Set this as the default for all workflows"
                   hidden
                 >
                   Set as Default
-                </button>
+                </a>
               </div>
+              <input
+                type="text"
+                id="workflow-session-id"
+                class="session-id-input"
+                placeholder="disable New Chat to input session ID"
+                disabled
+                title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+              />
             </div>
           </div>
           <span class="setting-description"
@@ -124,21 +124,21 @@
 
         <!-- Allow Dynamic Extension -->
         <div class="setting-group">
-          <label for="workflow-dynamic-ext">Allow Dynamic Extension</label>
-          <div class="setting-input-row">
-            <select id="workflow-dynamic-ext" title="Allow dynamic extension">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
-            <button
-              class="btn-set-default"
+          <div class="label-with-link">
+            <label for="workflow-dynamic-ext">Allow Dynamic Extension</label>
+            <a
+              class="link-set-default"
               data-property="allowDynamicExtension"
               title="Set this as the default for all workflows"
               hidden
             >
               Set as Default
-            </button>
+            </a>
           </div>
+          <select id="workflow-dynamic-ext" title="Allow dynamic extension">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
           <span class="setting-description"
             >Allow prompts to extend the workflow queue</span
           >

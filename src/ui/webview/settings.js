@@ -95,7 +95,7 @@
 
     // Buttons
     moreSettingsBtn: document.getElementById("more-settings-btn"),
-    setDefaultButtons: document.querySelectorAll(".btn-set-default"),
+    setDefaultButtons: document.querySelectorAll(".link-set-default"),
   };
 
   // ============================================================================
