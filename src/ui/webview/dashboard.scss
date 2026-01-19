@@ -1720,10 +1720,24 @@ button:disabled {
 .prompt-editor {
   flex: 1;
   height: 200px;
-  min-height: 150px;
+  min-height: 25vh;
   border: 1px solid var(--input-border);
   border-radius: 2px;
   overflow: hidden;
+}
+
+/* When total height gets super short, allow prompt editor to shrink completely to avoid overflow */
+@media (max-height: 240px) and (min-width: $breakpoint-tablet) {
+  .prompt-editor {
+    min-height: auto;
+  }
+}
+
+/* when short AND narrow, use 310px breakpoint instead*/
+@media (max-height: 310px) and (max-width: #{$breakpoint-tablet - 1px}) {
+  .prompt-editor {
+    min-height: auto;
+  }
 }
 
 .prompt-editor .cm-editor {
@@ -1872,7 +1886,11 @@ button:disabled {
   max-height: 500px;
   opacity: 1;
   overflow: hidden;
-  transition: max-height 0.3s ease-out, opacity 0.25s ease-out, margin-top 0.3s ease-out, padding 0.3s ease-out;
+  transition:
+    max-height 0.3s ease-out,
+    opacity 0.25s ease-out,
+    margin-top 0.3s ease-out,
+    padding 0.3s ease-out;
 
   /* Collapsed state */
   &.collapsed {

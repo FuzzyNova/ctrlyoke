@@ -69,7 +69,9 @@
         EditorView.lineWrapping,
         history(),
         keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
-        placeholder("Use @ for directory and file completions. Use # for selection and symbol completions."),
+        placeholder(
+          "Use @ for files and folders, # for selections and symbols"
+        ),
         this.themeExtension(),
         this.linterThemeExtension(),
         this.spellCheckExtension(),
@@ -93,7 +95,7 @@
             height: "100%",
           },
           ".cm-content": {
-            caretColor: "var(--vscode-editorCursor-foreground)",
+            caretColor: "transparent", // Hide native browser cursor
             fontFamily:
               "var(--vscode-editor-font-family, 'Consolas, monospace')",
             fontSize: "var(--vscode-editor-font-size, 14px)",
