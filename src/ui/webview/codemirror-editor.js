@@ -373,7 +373,7 @@
           return diagnostics;
         },
         {
-          delay: 500, // Increased debounce for better performance during fast typing
+          delay: 200, // Increased debounce for better performance during fast typing
           // Force linter to rerun when viewport changes (scroll/resize)
           needsRefresh: (update) => update.docChanged || update.viewportChanged,
         }
