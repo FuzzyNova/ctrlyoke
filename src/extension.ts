@@ -274,8 +274,8 @@ function registerCommands(context: vscode.ExtensionContext) {
   // Pause execution command
   const pauseCommand = vscode.commands.registerCommand(
     "flightpath.pause",
-    () => {
-      flightPathManager.pause();
+    async () => {
+      await flightPathManager.pause();
     }
   );
 

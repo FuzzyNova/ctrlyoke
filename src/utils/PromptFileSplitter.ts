@@ -22,39 +22,32 @@ export interface SplitResult {
  * Configuration for prompt splitting
  */
 export interface SplitConfig {
-  /** Maximum tokens per file (default: 20000 for safety margin below 25K) */
+  /** Maximum tokens per file (default: 15000) */
   maxTokensPerFile?: number;
 
-  /** Maximum lines per file (default: 1800 for safety margin below 2K) */
+  /** Maximum lines per file (default: 1800, 90% of Claude's 2K limit) */
   maxLinesPerFile?: number;
 
-  /** Minimum chunk size to avoid tiny fragments (default: 5000 tokens) */
+  /** Minimum chunk size to avoid tiny fragments (default: 3000) */
   minChunkSize?: number;
 }
 
 /**
  * PromptFileSplitter - Intelligently splits large prompts into multiple files
  *
- * Handles:
- * - Token counting using gpt-tokenizer
- * - Line counting
- * - Smart splitting that preserves content structure
- * - Safety margins for Claude's 25K token and 2K line limits
+ * Splits on paragraph boundaries first, then lines, then sentences to preserve structure.
+ * Conservative defaults work for both Copilot and Claude CLI providers.
  *
- * DESIGN PRINCIPLES:
- * - Preserve structure: Split on paragraphs first, then lines, then sentences
- * - Safety margins: Use 20K tokens and 1.8K lines to stay well below limits
- * - Minimum chunk size: Avoid tiny fragments that waste overhead
- * - Graceful degradation: Fall back to character count if tokenizer fails
+ * Claude CLI has a 2,000 line limit per request; other limits depend on underlying model context windows.
  */
 export class PromptFileSplitter {
   private readonly config: Required<SplitConfig>;
 
-  // Default configuration with safety margins
+  // Conservative defaults: avoid Claude's 2K line limit, keep file sizes manageable
   private static readonly DEFAULT_CONFIG: Required<SplitConfig> = {
-    maxTokensPerFile: 20000, // 80% of Claude's 25K limit
-    maxLinesPerFile: 1800, // 90% of Claude's 2K limit
-    minChunkSize: 5000, // Avoid tiny fragments
+    maxTokensPerFile: 15000,
+    maxLinesPerFile: 1800, // 90% of Claude's 2K line limit
+    minChunkSize: 3000,
   };
 
   constructor(config?: SplitConfig) {

@@ -762,8 +762,8 @@ export class FlightPathManager {
   /**
    * Pause current execution
    */
-  pause(): void {
-    this.promptQueue.pause();
+  async pause(): Promise<void> {
+    await this.promptQueue.pause();
   }
 
   /**

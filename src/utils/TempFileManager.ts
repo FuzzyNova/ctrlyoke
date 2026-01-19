@@ -87,7 +87,10 @@ export class TempFileManager {
       // Remove extensions (.flightpath.json, .prompt.json, .prompt.md)
       basename = originalBasename
         .replace(/\.flightpath\.json$/, "")
-        .replace(/\.prompt\.(json|md)$/, "");
+        .replace(/\.prompt\.(json|md)$/, "")
+        // Remove whitespace and special characters for CLI compatibility
+        .replace(/\s+/g, "-") // Replace spaces with hyphens
+        .replace(/[^\w-]/g, ""); // Remove non-alphanumeric except hyphens
     }
 
     // Add step number if this is a multi-step workflow

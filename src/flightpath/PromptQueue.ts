@@ -278,12 +278,15 @@ export class PromptQueue {
     this.emitStateChange();
 
     Log.info("Queue state set to running");
+
+    // Update working file to persist RUNNING state to disk
+    await this.updateWorkingFile();
   }
 
   /**
    * Pause queue execution
    */
-  pause(): void {
+  async pause(): Promise<void> {
     if (this.state.status !== EXECUTION_STATES.RUNNING) {
       return;
     }
@@ -294,6 +297,9 @@ export class PromptQueue {
 
     this.emitStateChange();
     Log.info("Queue execution paused");
+
+    // Update working file to persist PAUSED state to disk
+    await this.updateWorkingFile();
   }
 
   /**
@@ -342,6 +348,9 @@ export class PromptQueue {
     this.emitStateChange();
 
     Log.info(`Queue state set to running (resumed from ${previousState})`);
+
+    // Update working file to persist RUNNING state to disk
+    await this.updateWorkingFile();
   }
 
   /**
