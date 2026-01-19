@@ -357,6 +357,7 @@ body {
   max-width: 500px; /* Prevent excessive width */
   flex: 1 1 auto;
   min-width: 0;
+  z-index: 100; /* High z-index to ensure dropdown appears above output/editor sections */
 }
 
 /* Main button (workflow name + state) */
@@ -955,7 +956,7 @@ button:disabled {
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
-  z-index: 1; /* Above background logo */
+  z-index: 2; /* Above output section (z-index: 1) to ensure CodeMirror tooltips don't overflow behind output */
 }
 
 /* Wide layout: side-by-side (>= 768px) */
@@ -1230,7 +1231,7 @@ button:disabled {
   position: relative;
   border-radius: var(--vscode-button-border-radius, 2px);
   overflow: visible;
-  z-index: 1; /* Ensure split button stacking context */
+  z-index: 100; /* High z-index to ensure dropdown appears above output/editor sections */
 }
 
 /* Main button (left side) */
