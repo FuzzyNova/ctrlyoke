@@ -79,19 +79,9 @@ export class TempFileManager {
 
     // Build useful filename
     const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
-    let basename = "prompt";
-
-    if (originalFilePath) {
-      // Extract basename from original file path
-      const originalBasename = path.basename(originalFilePath);
-      // Remove extensions (.flightpath.json, .prompt.json, .prompt.md)
-      basename = originalBasename
-        .replace(/\.flightpath\.json$/, "")
-        .replace(/\.prompt\.(json|md)$/, "")
-        // Remove whitespace and special characters for CLI compatibility
-        .replace(/\s+/g, "-") // Replace spaces with hyphens
-        .replace(/[^\w-]/g, ""); // Remove non-alphanumeric except hyphens
-    }
+    const basename = originalFilePath
+      ? this.sanitizeBasename(originalFilePath)
+      : "prompt";
 
     // Add step number if this is a multi-step workflow
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
@@ -144,14 +134,9 @@ export class TempFileManager {
 
     // Build base filename
     const timestamp = Math.floor(Date.now() / 1000);
-    let basename = "prompt";
-
-    if (originalFilePath) {
-      const originalBasename = path.basename(originalFilePath);
-      basename = originalBasename
-        .replace(/\.flightpath\.(json|yaml|yml)$/, "")
-        .replace(/\.prompt\.(json|md)$/, "");
-    }
+    const basename = originalFilePath
+      ? this.sanitizeBasename(originalFilePath)
+      : "prompt";
 
     const stepSuffix = stepNumber ? `-${stepNumber}` : "";
     const filePaths: string[] = [];
@@ -256,6 +241,30 @@ export class TempFileManager {
     }
 
     return cleanedCount;
+  }
+
+  /**
+   * Sanitize basename from original file path for use in temp file names
+   * Removes file extensions and special characters for CLI compatibility
+   *
+   * Matches PromptQueue.generateWorkingFilePath() sanitization approach:
+   * - Lowercase for consistency
+   * - Non-alphanumeric chars → hyphens
+   * - Strip leading/trailing hyphens
+   *
+   * @param originalFilePath Path to original .flightpath or .prompt file
+   * @returns Sanitized basename suitable for temp file naming
+   */
+  private sanitizeBasename(originalFilePath: string): string {
+    const originalBasename = path.basename(originalFilePath);
+    return (
+      originalBasename
+        .replace(/\.flightpath\.(json|yaml|yml)$/, "")
+        .replace(/\.prompt\.(json|md)$/, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "prompt"
+    );
   }
 
   /**

@@ -1114,7 +1114,12 @@ export class PromptQueue {
     // Ensure directory exists
     await fs.mkdir(queueDir, { recursive: true });
 
-    return path.join(queueDir, `${fileName}-${timestamp}.flightpath.json`);
+    // Sanitize filename to avoid spaces/special chars in generated working file path
+    const sanitizedFileName = (fileName || "workflow")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "workflow";
+    return path.join(queueDir, `${sanitizedFileName}-${timestamp}.flightpath.json`);
   }
 
   /**
