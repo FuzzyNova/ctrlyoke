@@ -114,4 +114,25 @@ export class CodexNotificationMonitor
   extractSessionId(data: any): string | undefined {
     return data?.sessionId;
   }
+
+  /**
+   * Wait for SessionStart hook notification
+   *
+   * NOT IMPLEMENTED: Codex CLI does not currently support SessionStart hooks.
+   * This is a placeholder for future implementation when Codex adds start hook support.
+   *
+   * When implemented, this would:
+   * 1. Configure start hook in buildHookConfig() (similar to notify hook)
+   * 2. Wait for hook notification file to be written
+   * 3. Extract and return session ID immediately
+   *
+   * For now, Codex integration falls back to log file discovery via prompt text matching.
+   *
+   * @param config Monitoring configuration
+   * @param startTime Execution start time
+   * @param onCancel Cancellation callback
+   * @returns Always null (not implemented)
+   */
+  // waitForSessionStart is intentionally not implemented
+  // Codex will use fallback log discovery path in CliIntegration
 }

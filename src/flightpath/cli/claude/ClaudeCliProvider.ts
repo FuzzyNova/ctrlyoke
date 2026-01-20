@@ -290,7 +290,7 @@ export class ClaudeCliProvider implements ICliProvider {
       context.extensionPath,
       "out",
       "scripts",
-      "flightpath-claude-stop-hook.js"
+      "flightpath-claude-hook.js"
     );
     const notifyDir =
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);

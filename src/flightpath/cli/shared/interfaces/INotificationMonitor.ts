@@ -88,6 +88,23 @@ export interface INotificationMonitor {
    * @returns Session ID if found
    */
   extractSessionId?(data: any): string | undefined;
+
+  /**
+   * Wait for session start notification and extract session ID
+   *
+   * This method waits for the SessionStart hook to fire and returns the session ID.
+   * This is faster and more reliable than searching log files.
+   *
+   * @param config Monitoring configuration
+   * @param startTime Execution start time
+   * @param onCancel Cancellation callback
+   * @returns Session ID if found, or null on timeout/cancellation
+   */
+  waitForSessionStart?(
+    config: NotificationConfig,
+    startTime: Date,
+    onCancel?: () => boolean
+  ): Promise<string | null>;
 }
 
 /**

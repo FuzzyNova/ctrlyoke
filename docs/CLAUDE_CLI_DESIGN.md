@@ -39,7 +39,7 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 
 **Implementation:**
 
-- Script: `src/scripts/flightpath-claude-stop-hook.js`
+- Script: `src/scripts/flightpath-claude-hook.js`
 - Settings injection: `ClaudeCommandLineIntegration.buildStopHookSettings()`
 - Monitoring: `ClaudeCommandLineIntegration.monitorNotificationFile()`
 

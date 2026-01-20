@@ -90,19 +90,21 @@ export abstract class BaseLogParser implements ILogParser {
    * Discover session log file for a prompt
    *
    * Provider-specific implementation must:
+   * - If sessionId provided: Search for log file containing that session ID (fast path)
+   * - Otherwise: Use findModifiedSessionLogs() to get candidate files and match by prompt text
    * - Get log directory path for provider
-   * - Use findModifiedSessionLogs() to get candidate files
    * - Read and parse log entries from each candidate
-   * - Match prompt text against log content
    * - Return first matching file path
    *
-   * @param promptText - The prompt text sent to the CLI
-   * @param startTime - Execution start timestamp
+   * @param promptText - The prompt text sent to the CLI (used for matching if no sessionId)
+   * @param startTime - Execution start timestamp (used to filter candidates)
+   * @param sessionId - Optional session ID from SessionStart hook (faster, more reliable)
    * @returns Absolute path to session log file, or null if not found
    */
   abstract discoverSessionLog(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    sessionId?: string
   ): Promise<string | null>;
 
   /**

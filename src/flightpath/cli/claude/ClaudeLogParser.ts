@@ -194,14 +194,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /**
    * Discover session log file for a prompt
    *
-   * Searches Claude project directory for log file matching the prompt text.
+   * Searches Claude project directory for log file matching session ID or prompt text.
    *
-   * @param promptText - The prompt text sent to Claude CLI
-   * @param startTime - Execution start timestamp
+   * @param promptText - The prompt text sent to Claude CLI (used for matching if no sessionId)
+   * @param startTime - Execution start timestamp (used to filter candidates)
+   * @param sessionId - Optional session ID from SessionStart hook (faster, more reliable)
    * @returns Absolute path to session log file, or null if not found
    *
    * @remarks
-   * **Discovery Process:**
+   * **Fast Path (Session ID provided):**
+   * 1. Find Claude project directory for current workspace
+   * 2. Construct log file path: `<projectDir>/<sessionId>.jsonl`
+   * 3. Verify file exists and was modified after startTime
+   * 4. Return file path if valid
+   *
+   * **Fallback (No Session ID):**
    * 1. Find Claude project directory for current workspace
    * 2. Get candidate log files modified after startTime (via findModifiedSessionLogs)
    * 3. Read first 10 events from each candidate
@@ -214,19 +221,26 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - Full: `~/.claude/projects/dev_FlightPath/`
    *
    * **Matching Strategy:**
-   * - Compares first 100 chars of prompt text
-   * - Case-sensitive exact match
-   * - Checks user event.message.content[{type: "text"}]
+   * - Session ID: Direct file lookup (much faster)
+   * - Prompt text: Compares first 100 chars, case-sensitive exact match
    *
    * @example
    * ```typescript
+   * // Fast path (with session ID from hook)
+   * const logPath = await parser.discoverSessionLog(
+   *   "Analyze code",
+   *   new Date(),
+   *   "abc-123-session-id"
+   * );
+   *
+   * // Fallback (no session ID)
    * const logPath = await parser.discoverSessionLog("Analyze code", new Date());
-   * // Returns: "/Users/name/.claude/projects/dev_FlightPath/abc-123.jsonl"
    * ```
    */
   async discoverSessionLog(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    sessionId?: string
   ): Promise<string | null> {
     try {
       // Get Claude project directory for current workspace
@@ -240,7 +254,52 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         `[ClaudeLogParser] Searching for session logs in: ${projectDir}`
       );
 
-      // Get candidate log files modified after startTime
+      // FAST PATH: If session ID provided, construct direct file path
+      if (sessionId) {
+        const logPath = path.join(projectDir, `${sessionId}.jsonl`);
+
+        // Retry logic: Claude writes log file within ~50-100ms of SessionStart hook
+        const maxRetries = 5;
+        const retryDelays = [0, 50, 100, 150, 200]; // Total max wait: 500ms
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          // Wait before retry (except first attempt)
+          if (attempt > 0) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryDelays[attempt])
+            );
+          }
+
+          // Verify file exists and was modified after startTime
+          if (fs.existsSync(logPath)) {
+            const stats = fs.statSync(logPath);
+            if (stats.mtime >= startTime) {
+              Log.debug(
+                `[ClaudeLogParser] Found session log via session ID (attempt ${attempt + 1}/${maxRetries}): ${logPath}`
+              );
+              return logPath;
+            } else {
+              Log.debug(
+                `[ClaudeLogParser] Session log exists but modified before startTime`
+              );
+              break; // Don't retry if file exists but is too old
+            }
+          }
+
+          // Log retry attempts
+          if (attempt < maxRetries - 1) {
+            Log.debug(
+              `[ClaudeLogParser] Session log file not found (attempt ${attempt + 1}/${maxRetries}), retrying in ${retryDelays[attempt + 1]}ms...`
+            );
+          } else {
+            Log.debug(
+              `[ClaudeLogParser] Session log file not found after ${maxRetries} attempts: ${logPath}`
+            );
+          }
+        }
+      }
+
+      // FALLBACK: Get candidate log files modified after startTime
       const candidates = this.findModifiedSessionLogs(projectDir, startTime);
       if (candidates.length === 0) {
         Log.debug("[ClaudeLogParser] No candidate log files found");
@@ -382,27 +441,28 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Converts filesystem path to Claude's normalized format.
    *
    * @param workspacePath - Absolute workspace path
-   * @returns Normalized path (e.g., "dev_FlightPath")
+   * @returns Normalized path (e.g., "C--dev-FlightPath")
    *
    * @remarks
    * **Normalization Rules:**
-   * - Remove drive letter (Windows: `C:\` → ``)
-   * - Remove leading slashes (Unix: `/Users/` → `Users/`)
-   * - Replace path separators with underscores
-   * - Example: `/Users/name/dev/FlightPath` → `Users_name_dev_FlightPath`
+   * - Convert drive colon to double dash (Windows: `C:\` → `C--`)
+   * - Remove leading slashes (Unix: `/Users/` → `Users-`)
+   * - Replace path separators with dashes
+   * - Example Windows: `C:\dev\FlightPath` → `C--dev-FlightPath`
+   * - Example Unix: `/Users/name/dev/FlightPath` → `Users-name-dev-FlightPath`
    *
    * **Note:** This is based on observed Claude CLI behavior.
    * The actual normalization may vary depending on Claude CLI version.
    */
   private normalizeWorkspacePath(workspacePath: string): string {
-    // Remove drive letter on Windows (e.g., "C:\dev\FlightPath" → "dev\FlightPath")
-    let normalized = workspacePath.replace(/^[A-Z]:[\\\/]/i, "");
+    // Replace drive letter colon with double dash on Windows (e.g., "C:\dev\FlightPath" → "C--dev-FlightPath")
+    let normalized = workspacePath.replace(/^([A-Z]):[\\\/]/i, "$1--");
 
     // Remove leading slash on Unix (e.g., "/Users/name/dev" → "Users/name/dev")
     normalized = normalized.replace(/^[\\\/]/, "");
 
-    // Replace path separators with underscores
-    normalized = normalized.replace(/[\\\/]/g, "_");
+    // Replace path separators with dashes
+    normalized = normalized.replace(/[\\\/]/g, "-");
 
     return normalized;
   }

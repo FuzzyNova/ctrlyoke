@@ -110,10 +110,10 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
    *
    * KNOWN LIMITATION: Copilot sessionEnd hooks currently do NOT provide session IDs
    * in notifications. This is a known issue we're waiting for Copilot to address.
-   * 
-   * For now, session IDs must be extracted from log files via 
+   *
+   * For now, session IDs must be extracted from log files via
    * CopilotCliProvider.extractSessionIdFromLogs().
-   * 
+   *
    * This method is kept for future compatibility when Copilot adds session ID support
    * to their hook notifications.
    *
@@ -124,4 +124,25 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
     // Copilot hooks don't include session IDs in notifications (yet)
     return undefined;
   }
+
+  /**
+   * Wait for SessionStart hook notification
+   *
+   * NOT IMPLEMENTED: Copilot CLI does not currently support SessionStart hooks.
+   * This is a placeholder for future implementation when Copilot adds start hook support.
+   *
+   * When implemented, this would:
+   * 1. Configure SessionStart hook in buildHookConfig()
+   * 2. Wait for hook notification file to be written
+   * 3. Extract and return session ID immediately
+   *
+   * For now, Copilot integration falls back to log file discovery via prompt text matching.
+   *
+   * @param config Monitoring configuration
+   * @param startTime Execution start time
+   * @param onCancel Cancellation callback
+   * @returns Always null (not implemented)
+   */
+  // waitForSessionStart is intentionally not implemented
+  // Copilot will use fallback log discovery path in CliIntegration
 }

@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
 import { ChildProcess } from "child_process";
 import { CliResult } from "../../types/CopilotTypes";
 import {
@@ -11,6 +13,7 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
+import { FileSystemUtils } from "../../utils/FileSystemUtils";
 import { Log } from "../../utils/Log";
 import { ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
@@ -433,9 +436,16 @@ export class CliIntegration extends CopilotIntegration {
    * Strategy:
    * 1. Record start time BEFORE spawning CLI
    * 2. Spawn CLI in terminal (TUI displays for user, but we ignore it)
-   * 3. Discover session log by matching prompt content
-   * 4. Extract session ID from matched log
-   * 5. Monitor log file for completion
+   * 3. Wait for session start and discover log file:
+   *    - **Claude (SessionStart hook):** Wait up to 60 seconds for SessionStart hook,
+   *      then use session ID to find log file directly
+   *    - **Copilot/Codex (no hook):** Discover log file by matching prompt text
+   * 4. Monitor log file for completion
+   *
+   * **Important:** 60-second timeout gives Claude CLI plenty of time to:
+   * - Start the session
+   * - Fire the SessionStart hook
+   * - Create the log file
    *
    * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
@@ -467,36 +477,92 @@ export class CliIntegration extends CopilotIntegration {
         workflowContext
       );
 
-      // 3. Discover session log by matching prompt content
-      Log.info("🔍 Discovering session log file...");
-      const logPath = await this.provider.logParser.discoverSessionLog(
-        promptText,
-        startTime
-      );
+      // 3. Wait for SessionStart hook and discover log file
+      let sessionId: string | null = null;
+      let logPath: string | null = null;
 
-      if (!logPath) {
-        Log.error(
-          "❌ Could not discover session log - no matching prompt found"
+      if (this.provider.notificationMonitor.waitForSessionStart) {
+        // Provider supports SessionStart hook (Claude only currently)
+        Log.info("🔍 Waiting for SessionStart hook and log file creation...");
+
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (!workspaceRoot) {
+          Log.error("❌ No workspace root for session start monitoring");
+          await this.cleanupTempFiles(tempFilePaths);
+          return { success: false };
+        }
+
+        const notifyDir =
+          this.provider.notificationMonitor.getNotificationDirectory(
+            workspaceRoot
+          );
+
+        // Wait for SessionStart notification (60 second timeout)
+        sessionId = await this.provider.notificationMonitor.waitForSessionStart(
+          {
+            directory: notifyDir,
+            timeoutMs: 60000,
+            pollMs: 100,
+          },
+          startTime,
+          () => this.isCancelling
         );
-        this.lastFailureReason = "Session log not found";
 
-        // Clean up temp files
-        await this.cleanupTempFiles(tempFilePaths);
+        if (!sessionId) {
+          Log.error("❌ SessionStart hook timeout after 60 seconds");
+          this.lastFailureReason = "SessionStart hook timeout";
+          await this.cleanupTempFiles(tempFilePaths);
+          return { success: false };
+        }
 
-        return { success: false };
+        Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
+
+        // Now find the log file using the session ID
+        logPath = await this.provider.logParser.discoverSessionLog(
+          promptText,
+          startTime,
+          sessionId
+        );
+
+        if (!logPath) {
+          Log.error(
+            `❌ Could not find log file for session ${sessionId} - this should not happen!`
+          );
+          this.lastFailureReason = "Log file not found after SessionStart";
+          await this.cleanupTempFiles(tempFilePaths);
+          return { success: false };
+        }
+
+        Log.info(`✅ Found session log: ${logPath}`);
+      } else {
+        // Provider doesn't support SessionStart hook - use old method (Copilot, Codex)
+        Log.info("🔍 Discovering session log file (no SessionStart hook)...");
+        logPath = await this.provider.logParser.discoverSessionLog(
+          promptText,
+          startTime
+        );
+
+        if (!logPath) {
+          Log.error(
+            "❌ Could not discover session log - no matching prompt found"
+          );
+          this.lastFailureReason = "Session log not found";
+          await this.cleanupTempFiles(tempFilePaths);
+          return { success: false };
+        }
+
+        Log.info(`✅ Found session log: ${logPath}`);
+
+        // Extract session ID from matched log
+        const events = await this.provider.logParser.readNewLines(logPath);
+        sessionId = this.provider.logParser.extractSessionId(events);
+
+        if (sessionId) {
+          Log.debug(`💾 Extracted session ID from log: ${sessionId}`);
+        }
       }
 
-      Log.info(`✅ Found session log: ${logPath}`);
-
-      // 4. Extract session ID from matched log
-      const events = await this.provider.logParser.readNewLines(logPath);
-      const sessionId = this.provider.logParser.extractSessionId(events);
-
-      if (sessionId) {
-        Log.debug(`💾 Extracted session ID: ${sessionId}`);
-      }
-
-      // 5. Monitor log file for completion
+      // 4. Monitor log file for completion
       const result = await this.monitorLogFile(logPath, sessionId, startTime);
 
       // Clean up temp files
@@ -561,6 +627,12 @@ export class CliIntegration extends CopilotIntegration {
   /**
    * Monitor log file for completion using provider's log parser.
    *
+   * For providers with notification monitors (Claude, Codex), monitors both:
+   * - Log file for streaming content
+   * - Notification file for completion signal
+   *
+   * For providers without notification monitors (Copilot), relies on log file completion detection.
+   *
    * @param logPath Absolute path to log file
    * @param sessionId Session ID (if already extracted)
    * @param startTime Execution start time
@@ -576,7 +648,47 @@ export class CliIntegration extends CopilotIntegration {
     const timeoutMs =
       ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000;
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      let completed = false;
+      let completionCheckInterval: NodeJS.Timeout | undefined;
+
+      // Completion handler - single source of truth
+      const handleCompletion = (source: string) => {
+        if (completed) {
+          return; // Already completed
+        }
+        completed = true;
+
+        Log.info(`✅ Completion detected via ${source}`);
+
+        // Extract final response from accumulated events
+        const response = parser.extractResponse(events);
+
+        // Store the result
+        const cliResult: CliResult = {
+          success: true,
+          response: response.text,
+          statistics: this.formatStatistics(response.metadata),
+          exitCode: 0,
+          sessionId: response.metadata.sessionId || sessionId || undefined,
+        };
+        this.lastResult = cliResult;
+        this.logResponse(cliResult.response, cliResult.statistics);
+
+        // Cleanup
+        watcher.close();
+        if (completionCheckInterval) {
+          clearInterval(completionCheckInterval);
+        }
+        this.responseCompleteEmitter.fire("Response complete");
+
+        resolve({
+          success: true,
+          sessionId: cliResult.sessionId,
+        });
+      };
+
+      // Start log file watcher for streaming content
       const watcher = parser.watchLogFile(
         logPath,
         (event) => {
@@ -588,41 +700,56 @@ export class CliIntegration extends CopilotIntegration {
             this.streamingChunkEmitter.fire(content);
           }
 
-          // Check completion
+          // Check completion via log file (fallback for providers without notification monitor)
           if (parser.isComplete(event)) {
-            Log.info("✅ Log file indicates completion");
-
-            const response = parser.extractResponse(events);
-
-            // Store the result so getLastResult() works
-            const result: CliResult = {
-              success: true,
-              response: response.text,
-              statistics: this.formatStatistics(response.metadata),
-              exitCode: 0,
-              sessionId: response.metadata.sessionId || sessionId || undefined,
-            };
-            this.lastResult = result;
-
-            // Log the response for visibility
-            this.logResponse(result.response, result.statistics);
-
-            watcher.close();
-            this.responseCompleteEmitter.fire("Response complete");
-
-            resolve({
-              success: true,
-              sessionId: result.sessionId,
-            });
+            handleCompletion("log file");
           }
         },
         startTime
       );
 
+      // If provider has notification monitor, also monitor for Stop/completion hook
+      if (this.provider.notificationMonitor && sessionId) {
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (workspaceRoot) {
+          const notifyDir =
+            this.provider.notificationMonitor.getNotificationDirectory(
+              workspaceRoot
+            );
+          const notifyFile = path.join(notifyDir, `${sessionId}.json`);
+
+          Log.debug(`🔔 Monitoring Stop hook notification: ${notifyFile}`);
+
+          // Helper to check and cleanup notification file
+          const checkNotificationFile = async (): Promise<boolean> => {
+            const fsUtils = new FileSystemUtils();
+            const notifyData = await fsUtils.readJsonFileAndDelete(notifyFile);
+            if (notifyData?.status === "completed") {
+              handleCompletion("Stop hook");
+              return true;
+            }
+            return false;
+          };
+
+          // Check if notification file already exists (race condition: hook fired before we started monitoring)
+          if (await checkNotificationFile()) {
+            return; // Early exit - completion already handled
+          }
+
+          // Poll for completion notification (check every 100ms)
+          completionCheckInterval = setInterval(async () => {
+            await checkNotificationFile();
+          }, 100);
+        }
+      }
+
       // Timeout handling
       const timeoutHandle = setTimeout(() => {
         Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
         watcher.close();
+        if (completionCheckInterval) {
+          clearInterval(completionCheckInterval);
+        }
         reject(new Error("Log monitoring timeout"));
       }, timeoutMs);
 
@@ -632,6 +759,9 @@ export class CliIntegration extends CopilotIntegration {
           Log.info("⏹️ Log monitoring cancelled by user");
           clearInterval(checkCancellation);
           clearTimeout(timeoutHandle);
+          if (completionCheckInterval) {
+            clearInterval(completionCheckInterval);
+          }
           watcher.close();
           resolve({ success: false });
         }

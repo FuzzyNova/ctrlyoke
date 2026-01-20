@@ -66,6 +66,10 @@ export class ClaudeNotificationMonitor
    * Claude uses JSON string (not object) for --settings flag.
    * Settings must be JSON.stringify'd before passing to CLI.
    *
+   * Configures both SessionStart and Stop hooks:
+   * - SessionStart: Called when new session starts (provides session ID immediately)
+   * - Stop: Called when execution completes (for completion detection)
+   *
    * @param scriptPath Path to notification handler script
    * @param notifyDir Notification directory
    * @param workspaceRoot Workspace root directory (unused for Claude)
@@ -82,6 +86,16 @@ export class ClaudeNotificationMonitor
 
     const settings = {
       hooks: {
+        SessionStart: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node "${normalizedScriptPath}" "${normalizedNotifyDir}"`,
+              },
+            ],
+          },
+        ],
         Stop: [
           {
             hooks: [
@@ -124,5 +138,65 @@ export class ClaudeNotificationMonitor
    */
   extractSessionId(data: any): string | undefined {
     return data?.sessionId;
+  }
+
+  /**
+   * Wait for SessionStart hook notification and extract session ID
+   *
+   * Polls notification directory for SessionStart notification file.
+   * This is faster and more reliable than searching log files.
+   *
+   * @param config Monitoring configuration
+   * @param startTime Execution start time
+   * @param onCancel Cancellation callback
+   * @returns Session ID if found, or null on timeout/cancellation
+   */
+  async waitForSessionStart(
+    config: NotificationConfig,
+    startTime: Date,
+    onCancel?: () => boolean
+  ): Promise<string | null> {
+    const pollMs = config.pollMs || 100;
+    const timeoutMs = config.timeoutMs;
+    const startMs = Date.now();
+
+    Log.debug(
+      `[ClaudeNotificationMonitor] Waiting for SessionStart notification (timeout: ${timeoutMs}ms)`
+    );
+
+    while (Date.now() - startMs < timeoutMs) {
+      // Check for cancellation
+      if (onCancel && onCancel()) {
+        Log.debug("[ClaudeNotificationMonitor] SessionStart wait cancelled");
+        return null;
+      }
+
+      // Check for any new notification files created after start time
+      const files = await this.findNotificationFiles(
+        config.directory,
+        /\.json$/
+      );
+
+      for (const file of files) {
+        // Only check files created after start time
+        if (await this.isFileNewerThan(file, startTime)) {
+          const data = await this.readNotificationFile(file);
+
+          // Check if this is a SessionStart notification
+          if (data?.hookEvent === "SessionStart" && data?.sessionId) {
+            Log.debug(
+              `[ClaudeNotificationMonitor] Found SessionStart notification: ${data.sessionId}`
+            );
+            return data.sessionId;
+          }
+        }
+      }
+
+      // Wait before next poll
+      await this.delay(pollMs);
+    }
+
+    Log.warn("[ClaudeNotificationMonitor] SessionStart wait timeout");
+    return null;
   }
 }

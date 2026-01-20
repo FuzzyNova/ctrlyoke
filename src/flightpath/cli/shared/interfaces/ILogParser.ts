@@ -125,39 +125,47 @@ export interface ILogParser {
    * Discover session log file for a prompt
    *
    * Searches provider's log directory for the session log file corresponding
-   * to a specific prompt execution. Uses prompt text and timestamp to identify
-   * the correct log file.
+   * to a specific prompt execution. Uses session ID (if available) or prompt
+   * text and timestamp to identify the correct log file.
    *
-   * @param promptText - The prompt text sent to the CLI (used for matching)
+   * @param promptText - The prompt text sent to the CLI (used for matching if no sessionId)
    * @param startTime - Execution start timestamp (used to filter candidates)
+   * @param sessionId - Optional session ID from SessionStart hook (faster, more reliable)
    * @returns Absolute path to session log file, or null if not found
    *
    * @remarks
+   * - **Fast path**: If sessionId provided, searches for log file with matching session ID
+   * - **Fallback**: If no sessionId, matches prompt text against log entries (slower)
    * - Checks recently modified files in log directory
-   * - Matches prompt text against log entries (fuzzy or exact match)
    * - Validates timestamps to ensure log is for current execution
    * - Returns null if no matching session found (e.g., too early, no logs)
    *
    * Strategy:
-   * 1. List files in log directory modified after startTime
-   * 2. Read first few lines of each file
-   * 3. Check if prompt text appears in log entries
+   * 1. If sessionId provided, search for log file containing that session ID
+   * 2. Otherwise, list files modified after startTime and match by prompt text
+   * 3. Read first few lines of each file
    * 4. Return first matching file path
    *
    * @example
    * ```typescript
+   * // Fast path (with session ID from hook)
+   * const logFile = await parser.discoverSessionLog(
+   *   "Explain this code",
+   *   new Date(),
+   *   "abc-123-session-id"
+   * );
+   *
+   * // Fallback (no session ID, match by prompt)
    * const logFile = await parser.discoverSessionLog(
    *   "Explain this code",
    *   new Date()
    * );
-   * if (logFile) {
-   *   // Watch logFile for completion
-   * }
    * ```
    */
   discoverSessionLog(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    sessionId?: string
   ): Promise<string | null>;
 
   /**

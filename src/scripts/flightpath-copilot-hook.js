@@ -33,24 +33,53 @@
  * - argv[2]: Notification directory
  * - argv[3]: Hook type (sessionStart | userPromptSubmitted | sessionEnd)
  *
- * Debug logging: All hook data logged to %TEMP%/flightpath-copilot-hook-debug.log
+ * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-copilot-hook-debug.log
  */
 
 const fs = require("fs");
 const path = require("path");
-const readline = require("readline");
 const os = require("os");
+const readline = require("readline");
 
-// DEBUG: Hardcoded debug log file path
-const DEBUG_LOG_FILE = path.join(
-  os.tmpdir(),
-  "flightpath-copilot-hook-debug.log"
-);
+/**
+ * Get debug log file path in .flightpath/logs/
+ * Derives workspace root from notification directory argument
+ */
+function getDebugLogPath(notifyDir) {
+  try {
+    // notifyDir is like: <workspace>/.flightpath/temp/copilot-notifications
+    // Navigate up to .flightpath directory, then to logs/
+    const flightpathDir = path.join(notifyDir, "..", "..");
+    const logsDir = path.join(flightpathDir, "logs");
+
+    // Ensure logs directory exists
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    return path.join(logsDir, "flightpath-copilot-hook-debug.log");
+  } catch (err) {
+    // If anything fails, use temp directory fallback
+    return getTempLogPath();
+  }
+}
+
+/**
+ * Fallback: Get debug log file path in system temp directory
+ */
+function getTempLogPath() {
+  return path.join(os.tmpdir(), "flightpath-copilot-hook-debug.log");
+}
+
+let DEBUG_LOG_FILE = null; // Will be set after parsing arguments
 
 /**
  * Debug logging helper
  */
 function debugLog(message, data = null) {
+  if (!DEBUG_LOG_FILE) {
+    return; // Skip logging if path not initialized yet
+  }
   try {
     const timestamp = new Date().toISOString();
     let logEntry = `[${timestamp}] ${message}`;
@@ -68,23 +97,42 @@ function debugLog(message, data = null) {
  * Main handler function
  */
 function main() {
-  debugLog("🚀 Hook script invoked", {
-    argv: process.argv,
-    cwd: process.cwd(),
-    env_keys: Object.keys(process.env),
-  });
+  // Try to initialize debug logging as early as possible
+  // ALWAYS get a log file somewhere (fallback to temp if notifyDir is missing)
+  const notifyDir = process.argv[2];
+  try {
+    if (notifyDir) {
+      DEBUG_LOG_FILE = getDebugLogPath(notifyDir);
+    } else {
+      DEBUG_LOG_FILE = getTempLogPath();
+    }
+    debugLog("🚀 Hook script invoked", {
+      argv: process.argv,
+      argvLength: process.argv.length,
+      cwd: process.cwd(),
+      env_keys: Object.keys(process.env),
+      logLocation: DEBUG_LOG_FILE,
+    });
+  } catch (err) {
+    // Last resort fallback
+    DEBUG_LOG_FILE = getTempLogPath();
+  }
 
   // Arguments: node <script> <notifyDir> <hookType>
   if (process.argv.length < 4) {
-    const errorMsg = "Missing required arguments (notifyDir and hookType)";
-    debugLog("❌ ERROR: " + errorMsg);
+    const errorMsg = `Missing required arguments (notifyDir and hookType). Received ${process.argv.length - 1} argument(s): ${process.argv.slice(2).join(", ")}`;
+    debugLog("❌ FATAL ERROR: " + errorMsg, {
+      argv: process.argv,
+      expected: "node <script> <notifyDir> <hookType>",
+    });
     console.error("FlightPath Copilot Hook: " + errorMsg);
     process.exit(1);
   }
 
-  const notifyDir = process.argv[2];
   const hookType = process.argv[3];
+
   debugLog("📁 Hook configuration", { notifyDir, hookType });
+  debugLog("📝 Debug log file", { DEBUG_LOG_FILE });
 
   // Read hook input JSON from stdin (Copilot hook format)
   debugLog("📥 Starting stdin read...");

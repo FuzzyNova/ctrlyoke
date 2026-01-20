@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
+import { FileSystemUtils } from "../../../utils/FileSystemUtils";
 
 /**
  * Notification monitoring configuration
@@ -141,29 +142,13 @@ export class CliNotificationMonitor {
     sessionId: string
   ): Promise<NotificationResult> {
     const notifyFile = path.join(directory, `${sessionId}.json`);
+    const notifyData = await this.readAndCleanupNotificationFile(notifyFile);
 
-    if (fs.existsSync(notifyFile)) {
-      try {
-        // Read notification data
-        const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
-
-        Log.info(
-          `✅ Completion detected via hook (session: ${notifyData.sessionId || notifyData.threadId || sessionId})`
-        );
-
-        // Clean up notification file
-        try {
-          fs.unlinkSync(notifyFile);
-          Log.debug(`🗑️ Cleaned up notification file`);
-        } catch (cleanupError) {
-          Log.debug(`Failed to clean up notification file: ${cleanupError}`);
-        }
-
-        return { completed: true, data: notifyData };
-      } catch (parseError) {
-        Log.debug(`Failed to parse notification file: ${parseError}`);
-        return { completed: false };
-      }
+    if (notifyData) {
+      Log.info(
+        `✅ Completion detected via hook (session: ${notifyData.sessionId || notifyData.threadId || sessionId})`
+      );
+      return { completed: true, data: notifyData };
     }
 
     return { completed: false };
@@ -186,10 +171,10 @@ export class CliNotificationMonitor {
       for (const file of currentFiles) {
         if (!initialFiles.has(file) && file.endsWith(".json")) {
           const notifyFile = path.join(directory, file);
+          const notifyData =
+            await this.readAndCleanupNotificationFile(notifyFile);
 
-          try {
-            const notifyData = JSON.parse(fs.readFileSync(notifyFile, "utf8"));
-
+          if (notifyData) {
             Log.info(
               `✅ Completion detected via hook (file: ${file}, session: ${notifyData.sessionId || notifyData.threadId})`
             );
@@ -202,22 +187,7 @@ export class CliNotificationMonitor {
               Log.debug(`🔄 Turn ID: ${notifyData.turnId}`);
             }
 
-            // Clean up notification file
-            try {
-              fs.unlinkSync(notifyFile);
-              Log.debug(`🗑️ Cleaned up notification file: ${file}`);
-            } catch (cleanupError) {
-              Log.debug(
-                `Failed to clean up notification file: ${cleanupError}`
-              );
-            }
-
             return { completed: true, data: notifyData };
-          } catch (parseError) {
-            Log.debug(
-              `Failed to parse notification file ${file}: ${parseError}`
-            );
-            // Continue checking other files
           }
         }
       }
@@ -226,6 +196,20 @@ export class CliNotificationMonitor {
     }
 
     return { completed: false };
+  }
+
+  /**
+   * Read and cleanup notification file.
+   * Delegates to FileSystemUtils for actual read/delete operation.
+   *
+   * @param notifyFile Path to notification file
+   * @returns Parsed notification data, or null if file doesn't exist or is invalid
+   */
+  private static async readAndCleanupNotificationFile(
+    notifyFile: string
+  ): Promise<any | null> {
+    const fsUtils = new FileSystemUtils();
+    return await fsUtils.readJsonFileAndDelete(notifyFile);
   }
 
   /**
