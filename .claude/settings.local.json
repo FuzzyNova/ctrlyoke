@@ -32,7 +32,9 @@
       "WebFetch(domain:discuss.codemirror.net)",
       "WebFetch(domain:www.npmjs.com)",
       "Bash(npm run compile:scss:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(claude:*)",
+      "Bash(codex exec:*)"
     ],
     "deny": [],
     "ask": []
