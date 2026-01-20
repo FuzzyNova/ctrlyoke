@@ -1,0 +1,11 @@
+# YAML Format Test
+# Tests that FlightPath correctly parses YAML workflows
+
+prompts:
+  - id: test-yaml
+    prompt: |
+      This is a FlightPath YAML test. Reply with "YAML parsing successful" if you receive this.
+
+      This tests multi-line string support using literal block scalar (|).
+
+# Expected: LLM responds with "YAML parsing successful"

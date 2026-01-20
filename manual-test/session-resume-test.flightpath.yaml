@@ -1,0 +1,21 @@
+# Session Resume Test
+# Tests that sessions maintain context across prompts (newChatSession flag)
+
+provider: copilot-cli
+model: claude-haiku-4.5
+
+prompts:
+  - id: remember-info
+    prompt: |
+      We are testing FlightPath session management. Remember: My favorite color is orange.
+    newChatSession: true
+
+  - id: recall-info
+    prompt: |
+      What is my favorite color?
+    newChatSession: false
+
+# Expected behavior:
+# 1. First prompt starts new session with the info
+# 2. Second prompt continues session and should recall "orange"
+# 3. If it can't recall, session resume failed
