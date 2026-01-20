@@ -92,6 +92,18 @@ export interface PromptItem extends ExecutionProperties {
 }
 
 /**
+ * Optional workflow context for temp file naming and session resolution.
+ * Used by CliIntegration to create meaningful temp file names.
+ */
+export interface WorkflowContext {
+  promptIndex: number;
+  allPrompts: PromptItem[];
+  filePath?: string;
+  workflowFile?: PromptFile;
+  promptQueue?: any; // Avoid circular dependency with PromptQueue
+}
+
+/**
  * Per-prompt runtime execution metadata.
  * Tracks execution state for individual prompts within a workflow.
  */

@@ -12,6 +12,7 @@ import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMappe
 import { ClaudeResponseParser } from "./ClaudeResponseParser";
 import { ClaudeNotificationMonitor } from "./ClaudeNotificationMonitor";
 import { ClaudeToolPermissionMapper } from "./ClaudeToolPermissionMapper";
+import { ClaudeLogParser } from "./ClaudeLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { getClaudeModelName } from "../../../utils/ModelConstants";
@@ -23,11 +24,11 @@ const execAsync = promisify(exec);
  * Claude CLI Provider
  *
  * Implements all Claude-specific logic using composition pattern:
- * - TUI patterns and completion detection (escapeIndicator, chromePatterns)
- * - Stop hook configuration for reliable completion detection
+ * - Log file monitoring and Stop hook for completion detection
  * - Stream-json output parsing with real-time content extraction
  * - Tool permission conversion with Anthropic tool name format (Bash, Write)
  * - MCP server configuration with "type": "stdio"
+ * - Session discovery via log file analysis
  *
  * This provider aggregates four specialized components:
  * - ClaudeResponseParser: Parses stream-json output and tool calls
@@ -46,49 +47,6 @@ export class ClaudeCliProvider implements ICliProvider {
     name: "claude",
     displayName: "Claude Code CLI",
     installHint: "Install via: npm install -g @anthropic-ai/claude-code",
-    escapeIndicator: "esc to interrupt",
-    screenEndPattern: /─{20,}\r?\n\s*(?:⏵⏵|⏸|[>❯])\s*/g,
-    chromePatterns: [
-      // Claude-specific box drawing and separators
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing characters (8+ in a row = UI chrome)
-      /^[─═]{20,}$/, // Long horizontal separators
-      /Claude Code v[\d.]+/i, // Header with version
-
-      // Claude ASCII logo (distinctive characters)
-      /▐▛███▜▌/, // Logo line 1
-      /▝▜█████▛▘/, // Logo line 2
-
-      // Claude welcome and info sections (UI chrome)
-      /^Welcome back/i, // Welcome message
-      /^Recent activity/i, // Activity header
-      /^No recent activity/i, // Empty activity
-      /^What's new/i, // Release notes header
-      /\/release-notes for more/i, // Navigation hint
-      /^Added .* support for/i, // Feature announcements
-      /^Added .* tool for/i, // Tool announcements
-      /Claude Pro ·.*Organization/i, // Status line with model and account
-
-      // Claude spinner/thinking indicator (UI chrome)
-      /^[✻✽✢✶·*]\s*$/, // Spinner alone (any Claude spinner character including *)
-      /^[✻✽✢✶·*]\s+.*\((esc to interrupt|ctrl\+c to interrupt).*\)/, // Spinner + text + interrupt hint
-
-      // Claude approval prompts (UI chrome)
-      /^Do you want to proceed\?/i, // Approval question
-      /^Esc to cancel$/i, // Cancel hint (exact match - distinctive)
-      /^❯\s*\d+\./, // Selected option indicator
-      /^\s*\d+\.\s+Yes, and don't ask again/i, // Option 2
-      /^\s*\d+\.\s+Type here to tell Claude/i, // Option 3
-
-      // Claude UI hints and mode indicators
-      /ctrl\+b to run in background/i, // Background hint
-      /^[>❯]\s*$/, // Empty prompt line (> or ❯)
-      /^\s*⏵⏵\s*$/, // Mode indicator alone (wraps on narrow terminals)
-      /^\s*⏸\s*$/, // Pause indicator alone
-      /⏵⏵.*\(shift\+tab to cycle\)/, // Mode indicator with full text (accept edits, etc.)
-      /⏸.*\(shift\+tab to cycle\)/, // Pause/plan mode indicator with full text
-      /^accept edits on \(shift\+tab to cycle\)/i, // Mode text continuation (when wrapped)
-      /^\s*\?\s+for shortcuts/i, // Shortcuts hint
-    ],
     shouldStreamHeadlessOutput: true,
 
     // Claude uses Stop hook for reliable completion detection in interactive mode
@@ -100,6 +58,7 @@ export class ClaudeCliProvider implements ICliProvider {
     new ClaudeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new ClaudeToolPermissionMapper();
+  readonly logParser = new ClaudeLogParser();
 
   /**
    * Build complete CLI arguments array for Claude CLI execution

@@ -48,18 +48,6 @@ export interface IResponseParser {
   ): { prompt: number; completion: number } | undefined;
 
   /**
-   * Parse interactive TUI output to extract AI response
-   * Used when notify hook fires before TUI completion detection
-   * @param terminalOutput Full terminal output accumulated during execution
-   * @param sanitizedPrompt Original prompt (for context)
-   * @returns Parsed result with response and statistics
-   */
-  parseInteractiveResponse(
-    terminalOutput: string,
-    sanitizedPrompt: string
-  ): CliResult;
-
-  /**
    * Check if an error is a recoverable session error that should trigger retry without resume flag
    *
    * Some providers (e.g., Claude CLI) reject invalid session IDs with specific error messages.
@@ -87,34 +75,6 @@ export abstract class ResponseParserBase implements IResponseParser {
   abstract parseTokenCounts(
     output: string
   ): { prompt: number; completion: number } | undefined;
-
-  /**
-   * Parse interactive TUI output to extract AI response
-   *
-   * In interactive mode, the output has already been filtered by TuiStreamProcessor
-   * (TUI chrome removed), so it should mostly contain the AI response text.
-   * Statistics are not available in interactive mode.
-   *
-   * This default implementation is sufficient for most providers.
-   * Override only if provider-specific parsing is needed.
-   *
-   * @param terminalOutput Accumulated terminal output from TuiStreamProcessor
-   * @param sanitizedPrompt Original prompt (for context, mostly unused)
-   * @returns Parsed result with response
-   */
-  parseInteractiveResponse(
-    terminalOutput: string,
-    sanitizedPrompt: string
-  ): CliResult {
-    // Terminal output is already cleaned by TuiStreamProcessor
-    // Just return it as the response (no statistics available in interactive mode)
-    return {
-      success: true,
-      response: terminalOutput.trim(),
-      statistics: "", // No statistics in interactive mode
-      exitCode: 0,
-    };
-  }
 
   /**
    * Format usage statistics for display

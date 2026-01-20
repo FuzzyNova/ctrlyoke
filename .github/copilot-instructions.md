@@ -72,25 +72,29 @@ src/
 │   │   │   ├── CopilotCliProvider.ts
 │   │   │   ├── CopilotResponseParser.ts
 │   │   │   ├── CopilotNotificationMonitor.ts
-│   │   │   └── CopilotToolPermissionMapper.ts
+│   │   │   ├── CopilotToolPermissionMapper.ts
+│   │   │   └── CopilotLogParser.ts
 │   │   ├── claude/                    # Claude CLI provider
 │   │   │   ├── ClaudeCliProvider.ts
 │   │   │   ├── ClaudeResponseParser.ts
 │   │   │   ├── ClaudeNotificationMonitor.ts
-│   │   │   └── ClaudeToolPermissionMapper.ts
+│   │   │   ├── ClaudeToolPermissionMapper.ts
+│   │   │   └── ClaudeLogParser.ts
 │   │   ├── codex/                     # Codex CLI provider
 │   │   │   ├── CodexCliProvider.ts
 │   │   │   ├── CodexResponseParser.ts
 │   │   │   ├── CodexNotificationMonitor.ts
-│   │   │   └── CodexToolPermissionMapper.ts
+│   │   │   ├── CodexToolPermissionMapper.ts
+│   │   │   └── CodexLogParser.ts
 │   │   └── shared/                    # Truly shared utilities (no provider-specific logic)
 │   │       ├── interfaces/            # Provider contracts
 │   │       │   ├── ICliProvider.ts
 │   │       │   ├── IResponseParser.ts
 │   │       │   ├── INotificationMonitor.ts
-│   │       │   └── IToolPermissionMapper.ts
+│   │       │   ├── IToolPermissionMapper.ts
+│   │       │   └── ILogParser.ts
 │   │       ├── CliProcessManager.ts   # Process/terminal management
-│   │       ├── TuiStreamProcessor.ts  # TUI streaming utilities
+│   │       ├── BaseLogParser.ts       # Base class for log file parsing
 │   │       ├── CliMcpConfigGenerator.ts # MCP config generation
 │   │       └── TempFileManager.ts     # Temp file utilities
 │   ├── orchestration/             # Specialized orchestration classes
@@ -184,14 +188,14 @@ Sequential execution with pause/resume/cancel. State machine tracks progress. Re
 Abstract base with four concrete implementations:
 
 - **CLI Integrations** (composition-based architecture as of January 2026):
-  - **Copilot CLI** (default): GitHub Copilot CLI with TUI streaming
-  - **Claude CLI**: Anthropic's Claude Code CLI with JSON streaming
+  - **Copilot CLI** (default): GitHub Copilot CLI with log file monitoring
+  - **Claude CLI**: Anthropic's Claude Code CLI with JSON streaming and log file monitoring
   - **Codex CLI**: OpenAI's Codex CLI with JSONL events and notify hook
   - **Architecture**: Single generic `CliIntegration` class works with all providers via `ICliProvider` interface
-  - **Provider isolation**: Each provider in separate directory (copilot/, claude/, codex/) with 4 required files
+  - **Provider isolation**: Each provider in separate directory (copilot/, claude/, codex/) with 5 required files
   - **Zero core changes**: Adding new providers requires NO modifications to CliIntegration or shared utilities
-  - **Shared features**: Adaptive prompt passing (simple ≤300 chars direct, complex via temp files), two execution modes (interactive TUI or headless background), session continuity, token parsing
-  - **Shared utilities**: CliProcessManager (process/terminal), TuiStreamProcessor (TUI streaming), CliMcpConfigGenerator (MCP config)
+  - **Shared features**: Adaptive prompt passing (simple ≤300 chars direct, complex via temp files), two execution modes (interactive terminal or headless background), session continuity, token parsing
+  - **Shared utilities**: CliProcessManager (process/terminal), CliMcpConfigGenerator (MCP config), BaseLogParser (log file monitoring)
   - **See**: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide to adding new providers
 - **Chat** (fallback): UI automation with log-based completion detection
   - **Components**: CopilotChatIntegration (orchestration), ChatLogMonitor (log polling), NativeAttachmentHandler (file attachments)

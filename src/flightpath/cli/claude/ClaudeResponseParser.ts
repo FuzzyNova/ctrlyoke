@@ -192,8 +192,6 @@ export class ClaudeResponseParser
     return undefined;
   }
 
-  // parseInteractiveResponse() inherited from ResponseParserBase
-
   // ============================================================
   // PRIVATE HELPER METHODS
   // ============================================================

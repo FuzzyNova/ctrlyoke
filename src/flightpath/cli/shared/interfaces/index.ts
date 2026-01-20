@@ -9,3 +9,4 @@ export * from "./IResponseParser";
 export * from "./INotificationMonitor";
 export * from "./IToolPermissionMapper";
 export * from "./ICliProvider";
+export * from "./ILogParser";

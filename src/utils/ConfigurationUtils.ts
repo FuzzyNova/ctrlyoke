@@ -237,24 +237,6 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get Copilot CLI log directory
-   */
-  getCopilotCliLogDir(): string {
-    return getConfig().get<string>("copilotCliLogDir", "");
-  },
-
-  /**
-   * Get Copilot CLI log level
-   */
-  /**
-   * Get Copilot CLI log level (hardcoded to debug for session resumption)
-   * Debug level is required to capture session IDs in logs
-   */
-  getCopilotCliLogLevel(): string {
-    return "debug";
-  },
-
-  /**
    * Check if all paths should be allowed for Copilot CLI
    */
   shouldAllowAllPaths(): boolean {

@@ -85,6 +85,4 @@ export class CopilotResponseParser
       completion: parseValue(match[3], match[4]),
     };
   }
-
-  // parseInteractiveResponse() inherited from ResponseParserBase
 }

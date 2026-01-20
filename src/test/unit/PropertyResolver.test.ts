@@ -286,9 +286,10 @@ suite("PropertyResolver Tests", () => {
       };
 
       // When prompt.endCondition is explicitly set to undefined,
-      // it should use the workflow condition (since undefined !== defined)
+      // it should OVERRIDE the workflow condition (disable validation for this prompt)
+      // If user wanted workflow default, they would omit the property entirely
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.endCondition, workflowCondition);
+      assert.strictEqual(resolved.endCondition, undefined);
     });
   });
 

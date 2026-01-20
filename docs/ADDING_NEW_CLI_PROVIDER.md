@@ -57,16 +57,17 @@ Before starting, ensure you have:
 - ZERO modifications to core classes
 - Complete isolation from existing providers
 
-### The 4 Required Components
+### The 5 Required Components
 
-Every CLI provider consists of exactly **4 files** implementing **4 interfaces**:
+Every CLI provider consists of exactly **5 files** implementing **4 interfaces** + **1 log parser**:
 
-| File                              | Interface               | Purpose                                              |
+| File                              | Interface/Type          | Purpose                                              |
 | --------------------------------- | ----------------------- | ---------------------------------------------------- |
 | `ProviderCliProvider.ts`          | `ICliProvider`          | Main provider descriptor - aggregates all components |
 | `ProviderResponseParser.ts`       | `IResponseParser`       | Parses CLI output, extracts tokens/session IDs       |
 | `ProviderNotificationMonitor.ts`  | `INotificationMonitor`  | Monitors for completion events (hooks/polling)       |
 | `ProviderToolPermissionMapper.ts` | `IToolPermissionMapper` | Converts permissions to CLI arguments                |
+| `ProviderLogParser.ts`            | `ILogParser`            | Parses log files for session IDs and completion      |
 
 ### Directory Structure
 
@@ -86,14 +87,16 @@ src/flightpath/cli/
 │   ├── CopilotCliProvider.ts
 │   ├── CopilotResponseParser.ts
 │   ├── CopilotNotificationMonitor.ts
-│   └── CopilotToolPermissionMapper.ts
+│   ├── CopilotToolPermissionMapper.ts
+│   └── CopilotLogParser.ts
 ├── claude/                            # Example: Claude provider
 │   └── ...
 └── gemini/                            # NEW: Your provider here
     ├── GeminiCliProvider.ts
     ├── GeminiResponseParser.ts
     ├── GeminiNotificationMonitor.ts
-    └── GeminiToolPermissionMapper.ts
+    ├── GeminiToolPermissionMapper.ts
+    └── GeminiLogParser.ts
 ```
 
 ---
@@ -109,9 +112,11 @@ src/flightpath/cli/
 - [ ] Install CLI and verify it works: `gemini --version`
 - [ ] Test basic prompt: `gemini "Hello, world"`
 - [ ] Identify output format (plain text, JSON, JSONL)
-- [ ] Test TUI mode (if available): Interactive terminal with spinner
-- [ ] Document completion indicators (escape sequence, exit code, JSON event)
+- [ ] Document completion indicators (exit code, JSON event, log file event)
 - [ ] Check for hooks/notifications (like Copilot's sessionEnd or Codex's notify)
+- [ ] **Identify log file format and location** (JSONL, JSON, plain text)
+- [ ] **Document log file structure** (session events, completion events, errors)
+- [ ] **Test log file monitoring** (can completion be detected from logs?)
 - [ ] Test session resumption: `gemini --resume <id>` (or equivalent)
 - [ ] Document tool permission flags: `--allow-tools`, `--deny-tools`, etc.
 - [ ] Test file references: `@file`, `-f file`, or other syntax
@@ -124,9 +129,10 @@ Gemini CLI v1.0.0
 - Command: gemini
 - Basic prompt: gemini "your question"
 - Output: Plain text to stdout, stats to stderr
-- TUI: Yes, with "Thinking..." indicator
-- Completion: Escape sequence '\x1b[?25h' (cursor visible) indicates done
+- Completion: Exit code 0 indicates success
 - Hooks: No native hooks, use log file monitoring
+- Log files: ~/.gemini/sessions/<session-id>.jsonl (JSONL format)
+- Log events: {"type":"session.started"}, {"type":"turn.completed"}
 - Session: --continue-session <id>
 - Permissions: --allow-all-tools, --deny-tool <name>
 - File reference: @path/to/file
@@ -153,6 +159,72 @@ touch GeminiResponseParser.ts
 touch GeminiNotificationMonitor.ts
 touch GeminiToolPermissionMapper.ts
 ```
+
+---
+
+### Phase 2.5: Create Log Parser
+
+**Goal**: Implement log file parsing for session discovery and completion detection.
+
+```bash
+touch GeminiLogParser.ts
+```
+
+**Template**: Extend `BaseLogParser` from `src/flightpath/cli/shared/BaseLogParser.ts`
+
+**Implementation checklist**:
+
+- [ ] Implement `getLogDirectory()` - Return CLI's log directory path
+- [ ] Implement `getLogFilePattern()` - Return regex pattern for log files (e.g., `session-*.jsonl`)
+- [ ] Implement `parseLogLine()` - Parse single JSONL line into structured event
+- [ ] Implement `isCompletionEvent()` - Check if event indicates completion
+- [ ] Implement `extractSessionId()` - Extract session ID from log events
+- [ ] Implement `findSessionByPrompt()` - Match session by prompt text (for session discovery)
+- [ ] Test with actual CLI log files
+
+**Example Log Parser**:
+
+```typescript
+import path from "path";
+import os from "os";
+import { BaseLogParser } from "../shared/BaseLogParser";
+
+export class GeminiLogParser extends BaseLogParser {
+  getLogDirectory(): string {
+    // Example: ~/.gemini/sessions/
+    return path.join(os.homedir(), ".gemini", "sessions");
+  }
+
+  getLogFilePattern(): RegExp {
+    // Example: Match session-abc123.jsonl
+    return /^session-[a-f0-9-]+\.jsonl$/;
+  }
+
+  parseLogLine(line: string): any | null {
+    try {
+      return JSON.parse(line);
+    } catch {
+      return null;
+    }
+  }
+
+  isCompletionEvent(event: any): boolean {
+    // Example: Check for completion event type
+    return event?.type === "turn.completed" || event?.type === "session.ended";
+  }
+
+  extractSessionId(event: any): string | undefined {
+    return event?.session_id || event?.sessionId;
+  }
+}
+```
+
+**Why log file monitoring?**
+
+- More reliable than parsing terminal output
+- Works consistently across providers
+- Enables session discovery by matching prompt content
+- No need for complex TUI escape sequence parsing
 
 ---
 
@@ -200,9 +272,9 @@ console.log(result.statistics); // "Usage: 100 input + 50 output = 150 tokens"
 
 **Approaches**:
 
-1. **Hook-based** (like Copilot/Codex): CLI calls script when done, writes JSON
-2. **Log-based** (like Claude): Poll log file for completion event
-3. **TUI-based** (fallback): Parse escape sequences in terminal output
+1. **Hook-based** (like Codex): CLI calls script when done, writes JSON
+2. **Log-based** (like Copilot/Claude): Poll log file for completion event (RECOMMENDED)
+3. **Exit-based** (simple): Monitor process exit code only
 
 ---
 
@@ -435,15 +507,17 @@ const execAsync = promisify(exec);
  * Gemini CLI Provider
  *
  * Implements all Gemini-specific logic using composition pattern:
- * - TUI patterns and completion detection (escapeIndicator, chromePatterns)
+ * - Log file monitoring for completion detection
  * - Plain text output parsing (or JSON if Gemini uses structured output)
  * - Tool permission conversion
  * - File reference formatting
+ * - Session discovery via log file analysis
  *
- * This provider aggregates four specialized components:
+ * This provider aggregates specialized components:
  * - GeminiResponseParser: Parses output and extracts tokens
  * - GeminiNotificationMonitor: Monitors for completion events
  * - GeminiToolPermissionMapper: Converts permissions to CLI arguments
+ * - GeminiLogParser: Parses log files for sessions and completion
  * - CliMcpConfigGenerator: Generates MCP configuration (if supported)
  *
  * Usage:
@@ -458,33 +532,8 @@ export class GeminiCliProvider implements ICliProvider {
     displayName: "Google Gemini CLI",
     installHint: "Install via: npm install -g @google/gemini-cli",
 
-    // TUI completion indicator - adjust based on actual CLI behavior
-    // Example: When escape sequence appears, CLI is waiting for input
-    escapeIndicator: "Esc to cancel",
-
-    // Screen end pattern - marks end of response in TUI
-    // Example: Bottom navigation bar or prompt line
-    screenEndPattern: /^>\s*$/m, // Prompt line '> '
-
-    // Chrome patterns - UI elements to filter from TUI output
-    // These should ONLY match pure UI chrome, NOT content
-    chromePatterns: [
-      // Box drawing characters (8+ in a row = UI chrome)
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/,
-
-      // Gemini-specific UI elements
-      /^Gemini CLI v\d+\.\d+\.\d+/i, // Version header
-      /^●\s+Thinking\.\.\./i, // Thinking indicator
-      /^●\s+Connected to Gemini/i, // Connection status
-
-      // Spinner/status (ONLY pure chrome lines)
-      /^\s*[·∙◉◎●]\s+.*\(Esc to cancel/i, // Spinner with cancel hint
-
-      // Empty prompt
-      /^>\s*$/,
-
-      // Any other Gemini-specific UI patterns
-    ],
+    // Log file monitoring for completion detection
+    useLogFileMonitoring: true,
 
     // Whether to stream headless output in real-time
     // Set to false if CLI uses JSON/JSONL (buffer until complete)
@@ -497,6 +546,7 @@ export class GeminiCliProvider implements ICliProvider {
     new GeminiNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new GeminiToolPermissionMapper();
+  readonly logParser: ILogParser = new GeminiLogParser();
 
   /**
    * Build CLI arguments for headless mode with file reference

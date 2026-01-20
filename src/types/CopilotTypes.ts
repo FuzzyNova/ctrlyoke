@@ -46,12 +46,7 @@ export interface CliResult {
   statistics: string;
   error?: string;
   exitCode?: number;
-}
-
-export interface CopilotCliStatistics {
-  usageEstimate: string;
-  apiDuration: string;
-  wallDuration: string;
-  codeChanges: string;
+  sessionId?: string;
+  codeChanges?: string;
   modelUsage?: string;
 }

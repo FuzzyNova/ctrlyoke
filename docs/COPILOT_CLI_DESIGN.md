@@ -20,7 +20,6 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 | `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions                    |
 | `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                  |
 | `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                     |
-| `--log-dir <directory>` | `flightpath.copilotCliLogDir`                | Full support - user-configurable or OS temp                      |
 | `--log-level <level>`   | _(hardcoded to `debug`)_                     | Always `debug` level (required for session ID extraction)        |
 | `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                                     |
 | `-p, --prompt <text>`   | Prompt text                                  | Full support (always uses `--prompt` flag)                       |
@@ -126,8 +125,8 @@ write                 # Match file creation/modification tools
 
 **Current behavior:**
 
-- Session ID extracted from process log files (`process-{timestamp}-{pid}.log`)
-- Pattern: "Flushed X events to session {GUID}" in log content (requires debug log level)
+- Session ID extracted from session event log files in `~/.copilot/session-state/`
+- Session discovery uses prompt content matching in JSONL event logs
 - `prompt.newChatSession: false` uses `--resume <sessionId>`
 - `--continue` not implemented (we track explicit session IDs)
 
@@ -157,7 +156,6 @@ write                 # Match file creation/modification tools
 ### Logging
 
 ```bash
---log-dir <directory>    # Set log directory (default: ~/.copilot/logs/)
 --log-level <level>      # none, error, warning, info, debug, all, default
 ```
 
@@ -171,9 +169,9 @@ write                 # Match file creation/modification tools
 
 **Current behavior:**
 
-- `--log-dir` configurable via `flightpath.copilotCliLogDir` setting (defaults to OS temp)
-- `--log-level` **hardcoded to `debug`** (required for session ID extraction from log content)
-- Session ID extracted from process log files (`process-{timestamp}-{pid}.log`) by parsing "Flushed X events to session {GUID}" pattern
+- `--log-level` **hardcoded to `debug`** (Copilot CLI creates logs in `~/.copilot/session-state/`)
+- FlightPath monitors these log files for session discovery and completion detection
+- Session IDs discovered by matching prompt content in event logs
 
 ### Streaming & Display
 
@@ -273,21 +271,13 @@ write                 # Match file creation/modification tools
 
 ### 2. ✅ Logging Configuration
 
-**Goal:** Allow users to customize log directory for troubleshooting.
-
-**Settings (`package.json`):**
-
-```json
-{
-  "flightpath.copilotCliLogDir": "/path/to/custom/logs"
-}
-```
+**Goal:** Copilot CLI automatically manages its own logging.
 
 **Implementation details:**
 
-- `initializeLogDirectory()` checks the setting first, falls back to OS temp
-- `--log-level` is **hardcoded to `debug`** to ensure session ID extraction works (session IDs are only logged at DEBUG level)
-- Both log directory and level are applied during CLI argument building in `sendPrompt()`
+- `--log-level` is **hardcoded to `debug`** to ensure session event logging (required for session discovery)
+- Copilot CLI writes logs to `~/.copilot/session-state/` (managed by CLI itself)
+- FlightPath monitors these logs for session IDs and completion events using log file parsers
 
 ---
 

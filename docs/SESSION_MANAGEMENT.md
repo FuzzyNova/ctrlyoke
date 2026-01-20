@@ -141,7 +141,7 @@ prompts:
 **Finding session IDs:**
 
 1. Check working files: `.flightpath/.working/<workflow>.working.yaml`
-2. Look in CLI logs (if `flightpath.copilotCliLogDir` configured)
+2. Look in CLI session logs (in `~/.copilot/session-state/` for Copilot)
 3. Use `_runtime.sessionId` from previous executions
 
 ---
@@ -350,9 +350,9 @@ gh copilot --resume 550e8400-e29b-41d4-a716-446655440000
 
 **Session tracking:**
 
-- Session IDs extracted from CLI output or process logs
-- Logs stored in `flightpath.copilotCliLogDir` (or system temp)
-- Debug log level required for session ID extraction
+- Session IDs extracted from session event logs in `~/.copilot/session-state/`
+- Session discovery uses prompt content matching in JSONL event logs
+- FlightPath monitors these logs for completion detection and session resumption
 
 **Notes:**
 

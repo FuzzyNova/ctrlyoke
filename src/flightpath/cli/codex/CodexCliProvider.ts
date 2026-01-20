@@ -12,6 +12,7 @@ import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMappe
 import { CodexResponseParser } from "./CodexResponseParser";
 import { CodexNotificationMonitor } from "./CodexNotificationMonitor";
 import { CodexToolPermissionMapper } from "./CodexToolPermissionMapper";
+import { CodexLogParser } from "./CodexLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS } from "../../../utils/ModelConstants";
@@ -23,8 +24,7 @@ const execAsync = promisify(exec);
  * Codex CLI Provider
  *
  * Implements all Codex-specific logic using composition pattern:
- * - TUI patterns and completion detection (escapeIndicator, chromePatterns)
- * - Notify hook configuration for reliable completion detection
+ * - Log file monitoring and notify hook for completion detection
  * - JSONL output parsing with event-based streaming
  * - Mode-based permissions (no granular tool patterns)
  * - MCP server configuration with inline TOML format
@@ -54,49 +54,6 @@ export class CodexCliProvider implements ICliProvider {
     name: "codex",
     displayName: "Codex CLI",
     installHint: "Install via: npm install -g @openai/codex-cli",
-    escapeIndicator: "esc to interrupt",
-    screenEndPattern: /›\s|\d+%\s+context\s+left/g,
-    chromePatterns: [
-      // Codex-specific box borders (UI chrome only)
-      /^[╭╰]─+[╮╯]$/, // Box top/bottom borders
-      />_\s+OpenAI Codex/i, // Header (distinctive marker)
-      /^│\s*│$/, // Empty box lines
-      /model:.*\/model to change/i, // Model info line (distinctive parts)
-      /directory:.*│$/i, // Directory line in box
-
-      // Codex informational messages (UI chrome)
-      /^Tip:/i, // Tips (any tip)
-      /is deprecated.*Use \[features\]/i, // Deprecation warnings (distinctive parts)
-      /^Enable it with/i, // Configuration hints
-      /github\.com\/openai\/codex/i, // Documentation links
-
-      // Codex status bar (UI chrome - context percentage and shortcuts)
-      /\d+%\s+context\s+left.*\?\s+for shortcuts/i, // Status bar (distinctive parts)
-      /^\d+%\s+context\s+left\s*$/i, // Context percentage alone
-      /[·•]\s*\?\s*for shortcuts/i, // Status bar fragment (just shortcuts part)
-
-      // Codex prompt indicator when empty (UI chrome)
-      /^›\s*$/, // Empty prompt line only
-
-      // Codex approval prompts (UI chrome)
-      /Would you like to run the following command\?/i, // Approval question
-      /^\s*Reason:/i, // Reason line prefix
-      /^›\s+\d+\.\s+Yes, proceed/i, // Option 1 (distinctive part)
-      /Yes, and don't ask again for commands that start with/i, // Option 2 (distinctive part)
-      /No, and tell Codex what to do differently/i, // Option 3
-      /Press enter to confirm or esc to cancel/i, // Confirmation hint
-
-      // Codex separators (UI chrome)
-      /^─\s+Worked for \d+s\s+─/i, // Worked for Xs separator
-
-      // Codex spinner/thinking indicator (UI chrome)
-      /^•?\s*W(o(r(k(i(n(g)?)?)?)?)?)?\d*\s*$/i, // Working prefixes (W, Wo, Wor, Work, Worki, Workin, Working + numbers)
-      /^•?\s*(orking|rking|king|ing|ng|g)\s*$/i, // Working suffixes (fragments from right side)
-      /^•?\s*\d+\s*$/i, // Standalone numbers (spinner frame counters)
-      /^[•·]\s*$/i, // Standalone bullet points
-      /\(.*esc to interr?upt.*\)/i, // Lines with "(esc to interrupt)" or "(Xs • esc to interrupt)" (handles typo "interupt")
-      /\d+s\s*[•·]\s*esc to interr?upt/i, // Timer with escape indicator (handles missing opening paren)
-    ],
     shouldStreamHeadlessOutput: true,
 
     // Codex uses notify hook for reliable completion detection in interactive mode
@@ -108,6 +65,7 @@ export class CodexCliProvider implements ICliProvider {
     new CodexNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CodexToolPermissionMapper();
+  readonly logParser = new CodexLogParser();
 
   /**
    * Build complete CLI arguments array for Codex CLI execution

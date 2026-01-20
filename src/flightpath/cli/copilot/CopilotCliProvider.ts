@@ -3,7 +3,6 @@ import { promisify } from "util";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
-import * as os from "os";
 import {
   ICliProvider,
   ProviderConfig,
@@ -14,6 +13,7 @@ import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMappe
 import { CopilotResponseParser } from "./CopilotResponseParser";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
+import { CopilotLogParser } from "./CopilotLogParser";
 import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import {
@@ -28,11 +28,11 @@ const execAsync = promisify(exec);
  * Copilot CLI Provider
  *
  * Implements all Copilot-specific logic using composition pattern:
- * - TUI patterns and completion detection (escapeIndicator, chromePatterns)
- * - sessionEnd hook configuration for reliable completion detection
+ * - Log file monitoring and sessionEnd hook for completion detection
  * - Plain text output parsing with stderr statistics
  * - Tool permission conversion with read-only tool filtering
  * - MCP server configuration with "local" type and tools field
+ * - Session discovery via prompt matching in event logs
  *
  * This provider aggregates four specialized components:
  * - CopilotResponseParser: Parses plain text output and statistics
@@ -51,50 +51,6 @@ export class CopilotCliProvider implements ICliProvider {
     name: "copilot",
     displayName: "GitHub Copilot CLI",
     installHint: "Install via: npm install -g @github/copilot",
-    escapeIndicator: "Esc to cancel",
-    screenEndPattern: /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand\s+recent/gi,
-    chromePatterns: [
-      // Copilot-specific box drawing and separators (UI chrome only)
-      /^[─═╭╮╰╯│┌┐└┘├┤┬┴┼]{8,}$/, // Box drawing characters (8+ in a row = UI chrome)
-      /^[─═]{50,}$/, // Very long horizontal separators (50+ = UI chrome)
-      /^│\s*│$/, // Empty box sides
-
-      // Copilot welcome and version info (UI chrome)
-      /^Welcome to GitHub Copilot CLI/i, // Welcome header
-      /Version.*·.*Commit/i, // Version line (distinctive parts)
-      /check for mistakes/i, // Description line (distinctive ending)
-
-      // Copilot status bullets (UI chrome, very specific text)
-      /^●\s+Logged in as user:/i, // Login status
-      /^●\s+Connected to.*MCP Server/i, // Connection status
-      /^●\s+Model changed to:/i, // Model change notification
-
-      // Copilot spinner/thinking indicator (UI chrome - just the spinner character alone)
-      /^\s*[·∙◉◎●]\s*$/, // Spinner alone (U+00B7 middle dot, U+2219 bullet operator, or filled circles)
-
-      // Copilot spinner with status text and cancel hint (UI chrome)
-      // Allow optional leading whitespace (left after zero-width char stripping)
-      // Note: Only filters lines that are JUST chrome (no content before the spinner)
-      /^\s*[·∙◉◎●]\s+.*\(Esc to cancel/i, // Pure chrome: "∙ Thinking (Esc to cancel)"
-
-      // Copilot status bar (UI chrome - path + branch + model display)
-      /\[⎇\s+\w+\*?\].*gpt-.*\(\d+x\)/i, // Look for distinctive parts: branch indicator, model, and multiplier
-
-      // Copilot bottom navigation bar (already in screenEndPattern, but keep for safety)
-      /Ctrl\+c\s+Exit\s*·\s*Ctrl\+r\s+Expand/i, // Bottom status bar
-      /·\s*Ctrl\+t\s+Show\s+reasoning/i, // Bottom actions: "· Ctrl+t Show reasoning"
-      /·\s*Ctrl\+d\s+Enqueue/i, // Bottom actions: "· Ctrl+d Enqueue"
-
-      // Copilot prompt hints (UI chrome)
-      /Enter @ to mention files/i, // Prompt hint (distinctive part)
-      /^>\s*$/, // Empty prompt line
-
-      // Copilot approval prompts (UI chrome)
-      /^Do you want to run this command\?/i, // Approval question
-      /Confirm with number keys.*Cancel with Esc/i, // Confirmation hint
-      /^❯\s*\d+\./, // Selected option indicator (any option)
-      /No, and tell Copilot what to do differently/i, // Option text
-    ],
     shouldStreamHeadlessOutput: true,
 
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
@@ -106,29 +62,10 @@ export class CopilotCliProvider implements ICliProvider {
     new CopilotNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new CopilotToolPermissionMapper();
-
-  /** Log directory for session ID tracking */
-  private logDirectory?: string;
+  readonly logParser = new CopilotLogParser();
 
   constructor() {
-    this.initializeLogDirectory();
-  }
-
-  /**
-   * Initialize log directory for session ID tracking.
-   * Uses configured directory or falls back to OS temp directory + FlightPath subdirectory.
-   */
-  private initializeLogDirectory(): void {
-    const configuredDir = ConfigurationUtils.getCopilotCliLogDir();
-
-    if (configuredDir) {
-      this.logDirectory = configuredDir;
-    } else {
-      // Fallback: Create FlightPath-specific log directory in OS temp folder
-      // Cross-platform: works on Windows (C:\Users\{user}\AppData\Local\Temp), macOS/Linux (/tmp)
-      this.logDirectory = path.join(os.tmpdir(), "flightpath-copilot-logs");
-    }
-    Log.info(`📁 Copilot log directory: ${this.logDirectory}`);
+    // No initialization needed
   }
 
   /**
@@ -234,15 +171,6 @@ export class CopilotCliProvider implements ICliProvider {
     // Path permissions
     if (ConfigurationUtils.shouldAllowAllPaths()) {
       args.push("--allow-all-paths");
-    }
-
-    // Logging configuration
-    if (this.logDirectory) {
-      args.push("--log-dir", this.logDirectory);
-    }
-    const logLevel = ConfigurationUtils.getCopilotCliLogLevel();
-    if (logLevel !== "default") {
-      args.push("--log-level", logLevel);
     }
 
     // Workspace directories
@@ -405,69 +333,7 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Extract session ID from Copilot CLI process log files.
-   *
-   * New log format (as of CLI v0.0.377+): process-{timestamp}-{pid}.log
-   * Session ID appears in log lines: "Flushed X events to session {GUID}"
-   * Requires --log-level debug or higher to capture session ID.
-   * Returns the session ID from the most recently modified log file.
-   *
-   * @returns Session ID if found, undefined otherwise
-   */
-  async extractSessionIdFromLogs(): Promise<string | undefined> {
-    if (!this.logDirectory) {
-      return undefined;
-    }
-
-    try {
-      // Ensure log directory exists
-      await fs.mkdir(this.logDirectory, { recursive: true });
-
-      // Read all files in log directory
-      const files = await fs.readdir(this.logDirectory);
-
-      // Filter for process log files (process-{timestamp}-{pid}.log)
-      const processFiles = files.filter((file) =>
-        file.match(/^process-\d+-\d+\.log$/i)
-      );
-
-      if (processFiles.length === 0) {
-        return undefined;
-      }
-
-      // Get file stats to find most recent
-      const fileStats = await Promise.all(
-        processFiles.map(async (file) => {
-          const filePath = path.join(this.logDirectory!, file);
-          const stats = await fs.stat(filePath);
-          return { file, filePath, mtime: stats.mtime };
-        })
-      );
-
-      // Sort by modification time (most recent first)
-      fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-      // Read the most recent log file and search for session ID
-      const logContent = await fs.readFile(fileStats[0].filePath, "utf-8");
-
-      // Pattern: "Flushed X events to session {GUID}"
-      // Example: "2026-01-12T20:11:10.385Z [DEBUG] Flushed 3 events to session 4f59192e-65ed-4fdb-aed7-ce69a263dd7b"
-      const match = logContent.match(
-        /Flushed \d+ events to session ([a-f0-9-]+)/i
-      );
-
-      if (match && match[1]) {
-        return match[1];
-      }
-
-      return undefined;
-    } catch (error) {
-      Log.error("❌ Failed to extract session ID from logs", error);
-      return undefined;
-    }
-  }
-
-  /**   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode with file reference
    *
    * Copilot requires --prompt flag to specify file references.
    * Format: copilot --prompt "@path/to/file" [other args]

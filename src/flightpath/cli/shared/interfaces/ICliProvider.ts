@@ -1,6 +1,7 @@
 import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper } from "./IToolPermissionMapper";
+import type { ILogParser } from "./ILogParser";
 
 /**
  * Provider configuration (static metadata)
@@ -15,26 +16,17 @@ export interface ProviderConfig {
   /** Installation hint when CLI not found */
   installHint: string;
 
-  /** Escape indicator for TUI completion detection */
-  escapeIndicator: string;
-
-  /** Screen end pattern for TUI parsing */
-  screenEndPattern: RegExp;
-
-  /** TUI chrome patterns for filtering */
-  chromePatterns: RegExp[];
-
   /** Whether to stream headless output in real-time */
   shouldStreamHeadlessOutput: boolean;
 
   /**
    * Whether this provider uses notification-based completion detection in interactive mode.
-   * When true, CliIntegration will use dual monitoring (TUI + notification file).
-   * When false or undefined, only TUI-based completion detection is used.
+   * When true, CliIntegration will use log file monitoring for completion detection.
+   * When false or undefined, only fallback completion detection is used.
    *
-   * - Claude: true (uses Stop hook for reliable completion)
-   * - Copilot: true (uses sessionEnd hook for reliable completion)
-   * - Codex: true (uses notify hook for reliable completion)
+   * - Claude: true (monitors JSONL log files for completion events)
+   * - Copilot: true (monitors process log files for sessionEnd events)
+   * - Codex: true (monitors JSONL log files for turn.completed events)
    */
   usesInteractiveNotificationMonitor?: boolean;
 }
@@ -72,6 +64,9 @@ export interface ICliProvider {
 
   /** Tool permission mapper component */
   readonly toolPermissionMapper: IToolPermissionMapper;
+
+  /** Log parser component (for log file monitoring in interactive mode) */
+  readonly logParser?: ILogParser;
 
   /**
    * Build complete CLI arguments array for execution

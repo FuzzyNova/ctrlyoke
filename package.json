@@ -795,13 +795,6 @@
           "description": "[Copilot CLI] Additional directories to allow access (beyond workspace)",
           "markdownDescription": "**Copilot CLI Only.** List of additional directory paths that Copilot CLI can access. Workspace folders are automatically included."
         },
-        "flightpath.copilotCliLogDir": {
-          "order": 304,
-          "type": "string",
-          "default": "",
-          "description": "[Copilot CLI] Custom directory for logs (default: system temp)",
-          "markdownDescription": "**Copilot CLI Only.** Custom directory for Copilot CLI logs. Leave empty to use system temp directory (`os.tmpdir()/flightpath-copilot-logs`). Logs are used for session ID tracking and debugging. **Note:** FlightPath always uses debug log level to ensure session resumption works correctly."
-        },
         "flightpath.claudeCliModel": {
           "order": 400,
           "type": "string",

@@ -1,17 +1,18 @@
 import * as vscode from "vscode";
 import { ChildProcess } from "child_process";
 import { CliResult } from "../../types/CopilotTypes";
-import { PromptItem, Provider, PromptFile } from "../../types/FlightPathTypes";
+import {
+  PromptItem,
+  Provider,
+  PromptFile,
+  WorkflowContext,
+} from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import {
-  TuiStreamProcessor,
-  TuiStreamConfig,
-  WorkflowContext,
-} from "../../utils/TuiStreamProcessor";
 import { Log } from "../../utils/Log";
+import { ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import {
@@ -107,12 +108,6 @@ export class CliIntegration extends CopilotIntegration {
 
   // Interactive terminal mode properties
   protected currentExecution?: vscode.TerminalShellExecution;
-
-  // TUI completion detection - using execution.read()
-  private readAbortController?: AbortController;
-
-  // Track the sanitized prompt sent to terminal for filtering echo in response
-  protected lastSanitizedPrompt?: string;
 
   // Cached MCP config file path (generated once per session, reused for all prompts)
   private cachedMcpConfigPath?: string;
@@ -433,26 +428,19 @@ export class CliIntegration extends CopilotIntegration {
   // ============================================================
 
   /**
-   * Execute a CLI command in interactive TUI mode.
+   * Execute a CLI command in interactive mode with log file monitoring.
    *
    * Strategy:
-   * 1. Dispose any existing terminal (CLI may be running in it)
-   * 2. Create fresh terminal and start CLI in interactive mode
-   * 3. Wait for TUI to be ready (delay-based, simple)
-   * 4. Send prompt via terminal.sendText()
-   *    - Simple prompts: sent directly (fast!)
-   *    - Complex prompts: written to temp file and referenced
-   * 5. Stream output via execution.read() and detect completion
-   *    - If provider uses notification monitoring: dual monitoring (TUI + notification)
-   *    - Otherwise: TUI-only completion detection
-   *
-   * Session continuity is handled via --resume flag in CLI args, not by
-   * reusing the same terminal. Each execution starts a fresh CLI process.
+   * 1. Record start time BEFORE spawning CLI
+   * 2. Spawn CLI in terminal (TUI displays for user, but we ignore it)
+   * 3. Discover session log by matching prompt content
+   * 4. Extract session ID from matched log
+   * 5. Monitor log file for completion
    *
    * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
    * @param workflowContext Optional workflow context for temp file naming
-   * @param resolvedSessionId Resolved session ID for notification monitoring
+   * @param resolvedSessionId Resolved session ID (not used in log monitoring)
    * @returns Promise with success flag and optional sessionId
    */
   protected async executeInTerminal(
@@ -462,251 +450,84 @@ export class CliIntegration extends CopilotIntegration {
     resolvedSessionId?: string
   ): Promise<{ success: boolean; sessionId?: string }> {
     try {
-      // Check if prompt is simple enough for direct passing
-      const useDirectPrompt = this.isSimplePrompt(promptText);
-
-      if (useDirectPrompt) {
-        Log.debug("📝 Using direct prompt (simple, no temp file)");
-      } else {
-        Log.debug("📁 Using temp file prompt (complex or long)");
+      // Check if provider has log parser capability
+      if (!this.provider.logParser) {
+        Log.error("❌ Provider does not support log file monitoring");
+        return { success: false };
       }
 
-      // Check if provider uses notification-based completion detection
-      const useNotificationMonitoring =
-        this.provider.config.usesInteractiveNotificationMonitor === true;
+      // 1. Record start time BEFORE spawning CLI
+      const startTime = new Date();
+      Log.info(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
-      const result = await this.withInteractiveTuiExecution(
-        args,
+      // 2. Spawn CLI in terminal (TUI displays for user)
+      const { terminal, execution, promptToSend, tempFilePaths } =
+        await this.startCliProcess(args, promptText, workflowContext);
+
+      // 3. Discover session log by matching prompt content
+      Log.info("🔍 Discovering session log file...");
+      const logPath = await this.provider.logParser.discoverSessionLog(
         promptText,
-        workflowContext,
-        async ({
-          terminal,
-          execution,
-          promptWithInstruction,
-          tuiProcessor,
-          timeoutMs,
-        }) => {
-          if (useNotificationMonitoring) {
-            // Dual monitoring: TUI + notification file (Claude, Copilot, Codex)
-            return this.executeDualMonitoring(
-              execution,
-              terminal,
-              promptWithInstruction,
-              tuiProcessor,
-              timeoutMs,
-              resolvedSessionId // Pass resolved session for notification monitoring
-            );
-          } else {
-            // TUI-only monitoring (fallback)
-            return tuiProcessor.processStream(
-              execution,
-              terminal,
-              promptWithInstruction,
-              timeoutMs,
-              this.lastSanitizedPrompt
-            );
-          }
-        },
-        undefined,
-        useDirectPrompt
+        startTime
       );
 
-      if (!result.success && result.errorMessage) {
-        this.lastFailureReason = result.errorMessage;
+      if (!logPath) {
+        Log.error(
+          "❌ Could not discover session log - no matching prompt found"
+        );
+        this.lastFailureReason = "Session log not found";
+
+        // Clean up temp files
+        await this.cleanupTempFiles(tempFilePaths);
+
+        return { success: false };
       }
 
-      return { success: result.success, sessionId: result.sessionId };
+      Log.info(`✅ Found session log: ${logPath}`);
+
+      // 4. Extract session ID from matched log
+      const events = await this.provider.logParser.readNewLines(logPath);
+      const sessionId = this.provider.logParser.extractSessionId(events);
+
+      if (sessionId) {
+        Log.debug(`💾 Extracted session ID: ${sessionId}`);
+      }
+
+      // 5. Monitor log file for completion
+      const result = await this.monitorLogFile(logPath, sessionId, startTime);
+
+      // Clean up temp files
+      await this.cleanupTempFiles(tempFilePaths);
+
+      return result;
     } catch (error) {
-      Log.error(`❌ TUI execution error`, error);
+      Log.error(`❌ Interactive execution error`, error);
+      this.lastFailureReason =
+        error instanceof Error ? error.message : String(error);
       throw error;
     }
   }
 
   /**
-   * Execute with dual monitoring: TUI stream + notification file.
+   * Start CLI process in terminal and return execution details.
    *
-   * Uses Promise.race to detect completion from either:
-   * - TUI stream processing (escape indicator disappearing)
-   * - Notification file (hook writes completion file)
-   *
-   * When notification detects completion first:
-   * 1. Aborts TUI stream processing
-   * 2. Extracts session ID from notification data
-   * 3. Waits for TUI stream to finish (cleanup)
-   *
-   * This provides more reliable completion detection for CLIs that
-   * support hooks (Claude Stop hook, Copilot sessionEnd, Codex notify).
-   *
-   * @param execution Terminal shell execution
-   * @param terminal Terminal instance
-   * @param promptWithInstruction Prompt text to send
-   * @param tuiProcessor TUI stream processor
-   * @param timeoutMs Execution timeout in milliseconds
-   * @param resolvedSessionId Resolved session ID for monitoring (undefined = wildcard mode)
-   * @returns TuiProcessResult with success flag and optional error
-   */
-  private async executeDualMonitoring(
-    execution: vscode.TerminalShellExecution,
-    terminal: vscode.Terminal,
-    promptWithInstruction: string,
-    tuiProcessor: TuiStreamProcessor,
-    timeoutMs: number,
-    resolvedSessionId?: string
-  ): Promise<{ success: boolean; errorMessage?: string; sessionId?: string }> {
-    const tuiAbortController = new AbortController();
-    const startTime = new Date();
-    const workspaceRoot = this.getWorkspaceRoot();
-
-    if (!workspaceRoot) {
-      Log.warn("⚠️ No workspace root - falling back to TUI-only monitoring");
-      return tuiProcessor.processStream(
-        execution,
-        terminal,
-        promptWithInstruction,
-        timeoutMs,
-        this.lastSanitizedPrompt
-      );
-    }
-
-    Log.info("⏳ Starting TUI processing with notification monitoring...");
-
-    // Start TUI stream processing
-    const tuiPromise = tuiProcessor.processStream(
-      execution,
-      terminal,
-      promptWithInstruction,
-      timeoutMs,
-      this.lastSanitizedPrompt,
-      tuiAbortController
-    );
-
-    // Get notification directory from provider
-    const notifyDir =
-      this.provider.notificationMonitor.getNotificationDirectory(workspaceRoot);
-
-    // Track whether the race has resolved - used to cancel notification monitor
-    // when TUI finishes first, preventing stale monitors from stealing hook files
-    // from subsequent runs
-    let raceResolved = false;
-
-    // Start notification monitoring
-    const notifyPromise =
-      this.provider.notificationMonitor.monitorForCompletion(
-        {
-          directory: notifyDir,
-          timeoutMs,
-        },
-        resolvedSessionId, // undefined = wildcard mode for first prompt
-        startTime,
-        () => this.isCancelling || raceResolved // Cancel when user cancels OR race resolved
-      );
-
-    // Race: TUI completion vs notification file
-    type NotifyLikeResult = { completed: boolean; error?: string; data?: any };
-
-    const notifyResult = await Promise.race<NotifyLikeResult>([
-      notifyPromise,
-      tuiPromise.then((tuiResult) => ({
-        completed: tuiResult.success,
-        error: tuiResult.errorMessage,
-      })),
-    ]);
-
-    // Mark race as resolved to stop the notification monitor if it's still running
-    // This prevents the monitor from stealing hook files from subsequent runs
-    raceResolved = true;
-
-    let extractedSessionId: string | undefined;
-
-    if (notifyResult.completed) {
-      Log.debug("🛑 Notification detected completion - aborting TUI stream");
-      tuiAbortController.abort();
-
-      // Extract session ID from notification data if available
-      // Note: Copilot hooks currently don't provide session IDs (known limitation).
-      // This code is kept for future compatibility when Copilot adds session ID support.
-      if (
-        "data" in notifyResult &&
-        notifyResult.data &&
-        this.provider.notificationMonitor.extractSessionId
-      ) {
-        extractedSessionId = this.provider.notificationMonitor.extractSessionId(
-          notifyResult.data
-        );
-        if (extractedSessionId) {
-          Log.debug(`💾 Session ID from notification: ${extractedSessionId}`);
-        }
-      }
-    }
-
-    // Wait for TUI stream to finish (ensures cleanup)
-    const tuiResult = await tuiPromise;
-
-    if (!notifyResult.completed) {
-      const errorMsg = notifyResult.error || "Completion detection failed";
-      Log.error(`❌ Execution failed: ${errorMsg}`);
-      return { success: false, errorMessage: errorMsg };
-    }
-
-    // Log any TUI error as warning (notification took precedence)
-    if (!tuiResult.success && tuiResult.errorMessage) {
-      Log.warn(`⚠️ TUI processor reported: ${tuiResult.errorMessage}`);
-    }
-
-    // CRITICAL: Extract and store response from terminal output
-    // Interactive mode doesn't parse output automatically like headless mode does.
-    // We need to extract the response text from the terminal stream for WorkflowExecutor.
-    const terminalOutput = tuiProcessor.getAccumulatedOutput();
-    if (terminalOutput) {
-      // Parse the terminal output to extract response and statistics
-      const parsed = this.provider.responseParser.parseInteractiveResponse(
-        terminalOutput,
-        this.lastSanitizedPrompt || ""
-      );
-
-      // Store the result so getLastResult() works
-      this.lastResult = parsed;
-
-      // Log the response for visibility
-      this.logResponse(parsed.response, parsed.statistics);
-    } else {
-      Log.warn("⚠️ No terminal output captured - lastResult may be incomplete");
-    }
-
-    return { success: true, sessionId: extractedSessionId };
-  }
-
-  /**
-   * Common wrapper for interactive TUI execution with proper cleanup.
-   *
-   * @param args Base CLI arguments
-   * @param promptText Prompt text to send
+   * @param args CLI arguments
+   * @param promptText Prompt text
    * @param workflowContext Optional workflow context
-   * @param execute Execution callback
-   * @param tuiConfigOverrides Optional TUI config overrides
-   * @param useDirectPrompt Whether to send prompt directly (no temp file)
-   * @returns Success/failure result with optional sessionId
+   * @returns Terminal, execution, prompt to send, and temp file paths for cleanup
    */
-  protected async withInteractiveTuiExecution(
+  private async startCliProcess(
     args: string[],
     promptText: string,
-    workflowContext: WorkflowContext | undefined,
-    execute: (context: {
-      terminal: vscode.Terminal;
-      execution: vscode.TerminalShellExecution;
-      promptWithInstruction: string;
-      tuiProcessor: TuiStreamProcessor;
-      timeoutMs: number;
-    }) => Promise<{
-      success: boolean;
-      errorMessage?: string;
-      sessionId?: string;
-    }>,
-    tuiConfigOverrides?: Partial<TuiStreamConfig>,
-    useDirectPrompt: boolean = false
-  ): Promise<{ success: boolean; errorMessage?: string; sessionId?: string }> {
+    workflowContext?: WorkflowContext
+  ): Promise<{
+    terminal: vscode.Terminal;
+    execution: vscode.TerminalShellExecution;
+    promptToSend: string;
+    tempFilePaths: string[];
+  }> {
     const tuiCommand = this.provider.buildInteractiveTuiCommand(args);
-    const displayCommand = `${this.provider.config.name} [TUI mode] "<prompt>"`;
+    const displayCommand = `${this.provider.config.name} [Interactive mode] "<prompt>"`;
 
     const terminal = await this.createFreshTerminal();
     terminal.show();
@@ -717,7 +538,7 @@ export class CliIntegration extends CopilotIntegration {
     });
 
     this.streamingChunkEmitter.fire(
-      "📺 Interactive TUI mode: Output is streaming to the VS Code terminal.\n" +
+      "📺 Interactive mode: Output is streaming to the VS Code terminal.\n" +
         "   View the terminal for real-time output.\n\n"
     );
 
@@ -725,56 +546,182 @@ export class CliIntegration extends CopilotIntegration {
     const execution = shellIntegration.executeCommand(tuiCommand);
     this.currentExecution = execution;
 
+    // Check if prompt is simple enough for direct passing
+    const useDirectPrompt = this.isSimplePrompt(promptText);
     let tempFilePaths: string[] = [];
+    let promptToSend: string;
 
-    try {
-      let promptToSend: string;
+    if (useDirectPrompt) {
+      Log.debug("📝 Using direct prompt (simple, no temp file)");
+      promptToSend = promptText;
+    } else {
+      Log.debug("📁 Using temp file prompt (complex or long)");
+      const { tempFilePaths: paths, promptWithInstruction } =
+        await this.createPromptFileWithReference(promptText, workflowContext);
+      tempFilePaths = paths;
+      promptToSend = promptWithInstruction;
+    }
 
-      if (useDirectPrompt) {
-        // Simple prompt: send directly without temp file
-        promptToSend = promptText;
-        this.lastSanitizedPrompt = promptText;
-      } else {
-        // Complex prompt: create temp file(s) with instruction
-        const { tempFilePaths: paths, promptWithInstruction } =
-          await this.createPromptFileWithReference(promptText, workflowContext);
-        tempFilePaths = paths;
-        promptToSend = promptWithInstruction;
-        this.lastSanitizedPrompt = promptText;
-      }
+    return { terminal, execution, promptToSend, tempFilePaths };
+  }
 
-      const timeoutMs =
-        ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000; // 12 hours default
+  /**
+   * Monitor log file for completion using provider's log parser.
+   *
+   * @param logPath Absolute path to log file
+   * @param sessionId Session ID (if already extracted)
+   * @param startTime Execution start time
+   * @returns Promise with success flag and sessionId
+   */
+  private async monitorLogFile(
+    logPath: string,
+    sessionId: string | null,
+    startTime: Date
+  ): Promise<{ success: boolean; sessionId?: string }> {
+    const parser = this.provider.logParser!;
+    const events: any[] = [];
+    const timeoutMs =
+      ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000;
 
-      const tuiConfig: TuiStreamConfig = {
-        escapeIndicator: this.provider.config.escapeIndicator,
-        screenEndPattern: this.provider.config.screenEndPattern,
-        tuiChromePatterns: this.provider.config.chromePatterns,
-        streamingEmitter: this.streamingChunkEmitter,
-        responseCompleteEmitter: this.responseCompleteEmitter,
-        ...tuiConfigOverrides,
-      };
+    return new Promise((resolve, reject) => {
+      const watcher = parser.watchLogFile(
+        logPath,
+        (event) => {
+          events.push(event);
 
-      const tuiProcessor = new TuiStreamProcessor(tuiConfig);
+          // Stream content to output window
+          const content = this.extractContentFromEvent(event);
+          if (content) {
+            this.streamingChunkEmitter.fire(content);
+          }
 
-      // CRITICAL: Must await execute() before finally block runs
-      return await execute({
-        terminal,
-        execution,
-        promptWithInstruction: promptToSend,
-        tuiProcessor,
-        timeoutMs,
-      });
-    } finally {
-      if (tempFilePaths.length > 0) {
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const tempMgr = new TempFileManager(workspaceRoot);
-          await tempMgr.deleteFiles(tempFilePaths);
-          Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
+          // Check completion
+          if (parser.isComplete(event)) {
+            Log.info("✅ Log file indicates completion");
+
+            const response = parser.extractResponse(events);
+
+            // Store the result so getLastResult() works
+            const result: CliResult = {
+              success: true,
+              response: response.text,
+              statistics: this.formatStatistics(response.metadata),
+              exitCode: 0,
+              sessionId: response.metadata.sessionId || sessionId || undefined,
+            };
+            this.lastResult = result;
+
+            // Log the response for visibility
+            this.logResponse(result.response, result.statistics);
+
+            watcher.close();
+            this.responseCompleteEmitter.fire("Response complete");
+
+            resolve({
+              success: true,
+              sessionId: result.sessionId,
+            });
+          }
+        },
+        startTime
+      );
+
+      // Timeout handling
+      const timeoutHandle = setTimeout(() => {
+        Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
+        watcher.close();
+        reject(new Error("Log monitoring timeout"));
+      }, timeoutMs);
+
+      // Cancel handling
+      const checkCancellation = setInterval(() => {
+        if (this.isCancelling) {
+          Log.info("⏹️ Log monitoring cancelled by user");
+          clearInterval(checkCancellation);
+          clearTimeout(timeoutHandle);
+          watcher.close();
+          resolve({ success: false });
         }
+      }, 100);
+    });
+  }
+
+  /**
+   * Extract text content from provider-specific log event.
+   *
+   * @param event Provider-specific log event
+   * @returns Text content for streaming, or undefined if no content
+   */
+  private extractContentFromEvent(event: any): string | undefined {
+    // Handle different provider event formats
+    // Claude: { type: "assistant", message: { content: [{ type: "text", text: "..." }] } }
+    if (event.type === "assistant" && event.message?.content) {
+      const textContent = event.message.content
+        .filter((c: any) => c.type === "text")
+        .map((c: any) => c.text)
+        .join("");
+      return textContent || undefined;
+    }
+
+    // Copilot/Codex: { type: "text", content: "..." }
+    if (event.type === "text" && event.content) {
+      return event.content;
+    }
+
+    // Codex nested payload: { payload: { type: "text", text: "..." } }
+    if (event.payload?.type === "text" && event.payload.text) {
+      return event.payload.text;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Format metadata into statistics string.
+   *
+   * @param metadata Provider-specific metadata
+   * @returns Formatted statistics string
+   */
+  private formatStatistics(metadata: any): string {
+    const parts: string[] = [];
+
+    if (metadata.model) {
+      parts.push(`Model: ${metadata.model}`);
+    }
+
+    if (metadata.usage) {
+      const usage = metadata.usage;
+      if (
+        usage.input_tokens !== undefined &&
+        usage.output_tokens !== undefined
+      ) {
+        parts.push(
+          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+        );
       }
     }
+
+    return parts.join(" | ");
+  }
+
+  /**
+   * Clean up temporary prompt files.
+   *
+   * @param tempFilePaths Array of temp file paths to delete
+   */
+  private async cleanupTempFiles(tempFilePaths: string[]): Promise<void> {
+    if (tempFilePaths.length === 0) {
+      return;
+    }
+
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return;
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    await tempMgr.deleteFiles(tempFilePaths);
+    Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
   }
 
   // ============================================================
@@ -1155,12 +1102,6 @@ export class CliIntegration extends CopilotIntegration {
    * Cancel the current CLI process
    */
   protected async cancelImplementation(): Promise<void> {
-    // Abort any active read() streaming
-    if (this.readAbortController) {
-      this.readAbortController.abort();
-      this.readAbortController = undefined;
-    }
-
     // Delegate to CliProcessManager for both terminal and process cancellation
     await this.processManager.cancel(this.currentExecution);
     this.currentExecution = undefined;
@@ -1174,10 +1115,6 @@ export class CliIntegration extends CopilotIntegration {
    * Dispose of resources
    */
   dispose(): void {
-    if (this.readAbortController) {
-      this.readAbortController.abort();
-      this.readAbortController = undefined;
-    }
     this.processManager.dispose();
     this.currentExecution = undefined;
   }
@@ -1286,11 +1223,17 @@ export class CliIntegration extends CopilotIntegration {
         // Fallback: Extract session ID from logs if not available from notification
         // Note: For Copilot CLI, this is currently the ONLY working method since hooks
         // don't provide session IDs yet. For Claude/Codex, this is a true fallback.
-        if (success && !extractedSessionId && this.provider.extractSessionIdFromLogs) {
+        if (
+          success &&
+          !extractedSessionId &&
+          this.provider.extractSessionIdFromLogs
+        ) {
           const logSessionId = await this.provider.extractSessionIdFromLogs();
           if (logSessionId) {
             extractedSessionId = logSessionId;
-            Log.debug(`📝 Session ID from logs (interactive): ${extractedSessionId}`);
+            Log.debug(
+              `📝 Session ID from logs (interactive): ${extractedSessionId}`
+            );
           }
         }
       } else {
@@ -1414,12 +1357,12 @@ export class CliIntegration extends CopilotIntegration {
             startedAt: Date.now(),
           };
         }
-        
+
         // Add session ID if available (may be undefined for first prompt or if extraction failed)
         if (extractedSessionId) {
           prompt._runtime.sessionId = extractedSessionId;
         }
-        
+
         prompt._runtime.completedAt = Date.now();
 
         // Persist runtime metadata to working file
