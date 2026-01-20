@@ -122,9 +122,10 @@ export interface ICliProvider {
   /**
    * Build CLI command for interactive TUI mode
    * @param baseArgs Base arguments array
+   * @param promptText The prompt text to include in command arguments
    * @returns Complete command string
    */
-  buildInteractiveTuiCommand(baseArgs: string[]): string;
+  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string;
 
   /**
    * Format a file path reference for this CLI

@@ -309,18 +309,16 @@ export class CodexCliProvider implements ICliProvider {
   /**
    * Build CLI command for interactive TUI mode
    *
-   * @param baseArgs Base arguments array
+   * Codex interactive mode: codex "prompt text" [args...] (no exec = interactive)
+   * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
+   *
+   * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
+   * @param promptText The prompt text to include
    * @returns Complete command string
    */
-  buildInteractiveTuiCommand(baseArgs: string[]): string {
-    // Filter out headless-only flags for interactive mode
-    const interactiveArgs = baseArgs.filter(
-      (arg, i, arr) =>
-        arg !== "--json" && arg !== "exec" && arr[i - 1] !== "--output-format"
-    );
-
+  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
     // Quote arguments that contain special characters (brackets, quotes, etc.)
-    const quotedArgs = interactiveArgs.map((arg) => {
+    const quotedArgs = baseArgs.map((arg) => {
       // If arg contains special chars like brackets, spaces, or quotes, wrap in double quotes
       // But escape any internal double quotes first
       if (/[\[\]\s"]/.test(arg)) {
@@ -329,7 +327,7 @@ export class CodexCliProvider implements ICliProvider {
       return arg;
     });
 
-    return `${this.config.name} ${quotedArgs.join(" ")}`;
+    return `${this.config.name} "${promptText.replace(/"/g, '\\"')}" ${quotedArgs.join(" ")}`;
   }
 
   /**

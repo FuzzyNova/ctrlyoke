@@ -360,20 +360,15 @@ export class ClaudeCliProvider implements ICliProvider {
   /**
    * Build CLI command for interactive TUI mode
    *
-   * Filters out headless-only flags for interactive mode.
+   * Claude interactive mode: claude "prompt text" [args...] (no -p flag = interactive)
+   * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
    *
-   * @param baseArgs Base arguments array
+   * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
+   * @param promptText The prompt text to include
    * @returns Complete command string
    */
-  buildInteractiveTuiCommand(baseArgs: string[]): string {
-    // Filter out headless-only flags for interactive mode
-    const interactiveArgs = baseArgs.filter(
-      (arg, i, arr) =>
-        arg !== "-p" &&
-        arg !== "--output-format" &&
-        arr[i - 1] !== "--output-format"
-    );
-    return `${this.config.name} ${interactiveArgs.join(" ")}`;
+  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
+    return `${this.config.name} "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
   }
 
   /**

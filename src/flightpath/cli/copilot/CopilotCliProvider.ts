@@ -368,11 +368,15 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Build CLI command for interactive TUI mode
    *
-   * @param baseArgs Base arguments array
+   * Copilot interactive mode: copilot -i "prompt text" [args...]
+   * Note: buildCliArgs() already filtered out headless-only flags when isInteractive=true
+   *
+   * @param baseArgs Base arguments array (from buildCliArgs with isInteractive=true)
+   * @param promptText The prompt text to include
    * @returns Complete command string
    */
-  buildInteractiveTuiCommand(baseArgs: string[]): string {
-    return `${this.config.name} ${baseArgs.join(" ")}`;
+  buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string {
+    return `${this.config.name} -i "${promptText.replace(/"/g, '\\"')}" ${baseArgs.join(" ")}`;
   }
 
   /**

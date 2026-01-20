@@ -461,8 +461,11 @@ export class CliIntegration extends CopilotIntegration {
       Log.info(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
       // 2. Spawn CLI in terminal (TUI displays for user)
-      const { terminal, execution, promptToSend, tempFilePaths } =
-        await this.startCliProcess(args, promptText, workflowContext);
+      const { terminal, execution, tempFilePaths } = await this.startCliProcess(
+        args,
+        promptText,
+        workflowContext
+      );
 
       // 3. Discover session log by matching prompt content
       Log.info("🔍 Discovering session log file...");
@@ -514,7 +517,7 @@ export class CliIntegration extends CopilotIntegration {
    * @param args CLI arguments
    * @param promptText Prompt text
    * @param workflowContext Optional workflow context
-   * @returns Terminal, execution, prompt to send, and temp file paths for cleanup
+   * @returns Terminal, execution, and temp file paths for cleanup
    */
   private async startCliProcess(
     args: string[],
@@ -523,10 +526,12 @@ export class CliIntegration extends CopilotIntegration {
   ): Promise<{
     terminal: vscode.Terminal;
     execution: vscode.TerminalShellExecution;
-    promptToSend: string;
     tempFilePaths: string[];
   }> {
-    const tuiCommand = this.provider.buildInteractiveTuiCommand(args);
+    const tuiCommand = this.provider.buildInteractiveTuiCommand(
+      args,
+      promptText
+    );
     const displayCommand = `${this.provider.config.name} [Interactive mode] "<prompt>"`;
 
     const terminal = await this.createFreshTerminal();
@@ -546,23 +551,11 @@ export class CliIntegration extends CopilotIntegration {
     const execution = shellIntegration.executeCommand(tuiCommand);
     this.currentExecution = execution;
 
-    // Check if prompt is simple enough for direct passing
-    const useDirectPrompt = this.isSimplePrompt(promptText);
-    let tempFilePaths: string[] = [];
-    let promptToSend: string;
+    // For interactive mode, we no longer need temp files since prompt is in CLI args
+    // However, we keep this structure for potential future use or MCP config files
+    const tempFilePaths: string[] = [];
 
-    if (useDirectPrompt) {
-      Log.debug("📝 Using direct prompt (simple, no temp file)");
-      promptToSend = promptText;
-    } else {
-      Log.debug("📁 Using temp file prompt (complex or long)");
-      const { tempFilePaths: paths, promptWithInstruction } =
-        await this.createPromptFileWithReference(promptText, workflowContext);
-      tempFilePaths = paths;
-      promptToSend = promptWithInstruction;
-    }
-
-    return { terminal, execution, promptToSend, tempFilePaths };
+    return { terminal, execution, tempFilePaths };
   }
 
   /**
