@@ -3,6 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { Log } from "../../../utils/Log";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
 
 /**
  * Copilot CLI log parser
@@ -146,21 +147,22 @@ export class CopilotLogParser extends BaseLogParser {
    * Discover session log file for a prompt
    *
    * Searches `~/.copilot/session-state/` for the log file corresponding to
-   * a specific prompt execution. Uses prompt text matching to identify the
-   * correct session.
+   * a specific prompt execution. Uses session ID (if provided) or prompt text matching.
    *
-   * @param promptText - The prompt text sent to Copilot CLI
+   * @param promptText - The prompt text sent to Copilot CLI (not used when sessionId provided)
    * @param startTime - Execution start timestamp
+   * @param sessionId - Optional session ID for direct path construction (bypasses prompt matching)
    * @returns Absolute path to session log file, or null if not found
    *
    * @remarks
    * **Discovery Algorithm:**
-   * 1. Find `~/.copilot/session-state/` directory
-   * 2. Use inherited `findModifiedSessionLogs()` to get recently modified files/dirs
-   * 3. For each candidate, resolve to actual log path using `getLogPath()`
-   * 4. Read first 10 events from each log
-   * 5. Look for user.message event containing prompt text (first 100 chars)
-   * 6. Return first matching log file path
+   * 1. If sessionId provided: Construct path directly (`~/.copilot/session-state/{sessionId}/events.jsonl`)
+   * 2. Otherwise: Find `~/.copilot/session-state/` directory
+   * 3. Use inherited `findModifiedSessionLogs()` to get recently modified files/dirs
+   * 4. For each candidate, resolve to actual log path using `getLogPath()`
+   * 5. Read first 10 events from each log
+   * 6. Look for user.message event containing prompt text (first 100 chars)
+   * 7. Return first matching log file path
    *
    * **Prompt Matching:**
    * - Uses first 100 chars of prompt for fuzzy matching
@@ -173,7 +175,8 @@ export class CopilotLogParser extends BaseLogParser {
    */
   async discoverSessionLog(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    sessionId?: string
   ): Promise<string | null> {
     try {
       const logDir = path.join(os.homedir(), ".copilot", "session-state");
@@ -182,48 +185,102 @@ export class CopilotLogParser extends BaseLogParser {
         return null;
       }
 
-      // Get recently modified files/directories
-      const candidates = this.findModifiedSessionLogs(logDir, startTime);
-      if (candidates.length === 0) {
-        Log.debug("[CopilotLogParser] No recent session logs found");
+      // If session ID provided, construct path directly (resumed sessions)
+      if (sessionId) {
+        Log.debug(
+          `[CopilotLogParser] Using session ID ${sessionId} for direct path construction`
+        );
+
+        // Try directory format first: ~/.copilot/session-state/{sessionId}/events.jsonl
+        const sessionDir = path.join(logDir, sessionId);
+        const eventsPath = path.join(sessionDir, "events.jsonl");
+
+        if (fs.existsSync(eventsPath)) {
+          Log.debug(
+            `[CopilotLogParser] Found session log at ${eventsPath} (directory format)`
+          );
+          return eventsPath;
+        }
+
+        // Try flat file format: ~/.copilot/session-state/{sessionId}.jsonl
+        const flatPath = path.join(logDir, `${sessionId}.jsonl`);
+        if (fs.existsSync(flatPath)) {
+          Log.debug(
+            `[CopilotLogParser] Found session log at ${flatPath} (flat file format)`
+          );
+          return flatPath;
+        }
+
+        // Session ID provided but file not found - this is unexpected for resumed sessions
+        Log.warn(
+          `[CopilotLogParser] Session ${sessionId} not found in either format. Tried:\n` +
+            `  - ${eventsPath}\n` +
+            `  - ${flatPath}`
+        );
         return null;
       }
 
       // Prepare prompt matcher (first 100 chars, normalized)
       const promptPrefix = promptText.slice(0, 100).toLowerCase().trim();
 
-      // Check each candidate
-      for (const candidate of candidates) {
-        try {
-          // Resolve to actual log file path
-          const logPath = await this.resolveLogPath(candidate);
-          if (!logPath) {
-            continue;
+      // Retry with backoff: Copilot may take a moment to create the log file after SessionStart hook
+      const result = await retryWithBackoff(
+        async () => {
+          // Get recently modified files/directories
+          const candidates = this.findModifiedSessionLogs(logDir, startTime);
+          if (candidates.length === 0) {
+            return null; // Will retry
           }
 
-          // Read first 10 events
-          const events = await this.readFirstEvents(logPath, 10);
-
-          // Look for user.message event containing prompt text
-          for (const event of events) {
-            if (event.type === "user.message" && event.data?.content) {
-              const content = event.data.content.toLowerCase().trim();
-              if (content.includes(promptPrefix)) {
-                Log.debug(
-                  `[CopilotLogParser] Found matching session log: ${logPath}`
-                );
-                return logPath;
+          // Check each candidate
+          for (const candidate of candidates) {
+            try {
+              // Resolve to actual log file path
+              const logPath = await this.resolveLogPath(candidate);
+              if (!logPath) {
+                continue;
               }
+
+              // Read first 10 events
+              const events = await this.readFirstEvents(logPath, 10);
+
+              // Look for user.message event containing prompt text
+              for (const event of events) {
+                if (event.type === "user.message" && event.data?.content) {
+                  const content = event.data.content.toLowerCase().trim();
+                  if (content.includes(promptPrefix)) {
+                    return logPath; // Success - found matching log
+                  }
+                }
+              }
+            } catch (error) {
+              // Skip candidates that can't be read
+              Log.debug(
+                `[CopilotLogParser] Error reading candidate ${candidate}:`,
+                error
+              );
+              continue;
             }
           }
-        } catch (error) {
-          // Skip candidates that can't be read
-          Log.debug(
-            `[CopilotLogParser] Error reading candidate ${candidate}:`,
-            error
-          );
-          continue;
+
+          return null; // No match found, will retry
+        },
+        {
+          maxAttempts: 5,
+          delays: [0, 50, 100, 150, 200], // Total max wait: 500ms
+          onRetry: (attempt, max, delay) => {
+            if (attempt > 1) {
+              Log.debug(
+                `[CopilotLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+              );
+            }
+          },
         }
+      );
+
+      if (result) {
+        Log.debug(`[CopilotLogParser] Found matching session log: ${result}`);
+        return result;
       }
 
       Log.debug("[CopilotLogParser] No matching session log found");

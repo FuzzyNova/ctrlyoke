@@ -291,10 +291,14 @@ export class CliIntegration extends CopilotIntegration {
   /**
    * Check if a prompt is simple enough to pass directly without temp file.
    *
-   * Simple prompts:
+   * Simple prompts must be:
    * - Short length (≤300 characters)
    * - No dynamic queue XML instructions
-   * - No complex formatting that would break shell escaping
+   * - No shell-dangerous characters (quotes, backslashes, newlines, metacharacters, etc.)
+   *
+   * **Security-critical:** We're conservative here because the prompt gets embedded
+   * directly in the shell command line. Even with escaping, complex prompts could
+   * break parsing or introduce security issues.
    *
    * Benefits of direct passing:
    * - No file I/O overhead
@@ -307,15 +311,58 @@ export class CliIntegration extends CopilotIntegration {
   protected isSimplePrompt(finalPromptText: string): boolean {
     const MAX_SIMPLE_PROMPT_LENGTH = 300;
 
+    // Check length
     if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
       return false;
     }
 
+    // Check for XML instructions (dynamic queue)
     if (finalPromptText.includes("<criticalInstruction>")) {
       return false;
     }
 
+    // Check for shell-dangerous characters
+    // We only allow: letters, numbers, spaces, and basic safe punctuation
+    // This regex matches SAFE characters; if anything else exists, use file-based passing
+    const SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
+    if (!SAFE_CHARS_PATTERN.test(finalPromptText)) {
+      Log.debug(
+        "📁 Prompt contains special characters, using file-based passing for safety"
+      );
+      return false;
+    }
+
+    // Check for control characters and newlines
+    if (/[\n\r\t]/.test(finalPromptText)) {
+      Log.debug(
+        "📁 Prompt contains newlines/tabs, using file-based passing"
+      );
+      return false;
+    }
+
+    // Additional checks for specific dangerous patterns
+    // Double quotes - even escaped, could be problematic
+    if (finalPromptText.includes('"')) {
+      return false;
+    }
+
+    // Single quotes - shell escaping complexity
+    if (finalPromptText.includes("'")) {
+      return false;
+    }
+
+    // Backslashes - escape character issues
+    if (finalPromptText.includes("\\")) {
+      return false;
+    }
+
+    // Backticks - command substitution
     if (finalPromptText.includes("`")) {
+      return false;
+    }
+
+    // Dollar signs - variable expansion
+    if (finalPromptText.includes("$")) {
       return false;
     }
 
@@ -437,6 +484,7 @@ export class CliIntegration extends CopilotIntegration {
    * 1. Record start time BEFORE spawning CLI
    * 2. Spawn CLI in terminal (TUI displays for user, but we ignore it)
    * 3. Wait for session start and discover log file:
+   *    - **Session resumption:** If resolvedSessionId provided, use it directly to find log file
    *    - **Claude (SessionStart hook):** Wait up to 60 seconds for SessionStart hook,
    *      then use session ID to find log file directly
    *    - **Copilot/Codex (no hook):** Discover log file by matching prompt text
@@ -450,7 +498,7 @@ export class CliIntegration extends CopilotIntegration {
    * @param args The CLI arguments (WITHOUT prompt, but WITH --resume if session should continue)
    * @param promptText The prompt text (will be sent via sendText)
    * @param workflowContext Optional workflow context for temp file naming
-   * @param resolvedSessionId Resolved session ID (not used in log monitoring)
+   * @param resolvedSessionId Resolved session ID (used for session resumption to skip log discovery)
    * @returns Promise with success flag and optional sessionId
    */
   protected async executeInTerminal(
@@ -459,6 +507,8 @@ export class CliIntegration extends CopilotIntegration {
     workflowContext?: WorkflowContext,
     resolvedSessionId?: string
   ): Promise<{ success: boolean; sessionId?: string }> {
+    let tempFilePaths: string[] = [];
+
     try {
       // Check if provider has log parser capability
       if (!this.provider.logParser) {
@@ -471,24 +521,47 @@ export class CliIntegration extends CopilotIntegration {
       Log.info(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
       // 2. Spawn CLI in terminal (TUI displays for user)
-      const { terminal, execution, tempFilePaths } = await this.startCliProcess(
+      const startResult = await this.startCliProcess(
         args,
         promptText,
         workflowContext
       );
+      tempFilePaths = startResult.tempFilePaths; // Store for cleanup in finally
 
       // 3. Wait for SessionStart hook and discover log file
-      let sessionId: string | null = null;
+      let sessionId: string | null = resolvedSessionId || null;
       let logPath: string | null = null;
 
-      if (this.provider.notificationMonitor.waitForSessionStart) {
+      // If we already have a resolved session ID (from resumption), use it directly
+      if (resolvedSessionId) {
+        Log.info(
+          `🔄 Resuming session ${resolvedSessionId} - discovering log file directly...`
+        );
+
+        logPath = await this.provider.logParser.discoverSessionLog(
+          promptText,
+          startTime,
+          resolvedSessionId
+        );
+
+        if (!logPath) {
+          Log.error(
+            `❌ Could not find log file for resumed session ${resolvedSessionId}\n` +
+              `   The session may have been deleted or never existed.\n` +
+              `   To fix: Remove the sessionId property to start a new session.`
+          );
+          this.lastFailureReason = "Log file not found for resumed session";
+          return { success: false };
+        }
+
+        Log.info(`✅ Found log file for resumed session: ${logPath}`);
+      } else if (this.provider.notificationMonitor.waitForSessionStart) {
         // Provider supports SessionStart hook (Claude only currently)
         Log.info("🔍 Waiting for SessionStart hook and log file creation...");
 
         const workspaceRoot = this.getWorkspaceRoot();
         if (!workspaceRoot) {
           Log.error("❌ No workspace root for session start monitoring");
-          await this.cleanupTempFiles(tempFilePaths);
           return { success: false };
         }
 
@@ -498,7 +571,7 @@ export class CliIntegration extends CopilotIntegration {
           );
 
         // Wait for SessionStart notification (60 second timeout)
-        const startResult =
+        const startResultNotify =
           await this.provider.notificationMonitor.waitForSessionStart(
             {
               directory: notifyDir,
@@ -509,18 +582,17 @@ export class CliIntegration extends CopilotIntegration {
             () => this.isCancelling
           );
 
-        if (!startResult.completed) {
+        if (!startResultNotify.completed) {
           Log.error(
-            `❌ SessionStart hook timeout: ${startResult.error || "Unknown error"}`
+            `❌ SessionStart hook timeout: ${startResultNotify.error || "Unknown error"}`
           );
           this.lastFailureReason =
-            startResult.error || "SessionStart hook timeout";
-          await this.cleanupTempFiles(tempFilePaths);
+            startResultNotify.error || "SessionStart hook timeout";
           return { success: false };
         }
 
         // Extract session ID if provided (Claude provides it, Copilot doesn't)
-        sessionId = startResult.data?.sessionId || null;
+        sessionId = startResultNotify.data?.sessionId || null;
 
         if (sessionId) {
           Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
@@ -537,7 +609,6 @@ export class CliIntegration extends CopilotIntegration {
               `❌ Could not find log file for session ${sessionId} - this should not happen!`
             );
             this.lastFailureReason = "Log file not found after SessionStart";
-            await this.cleanupTempFiles(tempFilePaths);
             return { success: false };
           }
 
@@ -561,7 +632,6 @@ export class CliIntegration extends CopilotIntegration {
               "❌ Could not discover session log - no matching prompt found"
             );
             this.lastFailureReason = "Session log not found";
-            await this.cleanupTempFiles(tempFilePaths);
             return { success: false };
           }
 
@@ -588,7 +658,6 @@ export class CliIntegration extends CopilotIntegration {
             "❌ Could not discover session log - no matching prompt found"
           );
           this.lastFailureReason = "Session log not found";
-          await this.cleanupTempFiles(tempFilePaths);
           return { success: false };
         }
 
@@ -606,20 +675,24 @@ export class CliIntegration extends CopilotIntegration {
       // 4. Monitor log file for completion
       const result = await this.monitorLogFile(logPath, sessionId, startTime);
 
-      // Clean up temp files
-      await this.cleanupTempFiles(tempFilePaths);
-
       return result;
     } catch (error) {
       Log.error(`❌ Interactive execution error`, error);
       this.lastFailureReason =
         error instanceof Error ? error.message : String(error);
       throw error;
+    } finally {
+      // Always clean up temp files, regardless of success or failure
+      await this.cleanupTempFiles(tempFilePaths);
     }
   }
 
   /**
    * Start CLI process in terminal and return execution details.
+   *
+   * **Adaptive prompt passing strategy:**
+   * - Simple prompts (≤300 chars, no XML): Pass directly on command line (fast!)
+   * - Complex prompts: Create temp file(s) and pass file reference (avoids shell limits)
    *
    * @param args CLI arguments
    * @param promptText Prompt text
@@ -635,9 +708,29 @@ export class CliIntegration extends CopilotIntegration {
     execution: vscode.TerminalShellExecution;
     tempFilePaths: string[];
   }> {
+    // Adaptive prompt passing: check if prompt is simple enough for direct passing
+    let actualPromptText = promptText;
+    let tempFilePaths: string[] = [];
+
+    if (!this.isSimplePrompt(promptText)) {
+      // Complex prompt: create file reference to avoid shell argument length limits
+      const { tempFilePaths: paths, promptWithInstruction } =
+        await this.createPromptFileWithReference(promptText, workflowContext);
+      tempFilePaths = paths;
+      actualPromptText = promptWithInstruction; // "Follow instructions in @file1 "
+
+      Log.info(
+        `📁 Interactive mode using ${paths.length} temp file(s) (prompt too large for direct passing)`
+      );
+    } else {
+      Log.info(
+        `🚀 Interactive mode with direct prompt (simple path, no temp files needed)`
+      );
+    }
+
     const tuiCommand = this.provider.buildInteractiveTuiCommand(
       args,
-      promptText
+      actualPromptText // Use file reference or original depending on size
     );
     const displayCommand = `${this.provider.config.name} [Interactive mode] "<prompt>"`;
 
@@ -645,7 +738,7 @@ export class CliIntegration extends CopilotIntegration {
     terminal.show();
 
     this.promptReadyEmitter.fire({
-      fullPrompt: promptText,
+      fullPrompt: promptText, // Always use original prompt for display
       cliCommand: displayCommand,
     });
 
@@ -657,10 +750,6 @@ export class CliIntegration extends CopilotIntegration {
     const shellIntegration = await this.waitForShellIntegration(terminal);
     const execution = shellIntegration.executeCommand(tuiCommand);
     this.currentExecution = execution;
-
-    // For interactive mode, we no longer need temp files since prompt is in CLI args
-    // However, we keep this structure for potential future use or MCP config files
-    const tempFilePaths: string[] = [];
 
     return { terminal, execution, tempFilePaths };
   }

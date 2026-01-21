@@ -68,7 +68,7 @@ export class ClaudeCliProvider implements ICliProvider {
    * - Print mode and output format (-p, --output-format stream-json, --verbose)
    * - Model selection (with validation and fallback)
    * - Workspace directories (--add-dir)
-   * - Session management (-r resume, -c continue)
+   * - Session management (-r resume with explicit session ID only, no -c flag)
    * - Tool permissions (headless mode only)
    * - Stop hook settings (interactive mode only)
    *
@@ -181,15 +181,18 @@ export class ClaudeCliProvider implements ICliProvider {
     Log.debug(
       `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
-    if (!shouldStartNewSession && sessionId) {
+    // Session management: Resume with explicit session ID only
+    // NOTE: We don't use the `-c` flag (continue most recent session) because:
+    // 1. It's global across all projects, not workspace-specific
+    // 2. Could accidentally resume a session from a different project
+    // 3. No guarantee which session it will resume if user has multiple Claude instances
+    // Instead, we only resume when we have an explicit session ID from workflow state.
+    if (sessionId) {
       args.push("-r", sessionId);
       Log.debug(`✅ Added resume flag: -r ${sessionId}`);
-    } else if (!shouldStartNewSession) {
-      args.push("-c");
-      Log.debug(`✅ Added continue flag: -c`);
     } else {
       Log.debug(
-        `🆕 Starting new session (resolved shouldStartNewSession=${shouldStartNewSession})`
+        `🆕 Starting new session (no explicit sessionId, ignoring newChatSession=${shouldStartNewSession})`
       );
     }
 

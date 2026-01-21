@@ -206,21 +206,22 @@ export class CodexLogParser extends BaseLogParser {
    * Discover session log file for a prompt
    *
    * Searches `~/.codex/sessions/YYYY/MM/DD/` for the log file corresponding
-   * to a specific prompt execution. Uses date hierarchy navigation and
-   * prompt text matching.
+   * to a specific prompt execution. Uses session ID (if provided) or prompt text matching.
    *
-   * @param promptText - The prompt text sent to Codex CLI
+   * @param promptText - The prompt text sent to Codex CLI (not used when sessionId provided)
    * @param startTime - Execution start timestamp
+   * @param sessionId - Optional session ID for direct file matching (bypasses prompt matching)
    * @returns Absolute path to session log file, or null if not found
    *
    * @remarks
    * **Discovery Algorithm:**
-   * 1. Calculate today's date directory (YYYY/MM/DD)
-   * 2. Find all `.jsonl` files modified after startTime
-   * 3. Sort by modification time (newest first)
-   * 4. Read first 10 events from each candidate
-   * 5. Look for user message in response_items or event_msg
-   * 6. Return first matching log file path
+   * 1. If sessionId provided: Search for file matching `rollout-*-{sessionId}.jsonl`
+   * 2. Otherwise: Calculate today's date directory (YYYY/MM/DD)
+   * 3. Find all `.jsonl` files modified after startTime
+   * 4. Sort by modification time (newest first)
+   * 5. Read first 10 events from each candidate
+   * 6. Look for user message in response_items or event_msg
+   * 7. Return first matching log file path
    *
    * **Date Hierarchy:**
    * - Base: `~/.codex/sessions/`
@@ -236,7 +237,8 @@ export class CodexLogParser extends BaseLogParser {
    */
   async discoverSessionLog(
     promptText: string,
-    startTime: Date
+    startTime: Date,
+    sessionId?: string
   ): Promise<string | null> {
     try {
       // Calculate today's date directory
@@ -252,7 +254,33 @@ export class CodexLogParser extends BaseLogParser {
         return null;
       }
 
-      // Find all .jsonl files modified after startTime
+      // FAST PATH: If session ID provided, search for matching file directly
+      if (sessionId) {
+        Log.debug(
+          `[CodexLogParser] Using session ID ${sessionId} to find log file`
+        );
+
+        // Codex file pattern: rollout-<timestamp>-<session-id>.jsonl
+        const files = fs.readdirSync(datePath);
+        const matchingFile = files.find((file) =>
+          file.endsWith(`-${sessionId}.jsonl`)
+        );
+
+        if (matchingFile) {
+          const logPath = path.join(datePath, matchingFile);
+          Log.debug(
+            `[CodexLogParser] Found session log via session ID: ${logPath}`
+          );
+          return logPath;
+        } else {
+          Log.debug(
+            `[CodexLogParser] No log file found for session ${sessionId} in ${datePath}`
+          );
+          return null;
+        }
+      }
+
+      // FALLBACK: Find all .jsonl files modified after startTime
       const files = fs.readdirSync(datePath);
       const candidates: Array<{ path: string; mtime: Date }> = [];
 

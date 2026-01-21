@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { retryWithBackoff, PermanentFailureError } from "../../../utils/RetryUtils";
 
 /**
  * Claude CLI Log Parser
@@ -258,44 +259,50 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       if (sessionId) {
         const logPath = path.join(projectDir, `${sessionId}.jsonl`);
 
-        // Retry logic: Claude writes log file within ~50-100ms of SessionStart hook
-        const maxRetries = 5;
-        const retryDelays = [0, 50, 100, 150, 200]; // Total max wait: 500ms
-
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-          // Wait before retry (except first attempt)
-          if (attempt > 0) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, retryDelays[attempt])
-            );
-          }
-
-          // Verify file exists and was modified after startTime
-          if (fs.existsSync(logPath)) {
-            const stats = fs.statSync(logPath);
-            if (stats.mtime >= startTime) {
-              Log.debug(
-                `[ClaudeLogParser] Found session log via session ID (attempt ${attempt + 1}/${maxRetries}): ${logPath}`
-              );
-              return logPath;
-            } else {
-              Log.debug(
-                `[ClaudeLogParser] Session log exists but modified before startTime`
-              );
-              break; // Don't retry if file exists but is too old
+        // Retry with backoff: Claude writes log file within ~50-100ms of SessionStart hook
+        // NOTE: When resuming a session, the log file may have an old mtime initially,
+        // but the CLI will update it as it writes new content. This can take several seconds
+        // if Claude is processing the resume request. We retry with longer delays to handle this.
+        const result = await retryWithBackoff(
+          async () => {
+            // Verify file exists
+            if (fs.existsSync(logPath)) {
+              const stats = fs.statSync(logPath);
+              if (stats.mtime >= startTime) {
+                return logPath; // Success - file exists and is recent
+              } else {
+                // File exists but hasn't been updated yet - might be resuming an old session
+                // The CLI will update it soon, so retry instead of failing
+                Log.debug(
+                  `[ClaudeLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
+                );
+                return null; // Retry - file will be updated soon
+              }
             }
+            return null; // File doesn't exist yet, will retry
+          },
+          {
+            maxAttempts: 10,
+            delays: [0, 100, 200, 300, 500, 500, 500, 1000, 1000, 1000], // Total max wait: ~5s
+            onRetry: (attempt, max, delay) => {
+              if (attempt > 1) {
+                Log.debug(
+                  `[ClaudeLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+                );
+              }
+            },
           }
+        );
 
-          // Log retry attempts
-          if (attempt < maxRetries - 1) {
-            Log.debug(
-              `[ClaudeLogParser] Session log file not found (attempt ${attempt + 1}/${maxRetries}), retrying in ${retryDelays[attempt + 1]}ms...`
-            );
-          } else {
-            Log.debug(
-              `[ClaudeLogParser] Session log file not found after ${maxRetries} attempts: ${logPath}`
-            );
-          }
+        if (result) {
+          Log.debug(
+            `[ClaudeLogParser] Found session log via session ID: ${result}`
+          );
+          return result;
+        } else {
+          Log.debug(
+            `[ClaudeLogParser] Session log file not found after retries: ${logPath}`
+          );
         }
       }
 
