@@ -781,15 +781,31 @@ export class CliIntegration extends CopilotIntegration {
     return new Promise(async (resolve, reject) => {
       let completed = false;
       let completionCheckInterval: NodeJS.Timeout | undefined;
+      let draining = false;
+      const getEntryTimestamp = (entry: any): Date | null => {
+        if (entry.timestamp) {
+          return new Date(entry.timestamp);
+        }
+        if (entry.time) {
+          return new Date(entry.time);
+        }
+        if (entry.created_at) {
+          return new Date(entry.created_at);
+        }
+        return null;
+      };
 
       // Completion handler - single source of truth
-      const handleCompletion = (source: string) => {
+      const handleCompletion = async (source: string) => {
         if (completed) {
           return; // Already completed
         }
         completed = true;
 
         Log.info(`✅ Completion detected via ${source}`);
+
+        // Drain any remaining log entries before final extraction (race-safe for fast prompts)
+        await drainLogEvents();
 
         // Extract final response from accumulated events
         const response = parser.extractResponse(events);
@@ -818,25 +834,67 @@ export class CliIntegration extends CopilotIntegration {
         });
       };
 
+      const processEvent = (event: any, source: string) => {
+        events.push(event);
+
+        // Stream content to output window (delegates to provider's log parser)
+        const content = parser.extractContentFromEvent(event);
+        if (content) {
+          this.streamingChunkEmitter.fire(content);
+        }
+
+        // Check completion via log file (fallback for providers without notification monitor)
+        if (!completed && parser.isComplete(event)) {
+          void handleCompletion(source);
+        }
+      };
+
+      const drainLogEvents = async (): Promise<void> => {
+        if (draining) {
+          return;
+        }
+        draining = true;
+
+        const deadline = Date.now() + 2000;
+        while (Date.now() < deadline) {
+          const newEntries = await parser.readNewLines(logPath);
+          if (newEntries.length === 0) {
+            await new Promise((r) => setTimeout(r, 150));
+            continue;
+          }
+
+          for (const entry of newEntries) {
+            const entryTime = getEntryTimestamp(entry);
+            if (entryTime && entryTime < startTime) {
+              continue;
+            }
+            processEvent(entry, "log file (drain)");
+          }
+        }
+      };
+
       // Start log file watcher for streaming content
       const watcher = parser.watchLogFile(
         logPath,
         (event) => {
-          events.push(event);
-
-          // Stream content to output window (delegates to provider's log parser)
-          const content = parser.extractContentFromEvent(event);
-          if (content) {
-            this.streamingChunkEmitter.fire(content);
-          }
-
-          // Check completion via log file (fallback for providers without notification monitor)
-          if (parser.isComplete(event)) {
-            handleCompletion("log file");
-          }
+          processEvent(event, "log file");
         },
         startTime
       );
+
+      // Initial read to capture events written before watcher setup (fast prompts)
+      try {
+        const initialEntries = await parser.readNewLines(logPath);
+        for (const entry of initialEntries) {
+          const entryTime = getEntryTimestamp(entry);
+          if (entryTime && entryTime < startTime) {
+            continue;
+          }
+          processEvent(entry, "log file (initial)");
+        }
+      } catch (error) {
+        Log.warn(`⚠️ Failed initial log read: ${error}`);
+      }
 
       // If provider has notification monitor, also monitor for Stop/completion hook
       if (this.provider.notificationMonitor && sessionId) {
@@ -855,7 +913,7 @@ export class CliIntegration extends CopilotIntegration {
             const fsUtils = new FileSystemUtils();
             const notifyData = await fsUtils.readJsonFileAndDelete(notifyFile);
             if (notifyData?.status === "completed") {
-              handleCompletion("Stop hook");
+              void handleCompletion("Stop hook");
               return true;
             }
             return false;

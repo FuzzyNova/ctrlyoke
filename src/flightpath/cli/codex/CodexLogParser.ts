@@ -3,6 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { Log } from "../../../utils/Log";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
 
 /**
  * Codex CLI log parser
@@ -26,16 +27,16 @@ import { Log } from "../../../utils/Log";
  * {
  *   "type": "response_item" | "event_msg" | "session_meta" | "turn_context",
  *   "payload": {
- *     "type": "message" | "turn.completed",
+ *     "type": "message" | "turn.completed" | "function_call",
  *     "role": "assistant",
- *     "content": [{ "type": "input_text", "text": "Response..." }]
+ *     "content": [{ "type": "output_text", "text": "Response..." }]
  *   },
  *   "timestamp": "ISO8601"
  * }
  * ```
  *
  * **Event Types:**
- * - `session_meta` - Session initialization (contains thread_xxx ID)
+ * - `session_meta` - Session initialization (contains session ID)
  * - `response_item` - Assistant response chunks (nested payload)
  * - `turn_context` - User message context
  * - `event_msg` - Control events (completion, errors)
@@ -83,7 +84,7 @@ export class CodexLogParser extends BaseLogParser {
    * **Response Assembly:**
    * - Processes response_item events with role="assistant"
    * - Extracts text from nested payload.content[].text fields
-   * - Identifies tool calls from payload.content[].tool_use items
+   * - Identifies tool calls from payload.content[].tool_use items or function_call payloads
    * - Captures reasoning blocks if present
    * - Retrieves session ID from session_meta event
    *
@@ -94,7 +95,7 @@ export class CodexLogParser extends BaseLogParser {
    *   "payload": {
    *     "role": "assistant",
    *     "content": [
-   *       { "type": "input_text", "text": "Response..." },
+   *       { "type": "output_text", "text": "Response..." },
    *       { "type": "tool_use", "name": "write_file", "input": {...} }
    *     ]
    *   }
@@ -131,7 +132,10 @@ export class CodexLogParser extends BaseLogParser {
         if (Array.isArray(content)) {
           for (const item of content) {
             // Text content
-            if (item.type === "input_text" && item.text) {
+            if (
+              (item.type === "input_text" || item.type === "output_text") &&
+              item.text
+            ) {
               textParts.push(item.text);
             }
 
@@ -150,6 +154,15 @@ export class CodexLogParser extends BaseLogParser {
             }
           }
         }
+      }
+
+      // Tool calls emitted as dedicated response_item payloads
+      if (event.type === "response_item" && event.payload?.type === "function_call") {
+        toolCalls.push({
+          name: event.payload.name,
+          input: event.payload.arguments,
+          id: event.payload.call_id ?? event.payload.id,
+        });
       }
     }
 
@@ -260,18 +273,54 @@ export class CodexLogParser extends BaseLogParser {
           `[CodexLogParser] Using session ID ${sessionId} to find log file`
         );
 
-        // Codex file pattern: rollout-<timestamp>-<session-id>.jsonl
-        const files = fs.readdirSync(datePath);
-        const matchingFile = files.find((file) =>
-          file.endsWith(`-${sessionId}.jsonl`)
+        // Retry with backoff: Codex writes log file asynchronously after session start
+        // When resuming, the file may exist but not be updated yet
+        const result = await retryWithBackoff(
+          async () => {
+            // Codex file pattern: rollout-<timestamp>-<session-id>.jsonl
+            if (!fs.existsSync(datePath)) {
+              return null; // Date directory doesn't exist yet, retry
+            }
+
+            const files = fs.readdirSync(datePath);
+            const matchingFile = files.find((file) =>
+              file.endsWith(`-${sessionId}.jsonl`)
+            );
+
+            if (matchingFile) {
+              const logPath = path.join(datePath, matchingFile);
+              const stats = fs.statSync(logPath);
+
+              // Verify file is recent (handles resume case where file exists but isn't updated yet)
+              if (stats.mtime >= startTime) {
+                return logPath; // Success - file exists and is recent
+              } else {
+                Log.debug(
+                  `[CodexLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
+                );
+                return null; // Retry - file will be updated soon
+              }
+            }
+
+            return null; // File doesn't exist yet, will retry
+          },
+          {
+            // Uses default: 14 attempts, ~10s total (0, 100, 200, 300, 500, 1000ms repeating)
+            onRetry: (attempt, max, delay) => {
+              if (attempt > 1) {
+                Log.debug(
+                  `[CodexLogParser] Session log not ready (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+                );
+              }
+            },
+          }
         );
 
-        if (matchingFile) {
-          const logPath = path.join(datePath, matchingFile);
+        if (result) {
           Log.debug(
-            `[CodexLogParser] Found session log via session ID: ${logPath}`
+            `[CodexLogParser] Found session log via session ID: ${result}`
           );
-          return logPath;
+          return result;
         } else {
           Log.debug(
             `[CodexLogParser] No log file found for session ${sessionId} in ${datePath}`
@@ -281,87 +330,119 @@ export class CodexLogParser extends BaseLogParser {
       }
 
       // FALLBACK: Find all .jsonl files modified after startTime
-      const files = fs.readdirSync(datePath);
-      const candidates: Array<{ path: string; mtime: Date }> = [];
-
-      for (const file of files) {
-        if (!file.endsWith(".jsonl")) {
-          continue;
-        }
-
-        const filePath = path.join(datePath, file);
-        const stats = fs.statSync(filePath);
-
-        if (stats.mtime >= startTime) {
-          candidates.push({
-            path: filePath,
-            mtime: stats.mtime,
-          });
-        }
-      }
-
-      if (candidates.length === 0) {
-        Log.debug("[CodexLogParser] No recent session logs found");
-        return null;
-      }
-
-      // Sort by modification time (newest first)
-      candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-      // Prepare prompt matcher (first 100 chars, normalized)
+      // Retry with backoff: Codex may take a moment to create the log file
       const promptPrefix = promptText.slice(0, 100).toLowerCase().trim();
 
-      // Check each candidate
-      for (const candidate of candidates) {
-        try {
-          // Read first 10 events
-          const events = await this.readFirstEvents(candidate.path, 10);
+      const result = await retryWithBackoff(
+        async () => {
+          const files = fs.readdirSync(datePath);
+          const candidates: Array<{ path: string; mtime: Date }> = [];
 
-          // Look for user message in turn_context or response_item events
-          for (const event of events) {
-            let userMessage: string | null = null;
-
-            // Check turn_context for user message
-            if (event.type === "turn_context" && event.payload?.messages) {
-              const userMsg = event.payload.messages.find(
-                (m: any) => m.role === "user"
-              );
-              if (userMsg?.content) {
-                userMessage = Array.isArray(userMsg.content)
-                  ? userMsg.content.map((c: any) => c.text).join("")
-                  : userMsg.content;
-              }
+          for (const file of files) {
+            if (!file.endsWith(".jsonl")) {
+              continue;
             }
 
-            // Check response_item for user echo
-            if (
-              event.type === "response_item" &&
-              event.payload?.role === "user"
-            ) {
-              const content = event.payload.content;
-              if (Array.isArray(content)) {
-                userMessage = content
-                  .filter((c: any) => c.type === "input_text")
-                  .map((c: any) => c.text)
-                  .join("");
-              }
-            }
+            const filePath = path.join(datePath, file);
+            const stats = fs.statSync(filePath);
 
-            // Match prompt text
-            if (
-              userMessage &&
-              userMessage.toLowerCase().includes(promptPrefix)
-            ) {
-              Log.debug(
-                `[CodexLogParser] Found matching log: ${candidate.path}`
-              );
-              return candidate.path;
+            if (stats.mtime >= startTime) {
+              candidates.push({
+                path: filePath,
+                mtime: stats.mtime,
+              });
             }
           }
-        } catch (error) {
-          Log.debug(`[CodexLogParser] Failed to read candidate log: ${error}`);
-          continue;
+
+          if (candidates.length === 0) {
+            return null; // No candidates yet, will retry
+          }
+
+          // Sort by modification time (newest first)
+          candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+          // Check each candidate
+          for (const candidate of candidates) {
+            try {
+              // Read first 10 events
+              const events = await this.readFirstEvents(candidate.path, 10);
+
+              // Look for user message in turn_context or response_item events
+              for (const event of events) {
+                let userMessage: string | null = null;
+
+                // Check turn_context for user message (if present)
+                if (event.type === "turn_context" && event.payload?.messages) {
+                  const userMsg = event.payload.messages.find(
+                    (m: any) => m.role === "user"
+                  );
+                  if (userMsg?.content) {
+                    userMessage = Array.isArray(userMsg.content)
+                      ? userMsg.content.map((c: any) => c.text).join("")
+                      : userMsg.content;
+                  }
+                }
+
+                // Check response_item for user echo
+                if (
+                  event.type === "response_item" &&
+                  event.payload?.role === "user"
+                ) {
+                  const content = event.payload.content;
+                  if (Array.isArray(content)) {
+                    userMessage = content
+                      .filter(
+                        (c: any) =>
+                          (c.type === "input_text" || c.type === "output_text") &&
+                          c.text
+                      )
+                      .map((c: any) => c.text)
+                      .join("");
+                  }
+                }
+
+                // Check event_msg for user_message (prompt echo)
+                if (
+                  event.type === "event_msg" &&
+                  event.payload?.type === "user_message" &&
+                  event.payload?.message
+                ) {
+                  userMessage = event.payload.message;
+                }
+
+                // Match prompt text
+                if (
+                  userMessage &&
+                  userMessage.toLowerCase().includes(promptPrefix)
+                ) {
+                  return candidate.path; // Success - found matching log
+                }
+              }
+            } catch (error) {
+              Log.debug(
+                `[CodexLogParser] Failed to read candidate log: ${error}`
+              );
+              continue;
+            }
+          }
+
+          return null; // No match found, will retry
+        },
+        {
+          // Uses default: 10s
+          onRetry: (attempt, max, delay) => {
+            if (attempt > 1) {
+              Log.debug(
+                `[CodexLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+              );
+            }
+          },
         }
+      );
+
+      if (result) {
+        Log.debug(`[CodexLogParser] Found matching log: ${result}`);
+        return result;
       }
 
       Log.debug("[CodexLogParser] No matching session log found");
@@ -381,7 +462,7 @@ export class CodexLogParser extends BaseLogParser {
    * @returns Session ID (thread_xxx format), or null if not found
    *
    * @remarks
-   * **Session ID Format:** `thread_abc123xyz789`
+   * **Session ID Format:** `thread_abc123xyz789` or UUID
    *
    * **Event Structure:**
    * ```json
@@ -418,7 +499,7 @@ export class CodexLogParser extends BaseLogParser {
    * @remarks
    * **Codex Event Formats:**
    * - Direct content: `{ type: "text", content: "..." }`
-   * - Nested payload: `{ payload: { type: "input_text", text: "..." } }`
+   * - Nested payload: `{ payload: { type: "input_text" | "output_text", text: "..." } }`
    * - Response items: `{ type: "response_item", payload: { content: [...] } }`
    */
   extractContentFromEvent(event: any): string | undefined {
@@ -428,16 +509,32 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     // Nested payload with text
-    if (event.payload?.type === "input_text" && event.payload.text) {
+    if (
+      (event.payload?.type === "input_text" ||
+        event.payload?.type === "output_text") &&
+      event.payload.text
+    ) {
       return event.payload.text;
     }
 
     // Response item with content array
     if (event.type === "response_item" && event.payload?.content) {
       const textParts = event.payload.content
-        .filter((c: any) => c.type === "input_text" && c.text)
+        .filter(
+          (c: any) =>
+            (c.type === "input_text" || c.type === "output_text") && c.text
+        )
         .map((c: any) => c.text);
       return textParts.length > 0 ? textParts.join("") : undefined;
+    }
+
+    // Agent message events carry assistant output
+    if (
+      event.type === "event_msg" &&
+      event.payload?.type === "agent_message" &&
+      event.payload.message
+    ) {
+      return event.payload.message;
     }
 
     return undefined;

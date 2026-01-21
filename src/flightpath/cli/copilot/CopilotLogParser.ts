@@ -266,8 +266,7 @@ export class CopilotLogParser extends BaseLogParser {
           return null; // No match found, will retry
         },
         {
-          maxAttempts: 5,
-          delays: [0, 50, 100, 150, 200], // Total max wait: 500ms
+          // Uses default: 10s
           onRetry: (attempt, max, delay) => {
             if (attempt > 1) {
               Log.debug(

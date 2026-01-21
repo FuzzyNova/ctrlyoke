@@ -285,8 +285,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             return null; // File doesn't exist yet, will retry
           },
           {
-            maxAttempts: 20,
-            delays: [0, 100, 200, 300, 500, 500, 500, 1000, 1000, 1000], // Total max wait: ~5s
+            // Uses default: 10s
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {
                 Log.debug(

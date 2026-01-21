@@ -36,7 +36,7 @@ export class PermanentFailureError extends Error {
 export interface RetryOptions {
   /**
    * Maximum number of attempts (including the initial attempt)
-   * @default 5
+   * @default 15
    */
   maxAttempts?: number;
 
@@ -49,15 +49,15 @@ export interface RetryOptions {
    *
    * Note: First attempt is always immediate (no delay).
    *
-   * @default [50, 100, 150, 200]
+   * @default [0, 100, 200, 300, 500, 1000] (total ~10s with maxAttempts=15)
    *
    * @example
    * ```typescript
-   * // With maxAttempts=10 and delays=[50, 100, 1000]:
+   * // With maxAttempts=15 and delays=[50, 100, 1000]:
    * // Attempt 1: immediate
    * // Attempt 2: wait 50ms
    * // Attempt 3: wait 100ms
-   * // Attempts 4-10: wait 1000ms (last value repeats)
+   * // Attempts 4-15: wait 1000ms (last value repeats)
    * ```
    */
   delays?: number | number[];
@@ -104,8 +104,6 @@ export interface RetryOptions {
  *     return null;
  *   },
  *   {
- *     maxAttempts: 5,
- *     delays: [50, 100, 150, 200], // First attempt immediate, then these delays
  *     onRetry: (attempt, max, delay) => {
  *       console.log(`Attempt ${attempt}/${max} (delay: ${delay}ms)`);
  *     }
@@ -126,7 +124,11 @@ export async function retryWithBackoff<T>(
   operation: () => Promise<T | null | undefined>,
   options: RetryOptions = {}
 ): Promise<T | undefined> {
-  const { maxAttempts = 5, delays = [50, 100, 150, 200], onRetry } = options;
+  const {
+    maxAttempts = 15,
+    delays = [0, 100, 200, 300, 500, 1000],
+    onRetry,
+  } = options;
 
   // Normalize delays to array
   // If delays is a number, create array filled with that delay
