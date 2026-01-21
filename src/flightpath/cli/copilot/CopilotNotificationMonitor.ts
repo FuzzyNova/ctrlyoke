@@ -1,5 +1,3 @@
-import * as path from "path";
-import * as fs from "fs";
 import {
   INotificationMonitor,
   NotificationConfig,
@@ -7,16 +5,17 @@ import {
   HookConfig,
 } from "../shared/interfaces/INotificationMonitor";
 import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
-import { Log } from "../../../utils/Log";
 
 /**
  * Copilot CLI Notification Monitor
  *
- * Monitors for completion via sessionEnd hooks:
+ * Monitors for session lifecycle via hooks:
+ * - sessionStart: Signals when CLI session begins (no session ID provided)
+ * - sessionEnd: Signals when CLI session completes
  * - Hook file: .github/hooks/flightpath.json
  * - Hook script: flightpath-copilot-hook.js (writes notification files)
  * - Notification directory: .flightpath/notify-copilot/
- * - Detection: File-based polling for completion notifications
+ * - Detection: File-based polling for start/completion notifications
  *
  * Note: Copilot hooks do NOT provide session IDs in notifications.
  * Session IDs must be extracted from process log files separately.
@@ -51,8 +50,8 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
    * Build Copilot hook configuration
    *
-   * Creates JSON object for .github/hooks/flightpath.json with sessionEnd hook.
-   * The hook calls a Node.js script that writes notification files.
+   * Creates JSON object for .github/hooks/flightpath.json with sessionStart and sessionEnd hooks.
+   * The hooks call a Node.js script that writes notification files.
    *
    * @param scriptPath Path to notification handler script (flightpath-copilot-hook.js)
    * @param notifyDir Notification directory path
@@ -77,6 +76,14 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
       config: {
         version: 1,
         hooks: {
+          sessionStart: [
+            {
+              type: "command",
+              bash: `node "${bashScriptPath}" "${bashNotifyDir}" "sessionStart"`,
+              powershell: `node "${psScriptPath}" "${psNotifyDir}" "sessionStart"`,
+              timeoutSec: 10,
+            },
+          ],
           sessionEnd: [
             {
               type: "command",
@@ -128,21 +135,30 @@ export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
    * Wait for SessionStart hook notification
    *
-   * NOT IMPLEMENTED: Copilot CLI does not currently support SessionStart hooks.
-   * This is a placeholder for future implementation when Copilot adds start hook support.
+   * Monitors for sessionStart hook notification to confirm CLI session has started.
+   * Copilot's sessionStart hook does NOT provide session IDs.
+   * This method is used to wait until Copilot CLI is ready before discovering log files.
    *
-   * When implemented, this would:
-   * 1. Configure SessionStart hook in buildHookConfig()
-   * 2. Wait for hook notification file to be written
-   * 3. Extract and return session ID immediately
-   *
-   * For now, Copilot integration falls back to log file discovery via prompt text matching.
+   * Uses wildcard monitoring since Copilot hooks don't provide session IDs.
+   * Hook writes: sessionStart-{timestamp}.json
    *
    * @param config Monitoring configuration
    * @param startTime Execution start time
    * @param onCancel Cancellation callback
-   * @returns Always null (not implemented)
+   * @returns NotificationResult (completed=true on success, sessionId not provided)
    */
-  // waitForSessionStart is intentionally not implemented
-  // Copilot will use fallback log discovery path in CliIntegration
+  async waitForSessionStart(
+    config: NotificationConfig,
+    startTime: Date,
+    onCancel?: () => boolean
+  ): Promise<NotificationResult> {
+    // Monitor for any sessionStart notification file (wildcard mode)
+    // Copilot hooks don't provide session IDs, but we still get confirmation
+    return await CliNotificationMonitor.monitorForCompletion(
+      config,
+      undefined, // sessionId undefined = wildcard mode
+      startTime,
+      onCancel
+    );
+  }
 }

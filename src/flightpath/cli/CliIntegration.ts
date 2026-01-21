@@ -498,42 +498,83 @@ export class CliIntegration extends CopilotIntegration {
           );
 
         // Wait for SessionStart notification (60 second timeout)
-        sessionId = await this.provider.notificationMonitor.waitForSessionStart(
-          {
-            directory: notifyDir,
-            timeoutMs: 60000,
-            pollMs: 100,
-          },
-          startTime,
-          () => this.isCancelling
-        );
-
-        if (!sessionId) {
-          Log.error("❌ SessionStart hook timeout after 60 seconds");
-          this.lastFailureReason = "SessionStart hook timeout";
-          await this.cleanupTempFiles(tempFilePaths);
-          return { success: false };
-        }
-
-        Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
-
-        // Now find the log file using the session ID
-        logPath = await this.provider.logParser.discoverSessionLog(
-          promptText,
-          startTime,
-          sessionId
-        );
-
-        if (!logPath) {
-          Log.error(
-            `❌ Could not find log file for session ${sessionId} - this should not happen!`
+        const startResult =
+          await this.provider.notificationMonitor.waitForSessionStart(
+            {
+              directory: notifyDir,
+              timeoutMs: 60000,
+              pollMs: 100,
+            },
+            startTime,
+            () => this.isCancelling
           );
-          this.lastFailureReason = "Log file not found after SessionStart";
+
+        if (!startResult.completed) {
+          Log.error(
+            `❌ SessionStart hook timeout: ${startResult.error || "Unknown error"}`
+          );
+          this.lastFailureReason =
+            startResult.error || "SessionStart hook timeout";
           await this.cleanupTempFiles(tempFilePaths);
           return { success: false };
         }
 
-        Log.info(`✅ Found session log: ${logPath}`);
+        // Extract session ID if provided (Claude provides it, Copilot doesn't)
+        sessionId = startResult.data?.sessionId || null;
+
+        if (sessionId) {
+          Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
+
+          // Use session ID to find log file directly
+          logPath = await this.provider.logParser.discoverSessionLog(
+            promptText,
+            startTime,
+            sessionId
+          );
+
+          if (!logPath) {
+            Log.error(
+              `❌ Could not find log file for session ${sessionId} - this should not happen!`
+            );
+            this.lastFailureReason = "Log file not found after SessionStart";
+            await this.cleanupTempFiles(tempFilePaths);
+            return { success: false };
+          }
+
+          Log.info(`✅ Found session log: ${logPath}`);
+        } else {
+          // No session ID provided - fall back to prompt text matching
+          Log.info(
+            "✅ SessionStart hook confirmed (session ID not provided by CLI)"
+          );
+          Log.info(
+            "🔍 Discovering session log file via prompt text matching..."
+          );
+
+          logPath = await this.provider.logParser.discoverSessionLog(
+            promptText,
+            startTime
+          );
+
+          if (!logPath) {
+            Log.error(
+              "❌ Could not discover session log - no matching prompt found"
+            );
+            this.lastFailureReason = "Session log not found";
+            await this.cleanupTempFiles(tempFilePaths);
+            return { success: false };
+          }
+
+          Log.info(`✅ Found session log: ${logPath}`);
+
+          // Extract session ID from matched log
+          const events = await this.provider.logParser.readNewLines(logPath);
+          sessionId = this.provider.logParser.extractSessionId(events);
+
+          if (sessionId) {
+            Log.debug(`💾 Extracted session ID from log: ${sessionId}`);
+          }
+        }
       } else {
         // Provider doesn't support SessionStart hook - use old method (Copilot, Codex)
         Log.info("🔍 Discovering session log file (no SessionStart hook)...");

@@ -299,29 +299,33 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Find recently modified session log files
    *
-   * Helper for session discovery. Lists log files in directory that were
+   * Helper for session discovery. Lists log files/directories in directory that were
    * modified after the specified start time (potential session logs).
    *
    * @param logDirectory - Absolute path to log directory
-   * @param startTime - Only include files modified after this time
-   * @returns Array of absolute file paths to candidate log files
+   * @param startTime - Only include files/directories modified after this time
+   * @returns Array of absolute paths to candidate log files/directories
    *
    * @remarks
    * **File Selection:**
    * - Checks modification time (mtime) against startTime
-   * - Returns files modified within reasonable window (startTime - 10s to now)
+   * - Returns files AND directories modified within reasonable window (startTime - 10s to now)
    * - Sorts by modification time (newest first)
+   * - Handles both flat files (old format) and directories (new format)
    *
    * **Use Case:**
-   * Provider parsers use this to get candidate files, then read/parse
-   * each one to find matching prompt text.
+   * Provider parsers use this to get candidate files/directories, then resolve
+   * to actual log file path and read/parse to find matching prompt text.
    *
    * @example
    * ```typescript
    * const candidates = this.findModifiedSessionLogs("/tmp/copilot-logs", new Date());
-   * for (const file of candidates) {
-   *   const entries = await this.readNewLines(file);
-   *   // Check if entries contain prompt text
+   * for (const candidate of candidates) {
+   *   const logPath = await this.resolveLogPath(candidate);
+   *   if (logPath) {
+   *     const entries = await this.readNewLines(logPath);
+   *     // Check if entries contain prompt text
+   *   }
    * }
    * ```
    */
@@ -346,8 +350,9 @@ export abstract class BaseLogParser implements ILogParser {
         try {
           const stats = fs.statSync(filePath);
 
-          // Only include regular files (not directories)
-          if (!stats.isFile()) {
+          // Include both files (old format: session-id.jsonl)
+          // and directories (new format: session-id/events.jsonl)
+          if (!stats.isFile() && !stats.isDirectory()) {
             continue;
           }
 

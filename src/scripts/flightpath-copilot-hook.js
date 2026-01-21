@@ -184,8 +184,8 @@ function main() {
         });
       }
 
-      // Only write completion notification on sessionEnd
-      if (hookType === "sessionEnd") {
+      // Write notification files for sessionStart and sessionEnd
+      if (hookType === "sessionStart" || hookType === "sessionEnd") {
         // Ensure notification directory exists
         if (!fs.existsSync(notifyDir)) {
           fs.mkdirSync(notifyDir, { recursive: true });
@@ -196,15 +196,15 @@ function main() {
         // Use session ID if available, otherwise use timestamp for wildcard monitoring
         const filename = sessionId
           ? `${sessionId}.json`
-          : `completion-${Date.now()}.json`;
+          : `${hookType}-${Date.now()}.json`;
         const notifyFile = path.join(notifyDir, filename);
 
         // Create notification data
         const notifyData = {
           timestamp: Date.now(),
           sessionId: sessionId || null,
-          status: "completed",
-          hookType: "sessionEnd",
+          status: hookType === "sessionStart" ? "started" : "completed",
+          hookType: hookType,
           reason: hookInput.reason,
           cwd: hookInput.cwd,
           rawHookData: hookInput,

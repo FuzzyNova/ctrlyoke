@@ -1,6 +1,14 @@
 {
   "version": 1,
   "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node \"c:/dev/FlightPath/out/scripts/flightpath-copilot-hook.js\" \"c:/dev/FlightPath/.flightpath/temp/copilot-notifications\" \"sessionStart\"",
+        "powershell": "node \"c:\\\\dev\\\\FlightPath\\\\out\\\\scripts\\\\flightpath-copilot-hook.js\" \"c:\\\\dev\\\\FlightPath\\\\.flightpath\\\\temp\\\\copilot-notifications\" \"sessionStart\"",
+        "timeoutSec": 10
+      }
+    ],
     "sessionEnd": [
       {
         "type": "command",

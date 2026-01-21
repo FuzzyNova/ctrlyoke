@@ -149,13 +149,13 @@ export class ClaudeNotificationMonitor
    * @param config Monitoring configuration
    * @param startTime Execution start time
    * @param onCancel Cancellation callback
-   * @returns Session ID if found, or null on timeout/cancellation
+   * @returns NotificationResult with session ID in data.sessionId
    */
   async waitForSessionStart(
     config: NotificationConfig,
     startTime: Date,
     onCancel?: () => boolean
-  ): Promise<string | null> {
+  ): Promise<NotificationResult> {
     const pollMs = config.pollMs || 100;
     const timeoutMs = config.timeoutMs;
     const startMs = Date.now();
@@ -168,7 +168,10 @@ export class ClaudeNotificationMonitor
       // Check for cancellation
       if (onCancel && onCancel()) {
         Log.debug("[ClaudeNotificationMonitor] SessionStart wait cancelled");
-        return null;
+        return {
+          completed: false,
+          error: "User cancelled execution",
+        };
       }
 
       // Check for any new notification files created after start time
@@ -187,7 +190,10 @@ export class ClaudeNotificationMonitor
             Log.debug(
               `[ClaudeNotificationMonitor] Found SessionStart notification: ${data.sessionId}`
             );
-            return data.sessionId;
+            return {
+              completed: true,
+              data: { sessionId: data.sessionId },
+            };
           }
         }
       }
@@ -197,6 +203,9 @@ export class ClaudeNotificationMonitor
     }
 
     Log.warn("[ClaudeNotificationMonitor] SessionStart wait timeout");
-    return null;
+    return {
+      completed: false,
+      error: "Timeout waiting for SessionStart notification",
+    };
   }
 }
