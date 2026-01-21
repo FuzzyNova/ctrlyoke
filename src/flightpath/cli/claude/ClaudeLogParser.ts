@@ -390,6 +390,75 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return null;
   }
 
+  /**
+   * Extract text content from a single Claude log event for streaming
+   *
+   * @param event - Single parsed Claude log event
+   * @returns Text content to display, or undefined if no displayable content
+   *
+   * @remarks
+   * **Claude Event Format:**
+   * - `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
+   */
+  extractContentFromEvent(event: any): string | undefined {
+    // Claude: Extract text from content array
+    if (event.type === "assistant" && event.message?.content) {
+      const textContent = event.message.content
+        .filter((c: any) => c.type === "text")
+        .map((c: any) => c.text)
+        .join("");
+      return textContent || undefined;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Format Claude metadata into statistics string
+   *
+   * @param metadata - Metadata from extractResponse() (sessionId, model, usage)
+   * @returns Formatted statistics string
+   *
+   * @example
+   * ```typescript
+   * const metadata = {
+   *   sessionId: "abc-123",
+   *   model: "claude-sonnet-4.5",
+   *   usage: { input_tokens: 100, output_tokens: 50 }
+   * };
+   * const stats = parser.formatStatistics(metadata);
+   * // "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out"
+   * ```
+   */
+  formatStatistics(metadata: any): string {
+    const parts: string[] = [];
+
+    // Session ID (truncated for readability)
+    if (metadata.sessionId) {
+      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}`);
+    }
+
+    // Model name
+    if (metadata.model) {
+      parts.push(`Model: ${metadata.model}`);
+    }
+
+    // Token usage
+    if (metadata.usage) {
+      const usage = metadata.usage;
+      if (
+        usage.input_tokens !== undefined &&
+        usage.output_tokens !== undefined
+      ) {
+        parts.push(
+          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+        );
+      }
+    }
+
+    return parts.join(" | ");
+  }
+
   // ========================================================================
   // Private Helper Methods
   // ========================================================================

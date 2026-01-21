@@ -119,7 +119,31 @@ export abstract class BaseLogParser implements ILogParser {
    * @returns Session ID string, or null if not found
    */
   abstract extractSessionId(events: any[]): string | null;
+  /**
+   * Extract text content from a single log event for streaming
+   *
+   * Provider-specific implementation must:
+   * - Parse event format specific to this provider
+   * - Extract displayable text content
+   * - Return undefined if event has no displayable content
+   *
+   * @param event - Single parsed log event
+   * @returns Text content to display, or undefined if no content
+   */
+  abstract extractContentFromEvent(event: any): string | undefined;
 
+  /**
+   * Format metadata into human-readable statistics string
+   *
+   * Provider-specific implementation must:
+   * - Parse metadata fields specific to this provider
+   * - Format into consistent display string
+   * - Include session ID, model, token usage as available
+   *
+   * @param metadata - Metadata object from extractResponse()
+   * @returns Formatted statistics string
+   */
+  abstract formatStatistics(metadata: any): string;
   // ========================================================================
   // Shared Implementation (Used by All Providers)
   // ========================================================================

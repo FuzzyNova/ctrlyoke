@@ -382,6 +382,87 @@ export class CodexLogParser extends BaseLogParser {
   }
 
   /**
+   * Extract text content from a single Codex log event for streaming
+   *
+   * @param event - Single parsed Codex log event
+   * @returns Text content to display, or undefined if no displayable content
+   *
+   * @remarks
+   * **Codex Event Formats:**
+   * - Direct content: `{ type: "text", content: "..." }`
+   * - Nested payload: `{ payload: { type: "input_text", text: "..." } }`
+   * - Response items: `{ type: "response_item", payload: { content: [...] } }`
+   */
+  extractContentFromEvent(event: any): string | undefined {
+    // Direct content field
+    if (event.type === "text" && event.content) {
+      return event.content;
+    }
+
+    // Nested payload with text
+    if (event.payload?.type === "input_text" && event.payload.text) {
+      return event.payload.text;
+    }
+
+    // Response item with content array
+    if (event.type === "response_item" && event.payload?.content) {
+      const textParts = event.payload.content
+        .filter((c: any) => c.type === "input_text" && c.text)
+        .map((c: any) => c.text);
+      return textParts.length > 0 ? textParts.join("") : undefined;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Format Codex metadata into statistics string
+   *
+   * @param metadata - Metadata from extractResponse() (sessionId, model, usage)
+   * @returns Formatted statistics string
+   *
+   * @example
+   * ```typescript
+   * const metadata = {
+   *   sessionId: "thread_abc123",
+   *   model: "gpt-5.1-codex",
+   *   usage: { input_tokens: 100, output_tokens: 50 }
+   * };
+   * const stats = parser.formatStatistics(metadata);
+   * // "Session: thread_abc | Model: gpt-5.1-codex | Tokens: 100 in / 50 out"
+   * ```
+   */
+  formatStatistics(metadata: any): string {
+    const parts: string[] = [];
+
+    // Session ID (truncate thread_ prefix for readability)
+    if (metadata.sessionId) {
+      const displayId = metadata.sessionId.replace(/^thread_/, "thread_");
+      parts.push(`Session: ${displayId.substring(0, 12)}`);
+    }
+
+    // Model name
+    if (metadata.model) {
+      parts.push(`Model: ${metadata.model}`);
+    }
+
+    // Token usage
+    if (metadata.usage) {
+      const usage = metadata.usage;
+      if (
+        usage.input_tokens !== undefined &&
+        usage.output_tokens !== undefined
+      ) {
+        parts.push(
+          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+        );
+      }
+    }
+
+    return parts.join(" | ");
+  }
+
+  /**
    * Process a single event for buffering and state tracking
    *
    * Buffers response_item events and tracks session metadata for later

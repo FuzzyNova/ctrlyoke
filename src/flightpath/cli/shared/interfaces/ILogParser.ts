@@ -198,4 +198,57 @@ export interface ILogParser {
    * ```
    */
   extractSessionId(events: any[]): string | null;
+
+  /**
+   * Extract text content from a single log event for streaming
+   *
+   * Parses provider-specific event format to extract displayable text content.
+   * Used during log file watching to stream content to output in real-time.
+   *
+   * @param event - Single parsed log event (provider-specific format)
+   * @returns Text content to display, or undefined if event has no displayable content
+   *
+   * @remarks
+   * Provider-specific formats:
+   * - **Copilot**: `{ type: "assistant.message", data: { content: "..." } }`
+   * - **Copilot Reasoning**: `{ type: "assistant.reasoning", data: { content: "..." } }`
+   * - **Claude**: `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
+   * - **Codex**: `{ type: "text", content: "..." }` or `{ payload: { type: "text", text: "..." } }`
+   *
+   * @example
+   * ```typescript
+   * const event = { type: "assistant.message", data: { content: "Hello world" } };
+   * const text = parser.extractContentFromEvent(event);
+   * // "Hello world"
+   * ```
+   */
+  extractContentFromEvent(event: any): string | undefined;
+
+  /**
+   * Format metadata into human-readable statistics string
+   *
+   * Converts provider-specific metadata (model, tokens, session info) into
+   * a formatted display string for the output panel.
+   *
+   * @param metadata - Metadata object from extractResponse()
+   * @returns Formatted statistics string (e.g., "Model: gpt-4 | Tokens: 100 in / 50 out")
+   *
+   * @remarks
+   * Provider-specific metadata:
+   * - **Copilot**: `{ sessionId, model }` from session.start event
+   * - **Claude**: `{ sessionId, model, usage: { input_tokens, output_tokens } }`
+   * - **Codex**: Similar to Claude with token usage
+   *
+   * @example
+   * ```typescript
+   * const metadata = {
+   *   sessionId: "abc-123",
+   *   model: "gpt-4",
+   *   usage: { input_tokens: 100, output_tokens: 50 }
+   * };
+   * const stats = parser.formatStatistics(metadata);
+   * // "Session: abc-123 | Model: gpt-4 | Tokens: 100 in / 50 out"
+   * ```
+   */
+  formatStatistics(metadata: any): string;
 }

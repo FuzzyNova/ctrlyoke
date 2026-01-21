@@ -260,6 +260,73 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   /**
+   * Extract text content from a single Copilot log event for streaming
+   *
+   * @param event - Single parsed Copilot log event
+   * @returns Text content to display, or undefined if no displayable content
+   *
+   * @remarks
+   * **Copilot Event Formats:**
+   * - `assistant.message`: `{ type: "assistant.message", data: { content: "..." } }`
+   * - `assistant.reasoning`: `{ type: "assistant.reasoning", data: { content: "..." } }`
+   */
+  extractContentFromEvent(event: any): string | undefined {
+    // Assistant message content
+    if (event.type === "assistant.message" && event.data?.content) {
+      return event.data.content;
+    }
+
+    // Assistant reasoning content (prefixed for visibility)
+    if (event.type === "assistant.reasoning" && event.data?.content) {
+      return `[Reasoning] ${event.data.content}`;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Format Copilot metadata into statistics string
+   *
+   * @param metadata - Metadata from extractResponse() (sessionId, model from session.start event)
+   * @returns Formatted statistics string
+   *
+   * @example
+   * ```typescript
+   * const metadata = { sessionId: "abc-123", model: "gpt-5-mini" };
+   * const stats = parser.formatStatistics(metadata);
+   * // "Session: abc-123 | Model: gpt-5-mini"
+   * ```
+   */
+  formatStatistics(metadata: any): string {
+    const parts: string[] = [];
+
+    // Session ID (truncated for readability)
+    if (metadata.sessionId) {
+      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}`);
+    }
+
+    // Model name
+    if (metadata.model) {
+      parts.push(`Model: ${metadata.model}`);
+    }
+
+    // Token usage (if available - Copilot doesn't typically provide this in logs)
+    if (metadata.usage) {
+      const usage = metadata.usage;
+      if (
+        usage.input_tokens !== undefined &&
+        usage.output_tokens !== undefined
+      ) {
+        parts.push(
+          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+        );
+      }
+    }
+
+    return parts.join(" | ");
+  }
+
+  /**
    * Get log file path for a session ID
    *
    * Resolves session ID to actual log file path, handling both old and new formats.

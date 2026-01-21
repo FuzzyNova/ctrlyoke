@@ -709,7 +709,7 @@ export class CliIntegration extends CopilotIntegration {
         const cliResult: CliResult = {
           success: true,
           response: response.text,
-          statistics: this.formatStatistics(response.metadata),
+          statistics: parser.formatStatistics(response.metadata),
           exitCode: 0,
           sessionId: response.metadata.sessionId || sessionId || undefined,
         };
@@ -735,8 +735,8 @@ export class CliIntegration extends CopilotIntegration {
         (event) => {
           events.push(event);
 
-          // Stream content to output window
-          const content = this.extractContentFromEvent(event);
+          // Stream content to output window (delegates to provider's log parser)
+          const content = parser.extractContentFromEvent(event);
           if (content) {
             this.streamingChunkEmitter.fire(content);
           }
@@ -808,64 +808,6 @@ export class CliIntegration extends CopilotIntegration {
         }
       }, 100);
     });
-  }
-
-  /**
-   * Extract text content from provider-specific log event.
-   *
-   * @param event Provider-specific log event
-   * @returns Text content for streaming, or undefined if no content
-   */
-  private extractContentFromEvent(event: any): string | undefined {
-    // Handle different provider event formats
-    // Claude: { type: "assistant", message: { content: [{ type: "text", text: "..." }] } }
-    if (event.type === "assistant" && event.message?.content) {
-      const textContent = event.message.content
-        .filter((c: any) => c.type === "text")
-        .map((c: any) => c.text)
-        .join("");
-      return textContent || undefined;
-    }
-
-    // Copilot/Codex: { type: "text", content: "..." }
-    if (event.type === "text" && event.content) {
-      return event.content;
-    }
-
-    // Codex nested payload: { payload: { type: "text", text: "..." } }
-    if (event.payload?.type === "text" && event.payload.text) {
-      return event.payload.text;
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Format metadata into statistics string.
-   *
-   * @param metadata Provider-specific metadata
-   * @returns Formatted statistics string
-   */
-  private formatStatistics(metadata: any): string {
-    const parts: string[] = [];
-
-    if (metadata.model) {
-      parts.push(`Model: ${metadata.model}`);
-    }
-
-    if (metadata.usage) {
-      const usage = metadata.usage;
-      if (
-        usage.input_tokens !== undefined &&
-        usage.output_tokens !== undefined
-      ) {
-        parts.push(
-          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
-        );
-      }
-    }
-
-    return parts.join(" | ");
   }
 
   /**
