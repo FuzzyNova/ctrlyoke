@@ -47,6 +47,28 @@ export interface SessionValidationResult {
  */
 export class SessionResolver {
   /**
+   * Check if two providers are compatible for session sharing.
+   *
+   * **Strict provider matching:**
+   * - Both defined and equal → Compatible
+   * - One undefined, one defined → **NOT compatible**
+   * - Both defined but different → **NOT compatible**
+   *
+   * This prevents cross-provider session references (Copilot ↔ Claude ↔ Codex).
+   *
+   * @param provider1 First provider (may be undefined)
+   * @param provider2 Second provider (may be undefined)
+   * @returns true if providers are compatible for session sharing
+   */
+  private static areProvidersCompatible(
+    provider1: Provider | undefined,
+    provider2: Provider | undefined
+  ): boolean {
+    // Strict equality check: Both must be defined and match
+    // This prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
+    return !!(provider1 && provider2 && provider1 === provider2);
+  }
+  /**
    * Resolve session ID for a prompt.
    *
    * Resolution order:
@@ -131,7 +153,8 @@ export class SessionResolver {
       Log.warn(
         `⚠️ Invalid sessionId reference: ${refNumber}. ` +
           `Must reference a completed prompt (1-${promptIndex}). ` +
-          `Starting new session.`
+          `Starting new session instead.\n` +
+          `   To fix: Use a valid prompt number (1-${promptIndex}) or remove sessionId to auto-resume.`
       );
       return undefined;
     }
@@ -141,7 +164,9 @@ export class SessionResolver {
 
     if (!sessionId) {
       Log.warn(
-        `⚠️ Prompt ${refNumber} has no session ID. Starting new session.`
+        `⚠️ Prompt ${refNumber} has no session ID. Starting new session instead.\n` +
+          `   This usually means prompt ${refNumber} hasn't been executed yet.\n` +
+          `   To fix: Ensure prompts run in order, or use a different prompt number.`
       );
       return undefined;
     }
@@ -156,14 +181,19 @@ export class SessionResolver {
       return undefined;
     }
 
-    // Validate provider compatibility
+    // Validate provider compatibility using shared method
     const refProvider = referencedPrompt._runtime?.provider;
     const currentProvider = resolvedProvider ?? prompt.provider;
 
-    if (refProvider && currentProvider && refProvider !== currentProvider) {
+    if (!this.areProvidersCompatible(refProvider, currentProvider)) {
       Log.warn(
-        `⚠️ Session ID from prompt ${refNumber} uses different provider ` +
-          `(${refProvider} vs ${currentProvider}). Starting new session.`
+        `⚠️ Cross-provider session reference detected!\n` +
+          `   Prompt ${refNumber} used ${refProvider}, but current prompt uses ${currentProvider}.\n` +
+          `   Sessions cannot be shared across different providers (Copilot ↔ Claude ↔ Codex).\n` +
+          `   Starting new ${currentProvider} session instead.\n` +
+          `   To fix: Either:\n` +
+          `     1. Use same provider for all prompts that share a session, OR\n` +
+          `     2. Remove sessionId to auto-resume from last prompt with matching provider`
       );
       return undefined;
     }
@@ -201,9 +231,19 @@ export class SessionResolver {
       const prevSessionId = prevPrompt._runtime?.sessionId;
       const currentProvider = resolvedProvider ?? prompt.provider;
 
-      // Match provider if specified, otherwise any previous session
-      const providersMatch =
-        !currentProvider || !prevProvider || prevProvider === currentProvider;
+      // Check provider compatibility using shared method
+      const providersMatch = this.areProvidersCompatible(
+        currentProvider,
+        prevProvider
+      );
+
+      // Skip prompts with mismatched providers (log for debugging)
+      if (!providersMatch && prevSessionId) {
+        Log.debug(
+          `⏭️ Skipping prompt ${i + 1} (provider mismatch: ${prevProvider} vs ${currentProvider})`
+        );
+        continue;
+      }
 
       if (providersMatch && prevSessionId) {
         // Runtime sessionId should always be string (actual CLI session ID)

@@ -1542,15 +1542,28 @@ export class CliIntegration extends CopilotIntegration {
 
       // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
       if (success) {
+        // IMPORTANT: Always create/update provider and model fields, even when resuming from working file
+        // This ensures _runtime accurately reflects what was ACTUALLY used, not stale data from previous runs
+        const actualProvider =
+          resolvedProperties?.provider ??
+          (this.getIntegrationMode() as Provider);
+        const actualModel = resolvedProperties?.model ?? "";
+        const actualAgent = resolvedProperties?.agent;
+
         if (!prompt._runtime) {
+          // First execution - create new _runtime
           prompt._runtime = {
-            provider:
-              resolvedProperties?.provider ??
-              (this.getIntegrationMode() as Provider),
-            model: resolvedProperties?.model ?? "",
-            agent: resolvedProperties?.agent,
+            provider: actualProvider,
+            model: actualModel,
+            agent: actualAgent,
             startedAt: Date.now(),
           };
+        } else {
+          // Resuming from working file - update provider/model to match what actually ran
+          prompt._runtime.provider = actualProvider;
+          prompt._runtime.model = actualModel;
+          prompt._runtime.agent = actualAgent;
+          // Keep existing startedAt (from first attempt)
         }
 
         // Add session ID if available (may be undefined for first prompt or if extraction failed)

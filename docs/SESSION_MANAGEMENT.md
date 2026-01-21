@@ -189,6 +189,117 @@ prompts:
 
 ---
 
+## Cross-Provider Workflows
+
+### Provider-Aware Session Resumption
+
+FlightPath **automatically validates provider compatibility** when resuming sessions. Sessions cannot be shared across different providers (Copilot ↔ Claude ↔ Codex) because each provider has different session formats and APIs.
+
+**How It Works:**
+
+1. **Explicit numeric reference** (`sessionId: 1`) - Validates providers match, warns and starts new session if mismatch
+2. **Auto-resume** (`newChatSession: false`, no `sessionId`) - **Searches backward for last prompt with matching provider** (strict equality check)
+3. **Exact session ID** (`sessionId: "uuid"`) - No provider validation (you control the session ID)
+
+**Strict Provider Matching:** Auto-resume uses strict equality to prevent cross-provider session references. Providers must BOTH be defined and match exactly (e.g., `"claude-cli" === "claude-cli"`) for session reuse. This prevents errors like "Copilot trying to resume Claude's session".
+
+### Example: Mixed Provider Workflow
+
+```yaml
+prompts:
+  - id: claude-analyze
+    provider: claude-cli
+    prompt: "Analyze codebase architecture"
+    # Creates Claude session: abc-123
+
+  - id: copilot-review
+    provider: copilot-cli
+    prompt: "Review code quality"
+    # Creates Copilot session: xyz-789
+
+  - id: claude-implement
+    provider: claude-cli
+    prompt: "Implement improvements"
+    newChatSession: false  # No sessionId specified
+    # ✅ Auto-resumes Claude session abc-123 (skips Copilot session)
+
+  - id: copilot-test
+    provider: copilot-cli
+    prompt: "Add tests"
+    newChatSession: false  # No sessionId specified
+    # ✅ Auto-resumes Copilot session xyz-789 (skips Claude session)
+```
+
+**Result:** Each provider maintains its own session chain, automatically!
+
+### Example: Cross-Provider Reference (Error Case)
+
+```yaml
+prompts:
+  - id: step1
+    provider: claude-cli
+    prompt: "Analyze code"
+    # Creates Claude session: abc-123
+
+  - id: step2
+    provider: copilot-cli
+    prompt: "Review analysis"
+    sessionId: 1  # ⚠️ Trying to use Claude session with Copilot!
+```
+
+**What Happens:**
+
+```
+⚠️ Cross-provider session reference detected!
+   Prompt 1 used claude-cli, but current prompt uses copilot-cli.
+   Sessions cannot be shared across different providers (Copilot ↔ Claude ↔ Codex).
+   Starting new copilot-cli session instead.
+   To fix: Either:
+     1. Use same provider for all prompts that share a session, OR
+     2. Remove sessionId to auto-resume from last prompt with matching provider
+```
+
+**Result:** Starts a **new Copilot session** instead of erroring.
+
+### When to Use Each Approach
+
+| Scenario | Configuration | Behavior |
+|----------|---------------|----------|
+| **All prompts same provider** | `sessionId: 1` on all prompts | ✅ All share session from prompt 1 |
+| **Mixed providers, auto-resume** | `newChatSession: false` (no `sessionId`) | ✅ Each provider resumes its own last session |
+| **Mixed providers, explicit ref** | `sessionId: 1` across providers | ⚠️ Warns and starts new session on provider change |
+| **Force new session** | `newChatSession: true` | ✅ Always starts new session |
+
+### Best Practice: Use Auto-Resume for Mixed Providers
+
+**Recommended:**
+
+```yaml
+# Workflow default: Auto-resume
+newChatSession: false
+
+prompts:
+  - provider: claude-cli
+    prompt: "Step 1"
+    # New Claude session
+
+  - provider: claude-cli
+    prompt: "Step 2"
+    # Auto-resumes previous Claude session
+
+  - provider: copilot-cli
+    prompt: "Step 3"
+    # New Copilot session (no Claude sessions to resume)
+
+  - provider: copilot-cli
+    prompt: "Step 4"
+    # Auto-resumes previous Copilot session
+```
+
+**Why:** No manual session tracking needed, provider-aware auto-resume handles everything!
+
+---
+
 ## Session Resolution Algorithm
 
 FlightPath follows a strict precedence order when determining which session to use:
