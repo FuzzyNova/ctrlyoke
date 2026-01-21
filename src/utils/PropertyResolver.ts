@@ -26,6 +26,9 @@ export interface ResolvedProperties {
   /** Allow dynamic queue extension (always resolved, defaults to false) */
   allowDynamicExtension: boolean;
 
+  /** Session ID for resuming - undefined if not specified */
+  sessionId?: string | number;
+
   /** End condition validation - undefined if not specified */
   endCondition?: EndCondition;
 }
@@ -74,6 +77,7 @@ export class PropertyResolver {
         prompt,
         workflow
       ),
+      sessionId: this.resolveSessionId(prompt, workflow),
       endCondition: this.resolveEndCondition(prompt, workflow),
     };
   }
@@ -226,9 +230,42 @@ export class PropertyResolver {
     const globalEnabled = ConfigurationUtils.getDynamicQueueConfig().enabled;
     return Boolean(
       prompt.allowDynamicExtension ||
-        workflow.allowDynamicExtension ||
-        globalEnabled
+      workflow.allowDynamicExtension ||
+      globalEnabled
     );
+  }
+
+  /**
+   * Resolve sessionId with two-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.sessionId)
+   * 2. Workflow-level default (workflow.sessionId)
+   * 3. No fallback (returns undefined if not specified)
+   *
+   * Note: Session IDs are NOT inherited from VS Code settings.
+   * They must be explicitly defined at the prompt or workflow level.
+   *
+   * @param prompt The prompt to resolve sessionId for
+   * @param workflow The parent workflow file
+   * @returns Resolved sessionId (string | number) or undefined
+   */
+  private static resolveSessionId(
+    prompt: PromptItem,
+    workflow: PromptFile
+  ): string | number | undefined {
+    // 1. Prompt-level override (highest priority)
+    if (prompt.sessionId !== undefined) {
+      return prompt.sessionId;
+    }
+
+    // 2. Workflow-level default
+    if (workflow.sessionId !== undefined) {
+      return workflow.sessionId;
+    }
+
+    // 3. No fallback (undefined if not specified)
+    return undefined;
   }
 
   /**
@@ -256,7 +293,7 @@ export class PropertyResolver {
   ): EndCondition | undefined {
     // 1. Prompt-level override (highest priority)
     // Check for property existence, not just truthiness, to distinguish null from undefined
-    if (Object.prototype.hasOwnProperty.call(prompt, 'endCondition')) {
+    if (Object.prototype.hasOwnProperty.call(prompt, "endCondition")) {
       const promptEndCondition = prompt.endCondition;
       // null means "explicitly disabled" - return undefined to skip validation
       if (promptEndCondition === null) {

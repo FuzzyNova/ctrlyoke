@@ -564,6 +564,46 @@ User clicks New Workflow
 - Editor state persisted to VS Code memento for session recovery
   </integrationWithFlightPathManager>
 
+<propertyFlow>
+
+**How Prompt Properties Flow from Extension to Dashboard:**
+
+1. **Extension sends property values** via DashboardProvider.updateFileSelected() or updateExecutionStarted()
+2. **WebView receives message** in message-router.js with MESSAGE_TYPES.fileSelected
+3. **state-manager.js stores** properties in state.prompts[].property
+4. **editor-manager.js renders** properties in HTML controls (#prop-provider, #prop-model, etc.)
+5. **User modifies property** (select dropdown or input field)
+6. **editor-manager.js detects change** via event listener
+7. **message-router.js sends MESSAGE_TYPES.updatePrompt** back to extension with new property values
+8. **FlightPathManager updates** PromptQueue and writes to working file
+
+**Checklist: Adding a New Property (e.g., "promptTemplate")**
+
+When adding a new property to prompts, update these files:
+
+1. **FlightPathTypes.ts** - Add `promptTemplate?: string` to `PromptItem` interface
+2. **DashboardConstants.ts** - No change needed (uses existing MESSAGE_TYPES)
+3. **dashboard.html** - Add HTML control: `<input id="prop-prompt-template" .../>`
+4. **editor-manager.js** (3 locations):
+   - `populatePropertyControls()` - Load value from state into HTML: `document.getElementById('prop-prompt-template').value = prompt.promptTemplate || ''`
+   - Event listener setup - Add change handler for new control
+   - `buildPromptFromControls()` - Extract value when sending to extension: `promptTemplate: document.getElementById('prop-prompt-template').value || undefined`
+5. **FlightPathDashboardProvider.ts** - Include in HTML generation if workflow-level: `<template>${prompt.promptTemplate || ''}</template>`
+6. **PromptQueue.ts** - Ensure property is preserved during queue operations (usually automatic)
+7. **Prompt schema** (schemas/prompt-schema.json) - Add to PromptItem schema:
+   ```json
+   "promptTemplate": { "type": "string", "description": "..." }
+   ```
+8. **Related integration** - Update CopilotIntegration or provider classes if property affects execution
+
+**Key Pattern:**
+
+- Extension → Dashboard: Property value in MESSAGE_TYPES message, stored in state
+- Dashboard → Extension: Property value extracted in editor-manager.js via `buildPromptFromControls()`
+- HTML ↔ State: Bidirectional via event listeners (change events update state, renderAllCliOutputs() populates from state)
+
+</propertyFlow>
+
 <futureEnhancements>
 - Drag-and-drop prompt reordering
 - Bulk prompt operations (delete multiple, duplicate)

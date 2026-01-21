@@ -1251,6 +1251,12 @@ export class FlightPathManager {
           : properties.newChatSession;
     }
 
+    // Handle sessionId: null clears, string/number sets, undefined skips
+    if (properties.sessionId !== undefined) {
+      updates.sessionId =
+        properties.sessionId === null ? undefined : properties.sessionId;
+    }
+
     // Handle allowDynamicExtension: null clears, boolean sets, undefined skips
     if (properties.allowDynamicExtension !== undefined) {
       updates.allowDynamicExtension =

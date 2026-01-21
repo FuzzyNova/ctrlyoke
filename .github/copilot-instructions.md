@@ -779,3 +779,39 @@ All in `package.json`:
 
 - **User guide & implementation**: `docs/QUEUE_APPEND_FEATURE.md`
 - **Examples**: `manual-test/dynamic-queue-*.flightpath.json`
+
+## Adding New Prompt Properties
+
+**When adding a new property to PromptItem, update in this order:**
+
+### Extension Side (TypeScript)
+
+1. **FlightPathTypes.ts** - Add to `PromptItem` interface: `newProperty?: string | boolean | object`
+2. **prompt-schema.json** - Add to schema.properties: `"newProperty": { "type": "...", "description": "..." }`
+3. **Run `npm run sync-models`** - Auto-updates package.json enum if model-related
+4. **DashboardProvider.ts** - Ensure property included in HTML template generation
+5. **PromptQueue.ts** - Verify property persisted through queue operations
+6. **CopilotIntegration classes** - Update if property affects execution behavior
+
+### Dashboard Side (WebView)
+
+See **`webview.instructions.md` - propertyFlow section** for comprehensive checklist of:
+
+- dashboard.html controls
+- editor-manager.js rendering/updates
+- state-manager.js state schema
+- message-router.js message handling
+- Integration with extension via MESSAGE_TYPES
+
+### Single Source of Truth
+
+- **Types**: FlightPathTypes.ts (PromptItem interface)
+- **Schema**: prompt-schema.json (JSON schema validation)
+- **Constants**: DashboardConstants.ts (MESSAGE_TYPES for communication)
+- **Models**: ModelConstants.ts (if property relates to model selection)
+
+**See related docs:**
+
+- [WORKFLOW_PROPERTIES.md](docs/WORKFLOW_PROPERTIES.md) - User guide for workflow-level properties
+- [SESSION_MANAGEMENT.md](docs/SESSION_MANAGEMENT.md) - Example: session ID properties
+- [WebView Instructions - propertyFlow](../.github/instructions/webview.instructions.md) - Detailed checklist

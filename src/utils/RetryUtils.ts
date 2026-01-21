@@ -41,12 +41,24 @@ export interface RetryOptions {
   maxAttempts?: number;
 
   /**
-   * Delay in milliseconds between attempts
+   * Delay in milliseconds between retry attempts (after the first attempt)
    * Can be:
-   * - A single number: Fixed delay between all attempts
-   * - An array: Custom delays for each retry (index 0 = delay before 2nd attempt)
+   * - A single number: Fixed delay between all retries
+   * - An array: Custom delays for each retry. If array is shorter than maxAttempts,
+   *   the last delay value is repeated for remaining attempts.
    *
-   * @default [0, 50, 100, 150, 200]
+   * Note: First attempt is always immediate (no delay).
+   *
+   * @default [50, 100, 150, 200]
+   *
+   * @example
+   * ```typescript
+   * // With maxAttempts=10 and delays=[50, 100, 1000]:
+   * // Attempt 1: immediate
+   * // Attempt 2: wait 50ms
+   * // Attempt 3: wait 100ms
+   * // Attempts 4-10: wait 1000ms (last value repeats)
+   * ```
    */
   delays?: number | number[];
 
@@ -70,8 +82,9 @@ export interface RetryOptions {
  *
  * @remarks
  * **Retry Strategy:**
- * - First attempt has no delay (immediate execution)
+ * - First attempt is always immediate (no delay)
  * - Subsequent attempts wait according to the delays array
+ * - If delays array is shorter than needed, the last delay value repeats
  * - If operation returns truthy value, retries stop and value is returned
  * - If all attempts fail, returns undefined
  *
@@ -92,7 +105,7 @@ export interface RetryOptions {
  *   },
  *   {
  *     maxAttempts: 5,
- *     delays: [0, 50, 100, 150, 200],
+ *     delays: [50, 100, 150, 200], // First attempt immediate, then these delays
  *     onRetry: (attempt, max, delay) => {
  *       console.log(`Attempt ${attempt}/${max} (delay: ${delay}ms)`);
  *     }
@@ -113,23 +126,25 @@ export async function retryWithBackoff<T>(
   operation: () => Promise<T | null | undefined>,
   options: RetryOptions = {}
 ): Promise<T | undefined> {
-  const {
-    maxAttempts = 5,
-    delays = [0, 50, 100, 150, 200],
-    onRetry,
-  } = options;
+  const { maxAttempts = 5, delays = [50, 100, 150, 200], onRetry } = options;
 
   // Normalize delays to array
-  // If delays is a number, create array with 0 for first attempt, then the delay for remaining attempts
+  // If delays is a number, create array filled with that delay
   const delayArray = Array.isArray(delays)
     ? delays
-    : [0, ...Array(maxAttempts - 1).fill(delays)];
+    : Array(maxAttempts - 1).fill(delays);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Get delay for this attempt from delays array
-    const delay = delayArray[attempt] || 0;
+    // First attempt is always immediate (0 delay)
+    // Subsequent attempts use delays array, repeating last value if array is too short
+    let delay = 0;
+    if (attempt > 0 && delayArray.length > 0) {
+      const delayIndex = attempt - 1;
+      // Use delay at index, or repeat last value if we've exceeded array length
+      delay = delayArray[Math.min(delayIndex, delayArray.length - 1)];
+    }
 
-    // Wait before retry (skip wait on first attempt if delay is 0)
+    // Wait before retry (skip wait on first attempt)
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

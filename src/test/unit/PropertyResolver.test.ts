@@ -293,6 +293,77 @@ suite("PropertyResolver Tests", () => {
     });
   });
 
+  suite("resolveSessionId", () => {
+    test("should use prompt-level sessionId when specified (string)", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        sessionId: "550e8400-e29b-41d4-a716-446655440000",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "other-session-id", // Should be ignored
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(
+        resolved.sessionId,
+        "550e8400-e29b-41d4-a716-446655440000"
+      );
+    });
+
+    test("should use prompt-level sessionId when specified (number)", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        sessionId: 1,
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "workflow-session-id", // Should be ignored
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, 1);
+    });
+
+    test("should use workflow-level sessionId when prompt-level not specified (string)", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: "workflow-session-id",
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, "workflow-session-id");
+    });
+
+    test("should use workflow-level sessionId when prompt-level not specified (number)", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+        sessionId: 2,
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, 2);
+    });
+
+    test("should return undefined when no sessionId specified", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+      };
+      const workflow: PromptFile = {
+        prompts: [],
+      };
+
+      const resolved = PropertyResolver.resolve(prompt, workflow);
+      assert.strictEqual(resolved.sessionId, undefined);
+    });
+  });
+
   suite("full precedence chain", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
       const prompt: PromptItem = {

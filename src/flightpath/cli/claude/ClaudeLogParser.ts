@@ -5,7 +5,10 @@ import * as vscode from "vscode";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
-import { retryWithBackoff, PermanentFailureError } from "../../../utils/RetryUtils";
+import {
+  retryWithBackoff,
+  PermanentFailureError,
+} from "../../../utils/RetryUtils";
 
 /**
  * Claude CLI Log Parser
@@ -282,7 +285,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             return null; // File doesn't exist yet, will retry
           },
           {
-            maxAttempts: 10,
+            maxAttempts: 20,
             delays: [0, 100, 200, 300, 500, 500, 500, 1000, 1000, 1000], // Total max wait: ~5s
             onRetry: (attempt, max, delay) => {
               if (attempt > 1) {

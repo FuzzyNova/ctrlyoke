@@ -48,13 +48,13 @@
 
     // Format based on largest unit
     if (days > 0) {
-      return `${days} day${days !== 1 ? 's' : ''}`;
+      return `${days} day${days !== 1 ? "s" : ""}`;
     } else if (hours > 0) {
       return `${hours} hr`;
     } else if (minutes > 0) {
       return `${minutes} min`;
     } else {
-      return 'just now';
+      return "just now";
     }
   }
 
@@ -110,7 +110,8 @@
    * @returns {Object|null|undefined} End condition object, null (explicit disable), or undefined (inherit)
    */
   function buildEndConditionFromControls(elements, propertyDefaults) {
-    const isEnabled = elements.propEndEnabled && elements.propEndEnabled.checked;
+    const isEnabled =
+      elements.propEndEnabled && elements.propEndEnabled.checked;
 
     // If checkbox is unchecked, return undefined to inherit from workflow
     if (!isEnabled) {
@@ -275,6 +276,7 @@
       [PROMPT_PROPERTIES.AGENT]: prompt[PROMPT_PROPERTIES.AGENT],
       [PROMPT_PROPERTIES.NEW_CHAT_SESSION]:
         prompt[PROMPT_PROPERTIES.NEW_CHAT_SESSION],
+      [PROMPT_PROPERTIES.SESSION_ID]: prompt[PROMPT_PROPERTIES.SESSION_ID],
       [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
         prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
       [PROMPT_PROPERTIES.END_CONDITION]:

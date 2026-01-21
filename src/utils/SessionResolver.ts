@@ -98,13 +98,14 @@ export class SessionResolver {
       return undefined;
     }
 
-    // 2. If sessionId is specified
-    if (prompt.sessionId !== undefined) {
+    // 2. Use resolved sessionId (includes workflow-level sessionId via PropertyResolver)
+    const resolvedSessionId = resolved?.sessionId;
+    if (resolvedSessionId !== undefined) {
       // 2a. Numeric reference (prompt number)
-      if (typeof prompt.sessionId === "number") {
+      if (typeof resolvedSessionId === "number") {
         return this.resolveNumericReference(
           prompt,
-          prompt.sessionId,
+          resolvedSessionId,
           promptIndex,
           allPrompts,
           resolved?.provider
@@ -112,7 +113,7 @@ export class SessionResolver {
       }
 
       // 2b. Exact session ID string
-      return prompt.sessionId;
+      return resolvedSessionId;
     }
 
     // 3. Auto-resume previous prompt in same workflow
@@ -315,11 +316,15 @@ export class SessionResolver {
     allPrompts: PromptItem[],
     workflow?: PromptFile
   ): SessionValidationResult {
-    // Check for conflicting settings
-    if (
-      this.shouldStartNewSession(prompt, workflow) &&
-      prompt.sessionId !== undefined
-    ) {
+    // Resolve sessionId (check prompt first, then workflow if available)
+    const sessionId = workflow
+      ? PropertyResolver.resolve(prompt, workflow).sessionId
+      : prompt.sessionId;
+
+    // Check for conflicting settings (ONLY if both explicitly set on prompt)
+    // Note: We check prompt.newChatSession directly, not resolved value,
+    // because this validation is about conflicting prompt-level settings.
+    if (prompt.newChatSession === true && sessionId !== undefined) {
       return {
         valid: true,
         warning:
@@ -329,15 +334,15 @@ export class SessionResolver {
     }
 
     // Validate numeric reference
-    if (typeof prompt.sessionId === "number") {
-      const refIndex = prompt.sessionId - 1;
+    if (typeof sessionId === "number") {
+      const refIndex = sessionId - 1;
 
       // Check if reference is out of bounds (beyond available prompts)
       if (refIndex < 0 || refIndex >= allPrompts.length) {
         return {
           valid: false,
           error:
-            `Invalid sessionId reference: ${prompt.sessionId}. ` +
+            `Invalid sessionId reference: ${sessionId}. ` +
             `Must reference a prompt between 1-${allPrompts.length}.`,
         };
       }
@@ -347,7 +352,7 @@ export class SessionResolver {
         return {
           valid: false,
           error:
-            `Invalid sessionId reference: ${prompt.sessionId}. ` +
+            `Invalid sessionId reference: ${sessionId}. ` +
             `Cannot reference future prompt (current: ${promptIndex + 1}).`,
         };
       }
