@@ -161,23 +161,31 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * Check if log event indicates completion
    *
-   * Detects response completion based on event type.
+   * **IMPORTANT: Copilot's `assistant.turn_end` fires after EACH tool call, not at final completion!**
+   *
+   * For example, if Copilot creates, edits, and deletes a file, you'll get:
+   * - `assistant.turn_end` after create (turn 0)
+   * - `assistant.turn_end` after edit (turn 1)
+   * - `assistant.turn_end` after delete (turn 2)
+   * - ... etc for multiple tool calls
+   *
+   * This makes log-based completion detection unreliable. Instead:
+   * - **Interactive mode**: Use sessionEnd hook (configured in CopilotCliProvider)
+   * - **Headless mode**: Process exit signals completion
    *
    * @param event - Single parsed log event
-   * @returns True if event signals completion
+   * @returns Always false - Copilot does not have reliable log completion signals
    *
    * @remarks
-   * **New Format (v0.0.384+):**
-   * - Looks for `event.type === "assistant.turn_end"`
-   * - Reliable completion signal
-   *
-   * **Old Format (pre-v0.0.384):**
-   * - No explicit completion event
-   * - Use heuristic: timeout after last assistant.message
-   * - Handled by calling code (not in this method)
+   * This method intentionally returns `false` to disable log-based completion detection.
+   * Copilot completion is detected via:
+   * - Interactive mode: sessionEnd hook (via CopilotNotificationMonitor)
+   * - Headless mode: Process exit
    */
   isComplete(event: any): boolean {
-    return event.type === "assistant.turn_end";
+    // NEVER detect completion from log files for Copilot - use hooks instead!
+    // Reason: assistant.turn_end fires after EACH tool call, not at final completion
+    return false;
   }
 
   /**

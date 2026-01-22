@@ -16,7 +16,9 @@ All events share this base structure:
 ```json
 {
   "type": "event.type.name",
-  "data": { /* event-specific data */ },
+  "data": {
+    /* event-specific data */
+  },
   "id": "unique-event-guid",
   "timestamp": "ISO-8601-timestamp",
   "parentId": "parent-event-guid-or-null"
@@ -25,13 +27,13 @@ All events share this base structure:
 
 ### Base Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Event type identifier (dot-separated namespace) |
-| `data` | object | Event-specific payload |
-| `id` | string | Unique GUID for this event |
-| `timestamp` | string | ISO 8601 timestamp (e.g., "2026-01-10T20:07:09.353Z") |
-| `parentId` | string/null | GUID of parent event (null for root events) |
+| Field       | Type        | Description                                           |
+| ----------- | ----------- | ----------------------------------------------------- |
+| `type`      | string      | Event type identifier (dot-separated namespace)       |
+| `data`      | object      | Event-specific payload                                |
+| `id`        | string      | Unique GUID for this event                            |
+| `timestamp` | string      | ISO 8601 timestamp (e.g., "2026-01-10T20:07:09.353Z") |
+| `parentId`  | string/null | GUID of parent event (null for root events)           |
 
 ---
 
@@ -44,6 +46,7 @@ All events share this base structure:
 **Description:** Marks the beginning of a new CLI session.
 
 **Example:**
+
 ```json
 {
   "type": "session.start",
@@ -62,6 +65,7 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `sessionId` (string): The session GUID (matches filename)
 - `version` (number): Event format version
 - `producer` (string): Always "copilot-agent"
@@ -76,6 +80,7 @@ All events share this base structure:
 **Description:** Indicates a session was resumed after being interrupted.
 
 **Example:**
+
 ```json
 {
   "type": "session.resume",
@@ -90,10 +95,12 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `resumeTime` (string): When the session resumed
 - `eventCount` (number): Number of events in session at resume point
 
 **Notes:**
+
 - Multiple resume events can occur in a single session
 - Each resume increments the event count
 
@@ -104,6 +111,7 @@ All events share this base structure:
 **Description:** Informational messages about session state (authentication, MCP connections).
 
 **Example 1 - Authentication:**
+
 ```json
 {
   "type": "session.info",
@@ -118,6 +126,7 @@ All events share this base structure:
 ```
 
 **Example 2 - MCP Connection:**
+
 ```json
 {
   "type": "session.info",
@@ -132,6 +141,7 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `infoType` (string): Category of info ("authentication", "mcp", etc.)
 - `message` (string): Human-readable message
 
@@ -142,6 +152,7 @@ All events share this base structure:
 **Description:** Indicates the model was changed during the session.
 
 **Example:**
+
 ```json
 {
   "type": "session.model_change",
@@ -156,10 +167,12 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `previousModel` (string): Model before change
 - `newModel` (string): Model after change
 
 **Notes:**
+
 - Often emitted even when model hasn't changed (same value for both fields)
 - Useful for detecting explicit model switches
 
@@ -170,6 +183,7 @@ All events share this base structure:
 **Description:** Logs when conversation history is truncated to fit within token limits.
 
 **Example:**
+
 ```json
 {
   "type": "session.truncation",
@@ -190,6 +204,7 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `tokenLimit` (number): Maximum token limit (usually 128000)
 - `preTruncationTokensInMessages` (number): Tokens before truncation
 - `preTruncationMessagesLength` (number): Message count before truncation
@@ -200,6 +215,7 @@ All events share this base structure:
 - `performedBy` (string): Truncation algorithm ("BasicTruncator")
 
 **Notes:**
+
 - Emitted before every assistant turn
 - Zero removed values indicate no truncation occurred
 - Useful for monitoring conversation size
@@ -213,6 +229,7 @@ All events share this base structure:
 **Description:** Records user input to the assistant.
 
 **Example 1 - Simple Text:**
+
 ```json
 {
   "type": "user.message",
@@ -227,7 +244,8 @@ All events share this base structure:
 ```
 
 **Example 2 - With File Attachment:**
-```json
+
+````json
 {
   "type": "user.message",
   "data": {
@@ -251,9 +269,10 @@ All events share this base structure:
   "timestamp": "2025-12-14T23:22:46.282Z",
   "parentId": "282d1eac-bcfd-4f9d-bd06-817a3f07fa7d"
 }
-```
+````
 
 **Example 3 - With Transformed Content (Current Datetime):**
+
 ```json
 {
   "type": "user.message",
@@ -269,17 +288,20 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `content` (string): Original user message text
 - `transformedContent` (string, optional): Modified content with datetime injection
 - `attachments` (array): List of attached files/directories
 
 **Attachment Object Fields:**
+
 - `type` (string): "file", "directory", "selection", etc.
 - `path` (string): Absolute file path
 - `displayName` (string): Name shown to user (e.g., "@src/ui/")
 - `mentionIndex` (number): Character position in content where mentioned
 
 **Notes:**
+
 - File selections embedded inline in `content` using `<attachment>` XML tags
 - Separate attachments listed in `attachments` array
 - `transformedContent` appears when CLI injects current datetime
@@ -291,6 +313,7 @@ All events share this base structure:
 **Description:** Assistant responses and tool calls.
 
 **Example 1 - Text Response:**
+
 ```json
 {
   "type": "assistant.message",
@@ -306,6 +329,7 @@ All events share this base structure:
 ```
 
 **Example 2 - With Tool Calls:**
+
 ```json
 {
   "type": "assistant.message",
@@ -329,6 +353,7 @@ All events share this base structure:
 ```
 
 **Example 3 - Multiple Tool Calls:**
+
 ```json
 {
   "type": "assistant.message",
@@ -353,16 +378,19 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `messageId` (string): Unique message identifier
 - `content` (string): Assistant's text response (empty for tool-only messages)
 - `toolRequests` (array): List of tool calls made by assistant
 
 **Tool Request Object:**
+
 - `toolCallId` (string): Unique identifier for this tool call
 - `name` (string): Tool name ("view", "grep", "report_intent", "powershell", etc.)
 - `arguments` (object): Tool-specific arguments
 
 **Notes:**
+
 - Empty `content` indicates assistant is only calling tools
 - Multiple `assistant.message` events can occur in sequence
 - Tool calls are executed asynchronously
@@ -374,6 +402,7 @@ All events share this base structure:
 **Description:** Assistant's internal reasoning/thinking process (extended thinking models).
 
 **Example:**
+
 ```json
 {
   "type": "assistant.reasoning",
@@ -388,10 +417,12 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `reasoningId` (string): Unique identifier for reasoning block
 - `content` (string): The reasoning text
 
 **Notes:**
+
 - Only appears with extended thinking models
 - Emitted alongside `assistant.message` events
 - May not be visible in UI but logged for debugging
@@ -405,6 +436,7 @@ All events share this base structure:
 **Description:** Marks the beginning of an assistant's turn.
 
 **Example:**
+
 ```json
 {
   "type": "assistant.turn_start",
@@ -418,9 +450,11 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `turnId` (string): Turn number (starts at "0", increments per turn)
 
 **Notes:**
+
 - Turn IDs increment across session resumes
 - Always followed by `session.truncation` event
 
@@ -431,6 +465,7 @@ All events share this base structure:
 **Description:** Marks the completion of an assistant's turn.
 
 **Example:**
+
 ```json
 {
   "type": "assistant.turn_end",
@@ -444,9 +479,11 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `turnId` (string): Matching turn number from `turn_start`
 
 **Notes:**
+
 - Indicates completion of all tool calls and responses for this turn
 - Useful for detecting when assistant has finished processing
 
@@ -459,6 +496,7 @@ All events share this base structure:
 **Description:** Logs the start of a tool execution.
 
 **Example:**
+
 ```json
 {
   "type": "tool.execution_start",
@@ -476,6 +514,7 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `toolCallId` (string): Matches `toolCallId` from `assistant.message`
 - `toolName` (string): Name of the tool being executed
 - `arguments` (object): Tool-specific arguments
@@ -487,6 +526,7 @@ All events share this base structure:
 **Description:** Logs the completion of a tool execution (success or failure).
 
 **Example 1 - Successful Execution:**
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -504,6 +544,7 @@ All events share this base structure:
 ```
 
 **Example 2 - View Tool Success:**
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -521,6 +562,7 @@ All events share this base structure:
 ```
 
 **Example 3 - Failed Execution:**
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -539,6 +581,7 @@ All events share this base structure:
 ```
 
 **Example 4 - PowerShell Tool Error:**
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -557,12 +600,14 @@ All events share this base structure:
 ```
 
 **Data Fields (Success):**
+
 - `toolCallId` (string): Matches tool call ID
 - `success` (boolean): `true`
 - `result` (object): Tool-specific result data
   - `content` (string): Result content (varies by tool)
 
 **Data Fields (Failure):**
+
 - `toolCallId` (string): Matches tool call ID
 - `success` (boolean): `false`
 - `error` (object): Error details
@@ -570,6 +615,7 @@ All events share this base structure:
   - `code` (string): Error code ("failure")
 
 **Notes:**
+
 - View tool returns diff-like output
 - Grep tool returns matched content or "No matches found."
 - Failures include full error messages with stack traces
@@ -583,6 +629,7 @@ All events share this base structure:
 **Description:** User-initiated cancellation of the current operation.
 
 **Example:**
+
 ```json
 {
   "type": "abort",
@@ -596,9 +643,11 @@ All events share this base structure:
 ```
 
 **Data Fields:**
+
 - `reason` (string): Reason for abort ("user initiated")
 
 **Notes:**
+
 - Often appears in duplicate (two consecutive abort events)
 - Indicates user pressed Ctrl+C or similar interrupt
 
@@ -658,39 +707,44 @@ assistant.message (toolRequests)
 
 ```typescript
 // Read first line of JSONL file
-const firstLine = fs.readFileSync(jsonlPath, 'utf-8').split('\n')[0];
+const firstLine = fs.readFileSync(jsonlPath, "utf-8").split("\n")[0];
 const sessionStart = JSON.parse(firstLine);
-if (sessionStart.type === 'session.start') {
+if (sessionStart.type === "session.start") {
   const sessionId = sessionStart.data.sessionId;
 }
 ```
 
 ### Detecting Completion
 
-**Option 1: Look for `assistant.turn_end`**
-```typescript
-function isResponseComplete(events: Event[]): boolean {
-  return events.some(e => e.type === 'assistant.turn_end');
+**⚠️ IMPORTANT: `assistant.turn_end` fires after EACH tool call, not at final completion!**
+
+If Copilot makes multiple tool calls (e.g., create file, edit file, delete file), you'll see multiple `assistant.turn_end` events in a single response. **Do NOT use this for completion detection!**
+
+**Correct Approach: Use sessionEnd Hook (Interactive Mode)**
+
+For reliable completion detection in interactive mode, use Copilot's `sessionEnd` hook:
+
+```json
+// .github/hooks/flightpath.json
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "node /path/to/notification-script.js",
+        "powershell": "node C:\\path\\to\\notification-script.js"
+      }
+    ]
+  }
 }
 ```
 
-**Option 2: Look for final text response**
-```typescript
-function getFinalResponse(events: Event[]): string | null {
-  // Find last assistant.message with non-empty content before turn_end
-  for (let i = events.length - 1; i >= 0; i--) {
-    if (events[i].type === 'assistant.turn_end') {
-      // Look backwards for assistant.message
-      for (let j = i - 1; j >= 0; j--) {
-        if (events[j].type === 'assistant.message' && events[j].data.content) {
-          return events[j].data.content;
-        }
-      }
-    }
-  }
-  return null;
-}
-```
+The hook script writes a notification file when the session truly ends. FlightPath monitors for this file.
+
+**Headless Mode: Process Exit**
+
+For headless execution, the CLI process exits when complete, providing a reliable completion signal.
 
 ### Extracting Tool Calls
 
@@ -706,14 +760,14 @@ function extractToolCalls(events: Event[]): ToolCall[] {
   const calls: Map<string, ToolCall> = new Map();
 
   for (const event of events) {
-    if (event.type === 'assistant.message') {
+    if (event.type === "assistant.message") {
       for (const req of event.data.toolRequests || []) {
         calls.set(req.toolCallId, {
           name: req.name,
-          arguments: req.arguments
+          arguments: req.arguments,
         });
       }
-    } else if (event.type === 'tool.execution_complete') {
+    } else if (event.type === "tool.execution_complete") {
       const call = calls.get(event.data.toolCallId);
       if (call) {
         if (event.data.success) {
@@ -732,14 +786,18 @@ function extractToolCalls(events: Event[]): ToolCall[] {
 ### Token Count Extraction
 
 ```typescript
-function getTokenUsage(events: Event[]): { input: number; output: number } | null {
-  const truncationEvents = events.filter(e => e.type === 'session.truncation');
+function getTokenUsage(
+  events: Event[]
+): { input: number; output: number } | null {
+  const truncationEvents = events.filter(
+    (e) => e.type === "session.truncation"
+  );
   if (truncationEvents.length === 0) return null;
 
   const latest = truncationEvents[truncationEvents.length - 1];
   return {
     input: latest.data.preTruncationTokensInMessages,
-    output: latest.data.postTruncationTokensInMessages
+    output: latest.data.postTruncationTokensInMessages,
   };
 }
 ```
@@ -749,26 +807,32 @@ function getTokenUsage(events: Event[]): { input: number; output: number } | nul
 ## Edge Cases & Notes
 
 ### Duplicate Events
+
 - **Abort events** often appear twice in succession
 - This appears to be intentional (confirmation pattern)
 
 ### Tool Call IDs
+
 - **Format variations**: `call_*` (OpenAI-style) vs `toolu_*` (Anthropic-style)
 - Both formats may appear depending on the model
 
 ### Session Resumes
+
 - **Event count tracking**: `session.resume` includes `eventCount` field
 - Useful for detecting if session state was preserved
 
 ### Empty Content
+
 - **Tool-only messages**: `assistant.message` with empty `content` indicates tool calls only
 - Final response will have non-empty `content`
 
 ### Timestamp Precision
+
 - All timestamps use ISO 8601 format with millisecond precision
 - Timezone always UTC (Z suffix)
 
 ### Parent ID Chains
+
 - Root events have `parentId: null`
 - All other events link back to their parent
 - Forms a tree structure representing causal relationships
@@ -782,14 +846,14 @@ function getTokenUsage(events: Event[]): { input: number; output: number } | nul
 **Use file watching with tail-like reading:**
 
 ```typescript
-import fs from 'fs';
+import fs from "fs";
 
 class CopilotLogMonitor {
   private lastPosition = 0;
 
   watchFile(filePath: string, callback: (events: Event[]) => void) {
     const watcher = fs.watch(filePath, (eventType) => {
-      if (eventType === 'change') {
+      if (eventType === "change") {
         const newEvents = this.readNewEvents(filePath);
         if (newEvents.length > 0) {
           callback(newEvents);
@@ -799,14 +863,14 @@ class CopilotLogMonitor {
   }
 
   private readNewEvents(filePath: string): Event[] {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, "utf-8");
     const newContent = content.slice(this.lastPosition);
     this.lastPosition = content.length;
 
     return newContent
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line));
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
   }
 }
 ```
@@ -820,17 +884,18 @@ function isSessionComplete(events: Event[]): boolean {
   const lastEvent = events[events.length - 1];
 
   // Check for explicit completion signals
-  if (lastEvent.type === 'assistant.turn_end') return true;
-  if (lastEvent.type === 'abort') return true;
+  if (lastEvent.type === "assistant.turn_end") return true;
+  if (lastEvent.type === "abort") return true;
 
   // Check for final response pattern
-  const hasTextResponse = events.some(e =>
-    e.type === 'assistant.message' &&
-    e.data.content &&
-    e.data.content.trim().length > 0
+  const hasTextResponse = events.some(
+    (e) =>
+      e.type === "assistant.message" &&
+      e.data.content &&
+      e.data.content.trim().length > 0
   );
 
-  const hasTurnEnd = events.some(e => e.type === 'assistant.turn_end');
+  const hasTurnEnd = events.some((e) => e.type === "assistant.turn_end");
 
   return hasTextResponse && hasTurnEnd;
 }
@@ -842,16 +907,15 @@ function isSessionComplete(events: Event[]): boolean {
 
 ```typescript
 function hasToolErrors(events: Event[]): boolean {
-  return events.some(e =>
-    e.type === 'tool.execution_complete' &&
-    e.data.success === false
+  return events.some(
+    (e) => e.type === "tool.execution_complete" && e.data.success === false
   );
 }
 
 function getToolErrors(events: Event[]): string[] {
   return events
-    .filter(e => e.type === 'tool.execution_complete' && !e.data.success)
-    .map(e => `${e.data.toolCallId}: ${e.data.error.message}`);
+    .filter((e) => e.type === "tool.execution_complete" && !e.data.success)
+    .map((e) => `${e.data.toolCallId}: ${e.data.error.message}`);
 }
 ```
 
@@ -859,10 +923,10 @@ function getToolErrors(events: Event[]): string[] {
 
 ## Version History
 
-| Version | Changes |
-|---------|---------|
-| 0.0.353 | Earliest version observed, basic event structure |
-| 0.0.365 | Added `session.info` with MCP connection details |
+| Version | Changes                                                       |
+| ------- | ------------------------------------------------------------- |
+| 0.0.353 | Earliest version observed, basic event structure              |
+| 0.0.365 | Added `session.info` with MCP connection details              |
 | 0.0.367 | Current version, extended thinking with `assistant.reasoning` |
 
 ---
