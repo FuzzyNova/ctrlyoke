@@ -370,6 +370,22 @@ export class FileSystemUtils {
   }
 
   /**
+   * Delete a file
+   *
+   * @param filePath Absolute path to file
+   * @returns True if deleted successfully
+   */
+  async deleteFile(filePath: string): Promise<boolean> {
+    try {
+      await fs.unlink(filePath);
+      return true;
+    } catch (error) {
+      Log.error(`Failed to delete file ${filePath}:`, error);
+      return false;
+    }
+  }
+
+  /**
    * Dispose of all resources
    */
   dispose(): void {

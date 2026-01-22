@@ -105,6 +105,21 @@ export interface INotificationMonitor {
     startTime: Date,
     onCancel?: () => boolean
   ): Promise<NotificationResult>;
+
+  /**
+   * Cleanup notification files after completion
+   *
+   * Called after completion is detected to clean up any remaining notification files.
+   * Providers can override this to handle provider-specific cleanup
+   * (e.g., Claude needs to cleanup both -start.json and -stop.json files)
+   *
+   * @param sessionId Session ID
+   * @param directory Notification directory
+   */
+  cleanupNotificationFiles?(
+    sessionId: string,
+    directory: string
+  ): Promise<void>;
 }
 
 /**

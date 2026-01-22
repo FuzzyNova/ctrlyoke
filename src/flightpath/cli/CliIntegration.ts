@@ -334,9 +334,7 @@ export class CliIntegration extends CopilotIntegration {
 
     // Check for control characters and newlines
     if (/[\n\r\t]/.test(finalPromptText)) {
-      Log.debug(
-        "📁 Prompt contains newlines/tabs, using file-based passing"
-      );
+      Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
       return false;
     }
 
@@ -780,8 +778,9 @@ export class CliIntegration extends CopilotIntegration {
 
     return new Promise(async (resolve, reject) => {
       let completed = false;
-      let completionCheckInterval: NodeJS.Timeout | undefined;
       let draining = false;
+      let timeoutHandle: NodeJS.Timeout | undefined;
+      let cancellationInterval: NodeJS.Timeout | undefined;
       const getEntryTimestamp = (entry: any): Date | null => {
         if (entry.timestamp) {
           return new Date(entry.timestamp);
@@ -823,8 +822,11 @@ export class CliIntegration extends CopilotIntegration {
 
         // Cleanup
         watcher.close();
-        if (completionCheckInterval) {
-          clearInterval(completionCheckInterval);
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+        if (cancellationInterval) {
+          clearInterval(cancellationInterval);
         }
         this.responseCompleteEmitter.fire("Response complete");
 
@@ -896,7 +898,7 @@ export class CliIntegration extends CopilotIntegration {
         Log.warn(`⚠️ Failed initial log read: ${error}`);
       }
 
-      // If provider has notification monitor, also monitor for Stop/completion hook
+      // If provider has notification monitor, also monitor for Stop/completion hook in parallel
       if (this.provider.notificationMonitor && sessionId) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {
@@ -904,51 +906,63 @@ export class CliIntegration extends CopilotIntegration {
             this.provider.notificationMonitor.getNotificationDirectory(
               workspaceRoot
             );
-          const notifyFile = path.join(notifyDir, `${sessionId}.json`);
 
-          Log.debug(`🔔 Monitoring Stop hook notification: ${notifyFile}`);
+          Log.debug(
+            `🔔 Starting notification monitor for completion detection`
+          );
 
-          // Helper to check and cleanup notification file
-          const checkNotificationFile = async (): Promise<boolean> => {
-            const fsUtils = new FileSystemUtils();
-            const notifyData = await fsUtils.readJsonFileAndDelete(notifyFile);
-            if (notifyData?.status === "completed") {
-              void handleCompletion("Stop hook");
-              return true;
+          // Launch provider-specific notification monitoring in parallel
+          // (each provider knows its own file naming conventions)
+          void (async () => {
+            try {
+              const result =
+                await this.provider.notificationMonitor!.monitorForCompletion(
+                  {
+                    directory: notifyDir,
+                    timeoutMs: timeoutMs,
+                    pollMs: 100,
+                  },
+                  sessionId,
+                  startTime,
+                  () => this.isCancelling || completed
+                );
+
+              if (result.completed && !completed) {
+                // Cleanup any remaining notification files (provider-specific)
+                if (
+                  this.provider.notificationMonitor!.cleanupNotificationFiles
+                ) {
+                  await this.provider.notificationMonitor!.cleanupNotificationFiles(
+                    sessionId,
+                    notifyDir
+                  );
+                }
+
+                void handleCompletion("Stop hook");
+              }
+            } catch (error) {
+              Log.debug(`Notification monitoring error: ${error}`);
             }
-            return false;
-          };
-
-          // Check if notification file already exists (race condition: hook fired before we started monitoring)
-          if (await checkNotificationFile()) {
-            return; // Early exit - completion already handled
-          }
-
-          // Poll for completion notification (check every 100ms)
-          completionCheckInterval = setInterval(async () => {
-            await checkNotificationFile();
-          }, 100);
+          })();
         }
       }
 
       // Timeout handling
-      const timeoutHandle = setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
         watcher.close();
-        if (completionCheckInterval) {
-          clearInterval(completionCheckInterval);
-        }
         reject(new Error("Log monitoring timeout"));
       }, timeoutMs);
 
       // Cancel handling
-      const checkCancellation = setInterval(() => {
+      cancellationInterval = setInterval(() => {
         if (this.isCancelling) {
           Log.info("⏹️ Log monitoring cancelled by user");
-          clearInterval(checkCancellation);
-          clearTimeout(timeoutHandle);
-          if (completionCheckInterval) {
-            clearInterval(completionCheckInterval);
+          if (cancellationInterval) {
+            clearInterval(cancellationInterval);
+          }
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
           }
           watcher.close();
           resolve({ success: false });

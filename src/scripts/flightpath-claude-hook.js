@@ -188,8 +188,13 @@ function main() {
       }
 
       // Write notification file (named by session_id for easy lookup)
-      // SessionStart and Stop hooks write to the same file (Stop overwrites)
-      const notifyFile = path.join(notifyDir, `${sessionId}.json`);
+      // SessionStart and Stop hooks write to SEPARATE files to avoid race conditions
+      const notifyFile = path.join(
+        notifyDir,
+        hookEvent === "SessionStart"
+          ? `${sessionId}-start.json`
+          : `${sessionId}-stop.json`
+      );
 
       // Create notification data
       const notifyData = {
