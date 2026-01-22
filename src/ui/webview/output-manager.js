@@ -52,71 +52,158 @@
   }
 
   /**
-   * Check if tool is a file modification operation
-   * @param {string} toolName - Name of the tool
-   * @returns {boolean} True if tool modifies files
+   * Truncate string to max length with ellipsis
+   * @param {string} str - String to truncate
+   * @param {number} maxLen - Maximum length
+   * @returns {string} Truncated string
    */
-  function isFileModificationTool(toolName) {
-    const fileTools = [
-      "Edit",
-      "Write",
-      "MultiEdit",
-      "sed",
-      "patch",
-      "apply_diff",
-      "insert",
-    ];
-    return fileTools.some((t) =>
-      toolName.toLowerCase().includes(t.toLowerCase())
-    );
+  function truncate(str, maxLen) {
+    if (!str || str.length <= maxLen) return str;
+    return str.substring(0, maxLen - 3) + '...';
   }
 
   /**
-   * Render tool call with diff visualization for file modifications
-   * @param {Object} tool - Tool call object
-   * @returns {string} HTML string
+   * Shorten file path for display
+   * @param {string} filePath - File path to shorten
+   * @param {number} maxLen - Maximum length
+   * @returns {string} Shortened path
    */
-  function renderToolWithDiff(tool) {
-    let html = "";
+  function shortenPath(filePath, maxLen = 50) {
+    if (!filePath || filePath.length <= maxLen) return filePath;
 
-    // Try to extract old_string and new_string from parameters for diff display
-    if (tool.parameters.old_string && tool.parameters.new_string) {
-      html += '<div class="tool-call-diff">';
+    const parts = filePath.split(/[/\\]/);
+    if (parts.length <= 2) return filePath;
 
-      const oldLines = tool.parameters.old_string.split("\n");
-      const newLines = tool.parameters.new_string.split("\n");
+    // Show "...parent/file.ext"
+    return '...' + parts.slice(-2).join('/');
+  }
 
-      // Show removed lines
-      oldLines.forEach((line) => {
-        html += '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
-      });
+  /**
+   * Extract key parameters from tool call for display
+   * @param {string} toolName - Name of the tool
+   * @param {Object} parameters - Tool parameters
+   * @returns {string} Formatted parameter string
+   */
+  function extractKeyParameters(toolName, parameters) {
+    if (!parameters) return '';
 
-      // Show added lines
-      newLines.forEach((line) => {
-        html += '<div class="diff-line added">' + escapeHtml(line) + "</div>";
-      });
+    const lowerName = toolName.toLowerCase();
 
-      html += "</div>";
-    } else if (tool.parameters.content && tool.parameters.file_path) {
-      // Write tool - show file path and content
-      html += '<div class="tool-file-info">';
-      html +=
-        '<div class="file-path">' +
-        escapeHtml(tool.parameters.file_path) +
-        "</div>";
-      html += "</div>";
-      html +=
-        '<pre class="tool-params">' +
-        escapeHtml(tool.parameters.content) +
-        "</pre>";
-    } else {
-      // Fallback to JSON if no diff available
-      html +=
-        '<pre class="tool-params">' +
-        escapeHtml(JSON.stringify(tool.parameters, null, 2)) +
-        "</pre>";
+    // Bash/Shell commands
+    if (lowerName === 'bash' || lowerName === 'shell') {
+      return truncate(parameters.command, 80);
     }
 
+    // File operations
+    if (lowerName === 'write' || lowerName === 'edit' || lowerName === 'read') {
+      return shortenPath(parameters.file_path);
+    }
+
+    // MultiEdit
+    if (lowerName === 'multiedit') {
+      const fileCount = Array.isArray(parameters.files) ? parameters.files.length : 1;
+      return `${fileCount} file${fileCount !== 1 ? 's' : ''}`;
+    }
+
+    // Glob
+    if (lowerName === 'glob') {
+      return parameters.pattern || '';
+    }
+
+    // Grep/Search
+    if (lowerName === 'grep' || lowerName === 'search') {
+      const pattern = parameters.pattern ? `"${truncate(parameters.pattern, 40)}"` : '';
+      const path = parameters.path ? `, path: ${shortenPath(parameters.path)}` : '';
+      return `${pattern}${path}`;
+    }
+
+    // Task
+    if (lowerName === 'task') {
+      return truncate(parameters.description || parameters.prompt || '', 60);
+    }
+
+    // Default: show first 2-3 key parameters
+    const keys = Object.keys(parameters).slice(0, 3);
+    return keys.map(k => `${k}: ${truncate(String(parameters[k]), 30)}`).join(', ');
+  }
+
+  /**
+   * Format tool call in terminal style: ● ToolName(params)
+   * @param {Object} tool - Tool call object
+   * @returns {string} Formatted tool call line
+   */
+  function formatToolCallTerminalStyle(tool) {
+    if (!tool || !tool.name) return '';
+    const params = extractKeyParameters(tool.name, tool.parameters);
+    return `● ${tool.name}(${params})`;
+  }
+
+  /**
+   * Format tool result in terminal style:   ⎿  Result
+   * @param {Object} result - Tool result object
+   * @returns {string} Formatted result line
+   */
+  function formatToolResultTerminalStyle(result) {
+    if (!result) return '';
+
+    const prefix = '  ⎿  ';
+
+    // Error case
+    if (!result.success && result.error) {
+      return prefix + truncate(result.error, 200);
+    }
+
+    // Success with output
+    if (result.output) {
+      return prefix + truncate(result.output, 100);
+    }
+
+    // Simple success/failure
+    return prefix + (result.success ? 'Success' : 'Failed');
+  }
+
+  /**
+   * Render diff visualization for Edit operations using proper diff algorithm
+   * @param {Object} parameters - Tool parameters
+   * @returns {string} HTML string with diff visualization
+   */
+  function renderDiffVisualization(parameters) {
+    if (!parameters.old_string || !parameters.new_string) {
+      return '';
+    }
+
+    // Use the diff library (window.Diff is exposed by diff-bundle.js)
+    if (!window.Diff) {
+      console.error('Diff library not loaded');
+      return '';
+    }
+
+    let html = '<div class="tool-call-diff">';
+
+    // Generate line-by-line diff
+    const diff = window.Diff.diffLines(parameters.old_string, parameters.new_string);
+
+    // Render each chunk
+    diff.forEach((part) => {
+      if (part.added) {
+        // Added lines (green)
+        part.value.split('\n').forEach((line, index, array) => {
+          // Skip the last empty line if it exists
+          if (index === array.length - 1 && line === '') return;
+          html += '<div class="diff-line added">' + escapeHtml(line) + "</div>";
+        });
+      } else if (part.removed) {
+        // Removed lines (red)
+        part.value.split('\n').forEach((line, index, array) => {
+          // Skip the last empty line if it exists
+          if (index === array.length - 1 && line === '') return;
+          html += '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
+        });
+      }
+      // Unchanged lines are not rendered (part.added === false && part.removed === false)
+    });
+
+    html += "</div>";
     return html;
   }
 
@@ -143,85 +230,58 @@
     for (const event of output.structured.events) {
       switch (event.type) {
         case "text":
-          // Text events
+          // Text events - terminal style with bullet
           if (event.data && event.data.text) {
             html +=
-              '<div class="output-text">' +
-              escapeHtml(event.data.text) +
+              '<div class="output-text-terminal">' +
+              '● ' + escapeHtml(event.data.text) +
               "</div>\n";
           }
           break;
 
         case "toolCall":
-          // Tool call events
+          // Tool call events - terminal style
           if (event.data) {
-            html += '<div class="output-tool-call">';
-            html +=
-              '<div class="tool-call-header"><i class="codicon codicon-tools"></i> Tool Call: ' +
-              escapeHtml(event.data.name) +
-              "</div>";
-            html += '<div class="tool-call-item">';
+            const toolLine = formatToolCallTerminalStyle(event.data);
 
-            // Check if this is a file modification tool
-            if (isFileModificationTool(event.data.name)) {
-              html += renderToolWithDiff(event.data);
-            } else {
-              html +=
-                '<pre class="tool-params">' +
-                escapeHtml(JSON.stringify(event.data.parameters, null, 2)) +
-                "</pre>";
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">' + escapeHtml(toolLine) + '</div>';
+
+            // Add diff visualization if available (for Edit operations)
+            if (event.data.parameters) {
+              html += renderDiffVisualization(event.data.parameters);
             }
 
+            // Add result if available
             if (event.data.result) {
-              const icon = event.data.result.success
-                ? "codicon-pass"
-                : "codicon-error";
-              const resultClass = event.data.result.success
-                ? "success"
-                : "error";
-              html += '<div class="tool-result ' + resultClass + '">';
-              html += '<i class="codicon ' + icon + '"></i> ';
-              html += escapeHtml(
-                event.data.result.output || event.data.result.error || ""
-              );
-              html += "</div>";
+              const resultLine = formatToolResultTerminalStyle(event.data.result);
+              const resultClass = event.data.result.success ? '' : ' error';
+              html += '<div class="tool-result-line' + resultClass + '">' + escapeHtml(resultLine) + '</div>';
             }
 
-            html += "</div></div>\n";
+            html += "</div>\n";
           }
           break;
 
         case "thinking":
-          // Thinking block events
+          // Thinking block events - terminal style
           if (event.data && event.data.text) {
-            html += '<div class="output-thinking">';
-            html +=
-              '<div class="thinking-header"><i class="codicon codicon-lightbulb"></i> ';
-            if (event.data.label && event.data.label !== "Thinking") {
-              html += escapeHtml(event.data.label);
-            } else {
-              html += "Thinking";
-            }
-            html += "</div>";
-            html += '<div class="thinking-block">';
-            html +=
-              '<div class="thinking-text">' +
-              escapeHtml(event.data.text) +
-              "</div>";
-            html += "</div></div>\n";
+            const label = (event.data.label && event.data.label !== "Thinking")
+              ? event.data.label
+              : "Thinking";
+
+            html += '<div class="output-text-terminal">';
+            html += '● ' + escapeHtml(label) + ': ' + escapeHtml(event.data.text);
+            html += "</div>\n";
           }
           break;
 
         case "toolResult":
           // Tool result events (if separate from toolCall)
           if (event.data && event.data.result) {
-            const result = event.data.result;
-            const icon = result.success ? "codicon-pass" : "codicon-error";
-            const resultClass = result.success ? "success" : "error";
-            html += '<div class="tool-result ' + resultClass + '">';
-            html += '<i class="codicon ' + icon + '"></i> ';
-            html += escapeHtml(result.output || result.error || "");
-            html += "</div>\n";
+            const resultLine = formatToolResultTerminalStyle(event.data.result);
+            const resultClass = event.data.result.success ? '' : ' error';
+            html += '<div class="tool-result-line' + resultClass + '">' + escapeHtml(resultLine) + '</div>\n';
           }
           break;
       }
@@ -590,7 +650,7 @@
           lines.push("");
         }
 
-        // Export events in chronological order
+        // Export events in chronological order - terminal style
         if (output.structured?.events && output.structured.events.length > 0) {
           lines.push("### Response");
           lines.push("");
@@ -598,81 +658,59 @@
           output.structured.events.forEach((event) => {
             switch (event.type) {
               case "text":
-                // Text events - output directly
+                // Text events - terminal style with bullet
                 if (event.data && event.data.text) {
-                  lines.push(event.data.text);
+                  lines.push('● ' + event.data.text);
                   lines.push("");
                 }
                 break;
 
               case "toolCall":
-                // Tool call events
+                // Tool call events - terminal style
                 if (event.data) {
-                  lines.push("**Tool Call: " + event.data.name + "**");
-                  lines.push("");
+                  const toolLine = formatToolCallTerminalStyle(event.data);
+                  lines.push(toolLine);
 
-                  // Special handling for file modifications with diff
-                  if (
-                    event.data.parameters.old_string &&
-                    event.data.parameters.new_string
-                  ) {
-                    lines.push("```diff");
-                    event.data.parameters.old_string
-                      .split("\n")
-                      .forEach((line) => {
-                        lines.push("- " + line);
-                      });
-                    event.data.parameters.new_string
-                      .split("\n")
-                      .forEach((line) => {
-                        lines.push("+ " + line);
-                      });
-                    lines.push("```");
-                  } else if (
-                    event.data.parameters.file_path &&
-                    event.data.parameters.content
-                  ) {
-                    // Write tool - show file path
-                    lines.push("File: `" + event.data.parameters.file_path + "`");
+                  // Add diff visualization if available (for Edit operations)
+                  if (event.data.parameters && event.data.parameters.old_string && event.data.parameters.new_string && window.Diff) {
                     lines.push("");
-                    lines.push("```");
-                    lines.push(event.data.parameters.content);
-                    lines.push("```");
-                  } else {
-                    // Other tools - show JSON
-                    lines.push("```json");
-                    lines.push(JSON.stringify(event.data.parameters, null, 2));
+                    lines.push("```diff");
+
+                    // Use diff library for proper diff
+                    const diff = window.Diff.diffLines(event.data.parameters.old_string, event.data.parameters.new_string);
+                    diff.forEach((part) => {
+                      if (part.added) {
+                        part.value.split('\n').forEach((line, index, array) => {
+                          if (index === array.length - 1 && line === '') return;
+                          lines.push("+ " + line);
+                        });
+                      } else if (part.removed) {
+                        part.value.split('\n').forEach((line, index, array) => {
+                          if (index === array.length - 1 && line === '') return;
+                          lines.push("- " + line);
+                        });
+                      }
+                      // Unchanged lines are not included in markdown export
+                    });
+
                     lines.push("```");
                   }
 
                   if (event.data.result) {
-                    const status = event.data.result.success
-                      ? "✓ Success"
-                      : "✗ Failed";
-                    lines.push("");
-                    lines.push("*" + status + "*");
-                    if (event.data.result.output || event.data.result.error) {
-                      lines.push("```");
-                      lines.push(event.data.result.output || event.data.result.error);
-                      lines.push("```");
-                    }
+                    const resultLine = formatToolResultTerminalStyle(event.data.result);
+                    lines.push(resultLine);
                   }
                   lines.push("");
                 }
                 break;
 
               case "thinking":
-                // Thinking block events
+                // Thinking block events - terminal style
                 if (event.data && event.data.text) {
-                  if (event.data.label && event.data.label !== "Thinking") {
-                    lines.push("**" + event.data.label + "**");
-                  } else {
-                    lines.push("**Thinking**");
-                  }
-                  lines.push("");
-                  lines.push("```");
-                  lines.push(event.data.text);
-                  lines.push("```");
+                  const label = (event.data.label && event.data.label !== "Thinking")
+                    ? event.data.label
+                    : "Thinking";
+                  lines.push('● ' + label + ': ' + event.data.text);
                   lines.push("");
                 }
                 break;
@@ -680,15 +718,8 @@
               case "toolResult":
                 // Tool result events (if separate from toolCall)
                 if (event.data && event.data.result) {
-                  const result = event.data.result;
-                  const status = result.success ? "✓ Success" : "✗ Failed";
-                  lines.push("");
-                  lines.push("*" + status + "*");
-                  if (result.output || result.error) {
-                    lines.push("```");
-                    lines.push(result.output || result.error);
-                    lines.push("```");
-                  }
+                  const resultLine = formatToolResultTerminalStyle(event.data.result);
+                  lines.push(resultLine);
                   lines.push("");
                 }
                 break;

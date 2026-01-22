@@ -810,6 +810,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     const gptTokenizerUri = webview.asWebviewUri(
       this.getWebviewPath("gpt-tokenizer.js")
     );
+    const diffUri = webview.asWebviewUri(this.getWebviewPath("diff.js"));
     const scriptUri = webview.asWebviewUri(this.getWebviewPath("dashboard.js"));
     const styleUri = webview.asWebviewUri(this.getWebviewPath("dashboard.css"));
     const sharedStyleUri = webview.asWebviewUri(
@@ -889,6 +890,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     html = html
       .replace(/\{\{constantsUri\}\}/g, constantsUri.toString())
       .replace(/\{\{gptTokenizerUri\}\}/g, gptTokenizerUri.toString())
+      .replace(/\{\{diffUri\}\}/g, diffUri.toString())
       .replace(/\{\{scriptUri\}\}/g, scriptUri.toString())
       .replace(/\{\{styleUri\}\}/g, styleUri.toString())
       .replace(/\{\{sharedStyleUri\}\}/g, sharedStyleUri.toString())

@@ -1210,85 +1210,46 @@ button:disabled {
 }
 
 /* ============================================================================
-   Tool Calls Section - Structured Output
+   Terminal-Style Output
    ============================================================================ */
-.output-tool-calls {
-  margin-top: 12px;
-  border-left: 3px solid var(--vscode-charts-blue, #3794ff);
-  padding-left: 12px;
 
-  .tool-calls-header {
-    font-weight: 600;
-    color: var(--vscode-charts-blue, #3794ff);
-    margin-bottom: 8px;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+/* Terminal-style tool call container */
+.output-tool-call-terminal {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
 
-  .tool-call-item {
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border, var(--border-color));
-    border-radius: 4px;
-    padding: 8px;
-    margin: 8px 0;
+/* Tool call line: ● ToolName(params) */
+.tool-call-line {
+  color: var(--vscode-foreground);
+  font-size: 12px;
+}
 
-    .tool-name {
-      font-weight: 600;
-      color: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
+/* Tool result line:   ⎿  Output */
+.tool-result-line {
+  color: var(--vscode-descriptionForeground);
+  padding-left: 1rem;
+  margin-left: 0.5rem;
+  font-size: 11px;
 
-    .tool-params {
-      font-size: 11px;
-      font-family: var(--vscode-editor-font-family);
-      background: var(--vscode-textCodeBlock-background, rgba(0, 0, 0, 0.2));
-      padding: 6px;
-      border-radius: 3px;
-      overflow-x: auto;
-      margin: 0;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-
-    .tool-file-info {
-      margin-bottom: 6px;
-
-      .file-path {
-        font-family: var(--vscode-editor-font-family);
-        font-size: 11px;
-        color: var(--vscode-terminal-ansiBlue, #3794ff);
-        font-weight: 600;
-      }
-    }
-
-    .tool-result {
-      margin-top: 6px;
-      padding: 4px 8px;
-      border-radius: 3px;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-
-      &.success {
-        background: rgba(115, 201, 145, 0.15);
-        color: var(--vscode-testing-iconPassed, #73c991);
-      }
-
-      &.error {
-        background: rgba(241, 76, 76, 0.15);
-        color: var(--vscode-testing-iconFailed, #f14c4c);
-      }
-    }
+  &.error {
+    color: var(--vscode-errorForeground);
   }
 }
 
-/* Diff Visualization */
+/* Text events: ● Text content */
+.output-text-terminal {
+  margin: 0.5rem 0;
+  color: var(--vscode-foreground);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 12px;
+}
+
+/* Diff Visualization - integrated with terminal style */
 .tool-call-diff {
-  margin-top: 8px;
+  margin: 0.5rem 0 0.5rem 1.5rem;
   font-family: var(--vscode-editor-font-family);
   font-size: 11px;
   border-radius: 3px;
@@ -1328,50 +1289,6 @@ button:disabled {
         color: var(--vscode-terminal-ansiRed, #f14c4c);
         font-weight: bold;
       }
-    }
-  }
-}
-
-/* ============================================================================
-   Thinking Blocks Section - Structured Output
-   ============================================================================ */
-.output-thinking {
-  margin-top: 12px;
-  border-left: 3px solid var(--vscode-charts-purple, #b180d7);
-  padding-left: 12px;
-
-  .thinking-header {
-    font-weight: 600;
-    color: var(--vscode-charts-purple, #b180d7);
-    margin-bottom: 8px;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .thinking-block {
-    background: var(--vscode-editor-background);
-    border: 1px solid var(--vscode-panel-border, var(--border-color));
-    border-radius: 4px;
-    padding: 8px;
-    margin: 8px 0;
-
-    .thinking-label {
-      font-weight: 600;
-      font-size: 10px;
-      text-transform: uppercase;
-      color: var(--vscode-descriptionForeground);
-      margin-bottom: 4px;
-      letter-spacing: 0.5px;
-    }
-
-    .thinking-text {
-      white-space: pre-wrap;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 11px;
-      line-height: 1.5;
-      color: var(--vscode-editor-foreground);
     }
   }
 }

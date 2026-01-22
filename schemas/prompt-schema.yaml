@@ -215,6 +215,8 @@ definitions:
           - idle
           - running
           - paused
+          - stopped
+          - cancelling
           - completed
           - cancelled
           - error

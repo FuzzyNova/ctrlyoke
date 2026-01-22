@@ -1030,6 +1030,7 @@
     "ajv": "^8.17.1",
     "chokidar": "^5.0.0",
     "codemirror": "^6.0.2",
+    "diff": "^8.0.3",
     "gpt-tokenizer": "^3.4.0",
     "js-yaml": "^4.1.1",
     "jsonschema": "^1.5.0",

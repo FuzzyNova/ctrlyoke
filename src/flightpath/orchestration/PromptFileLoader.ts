@@ -187,7 +187,8 @@ export class PromptFileLoader {
    */
   async reloadFromWorkingFile(
     workingFilePath: string,
-    mode: "replace" | "merge" | "auto" = "auto"
+    mode: "replace" | "merge" | "auto" = "auto",
+    isAutoLoad: boolean = false
   ): Promise<void> {
     try {
       // Read working file
@@ -223,9 +224,12 @@ export class PromptFileLoader {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
         Log.info(
-          `Restoring session from working file (${workingFile.prompts.length} prompts, mode: ${mode})`
+          `Restoring session from working file (${workingFile.prompts.length} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
         );
-        await this.promptQueue.restoreFromWorkingFile(workingFilePath);
+        await this.promptQueue.restoreFromWorkingFile(
+          workingFilePath,
+          isAutoLoad
+        );
 
         if (this.dashboardProvider) {
           const fileName = path.basename(workingFile.originalFile);

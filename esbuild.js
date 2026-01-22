@@ -182,8 +182,8 @@ const copyWebviewPlugin = {
         });
 
         entries.forEach((entry) => {
-          // Skip gpt-tokenizer-bundle.js - it's bundled separately
-          if (entry.name === "gpt-tokenizer-bundle.js") {
+          // Skip bundle source files - they're bundled separately
+          if (entry.name === "gpt-tokenizer-bundle.js" || entry.name === "diff-bundle.js") {
             return;
           }
 
@@ -327,12 +327,35 @@ async function buildGptTokenizer() {
   console.log("✓ GPT Tokenizer bundle created");
 }
 
+/**
+ * Bundle diff library for webview use (exposes window.Diff)
+ */
+async function buildDiff() {
+  await esbuild.build({
+    entryPoints: ["src/ui/webview/diff-bundle.js"],
+    bundle: true,
+    format: "iife", // Immediately Invoked Function Expression for browser
+    outfile: "out/ui/webview/diff.js",
+    platform: "browser",
+    external: [], // Bundle diff library
+    minify: production,
+    sourcemap: !production,
+    target: ["es2020"],
+    logLevel: "info",
+  });
+
+  console.log("✓ Diff bundle created");
+}
+
 async function main() {
   // Build CodeMirror bundle first
   await buildCodeMirror();
 
   // Build gpt-tokenizer bundle
   await buildGptTokenizer();
+
+  // Build diff bundle
+  await buildDiff();
 
   // Build main extension
   const ctx = await esbuild.context({

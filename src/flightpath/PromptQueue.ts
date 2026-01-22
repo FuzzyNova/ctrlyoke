@@ -170,7 +170,10 @@ export class PromptQueue {
    * This is used when resuming a previous session from .flightpath/.queue
    * @param workingFilePath Path to the working file
    */
-  async restoreFromWorkingFile(workingFilePath: string): Promise<void> {
+  async restoreFromWorkingFile(
+    workingFilePath: string,
+    isAutoLoad: boolean = false
+  ): Promise<void> {
     try {
       // Read the working file
       const workingFile = await this.readWorkingFile(workingFilePath);
@@ -184,12 +187,23 @@ export class PromptQueue {
       // Restore completed IDs set from saved array
       const completedIds = new Set<string>(runtime?.completedPrompts || []);
 
+      // Determine execution state
+      // When auto-loading on startup, NEVER restore as RUNNING (prevents unwanted auto-start)
+      // Force to PAUSED so user must explicitly resume
+      let executionState = runtime?.executionState || EXECUTION_STATES.IDLE;
+      if (isAutoLoad && executionState === EXECUTION_STATES.RUNNING) {
+        executionState = EXECUTION_STATES.PAUSED;
+        Log.info(
+          "Auto-load: Forced RUNNING state to PAUSED to prevent auto-start"
+        );
+      }
+
       // Restore prompts and basic state
       // CRITICAL: Preserve _runtime metadata during load (Phase 4: Per-Prompt Session Management)
       // Each prompt's _runtime contains: provider, model, agent, sessionId, startedAt, completedAt
       this.state = {
         currentIndex: runtime?.currentIndex || 0,
-        status: runtime?.executionState || EXECUTION_STATES.IDLE,
+        status: executionState,
         prompts: workingFile.prompts.map((prompt) => ({
           ...prompt,
           // Backward compatibility: _runtime is optional, old files won't have it

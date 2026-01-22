@@ -110,6 +110,9 @@ export class CliIntegration extends CopilotIntegration {
   /** Last full prompt text sent (for debugging) */
   protected lastFullPrompt?: string;
 
+  /** Actual prompt text sent to CLI (may be file reference if using temp files) */
+  protected actualPromptSent?: string;
+
   /** Current background process (headless mode) */
   protected currentProcess?: ChildProcess;
 
@@ -543,8 +546,11 @@ export class CliIntegration extends CopilotIntegration {
           `🔄 Resuming session ${resolvedSessionId} - discovering log file directly...`
         );
 
+        // Use the actual prompt sent (may be file reference)
+        const promptForDiscovery = this.actualPromptSent || promptText;
+
         logPath = await this.provider.logParser.discoverSessionLog(
-          promptText,
+          promptForDiscovery,
           startTime,
           resolvedSessionId
         );
@@ -603,8 +609,11 @@ export class CliIntegration extends CopilotIntegration {
           Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
 
           // Use session ID to find log file directly
+          // Use the actual prompt sent (may be file reference)
+          const promptForDiscovery = this.actualPromptSent || promptText;
+
           logPath = await this.provider.logParser.discoverSessionLog(
-            promptText,
+            promptForDiscovery,
             startTime,
             sessionId
           );
@@ -627,8 +636,11 @@ export class CliIntegration extends CopilotIntegration {
             "🔍 Discovering session log file via prompt text matching..."
           );
 
+          // Use the actual prompt sent (may be file reference)
+          const promptForDiscovery = this.actualPromptSent || promptText;
+
           logPath = await this.provider.logParser.discoverSessionLog(
-            promptText,
+            promptForDiscovery,
             startTime
           );
 
@@ -653,8 +665,12 @@ export class CliIntegration extends CopilotIntegration {
       } else {
         // Provider doesn't support SessionStart hook - use old method (Copilot, Codex)
         Log.info("🔍 Discovering session log file (no SessionStart hook)...");
+
+        // Use the actual prompt sent (may be file reference)
+        const promptForDiscovery = this.actualPromptSent || promptText;
+
         logPath = await this.provider.logParser.discoverSessionLog(
-          promptText,
+          promptForDiscovery,
           startTime
         );
 
@@ -738,6 +754,9 @@ export class CliIntegration extends CopilotIntegration {
       actualPromptText // Use file reference or original depending on size
     );
     const displayCommand = `${this.provider.config.name} [Interactive mode] "<prompt>"`;
+
+    // Store the actual prompt sent for log discovery
+    this.actualPromptSent = actualPromptText;
 
     const terminal = await this.createFreshTerminal();
     terminal.show();

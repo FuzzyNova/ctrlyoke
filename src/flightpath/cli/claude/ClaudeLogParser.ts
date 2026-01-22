@@ -344,7 +344,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       );
 
       // Prepare prompt text for matching (first 100 chars)
-      const promptPrefix = promptText.substring(0, 100);
+      // Normalize for path escaping: Claude may escape backslashes in file paths
+      const promptPrefix = this.normalizePromptForMatching(
+        promptText.substring(0, 100)
+      );
 
       // Check each candidate for matching prompt text
       for (const candidatePath of candidates) {
@@ -357,7 +360,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             if (event.type === "user" && event.message?.content) {
               for (const contentBlock of event.message.content) {
                 if (contentBlock.type === "text" && contentBlock.text) {
-                  const logPromptPrefix = contentBlock.text.substring(0, 100);
+                  const logPromptPrefix = this.normalizePromptForMatching(
+                    contentBlock.text.substring(0, 100)
+                  );
                   if (logPromptPrefix === promptPrefix) {
                     Log.debug(
                       `[ClaudeLogParser] Found matching session log: ${candidatePath}`

@@ -988,9 +988,11 @@ export class FlightPathManager {
         this.currentWorkspaceFolder,
         async (workingFilePath: string) => {
           // Attempt to reload from working file - throws if validation fails
+          // Pass isAutoLoad=true to prevent auto-starting RUNNING workflows
           await this.promptFileLoader.reloadFromWorkingFile(
             workingFilePath,
-            "replace"
+            "replace",
+            true
           );
 
           // Set currentPromptFile so getCurrentPromptFile() works correctly

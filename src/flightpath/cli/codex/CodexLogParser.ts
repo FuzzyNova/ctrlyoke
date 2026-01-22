@@ -372,7 +372,10 @@ export class CodexLogParser extends BaseLogParser {
 
       // FALLBACK: Find all .jsonl files modified after startTime
       // Retry with backoff: Codex may take a moment to create the log file
-      const promptPrefix = promptText.slice(0, 100).toLowerCase().trim();
+      // Normalize for path escaping: Codex may double backslashes in file paths
+      const promptPrefix = this.normalizePromptForMatching(
+        promptText.slice(0, 100)
+      );
 
       const result = await retryWithBackoff(
         async () => {
@@ -455,7 +458,9 @@ export class CodexLogParser extends BaseLogParser {
                 // Match prompt text
                 if (
                   userMessage &&
-                  userMessage.toLowerCase().includes(promptPrefix)
+                  this.normalizePromptForMatching(userMessage).includes(
+                    promptPrefix
+                  )
                 ) {
                   return candidate.path; // Success - found matching log
                 }

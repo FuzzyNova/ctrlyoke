@@ -282,7 +282,10 @@ export class CopilotLogParser extends BaseLogParser {
       }
 
       // Prepare prompt matcher (first 100 chars, normalized)
-      const promptPrefix = promptText.slice(0, 100).toLowerCase().trim();
+      // Normalize for path escaping: Copilot may double backslashes in file paths
+      const promptPrefix = this.normalizePromptForMatching(
+        promptText.slice(0, 100)
+      );
 
       // Retry with backoff: Copilot may take a moment to create the log file after SessionStart hook
       const result = await retryWithBackoff(
@@ -308,7 +311,9 @@ export class CopilotLogParser extends BaseLogParser {
               // Look for user.message event containing prompt text
               for (const event of events) {
                 if (event.type === "user.message" && event.data?.content) {
-                  const content = event.data.content.toLowerCase().trim();
+                  const content = this.normalizePromptForMatching(
+                    event.data.content
+                  );
                   if (content.includes(promptPrefix)) {
                     return logPath; // Success - found matching log
                   }

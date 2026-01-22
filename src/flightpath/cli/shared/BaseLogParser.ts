@@ -432,4 +432,41 @@ export abstract class BaseLogParser implements ILogParser {
 
     return null;
   }
+
+  /**
+   * Normalize prompt text for matching
+   *
+   * Handles path escaping differences between what we send and what CLIs log:
+   * - Converts all backslashes to forward slashes (CLIs may escape \\ to \\\\)
+   * - Lowercases for case-insensitive matching
+   * - Trims whitespace
+   *
+   * @param text Prompt text to normalize
+   * @returns Normalized text for comparison
+   *
+   * @remarks
+   * **Why this is needed:**
+   * When FlightPath uses temp files for complex prompts, it sends something like:
+   * - We send: `"Follow instructions in @.flightpath\temp\file.md"`
+   * - CLI logs: `"Follow instructions in @.flightpath\\temp\\file.md"`
+   *
+   * After normalization, both become: `"follow instructions in @.flightpath/temp/file.md"`
+   *
+   * This ensures prompt discovery works reliably regardless of path separator
+   * escaping differences across different CLIs.
+   *
+   * @example
+   * ```typescript
+   * const normalized = this.normalizePromptForMatching(promptText);
+   * if (logContent.includes(normalized)) {
+   *   // Found matching prompt in log
+   * }
+   * ```
+   */
+  protected normalizePromptForMatching(text: string): string {
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+  }
 }
