@@ -544,9 +544,11 @@ suite("CopilotLogParser", () => {
   });
 
   suite("isComplete", () => {
-    test("should detect completion via assistant.turn_end event", () => {
+    test("should always return false (uses hooks for completion detection)", () => {
+      // CopilotLogParser intentionally returns false for all events
+      // because it uses hooks for completion detection, not log parsing
       const event = { type: "assistant.turn_end" };
-      assert.strictEqual(parser.isComplete(event), true);
+      assert.strictEqual(parser.isComplete(event), false);
     });
 
     test("should not detect completion for other event types", () => {

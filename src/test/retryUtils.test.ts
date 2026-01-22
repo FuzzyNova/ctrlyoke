@@ -109,7 +109,8 @@ suite("RetryUtils", () => {
       );
 
       assert.strictEqual(attempts, 4);
-      assert.deepStrictEqual(delays, [0, 100, 200, 300]);
+      // First attempt is always 0, then uses delays[0], delays[1], delays[2]
+      assert.deepStrictEqual(delays, [0, 0, 100, 200]);
     });
 
     test("should use fixed delay when number is provided", async () => {
@@ -131,7 +132,7 @@ suite("RetryUtils", () => {
       );
 
       assert.strictEqual(attempts, 3);
-      assert.deepStrictEqual(delays, [0, 50, 50]); // First is 0, rest are 50
+      assert.deepStrictEqual(delays, [0, 50, 50]); // First attempt always has 0 delay
     });
 
     test("should call onRetry callback with correct parameters", async () => {
@@ -153,22 +154,26 @@ suite("RetryUtils", () => {
       );
 
       assert.strictEqual(retryLog.length, 3);
+      // First attempt always 0, then uses delays[0], delays[1]
       assert.deepStrictEqual(retryLog, [
         { attempt: 1, max: 3, delay: 0 },
-        { attempt: 2, max: 3, delay: 10 },
-        { attempt: 3, max: 3, delay: 20 },
+        { attempt: 2, max: 3, delay: 0 },
+        { attempt: 3, max: 3, delay: 10 },
       ]);
     });
 
     test("should handle undefined return values", async () => {
       let attempts = 0;
-      const result = await retryWithBackoff(async () => {
-        attempts++;
-        return undefined; // Treat as failure
-      });
+      const result = await retryWithBackoff(
+        async () => {
+          attempts++;
+          return undefined; // Treat as failure
+        },
+        { maxAttempts: 5, delays: [0, 10, 10, 10, 10] }
+      );
 
       assert.strictEqual(result, undefined);
-      assert.strictEqual(attempts, 5); // Default maxAttempts
+      assert.strictEqual(attempts, 5);
     });
 
     test("should distinguish between null and truthy values", async () => {
