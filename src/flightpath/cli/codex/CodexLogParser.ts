@@ -4,6 +4,11 @@ import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import {
+  UniversalCliOutput,
+  ToolCall,
+  ThinkingBlock,
+} from "../../../types/CliOutputTypes";
 
 /**
  * Codex CLI log parser
@@ -75,17 +80,18 @@ export class CodexLogParser extends BaseLogParser {
    * Extract complete response from Codex log events
    *
    * Combines multiple response_item events with nested payloads into a single
-   * response object. Extracts tool calls, reasoning blocks, and metadata.
+   * response object. Extracts tool calls, thinking blocks, and metadata.
    *
    * @param events - Array of parsed Codex log events
-   * @returns Structured response object
+   * @returns UniversalCliOutput - Standardized response object
    *
    * @remarks
    * **Response Assembly:**
    * - Processes response_item events with role="assistant"
    * - Extracts text from nested payload.content[].text fields
    * - Identifies tool calls from payload.content[].tool_use items or function_call payloads
-   * - Captures reasoning blocks if present
+   * - Normalizes tool call parameters (input/arguments → parameters)
+   * - Captures thinking blocks from content[{type: "thinking"}]
    * - Retrieves session ID from session_meta event
    *
    * **Payload Structure:**
@@ -102,17 +108,13 @@ export class CodexLogParser extends BaseLogParser {
    * }
    * ```
    */
-  extractResponse(events: any[]): {
-    text: string;
-    toolCalls: any[];
-    metadata: any;
-  } {
+  extractResponse(events: any[]): UniversalCliOutput {
     const textParts: string[] = [];
-    const toolCalls: any[] = [];
-    const reasoningBlocks: string[] = [];
-    let sessionId: string | null = null;
-    let model: string | null = null;
-    let cliVersion: string | null = null;
+    const toolCalls: ToolCall[] = [];
+    const thinkingBlocks: ThinkingBlock[] = [];
+    let sessionId: string | undefined;
+    let model: string | undefined;
+    let cliVersion: string | undefined;
 
     for (const event of events) {
       // Track session metadata
@@ -139,28 +141,44 @@ export class CodexLogParser extends BaseLogParser {
               textParts.push(item.text);
             }
 
-            // Tool calls
+            // Tool calls - normalize 'input' to 'parameters'
             if (item.type === "tool_use") {
               toolCalls.push({
                 name: item.name,
-                input: item.input,
+                parameters: item.input || {},
                 id: item.id,
               });
             }
 
-            // Reasoning blocks (if present)
+            // Thinking blocks (moved from metadata.reasoningBlocks)
             if (item.type === "thinking" && item.text) {
-              reasoningBlocks.push(item.text);
+              thinkingBlocks.push({
+                text: item.text,
+              });
             }
           }
         }
       }
 
-      // Tool calls emitted as dedicated response_item payloads
-      if (event.type === "response_item" && event.payload?.type === "function_call") {
+      // Tool calls emitted as dedicated response_item payloads (function_call)
+      // Arguments may be a JSON string that needs parsing
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "function_call"
+      ) {
+        let params: Record<string, unknown> =
+          event.payload.arguments || event.payload.input || {};
+        // Arguments may be a JSON string!
+        if (typeof params === "string") {
+          try {
+            params = JSON.parse(params);
+          } catch {
+            params = { raw: params };
+          }
+        }
         toolCalls.push({
           name: event.payload.name,
-          input: event.payload.arguments,
+          parameters: params,
           id: event.payload.call_id ?? event.payload.id,
         });
       }
@@ -176,12 +194,12 @@ export class CodexLogParser extends BaseLogParser {
     return {
       text: textParts.join(""),
       toolCalls,
+      thinkingBlocks,
       metadata: {
         sessionId,
         model,
         cliVersion,
-        reasoningBlocks:
-          reasoningBlocks.length > 0 ? reasoningBlocks : undefined,
+        provider: "codex-cli",
       },
     };
   }
@@ -393,7 +411,8 @@ export class CodexLogParser extends BaseLogParser {
                     userMessage = content
                       .filter(
                         (c: any) =>
-                          (c.type === "input_text" || c.type === "output_text") &&
+                          (c.type === "input_text" ||
+                            c.type === "output_text") &&
                           c.text
                       )
                       .map((c: any) => c.text)
@@ -551,7 +570,7 @@ export class CodexLogParser extends BaseLogParser {
    * const metadata = {
    *   sessionId: "thread_abc123",
    *   model: "gpt-5.1-codex",
-   *   usage: { input_tokens: 100, output_tokens: 50 }
+   *   usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 }
    * };
    * const stats = parser.formatStatistics(metadata);
    * // "Session: thread_abc | Model: gpt-5.1-codex | Tokens: 100 in / 50 out"
@@ -574,12 +593,9 @@ export class CodexLogParser extends BaseLogParser {
     // Token usage
     if (metadata.usage) {
       const usage = metadata.usage;
-      if (
-        usage.input_tokens !== undefined &&
-        usage.output_tokens !== undefined
-      ) {
+      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
-          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
         );
       }
     }

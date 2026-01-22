@@ -31,6 +31,27 @@ import {
 import { FlightPathManager } from "../flightpath/FlightPathManager";
 import { FlightPathSettingsProvider } from "./FlightPathSettingsProvider";
 import { Provider } from "../types/FlightPathTypes";
+import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
+
+/**
+ * Output data for CLI execution, sent to dashboard for display.
+ */
+export interface CliOutputData {
+  /** The prompt text that was sent */
+  prompt: string;
+  /** Plain text response for backward compatibility */
+  response: string;
+  /** Structured output with tool calls, thinking blocks, and metadata (CLI only) */
+  structured?: DashboardOutput;
+  /** Execution time in seconds */
+  elapsed: number;
+  /** Token usage statistics */
+  tokens?: { prompt: number; completion: number };
+  /** Whether the response is still streaming */
+  isStreaming: boolean;
+  /** The CLI command executed (for debugging) */
+  cliCommand?: string;
+}
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -297,7 +318,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public updateCliOutput(stepIndex: number, output: any): void {
+  public updateCliOutput(stepIndex: number, output: CliOutputData): void {
     console.log(
       `📊 DashboardProvider: Sending CLI output for step ${stepIndex}`,
       output

@@ -4,6 +4,11 @@ import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import {
+  UniversalCliOutput,
+  ToolCall,
+  ThinkingBlock,
+} from "../../../types/CliOutputTypes";
 
 /**
  * Copilot CLI log parser
@@ -53,15 +58,16 @@ export class CopilotLogParser extends BaseLogParser {
    * Extract complete response from Copilot log events
    *
    * Combines multiple assistant.message events into a single response object.
-   * Extracts tool requests, metadata, and session information.
+   * Extracts tool requests, thinking blocks, metadata, and session information.
    *
    * @param events - Array of parsed Copilot log events
-   * @returns Structured response object
+   * @returns UniversalCliOutput - Standardized response object
    *
    * @remarks
    * **Response Assembly:**
    * - Concatenates content from all assistant.message events
-   * - Extracts toolRequests from event.data.toolRequests arrays
+   * - Extracts toolRequests from event.data.toolRequests arrays (normalized to `parameters`)
+   * - Extracts thinking blocks from assistant.reasoning events
    * - Captures model, session ID, and token usage from metadata
    *
    * **Event Structure:**
@@ -76,16 +82,14 @@ export class CopilotLogParser extends BaseLogParser {
    * }
    * ```
    */
-  extractResponse(events: any[]): {
-    text: string;
-    toolCalls: any[];
-    metadata: any;
-    sessionInfo?: any;
-  } {
+  extractResponse(events: any[]): UniversalCliOutput {
     const textParts: string[] = [];
-    const toolCalls: any[] = [];
-    let metadata: any = {};
-    let sessionInfo: any = {};
+    const toolCalls: ToolCall[] = [];
+    const thinkingBlocks: ThinkingBlock[] = [];
+    let sessionId: string | undefined;
+    let model: string | undefined;
+    let inputTokens = 0;
+    let outputTokens = 0;
 
     for (const event of events) {
       // Extract text content from assistant messages
@@ -93,31 +97,64 @@ export class CopilotLogParser extends BaseLogParser {
         textParts.push(event.data.content);
       }
 
-      // Extract tool calls
+      // Extract thinking/reasoning blocks
+      if (event.type === "assistant.reasoning" && event.data?.content) {
+        thinkingBlocks.push({
+          text: event.data.content,
+          timestamp: event.timestamp
+            ? new Date(event.timestamp).getTime()
+            : undefined,
+        });
+      }
+
+      // Extract tool calls and normalize to 'parameters'
+      // Copilot CLI uses different field names: parameters, args, or arguments
       if (event.data?.toolRequests && Array.isArray(event.data.toolRequests)) {
-        toolCalls.push(...event.data.toolRequests);
+        for (const req of event.data.toolRequests) {
+          toolCalls.push({
+            name: req.name,
+            parameters: req.parameters || req.arguments || req.args || {},
+            id: req.id,
+          });
+        }
       }
 
       // Extract session metadata from session.start event
       if (event.type === "session.start" && event.data) {
-        sessionInfo = {
-          sessionId: event.data.sessionId,
-          model: event.data.model,
-          timestamp: event.timestamp,
-        };
+        sessionId = event.data.sessionId;
+        model = event.data.model;
       }
 
-      // Extract metadata from any event with metadata field
-      if (event.data?.metadata) {
-        metadata = { ...metadata, ...event.data.metadata };
+      // Extract token usage from metadata
+      if (event.data?.metadata?.usage) {
+        inputTokens +=
+          event.data.metadata.usage.input_tokens ||
+          event.data.metadata.usage.inputTokens ||
+          0;
+        outputTokens +=
+          event.data.metadata.usage.output_tokens ||
+          event.data.metadata.usage.outputTokens ||
+          0;
       }
     }
 
     return {
       text: textParts.join(""),
       toolCalls,
-      metadata: { ...metadata, ...sessionInfo },
-      sessionInfo,
+      thinkingBlocks,
+      metadata: {
+        sessionId,
+        model,
+        provider: "copilot-cli",
+        usage:
+          inputTokens > 0 || outputTokens > 0
+            ? {
+                inputTokens,
+                outputTokens,
+                totalTokens: inputTokens + outputTokens,
+              }
+            : undefined,
+      },
     };
   }
 
@@ -369,12 +406,9 @@ export class CopilotLogParser extends BaseLogParser {
     // Token usage (if available - Copilot doesn't typically provide this in logs)
     if (metadata.usage) {
       const usage = metadata.usage;
-      if (
-        usage.input_tokens !== undefined &&
-        usage.output_tokens !== undefined
-      ) {
+      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
-          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
         );
       }
     }

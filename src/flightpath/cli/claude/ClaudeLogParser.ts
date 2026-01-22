@@ -9,6 +9,11 @@ import {
   retryWithBackoff,
   PermanentFailureError,
 } from "../../../utils/RetryUtils";
+import {
+  UniversalCliOutput,
+  ToolCall,
+  ThinkingBlock,
+} from "../../../types/CliOutputTypes";
 
 /**
  * Claude CLI Log Parser
@@ -59,19 +64,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *
    * Processes Claude JSONL events and combines:
    * - Text content from assistant messages
-   * - Tool calls (tool_use events)
+   * - Tool calls (tool_use events) with normalized 'parameters' field
    * - Thinking blocks (if present)
    * - Metadata (session ID, usage stats, model info)
    *
    * @param events - Array of parsed Claude log events
-   * @returns Structured response object
+   * @returns UniversalCliOutput - Standardized response object
    *
    * @remarks
    * **Response Assembly:**
    * - Concatenates text from all assistant.message.content[{type: "text"}]
-   * - Collects tool calls from content[{type: "tool_use"}]
+   * - Collects tool calls from content[{type: "tool_use"}], normalizes `input` → `parameters`
    * - Extracts thinking blocks from content[{type: "thinking"}]
-   * - Aggregates usage stats from all events
+   * - Aggregates usage stats from all events (normalized to camelCase)
    *
    * **Metadata Extraction:**
    * - Session ID from any event.sessionId field
@@ -88,16 +93,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * // { text: "Hello", toolCalls: [], thinkingBlocks: [], metadata: {...} }
    * ```
    */
-  extractResponse(events: any[]): {
-    text: string;
-    toolCalls: any[];
-    thinkingBlocks?: any[];
-    metadata: any;
-  } {
+  extractResponse(events: any[]): UniversalCliOutput {
     let text = "";
-    const toolCalls: any[] = [];
-    const thinkingBlocks: any[] = [];
-    let sessionId: string | null = null;
+    const toolCalls: ToolCall[] = [];
+    const thinkingBlocks: ThinkingBlock[] = [];
+    let sessionId: string | undefined;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let model: string | undefined;
@@ -116,11 +116,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             text += contentBlock.text;
           }
 
-          // Extract tool calls
+          // Extract tool calls and normalize 'input' to 'parameters'
           if (contentBlock.type === "tool_use") {
             toolCalls.push({
               name: contentBlock.name,
-              input: contentBlock.input,
+              parameters: contentBlock.input || {},
               id: contentBlock.id,
             });
           }
@@ -149,15 +149,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     return {
       text: text.trim(),
       toolCalls,
-      thinkingBlocks: thinkingBlocks.length > 0 ? thinkingBlocks : undefined,
+      thinkingBlocks,
       metadata: {
         sessionId,
         model,
-        usage: {
-          input_tokens: totalInputTokens,
-          output_tokens: totalOutputTokens,
-          total_tokens: totalInputTokens + totalOutputTokens,
-        },
+        provider: "claude-cli",
+        usage:
+          totalInputTokens > 0 || totalOutputTokens > 0
+            ? {
+                inputTokens: totalInputTokens,
+                outputTokens: totalOutputTokens,
+                totalTokens: totalInputTokens + totalOutputTokens,
+              }
+            : undefined,
       },
     };
   }
@@ -433,7 +437,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * const metadata = {
    *   sessionId: "abc-123",
    *   model: "claude-sonnet-4.5",
-   *   usage: { input_tokens: 100, output_tokens: 50 }
+   *   usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 }
    * };
    * const stats = parser.formatStatistics(metadata);
    * // "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out"
@@ -455,12 +459,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     // Token usage
     if (metadata.usage) {
       const usage = metadata.usage;
-      if (
-        usage.input_tokens !== undefined &&
-        usage.output_tokens !== undefined
-      ) {
+      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
-          `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`
+          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
         );
       }
     }

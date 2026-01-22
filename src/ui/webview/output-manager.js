@@ -52,6 +52,155 @@
   }
 
   /**
+   * Check if tool is a file modification operation
+   * @param {string} toolName - Name of the tool
+   * @returns {boolean} True if tool modifies files
+   */
+  function isFileModificationTool(toolName) {
+    const fileTools = [
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "sed",
+      "patch",
+      "apply_diff",
+      "insert",
+    ];
+    return fileTools.some((t) =>
+      toolName.toLowerCase().includes(t.toLowerCase())
+    );
+  }
+
+  /**
+   * Render tool call with diff visualization for file modifications
+   * @param {Object} tool - Tool call object
+   * @returns {string} HTML string
+   */
+  function renderToolWithDiff(tool) {
+    let html = "";
+
+    // Try to extract old_string and new_string from parameters for diff display
+    if (tool.parameters.old_string && tool.parameters.new_string) {
+      html += '<div class="tool-call-diff">';
+
+      const oldLines = tool.parameters.old_string.split("\n");
+      const newLines = tool.parameters.new_string.split("\n");
+
+      // Show removed lines
+      oldLines.forEach((line) => {
+        html += '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
+      });
+
+      // Show added lines
+      newLines.forEach((line) => {
+        html += '<div class="diff-line added">' + escapeHtml(line) + "</div>";
+      });
+
+      html += "</div>";
+    } else if (tool.parameters.content && tool.parameters.file_path) {
+      // Write tool - show file path and content
+      html += '<div class="tool-file-info">';
+      html +=
+        '<div class="file-path">' +
+        escapeHtml(tool.parameters.file_path) +
+        "</div>";
+      html += "</div>";
+      html +=
+        '<pre class="tool-params">' +
+        escapeHtml(tool.parameters.content) +
+        "</pre>";
+    } else {
+      // Fallback to JSON if no diff available
+      html +=
+        '<pre class="tool-params">' +
+        escapeHtml(JSON.stringify(tool.parameters, null, 2)) +
+        "</pre>";
+    }
+
+    return html;
+  }
+
+  /**
+   * Render structured output with tool calls and thinking blocks
+   * @param {Object} output - CLI output object with optional structured field
+   * @returns {string} HTML string
+   */
+  function renderStructuredOutput(output) {
+    let html = "";
+
+    // Response text first (only if we don't have structured text OR they differ)
+    // Usually response === structured.text, but render response for backward compat
+    if (output.response) {
+      html +=
+        '<div class="output-response">' +
+        escapeHtml(output.response) +
+        "</div>";
+    }
+
+    // If no structured data, we're done
+    if (!output.structured) {
+      return html;
+    }
+
+    // Tool calls section
+    if (output.structured.toolCalls && output.structured.toolCalls.length > 0) {
+      html += '<div class="output-tool-calls">';
+      html +=
+        '<div class="tool-calls-header"><i class="codicon codicon-tools"></i> Tool Calls</div>';
+
+      for (const tool of output.structured.toolCalls) {
+        html += '<div class="tool-call-item">';
+        html += '<div class="tool-name">' + escapeHtml(tool.name) + "</div>";
+
+        // Check if this is a file modification tool
+        if (isFileModificationTool(tool.name)) {
+          html += renderToolWithDiff(tool);
+        } else {
+          html +=
+            '<pre class="tool-params">' +
+            escapeHtml(JSON.stringify(tool.parameters, null, 2)) +
+            "</pre>";
+        }
+
+        if (tool.result) {
+          const icon = tool.result.success ? "codicon-pass" : "codicon-error";
+          const resultClass = tool.result.success ? "success" : "error";
+          html += '<div class="tool-result ' + resultClass + '">';
+          html += '<i class="codicon ' + icon + '"></i> ';
+          html += escapeHtml(tool.result.output || tool.result.error || "");
+          html += "</div>";
+        }
+        html += "</div>";
+      }
+      html += "</div>";
+    }
+
+    // Thinking blocks section
+    if (
+      output.structured.thinkingBlocks &&
+      output.structured.thinkingBlocks.length > 0
+    ) {
+      html += '<div class="output-thinking">';
+      html +=
+        '<div class="thinking-header"><i class="codicon codicon-lightbulb"></i> Thinking</div>';
+
+      for (const block of output.structured.thinkingBlocks) {
+        html += '<div class="thinking-block">';
+        if (block.label && block.label !== "Thinking") {
+          html +=
+            '<div class="thinking-label">' + escapeHtml(block.label) + "</div>";
+        }
+        html +=
+          '<div class="thinking-text">' + escapeHtml(block.text) + "</div>";
+        html += "</div>";
+      }
+      html += "</div>";
+    }
+
+    return html;
+  }
+
+  /**
    * Render all CLI outputs in chronological order
    */
   function renderAllCliOutputs() {
@@ -133,9 +282,8 @@
           html += `<div class="output-cli-command">$ ${escapeHtml(output.cliCommand)}</div>`;
         }
 
-        if (output.response) {
-          html += `<div class="output-response">${escapeHtml(output.response)}</div>`;
-        }
+        // Render response (and structured data if available)
+        html += renderStructuredOutput(output);
 
         if (output.tokens) {
           const total = output.tokens.prompt + output.tokens.completion;
@@ -419,6 +567,76 @@
           lines.push(output.response);
           lines.push("```");
           lines.push("");
+        }
+
+        // Export tool calls with diff formatting
+        if (
+          output.structured?.toolCalls &&
+          output.structured.toolCalls.length > 0
+        ) {
+          lines.push("### Tool Calls");
+          lines.push("");
+
+          output.structured.toolCalls.forEach((tool) => {
+            lines.push("**" + tool.name + "**");
+            lines.push("");
+
+            // Special handling for file modifications with diff
+            if (tool.parameters.old_string && tool.parameters.new_string) {
+              lines.push("```diff");
+              tool.parameters.old_string.split("\n").forEach((line) => {
+                lines.push("- " + line);
+              });
+              tool.parameters.new_string.split("\n").forEach((line) => {
+                lines.push("+ " + line);
+              });
+              lines.push("```");
+            } else if (tool.parameters.file_path && tool.parameters.content) {
+              // Write tool - show file path
+              lines.push("File: `" + tool.parameters.file_path + "`");
+              lines.push("");
+              lines.push("```");
+              lines.push(tool.parameters.content);
+              lines.push("```");
+            } else {
+              // Other tools - show JSON
+              lines.push("```json");
+              lines.push(JSON.stringify(tool.parameters, null, 2));
+              lines.push("```");
+            }
+
+            if (tool.result) {
+              const status = tool.result.success ? "✓ Success" : "✗ Failed";
+              lines.push("");
+              lines.push("*" + status + "*");
+              if (tool.result.output || tool.result.error) {
+                lines.push("```");
+                lines.push(tool.result.output || tool.result.error);
+                lines.push("```");
+              }
+            }
+            lines.push("");
+          });
+        }
+
+        // Export thinking blocks
+        if (
+          output.structured?.thinkingBlocks &&
+          output.structured.thinkingBlocks.length > 0
+        ) {
+          lines.push("### Thinking");
+          lines.push("");
+
+          output.structured.thinkingBlocks.forEach((block) => {
+            if (block.label) {
+              lines.push("**" + block.label + "**");
+              lines.push("");
+            }
+            lines.push("```");
+            lines.push(block.text);
+            lines.push("```");
+            lines.push("");
+          });
         }
 
         // Stats section

@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ILogParser } from "./interfaces/ILogParser";
+import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 
 /**
  * Abstract base class for CLI provider log parsers
@@ -64,15 +65,12 @@ export abstract class BaseLogParser implements ILogParser {
    * - Identify response content events (text, tool calls, etc.)
    * - Combine streaming events into complete response
    * - Extract metadata (model, session ID, timestamps, etc.)
+   * - Return UniversalCliOutput with normalized field names
    *
    * @param events - Array of parsed log events
-   * @returns Structured response object
+   * @returns UniversalCliOutput - Standardized response object
    */
-  abstract extractResponse(events: any[]): {
-    text: string;
-    toolCalls: any[];
-    metadata: any;
-  };
+  abstract extractResponse(events: any[]): UniversalCliOutput;
 
   /**
    * Check if log event indicates completion

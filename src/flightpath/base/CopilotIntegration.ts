@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem, PromptFile } from "../../types/FlightPathTypes";
 import { CliResult } from "../../types/CopilotTypes";
+import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { Log } from "../../utils/Log";
@@ -338,6 +339,15 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Includes response text, statistics, and exit code
    */
   getLastResult(): CliResult | undefined {
+    return undefined;
+  }
+
+  /**
+   * Get the last parsed output with structured data.
+   * Contains tool calls, thinking blocks, and metadata.
+   * Returns undefined for non-CLI integrations.
+   */
+  getLastParsedOutput(): UniversalCliOutput | undefined {
     return undefined;
   }
 

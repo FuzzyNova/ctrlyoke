@@ -20,6 +20,10 @@ import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
 import { Log } from "../utils/Log";
 import { PropertyResolver } from "../utils/PropertyResolver";
+import {
+  CliOutputFormatter,
+  DashboardOutput,
+} from "./cli/shared/CliOutputFormatter";
 
 /**
  * Context provided by FlightPathManager for workflow execution.
@@ -549,10 +553,18 @@ export class WorkflowExecutor {
           ? integration.getLastCliCommand()
           : undefined;
 
+        // Get structured output if available (CLI integrations only)
+        let structured: DashboardOutput | undefined;
+        const parsedOutput = integration.getLastParsedOutput?.();
+        if (parsedOutput) {
+          structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
+        }
+
         // Use unexpanded prompt to avoid flooding output with large attachments
         context.dashboardProvider.updateCliOutput(currentIndex, {
           prompt: retryPromptItem.prompt,
           response: retryResponseText,
+          structured,
           elapsed: parseFloat(retryDuration),
           tokens,
           isStreaming: false,
@@ -812,10 +824,18 @@ export class WorkflowExecutor {
       ? integration.getLastCliCommand()
       : undefined;
 
+    // Get structured output if available (CLI integrations only)
+    let structured: DashboardOutput | undefined;
+    const parsedOutput = integration.getLastParsedOutput?.();
+    if (parsedOutput) {
+      structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
+    }
+
     // Use unexpanded prompt to avoid flooding output with large attachments
     context.dashboardProvider.updateCliOutput(currentIndex, {
       prompt: prompt.prompt,
       response: responseText,
+      structured,
       elapsed: duration,
       tokens,
       isStreaming: false,

@@ -9,6 +9,7 @@ import {
   PromptFile,
   WorkflowContext,
 } from "../../types/FlightPathTypes";
+import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
@@ -96,6 +97,9 @@ export class CliIntegration extends CopilotIntegration {
 
   /** Last CLI execution result */
   protected lastResult?: CliResult;
+
+  /** Last parsed output with structured data (tool calls, thinking blocks, etc.) */
+  protected lastParsedOutput?: UniversalCliOutput;
 
   /** Last CLI command executed (for debugging) */
   protected lastCliCommand?: string;
@@ -809,6 +813,9 @@ export class CliIntegration extends CopilotIntegration {
         // Extract final response from accumulated events
         const response = parser.extractResponse(events);
 
+        // Store the full parsed output for structured data access
+        this.lastParsedOutput = response;
+
         // Store the result
         const cliResult: CliResult = {
           success: true,
@@ -1244,6 +1251,15 @@ export class CliIntegration extends CopilotIntegration {
    */
   getLastResult(): CliResult | undefined {
     return this.lastResult;
+  }
+
+  /**
+   * Get the last parsed output with structured data.
+   * Contains tool calls, thinking blocks, and metadata.
+   * Returns undefined if no parsed output is available (e.g., non-CLI integrations).
+   */
+  getLastParsedOutput(): UniversalCliOutput | undefined {
+    return this.lastParsedOutput;
   }
 
   /**

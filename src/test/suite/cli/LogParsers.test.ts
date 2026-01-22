@@ -102,9 +102,9 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.toolCalls.length, 0);
       assert.strictEqual(response.metadata.sessionId, "abc-123-def-456");
       assert.strictEqual(response.metadata.model, "claude-sonnet-4.5");
-      assert.strictEqual(response.metadata.usage.input_tokens, 100);
-      assert.strictEqual(response.metadata.usage.output_tokens, 50);
-      assert.strictEqual(response.metadata.usage.total_tokens, 150);
+      assert.strictEqual(response.metadata.usage!.inputTokens, 100);
+      assert.strictEqual(response.metadata.usage!.outputTokens, 50);
+      assert.strictEqual(response.metadata.usage!.totalTokens, 150);
     });
 
     test("should handle multiple content blocks (text, thinking, tool calls)", () => {
@@ -139,7 +139,7 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.toolCalls.length, 1);
       assert.strictEqual(response.toolCalls[0].name, "write_file");
       assert.strictEqual(response.toolCalls[0].id, "tool-1");
-      assert.deepStrictEqual(response.toolCalls[0].input, {
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
         path: "test.ts",
         content: "console.log('test');",
       });
@@ -172,9 +172,9 @@ suite("ClaudeLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.metadata.usage.input_tokens, 80);
-      assert.strictEqual(response.metadata.usage.output_tokens, 35);
-      assert.strictEqual(response.metadata.usage.total_tokens, 115);
+      assert.strictEqual(response.metadata.usage!.inputTokens, 80);
+      assert.strictEqual(response.metadata.usage!.outputTokens, 35);
+      assert.strictEqual(response.metadata.usage!.totalTokens, 115);
     });
 
     test("should handle missing/corrupted data gracefully", () => {
@@ -204,8 +204,8 @@ suite("ClaudeLogParser", () => {
 
       assert.strictEqual(response.text, "");
       assert.strictEqual(response.toolCalls.length, 0);
-      assert.strictEqual(response.metadata.sessionId, null);
-      assert.strictEqual(response.metadata.usage.total_tokens, 0);
+      assert.strictEqual(response.metadata.sessionId, undefined);
+      assert.strictEqual(response.metadata.usage, undefined);
     });
 
     test("should extract session ID from first event with sessionId field", () => {
@@ -439,7 +439,6 @@ suite("CopilotLogParser", () => {
       );
       assert.strictEqual(response.metadata.sessionId, "copilot-session-123");
       assert.strictEqual(response.metadata.model, "gpt-5");
-      assert.strictEqual(response.sessionInfo.sessionId, "copilot-session-123");
     });
 
     test("should extract tool requests from assistant messages", () => {
@@ -463,7 +462,7 @@ suite("CopilotLogParser", () => {
       assert.strictEqual(response.text, "I'll create the file now.");
       assert.strictEqual(response.toolCalls.length, 1);
       assert.strictEqual(response.toolCalls[0].name, "write_file");
-      assert.deepStrictEqual(response.toolCalls[0].arguments, {
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
         path: "test.ts",
         content: "export const x = 1;",
       });
@@ -487,12 +486,8 @@ suite("CopilotLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.sessionInfo.sessionId, "session-abc");
-      assert.strictEqual(response.sessionInfo.model, "claude-sonnet-4.5");
-      assert.strictEqual(
-        response.sessionInfo.timestamp,
-        "2026-01-17T10:00:00Z"
-      );
+      assert.strictEqual(response.metadata.sessionId, "session-abc");
+      assert.strictEqual(response.metadata.model, "claude-sonnet-4.5");
     });
 
     test("should handle missing data fields gracefully", () => {
@@ -514,23 +509,28 @@ suite("CopilotLogParser", () => {
 
       assert.strictEqual(response.text, "");
       assert.strictEqual(response.toolCalls.length, 0);
-      assert.deepStrictEqual(response.metadata, {});
+      assert.strictEqual(response.metadata.provider, "copilot-cli");
     });
 
-    test("should merge metadata from multiple events", () => {
+    test("should handle metadata from multiple events", () => {
       const events = [
+        {
+          type: "session.start",
+          data: {
+            sessionId: "merged-session",
+            model: "gpt-5",
+          },
+        },
         {
           type: "assistant.message",
           data: {
             content: "Response",
-            metadata: { key1: "value1" },
           },
         },
         {
           type: "assistant.message",
           data: {
             content: " continued",
-            metadata: { key2: "value2" },
           },
         },
       ];
@@ -538,8 +538,8 @@ suite("CopilotLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(response.text, "Response continued");
-      assert.strictEqual(response.metadata.key1, "value1");
-      assert.strictEqual(response.metadata.key2, "value2");
+      assert.strictEqual(response.metadata.sessionId, "merged-session");
+      assert.strictEqual(response.metadata.model, "gpt-5");
     });
   });
 
@@ -767,13 +767,82 @@ suite("CodexLogParser", () => {
       assert.strictEqual(response.toolCalls.length, 1);
       assert.strictEqual(response.toolCalls[0].name, "write_file");
       assert.strictEqual(response.toolCalls[0].id, "tool-codex-1");
-      assert.deepStrictEqual(response.toolCalls[0].input, {
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
         path: "app.ts",
         content: "export const app = 'FlightPath';",
       });
     });
 
-    test("should extract reasoning blocks from thinking type", () => {
+    test("should extract tool calls from function_call payload type", () => {
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "shell",
+            arguments: { command: "npm test" },
+            call_id: "call-123",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      assert.strictEqual(response.toolCalls.length, 1);
+      assert.strictEqual(response.toolCalls[0].name, "shell");
+      assert.strictEqual(response.toolCalls[0].id, "call-123");
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+        command: "npm test",
+      });
+    });
+
+    test("should parse function_call arguments when passed as JSON string", () => {
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "write_file",
+            arguments: '{"path":"test.ts","content":"export const x = 1;"}',
+            call_id: "call-456",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      assert.strictEqual(response.toolCalls.length, 1);
+      assert.strictEqual(response.toolCalls[0].name, "write_file");
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+        path: "test.ts",
+        content: "export const x = 1;",
+      });
+    });
+
+    test("should handle malformed JSON string arguments gracefully", () => {
+      const events = [
+        {
+          type: "response_item",
+          payload: {
+            type: "function_call",
+            name: "shell",
+            arguments: "{invalid json}",
+            call_id: "call-789",
+          },
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      assert.strictEqual(response.toolCalls.length, 1);
+      assert.strictEqual(response.toolCalls[0].name, "shell");
+      // Should fallback to { raw: "{invalid json}" }
+      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+        raw: "{invalid json}",
+      });
+    });
+
+    test("should extract thinking blocks from thinking type", () => {
       const events = [
         {
           type: "response_item",
@@ -795,13 +864,13 @@ suite("CodexLogParser", () => {
         response.text,
         "Based on my analysis, I recommend using pattern X."
       );
-      assert.strictEqual(response.metadata.reasoningBlocks.length, 2);
+      assert.strictEqual(response.thinkingBlocks.length, 2);
       assert.strictEqual(
-        response.metadata.reasoningBlocks[0],
+        response.thinkingBlocks[0].text,
         "Let me think about this approach..."
       );
       assert.strictEqual(
-        response.metadata.reasoningBlocks[1],
+        response.thinkingBlocks[1].text,
         "Actually, a better way would be..."
       );
     });
@@ -819,7 +888,7 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.ok(response.metadata.sessionId.startsWith("thread_"));
+      assert.ok(response.metadata.sessionId!.startsWith("thread_"));
       assert.strictEqual(response.metadata.sessionId, "thread_xyz987abc654");
     });
 

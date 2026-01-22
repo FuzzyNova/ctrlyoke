@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
  * Interface for CLI provider log parsers
@@ -25,10 +26,10 @@ export interface ILogParser {
    *
    * Combines multiple streaming events into a single response object.
    * Handles provider-specific event formats and assembles text, tool calls,
-   * and metadata into a unified structure.
+   * thinkingBlocks, and metadata into a unified UniversalCliOutput structure.
    *
    * @param events - Array of parsed log events (provider-specific format)
-   * @returns Structured response object
+   * @returns UniversalCliOutput - Standardized response object
    *
    * @example
    * ```typescript
@@ -37,14 +38,10 @@ export interface ILogParser {
    *   { type: "tool_call", name: "write_file", args: {...} }
    * ];
    * const response = parser.extractResponse(events);
-   * // { text: "Here's the solution...", toolCalls: [...], metadata: {...} }
+   * // { text: "Here's the solution...", toolCalls: [...], thinkingBlocks: [], metadata: {...} }
    * ```
    */
-  extractResponse(events: any[]): {
-    text: string;
-    toolCalls: any[];
-    metadata: any;
-  };
+  extractResponse(events: any[]): UniversalCliOutput;
 
   /**
    * Check if a log event indicates completion
