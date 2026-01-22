@@ -33,6 +33,12 @@ export class CodexNotificationMonitor
   implements INotificationMonitor
 {
   /**
+   * Codex includes thread IDs in notification filenames.
+   * Files are named: notify-{threadId}.json
+   * This enables specific session monitoring (faster, more reliable).
+   */
+  readonly supportsSessionIdInFilename = true;
+  /**
    * Monitor for completion notification
    *
    * Delegates to shared CliNotificationMonitor utility.

@@ -22,6 +22,12 @@ import { CliNotificationMonitor } from "../shared/CliNotificationMonitor";
  */
 export class CopilotNotificationMonitor implements INotificationMonitor {
   /**
+   * Copilot does NOT include session IDs in notification filenames.
+   * Files are named: sessionStart-{timestamp}.json, sessionEnd-{timestamp}.json
+   * This forces wildcard monitoring mode (monitor any new file).
+   */
+  readonly supportsSessionIdInFilename = false;
+  /**
    * Monitor for completion notification
    *
    * Delegates to shared CliNotificationMonitor utility.

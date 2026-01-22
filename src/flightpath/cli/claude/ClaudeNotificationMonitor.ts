@@ -34,6 +34,12 @@ export class ClaudeNotificationMonitor
   implements INotificationMonitor
 {
   /**
+   * Claude includes thread IDs in notification filenames.
+   * Files are named: {threadId}-start.json, {threadId}-stop.json
+   * This enables specific session monitoring (faster, more reliable).
+   */
+  readonly supportsSessionIdInFilename = true;
+  /**
    * Monitor for completion notification
    *
    * Claude-specific implementation that monitors for {sessionId}-stop.json files

@@ -906,7 +906,7 @@ export class CliIntegration extends CopilotIntegration {
       }
 
       // If provider has notification monitor, also monitor for Stop/completion hook in parallel
-      if (this.provider.notificationMonitor && sessionId) {
+      if (this.provider.notificationMonitor) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {
           const notifyDir =
@@ -917,6 +917,24 @@ export class CliIntegration extends CopilotIntegration {
           Log.debug(
             `🔔 Starting notification monitor for completion detection`
           );
+
+          // Determine monitoring mode:
+          // - If provider supports session IDs in notification filenames, use specific session monitoring
+          // - Otherwise (like Copilot), use wildcard mode (undefined sessionId)
+          const monitoringSessionId = this.provider.notificationMonitor
+            .supportsSessionIdInFilename
+            ? (sessionId ?? undefined)
+            : undefined;
+
+          if (monitoringSessionId) {
+            Log.debug(
+              `📋 Monitoring notification file for session: ${monitoringSessionId}`
+            );
+          } else {
+            Log.debug(
+              `📋 Monitoring notification directory for any new completion file`
+            );
+          }
 
           // Launch provider-specific notification monitoring in parallel
           // (each provider knows its own file naming conventions)
@@ -929,7 +947,7 @@ export class CliIntegration extends CopilotIntegration {
                     timeoutMs: timeoutMs,
                     pollMs: 100,
                   },
-                  sessionId,
+                  monitoringSessionId,
                   startTime,
                   () => this.isCancelling || completed
                 );
@@ -937,7 +955,8 @@ export class CliIntegration extends CopilotIntegration {
               if (result.completed && !completed) {
                 // Cleanup any remaining notification files (provider-specific)
                 if (
-                  this.provider.notificationMonitor!.cleanupNotificationFiles
+                  this.provider.notificationMonitor!.cleanupNotificationFiles &&
+                  sessionId
                 ) {
                   await this.provider.notificationMonitor!.cleanupNotificationFiles(
                     sessionId,

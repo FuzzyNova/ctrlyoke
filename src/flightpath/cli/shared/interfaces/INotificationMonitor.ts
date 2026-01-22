@@ -48,6 +48,18 @@ export type HookConfig =
  */
 export interface INotificationMonitor {
   /**
+   * Whether this provider includes session IDs in notification filenames.
+   *
+   * - `true`: Notification files include session ID (e.g., Claude: `stop-{threadId}.json`)
+   * - `false`: Notification files use timestamps (e.g., Copilot: `sessionEnd-{timestamp}.json`)
+   *
+   * This determines the monitoring mode:
+   * - When true: Use specific session monitoring (faster, more reliable)
+   * - When false: Use wildcard monitoring (any new file triggers completion)
+   */
+  readonly supportsSessionIdInFilename: boolean;
+
+  /**
    * Monitor for completion notification
    * @param config Monitoring configuration
    * @param sessionId Optional session/thread ID (undefined = wildcard mode)
@@ -129,6 +141,8 @@ export interface INotificationMonitor {
  * Providers can extend this class to avoid duplicating polling logic.
  */
 export abstract class NotificationMonitorBase implements INotificationMonitor {
+  abstract readonly supportsSessionIdInFilename: boolean;
+
   abstract monitorForCompletion(
     config: NotificationConfig,
     sessionId: string | undefined,
