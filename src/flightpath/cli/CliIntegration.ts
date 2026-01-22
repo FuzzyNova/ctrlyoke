@@ -753,7 +753,9 @@ export class CliIntegration extends CopilotIntegration {
       args,
       actualPromptText // Use file reference or original depending on size
     );
-    const displayCommand = `${this.provider.config.name} [Interactive mode] "<prompt>"`;
+
+    // Persist the actual TUI command (trimmed and collapsed to one line)
+    this.lastCliCommand = String(tuiCommand).replace(/\s+/g, " ").trim();
 
     // Store the actual prompt sent for log discovery
     this.actualPromptSent = actualPromptText;
@@ -763,7 +765,7 @@ export class CliIntegration extends CopilotIntegration {
 
     this.promptReadyEmitter.fire({
       fullPrompt: promptText, // Always use original prompt for display
-      cliCommand: displayCommand,
+      cliCommand: this.lastCliCommand,
     });
 
     this.streamingChunkEmitter.fire(
