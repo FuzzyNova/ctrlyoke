@@ -8,6 +8,9 @@ import {
   UniversalCliOutput,
   ToolCall,
   ThinkingBlock,
+  CliEvent,
+  TextData,
+  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
 /**
@@ -83,27 +86,38 @@ export class CopilotLogParser extends BaseLogParser {
    * ```
    */
   extractResponse(events: any[]): UniversalCliOutput {
-    const textParts: string[] = [];
-    const toolCalls: ToolCall[] = [];
-    const thinkingBlocks: ThinkingBlock[] = [];
+    const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let model: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
 
     for (const event of events) {
+      const timestamp = event.timestamp
+        ? new Date(event.timestamp).getTime()
+        : Date.now();
+
       // Extract text content from assistant messages
       if (event.type === "assistant.message" && event.data?.content) {
-        textParts.push(event.data.content);
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: {
+            text: event.data.content,
+          } as TextData,
+        });
       }
 
       // Extract thinking/reasoning blocks
       if (event.type === "assistant.reasoning" && event.data?.content) {
-        thinkingBlocks.push({
-          text: event.data.content,
-          timestamp: event.timestamp
-            ? new Date(event.timestamp).getTime()
-            : undefined,
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp,
+          data: {
+            text: event.data.content,
+            label: "Reasoning",
+            timestamp,
+          } as ThinkingBlock,
         });
       }
 
@@ -111,10 +125,14 @@ export class CopilotLogParser extends BaseLogParser {
       // Copilot CLI uses different field names: parameters, args, or arguments
       if (event.data?.toolRequests && Array.isArray(event.data.toolRequests)) {
         for (const req of event.data.toolRequests) {
-          toolCalls.push({
-            name: req.name,
-            parameters: req.parameters || req.arguments || req.args || {},
-            id: req.id,
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp,
+            data: {
+              name: req.name,
+              parameters: req.parameters || req.arguments || req.args || {},
+              id: req.id,
+            } as ToolCall,
           });
         }
       }
@@ -139,9 +157,7 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     return {
-      text: textParts.join(""),
-      toolCalls,
-      thinkingBlocks,
+      events: outputEvents,
       metadata: {
         sessionId,
         model,

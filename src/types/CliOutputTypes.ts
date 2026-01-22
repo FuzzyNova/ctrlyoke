@@ -5,16 +5,75 @@
  */
 
 /**
+ * CLI event type constants.
+ * Use these constants instead of string literals to avoid typos and ensure consistency.
+ */
+export const CLI_EVENT_TYPES = {
+  TEXT: "text",
+  TOOL_CALL: "toolCall",
+  THINKING: "thinking",
+  TOOL_RESULT: "toolResult",
+} as const;
+
+/**
+ * Type of CLI event.
+ * Events are rendered in the order they occurred during the CLI session.
+ */
+export type CliEventType = (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+
+/**
+ * A single event in the CLI output stream.
+ * Events maintain chronological order to preserve the actual sequence of AI interactions.
+ */
+export interface CliEvent {
+  /** Type of event (text, tool call, thinking block, tool result) */
+  type: CliEventType;
+  /** Timestamp when this event occurred (milliseconds since epoch) */
+  timestamp?: number;
+  /** Event-specific data based on type */
+  data: CliEventData;
+}
+
+/**
+ * Union type for event data.
+ * The actual type depends on the CliEvent.type field.
+ */
+export type CliEventData = TextData | ToolCall | ThinkingBlock | ToolResultData;
+
+/**
+ * Data for a text event (AI response text).
+ */
+export interface TextData {
+  /** The text content */
+  text: string;
+}
+
+/**
+ * Data for a tool result event.
+ * Separate from ToolCall to maintain chronological order (result comes after call).
+ */
+export interface ToolResultData {
+  /** ID of the tool call this result belongs to */
+  toolCallId: string;
+  /** Result of the tool execution */
+  result: ToolResult;
+}
+
+/**
  * Universal CLI output structure (provider-agnostic).
  * Used by all CLI parsers to standardize output format before display.
  */
 export interface UniversalCliOutput {
-  /** The main text response from the AI */
-  text: string;
-  /** Tool calls made during the response */
-  toolCalls: ToolCall[];
-  /** Thinking/reasoning blocks (Claude extended thinking, etc.) */
-  thinkingBlocks: ThinkingBlock[];
+  /**
+   * Chronologically ordered events from the CLI session.
+   * This array preserves the exact order events occurred:
+   * - Text responses from the AI
+   * - Tool calls made by the AI
+   * - Thinking/reasoning blocks
+   * - Tool execution results
+   */
+  events: CliEvent[];
+
   /** Response metadata (tokens, session, model, etc.) */
   metadata: OutputMetadata;
 }

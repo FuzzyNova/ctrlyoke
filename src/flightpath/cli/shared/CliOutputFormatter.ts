@@ -9,32 +9,21 @@ import {
   OutputMetadata,
   ToolCall,
   ToolResult,
+  CliEvent,
+  TextData,
+  ThinkingBlock,
+  ToolResultData,
+  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
 /**
  * Dashboard-ready output format.
  * Optimized structure for rendering in the FlightPath dashboard webview.
+ * Events are preserved in chronological order.
  */
 export interface DashboardOutput {
-  /** The main text response */
-  text: string;
-  /** Tool calls with normalized structure */
-  toolCalls: Array<{
-    name: string;
-    parameters: Record<string, unknown>;
-    id?: string;
-    result?: {
-      success: boolean;
-      output?: string;
-      error?: string;
-    };
-  }>;
-  /** Thinking blocks with required label */
-  thinkingBlocks: Array<{
-    text: string;
-    label: string;
-    timestamp?: number;
-  }>;
+  /** Chronologically ordered events from the CLI session */
+  events: CliEvent[];
   /** Response metadata */
   metadata: OutputMetadata;
 }
@@ -47,6 +36,7 @@ export class CliOutputFormatter {
   /**
    * Format output as plain text for VS Code Output panel.
    * Produces a human-readable text representation of the CLI response.
+   * Events are rendered in chronological order as they occurred.
    *
    * @param output - The universal CLI output to format
    * @returns Plain text representation suitable for Output panel
@@ -60,25 +50,33 @@ export class CliOutputFormatter {
   static toPlainText(output: UniversalCliOutput): string {
     const parts: string[] = [];
 
-    // Add main text response
-    if (output.text) {
-      parts.push(output.text);
-    }
+    // Render events in chronological order
+    for (const event of output.events) {
+      switch (event.type) {
+        case CLI_EVENT_TYPES.TEXT:
+          const textData = event.data as TextData;
+          if (textData.text) {
+            parts.push(textData.text);
+          }
+          break;
 
-    // Add tool calls section
-    if (output.toolCalls.length > 0) {
-      parts.push("\n--- Tool Calls ---");
-      for (const tool of output.toolCalls) {
-        parts.push(this.formatToolCall(tool));
-      }
-    }
+        case CLI_EVENT_TYPES.TOOL_CALL:
+          const toolCall = event.data as ToolCall;
+          parts.push("\n--- Tool Call ---");
+          parts.push(this.formatToolCall(toolCall));
+          break;
 
-    // Add thinking blocks section
-    if (output.thinkingBlocks.length > 0) {
-      parts.push("\n--- Thinking ---");
-      for (const block of output.thinkingBlocks) {
-        const label = block.label ? `[${block.label}] ` : "";
-        parts.push(`${label}${block.text}`);
+        case CLI_EVENT_TYPES.THINKING:
+          const thinkingBlock = event.data as ThinkingBlock;
+          parts.push("\n--- Thinking ---");
+          const label = thinkingBlock.label ? `[${thinkingBlock.label}] ` : "";
+          parts.push(`${label}${thinkingBlock.text}`);
+          break;
+
+        case CLI_EVENT_TYPES.TOOL_RESULT:
+          const resultData = event.data as ToolResultData;
+          parts.push(this.formatToolResult(resultData.result));
+          break;
       }
     }
 
@@ -121,6 +119,7 @@ export class CliOutputFormatter {
   /**
    * Format output as structured data for dashboard webview.
    * Converts UniversalCliOutput to a format optimized for the FlightPath dashboard.
+   * Events are passed through in chronological order.
    *
    * @param output - The universal CLI output to format
    * @returns Dashboard-ready output structure
@@ -133,24 +132,7 @@ export class CliOutputFormatter {
    */
   static toDashboardFormat(output: UniversalCliOutput): DashboardOutput {
     return {
-      text: output.text,
-      toolCalls: output.toolCalls.map((tool) => ({
-        name: tool.name,
-        parameters: tool.parameters,
-        id: tool.id,
-        result: tool.result
-          ? {
-              success: tool.result.success,
-              output: tool.result.output,
-              error: tool.result.error,
-            }
-          : undefined,
-      })),
-      thinkingBlocks: output.thinkingBlocks.map((block) => ({
-        text: block.text,
-        label: block.label || "Thinking",
-        timestamp: block.timestamp,
-      })),
+      events: output.events,
       metadata: output.metadata,
     };
   }
@@ -203,9 +185,7 @@ export class CliOutputFormatter {
    */
   static createEmpty(): UniversalCliOutput {
     return {
-      text: "",
-      toolCalls: [],
-      thinkingBlocks: [],
+      events: [],
       metadata: {},
     };
   }
@@ -213,9 +193,10 @@ export class CliOutputFormatter {
   /**
    * Merge multiple CLI outputs into a single output.
    * Useful for streaming scenarios where chunks need to be combined.
+   * Events from all outputs are concatenated in order.
    *
    * @param outputs - Array of outputs to merge
-   * @returns Combined UniversalCliOutput
+   * @returns Combined UniversalCliOutput with all events in order
    */
   static merge(outputs: UniversalCliOutput[]): UniversalCliOutput {
     if (outputs.length === 0) {
@@ -227,9 +208,7 @@ export class CliOutputFormatter {
     }
 
     return {
-      text: outputs.map((o) => o.text).join(""),
-      toolCalls: outputs.flatMap((o) => o.toolCalls),
-      thinkingBlocks: outputs.flatMap((o) => o.thinkingBlocks),
+      events: outputs.flatMap((o) => o.events),
       // Use metadata from the last output (most complete)
       metadata: outputs[outputs.length - 1].metadata,
     };

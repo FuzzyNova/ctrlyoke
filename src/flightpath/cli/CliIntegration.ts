@@ -9,7 +9,10 @@ import {
   PromptFile,
   WorkflowContext,
 } from "../../types/FlightPathTypes";
-import { UniversalCliOutput } from "../../types/CliOutputTypes";
+import {
+  UniversalCliOutput,
+  CLI_EVENT_TYPES,
+} from "../../types/CliOutputTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
@@ -816,10 +819,13 @@ export class CliIntegration extends CopilotIntegration {
         // Store the full parsed output for structured data access
         this.lastParsedOutput = response;
 
+        // Extract text from events for legacy response field
+        const responseText = this.extractTextFromEvents(response);
+
         // Store the result
         const cliResult: CliResult = {
           success: true,
-          response: response.text,
+          response: responseText,
           statistics: parser.formatStatistics(response.metadata),
           exitCode: 0,
           sessionId: response.metadata.sessionId || sessionId || undefined,
@@ -1223,6 +1229,24 @@ export class CliIntegration extends CopilotIntegration {
       );
       Log.appendLine("");
     }
+  }
+
+  /**
+   * Extract text content from events array
+   * Concatenates all text events to form the complete response text
+   */
+  private extractTextFromEvents(output: UniversalCliOutput): string {
+    const textParts: string[] = [];
+    for (const event of output.events) {
+      if (
+        event.type === CLI_EVENT_TYPES.TEXT &&
+        event.data &&
+        "text" in event.data
+      ) {
+        textParts.push(event.data.text);
+      }
+    }
+    return textParts.join("");
   }
 
   /**

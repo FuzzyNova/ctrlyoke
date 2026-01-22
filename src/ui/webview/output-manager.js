@@ -121,80 +121,110 @@
   }
 
   /**
-   * Render structured output with tool calls and thinking blocks
+   * Render structured output with events in chronological order
    * @param {Object} output - CLI output object with optional structured field
    * @returns {string} HTML string
    */
   function renderStructuredOutput(output) {
     let html = "";
 
-    // Response text first (only if we don't have structured text OR they differ)
-    // Usually response === structured.text, but render response for backward compat
-    if (output.response) {
-      html +=
-        '<div class="output-response">' +
-        escapeHtml(output.response) +
-        "</div>";
-    }
-
-    // If no structured data, we're done
-    if (!output.structured) {
+    // If no structured data, fall back to response text
+    if (!output.structured || !output.structured.events) {
+      if (output.response) {
+        html +=
+          '<div class="output-response">' +
+          escapeHtml(output.response) +
+          "</div>";
+      }
       return html;
     }
 
-    // Tool calls section
-    if (output.structured.toolCalls && output.structured.toolCalls.length > 0) {
-      html += '<div class="output-tool-calls">';
-      html +=
-        '<div class="tool-calls-header"><i class="codicon codicon-tools"></i> Tool Calls</div>';
+    // Render events in chronological order
+    for (const event of output.structured.events) {
+      switch (event.type) {
+        case "text":
+          // Text events
+          if (event.data && event.data.text) {
+            html +=
+              '<div class="output-text">' +
+              escapeHtml(event.data.text) +
+              "</div>\n";
+          }
+          break;
 
-      for (const tool of output.structured.toolCalls) {
-        html += '<div class="tool-call-item">';
-        html += '<div class="tool-name">' + escapeHtml(tool.name) + "</div>";
+        case "toolCall":
+          // Tool call events
+          if (event.data) {
+            html += '<div class="output-tool-call">';
+            html +=
+              '<div class="tool-call-header"><i class="codicon codicon-tools"></i> Tool Call: ' +
+              escapeHtml(event.data.name) +
+              "</div>";
+            html += '<div class="tool-call-item">';
 
-        // Check if this is a file modification tool
-        if (isFileModificationTool(tool.name)) {
-          html += renderToolWithDiff(tool);
-        } else {
-          html +=
-            '<pre class="tool-params">' +
-            escapeHtml(JSON.stringify(tool.parameters, null, 2)) +
-            "</pre>";
-        }
+            // Check if this is a file modification tool
+            if (isFileModificationTool(event.data.name)) {
+              html += renderToolWithDiff(event.data);
+            } else {
+              html +=
+                '<pre class="tool-params">' +
+                escapeHtml(JSON.stringify(event.data.parameters, null, 2)) +
+                "</pre>";
+            }
 
-        if (tool.result) {
-          const icon = tool.result.success ? "codicon-pass" : "codicon-error";
-          const resultClass = tool.result.success ? "success" : "error";
-          html += '<div class="tool-result ' + resultClass + '">';
-          html += '<i class="codicon ' + icon + '"></i> ';
-          html += escapeHtml(tool.result.output || tool.result.error || "");
-          html += "</div>";
-        }
-        html += "</div>";
+            if (event.data.result) {
+              const icon = event.data.result.success
+                ? "codicon-pass"
+                : "codicon-error";
+              const resultClass = event.data.result.success
+                ? "success"
+                : "error";
+              html += '<div class="tool-result ' + resultClass + '">';
+              html += '<i class="codicon ' + icon + '"></i> ';
+              html += escapeHtml(
+                event.data.result.output || event.data.result.error || ""
+              );
+              html += "</div>";
+            }
+
+            html += "</div></div>\n";
+          }
+          break;
+
+        case "thinking":
+          // Thinking block events
+          if (event.data && event.data.text) {
+            html += '<div class="output-thinking">';
+            html +=
+              '<div class="thinking-header"><i class="codicon codicon-lightbulb"></i> ';
+            if (event.data.label && event.data.label !== "Thinking") {
+              html += escapeHtml(event.data.label);
+            } else {
+              html += "Thinking";
+            }
+            html += "</div>";
+            html += '<div class="thinking-block">';
+            html +=
+              '<div class="thinking-text">' +
+              escapeHtml(event.data.text) +
+              "</div>";
+            html += "</div></div>\n";
+          }
+          break;
+
+        case "toolResult":
+          // Tool result events (if separate from toolCall)
+          if (event.data && event.data.result) {
+            const result = event.data.result;
+            const icon = result.success ? "codicon-pass" : "codicon-error";
+            const resultClass = result.success ? "success" : "error";
+            html += '<div class="tool-result ' + resultClass + '">';
+            html += '<i class="codicon ' + icon + '"></i> ';
+            html += escapeHtml(result.output || result.error || "");
+            html += "</div>\n";
+          }
+          break;
       }
-      html += "</div>";
-    }
-
-    // Thinking blocks section
-    if (
-      output.structured.thinkingBlocks &&
-      output.structured.thinkingBlocks.length > 0
-    ) {
-      html += '<div class="output-thinking">';
-      html +=
-        '<div class="thinking-header"><i class="codicon codicon-lightbulb"></i> Thinking</div>';
-
-      for (const block of output.structured.thinkingBlocks) {
-        html += '<div class="thinking-block">';
-        if (block.label && block.label !== "Thinking") {
-          html +=
-            '<div class="thinking-label">' + escapeHtml(block.label) + "</div>";
-        }
-        html +=
-          '<div class="thinking-text">' + escapeHtml(block.text) + "</div>";
-        html += "</div>";
-      }
-      html += "</div>";
     }
 
     return html;
@@ -560,83 +590,118 @@
           lines.push("");
         }
 
-        if (output.response) {
+        // Export events in chronological order
+        if (output.structured?.events && output.structured.events.length > 0) {
+          lines.push("### Response");
+          lines.push("");
+
+          output.structured.events.forEach((event) => {
+            switch (event.type) {
+              case "text":
+                // Text events - output directly
+                if (event.data && event.data.text) {
+                  lines.push(event.data.text);
+                  lines.push("");
+                }
+                break;
+
+              case "toolCall":
+                // Tool call events
+                if (event.data) {
+                  lines.push("**Tool Call: " + event.data.name + "**");
+                  lines.push("");
+
+                  // Special handling for file modifications with diff
+                  if (
+                    event.data.parameters.old_string &&
+                    event.data.parameters.new_string
+                  ) {
+                    lines.push("```diff");
+                    event.data.parameters.old_string
+                      .split("\n")
+                      .forEach((line) => {
+                        lines.push("- " + line);
+                      });
+                    event.data.parameters.new_string
+                      .split("\n")
+                      .forEach((line) => {
+                        lines.push("+ " + line);
+                      });
+                    lines.push("```");
+                  } else if (
+                    event.data.parameters.file_path &&
+                    event.data.parameters.content
+                  ) {
+                    // Write tool - show file path
+                    lines.push("File: `" + event.data.parameters.file_path + "`");
+                    lines.push("");
+                    lines.push("```");
+                    lines.push(event.data.parameters.content);
+                    lines.push("```");
+                  } else {
+                    // Other tools - show JSON
+                    lines.push("```json");
+                    lines.push(JSON.stringify(event.data.parameters, null, 2));
+                    lines.push("```");
+                  }
+
+                  if (event.data.result) {
+                    const status = event.data.result.success
+                      ? "✓ Success"
+                      : "✗ Failed";
+                    lines.push("");
+                    lines.push("*" + status + "*");
+                    if (event.data.result.output || event.data.result.error) {
+                      lines.push("```");
+                      lines.push(event.data.result.output || event.data.result.error);
+                      lines.push("```");
+                    }
+                  }
+                  lines.push("");
+                }
+                break;
+
+              case "thinking":
+                // Thinking block events
+                if (event.data && event.data.text) {
+                  if (event.data.label && event.data.label !== "Thinking") {
+                    lines.push("**" + event.data.label + "**");
+                  } else {
+                    lines.push("**Thinking**");
+                  }
+                  lines.push("");
+                  lines.push("```");
+                  lines.push(event.data.text);
+                  lines.push("```");
+                  lines.push("");
+                }
+                break;
+
+              case "toolResult":
+                // Tool result events (if separate from toolCall)
+                if (event.data && event.data.result) {
+                  const result = event.data.result;
+                  const status = result.success ? "✓ Success" : "✗ Failed";
+                  lines.push("");
+                  lines.push("*" + status + "*");
+                  if (result.output || result.error) {
+                    lines.push("```");
+                    lines.push(result.output || result.error);
+                    lines.push("```");
+                  }
+                  lines.push("");
+                }
+                break;
+            }
+          });
+        } else if (output.response) {
+          // Fallback for old format without events
           lines.push("### Response");
           lines.push("");
           lines.push("```");
           lines.push(output.response);
           lines.push("```");
           lines.push("");
-        }
-
-        // Export tool calls with diff formatting
-        if (
-          output.structured?.toolCalls &&
-          output.structured.toolCalls.length > 0
-        ) {
-          lines.push("### Tool Calls");
-          lines.push("");
-
-          output.structured.toolCalls.forEach((tool) => {
-            lines.push("**" + tool.name + "**");
-            lines.push("");
-
-            // Special handling for file modifications with diff
-            if (tool.parameters.old_string && tool.parameters.new_string) {
-              lines.push("```diff");
-              tool.parameters.old_string.split("\n").forEach((line) => {
-                lines.push("- " + line);
-              });
-              tool.parameters.new_string.split("\n").forEach((line) => {
-                lines.push("+ " + line);
-              });
-              lines.push("```");
-            } else if (tool.parameters.file_path && tool.parameters.content) {
-              // Write tool - show file path
-              lines.push("File: `" + tool.parameters.file_path + "`");
-              lines.push("");
-              lines.push("```");
-              lines.push(tool.parameters.content);
-              lines.push("```");
-            } else {
-              // Other tools - show JSON
-              lines.push("```json");
-              lines.push(JSON.stringify(tool.parameters, null, 2));
-              lines.push("```");
-            }
-
-            if (tool.result) {
-              const status = tool.result.success ? "✓ Success" : "✗ Failed";
-              lines.push("");
-              lines.push("*" + status + "*");
-              if (tool.result.output || tool.result.error) {
-                lines.push("```");
-                lines.push(tool.result.output || tool.result.error);
-                lines.push("```");
-              }
-            }
-            lines.push("");
-          });
-        }
-
-        // Export thinking blocks
-        if (
-          output.structured?.thinkingBlocks &&
-          output.structured.thinkingBlocks.length > 0
-        ) {
-          lines.push("### Thinking");
-          lines.push("");
-
-          output.structured.thinkingBlocks.forEach((block) => {
-            if (block.label) {
-              lines.push("**" + block.label + "**");
-              lines.push("");
-            }
-            lines.push("```");
-            lines.push(block.text);
-            lines.push("```");
-            lines.push("");
-          });
         }
 
         // Stats section

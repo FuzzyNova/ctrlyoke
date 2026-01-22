@@ -5,6 +5,13 @@ import * as os from "os";
 import { ClaudeLogParser } from "../../../flightpath/cli/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../../flightpath/cli/copilot/CopilotLogParser";
 import { CodexLogParser } from "../../../flightpath/cli/codex/CodexLogParser";
+import {
+  UniversalCliOutput,
+  ToolCall,
+  ThinkingBlock,
+  TextData,
+  CLI_EVENT_TYPES,
+} from "../../../types/CliOutputTypes";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -57,6 +64,49 @@ function cleanupTempFile(filePath: string) {
   }
 }
 
+/**
+ * Extract text content from events array
+ */
+function extractText(output: UniversalCliOutput): string {
+  const textParts: string[] = [];
+  for (const event of output.events) {
+    if (
+      event.type === CLI_EVENT_TYPES.TEXT &&
+      event.data &&
+      "text" in event.data
+    ) {
+      textParts.push((event.data as TextData).text);
+    }
+  }
+  return textParts.join("");
+}
+
+/**
+ * Extract tool calls from events array
+ */
+function extractToolCalls(output: UniversalCliOutput): ToolCall[] {
+  const toolCalls: ToolCall[] = [];
+  for (const event of output.events) {
+    if (event.type === CLI_EVENT_TYPES.TOOL_CALL && event.data) {
+      toolCalls.push(event.data as ToolCall);
+    }
+  }
+  return toolCalls;
+}
+
+/**
+ * Extract thinking blocks from events array
+ */
+function extractThinkingBlocks(output: UniversalCliOutput): ThinkingBlock[] {
+  const blocks: ThinkingBlock[] = [];
+  for (const event of output.events) {
+    if (event.type === CLI_EVENT_TYPES.THINKING && event.data) {
+      blocks.push(event.data as ThinkingBlock);
+    }
+  }
+  return blocks;
+}
+
 // ============================================================================
 // ClaudeLogParser Tests
 // ============================================================================
@@ -96,10 +146,10 @@ suite("ClaudeLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(
-        response.text,
+        extractText(response),
         "Here is the analysis of your code.\n\nIt looks good overall."
       );
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractToolCalls(response).length, 0);
       assert.strictEqual(response.metadata.sessionId, "abc-123-def-456");
       assert.strictEqual(response.metadata.model, "claude-sonnet-4.5");
       assert.strictEqual(response.metadata.usage!.inputTokens, 100);
@@ -133,20 +183,20 @@ suite("ClaudeLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(
-        response.text,
+        extractText(response),
         "Based on my analysis, the file has been updated."
       );
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "write_file");
-      assert.strictEqual(response.toolCalls[0].id, "tool-1");
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
+      assert.strictEqual(extractToolCalls(response)[0].id, "tool-1");
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         path: "test.ts",
         content: "console.log('test');",
       });
-      assert.ok(response.thinkingBlocks);
-      assert.strictEqual(response.thinkingBlocks.length, 1);
+      assert.ok(extractThinkingBlocks(response));
+      assert.strictEqual(extractThinkingBlocks(response).length, 1);
       assert.strictEqual(
-        response.thinkingBlocks[0].text,
+        extractThinkingBlocks(response)[0].text,
         "I need to analyze this carefully..."
       );
     });
@@ -194,16 +244,16 @@ suite("ClaudeLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Valid content");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "Valid content");
+      assert.strictEqual(extractToolCalls(response).length, 0);
       assert.ok(response.metadata);
     });
 
     test("should return empty response for empty events array", () => {
       const response = parser.extractResponse([]);
 
-      assert.strictEqual(response.text, "");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "");
+      assert.strictEqual(extractToolCalls(response).length, 0);
       assert.strictEqual(response.metadata.sessionId, undefined);
       assert.strictEqual(response.metadata.usage, undefined);
     });
@@ -434,7 +484,7 @@ suite("CopilotLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(
-        response.text,
+        extractText(response),
         "Here is the first part. And here is the second part."
       );
       assert.strictEqual(response.metadata.sessionId, "copilot-session-123");
@@ -459,10 +509,10 @@ suite("CopilotLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "I'll create the file now.");
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "write_file");
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.strictEqual(extractText(response), "I'll create the file now.");
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         path: "test.ts",
         content: "export const x = 1;",
       });
@@ -500,15 +550,15 @@ suite("CopilotLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Valid");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "Valid");
+      assert.strictEqual(extractToolCalls(response).length, 0);
     });
 
     test("should return empty response for empty events array", () => {
       const response = parser.extractResponse([]);
 
-      assert.strictEqual(response.text, "");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "");
+      assert.strictEqual(extractToolCalls(response).length, 0);
       assert.strictEqual(response.metadata.provider, "copilot-cli");
     });
 
@@ -537,7 +587,7 @@ suite("CopilotLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Response continued");
+      assert.strictEqual(extractText(response), "Response continued");
       assert.strictEqual(response.metadata.sessionId, "merged-session");
       assert.strictEqual(response.metadata.model, "gpt-5");
     });
@@ -736,7 +786,7 @@ suite("CodexLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(
-        response.text,
+        extractText(response),
         "Here is the implementation: console.log('hello');"
       );
     });
@@ -765,11 +815,11 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Creating file...");
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "write_file");
-      assert.strictEqual(response.toolCalls[0].id, "tool-codex-1");
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.strictEqual(extractText(response), "Creating file...");
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
+      assert.strictEqual(extractToolCalls(response)[0].id, "tool-codex-1");
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         path: "app.ts",
         content: "export const app = 'FlightPath';",
       });
@@ -790,10 +840,10 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "shell");
-      assert.strictEqual(response.toolCalls[0].id, "call-123");
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "shell");
+      assert.strictEqual(extractToolCalls(response)[0].id, "call-123");
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         command: "npm test",
       });
     });
@@ -813,9 +863,9 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "write_file");
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         path: "test.ts",
         content: "export const x = 1;",
       });
@@ -836,10 +886,10 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.toolCalls.length, 1);
-      assert.strictEqual(response.toolCalls[0].name, "shell");
+      assert.strictEqual(extractToolCalls(response).length, 1);
+      assert.strictEqual(extractToolCalls(response)[0].name, "shell");
       // Should fallback to { raw: "{invalid json}" }
-      assert.deepStrictEqual(response.toolCalls[0].parameters, {
+      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
         raw: "{invalid json}",
       });
     });
@@ -863,16 +913,16 @@ suite("CodexLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(
-        response.text,
+        extractText(response),
         "Based on my analysis, I recommend using pattern X."
       );
-      assert.strictEqual(response.thinkingBlocks.length, 2);
+      assert.strictEqual(extractThinkingBlocks(response).length, 2);
       assert.strictEqual(
-        response.thinkingBlocks[0].text,
+        extractThinkingBlocks(response)[0].text,
         "Let me think about this approach..."
       );
       assert.strictEqual(
-        response.thinkingBlocks[1].text,
+        extractThinkingBlocks(response)[1].text,
         "Actually, a better way would be..."
       );
     });
@@ -914,15 +964,15 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Valid");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "Valid");
+      assert.strictEqual(extractToolCalls(response).length, 0);
     });
 
     test("should return empty response for empty events array", () => {
       const response = parser.extractResponse([]);
 
-      assert.strictEqual(response.text, "");
-      assert.strictEqual(response.toolCalls.length, 0);
+      assert.strictEqual(extractText(response), "");
+      assert.strictEqual(extractToolCalls(response).length, 0);
       assert.ok(response.metadata);
     });
 
@@ -953,7 +1003,7 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(response.text, "Part 1. Part 2. Part 3.");
+      assert.strictEqual(extractText(response), "Part 1. Part 2. Part 3.");
     });
 
     test("should cache session metadata for fallback", () => {
@@ -1197,9 +1247,9 @@ suite("Cross-Parser Compatibility", () => {
     const copilotResponse = copilotParser.extractResponse([]);
     const codexResponse = codexParser.extractResponse([]);
 
-    assert.strictEqual(claudeResponse.text, "");
-    assert.strictEqual(copilotResponse.text, "");
-    assert.strictEqual(codexResponse.text, "");
+    assert.strictEqual(extractText(claudeResponse), "");
+    assert.strictEqual(extractText(copilotResponse), "");
+    assert.strictEqual(extractText(codexResponse), "");
   });
 
   test("all parsers should handle malformed events gracefully", () => {

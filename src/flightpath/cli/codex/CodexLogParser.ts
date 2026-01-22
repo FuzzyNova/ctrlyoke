@@ -8,6 +8,9 @@ import {
   UniversalCliOutput,
   ToolCall,
   ThinkingBlock,
+  CliEvent,
+  TextData,
+  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
 /**
@@ -109,14 +112,16 @@ export class CodexLogParser extends BaseLogParser {
    * ```
    */
   extractResponse(events: any[]): UniversalCliOutput {
-    const textParts: string[] = [];
-    const toolCalls: ToolCall[] = [];
-    const thinkingBlocks: ThinkingBlock[] = [];
+    const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let model: string | undefined;
     let cliVersion: string | undefined;
 
     for (const event of events) {
+      const timestamp = event.timestamp
+        ? new Date(event.timestamp).getTime()
+        : Date.now();
+
       // Track session metadata
       if (event.type === "session_meta" && event.payload) {
         this.sessionMeta = event.payload;
@@ -132,28 +137,44 @@ export class CodexLogParser extends BaseLogParser {
       ) {
         const content = event.payload.content;
         if (Array.isArray(content)) {
+          // Process content items in order they appear
           for (const item of content) {
             // Text content
             if (
               (item.type === "input_text" || item.type === "output_text") &&
               item.text
             ) {
-              textParts.push(item.text);
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.TEXT,
+                timestamp,
+                data: {
+                  text: item.text,
+                } as TextData,
+              });
             }
 
             // Tool calls - normalize 'input' to 'parameters'
             if (item.type === "tool_use") {
-              toolCalls.push({
-                name: item.name,
-                parameters: item.input || {},
-                id: item.id,
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.TOOL_CALL,
+                timestamp,
+                data: {
+                  name: item.name,
+                  parameters: item.input || {},
+                  id: item.id,
+                } as ToolCall,
               });
             }
 
-            // Thinking blocks (moved from metadata.reasoningBlocks)
+            // Thinking blocks
             if (item.type === "thinking" && item.text) {
-              thinkingBlocks.push({
-                text: item.text,
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.THINKING,
+                timestamp,
+                data: {
+                  text: item.text,
+                  label: "Thinking",
+                } as ThinkingBlock,
               });
             }
           }
@@ -176,10 +197,14 @@ export class CodexLogParser extends BaseLogParser {
             params = { raw: params };
           }
         }
-        toolCalls.push({
-          name: event.payload.name,
-          parameters: params,
-          id: event.payload.call_id ?? event.payload.id,
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: event.payload.name,
+            parameters: params,
+            id: event.payload.call_id ?? event.payload.id,
+          } as ToolCall,
         });
       }
     }
@@ -192,9 +217,7 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     return {
-      text: textParts.join(""),
-      toolCalls,
-      thinkingBlocks,
+      events: outputEvents,
       metadata: {
         sessionId,
         model,

@@ -13,6 +13,9 @@ import {
   UniversalCliOutput,
   ToolCall,
   ThinkingBlock,
+  CliEvent,
+  TextData,
+  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
 /**
@@ -94,9 +97,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * ```
    */
   extractResponse(events: any[]): UniversalCliOutput {
-    let text = "";
-    const toolCalls: ToolCall[] = [];
-    const thinkingBlocks: ThinkingBlock[] = [];
+    const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
@@ -110,25 +111,46 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
       // Process assistant messages
       if (event.type === "assistant" && event.message?.content) {
+        // Get timestamp for this batch of events
+        const timestamp = event.timestamp
+          ? new Date(event.timestamp).getTime()
+          : Date.now();
+
+        // Process content blocks in order they appear
         for (const contentBlock of event.message.content) {
           // Extract text content
           if (contentBlock.type === "text" && contentBlock.text) {
-            text += contentBlock.text;
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp,
+              data: {
+                text: contentBlock.text,
+              } as TextData,
+            });
           }
 
           // Extract tool calls and normalize 'input' to 'parameters'
           if (contentBlock.type === "tool_use") {
-            toolCalls.push({
-              name: contentBlock.name,
-              parameters: contentBlock.input || {},
-              id: contentBlock.id,
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.TOOL_CALL,
+              timestamp,
+              data: {
+                name: contentBlock.name,
+                parameters: contentBlock.input || {},
+                id: contentBlock.id,
+              } as ToolCall,
             });
           }
 
           // Extract thinking blocks
           if (contentBlock.type === "thinking" && contentBlock.text) {
-            thinkingBlocks.push({
-              text: contentBlock.text,
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp,
+              data: {
+                text: contentBlock.text,
+                label: "Thinking",
+              } as ThinkingBlock,
             });
           }
         }
@@ -147,9 +169,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     return {
-      text: text.trim(),
-      toolCalls,
-      thinkingBlocks,
+      events: outputEvents,
       metadata: {
         sessionId,
         model,

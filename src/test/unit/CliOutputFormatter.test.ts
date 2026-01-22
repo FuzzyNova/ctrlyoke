@@ -9,23 +9,60 @@ import {
   ThinkingBlock,
   OutputMetadata,
   ToolResult,
+  CliEvent,
+  TextData,
+  CLI_EVENT_TYPES,
 } from "../../types/CliOutputTypes";
 
 suite("CliOutputFormatter Tests", () => {
   // Helper to create test output with defaults
   function createTestOutput(
-    overrides: Partial<UniversalCliOutput> = {}
+    events: CliEvent[] = [],
+    metadata: OutputMetadata = {}
   ): UniversalCliOutput {
     return {
-      text: "",
-      toolCalls: [],
-      thinkingBlocks: [],
-      metadata: {},
-      ...overrides,
+      events,
+      metadata,
     };
   }
 
-  // Helper to create a test tool call
+  // Helper to create a text event
+  function createTextEvent(text: string): CliEvent {
+    return {
+      type: "text",
+      timestamp: Date.now(),
+      data: { text } as TextData,
+    };
+  }
+
+  // Helper to create a tool call event
+  function createToolCallEvent(overrides: Partial<ToolCall> = {}): CliEvent {
+    return {
+      type: "toolCall",
+      timestamp: Date.now(),
+      data: {
+        name: "test_tool",
+        parameters: {},
+        ...overrides,
+      } as ToolCall,
+    };
+  }
+
+  // Helper to create a thinking block event
+  function createThinkingEvent(
+    overrides: Partial<ThinkingBlock> = {}
+  ): CliEvent {
+    return {
+      type: "thinking",
+      timestamp: Date.now(),
+      data: {
+        text: "thinking text",
+        ...overrides,
+      } as ThinkingBlock,
+    };
+  }
+
+  // Helper to create a test tool call (for compatibility)
   function createToolCall(overrides: Partial<ToolCall> = {}): ToolCall {
     return {
       name: "test_tool",
@@ -34,7 +71,7 @@ suite("CliOutputFormatter Tests", () => {
     };
   }
 
-  // Helper to create a test thinking block
+  // Helper to create a test thinking block (for compatibility)
   function createThinkingBlock(
     overrides: Partial<ThinkingBlock> = {}
   ): ThinkingBlock {
@@ -46,7 +83,7 @@ suite("CliOutputFormatter Tests", () => {
 
   suite("toPlainText", () => {
     test("formats text-only output", () => {
-      const output = createTestOutput({ text: "Hello world" });
+      const output = createTestOutput([createTextEvent("Hello world")]);
       const result = CliOutputFormatter.toPlainText(output);
       assert.strictEqual(result, "Hello world");
     });
@@ -58,33 +95,32 @@ suite("CliOutputFormatter Tests", () => {
     });
 
     test("formats output with tool calls", () => {
-      const output = createTestOutput({
-        text: "Running tests",
-        toolCalls: [
-          createToolCall({
-            name: "shell",
-            parameters: { command: "npm test" },
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createTextEvent("Running tests"),
+        createToolCallEvent({
+          name: "shell",
+          parameters: { command: "npm test" },
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Running tests"));
-      assert.ok(result.includes("--- Tool Calls ---"));
+      assert.ok(result.includes("--- Tool Call ---"));
       assert.ok(result.includes("shell"));
       assert.ok(result.includes("npm test"));
     });
 
     test("formats output with multiple tool calls", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({ name: "read_file", parameters: { path: "foo.ts" } }),
-          createToolCall({
-            name: "write_file",
-            parameters: { path: "bar.ts", content: "code" },
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createToolCallEvent({
+          name: "read_file",
+          parameters: { path: "foo.ts" },
+        }),
+        createToolCallEvent({
+          name: "write_file",
+          parameters: { path: "bar.ts", content: "code" },
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("read_file"));
@@ -94,57 +130,49 @@ suite("CliOutputFormatter Tests", () => {
     });
 
     test("formats tool call with successful result", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "shell",
-            parameters: { command: "echo hello" },
-            result: { success: true, output: "hello" },
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createToolCallEvent({
+          name: "shell",
+          parameters: { command: "echo hello" },
+          result: { success: true, output: "hello" },
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Result: ✓ hello"));
     });
 
     test("formats tool call with failed result", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "shell",
-            parameters: { command: "exit 1" },
-            result: { success: false, error: "Command failed" },
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createToolCallEvent({
+          name: "shell",
+          parameters: { command: "exit 1" },
+          result: { success: false, error: "Command failed" },
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Result: ✗ Command failed"));
     });
 
     test("formats tool call with empty result", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "noop",
-            parameters: {},
-            result: { success: true },
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createToolCallEvent({
+          name: "noop",
+          parameters: {},
+          result: { success: true },
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Result: ✓"));
     });
 
     test("formats output with thinking blocks", () => {
-      const output = createTestOutput({
-        text: "Final answer",
-        thinkingBlocks: [
-          createThinkingBlock({ text: "Let me think about this" }),
-        ],
-      });
+      const output = createTestOutput([
+        createTextEvent("Final answer"),
+        createThinkingEvent({ text: "Let me think about this" }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Final answer"));
@@ -153,12 +181,10 @@ suite("CliOutputFormatter Tests", () => {
     });
 
     test("formats thinking blocks with labels", () => {
-      const output = createTestOutput({
-        thinkingBlocks: [
-          createThinkingBlock({ text: "Planning steps", label: "Planning" }),
-          createThinkingBlock({ text: "Analyzing code", label: "Analysis" }),
-        ],
-      });
+      const output = createTestOutput([
+        createThinkingEvent({ text: "Planning steps", label: "Planning" }),
+        createThinkingEvent({ text: "Analyzing code", label: "Analysis" }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("[Planning] Planning steps"));
@@ -166,9 +192,9 @@ suite("CliOutputFormatter Tests", () => {
     });
 
     test("formats thinking blocks without labels", () => {
-      const output = createTestOutput({
-        thinkingBlocks: [createThinkingBlock({ text: "Just thinking" })],
-      });
+      const output = createTestOutput([
+        createThinkingEvent({ text: "Just thinking" }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.ok(result.includes("Just thinking"));
@@ -176,38 +202,30 @@ suite("CliOutputFormatter Tests", () => {
     });
 
     test("formats output with all components", () => {
-      const output = createTestOutput({
-        text: "Here is the result",
-        toolCalls: [
-          createToolCall({
-            name: "read_file",
-            parameters: { path: "test.ts" },
-            result: { success: true, output: "content" },
-          }),
-        ],
-        thinkingBlocks: [
-          createThinkingBlock({
-            text: "Analyzing the file",
-            label: "Analysis",
-          }),
-        ],
-      });
+      const output = createTestOutput([
+        createTextEvent("Here is the result"),
+        createToolCallEvent({
+          name: "read_file",
+          parameters: { path: "test.ts" },
+          result: { success: true, output: "content" },
+        }),
+        createThinkingEvent({
+          text: "Analyzing the file",
+          label: "Analysis",
+        }),
+      ]);
       const result = CliOutputFormatter.toPlainText(output);
 
       // All sections present
       assert.ok(result.includes("Here is the result"));
-      assert.ok(result.includes("--- Tool Calls ---"));
+      assert.ok(result.includes("--- Tool Call ---"));
       assert.ok(result.includes("read_file"));
       assert.ok(result.includes("--- Thinking ---"));
       assert.ok(result.includes("[Analysis] Analyzing the file"));
     });
 
     test("handles empty arrays gracefully", () => {
-      const output = createTestOutput({
-        text: "Just text",
-        toolCalls: [],
-        thinkingBlocks: [],
-      });
+      const output = createTestOutput([createTextEvent("Just text")]);
       const result = CliOutputFormatter.toPlainText(output);
 
       assert.strictEqual(result, "Just text");
@@ -217,108 +235,101 @@ suite("CliOutputFormatter Tests", () => {
 
   suite("toDashboardFormat", () => {
     test("converts basic output to dashboard format", () => {
-      const output = createTestOutput({
-        text: "Response text",
-        metadata: { model: "gpt-4" },
-      });
+      const events = [createTextEvent("Response text")];
+      const output = createTestOutput(events, { model: "gpt-4" });
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.text, "Response text");
-      assert.deepStrictEqual(result.toolCalls, []);
-      assert.deepStrictEqual(result.thinkingBlocks, []);
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.TEXT);
       assert.deepStrictEqual(result.metadata, { model: "gpt-4" });
     });
 
     test("preserves all tool call fields", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "shell",
-            parameters: { command: "npm test", cwd: "/app" },
-            id: "tool-123",
-            result: { success: true, output: "passed" },
-          }),
-        ],
-      });
+      const events = [
+        createToolCallEvent({
+          name: "shell",
+          parameters: { command: "npm test", cwd: "/app" },
+          id: "tool-123",
+          result: { success: true, output: "passed" },
+        }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.toolCalls.length, 1);
-      assert.strictEqual(result.toolCalls[0].name, "shell");
-      assert.deepStrictEqual(result.toolCalls[0].parameters, {
+      assert.strictEqual(result.events.length, 1);
+      assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.TOOL_CALL);
+      const toolCall = result.events[0].data as ToolCall;
+      assert.strictEqual(toolCall.name, "shell");
+      assert.deepStrictEqual(toolCall.parameters, {
         command: "npm test",
         cwd: "/app",
       });
-      assert.strictEqual(result.toolCalls[0].id, "tool-123");
-      assert.deepStrictEqual(result.toolCalls[0].result, {
+      assert.strictEqual(toolCall.id, "tool-123");
+      assert.deepStrictEqual(toolCall.result, {
         success: true,
         output: "passed",
-        error: undefined,
       });
     });
 
     test("preserves tool call without result", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "read_file",
-            parameters: { path: "test.ts" },
-          }),
-        ],
-      });
+      const events = [
+        createToolCallEvent({
+          name: "read_file",
+          parameters: { path: "test.ts" },
+        }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.toolCalls[0].result, undefined);
+      const toolCall = result.events[0].data as ToolCall;
+      assert.strictEqual(toolCall.result, undefined);
     });
 
     test("preserves failed tool call result", () => {
-      const output = createTestOutput({
-        toolCalls: [
-          createToolCall({
-            name: "shell",
-            parameters: { command: "fail" },
-            result: { success: false, error: "Command not found" },
-          }),
-        ],
-      });
+      const events = [
+        createToolCallEvent({
+          name: "shell",
+          parameters: { command: "fail" },
+          result: { success: false, error: "Command not found" },
+        }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.toolCalls[0].result?.success, false);
-      assert.strictEqual(
-        result.toolCalls[0].result?.error,
-        "Command not found"
-      );
+      const toolCall = result.events[0].data as ToolCall;
+      assert.strictEqual(toolCall.result?.success, false);
+      assert.strictEqual(toolCall.result?.error, "Command not found");
     });
 
     test("preserves all thinking block fields with default label", () => {
       const timestamp = Date.now();
-      const output = createTestOutput({
-        thinkingBlocks: [
-          createThinkingBlock({
-            text: "Deep thought",
-            timestamp: timestamp,
-          }),
-        ],
-      });
+      const events = [
+        createThinkingEvent({
+          text: "Deep thought",
+          timestamp: timestamp,
+        }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.thinkingBlocks.length, 1);
-      assert.strictEqual(result.thinkingBlocks[0].text, "Deep thought");
-      assert.strictEqual(result.thinkingBlocks[0].label, "Thinking"); // Default label
-      assert.strictEqual(result.thinkingBlocks[0].timestamp, timestamp);
+      assert.strictEqual(result.events.length, 1);
+      const thinking = result.events[0].data as ThinkingBlock;
+      assert.strictEqual(thinking.text, "Deep thought");
+      assert.strictEqual(thinking.timestamp, timestamp);
     });
 
     test("preserves thinking block with custom label", () => {
-      const output = createTestOutput({
-        thinkingBlocks: [
-          createThinkingBlock({
-            text: "Planning implementation",
-            label: "Planning",
-          }),
-        ],
-      });
+      const events = [
+        createThinkingEvent({
+          text: "Planning implementation",
+          label: "Planning",
+        }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.thinkingBlocks[0].label, "Planning");
+      const thinking = result.events[0].data as ThinkingBlock;
+      assert.strictEqual(thinking.label, "Planning");
     });
 
     test("preserves all metadata fields", () => {
@@ -330,28 +341,30 @@ suite("CliOutputFormatter Tests", () => {
         elapsed: 2500,
         provider: "claude-cli",
       };
-      const output = createTestOutput({ metadata });
+      const output = createTestOutput([], metadata);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
       assert.deepStrictEqual(result.metadata, metadata);
     });
 
     test("handles multiple tool calls and thinking blocks", () => {
-      const output = createTestOutput({
-        text: "Result",
-        toolCalls: [
-          createToolCall({ name: "tool1", parameters: { a: 1 } }),
-          createToolCall({ name: "tool2", parameters: { b: 2 } }),
-        ],
-        thinkingBlocks: [
-          createThinkingBlock({ text: "First thought", label: "A" }),
-          createThinkingBlock({ text: "Second thought", label: "B" }),
-        ],
-      });
+      const events = [
+        createTextEvent("Result"),
+        createToolCallEvent({ name: "tool1", parameters: { a: 1 } }),
+        createToolCallEvent({ name: "tool2", parameters: { b: 2 } }),
+        createThinkingEvent({ text: "First thought", label: "A" }),
+        createThinkingEvent({ text: "Second thought", label: "B" }),
+      ];
+      const output = createTestOutput(events);
       const result = CliOutputFormatter.toDashboardFormat(output);
 
-      assert.strictEqual(result.toolCalls.length, 2);
-      assert.strictEqual(result.thinkingBlocks.length, 2);
+      assert.strictEqual(result.events.length, 5);
+      // Check that events maintain their order
+      assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.TEXT);
+      assert.strictEqual(result.events[1].type, CLI_EVENT_TYPES.TOOL_CALL);
+      assert.strictEqual(result.events[2].type, CLI_EVENT_TYPES.TOOL_CALL);
+      assert.strictEqual(result.events[3].type, CLI_EVENT_TYPES.THINKING);
+      assert.strictEqual(result.events[4].type, CLI_EVENT_TYPES.THINKING);
     });
   });
 
@@ -454,25 +467,20 @@ suite("CliOutputFormatter Tests", () => {
     test("returns valid empty structure", () => {
       const result = CliOutputFormatter.createEmpty();
 
-      assert.strictEqual(result.text, "");
-      assert.deepStrictEqual(result.toolCalls, []);
-      assert.deepStrictEqual(result.thinkingBlocks, []);
+      assert.deepStrictEqual(result.events, []);
       assert.deepStrictEqual(result.metadata, {});
     });
 
-    test("all arrays are empty", () => {
+    test("events array is empty", () => {
       const result = CliOutputFormatter.createEmpty();
 
-      assert.strictEqual(result.toolCalls.length, 0);
-      assert.strictEqual(result.thinkingBlocks.length, 0);
+      assert.strictEqual(result.events.length, 0);
     });
 
     test("all fields have correct types", () => {
       const result = CliOutputFormatter.createEmpty();
 
-      assert.strictEqual(typeof result.text, "string");
-      assert.ok(Array.isArray(result.toolCalls));
-      assert.ok(Array.isArray(result.thinkingBlocks));
+      assert.ok(Array.isArray(result.events));
       assert.strictEqual(typeof result.metadata, "object");
       assert.ok(result.metadata !== null);
     });
@@ -482,8 +490,7 @@ suite("CliOutputFormatter Tests", () => {
       const result2 = CliOutputFormatter.createEmpty();
 
       assert.notStrictEqual(result1, result2);
-      assert.notStrictEqual(result1.toolCalls, result2.toolCalls);
-      assert.notStrictEqual(result1.thinkingBlocks, result2.thinkingBlocks);
+      assert.notStrictEqual(result1.events, result2.events);
       assert.notStrictEqual(result1.metadata, result2.metadata);
     });
   });
@@ -491,27 +498,26 @@ suite("CliOutputFormatter Tests", () => {
   suite("merge", () => {
     test("combines text from multiple outputs", () => {
       const outputs = [
-        createTestOutput({ text: "First " }),
-        createTestOutput({ text: "Second" }),
+        createTestOutput([createTextEvent("First ")]),
+        createTestOutput([createTextEvent("Second")]),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      assert.strictEqual(result.text, "First Second");
+      assert.strictEqual(result.events.length, 2);
+      assert.strictEqual((result.events[0].data as TextData).text, "First ");
+      assert.strictEqual((result.events[1].data as TextData).text, "Second");
     });
 
     test("handles empty array", () => {
       const result = CliOutputFormatter.merge([]);
 
-      assert.strictEqual(result.text, "");
-      assert.deepStrictEqual(result.toolCalls, []);
-      assert.deepStrictEqual(result.thinkingBlocks, []);
+      assert.deepStrictEqual(result.events, []);
       assert.deepStrictEqual(result.metadata, {});
     });
 
     test("returns single output unchanged", () => {
-      const output = createTestOutput({
-        text: "Single",
-        metadata: { model: "test" },
+      const output = createTestOutput([createTextEvent("Single")], {
+        model: "test",
       });
       const result = CliOutputFormatter.merge([output]);
 
@@ -520,44 +526,38 @@ suite("CliOutputFormatter Tests", () => {
 
     test("combines tool calls from multiple outputs", () => {
       const outputs = [
-        createTestOutput({
-          toolCalls: [createToolCall({ name: "tool1", parameters: { a: 1 } })],
-        }),
-        createTestOutput({
-          toolCalls: [createToolCall({ name: "tool2", parameters: { b: 2 } })],
-        }),
+        createTestOutput([
+          createToolCallEvent({ name: "tool1", parameters: { a: 1 } }),
+        ]),
+        createTestOutput([
+          createToolCallEvent({ name: "tool2", parameters: { b: 2 } }),
+        ]),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      assert.strictEqual(result.toolCalls.length, 2);
-      assert.strictEqual(result.toolCalls[0].name, "tool1");
-      assert.strictEqual(result.toolCalls[1].name, "tool2");
+      assert.strictEqual(result.events.length, 2);
+      assert.strictEqual((result.events[0].data as ToolCall).name, "tool1");
+      assert.strictEqual((result.events[1].data as ToolCall).name, "tool2");
     });
 
     test("combines thinking blocks from multiple outputs", () => {
       const outputs = [
-        createTestOutput({
-          thinkingBlocks: [createThinkingBlock({ text: "First thought" })],
-        }),
-        createTestOutput({
-          thinkingBlocks: [createThinkingBlock({ text: "Second thought" })],
-        }),
+        createTestOutput([createThinkingEvent({ text: "First thought" })]),
+        createTestOutput([createThinkingEvent({ text: "Second thought" })]),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      assert.strictEqual(result.thinkingBlocks.length, 2);
-      assert.strictEqual(result.thinkingBlocks[0].text, "First thought");
-      assert.strictEqual(result.thinkingBlocks[1].text, "Second thought");
+      assert.strictEqual(result.events.length, 2);
+      assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.THINKING);
+      assert.strictEqual(result.events[1].type, CLI_EVENT_TYPES.THINKING);
+      assert.strictEqual((result.events[0].data as ThinkingBlock).text, "First thought");
+      assert.strictEqual((result.events[1].data as ThinkingBlock).text, "Second thought");
     });
 
     test("last metadata wins", () => {
       const outputs = [
-        createTestOutput({
-          metadata: { model: "gpt-4", sessionId: "old-session" },
-        }),
-        createTestOutput({
-          metadata: { model: "gpt-5", sessionId: "new-session" },
-        }),
+        createTestOutput([], { model: "gpt-4", sessionId: "old-session" }),
+        createTestOutput([], { model: "gpt-5", sessionId: "new-session" }),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
@@ -567,55 +567,48 @@ suite("CliOutputFormatter Tests", () => {
 
     test("merges three outputs correctly", () => {
       const outputs = [
-        createTestOutput({
-          text: "A",
-          toolCalls: [createToolCall({ name: "t1", parameters: {} })],
-        }),
-        createTestOutput({
-          text: "B",
-          thinkingBlocks: [createThinkingBlock({ text: "think" })],
-        }),
-        createTestOutput({
-          text: "C",
-          metadata: { model: "final" },
-        }),
+        createTestOutput([
+          createTextEvent("A"),
+          createToolCallEvent({ name: "t1", parameters: {} }),
+        ]),
+        createTestOutput([
+          createTextEvent("B"),
+          createThinkingEvent({ text: "think" }),
+        ]),
+        createTestOutput([createTextEvent("C")], { model: "final" }),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      assert.strictEqual(result.text, "ABC");
-      assert.strictEqual(result.toolCalls.length, 1);
-      assert.strictEqual(result.thinkingBlocks.length, 1);
+      assert.strictEqual(result.events.length, 5);
       assert.strictEqual(result.metadata.model, "final");
     });
 
     test("handles outputs with empty arrays", () => {
       const outputs = [
-        createTestOutput({ text: "Has data", toolCalls: [] }),
-        createTestOutput({ text: " More", thinkingBlocks: [] }),
+        createTestOutput([createTextEvent("Has data")]),
+        createTestOutput([createTextEvent(" More")]),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      assert.strictEqual(result.text, "Has data More");
-      assert.deepStrictEqual(result.toolCalls, []);
-      assert.deepStrictEqual(result.thinkingBlocks, []);
+      assert.strictEqual(result.events.length, 2);
+      assert.strictEqual((result.events[0].data as TextData).text, "Has data");
+      assert.strictEqual((result.events[1].data as TextData).text, " More");
     });
 
     test("preserves tool call details during merge", () => {
       const outputs = [
-        createTestOutput({
-          toolCalls: [
-            createToolCall({
-              name: "shell",
-              parameters: { cmd: "test" },
-              id: "id-1",
-              result: { success: true, output: "ok" },
-            }),
-          ],
-        }),
+        createTestOutput([
+          createToolCallEvent({
+            name: "shell",
+            parameters: { cmd: "test" },
+            id: "id-1",
+            result: { success: true, output: "ok" },
+          }),
+        ]),
       ];
       const result = CliOutputFormatter.merge(outputs);
 
-      const tool = result.toolCalls[0];
+      const tool = result.events[0].data as ToolCall;
       assert.strictEqual(tool.name, "shell");
       assert.strictEqual(tool.id, "id-1");
       assert.strictEqual(tool.result?.success, true);
