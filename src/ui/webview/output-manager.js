@@ -369,7 +369,10 @@
         }
 
         if (output.cliCommand) {
-          html += `<div class="output-cli-command">$ ${escapeHtml(output.cliCommand)}</div>`;
+          // Format command with working directory prefix (terminal-style)
+          // Use the full workspace path if available, otherwise fallback to 'workspace'
+          const workingDir = output.workingDirectory || 'workspace';
+          html += `<div class="output-cli-command">${escapeHtml(workingDir)}> ${escapeHtml(output.cliCommand)}</div>`;
         }
 
         // Render response (and structured data if available)
@@ -645,7 +648,10 @@
           lines.push("### CLI Command");
           lines.push("");
           lines.push("```bash");
-          lines.push(`$ ${output.cliCommand}`);
+          // Format command with working directory prefix (terminal-style)
+          // Use the full workspace path if available, otherwise fallback to 'workspace'
+          const workingDir = output.workingDirectory || 'workspace';
+          lines.push(`${workingDir}> ${output.cliCommand}`);
           lines.push("```");
           lines.push("");
         }

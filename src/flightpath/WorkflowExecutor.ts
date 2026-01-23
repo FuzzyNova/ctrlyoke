@@ -182,6 +182,7 @@ export class WorkflowExecutor {
           tokens: undefined,
           isStreaming: true,
           cliCommand: undefined,
+          workingDirectory: context.workspaceFolderPath,
         });
 
         // Listen for prompt ready event (fires when full prompt and command are built)
@@ -195,6 +196,7 @@ export class WorkflowExecutor {
             cliCommand: context.shouldShowCliCommand
               ? data.cliCommand
               : undefined,
+            workingDirectory: context.workspaceFolderPath,
           });
         });
 
@@ -569,6 +571,7 @@ export class WorkflowExecutor {
           tokens,
           isStreaming: false,
           cliCommand,
+          workingDirectory: context.workspaceFolderPath,
         });
       }
 
@@ -840,6 +843,7 @@ export class WorkflowExecutor {
       tokens,
       isStreaming: false,
       cliCommand,
+      workingDirectory: context.workspaceFolderPath,
     });
   }
 

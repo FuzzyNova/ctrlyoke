@@ -51,6 +51,8 @@ export interface CliOutputData {
   isStreaming: boolean;
   /** The CLI command executed (for debugging) */
   cliCommand?: string;
+  /** The working directory where the command was executed (for terminal-style display) */
+  workingDirectory?: string;
 }
 
 export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
