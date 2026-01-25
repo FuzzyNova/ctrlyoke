@@ -122,7 +122,7 @@ prompts:
     provider: claude-cli
     model: opus
     prompt: "Implement the improvements"
-    newChatSession: true # ✅ Explicit: Start fresh with Claude
+    resumeSession: false # ✅ Explicit: Start fresh with Claude
     # Creates new Claude session (not trying to reuse Copilot session)
 
   - id: continued-implementation
@@ -150,7 +150,7 @@ prompts:
 #    - Invalid formats trigger new session
 #
 # 4. Best practice for mixed providers:
-#    - Use newChatSession: true when switching providers
+#    - Use resumeSession: false when switching providers
 #    - Don't rely on cross-provider session references
 #    - Group related prompts with same provider
 #

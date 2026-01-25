@@ -92,14 +92,14 @@ suite("PromptFileParser Tests", () => {
       assert.strictEqual(endCondition.timeout, 30000);
     });
 
-    test("should keep newChatSession undefined when not explicitly set (uses global setting at execution time)", async () => {
+    test("should keep resumeSession undefined when not explicitly set (uses global setting at execution time)", async () => {
       const filePath = path.join(fixturesPath, "multi.flightpath.json");
       const result = await parser.parsePromptFile(filePath);
 
       assertValidResult(result);
-      // Prompts without explicit newChatSession should be undefined (will use global setting at execution time)
-      assert.strictEqual(result.prompts[0].newChatSession, undefined);
-      assert.strictEqual(result.prompts[1].newChatSession, undefined);
+      // Prompts without explicit resumeSession should be undefined (will use global setting at execution time)
+      assert.strictEqual(result.prompts[0].resumeSession, undefined);
+      assert.strictEqual(result.prompts[1].resumeSession, undefined);
     });
   });
 
@@ -301,9 +301,9 @@ suite("PromptFileParser Tests", () => {
     });
   });
 
-  suite("newChatSession Setting Resolution", () => {
-    test("shouldStartNewSessionForPrompt should use prompt value when explicitly set to true", () => {
-      const result = ConfigurationUtils.shouldStartNewSessionForPrompt(true);
+  suite("resumeSession Setting Resolution", () => {
+    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to true", () => {
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(true);
       assert.strictEqual(
         result,
         true,
@@ -311,8 +311,8 @@ suite("PromptFileParser Tests", () => {
       );
     });
 
-    test("shouldStartNewSessionForPrompt should use prompt value when explicitly set to false", () => {
-      const result = ConfigurationUtils.shouldStartNewSessionForPrompt(false);
+    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to false", () => {
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(false);
       assert.strictEqual(
         result,
         false,
@@ -320,10 +320,10 @@ suite("PromptFileParser Tests", () => {
       );
     });
 
-    test("shouldStartNewSessionForPrompt should fall back to global setting when prompt value is undefined", () => {
-      // The global setting defaults to true
+    test("shouldResumeSessionForPrompt should fall back to global setting when prompt value is undefined", () => {
+      // The global setting defaults to false
       const result =
-        ConfigurationUtils.shouldStartNewSessionForPrompt(undefined);
+        ConfigurationUtils.shouldResumeSessionForPrompt(undefined);
       // We can't mock VS Code settings in unit tests, so we just verify it returns a boolean
       assert.strictEqual(
         typeof result,

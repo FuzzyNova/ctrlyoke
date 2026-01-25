@@ -92,13 +92,13 @@ definitions:
           programmatically select agents - users must manually select from dropdown. See
           docs/CHAT_MODE_LIMITATIONS.md for details.
         pattern: ^[a-zA-Z0-9-_]+$
-      newChatSession:
+      resumeSession:
         type: boolean
         description: >-
-          Whether to start a new chat session for this prompt. When omitted, defaults to the
-          flightpath.newChatSessionPerPrompt setting (default: true). Set to false to continue in
-          the existing session for context continuity. Retries always use the same session
-          regardless of this setting.
+          Whether to resume the existing chat session for this prompt. When omitted, defaults to the
+          flightpath.resumeExistingSession setting (default: false). Set to true to continue in the
+          existing session for context continuity. Retries always use the same session regardless of
+          this setting.
       allowDynamicExtension:
         type: boolean
         description: >-
@@ -115,8 +115,8 @@ definitions:
         description: >-
           Session ID for resuming CLI conversations. Can be a string (exact CLI session ID to
           resume) or number (prompt reference: 1 = use session from first prompt). When omitted and
-          newChatSession=false, automatically resumes previous prompt's session. Working file
-          runtime metadata stores the actual session ID used during execution.
+          resumeSession=true, automatically resumes previous prompt's session. Working file runtime
+          metadata stores the actual session ID used during execution.
       endCondition:
         $ref: '#/definitions/endCondition'
   promptItem:

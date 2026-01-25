@@ -1173,7 +1173,7 @@ export class GeminiToolPermissionMapper implements IToolPermissionMapper {
       prompt: "My favorite color is blue."
     - id: second
       prompt: "What is my favorite color?"
-      newChatSession: false # Continue session
+      resumeSession: true # Continue session
   ```
 
   - Run workflow
@@ -1182,7 +1182,7 @@ export class GeminiToolPermissionMapper implements IToolPermissionMapper {
   - Second response references first prompt ("Your favorite color is blue")
 
 - [ ] **Session Reset**:
-  - Set `newChatSession: true` on second prompt
+  - Set `resumeSession: false` on second prompt
   - Second response does NOT reference first prompt (fresh session)
 
 ---
@@ -1528,7 +1528,7 @@ prompts:
   - id: recall
     prompt: |
       What is my name and profession?
-    newChatSession: false # Continue session
+    resumeSession: true # Continue session
     model: gemini-pro
 ```
 

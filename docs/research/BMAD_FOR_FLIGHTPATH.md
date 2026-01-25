@@ -18,7 +18,7 @@ This document outlines how FlightPath can leverage and customize the [BMAD Metho
 1. Embed full agent instructions (no stub loading failures)
 2. Force YOLO mode by default (no approval pauses)
 3. Chain workflow steps automatically across prompts
-4. Handle fresh chat context naturally (each prompt = new session)
+4. Handle fresh chat context naturally (each prompt = new session by default)
 
 ---
 
@@ -74,7 +74,7 @@ Stock BMAD's `workflow.xml` defines two execution modes:
 1. **Self-Contained Prompts**: Each prompt includes full agent persona, not just stub references
 2. **Autonomous by Default**: No confirmation pauses, no elicitation prompts, no menu waits
 3. **Sequential Execution**: Each prompt maps to one workflow step
-4. **Fresh Context**: `newChatSession: true` (default) mimics BMAD's "fresh chat" requirement
+4. **Fresh Context**: `resumeSession: false` (default) mimics BMAD's "fresh chat" requirement
 5. **Status-Aware**: Prompts can check/update `bmm-workflow-status.yaml` via end conditions
 
 ### Track Templates
@@ -193,10 +193,10 @@ Architecture: #file:docs/bmad/architecture.md
 | Aspect         | Stock BMAD                           | FlightPath BMAD                   |
 | -------------- | ------------------------------------ | --------------------------------- |
 | Agent loading  | Stub → manual load                   | Full content embedded             |
-| Execution mode | Interactive (default), YOLO (opt-in) | Autonomous only (no toggle)       |
-| Menu system    | Show menu, wait for selection        | Direct workflow execution         |
-| Confirmations  | Pause at template-output             | None—continue automatically       |
-| Fresh chats    | User manually opens new chat         | `newChatSession: true` per prompt |
+| Execution mode | Interactive (default), YOLO (opt-in) | Autonomous only (no toggle)        |
+| Menu system    | Show menu, wait for selection        | Direct workflow execution          |
+| Confirmations  | Pause at template-output             | None—continue automatically        |
+| Fresh chats    | User manually opens new chat         | `resumeSession: false` per prompt  |
 | Context files  | Agent must discover/load             | `#file:` references pre-attached  |
 
 ---

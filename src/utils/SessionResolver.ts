@@ -72,7 +72,7 @@ export class SessionResolver {
    * Resolve session ID for a prompt.
    *
    * Resolution order:
-   * 1. If newChatSession=true → undefined (new session)
+   * 1. If resumeSession=false → undefined (new session)
    * 2. If sessionId is number → resolve from referenced prompt
    * 3. If sessionId is string → use directly
    * 4. Otherwise → auto-resume from previous prompt (same provider)
@@ -93,8 +93,8 @@ export class SessionResolver {
       ? PropertyResolver.resolve(prompt, workflow)
       : undefined;
 
-    // 1. Check if new session is explicitly requested
-    if (this.shouldStartNewSession(prompt, workflow)) {
+    // 1. Check if session should NOT be resumed (i.e., start new session)
+    if (!this.shouldResumeSession(prompt, workflow)) {
       return undefined;
     }
 
@@ -267,40 +267,40 @@ export class SessionResolver {
   }
 
   /**
-   * Check if prompt should start new session.
+   * Check if prompt should resume existing session.
    *
    * Applies three-tier precedence (using PropertyResolver):
-   * 1. Prompt-level newChatSession setting (highest priority)
-   * 2. Workflow-level newChatSession setting
-   * 3. Global flightpath.newChatSessionPerPrompt setting (lowest priority)
+   * 1. Prompt-level resumeSession setting (highest priority)
+   * 2. Workflow-level resumeSession setting
+   * 3. Global flightpath.resumeExistingSession setting (lowest priority)
    *
    * @param prompt The prompt to check
    * @param workflow Workflow file for workflow-level defaults (optional)
-   * @returns True if new session should start, false to resume
+   * @returns True if session should be resumed, false to start new session
    */
-  static shouldStartNewSession(
+  static shouldResumeSession(
     prompt: PromptItem,
     workflow?: PromptFile
   ): boolean {
     if (workflow) {
-      return PropertyResolver.resolve(prompt, workflow).newChatSession;
+      return PropertyResolver.resolve(prompt, workflow).resumeSession;
     }
 
     // Fallback when workflow is unavailable (should be rare)
-    // In this case, respect prompt-level setting or default to true
-    if (prompt.newChatSession !== undefined) {
-      return prompt.newChatSession;
+    // In this case, respect prompt-level setting or default to false
+    if (prompt.resumeSession !== undefined) {
+      return prompt.resumeSession;
     }
 
     // Default to new session when no workflow or prompt setting exists
-    return true;
+    return false;
   }
 
   /**
    * Validate session reference before execution.
    *
    * Checks for:
-   * - Conflicting settings (newChatSession=true + sessionId set)
+   * - Conflicting settings (resumeSession=false + sessionId set)
    * - Invalid numeric references (out of bounds, future prompts)
    * - Other validation issues
    *
@@ -322,13 +322,13 @@ export class SessionResolver {
       : prompt.sessionId;
 
     // Check for conflicting settings (ONLY if both explicitly set on prompt)
-    // Note: We check prompt.newChatSession directly, not resolved value,
+    // Note: We check prompt.resumeSession directly, not resolved value,
     // because this validation is about conflicting prompt-level settings.
-    if (prompt.newChatSession === true && sessionId !== undefined) {
+    if (prompt.resumeSession === false && sessionId !== undefined) {
       return {
         valid: true,
         warning:
-          "Prompt has sessionId set but newChatSession=true. " +
+          "Prompt has sessionId set but resumeSession=false. " +
           "Session ID will be ignored.",
       };
     }

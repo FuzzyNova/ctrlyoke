@@ -7,13 +7,13 @@ prompts:
       - Provider: copilot-cli
       - Model: claude-sonnet-4.5
       - Agent: test-agent
-      - New Chat Session: No
+      - Resume Session: Yes
       - Allow Dynamic Extension: Yes
       - End Condition: Script, Returns, Timeout, Max Retries, Retry Prompt all filled in
     provider: copilot-cli
     model: claude-sonnet-4.5
     agent: test-agent
-    newChatSession: false
+    resumeSession: true
     allowDynamicExtension: true
     endCondition:
       script: .flightpath/scripts/always_true.py
@@ -37,10 +37,10 @@ prompts:
       - Provider: claude-cli
       - Model: sonnet
       - Agent: (empty)
-      - New Chat Session: Yes
+      - Resume Session: No
       - Allow Dynamic Extension: No
       - End Condition: All fields should be empty/default
     provider: claude-cli
     model: sonnet
-    newChatSession: true
+    resumeSession: false
     allowDynamicExtension: false

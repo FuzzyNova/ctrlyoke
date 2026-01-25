@@ -85,7 +85,7 @@ Add workflow properties at the root level of your `.flightpath.yaml` file:
 provider: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
-newChatSession: true
+resumeSession: false
 allowDynamicExtension: false
 
 # Optional: Workflow-wide end condition
@@ -123,7 +123,7 @@ prompts:
   "provider": "copilot-cli",
   "model": "claude-sonnet-4.5",
   "agent": "code-reviewer",
-  "newChatSession": true,
+  "resumeSession": false,
   "allowDynamicExtension": false,
   "endCondition": {
     "script": "npm test",
@@ -203,18 +203,18 @@ model: claude-sonnet-4.5
 agent: .github/agents/code-reviewer.agent.md
 ```
 
-### newChatSession
+### resumeSession
 
 **Type:** `boolean`
 
-**Description:** Whether to start a fresh chat session for each prompt (true) or continue previous conversation (false)
+**Description:** Whether to continue from the previous prompt's session (true) or start a fresh session (false)
 
-**Default:** Falls back to `flightpath.newChatSessionPerPrompt` setting
+**Default:** Falls back to `flightpath.resumeExistingSession` setting
 
 **Example:**
 
 ```yaml
-newChatSession: true
+resumeSession: true
 ```
 
 ### allowDynamicExtension
@@ -294,7 +294,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 **Saved when explicitly set:**
 
 - `agent` - Only if configured
-- `newChatSession` - Only if different from default
+- `resumeSession` - Only if different from default
 - `allowDynamicExtension` - Only if enabled
 - `endCondition` - Only if configured
 
@@ -304,6 +304,7 @@ FlightPath uses a **working file** system to track workflow execution state. Whe
 provider: copilot-cli
 model: claude-sonnet-4.5
 agent: code-reviewer
+resumeSession: true
 endCondition:
   script: npm test
   returns: "true"
@@ -377,7 +378,7 @@ prompts:
 provider: claude-cli
 model: sonnet
 agent: .github/agents/code-reviewer.agent.md
-newChatSession: true # Fresh context for each review phase
+resumeSession: false # Fresh context for each review phase
 
 prompts:
   - id: security-review
@@ -413,7 +414,7 @@ prompts:
 # Workflow defaults
 provider: copilot-cli
 model: claude-sonnet-4.5
-newChatSession: false
+resumeSession: true
 
 prompts:
   - id: analyze
@@ -421,7 +422,7 @@ prompts:
     # Uses workflow defaults:
     #   provider: copilot-cli (workflow)
     #   model: claude-sonnet-4.5 (workflow)
-    #   newChatSession: false (workflow)
+    #   resumeSession: true (workflow)
 
   - id: implement
     prompt: "Implement architectural improvements"
@@ -429,26 +430,26 @@ prompts:
     # Uses:
     #   provider: copilot-cli (workflow)
     #   model: gpt-5 (prompt override)
-    #   newChatSession: false (workflow)
+    #   resumeSession: true (workflow)
 
   - id: review
     prompt: "Review changes for compliance"
     provider: claude-cli # Prompt-level override
     model: opus # Prompt-level override
-    newChatSession: true # Prompt-level override
+    resumeSession: false # Prompt-level override
     # All workflow defaults overridden:
     #   provider: claude-cli (prompt override)
     #   model: opus (prompt override)
-    #   newChatSession: true (prompt override)
+    #   resumeSession: false (prompt override)
 ```
 
 **Precedence visualization:**
 
-| Prompt    | Provider    | Model             | New Session | Source       |
-| --------- | ----------- | ----------------- | ----------- | ------------ |
-| analyze   | copilot-cli | claude-sonnet-4.5 | false       | All workflow |
-| implement | copilot-cli | gpt-5             | false       | Mixed        |
-| review    | claude-cli  | opus              | true        | All prompt   |
+| Prompt    | Provider    | Model             | Resume Session | Source       |
+| --------- | ----------- | ----------------- | -------------- | ------------ |
+| analyze   | copilot-cli | claude-sonnet-4.5 | true           | All workflow |
+| implement | copilot-cli | gpt-5             | true           | Mixed        |
+| review    | claude-cli  | opus              | false          | All prompt   |
 
 ---
 
@@ -812,7 +813,7 @@ prompts:
 provider: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
 model: string
 agent: string
-newChatSession: boolean
+resumeSession: boolean
 allowDynamicExtension: boolean
 endCondition:
   script: string
@@ -830,7 +831,7 @@ prompts:
     provider: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
     model: string
     agent: string
-    newChatSession: boolean
+    resumeSession: boolean
     allowDynamicExtension: boolean
     endCondition:
       script: string
@@ -847,7 +848,7 @@ prompts:
   "provider": "copilot-cli | copilot-chat | claude-cli | codex-cli",
   "model": "string",
   "agent": "string",
-  "newChatSession": true,
+  "resumeSession": true,
   "allowDynamicExtension": false,
   "endCondition": {
     "script": "string",
@@ -863,7 +864,7 @@ prompts:
       "provider": "copilot-cli | copilot-chat | claude-cli | codex-cli",
       "model": "string",
       "agent": "string",
-      "newChatSession": true,
+      "resumeSession": true,
       "allowDynamicExtension": false,
       "endCondition": {}
     }

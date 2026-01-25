@@ -1336,10 +1336,10 @@ codex exec @path/to/prompt.md
 private buildSessionArgs(prompt: PromptItem): string[] {
   const args: string[] = [];
 
-  if (prompt.newChatSession === false && this.sessionId) {
+  if (prompt.resumeSession === true && this.sessionId) {
     // Resume specific thread
     args.push("resume", this.sessionId);
-  } else if (prompt.newChatSession === false) {
+  } else if (prompt.resumeSession === true) {
     // Resume most recent (no thread ID available)
     args.push("resume", "--last");
   }
@@ -1439,7 +1439,7 @@ private buildCliArgs(prompt: PromptItem, isInteractive: boolean): string[] {
   });
 
   // Session management
-  if (prompt.newChatSession === false && this.sessionId) {
+  if (prompt.resumeSession === true && this.sessionId) {
     // Note: resume is a subcommand, not a flag
     // Need different structure for exec vs interactive
     if (!isInteractive) {

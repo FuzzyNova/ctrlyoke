@@ -1465,7 +1465,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
         provider: workingFile.provider,
         model: workingFile.model,
         agent: workingFile.agent,
-        newChatSession: workingFile.newChatSession,
+        resumeSession: workingFile.resumeSession,
         allowDynamicExtension: workingFile.allowDynamicExtension,
         endCondition: workingFile.endCondition,
       };

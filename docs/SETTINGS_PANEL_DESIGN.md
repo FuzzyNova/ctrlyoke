@@ -47,7 +47,7 @@ Views display side-by-side in the bottom panel with native VS Code collapsible h
 |                                                          | | | Default   ▼| |  |
 |                                                          | | +-------------+ |  |
 |                                                          | |                 |  |
-|                                                          | | [ ] New Chat    |  |
+|                                                          | | [ ] Resume      |  |
 |                                                          | |     Session     |  |
 |                                                          | |                 |  |
 |                                                          | | Execution Mode  |  |
@@ -128,9 +128,9 @@ Selects the Copilot agent to use:
 
 Updates the `flightpath.copilotAgent` setting.
 
-### New Chat Session Checkbox
+### Resume Existing Session Checkbox
 
-When enabled, starts a fresh chat session for each prompt. Updates `flightpath.newChatSessionPerPrompt` setting.
+When enabled, automatically continues from the previous prompt's session. Updates `flightpath.resumeExistingSession` setting.
 
 ### Execution Mode Dropdown
 

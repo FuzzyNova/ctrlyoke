@@ -78,7 +78,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     provider?: string;
     model?: string;
     agent?: string;
-    newChatSession?: boolean;
+    resumeSession?: boolean;
     allowDynamicExtension?: boolean;
     endCondition?: any;
   } = {};
@@ -167,8 +167,8 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.CHANGE_EXECUTION_MODE:
         this.handleExecutionModeChange(message.executionMode);
         break;
-      case MESSAGE_TYPES.CHANGE_NEW_CHAT_SESSION:
-        this.handleNewChatSessionChange(message.enabled);
+      case MESSAGE_TYPES.CHANGE_RESUME_SESSION:
+        this.handleResumeSessionChange(message.enabled);
         break;
       case MESSAGE_TYPES.CHANGE_DYNAMIC_QUEUE:
         this.handleDynamicQueueChange(message.enabled);
@@ -198,8 +198,8 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     const model = this.getModelForProvider(provider);
     const agent = ConfigurationUtils.getCustomAgent();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
-    const newChatSessionPerPrompt =
-      ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+    const resumeExistingSession =
+      ConfigurationUtils.shouldResumeExistingSession();
     const dynamicQueueEnabled =
       ConfigurationUtils.getDynamicQueueConfig().enabled;
 
@@ -209,7 +209,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       model,
       agent,
       executionMode,
-      newChatSession: newChatSessionPerPrompt,
+      resumeSession: resumeExistingSession,
       allowDynamicExtension: dynamicQueueEnabled,
     };
 
@@ -505,17 +505,17 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleNewChatSessionChange(enabled: boolean): Promise<void> {
+  private async handleResumeSessionChange(enabled: boolean): Promise<void> {
     try {
       await ConfigurationUtils.updateSetting(
-        "newChatSessionPerPrompt",
+        "resumeExistingSession",
         enabled
       );
       Log.info(
-        `✅ New chat session per prompt ${enabled ? "enabled" : "disabled"}`
+        `✅ Resume existing session ${enabled ? "enabled" : "disabled"}`
       );
     } catch (error) {
-      Log.error("Failed to update newChatSessionPerPrompt setting:", error);
+      Log.error("Failed to update resumeExistingSession setting:", error);
     }
   }
 
@@ -651,7 +651,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
           provider || ConfigurationUtils.getIntegrationMode()
         ),
         agent: "customAgent",
-        newChatSession: "newChatSessionPerPrompt",
+        resumeSession: "resumeExistingSession",
         allowDynamicExtension: "enableDynamicQueue",
       };
 

@@ -39,8 +39,8 @@ export interface ExecutionProperties {
   /** Custom agent file (.agent.md) */
   agent?: string;
 
-  /** Start new chat session */
-  newChatSession?: boolean;
+  /** Resume existing chat session (default: false, start new session) */
+  resumeSession?: boolean;
 
   /** Allow dynamic queue extension */
   allowDynamicExtension?: boolean;

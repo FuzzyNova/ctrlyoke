@@ -21,7 +21,7 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 | `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                  |
 | `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                     |
 | `--log-level <level>`   | _(hardcoded to `debug`)_                     | Always `debug` level (required for session ID extraction)        |
-| `--resume [sessionId]`  | `prompt.newChatSession`                      | Full support                                                     |
+| `--resume [sessionId]`  | `prompt.resumeSession`                       | Full support                                                     |
 | `-p, --prompt <text>`   | Prompt text                                  | Full support (always uses `--prompt` flag)                       |
 | `--agent <agent>`       | `prompt.agent`                               | Full support                                                     |
 

@@ -83,7 +83,7 @@ export class PromptFileLoader {
               "provider",
               "model",
               "agent",
-              "newChatSession",
+              "resumeSession",
               "allowDynamicExtension",
               "endCondition",
             ] as const;

@@ -109,8 +109,8 @@ export class CopilotCliProvider implements ICliProvider {
     // This ensures workflow-level defaults are respected
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedAgent = workflowContext?.resolvedProperties?.agent;
-    const resolvedNewChatSession =
-      workflowContext?.resolvedProperties?.newChatSession;
+    const resolvedResumeSession =
+      workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -197,9 +197,9 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Session resumption - use resolved property if available
-    const shouldStartNewSession = resolvedNewChatSession ?? false;
+    const shouldStartNewSession = !(resolvedResumeSession ?? false);
     Log.debug(
-      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
     if (!shouldStartNewSession && sessionId) {
       args.push("--resume", sessionId);

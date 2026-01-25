@@ -104,8 +104,8 @@ export class CodexCliProvider implements ICliProvider {
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
-    const resolvedNewChatSession =
-      workflowContext?.resolvedProperties?.newChatSession;
+    const resolvedResumeSession =
+      workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -208,9 +208,9 @@ export class CodexCliProvider implements ICliProvider {
     }
 
     // Session management - use resolved property if available
-    const shouldStartNewSession = resolvedNewChatSession ?? false;
+    const shouldStartNewSession = !(resolvedResumeSession ?? false);
     Log.debug(
-      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
 
     if (!shouldStartNewSession && sessionId) {

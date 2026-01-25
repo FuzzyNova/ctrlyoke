@@ -8,7 +8,7 @@ suite("SessionResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         sessionId: "workflow-session-uuid",
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const prompt: PromptItem = {
@@ -23,7 +23,7 @@ suite("SessionResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         sessionId: 1,
-        newChatSession: false,
+        resumeSession: true,
       };
 
       // Create a completed prompt with runtime session
@@ -55,7 +55,7 @@ suite("SessionResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         sessionId: "workflow-session-uuid",
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const prompt: PromptItem = {
@@ -71,7 +71,7 @@ suite("SessionResolver Tests", () => {
       const workflow: PromptFile = {
         prompts: [],
         sessionId: 2,
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const completedPrompt: PromptItem = {
@@ -104,7 +104,7 @@ suite("SessionResolver Tests", () => {
     test("should return exact session ID string when provided", () => {
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false, // Necessary to enable session resumption
+        resumeSession: true, // Necessary to enable session resumption
       };
 
       const prompt: PromptItem = {
@@ -116,7 +116,7 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, "550e8400-e29b-41d4-a716-446655440000");
     });
 
-    test("should return exact session ID even with newChatSession=false", () => {
+    test("should return exact session ID even with resumeSession=true", () => {
       const workflow: PromptFile = {
         prompts: [],
       };
@@ -124,7 +124,7 @@ suite("SessionResolver Tests", () => {
       const prompt: PromptItem = {
         prompt: "test",
         sessionId: "my-session-id",
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const sessionId = SessionResolver.resolve(prompt, 0, [prompt], workflow);
@@ -136,7 +136,7 @@ suite("SessionResolver Tests", () => {
     test("should resolve numeric reference to runtime session ID", () => {
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const prompts: PromptItem[] = [
@@ -214,7 +214,7 @@ suite("SessionResolver Tests", () => {
   });
 
   suite("resolve - auto-resume", () => {
-    test("should auto-resume from previous prompt when newChatSession=false", () => {
+    test("should auto-resume from previous prompt when resumeSession=true", () => {
       const workflow: PromptFile = {
         prompts: [],
       };
@@ -232,7 +232,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          newChatSession: false,
+          resumeSession: true,
         },
       ];
 
@@ -270,7 +270,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "third",
           provider: Provider.CopilotCli,
-          newChatSession: false,
+          resumeSession: true,
         },
       ];
 
@@ -294,7 +294,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "second",
           provider: Provider.CopilotCli,
-          newChatSession: false,
+          resumeSession: true,
         },
       ];
 
@@ -306,7 +306,7 @@ suite("SessionResolver Tests", () => {
     test("should return undefined for first prompt with auto-resume", () => {
       const prompt: PromptItem = {
         prompt: "first",
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const sessionId = SessionResolver.resolve(prompt, 0, [prompt]);
@@ -314,11 +314,11 @@ suite("SessionResolver Tests", () => {
     });
   });
 
-  suite("resolve - newChatSession precedence", () => {
-    test("should return undefined when newChatSession=true at prompt level", () => {
+  suite("resolve - resumeSession precedence", () => {
+    test("should return undefined when resumeSession=false at prompt level", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        newChatSession: true,
+        resumeSession: false,
         sessionId: "ignored-session", // Should be ignored
       };
 
@@ -326,10 +326,10 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, undefined);
     });
 
-    test("should respect workflow-level newChatSession when prompt-level not set", () => {
+    test("should respect workflow-level resumeSession when prompt-level not set", () => {
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: true,
+        resumeSession: false,
         sessionId: "ignored-session",
       };
 
@@ -341,10 +341,10 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, undefined);
     });
 
-    test("should use sessionId when newChatSession=false at workflow level", () => {
+    test("should use sessionId when resumeSession=true at workflow level", () => {
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false,
+        resumeSession: true,
         sessionId: "workflow-session",
       };
 
@@ -357,58 +357,58 @@ suite("SessionResolver Tests", () => {
     });
   });
 
-  suite("shouldStartNewSession", () => {
-    test("should return true when prompt.newChatSession=true", () => {
+  suite("shouldResumeSession", () => {
+    test("should return false when prompt.resumeSession=false", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        newChatSession: true,
+        resumeSession: false,
       };
 
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false, // Should be ignored
+        resumeSession: true, // Should be ignored
       };
 
-      const result = SessionResolver.shouldStartNewSession(prompt, workflow);
-      assert.strictEqual(result, true);
-    });
-
-    test("should return false when prompt.newChatSession=false", () => {
-      const prompt: PromptItem = {
-        prompt: "test",
-        newChatSession: false,
-      };
-
-      const workflow: PromptFile = {
-        prompts: [],
-        newChatSession: true, // Should be ignored
-      };
-
-      const result = SessionResolver.shouldStartNewSession(prompt, workflow);
+      const result = SessionResolver.shouldResumeSession(prompt, workflow);
       assert.strictEqual(result, false);
     });
 
-    test("should use workflow.newChatSession when prompt-level not set", () => {
+    test("should return true when prompt.resumeSession=true", () => {
+      const prompt: PromptItem = {
+        prompt: "test",
+        resumeSession: true,
+      };
+
+      const workflow: PromptFile = {
+        prompts: [],
+        resumeSession: false, // Should be ignored
+      };
+
+      const result = SessionResolver.shouldResumeSession(prompt, workflow);
+      assert.strictEqual(result, true);
+    });
+
+    test("should use workflow.resumeSession when prompt-level not set", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
 
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false,
+        resumeSession: true,
       };
 
-      const result = SessionResolver.shouldStartNewSession(prompt, workflow);
-      assert.strictEqual(result, false);
+      const result = SessionResolver.shouldResumeSession(prompt, workflow);
+      assert.strictEqual(result, true);
     });
 
-    test("should return true when no workflow provided and prompt not set", () => {
+    test("should return false when no workflow provided and prompt not set", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
 
-      const result = SessionResolver.shouldStartNewSession(prompt);
-      assert.strictEqual(result, true);
+      const result = SessionResolver.shouldResumeSession(prompt);
+      assert.strictEqual(result, false);
     });
   });
 
@@ -424,17 +424,17 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(result.error, undefined);
     });
 
-    test("should warn when both newChatSession=true and sessionId set", () => {
+    test("should warn when both resumeSession=false and sessionId set", () => {
       const prompt: PromptItem = {
         prompt: "test",
         sessionId: "my-session",
-        newChatSession: true,
+        resumeSession: false,
       };
 
       const result = SessionResolver.validate(prompt, 0, [prompt]);
       assert.strictEqual(result.valid, true);
       assert.ok(result.warning);
-      assert.ok(result.warning!.includes("newChatSession=true"));
+      assert.ok(result.warning!.includes("resumeSession=false"));
     });
 
     test("should return error for out-of-range numeric reference", () => {

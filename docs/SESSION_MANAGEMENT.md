@@ -148,7 +148,7 @@ prompts:
 
 ### Format 3: Auto-Resume (Implicit)
 
-**Syntax:** `newChatSession: false` (no `sessionId` field)
+**Syntax:** `resumeSession: true` (no `sessionId` field)
 
 Automatically continue from the previous prompt's session.
 
@@ -160,18 +160,18 @@ prompts:
 
   - id: step2
     prompt: "Second step"
-    newChatSession: false
+    resumeSession: true
     # Auto-resumes session from step1
 
   - id: step3
     prompt: "Third step"
-    newChatSession: false
+    resumeSession: true
     # Auto-resumes session from step2 (same as step1)
 ```
 
 **How it works:**
 
-1. No `sessionId` specified + `newChatSession: false`
+1. No `sessionId` specified + `resumeSession: true`
 2. FlightPath looks at previous prompt's `_runtime.sessionId`
 3. Automatically uses that session ID
 
@@ -198,7 +198,7 @@ FlightPath **automatically validates provider compatibility** when resuming sess
 **How It Works:**
 
 1. **Explicit numeric reference** (`sessionId: 1`) - Validates providers match, warns and starts new session if mismatch
-2. **Auto-resume** (`newChatSession: false`, no `sessionId`) - **Searches backward for last prompt with matching provider** (strict equality check)
+2. **Auto-resume** (`resumeSession: true`, no `sessionId`) - **Searches backward for last prompt with matching provider** (strict equality check)
 3. **Exact session ID** (`sessionId: "uuid"`) - No provider validation (you control the session ID)
 
 **Strict Provider Matching:** Auto-resume uses strict equality to prevent cross-provider session references. Providers must BOTH be defined and match exactly (e.g., `"claude-cli" === "claude-cli"`) for session reuse. This prevents errors like "Copilot trying to resume Claude's session".
@@ -220,13 +220,13 @@ prompts:
   - id: claude-implement
     provider: claude-cli
     prompt: "Implement improvements"
-    newChatSession: false  # No sessionId specified
+    resumeSession: true  # No sessionId specified
     # ✅ Auto-resumes Claude session abc-123 (skips Copilot session)
 
   - id: copilot-test
     provider: copilot-cli
     prompt: "Add tests"
-    newChatSession: false  # No sessionId specified
+    resumeSession: true  # No sessionId specified
     # ✅ Auto-resumes Copilot session xyz-789 (skips Claude session)
 ```
 
@@ -266,9 +266,9 @@ prompts:
 | Scenario | Configuration | Behavior |
 |----------|---------------|----------|
 | **All prompts same provider** | `sessionId: 1` on all prompts | ✅ All share session from prompt 1 |
-| **Mixed providers, auto-resume** | `newChatSession: false` (no `sessionId`) | ✅ Each provider resumes its own last session |
+| **Mixed providers, auto-resume** | `resumeSession: true` (no `sessionId`) | ✅ Each provider resumes its own last session |
 | **Mixed providers, explicit ref** | `sessionId: 1` across providers | ⚠️ Warns and starts new session on provider change |
-| **Force new session** | `newChatSession: true` | ✅ Always starts new session |
+| **Force new session** | `resumeSession: false` | ✅ Always starts new session |
 
 ### Best Practice: Use Auto-Resume for Mixed Providers
 
@@ -276,7 +276,7 @@ prompts:
 
 ```yaml
 # Workflow default: Auto-resume
-newChatSession: false
+resumeSession: true
 
 prompts:
   - provider: claude-cli
@@ -312,19 +312,19 @@ FlightPath follows a strict precedence order when determining which session to u
 └─────────────────────────────────────────────┘
                   ↓ (if not set)
 ┌─────────────────────────────────────────────┐
-│ 2. Check prompt.newChatSession             │
-│    - true → Start new session              │
-│    - false → Auto-resume from previous     │
+│ 2. Check prompt.resumeSession              │
+│    - true → Auto-resume from previous      │
+│    - false → Start new session             │
 └─────────────────────────────────────────────┘
                   ↓ (if not set)
 ┌─────────────────────────────────────────────┐
-│ 3. Check workflow.newChatSession           │
+│ 3. Check workflow.resumeSession            │
 │    - Workflow-level default                 │
 └─────────────────────────────────────────────┘
                   ↓ (if not set)
 ┌─────────────────────────────────────────────┐
 │ 4. Check global setting                     │
-│    - flightpath.newChatSessionPerPrompt     │
+│    - flightpath.resumeExistingSession       │
 └─────────────────────────────────────────────┘
 ```
 
@@ -340,7 +340,7 @@ prompts:
 
   - id: implement
     sessionId: 1 # ← Explicit reference wins
-    newChatSession: true # ← Ignored (sessionId takes precedence)
+    resumeSession: false # ← Ignored (sessionId takes precedence)
 ```
 
 **Result:** Uses session from prompt 1 (analyze)
@@ -355,7 +355,7 @@ prompts:
     prompt: "First step"
 
   - id: step2
-    newChatSession: false # ← No sessionId, so check newChatSession
+    resumeSession: true # ← No sessionId, so check resumeSession
 ```
 
 **Result:** Auto-resumes from step1's session
@@ -365,7 +365,7 @@ prompts:
 **Example 3: Workflow-level default**
 
 ```yaml
-newChatSession: false # Workflow default
+resumeSession: true # Workflow default
 
 prompts:
   - id: step1
@@ -607,12 +607,12 @@ Warning: sessionId references prompt using different provider (copilot-cli vs cl
 #### Error: Conflicting settings
 
 ```
-Warning: Both newChatSession=true and sessionId specified. sessionId takes precedence.
+Warning: Both resumeSession=false and sessionId specified. sessionId takes precedence.
 ```
 
-**Cause:** `newChatSession: true` and `sessionId: 1` both set
+**Cause:** `resumeSession: false` and `sessionId: 1` both set
 
-**Fix:** Remove `newChatSession: true` (it's ignored when `sessionId` is set)
+**Fix:** Remove `resumeSession: false` (it's ignored when `sessionId` is set)
 
 ---
 
@@ -622,7 +622,7 @@ Warning: Both newChatSession=true and sessionId specified. sessionId takes prece
 
 **Symptoms:**
 
-- Prompt starts fresh conversation despite `sessionId` or `newChatSession: false`
+- Prompt starts fresh conversation despite `sessionId` or `resumeSession: true`
 - CLI doesn't use `--resume` flag
 
 **Possible causes:**
@@ -642,6 +642,10 @@ Warning: Both newChatSession=true and sessionId specified. sessionId takes prece
 4. **Provider mismatch**
    - Trying to resume Copilot session with Claude
    - **Fix:** Use same provider for all prompts in session chain
+
+5. **resumeSession not set correctly**
+   - May be explicitly set to `false` when you want to resume
+   - **Fix:** Set `resumeSession: true` or use numeric `sessionId` reference
 
 **Debugging:**
 
@@ -749,7 +753,7 @@ prompts:
 
   - id: implement
     prompt: "Implement the plan"
-    newChatSession: true # Fresh session for implementation
+    resumeSession: false # Fresh session for implementation
 
   - id: test
     prompt: "Add tests"
@@ -777,7 +781,7 @@ prompts:
   # Phase 2: Implementation (new session)
   - id: implement-fixes
     prompt: "Implement all fixes"
-    newChatSession: true # Start fresh for implementation
+    resumeSession: false # Start fresh for implementation
 ```
 
 **Why:** Makes workflow intent clear for future maintainers
@@ -790,7 +794,7 @@ prompts:
 
 ```yaml
 # Default: Continue sessions throughout workflow
-newChatSession: false
+resumeSession: true
 
 prompts:
   - id: step1
@@ -802,7 +806,7 @@ prompts:
 
   - id: step3
     prompt: "Third step"
-    newChatSession: true # Override: Start fresh here
+    resumeSession: false # Override: Start fresh here
 ```
 
 **Why:** Reduces repetition, clear exceptions stand out
@@ -856,7 +860,7 @@ prompts:
   # Phase 2: Implementation (Session B - fresh context)
   - id: implement-security
     prompt: "Implement security fixes"
-    newChatSession: true
+    resumeSession: false
 
   - id: implement-performance
     prompt: "Implement performance improvements"
@@ -865,7 +869,7 @@ prompts:
   # Phase 3: Verification (Session C - independent review)
   - id: verify-all
     prompt: "Verify all changes meet requirements"
-    newChatSession: true
+    resumeSession: false
 ```
 
 ---
@@ -877,7 +881,7 @@ Shared session for related work:
 ```yaml
 provider: copilot-cli
 model: claude-sonnet-4.5
-newChatSession: false # Workflow default: Share sessions
+resumeSession: true # Workflow default: Share sessions
 
 prompts:
   - id: write-tests
@@ -935,7 +939,7 @@ prompts:
 
     # Session management
     sessionId: string | number # Session reference (numeric or exact UUID)
-    newChatSession: boolean # Start new session vs continue
+    resumeSession: boolean # Continue from previous session vs start new
 
     # Other properties
     provider: string
@@ -962,7 +966,7 @@ prompts:
 provider: string
 model: string
 agent: string
-newChatSession: boolean
+resumeSession: boolean
 allowDynamicExtension: boolean
 endCondition: object
 

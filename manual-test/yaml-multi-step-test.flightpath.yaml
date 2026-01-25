@@ -5,11 +5,11 @@ prompts:
   - id: step1
     prompt: |
       This is step 1. Remember the number: 42
-    newChatSession: true
+    resumeSession: false
 
   - id: step2
     prompt: |
       What number did I tell you to remember in step 1?
-    newChatSession: false
+    resumeSession: true
 
 # Expected: Step 2 should recall "42"

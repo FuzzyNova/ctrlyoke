@@ -65,7 +65,7 @@
     PROVIDER: "default",
     MODEL: "default",
     AGENT: "",
-    NEW_CHAT: "default",
+    RESUME_SESSION: "default",
     ALLOW_DYNAMIC: "default",
     END_SCRIPT: "",
     END_RETURNS: "",
@@ -359,11 +359,11 @@
         elements.propAgent.value =
           props[PROMPT_PROPERTIES.AGENT] || PROPERTY_DEFAULTS.AGENT;
 
-      const newChatSession = props[PROMPT_PROPERTIES.NEW_CHAT_SESSION];
+      const resumeSession = props[PROMPT_PROPERTIES.RESUME_SESSION];
       elements.propNewChat.value =
-        newChatSession === undefined
-          ? PROPERTY_DEFAULTS.NEW_CHAT
-          : newChatSession
+        resumeSession === undefined
+          ? PROPERTY_DEFAULTS.RESUME_SESSION
+          : resumeSession
             ? "yes"
             : "no";
 

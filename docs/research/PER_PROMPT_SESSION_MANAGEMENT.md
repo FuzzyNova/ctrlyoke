@@ -86,7 +86,7 @@ export interface ExecutionProperties {
   provider?: Provider;
   model?: string;
   agent?: string;
-  newChatSession?: boolean;
+  resumeSession?: boolean;
   allowDynamicExtension?: boolean;
   endCondition?: EndCondition;
   sessionId?: string | number; // Shared, now part of executionProperties
@@ -153,7 +153,7 @@ This approach:
           "properties": {
             "id": { ... },
             "prompt": { ... },
-            "newChatSession": { ... },
+            "resumeSession": { ... },
             "endCondition": { ... },
             "_runtime": { "$ref": "#/definitions/promptRuntimeMetadata" }
           }
@@ -185,7 +185,7 @@ This approach:
 {
   "sessionId": {
     "type": ["string", "number"],
-    "description": "Session ID for resuming conversations. Two formats supported: (1) Exact session ID string to pass to --resume flag, (2) Prompt number (integer) to reuse that prompt's session ID (e.g., 1 means 'use session from prompt 1'). When omitted and newChatSession=false, automatically uses previous prompt's session in same workflow.",
+    "description": "Session ID for resuming conversations. Two formats supported: (1) Exact session ID string to pass to --resume flag, (2) Prompt number (integer) to reuse that prompt's session ID (e.g., 1 means 'use session from prompt 1'). When omitted and resumeSession=false, automatically uses previous prompt's session in same workflow.",
     "examples": ["ses_abc123xyz", "550e8400-e29b-41d4-a716-446655440000", 1, 3]
   }
 }
@@ -199,7 +199,7 @@ export interface ExecutionProperties {
   provider?: Provider;
   model?: string;
   agent?: string;
-  newChatSession?: boolean;
+  resumeSession?: boolean;
   sessionId?: string | number; // Session reference shared at prompt/workflow/runtime
   allowDynamicExtension?: boolean;
   endCondition?: EndCondition;
@@ -267,12 +267,12 @@ prompts:
 
   - id: implement
     prompt: "Implement the changes"
-    newChatSession: false
+    resumeSession: true
     sessionId: 1 # Use session from prompt 1 (analyze)
 
   - id: test
     prompt: "Run the tests"
-    newChatSession: false
+    resumeSession: true
     sessionId: 1 # Also use session from prompt 1
 ```
 
@@ -284,7 +284,7 @@ prompts:
 prompts:
   - id: resume-old
     prompt: "Continue previous work"
-    newChatSession: false
+    resumeSession: true
     sessionId: "550e8400-e29b-41d4-a716-446655440000" # Direct session ID
 ```
 
@@ -300,7 +300,7 @@ prompts:
 
   - id: step2
     prompt: "Second step"
-    newChatSession: false
+    resumeSession: true
     # No sessionId specified - auto-resumes previous prompt's session
 ```
 
@@ -332,7 +332,7 @@ export class SessionResolver {
    * Resolve session ID for a prompt.
    *
    * Resolution order:
-   * 1. If newChatSession=true → undefined (new session)
+   * 1. If resumeSession=false → undefined (new session)
    * 2. If sessionId is number → resolve from referenced prompt
    * 3. If sessionId is string → use directly
    * 4. Otherwise → auto-resume from previous prompt (same provider)
@@ -471,24 +471,24 @@ export class SessionResolver {
    * Check if prompt should start new session.
    *
    * Priority order:
-   * 1. Prompt-level newChatSession setting
-   * 2. Workflow-level newChatSession setting
-   * 3. Global flightpath.newChatSessionPerPrompt setting
+   * 1. Prompt-level resumeSession setting
+   * 2. Workflow-level resumeSession setting
+   * 3. Global flightpath.resumeExistingSession setting
    */
   static shouldStartNewSession(
     prompt: PromptItem,
     workflow?: PromptFile
   ): boolean {
     if (workflow) {
-      return PropertyResolver.resolve(prompt, workflow).newChatSession;
+      return !PropertyResolver.resolve(prompt, workflow).resumeSession;
     }
 
     // Fallback when workflow is unavailable (should be rare)
-    if (prompt.newChatSession !== undefined) {
-      return prompt.newChatSession;
+    if (prompt.resumeSession !== undefined) {
+      return !prompt.resumeSession;
     }
 
-    // return ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+    // return !ConfigurationUtils.shouldResumeExistingSession();
     return true;
   }
 
@@ -516,7 +516,7 @@ export class SessionResolver {
       return {
         valid: true,
         warning:
-          "Prompt has sessionId set but newChatSession=true. " +
+          "Prompt has sessionId set but resumeSession=false. " +
           "Session ID will be ignored.",
       };
     }
@@ -801,7 +801,7 @@ Implement:
 - `resolve()` - Main resolution logic
 - `resolveNumericReference()` - Handle prompt number references
 - `autoResumeFromPrevious()` - Auto-resume logic
-- `shouldStartNewSession()` - Check newChatSession with workflow-level precedence
+- `shouldStartNewSession()` - Check resumeSession with workflow-level precedence
 - `validate()` - Pre-execution validation
 
 **Testing:**
@@ -809,7 +809,7 @@ Implement:
 - Unit tests for all resolution paths
 - Test numeric references (1-based indexing)
 - Test auto-resume logic
-- Test workflow-level `newChatSession` precedence
+- Test workflow-level `resumeSession` precedence
 - Test validation edge cases
 - Test cross-provider validation
 
@@ -878,7 +878,7 @@ Verify they handle `undefined` (new session) and `string` (resume) correctly.
     {
       "id": "implement",
       "prompt": "Implement fixes",
-      "newChatSession": false,
+      "resumeSession": false,
       "sessionId": 1,
       "_runtime": {
         "provider": "copilot-cli",
@@ -910,7 +910,7 @@ Verify they handle `undefined` (new session) and `string` (resume) correctly.
 1. Add session format validation (UUID for Copilot/Claude)
 2. Add Claude CLI error recovery (retry without resume on invalid session)
 3. Add cross-provider validation warnings
-4. Add conflicting setting warnings (newChatSession=true + sessionId)
+4. Add conflicting setting warnings (resumeSession=true + sessionId)
 
 **Testing:**
 
@@ -1011,17 +1011,17 @@ prompts:
 
   - id: analyze-tests
     prompt: "Analyze test coverage"
-    newChatSession: false
+    resumeSession: true
     sessionId: 1 # Continue analysis session
 
   # Session 2: Implementation
   - id: implement-fixes
     prompt: "Implement security fixes based on analysis"
-    newChatSession: true # Start fresh implementation session
+    resumeSession: false # Start fresh implementation session
 
   - id: add-tests
     prompt: "Add tests for the security fixes"
-    newChatSession: false
+    resumeSession: true
     sessionId: 3 # Continue implementation session (prompt 3)
 ```
 

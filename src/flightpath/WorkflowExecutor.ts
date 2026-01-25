@@ -217,7 +217,7 @@ export class WorkflowExecutor {
           `provider=${resolvedProperties.provider}, ` +
           `model=${resolvedProperties.model}, ` +
           `agent=${resolvedProperties.agent || "(none)"}, ` +
-          `newChatSession=${resolvedProperties.newChatSession}, ` +
+          `resumeSession=${resolvedProperties.resumeSession}, ` +
           `allowDynamicExtension=${resolvedProperties.allowDynamicExtension}, ` +
           `endCondition=${resolvedProperties.endCondition ? "defined" : "none"}`
       );
@@ -518,7 +518,7 @@ export class WorkflowExecutor {
       );
       const resolvedRetryProperties = {
         ...resolvedProperties,
-        newChatSession: false,
+        resumeSession: true,
       };
       const success = await integration.sendPrompt(
         retryPromptItem,

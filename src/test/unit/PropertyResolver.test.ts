@@ -133,35 +133,35 @@ suite("PropertyResolver Tests", () => {
     });
   });
 
-  suite("resolveNewChatSession", () => {
-    test("should use prompt-level newChatSession when specified", () => {
+  suite("resolveResumeSession", () => {
+    test("should use prompt-level resumeSession when specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        newChatSession: true,
+        resumeSession: true,
       };
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false, // Should be ignored
+        resumeSession: false, // Should be ignored
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.newChatSession, true);
+      assert.strictEqual(resolved.resumeSession, true);
     });
 
-    test("should use workflow-level newChatSession when prompt-level not specified", () => {
+    test("should use workflow-level resumeSession when prompt-level not specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
       const workflow: PromptFile = {
         prompts: [],
-        newChatSession: false,
+        resumeSession: true,
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.newChatSession, false);
+      assert.strictEqual(resolved.resumeSession, true);
     });
 
-    test("should fall back to VS Code setting when neither prompt nor workflow specify newChatSession", () => {
+    test("should fall back to VS Code setting when neither prompt nor workflow specify resumeSession", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -170,8 +170,8 @@ suite("PropertyResolver Tests", () => {
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      // Should default to ConfigurationUtils.shouldStartNewChatSessionPerPrompt()
-      assert.strictEqual(typeof resolved.newChatSession, "boolean");
+      // Should default to ConfigurationUtils.shouldResumeExistingSession()
+      assert.strictEqual(typeof resolved.resumeSession, "boolean");
     });
   });
 
@@ -371,7 +371,7 @@ suite("PropertyResolver Tests", () => {
         provider: Provider.ClaudeCli, // Override
         // model: not specified - should use workflow
         agent: "code-reviewer", // Override
-        // newChatSession: not specified - should use workflow
+        // resumeSession: not specified - should use workflow
         allowDynamicExtension: true, // Override
         // endCondition: not specified - should use workflow
       };
@@ -381,7 +381,7 @@ suite("PropertyResolver Tests", () => {
         // provider: not specified - prompt overrides anyway
         model: "opus", // Should be used
         // agent: not specified - prompt overrides anyway
-        newChatSession: false, // Should be used
+        resumeSession: true, // Should be used
         // allowDynamicExtension: not specified - prompt overrides anyway
         endCondition: {
           script: "test.js",
@@ -394,7 +394,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.provider, Provider.ClaudeCli); // From prompt
       assert.strictEqual(resolved.model, "opus"); // From workflow
       assert.strictEqual(resolved.agent, "code-reviewer"); // From prompt
-      assert.strictEqual(resolved.newChatSession, false); // From workflow
+      assert.strictEqual(resolved.resumeSession, true); // From workflow
       assert.strictEqual(resolved.allowDynamicExtension, true); // From prompt
       assert.deepStrictEqual(resolved.endCondition, {
         script: "test.js",

@@ -86,7 +86,7 @@ prompts:
   - id: implement
     prompt: |
       Implement the improvements identified in the analysis.
-    newChatSession: false
+    resumeSession: true
     endCondition:
       script: npm test
       returns: "true"

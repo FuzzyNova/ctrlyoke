@@ -65,7 +65,7 @@ export const MESSAGE_TYPES = {
   CHANGE_AGENT: "changeAgent",
   CHANGE_EXECUTION_MODE: "changeExecutionMode",
   CHANGE_DYNAMIC_QUEUE: "changeDynamicQueue",
-  CHANGE_NEW_CHAT_SESSION: "changeNewChatSession",
+  CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
@@ -238,7 +238,7 @@ export const PROMPT_PROPERTIES = {
   AGENT: "agent",
 
   // Session properties
-  NEW_CHAT_SESSION: "newChatSession",
+  RESUME_SESSION: "resumeSession",
   SESSION_ID: "sessionId",
   ALLOW_DYNAMIC_EXTENSION: "allowDynamicExtension",
 

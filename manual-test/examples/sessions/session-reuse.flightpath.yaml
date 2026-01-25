@@ -11,7 +11,7 @@
 
 provider: copilot-cli
 model: claude-sonnet-4.5
-newChatSession: false # Workflow default: Continue sessions
+resumeSession: true # Workflow default: Continue sessions
 
 prompts:
   # ============================================================
@@ -44,7 +44,7 @@ prompts:
       - TypeScript strict mode compliance
 
       Create src/flightpath/orchestration/PromptSessionResolver.ts
-    # No sessionId, newChatSession: false (workflow default)
+    # No sessionId, resumeSession: true (workflow default)
     # Auto-resumes from write-tests
     # Copilot has full context of the test requirements
 

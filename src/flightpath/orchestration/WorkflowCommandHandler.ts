@@ -513,7 +513,7 @@ prompts:
       Fix any issues found in the previous analysis.
 
       Follow best practices and maintain code consistency.
-    newChatSession: false
+    resumeSession: true
     endCondition:
       script: run_tests.py
       returns: "all_passed"

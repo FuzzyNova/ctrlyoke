@@ -68,7 +68,7 @@ export class ValidationUtils {
         type: "string",
         nullable: true,
       },
-      newChatSession: {
+      resumeSession: {
         type: "boolean",
         nullable: true,
       },
@@ -112,7 +112,7 @@ export class ValidationUtils {
           },
           model: { type: "string", nullable: true },
           agent: { type: "string", nullable: true },
-          newChatSession: { type: "boolean", nullable: true },
+          resumeSession: { type: "boolean", nullable: true },
           allowDynamicExtension: { type: "boolean", nullable: true },
           endCondition: {
             type: "object",

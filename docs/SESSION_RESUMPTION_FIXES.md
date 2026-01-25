@@ -9,7 +9,7 @@ This document details the fixes applied to session resumption functionality for 
 ### Issue 1: Claude `-c` Flag is Dangerous
 
 **Problem:**
-When no explicit session ID was provided but `newChatSession: false` was set, FlightPath would use Claude's `-c` (continue) flag. This flag resumes the **most recent Claude session globally**, not workspace-specific.
+When no explicit session ID was provided but `resumeSession: true` was set (equivalent to old `newChatSession: false`), FlightPath would use Claude's `-c` (continue) flag. This flag resumes the **most recent Claude session globally**, not workspace-specific.
 
 **Why This is Bad:**
 1. ❌ Resumes most recent session **across all projects**, not just current workspace
@@ -23,7 +23,7 @@ When no explicit session ID was provided but `newChatSession: false` was set, Fl
 prompts:
   - prompt: "Analyze code"
   - prompt: "Continue analysis"
-    newChatSession: false  # ← Used to add `-c` flag
+    resumeSession: true  # ← Used to add `-c` flag
 ```
 
 If user also has Claude session open in project B, the `-c` flag might resume project B's session instead!
@@ -56,8 +56,8 @@ Removed `-c` flag support entirely. Now Claude only resumes sessions when we hav
 |---------|-------------|--------------|
 | `sessionId: "abc-123"` | ✅ Resume session abc-123 | ✅ Resume session abc-123 (unchanged) |
 | `sessionId: 1` (ref) | ✅ Resume session from prompt 1 | ✅ Resume session from prompt 1 (unchanged) |
-| `newChatSession: false` | ⚠️ Use `-c` flag (global resume) | ✅ Start new session (safe) |
-| No sessionId/newChatSession | ✅ Start new session | ✅ Start new session (unchanged) |
+| `resumeSession: true` | ⚠️ Use `-c` flag (global resume) | ✅ Start new session (safe) |
+| No sessionId/resumeSession | ✅ Start new session | ✅ Start new session (unchanged) |
 
 ### Issue 2: Retry Timing Too Short for Resumed Sessions
 
@@ -117,7 +117,7 @@ This gives Claude CLI plenty of time to process the resume request and update th
 
 ### Breaking Changes
 None. The `-c` flag removal only affects edge cases where:
-- `newChatSession: false` is set
+- `resumeSession: true` is set (old `newChatSession: false`)
 - No explicit `sessionId` is provided
 - User expected to resume previous session
 
@@ -143,13 +143,13 @@ prompts:
 
 **Expected:** Second prompt resumes first prompt's session successfully.
 
-### Test Case 2: newChatSession: false (Behavior Changed)
+### Test Case 2: resumeSession: true (Behavior Changed)
 ```yaml
 prompts:
   - prompt: "First prompt"
 
   - prompt: "Second prompt"
-    newChatSession: false  # No longer uses -c flag
+    resumeSession: true  # No longer uses -c flag
 ```
 
 **Old Behavior:** Used `-c` flag (might resume wrong session)

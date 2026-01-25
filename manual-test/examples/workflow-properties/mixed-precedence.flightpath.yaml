@@ -14,7 +14,7 @@
 # These provide defaults for all prompts
 provider: copilot-cli
 model: claude-sonnet-4.5
-newChatSession: false
+resumeSession: true
 
 # Prompts
 prompts:
@@ -34,7 +34,7 @@ prompts:
     # Effective properties:
     #   provider: copilot-cli (from workflow)
     #   model: claude-sonnet-4.5 (from workflow)
-    #   newChatSession: false (from workflow)
+    #   resumeSession: true (from workflow)
 
   # Prompt 2: Model override only - demonstrates partial override
   - id: implement
@@ -51,7 +51,7 @@ prompts:
     # Effective properties:
     #   provider: copilot-cli (from workflow)
     #   model: gpt-5 (PROMPT OVERRIDE - highest priority)
-    #   newChatSession: false (from workflow)
+    #   resumeSession: true (from workflow)
 
   # Prompt 3: Complete override - demonstrates all properties overridden
   - id: review
@@ -67,20 +67,20 @@ prompts:
       Provide approval or detailed feedback for improvements.
     provider: claude-cli # Override: Different provider
     model: opus # Override: Most capable Claude model
-    newChatSession: true # Override: Fresh session for review
+    resumeSession: false # Override: Fresh session for review
     # Effective properties:
     #   provider: claude-cli (PROMPT OVERRIDE)
     #   model: opus (PROMPT OVERRIDE)
-    #   newChatSession: true (PROMPT OVERRIDE)
+    #   resumeSession: false (PROMPT OVERRIDE)
     # All workflow defaults overridden at prompt level
 
 # Precedence Summary Table:
 #
-# | Prompt     | Provider      | Model            | New Session | Source          |
-# |------------|---------------|------------------|-------------|-----------------|
-# | analyze    | copilot-cli   | claude-sonnet-4.5| false       | All workflow    |
-# | implement  | copilot-cli   | gpt-5            | false       | Mixed (model)   |
-# | review     | claude-cli    | opus             | true        | All prompt      |
+# | Prompt     | Provider      | Model            | Resume Session | Source          |
+# |------------|---------------|------------------|----------------|-----------------|
+# | analyze    | copilot-cli   | claude-sonnet-4.5| true           | All workflow    |
+# | implement  | copilot-cli   | gpt-5            | true           | Mixed (model)   |
+# | review     | claude-cli    | opus             | false          | All prompt      |
 #
 # Key Insights:
 # - Workflow properties provide sensible defaults

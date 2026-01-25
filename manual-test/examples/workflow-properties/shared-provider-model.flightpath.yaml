@@ -15,7 +15,7 @@
 provider: claude-cli
 model: sonnet # Default: Powerful model for complex analysis
 agent: .github/agents/code-reviewer.agent.md
-newChatSession: true # Fresh context for each review phase
+resumeSession: false # Fresh context for each review phase
 
 # Prompts
 prompts:

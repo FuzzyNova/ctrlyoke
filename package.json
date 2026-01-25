@@ -896,12 +896,12 @@
           "description": "Default retry prompt template when maxRetries is specified but retryPrompt is not",
           "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{scriptOutput}`, `{errorOutput}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, `{maxRetries}`. Leave empty to require explicit retry prompts."
         },
-        "flightpath.newChatSessionPerPrompt": {
+        "flightpath.resumeExistingSession": {
           "order": 550,
           "type": "boolean",
-          "default": true,
-          "description": "Start a new chat session for each prompt in multi-prompt workflows",
-          "markdownDescription": "When enabled (default), each prompt in a multi-prompt workflow starts a fresh chat session. When disabled, prompts continue in the same session for context continuity. Individual prompts can override this with `\"newChatSession\": false` in the JSON schema. Retries always use the same session regardless of this setting."
+          "default": false,
+          "description": "Resume existing chat session for each prompt in multi-prompt workflows",
+          "markdownDescription": "When enabled, each prompt in a multi-prompt workflow continues in the existing chat session for context continuity. When disabled (default), each prompt starts a fresh chat session. Individual prompts can override this with `\"resumeSession\": true` in the JSON schema. Retries always use the same session regardless of this setting."
         },
         "flightpath.enableDynamicQueue": {
           "order": 600,

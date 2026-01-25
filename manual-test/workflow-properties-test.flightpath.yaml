@@ -4,7 +4,7 @@
 # Workflow-level defaults (apply to all prompts unless overridden)
 provider: copilot-cli
 model: claude-sonnet-4.5
-newChatSession: false
+resumeSession: true
 allowDynamicExtension: false
 
 prompts:
@@ -14,7 +14,7 @@ prompts:
       # Expected resolved properties:
       # - provider: copilot-cli (workflow)
       # - model: claude-sonnet-4.5 (workflow)
-      # - newChatSession: false (workflow)
+      # - resumeSession: true (workflow)
       # - allowDynamicExtension: false (workflow)
 
   - id: step2-override-model
@@ -24,29 +24,29 @@ prompts:
     # Expected resolved properties:
     # - provider: copilot-cli (workflow)
     # - model: claude-haiku-4.5 (prompt override)
-    # - newChatSession: false (workflow)
+    # - resumeSession: true (workflow)
     # - allowDynamicExtension: false (workflow)
 
   - id: step3-override-session
     prompt: |
       Echo "Step 3: I start a new session but inherit model and provider"
-    newChatSession: true # Prompt-level override
+    resumeSession: false # Prompt-level override
     # Expected resolved properties:
     # - provider: copilot-cli (workflow)
     # - model: claude-sonnet-4.5 (workflow)
-    # - newChatSession: true (prompt override)
+    # - resumeSession: false (prompt override)
     # - allowDynamicExtension: false (workflow)
 
   - id: step4-multiple-overrides
     prompt: |
       Echo "Step 4: I override multiple properties"
     model: gpt-5
-    newChatSession: true
+    resumeSession: false
     allowDynamicExtension: true
     # Expected resolved properties:
     # - provider: copilot-cli (workflow)
     # - model: gpt-5 (prompt override)
-    # - newChatSession: true (prompt override)
+    # - resumeSession: false (prompt override)
     # - allowDynamicExtension: true (prompt override)
 
 # Instructions for testing:

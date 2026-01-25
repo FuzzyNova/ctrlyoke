@@ -473,13 +473,14 @@ export class FlightPathManager {
         return;
       }
 
-      // Check if queue needs to be restarted (completed, paused, or error state)
+      // Check if queue needs to be restarted (completed, paused, stopped, or error state)
       // Skip restart if we're continuing from append operation
       const queueState = this.promptQueue.getState();
       if (!continueFromCurrent) {
         if (
           queueState.status === EXECUTION_STATES.COMPLETED ||
           queueState.status === EXECUTION_STATES.PAUSED ||
+          queueState.status === EXECUTION_STATES.STOPPED ||
           queueState.status === EXECUTION_STATES.ERROR
         ) {
           Log.info(
@@ -1245,12 +1246,12 @@ export class FlightPathManager {
       updates.agent = properties.agent === null ? undefined : properties.agent;
     }
 
-    // Handle newChatSession: null clears, boolean sets, undefined skips
-    if (properties.newChatSession !== undefined) {
-      updates.newChatSession =
-        properties.newChatSession === null
+    // Handle resumeSession: null clears, boolean sets, undefined skips
+    if (properties.resumeSession !== undefined) {
+      updates.resumeSession =
+        properties.resumeSession === null
           ? undefined
-          : properties.newChatSession;
+          : properties.resumeSession;
     }
 
     // Handle sessionId: null clears, string/number sets, undefined skips

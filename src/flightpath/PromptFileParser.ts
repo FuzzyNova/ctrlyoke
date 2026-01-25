@@ -332,8 +332,8 @@ export class PromptFileParser {
     if (source.provider !== undefined) promptItem.provider = source.provider;
     if (source.model !== undefined) promptItem.model = source.model;
     if (source.agent !== undefined) promptItem.agent = source.agent;
-    if (source.newChatSession !== undefined)
-      promptItem.newChatSession = source.newChatSession;
+    if (source.resumeSession !== undefined)
+      promptItem.resumeSession = source.resumeSession;
     if (source.allowDynamicExtension !== undefined)
       promptItem.allowDynamicExtension = source.allowDynamicExtension;
     if (source.endCondition !== undefined)
@@ -369,8 +369,8 @@ export class PromptFileParser {
       if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
       if (parsed.model !== undefined) promptFile.model = parsed.model;
       if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
-      if (parsed.newChatSession !== undefined)
-        promptFile.newChatSession = parsed.newChatSession;
+      if (parsed.resumeSession !== undefined)
+        promptFile.resumeSession = parsed.resumeSession;
       if (parsed.allowDynamicExtension !== undefined)
         promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
       if (parsed.endCondition !== undefined)
@@ -400,8 +400,8 @@ export class PromptFileParser {
       if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
       if (parsed.model !== undefined) promptFile.model = parsed.model;
       if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
-      if (parsed.newChatSession !== undefined)
-        promptFile.newChatSession = parsed.newChatSession;
+      if (parsed.resumeSession !== undefined)
+        promptFile.resumeSession = parsed.resumeSession;
       if (parsed.allowDynamicExtension !== undefined)
         promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
       if (parsed.endCondition !== undefined)

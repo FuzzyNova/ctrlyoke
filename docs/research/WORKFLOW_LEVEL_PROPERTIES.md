@@ -506,7 +506,7 @@ Adding workflow-level properties creates UI confusion:
 │                                                           │
 │  Agent:     [code-reviewer ▼]  [Set as Default] ⚙️       │ ← Differs from global
 │                                                           │
-│  New Chat Session: [Yes ▼]                               │ ← Matches global (no button)
+│  Resume Session: [Yes ▼]                               │ ← Matches global (no button)
 │                                                           │
 │  Allow Dynamic Extension: [No ▼]  [Set as Default] ⚙️    │ ← Differs from global
 │                                                           │
@@ -691,9 +691,9 @@ User clicks "Set as Default":
       <span class="setting-description">Custom agent file</span>
     </div>
 
-    <!-- New Chat Session -->
+    <!-- Resume Session -->
     <div class="setting-group">
-      <label for="workflow-new-chat">New Chat Session Per Prompt</label>
+      <label for="workflow-new-chat">Resume Session Per Prompt</label>
       <div class="setting-input-row">
         <select id="workflow-new-chat">
           <option value="true">Yes</option>

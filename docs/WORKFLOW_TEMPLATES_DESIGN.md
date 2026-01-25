@@ -114,12 +114,12 @@ FlightPath ships with built-in templates available in the "New Workflow" dialog:
     {
       "id": "implement",
       "prompt": "Implement the plan you just created. Make all necessary code changes.",
-      "newChatSession": false
+      "resumeSession": true
     },
     {
       "id": "commit",
       "prompt": "Generate a conventional commit message for the changes. Format: feat(scope): description",
-      "newChatSession": false
+      "resumeSession": true
     }
   ]
 }

@@ -20,8 +20,8 @@ export interface ResolvedProperties {
   /** Custom agent file (.agent.md) - undefined if not specified */
   agent?: string;
 
-  /** Start new chat session (always resolved, defaults to setting) */
-  newChatSession: boolean;
+  /** Resume existing chat session (always resolved, defaults to setting) */
+  resumeSession: boolean;
 
   /** Allow dynamic queue extension (always resolved, defaults to false) */
   allowDynamicExtension: boolean;
@@ -72,7 +72,7 @@ export class PropertyResolver {
       provider,
       model,
       agent: this.resolveAgent(prompt, workflow),
-      newChatSession: this.resolveNewChatSession(prompt, workflow),
+      resumeSession: this.resolveResumeSession(prompt, workflow),
       allowDynamicExtension: this.resolveAllowDynamicExtension(
         prompt,
         workflow
@@ -178,33 +178,33 @@ export class PropertyResolver {
   }
 
   /**
-   * Resolve newChatSession with three-tier precedence.
+   * Resolve resumeSession with three-tier precedence.
    *
    * Precedence order:
-   * 1. Prompt-level override (prompt.newChatSession)
-   * 2. Workflow-level default (workflow.newChatSession)
-   * 3. VS Code setting (flightpath.newChatSessionPerPrompt)
+   * 1. Prompt-level override (prompt.resumeSession)
+   * 2. Workflow-level default (workflow.resumeSession)
+   * 3. VS Code setting (flightpath.resumeExistingSession)
    *
-   * @param prompt The prompt to resolve newChatSession for
+   * @param prompt The prompt to resolve resumeSession for
    * @param workflow The parent workflow file
-   * @returns Resolved newChatSession flag (always defined, defaults to setting)
+   * @returns Resolved resumeSession flag (always defined, defaults to setting)
    */
-  private static resolveNewChatSession(
+  private static resolveResumeSession(
     prompt: PromptItem,
     workflow: PromptFile
   ): boolean {
     // 1. Prompt-level override (highest priority)
-    if (prompt.newChatSession !== undefined) {
-      return prompt.newChatSession;
+    if (prompt.resumeSession !== undefined) {
+      return prompt.resumeSession;
     }
 
     // 2. Workflow-level default
-    if (workflow.newChatSession !== undefined) {
-      return workflow.newChatSession;
+    if (workflow.resumeSession !== undefined) {
+      return workflow.resumeSession;
     }
 
     // 3. VS Code setting fallback
-    return ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+    return ConfigurationUtils.shouldResumeExistingSession();
   }
 
   /**

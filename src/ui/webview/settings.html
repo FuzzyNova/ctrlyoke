@@ -77,16 +77,16 @@
           <span class="setting-description">Custom agent file</span>
         </div>
 
-        <!-- New Chat Session & Session ID -->
+        <!-- Resume Session & Session ID -->
         <div class="setting-group">
           <div class="session-control-row">
             <div class="session-column">
-              <label for="workflow-new-chat">New Chat</label>
+              <label for="workflow-new-chat">Resume Session</label>
               <div class="session-control-with-button">
                 <input type="checkbox" id="workflow-new-chat" />
                 <a
                   class="link-set-default"
-                  data-property="newChatSession"
+                  data-property="resumeSession"
                   title="Set this as the default for all workflows"
                   hidden
                 >
@@ -110,14 +110,14 @@
                 type="text"
                 id="workflow-session-id"
                 class="session-id-input"
-                placeholder="disable New Chat to input session ID"
+                placeholder="enable Resume Session to input session ID"
                 disabled
                 title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
               />
             </div>
           </div>
           <span class="setting-description"
-            >New Chat starts fresh session; Session ID resumes specific session or
+            >Resume Session continues existing session; Session ID resumes specific session or
             reuses another prompt's session (by number)</span
           >
         </div>

@@ -306,13 +306,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Use resolved properties if available (from PropertyResolver three-tier precedence)
       const resolvedModel = workflowContext?.resolvedProperties?.model;
-      const resolvedNewChatSession =
-        workflowContext?.resolvedProperties?.newChatSession;
+      const resolvedResumeSession =
+        workflowContext?.resolvedProperties?.resumeSession;
 
-      // Start new chat session if requested
+      // Start new chat session if NOT resuming
       // Use resolved property if available, otherwise fall back to prompt property
       const shouldStartNewSession =
-        resolvedNewChatSession ?? prompt.newChatSession === true;
+        !(resolvedResumeSession ?? prompt.resumeSession ?? false);
       if (shouldStartNewSession) {
         await this.startNewChatSession();
       }

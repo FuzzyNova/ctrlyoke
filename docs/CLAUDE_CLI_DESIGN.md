@@ -82,8 +82,8 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 | `--disallowedTools <pattern>`         | `flightpath.cliDeniedTools` (shared)                              | Full support - auto-converted from Copilot format, always applied except dangerouslyAllowAll |
 | `--output-format stream-json`         | Hardcoded                                                         | Full support - always uses stream-json for real-time output                                  |
 | `--verbose`                           | Auto-added for stream-json                                        | Full support - required for stream-json format                                               |
-| `-r, --resume <sessionId>`            | `prompt.newChatSession: false` + session ID                       | Full support                                                                                 |
-| `-c`                                  | `prompt.newChatSession: false` (no session ID)                    | Full support - continues most recent session                                                 |
+| `-r, --resume <sessionId>`            | `prompt.resumeSession: true` + session ID                         | Full support                                                                                 |
+| `-c`                                  | `prompt.resumeSession: true` (no session ID)                      | Full support - continues most recent session                                                 |
 | `--settings <json-string>`            | Auto-injected for stop hook (interactive mode)                    | Full support - passes Stop hook configuration                                                |
 | `--mcp-config <path>`                 | Auto-generated for dynamic queue extension                        | Full support - FlightPath MCP server auto-configured when dynamic queue enabled              |
 | `--allowed-tools mcp__flightpath`     | Auto-added with MCP config                                        | Full support - auto-approves FlightPath MCP tools                                            |
@@ -210,9 +210,9 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 **Current behavior:**
 
 - Session ID extracted from Claude JSON response (`session_id` field)
-- `prompt.newChatSession: false` with stored session ID uses `-r <sessionId>`
-- `prompt.newChatSession: false` without session ID uses `-c` (most recent)
-- `prompt.newChatSession: true` or undefined starts fresh session (no flags)
+- `prompt.resumeSession: true` with stored session ID uses `-r <sessionId>`
+- `prompt.resumeSession: true` without session ID uses `-c` (most recent)
+- `prompt.resumeSession: false` or undefined starts fresh session (no flags)
 
 ### Print Mode (Non-Interactive)
 

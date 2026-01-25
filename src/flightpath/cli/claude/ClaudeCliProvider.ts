@@ -98,8 +98,8 @@ export class ClaudeCliProvider implements ICliProvider {
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
     const resolvedAgent = workflowContext?.resolvedProperties?.agent;
-    const resolvedNewChatSession =
-      workflowContext?.resolvedProperties?.newChatSession;
+    const resolvedResumeSession =
+      workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
     if (workflowContext && workspaceRoot) {
@@ -177,9 +177,9 @@ export class ClaudeCliProvider implements ICliProvider {
     }
 
     // Session management - use resolved property if available
-    const shouldStartNewSession = resolvedNewChatSession ?? false;
+    const shouldStartNewSession = !(resolvedResumeSession ?? false);
     Log.debug(
-      `🔍 Session check (resolved): newChatSession=${resolvedNewChatSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
+      `🔍 Session check (resolved): resumeSession=${resolvedResumeSession}, shouldStartNewSession=${shouldStartNewSession}, sessionId=${sessionId}`
     );
     // Session management: Resume with explicit session ID only
     // NOTE: We don't use the `-c` flag (continue most recent session) because:
@@ -192,7 +192,7 @@ export class ClaudeCliProvider implements ICliProvider {
       Log.debug(`✅ Added resume flag: -r ${sessionId}`);
     } else {
       Log.debug(
-        `🆕 Starting new session (no explicit sessionId, ignoring newChatSession=${shouldStartNewSession})`
+        `🆕 Starting new session (no explicit sessionId, resumeSession=${!shouldStartNewSession})`
       );
     }
 

@@ -311,25 +311,25 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
-   * Check if new chat session should be started per prompt
+   * Check if existing chat session should be resumed per prompt
    */
-  shouldStartNewChatSessionPerPrompt(): boolean {
-    return getConfig().get<boolean>("newChatSessionPerPrompt", true);
+  shouldResumeExistingSession(): boolean {
+    return getConfig().get<boolean>("resumeExistingSession", false);
   },
 
   /**
-   * Determine if a new chat session should be started for a specific prompt
+   * Determine if existing chat session should be resumed for a specific prompt
    * Checks prompt's explicit setting first, then falls back to global setting
-   * @param promptNewChatSession The prompt's newChatSession property (may be undefined)
-   * @returns true if new session should be started, false to continue/resume session
+   * @param promptResumeSession The prompt's resumeSession property (may be undefined)
+   * @returns true if session should be resumed, false to start new session
    */
-  shouldStartNewSessionForPrompt(
-    promptNewChatSession: boolean | undefined
+  shouldResumeSessionForPrompt(
+    promptResumeSession: boolean | undefined
   ): boolean {
-    if (promptNewChatSession !== undefined) {
-      return promptNewChatSession;
+    if (promptResumeSession !== undefined) {
+      return promptResumeSession;
     }
-    return ConfigurationUtils.shouldStartNewChatSessionPerPrompt();
+    return ConfigurationUtils.shouldResumeExistingSession();
   },
 
   /**
