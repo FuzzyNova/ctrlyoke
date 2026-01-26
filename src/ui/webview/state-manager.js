@@ -360,7 +360,7 @@
           props[PROMPT_PROPERTIES.AGENT] || PROPERTY_DEFAULTS.AGENT;
 
       const resumeSession = props[PROMPT_PROPERTIES.RESUME_SESSION];
-      elements.propNewChat.value =
+      elements.propResumeSession.value =
         resumeSession === undefined
           ? PROPERTY_DEFAULTS.RESUME_SESSION
           : resumeSession

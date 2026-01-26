@@ -364,16 +364,20 @@
 
                     <div class="property-row session-property-row">
                       <div class="session-column">
-                        <label for="prop-new-chat">Resume Session</label>
-                        <input type="checkbox" id="prop-new-chat" />
+                        <label for="prop-resume-session">Resume Session</label>
+                        <select id="prop-resume-session" class="property-select">
+                          <option value="default" selected>Default</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
                       </div>
                       <div class="session-column">
-                        <label for="prop-session-id">Session ID <span class="label-hint">(disabled while Resume Session is unchecked)</span></label>
+                        <label for="prop-session-id">Session ID <span class="label-hint">(enabled when Resume Session is Yes)</span></label>
                         <input
                           type="text"
                           id="prop-session-id"
                           class="property-input"
-                          placeholder="enable Resume Session to input session ID"
+                          placeholder="set Resume Session to Yes to input session ID"
                           disabled
                           title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
                         />

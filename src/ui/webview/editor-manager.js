@@ -189,19 +189,20 @@
       }
     });
 
-    // Resume Session checkbox - enable/disable session ID input
-    elements.propNewChat.addEventListener("change", (e) => {
-      const isChecked = e.target.checked;
+    // Resume Session dropdown - enable/disable session ID input
+    elements.propResumeSession.addEventListener("change", (e) => {
+      const value = e.target.value;
 
-      // Enable/disable session ID input based on checkbox state
-      // When Resume Session is UNCHECKED (new session), disable session ID input
-      elements.propSessionId.disabled = !isChecked;
-      elements.propSessionId.placeholder = !isChecked
+      // Enable/disable session ID input based on dropdown value
+      // When Resume Session is "yes", enable session ID input
+      // When Resume Session is "default" or "no", disable session ID input
+      elements.propSessionId.disabled = value !== "yes";
+      elements.propSessionId.placeholder = value !== "yes"
         ? "enable Resume Session to input session ID"
         : "enter session ID or prompt number";
 
       // Clear session ID when Resume Session is disabled
-      if (!isChecked) {
+      if (value !== "yes") {
         elements.propSessionId.value = "";
       }
 
@@ -375,16 +376,18 @@
           props[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
       const resumeSession = props[PROMPT_PROPERTIES.RESUME_SESSION];
-      elements.propNewChat.checked =
+      elements.propResumeSession.value =
         resumeSession === undefined
-          ? propertyDefaults.RESUME_SESSION === "yes"
-          : resumeSession;
+          ? propertyDefaults.RESUME_SESSION
+          : resumeSession
+            ? "yes"
+            : "no";
 
       // Session ID
       const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
       elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-      elements.propSessionId.disabled = !elements.propNewChat.checked;
-      elements.propSessionId.placeholder = !elements.propNewChat.checked
+      elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
+      elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
         ? "enable Resume Session to input session ID"
         : "enter session ID or prompt number";
 
@@ -460,16 +463,21 @@
       properties[PROMPT_PROPERTIES.AGENT] = null;
     }
 
-    const isResumeSessionChecked = elements.propNewChat.checked;
-    const defaultResumeSession = propertyDefaults.RESUME_SESSION === "yes";
-    if (isResumeSessionChecked !== defaultResumeSession) {
-      properties[PROMPT_PROPERTIES.RESUME_SESSION] = isResumeSessionChecked;
+    const resumeSessionValue = elements.propResumeSession.value;
+    if (resumeSessionValue !== propertyDefaults.RESUME_SESSION) {
+      // Only save if not "default" - convert "yes"/"no" to boolean
+      if (resumeSessionValue === "yes") {
+        properties[PROMPT_PROPERTIES.RESUME_SESSION] = true;
+      } else if (resumeSessionValue === "no") {
+        properties[PROMPT_PROPERTIES.RESUME_SESSION] = false;
+      }
+      // If "default", don't include the property (let it inherit)
     } else if (includeNullsForDefaults) {
       properties[PROMPT_PROPERTIES.RESUME_SESSION] = null;
     }
 
-    // Session ID (only include if not empty and Resume Session is checked)
-    if (isResumeSessionChecked) {
+    // Session ID (only include if not empty and Resume Session is "yes")
+    if (resumeSessionValue === "yes") {
       const sessionIdValue = elements.propSessionId.value.trim();
       if (sessionIdValue) {
         // Parse as number if it's a valid integer, otherwise keep as string
@@ -513,10 +521,10 @@
     elements.propProvider.value = propertyDefaults.PROVIDER;
     elements.propModel.value = propertyDefaults.MODEL;
     elements.propAgent.value = propertyDefaults.AGENT;
-    elements.propNewChat.checked = propertyDefaults.RESUME_SESSION === "yes";
+    elements.propResumeSession.value = propertyDefaults.RESUME_SESSION;
     elements.propSessionId.value = "";
-    elements.propSessionId.disabled = !elements.propNewChat.checked;
-    elements.propSessionId.placeholder = !elements.propNewChat.checked
+    elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
+    elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
       ? "enable Resume Session to input session ID"
       : "enter session ID or prompt number";
     elements.propAllowDynamic.value = propertyDefaults.ALLOW_DYNAMIC;
@@ -575,16 +583,18 @@
       prompt[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
     const resumeSession = prompt[PROMPT_PROPERTIES.RESUME_SESSION];
-    elements.propNewChat.checked =
+    elements.propResumeSession.value =
       resumeSession === undefined
-        ? propertyDefaults.RESUME_SESSION === "yes"
-        : resumeSession;
+        ? propertyDefaults.RESUME_SESSION
+        : resumeSession
+          ? "yes"
+          : "no";
 
     // Session ID
     const sessionId = prompt[PROMPT_PROPERTIES.SESSION_ID];
     elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-    elements.propSessionId.disabled = !elements.propNewChat.checked;
-    elements.propSessionId.placeholder = !elements.propNewChat.checked
+    elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
+    elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
       ? "enable Resume Session to input session ID"
       : "enter session ID or prompt number";
 
@@ -938,15 +948,17 @@
             props[PROMPT_PROPERTIES.AGENT] || propertyDefaults.AGENT;
 
           const resumeSession = props[PROMPT_PROPERTIES.RESUME_SESSION];
-          elements.propNewChat.checked =
+          elements.propResumeSession.value =
             resumeSession === undefined
-              ? propertyDefaults.RESUME_SESSION === "yes"
-              : resumeSession;
+              ? propertyDefaults.RESUME_SESSION
+              : resumeSession
+                ? "yes"
+                : "no";
 
           const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
           elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-          elements.propSessionId.disabled = !elements.propNewChat.checked;
-          elements.propSessionId.placeholder = !elements.propNewChat.checked
+          elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
+          elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
             ? "enable Resume Session to input session ID"
             : "enter session ID or prompt number";
 
