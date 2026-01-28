@@ -1090,14 +1090,11 @@ export class CliIntegration extends CopilotIntegration {
       const useDirectPrompt = this.isSimplePrompt(promptText);
       let headlessArgs: string[];
       let displayCommand: string;
+      let promptArgument: string;
 
       if (useDirectPrompt) {
         // Simple prompt: pass directly on command line
-        headlessArgs = this.provider.buildHeadlessArgsWithDirectPrompt(
-          args,
-          promptText
-        );
-        displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
+        promptArgument = promptText;
         Log.info(`🚀 Starting headless mode with direct prompt (fast path)`);
         Log.info(`📝 Prompt length: ${promptText.length} characters`);
       } else {
@@ -1105,14 +1102,14 @@ export class CliIntegration extends CopilotIntegration {
         const { tempFilePaths: paths, promptWithInstruction } =
           await this.createPromptFileWithReference(promptText, workflowContext);
         tempFilePaths = paths;
-        headlessArgs = this.provider.buildHeadlessArgs(
-          args,
-          promptWithInstruction
-        );
-        displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
+        promptArgument = promptWithInstruction;
         Log.info(`🚀 Starting headless mode with ${paths.length} file(s)`);
         Log.info(`📝 Total prompt length: ${promptText.length} characters`);
       }
+
+      // Build headless arguments (same method for both direct prompts and file references)
+      headlessArgs = this.provider.buildHeadlessArgs(args, promptArgument);
+      displayCommand = `${this.provider.config.name} ${headlessArgs.join(" ")}`;
 
       this.lastCliCommand = displayCommand;
 

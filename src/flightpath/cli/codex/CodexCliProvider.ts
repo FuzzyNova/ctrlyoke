@@ -274,36 +274,20 @@ export class CodexCliProvider implements ICliProvider {
   }
 
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode
    *
    * Codex expects: codex exec [OPTIONS] [PROMPT]
    * The prompt argument must come LAST after all flags/options.
    *
-   * @param baseArgs Base arguments array
-   * @param promptFileRef File reference (e.g., ".flightpath/temp/prompt.md")
-   * @returns Complete arguments array
-   */
-  buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
-    return [...baseArgs, `"${promptFileRef}"`];
-  }
-
-  /**
-   * Build CLI arguments for headless mode with direct prompt
-   *
-   * Simple prompts: pass as LAST positional argument.
-   * Format: codex exec [OPTIONS] "your question here"
+   * Handles both direct prompts and file references (e.g., ".flightpath/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
-   * @param promptText Prompt text
+   * @param prompt Prompt text or file reference
    * @returns Complete arguments array
    */
-  buildHeadlessArgsWithDirectPrompt(
-    baseArgs: string[],
-    promptText: string
-  ): string[] {
-    // Note: Quotes handle spaces and special chars
-    return [...baseArgs, `"${promptText}"`];
+  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote special characters
+    return [...baseArgs, `"${prompt}"`];
   }
 
   /**

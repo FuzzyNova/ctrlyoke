@@ -310,8 +310,7 @@ console.log(result.statistics); // "Usage: 100 input + 50 output = 150 tokens"
 
 - [ ] Define `config: ProviderConfig` (name, displayName, TUI patterns, etc.)
 - [ ] Instantiate components (responseParser, notificationMonitor, toolPermissionMapper)
-- [ ] Implement `buildHeadlessArgs()` method (file reference → CLI args)
-- [ ] Implement `buildHeadlessArgsWithDirectPrompt()` method (direct prompt → CLI args)
+- [ ] Implement `buildHeadlessArgs()` method (handles both direct prompts and file references)
 - [ ] Implement `buildInteractiveTuiCommand()` method (TUI command string)
 - [ ] Implement `formatFileReference()` method (format file paths for CLI)
 - [ ] Implement `getMcpConfigArgs()` method (optional, if CLI supports MCP)
@@ -549,38 +548,22 @@ export class GeminiCliProvider implements ICliProvider {
   readonly logParser: ILogParser = new GeminiLogParser();
 
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode
    *
-   * Adjust based on how Gemini CLI accepts file references.
+   * Handles both direct prompts and file references.
+   * Adjust based on how Gemini CLI accepts prompts.
    * Examples:
-   * - Copilot: ["--prompt", "@file"]
-   * - Claude: ["file"]
-   * - Codex: ["-f", "file"]
+   * - Copilot: ["--prompt", "..."]
+   * - Claude: ["..."]
+   * - Codex: [...baseArgs, "..."]
    *
    * @param baseArgs Base arguments array (permissions, model, etc.)
-   * @param promptFileRef File reference (e.g., "@.flightpath/temp/prompt.md")
+   * @param prompt Prompt text or file reference (e.g., "@.flightpath/temp/prompt.md")
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
-    // Example: Gemini uses --prompt flag with @ prefix
-    return ["--prompt", `"${promptFileRef}"`, ...baseArgs];
-  }
-
-  /**
-   * Build CLI arguments for headless mode with direct prompt
-   *
-   * Used for simple prompts (≤300 characters) to avoid temp file overhead.
-   *
-   * @param baseArgs Base arguments array
-   * @param promptText Prompt text
-   * @returns Complete arguments array
-   */
-  buildHeadlessArgsWithDirectPrompt(
-    baseArgs: string[],
-    promptText: string
-  ): string[] {
-    // Example: Gemini accepts direct prompt with --prompt flag
-    return ["--prompt", `"${promptText}"`, ...baseArgs];
+  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
+    // Example: Gemini uses --prompt flag for both direct prompts and file references
+    return ["--prompt", `"${prompt}"`, ...baseArgs];
   }
 
   /**

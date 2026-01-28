@@ -333,36 +333,20 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode
    *
-   * Copilot requires --prompt flag to specify file references.
-   * Format: copilot --prompt "@path/to/file" [other args]
+   * Copilot requires --prompt flag to specify prompts.
+   * Format: copilot --prompt "..." [other args]
+   *
+   * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
-   * @param promptFileRef File reference (e.g., "@.flightpath/temp/prompt.md")
+   * @param prompt Prompt text or file reference
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
+  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
     // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
-    return ["--prompt", `"${promptFileRef}"`, ...baseArgs];
-  }
-
-  /**
-   * Build CLI arguments for headless mode with direct prompt
-   *
-   * Simple prompts: pass directly with --prompt flag.
-   * Format: copilot --prompt "your question here" [other args]
-   *
-   * @param baseArgs Base arguments array
-   * @param promptText Prompt text
-   * @returns Complete arguments array
-   */
-  buildHeadlessArgsWithDirectPrompt(
-    baseArgs: string[],
-    promptText: string
-  ): string[] {
-    // Note: Quotes handle spaces and special chars
-    return ["--prompt", `"${promptText}"`, ...baseArgs];
+    return ["--prompt", `"${prompt}"`, ...baseArgs];
   }
 
   /**

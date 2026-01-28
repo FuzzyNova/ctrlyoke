@@ -101,23 +101,13 @@ export interface ICliProvider {
   ): Promise<string[]>;
 
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode
+   * Handles both direct prompts and file references identically
    * @param baseArgs Base arguments array
-   * @param promptFileRef File reference (e.g., "@.flightpath/temp/prompt.md")
+   * @param prompt Prompt text or file reference (e.g., "@.flightpath/temp/prompt.md")
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[];
-
-  /**
-   * Build CLI arguments for headless mode with direct prompt
-   * @param baseArgs Base arguments array
-   * @param promptText Prompt text
-   * @returns Complete arguments array
-   */
-  buildHeadlessArgsWithDirectPrompt(
-    baseArgs: string[],
-    promptText: string
-  ): string[];
+  buildHeadlessArgs(baseArgs: string[], prompt: string): string[];
 
   /**
    * Build CLI command for interactive TUI mode

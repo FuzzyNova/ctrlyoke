@@ -139,15 +139,9 @@ export class ClaudeCliProvider implements ICliProvider {
       }
     }
 
-    // Only add print mode for headless (non-interactive) execution
-    // Interactive mode should allow user input, so we skip -p
-    if (!isInteractive) {
-      args.push("-p");
-
-      // Always use stream-json format with verbose flag for headless mode
-      args.push("--output-format", "stream-json");
-      args.push("--verbose");
-    }
+    // Note: Headless-specific flags (-p, --output-format, --verbose) are added by
+    // buildHeadlessArgs() to ensure correct positioning after the prompt argument.
+    // Don't add them here to avoid duplication.
 
     // Model selection with validation - use resolved property if available
     const model = this.validateAndGetModel(resolvedModel);
@@ -312,46 +306,23 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Build CLI arguments for headless mode with file reference
+   * Build CLI arguments for headless mode
    *
    * Claude CLI expects the prompt as the FIRST positional argument (right after command name).
    * This is critical because variadic flags like --disallowedTools will consume any args after them.
    *
-   * Format: claude "@path/to/file" -p --output-format stream-json --verbose [other args]
+   * Format: claude "prompt" -p --output-format stream-json --verbose [other args]
+   *
+   * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
    *
    * @param baseArgs Base arguments array
-   * @param promptFileRef File reference (e.g., "@.flightpath/temp/prompt.md")
+   * @param prompt Prompt text or file reference
    * @returns Complete arguments array
    */
-  buildHeadlessArgs(baseArgs: string[], promptFileRef: string): string[] {
+  buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
     // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
     return [
-      `"${promptFileRef}"`,
-      "-p", // Print mode (non-interactive)
-      "--output-format",
-      "stream-json", // JSON streaming for parsing
-      "--verbose", // Include detailed information
-      ...baseArgs,
-    ];
-  }
-
-  /**
-   * Build CLI arguments for headless mode with direct prompt
-   *
-   * Simple prompts: pass as FIRST positional argument.
-   * Format: claude "your question here" -p --output-format stream-json --verbose [other args]
-   *
-   * @param baseArgs Base arguments array
-   * @param promptText Prompt text
-   * @returns Complete arguments array
-   */
-  buildHeadlessArgsWithDirectPrompt(
-    baseArgs: string[],
-    promptText: string
-  ): string[] {
-    // Note: Quotes handle spaces and special chars
-    return [
-      `"${promptText}"`,
+      `"${prompt}"`,
       "-p", // Print mode (non-interactive)
       "--output-format",
       "stream-json", // JSON streaming for parsing
