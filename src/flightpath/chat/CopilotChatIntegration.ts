@@ -1,15 +1,21 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { PromptItem, Provider } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { ChatLogMonitor } from "./ChatLogMonitor";
+import { ChatSessionMonitor } from "./ChatSessionMonitor";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../utils/Log";
+import { retryWithBackoff } from "../../utils/RetryUtils";
 
 /**
- * GitHub Copilot Chat Integration - UI automation with log-based response detection.
+ * GitHub Copilot Chat Integration - UI automation with session file monitoring.
  * See flightpath-chat.instructions.md for implementation details.
+ *
+ * Completion Detection:
+ * - Session file monitoring (100% reliable) - Method 5 from CHAT_COMPLETION_DETECTION.md
+ * - Monitors VS Code's internal chatSessions/*.json files for completion indicators
  */
 export class CopilotChatIntegration extends CopilotIntegration {
   // Background polling state
@@ -20,7 +26,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
   private pollingTimer: NodeJS.Timeout | undefined;
 
   // Extracted components
-  private logMonitor: ChatLogMonitor;
+  private sessionMonitor: ChatSessionMonitor;
   private attachmentHandler: NativeAttachmentHandler;
 
   // Track if last failure was due to user cancellation in chat UI
@@ -28,7 +34,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   constructor(context: vscode.ExtensionContext) {
     super(context);
-    this.logMonitor = new ChatLogMonitor(context);
+    this.sessionMonitor = new ChatSessionMonitor(context);
     this.attachmentHandler = new NativeAttachmentHandler((path) =>
       this.resolveWorkspacePath(path)
     );
@@ -238,8 +244,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
     if (this.isAvailable) {
       Log.info("✅ Copilot ready");
 
-      // Initialize log monitor for completion detection
-      await this.logMonitor.initialize();
+      // Initialize session monitor for completion detection
+      await this.sessionMonitor.initialize();
 
       this.initializationStatus = CopilotStatus.Ready;
       this.statusChangeEmitter.fire(CopilotStatus.Ready);
@@ -311,10 +317,18 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       // Start new chat session if NOT resuming
       // Use resolved property if available, otherwise fall back to prompt property
-      const shouldStartNewSession =
-        !(resolvedResumeSession ?? prompt.resumeSession ?? false);
+      const shouldStartNewSession = !(
+        resolvedResumeSession ??
+        prompt.resumeSession ??
+        false
+      );
       if (shouldStartNewSession) {
+        Log.info("🆕 Starting new chat session");
         await this.startNewChatSession();
+        // Clear session tracking so we search for the new session
+        this.sessionMonitor.resetSession();
+      } else {
+        Log.info("♻️ Resuming existing chat session");
       }
 
       // Ensure we're in agent mode if user has enabled force agent mode setting
@@ -335,19 +349,22 @@ export class CopilotChatIntegration extends CopilotIntegration {
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
 
-      // Build prompt with Copilot Chat syntax
+      // Get raw prompt text (what will appear in session files - without XML tags)
+      const rawPromptText = prompt.prompt.trim();
+
+      // Build full prompt with XML instructions (what we'll type into chat)
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
         workflowContext
       );
 
-      // Record log position before sending
-      await this.logMonitor.recordPositionBeforeSend();
+      // Record session position with RAW text for matching (session files don't include XML tags)
+      await this.sessionMonitor.recordPositionBeforeSend(rawPromptText);
 
-      // Execute direct automation
-      // Pass whether this is a new chat session for submit verification logic
+      // Execute direct automation - type full prompt (with XML), verify with raw text
       const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
+        rawPromptText,
         shouldStartNewSession
       );
 
@@ -355,11 +372,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
         return false;
       }
 
-      // Wait for completion using log monitoring (if needed)
+      // Wait for completion using session monitoring (if needed)
       if (shouldDetectCompletion) {
         const inactivityTimeoutMs =
           ConfigurationUtils.getChatInactivityTimeoutMs();
-        const result = await this.logMonitor.waitForCompletion(
+
+        Log.info("🔍 Monitoring session file for completion...");
+        const result = await this.sessionMonitor.waitForCompletion(
           () => this.isCancelling,
           inactivityTimeoutMs
         );
@@ -371,15 +390,14 @@ export class CopilotChatIntegration extends CopilotIntegration {
         }
 
         if (!result.completed) {
-          // Check if this was an inactivity timeout that should be treated as success
-          const isInactivityTimeout =
-            result.failureReason?.includes("inactivity timeout");
+          // Check if this was a timeout that should be treated as success
+          const isTimeout = result.failureReason?.includes("timeout");
           const treatTimeoutAsSuccess =
             ConfigurationUtils.shouldTreatChatTimeoutAsSuccess();
 
-          if (isInactivityTimeout && treatTimeoutAsSuccess) {
+          if (isTimeout && treatTimeoutAsSuccess) {
             Log.warn(
-              "⚠️ Inactivity timeout - treating as successful completion (treatChatTimeoutAsSuccess=true)"
+              "⚠️ Timeout - treating as successful completion (treatChatTimeoutAsSuccess=true)"
             );
             // Proceed as if completed - get chat content and fire event
             const responseText = await this.getChatContent(chatPrompt);
@@ -430,6 +448,16 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Read chat content
       const chatContent = await vscode.env.clipboard.readText();
 
+      // CRITICAL: Check if clipboard actually changed
+      // If copy failed (empty chat, wrong focus), clipboard still has original content
+      if (chatContent === originalClipboard) {
+        Log.warn(
+          "⚠️ Clipboard unchanged after copyAll - chat may be empty or copy failed"
+        );
+        // Don't restore clipboard (it's already the original)
+        return ""; // Treat as empty chat
+      }
+
       // Restore user's original clipboard content
       await vscode.env.clipboard.writeText(originalClipboard);
 
@@ -460,81 +488,83 @@ export class CopilotChatIntegration extends CopilotIntegration {
     }
   }
 
-  /** Submit with exponential backoff retry (500ms-5s) and verification */
-  private async submitWithRetry(
-    promptText: string,
-    maxAttempts: number = 5,
-    isNewChatSession: boolean = true
-  ): Promise<boolean> {
-    let attempt = 0;
-    const delays = [500, 1000, 2000, 3000, 5000]; // Exponential backoff pattern
+  /**
+   * Submit with exponential backoff retry and session file verification
+   *
+   * Session file verification is 100% reliable vs unreliable clipboard approach.
+   * Uses RetryUtils defaults: 15 attempts over ~18 seconds for robust verification.
+   */
+  private async submitWithRetry(promptText: string): Promise<boolean> {
+    // Debug: Log what we're searching for
+    const preview = promptText.substring(0, 150).replace(/\n/g, "\\n");
+    Log.info(`📝 Submit verification will search for: "${preview}"`);
 
-    // Get chat content BEFORE submitting (to verify it changes)
-    // If this is a new chat session, assume empty (the new chat command always works)
-    // If reusing existing chat, get actual content
-    let chatBeforeSubmit = "";
-    if (!isNewChatSession) {
-      chatBeforeSubmit = await this.getChatContent();
-    }
+    const result = await retryWithBackoff(
+      async () => {
+        // Check for cancellation
+        if (this.isCancelling) {
+          Log.info("⏹️ Cancelled during submit retry");
+          return false; // Stop retrying
+        }
 
-    while (attempt < maxAttempts) {
-      attempt++;
-
-      if (this.isCancelling) {
-        Log.info("⏹️ Cancelled");
-        return false;
-      }
-
-      try {
         // Execute submit command
         await vscode.commands.executeCommand("workbench.action.chat.submit");
 
-        // Wait for UI to process and chat to update
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Wait for UI to process
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Verify submit worked by checking if our prompt appears in chat
-        const chatAfterSubmit = await this.getChatContent();
+        // Verify submission by searching for our prompt in session files
+        // Searches ALL files sorted by newest first - handles both:
+        // 1. Resumed sessions from any age (user might resume chat from weeks ago)
+        // 2. Duplicate prompts (most recently modified session wins)
+        // VS Code updates file mtime when writing, so active sessions float to top
+        const sessionFile =
+          this.sessionMonitor.findSessionFileByPromptText(promptText);
 
-        // Extract a unique portion of the prompt for verification (first 100 chars)
-        // Normalize whitespace for comparison (replace multiple spaces/newlines with single space)
-        const promptToVerify = promptText
-          .trim()
-          .substring(0, 100)
-          .replace(/\s+/g, " "); // Normalize whitespace for comparison
-
-        // Normalize chat content for comparison
-        const normalizedChat = chatAfterSubmit.replace(/\s+/g, " ");
-
-        // Check if chat grew AND prompt appears in chat
-        // Size check handles duplicate prompts (primary signal), prompt presence is safety validation
-        const chatGrew = chatAfterSubmit.length > chatBeforeSubmit.length;
-        const promptFound = normalizedChat.includes(promptToVerify);
-
-        if (chatGrew && promptFound) {
-          return true;
+        if (sessionFile) {
+          Log.info(
+            `✅ Submit verified via session file: ${path.basename(sessionFile)}`
+          );
+          // Cache session file so waitForCompletion() doesn't re-search
+          this.sessionMonitor.setSessionFile(sessionFile);
+          return sessionFile; // Success
         }
-      } catch (error) {
-        Log.warn(
-          "⚠️ Submit attempt failed:",
-          error instanceof Error ? error.message : String(error)
-        );
-      }
 
-      // If we have attempts left, wait and retry
-      if (attempt < maxAttempts) {
-        const delayIndex = Math.min(attempt - 1, delays.length - 1);
-        const delay = delays[delayIndex];
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        // Submit didn't work, return null to trigger retry
+        return null;
+      },
+      {
+        // Use defaults: maxAttempts=15, delays=[0,100,200,300,500,1000] (~18s total)
+        onRetry: (attempt, maxAttempts) => {
+          if (attempt === 1) {
+            Log.info("🔍 Verifying submission...");
+          } else {
+            Log.warn(
+              `⚠️ Submit verification failed, retrying (${attempt}/${maxAttempts})...`
+            );
+          }
+        },
       }
+    );
+
+    if (!result) {
+      Log.error("❌ Submit failed after all retry attempts");
+      return false;
     }
 
-    Log.error(`❌ Submit failed after ${maxAttempts} attempts`);
-    return false;
+    return true;
   }
 
-  /** Execute direct automation: focus, clear, type, submit. Timing validated. */
+  /**
+   * Execute direct automation: focus, clear, type, submit. Timing validated.
+   *
+   * @param chatPrompt Full prompt with XML tags to type into chat
+   * @param rawPromptText Raw user prompt without XML (for session file verification)
+   * @param isNewChatSession Whether this is a new chat session
+   */
   private async sendPromptWithDirectAutomation(
     chatPrompt: string,
+    rawPromptText: string,
     isNewChatSession: boolean = true
   ): Promise<boolean> {
     try {
@@ -573,16 +603,13 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // PROVEN: 500ms required
 
-      // Step 4: Submit with retry logic (handles race condition)
-      const submitSuccess = await this.submitWithRetry(
-        chatPrompt,
-        10,
-        isNewChatSession
-      );
+      // Step 4: Submit with retry logic and session file verification
+      // Use raw prompt text (without XML) for session file matching
+      const submitSuccess = await this.submitWithRetry(rawPromptText);
 
       if (!submitSuccess) {
         throw new Error(
-          "Failed to submit message after multiple retries - Copilot is still responding"
+          "Failed to submit message after multiple retries - prompt not found in session files"
         );
       }
 
@@ -740,7 +767,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
     const testMessage = "FlightPath automation test. Please acknowledge.";
 
     try {
-      const result = await this.sendPromptWithDirectAutomation(testMessage);
+      // Test message has no XML tags, so pass same text for both params
+      const result = await this.sendPromptWithDirectAutomation(
+        testMessage,
+        testMessage
+      );
 
       if (result) {
         vscode.window.showInformationMessage(

@@ -126,7 +126,7 @@ export async function retryWithBackoff<T>(
 ): Promise<T | undefined> {
   const {
     maxAttempts = 15,
-    delays = [0, 100, 200, 300, 500, 1000],
+    delays = [100, 200, 500, 1000, 1500],
     onRetry,
   } = options;
 
