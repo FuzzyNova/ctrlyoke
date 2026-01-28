@@ -51,6 +51,14 @@ export class ChatSessionMonitor {
   }
 
   /**
+   * Get the cached session file path
+   * Used by ChatSessionParser to extract structured output
+   */
+  getSessionFile(): string | undefined {
+    return this.sessionFilePath || undefined;
+  }
+
+  /**
    * Detect which VS Code variant is running
    * Returns: "Code", "Code - Insiders", "VSCodium", etc.
    */

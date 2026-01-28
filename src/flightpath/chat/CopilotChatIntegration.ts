@@ -5,9 +5,11 @@ import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ChatSessionMonitor } from "./ChatSessionMonitor";
+import { ChatSessionParser } from "./ChatSessionParser";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../utils/Log";
 import { retryWithBackoff } from "../../utils/RetryUtils";
+import { CliOutputFormatter } from "../cli/shared/CliOutputFormatter";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -27,6 +29,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   // Extracted components
   private sessionMonitor: ChatSessionMonitor;
+  private sessionParser: ChatSessionParser;
   private attachmentHandler: NativeAttachmentHandler;
 
   // Track if last failure was due to user cancellation in chat UI
@@ -35,6 +38,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
   constructor(context: vscode.ExtensionContext) {
     super(context);
     this.sessionMonitor = new ChatSessionMonitor(context);
+    this.sessionParser = new ChatSessionParser();
     this.attachmentHandler = new NativeAttachmentHandler((path) =>
       this.resolveWorkspacePath(path)
     );
@@ -399,8 +403,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
             Log.warn(
               "⚠️ Timeout - treating as successful completion (treatChatTimeoutAsSuccess=true)"
             );
-            // Proceed as if completed - get chat content and fire event
-            const responseText = await this.getChatContent(chatPrompt);
+            // Proceed as if completed - extract session output and fire event
+            const responseText = await this.extractSessionOutput();
             this.responseCompleteEmitter.fire(responseText);
             return true;
           }
@@ -412,8 +416,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
           return false;
         }
 
-        // Get chat content and fire event
-        const responseText = await this.getChatContent(chatPrompt);
+        // Extract session output and fire event
+        const responseText = await this.extractSessionOutput();
         this.responseCompleteEmitter.fire(responseText);
       }
 
@@ -433,57 +437,46 @@ export class CopilotChatIntegration extends CopilotIntegration {
     }
   }
 
-  /** Copy chat and extract latest response (preserves original clipboard) */
-  private async getChatContent(lastPromptText?: string): Promise<string> {
+  /**
+   * Extract session output from session file
+   * Replaces unreliable clipboard-based approach with session file parsing.
+   * Session files are the single source of truth for Chat responses.
+   */
+  private async extractSessionOutput(): Promise<string> {
     try {
-      // Cache user's original clipboard content
-      const originalClipboard = await vscode.env.clipboard.readText();
-
-      // Execute copyAll command
-      await vscode.commands.executeCommand("workbench.action.chat.copyAll");
-
-      // Small delay to ensure clipboard is updated
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Read chat content
-      const chatContent = await vscode.env.clipboard.readText();
-
-      // CRITICAL: Check if clipboard actually changed
-      // If copy failed (empty chat, wrong focus), clipboard still has original content
-      if (chatContent === originalClipboard) {
-        Log.warn(
-          "⚠️ Clipboard unchanged after copyAll - chat may be empty or copy failed"
-        );
-        // Don't restore clipboard (it's already the original)
-        return ""; // Treat as empty chat
+      const sessionFile = this.sessionMonitor.getSessionFile();
+      if (!sessionFile) {
+        Log.error("❌ No session file found");
+        return "";
       }
 
-      // Restore user's original clipboard content
-      await vscode.env.clipboard.writeText(originalClipboard);
-
-      // If we have the prompt text, extract only the response after it
-      if (lastPromptText) {
-        // Find the last occurrence of our prompt in the chat
-        // Use a significant portion of the prompt for reliable matching
-        const searchText = lastPromptText.trim().substring(0, 200);
-        const lastPromptIndex = chatContent.lastIndexOf(searchText);
-
-        if (lastPromptIndex !== -1) {
-          // Find where the prompt ends (search for end of that line/section)
-          // The response typically starts after a newline following the prompt
-          const afterPromptStart = lastPromptIndex + searchText.length;
-          const responseText = chatContent.substring(afterPromptStart).trim();
-
-          Log.info(`📋 Response: ${responseText.length} chars`);
-          return responseText;
-        } else {
-          Log.warn("⚠️ Prompt not found in chat, returning full content");
-        }
+      // Validate session file exists
+      if (!this.sessionParser.isValidSessionFile(sessionFile)) {
+        Log.error(`❌ Invalid session file: ${sessionFile}`);
+        return "";
       }
 
-      return chatContent;
+      // Parse session file for structured output
+      const output = this.sessionParser.extractResponse(sessionFile);
+
+      if (output.events.length === 0) {
+        Log.warn("⚠️ Session file has no response events");
+        return "";
+      }
+
+      // Format for output window (plain text)
+      const formattedText = CliOutputFormatter.toPlainText(output);
+
+      Log.info(
+        `📋 Extracted response: ${formattedText.length} chars, ${output.events.length} events`
+      );
+
+      // TODO: Send structured output to dashboard for tool calls, thinking blocks
+      // this.sendOutputToDashboard(output);
+
+      return formattedText;
     } catch (error) {
-      Log.error("❌ Failed to copy chat to clipboard:", error);
+      Log.error("❌ Failed to extract session output:", error);
       return "";
     }
   }
