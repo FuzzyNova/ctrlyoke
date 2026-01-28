@@ -545,22 +545,32 @@ export class WorkflowExecutor {
 
       // Update dashboard with CLI output for retry (if integration supports it)
       if (context.dashboardProvider) {
+        // Get structured output if available (CLI integrations only)
+        const parsedOutput = integration.getLastParsedOutput?.();
+        let structured: DashboardOutput | undefined;
+        if (parsedOutput) {
+          structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
+        }
+
+        // Get token statistics (prefer structured output over legacy parsing)
         let tokens: { prompt: number; completion: number } | undefined;
-        const lastResult = integration.getLastResult();
-        if (lastResult?.statistics) {
-          tokens = integration.parseTokenCounts(lastResult.statistics);
+        if (parsedOutput?.metadata.usage) {
+          // Modern path: Use structured metadata directly
+          tokens = {
+            prompt: parsedOutput.metadata.usage.inputTokens,
+            completion: parsedOutput.metadata.usage.outputTokens,
+          };
+        } else {
+          // Legacy fallback: Parse from statistics string (Chat integration)
+          const lastResult = integration.getLastResult();
+          if (lastResult?.statistics) {
+            tokens = integration.parseTokenCounts(lastResult.statistics);
+          }
         }
 
         const cliCommand = context.shouldShowCliCommand
           ? integration.getLastCliCommand()
           : undefined;
-
-        // Get structured output if available (CLI integrations only)
-        let structured: DashboardOutput | undefined;
-        const parsedOutput = integration.getLastParsedOutput?.();
-        if (parsedOutput) {
-          structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
-        }
 
         // Use unexpanded prompt to avoid flooding output with large attachments
         context.dashboardProvider.updateCliOutput(currentIndex, {
@@ -815,24 +825,33 @@ export class WorkflowExecutor {
       return;
     }
 
-    // Get token statistics from CLI result (returns undefined for non-CLI)
+    // Get structured output if available (CLI integrations only)
+    const parsedOutput = integration.getLastParsedOutput?.();
+    let structured: DashboardOutput | undefined;
+    if (parsedOutput) {
+      structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
+    }
+
+    // Get token statistics (prefer structured output over legacy parsing)
     let tokens: { prompt: number; completion: number } | undefined;
-    const lastResult = integration.getLastResult();
-    if (lastResult?.statistics) {
-      tokens = integration.parseTokenCounts(lastResult.statistics);
+    if (parsedOutput?.metadata.usage) {
+      // Modern path: Use structured metadata directly
+      tokens = {
+        prompt: parsedOutput.metadata.usage.inputTokens,
+        completion: parsedOutput.metadata.usage.outputTokens,
+      };
+    } else {
+      // Legacy fallback: Parse from statistics string (Chat integration)
+      const lastResult = integration.getLastResult();
+      if (lastResult?.statistics) {
+        tokens = integration.parseTokenCounts(lastResult.statistics);
+      }
     }
 
     // Get CLI command if debugging is enabled (returns undefined for non-CLI)
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
       : undefined;
-
-    // Get structured output if available (CLI integrations only)
-    let structured: DashboardOutput | undefined;
-    const parsedOutput = integration.getLastParsedOutput?.();
-    if (parsedOutput) {
-      structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
-    }
 
     // Use unexpanded prompt to avoid flooding output with large attachments
     context.dashboardProvider.updateCliOutput(currentIndex, {

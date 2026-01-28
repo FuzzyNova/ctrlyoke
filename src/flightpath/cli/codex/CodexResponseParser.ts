@@ -3,6 +3,12 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  CLI_EVENT_TYPES,
+  ToolCall,
+} from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -64,19 +70,19 @@ export class CodexResponseParser
   implements IResponseParser
 {
   /**
-   * Parse Codex CLI JSONL output
+   * Parse Codex CLI JSONL output into structured events
    *
    * @param stdout CLI stdout (newline-delimited JSON events)
    * @param stderr CLI stderr (errors)
    * @param exitCode Process exit code
-   * @returns Parsed CLI result with session ID
+   * @returns Structured output with events array and metadata
    */
   parse(
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CliResult & { sessionId?: string } {
-    let fullResponse = "";
+  ): UniversalCliOutput {
+    const events: CliEvent[] = [];
     let sessionId: string | undefined;
     let usage:
       | { input_tokens: number; output_tokens: number; total_tokens?: number }
@@ -91,21 +97,35 @@ export class CodexResponseParser
       if (json.type === "item.completed" && json.item) {
         // Agent message (text response)
         if (json.item.type === "agent_message" && json.item.text) {
-          fullResponse += json.item.text;
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: json.item.text },
+          });
         }
 
         // Command execution (tool call)
         if (json.item.type === "command_execution") {
           const cmd = json.item.command || "unknown";
           const status = json.item.status || "unknown";
-          const exitCode = json.item.exit_code;
+          const toolExitCode = json.item.exit_code;
           const output = json.item.aggregated_output || "";
-          fullResponse += this.formatCommandExecution(
-            cmd,
-            status,
-            exitCode,
-            output
-          );
+
+          // Create TOOL_CALL event
+          events.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp: Date.now(),
+            data: {
+              name: "command_execution",
+              parameters: {
+                command: cmd,
+                status,
+                exit_code: toolExitCode,
+                output,
+              },
+              id: json.item.id,
+            },
+          });
         }
       }
 
@@ -126,26 +146,30 @@ export class CodexResponseParser
       }
     }
 
-    const statistics = this.formatStatistics(usage);
-
-    if (isError) {
-      return {
-        success: false,
-        response: "",
-        statistics,
-        error: errorMessage || stderr || "Stream contained error",
-        exitCode: exitCode !== 0 ? exitCode : 1,
-        sessionId,
-      };
+    // If error occurred, add error event
+    if (isError || exitCode !== 0) {
+      const errorText = errorMessage || stderr || "Unknown error";
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: `Error: ${errorText}` },
+      });
     }
 
     return {
-      success: exitCode === 0,
-      response: fullResponse.trim(),
-      statistics,
-      error: exitCode !== 0 ? stderr : undefined,
-      exitCode,
-      sessionId,
+      events,
+      metadata: {
+        sessionId,
+        usage: usage
+          ? {
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              totalTokens:
+                usage.total_tokens || usage.input_tokens + usage.output_tokens,
+            }
+          : undefined,
+        provider: "codex-cli",
+      },
     };
   }
 

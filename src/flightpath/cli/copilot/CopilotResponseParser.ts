@@ -3,6 +3,11 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  CLI_EVENT_TYPES,
+} from "../../../types/CliOutputTypes";
 
 /**
  * Copilot CLI Response Parser
@@ -24,28 +29,56 @@ export class CopilotResponseParser
   implements IResponseParser
 {
   /**
-   * Parse Copilot CLI text output
+   * Parse Copilot CLI text output into structured events
    *
    * @param stdout CLI stdout (response only)
    * @param stderr CLI stderr (statistics + errors)
    * @param exitCode Process exit code
-   * @returns Parsed CLI result
+   * @returns Structured output with events array and metadata
    */
   parse(
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CliResult & { sessionId?: string } {
-    // Statistics are written to stderr (not stdout!)
-    // Response is in stdout, statistics in stderr
+  ): UniversalCliOutput {
+    const events: CliEvent[] = [];
+
+    // Copilot outputs plain text (no structured events)
+    // Create a single TEXT event for the response
+    if (stdout.trim()) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: stdout.trim() },
+      });
+    }
+
+    // If error, add error event
+    if (exitCode !== 0 && stderr.trim()) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: `Error: ${stderr.trim()}` },
+      });
+    }
+
+    // Parse token usage from stderr statistics
+    const tokenCounts = this.parseTokenCounts(stderr);
+
     return {
-      success: exitCode === 0,
-      response: stdout.trim(),
-      statistics: stderr.trim(), // Statistics are in stderr!
-      error: exitCode !== 0 ? stderr : undefined,
-      exitCode,
-      // Note: Session ID is extracted from log files, not CLI output
-      sessionId: undefined,
+      events,
+      metadata: {
+        // Note: Session ID is extracted from log files, not CLI output
+        sessionId: undefined,
+        usage: tokenCounts
+          ? {
+              inputTokens: tokenCounts.prompt,
+              outputTokens: tokenCounts.completion,
+              totalTokens: tokenCounts.prompt + tokenCounts.completion,
+            }
+          : undefined,
+        provider: "copilot-cli",
+      },
     };
   }
 

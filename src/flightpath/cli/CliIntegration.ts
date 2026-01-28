@@ -21,6 +21,7 @@ import { FileSystemUtils } from "../../utils/FileSystemUtils";
 import { Log } from "../../utils/Log";
 import { ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
+import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import {
   ResolvedProperties,
@@ -1598,16 +1599,39 @@ export class CliIntegration extends CopilotIntegration {
               promptText,
               workflowContext,
               async (result) => {
-                // Parse result using provider's response parser
-                const parsed = this.provider.responseParser.parse(
+                // Parse result using provider's response parser (now returns UniversalCliOutput)
+                const parsedOutput = this.provider.responseParser.parse(
                   result.stdout,
                   result.stderr,
                   result.exitCode
                 );
 
+                // Store structured output for tool call/event access
+                this.lastParsedOutput = parsedOutput;
+
+                // Extract text from events for legacy CliResult
+                const responseText = this.extractTextFromEvents(parsedOutput);
+
+                // Format statistics for display
+                const statistics = CliOutputFormatter.formatStatistics(
+                  parsedOutput.metadata
+                );
+
+                // Create legacy CliResult for backward compatibility
+                const cliResult: CliResult = {
+                  success: result.exitCode === 0,
+                  response: responseText,
+                  statistics,
+                  exitCode: result.exitCode,
+                  error: result.exitCode !== 0 ? result.stderr : undefined,
+                };
+
+                // Store legacy result
+                this.lastResult = cliResult;
+
                 // Extract session ID if available from output or logs
-                if (parsed.sessionId) {
-                  extractedSessionId = parsed.sessionId;
+                if (parsedOutput.metadata.sessionId) {
+                  extractedSessionId = parsedOutput.metadata.sessionId;
                   Log.debug(`📝 Session ID from output: ${extractedSessionId}`);
                 } else if (this.provider.extractSessionIdFromLogs) {
                   // For CLIs that store session ID in log files (e.g., Copilot)
@@ -1619,16 +1643,13 @@ export class CliIntegration extends CopilotIntegration {
                   }
                 }
 
-                // Store result
-                this.lastResult = parsed;
-
                 // Log response
-                this.logResponse(parsed.response, parsed.statistics);
+                this.logResponse(responseText, statistics);
 
                 // Fire response complete event
-                this.responseCompleteEmitter.fire(parsed.response);
+                this.responseCompleteEmitter.fire(responseText);
 
-                return parsed.exitCode === 0;
+                return result.exitCode === 0;
               }
             );
           } catch (error) {
@@ -1662,24 +1683,51 @@ export class CliIntegration extends CopilotIntegration {
                   promptText,
                   workflowContext,
                   async (result) => {
-                    const parsed = this.provider.responseParser.parse(
+                    // Parse result using provider's response parser (now returns UniversalCliOutput)
+                    const parsedOutput = this.provider.responseParser.parse(
                       result.stdout,
                       result.stderr,
                       result.exitCode
                     );
 
-                    if (parsed.sessionId) {
-                      extractedSessionId = parsed.sessionId;
+                    // Store structured output
+                    this.lastParsedOutput = parsedOutput;
+
+                    // Extract text from events
+                    const responseText = this.extractTextFromEvents(parsedOutput);
+
+                    // Format statistics
+                    const statistics = CliOutputFormatter.formatStatistics(
+                      parsedOutput.metadata
+                    );
+
+                    // Create legacy CliResult
+                    const cliResult: CliResult = {
+                      success: result.exitCode === 0,
+                      response: responseText,
+                      statistics,
+                      exitCode: result.exitCode,
+                      error: result.exitCode !== 0 ? result.stderr : undefined,
+                    };
+
+                    // Store legacy result
+                    this.lastResult = cliResult;
+
+                    // Extract session ID
+                    if (parsedOutput.metadata.sessionId) {
+                      extractedSessionId = parsedOutput.metadata.sessionId;
                       Log.debug(
                         `📝 New session ID from retry: ${extractedSessionId}`
                       );
                     }
 
-                    this.lastResult = parsed;
-                    this.logResponse(parsed.response, parsed.statistics);
-                    this.responseCompleteEmitter.fire(parsed.response);
+                    // Log response
+                    this.logResponse(responseText, statistics);
 
-                    return parsed.exitCode === 0;
+                    // Fire response complete event
+                    this.responseCompleteEmitter.fire(responseText);
+
+                    return result.exitCode === 0;
                   }
                 );
               }

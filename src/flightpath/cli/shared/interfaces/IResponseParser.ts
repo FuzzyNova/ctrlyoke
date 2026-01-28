@@ -1,4 +1,5 @@
 import { CliResult } from "../../../../types/CopilotTypes";
+import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
  * Response parsing interface
@@ -8,17 +9,17 @@ import { CliResult } from "../../../../types/CopilotTypes";
  */
 export interface IResponseParser {
   /**
-   * Parse CLI output into structured result
+   * Parse CLI output into structured result with events
    * @param stdout CLI stdout
    * @param stderr CLI stderr
    * @param exitCode Process exit code
-   * @returns Parsed result with optional session ID
+   * @returns Structured output with events array and metadata
    */
   parse(
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CliResult & { sessionId?: string };
+  ): UniversalCliOutput;
 
   /**
    * Process streaming chunk for real-time display
@@ -70,7 +71,7 @@ export abstract class ResponseParserBase implements IResponseParser {
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CliResult & { sessionId?: string };
+  ): UniversalCliOutput;
 
   abstract parseTokenCounts(
     output: string

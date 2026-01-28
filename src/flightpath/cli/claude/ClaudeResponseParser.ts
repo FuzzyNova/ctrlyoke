@@ -3,6 +3,12 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  CLI_EVENT_TYPES,
+  ToolCall,
+} from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -23,19 +29,19 @@ export class ClaudeResponseParser
   implements IResponseParser
 {
   /**
-   * Parse Claude CLI stream-json output
+   * Parse Claude CLI stream-json output into structured events
    *
    * @param stdout CLI stdout (concatenated JSON objects)
    * @param stderr CLI stderr (errors)
    * @param exitCode Process exit code
-   * @returns Parsed CLI result with session ID
+   * @returns Structured output with events array and metadata
    */
   parse(
     stdout: string,
     stderr: string,
     exitCode: number
-  ): CliResult & { sessionId?: string } {
-    let fullResponse = "";
+  ): UniversalCliOutput {
+    const events: CliEvent[] = [];
     let sessionId: string | undefined;
     let usage:
       | { input_tokens: number; output_tokens: number; total_tokens?: number }
@@ -46,7 +52,7 @@ export class ClaudeResponseParser
 
     const { objects } = this.extractJsonObjectsFromStream(stdout);
 
-    // Extract data from parsed objects
+    // Extract data from parsed objects and create structured events
     for (const json of objects) {
       // Extract response from assistant message
       if (json.type === "assistant" && json.message?.content) {
@@ -54,7 +60,12 @@ export class ClaudeResponseParser
           (item: any) => item.type === "text"
         );
         if (textContent?.text) {
-          fullResponse += textContent.text;
+          // Create TEXT event
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: textContent.text },
+          });
         }
 
         // Check for tool use
@@ -62,10 +73,16 @@ export class ClaudeResponseParser
           (item: any) => item.type === "tool_use"
         );
         if (toolUse) {
-          fullResponse += this.formatClaudeToolCall(
-            toolUse.name,
-            toolUse.input
-          );
+          // Create TOOL_CALL event with normalized 'parameters' field
+          events.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp: Date.now(),
+            data: {
+              name: toolUse.name,
+              parameters: toolUse.input, // Normalize 'input' → 'parameters'
+              id: toolUse.id,
+            },
+          });
         }
       }
 
@@ -81,26 +98,31 @@ export class ClaudeResponseParser
       }
     }
 
-    const statistics = this.formatStatistics(usage, model);
-
-    if (isError) {
-      return {
-        success: false,
-        response: "",
-        statistics,
-        error: errorMessage || stderr || "Stream contained error",
-        exitCode: exitCode !== 0 ? exitCode : 1,
-        sessionId,
-      };
+    // If error occurred, add error event
+    if (isError || exitCode !== 0) {
+      const errorText = errorMessage || stderr || "Unknown error";
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: `Error: ${errorText}` },
+      });
     }
 
     return {
-      success: exitCode === 0,
-      response: fullResponse.trim(),
-      statistics,
-      error: exitCode !== 0 ? stderr : undefined,
-      exitCode,
-      sessionId,
+      events,
+      metadata: {
+        sessionId,
+        model,
+        usage: usage
+          ? {
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              totalTokens:
+                usage.total_tokens || usage.input_tokens + usage.output_tokens,
+            }
+          : undefined,
+        provider: "claude-cli",
+      },
     };
   }
 
