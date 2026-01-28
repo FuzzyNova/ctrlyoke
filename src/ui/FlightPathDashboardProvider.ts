@@ -11,6 +11,7 @@ import {
   StatusMessageSeverity,
   DEFAULT_MODELS,
 } from "../types/DashboardConstants";
+import { CliEvent } from "../types/CliOutputTypes";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -336,6 +337,20 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
       type: MESSAGE_TYPES.CLI_STREAMING_CHUNK,
       stepIndex,
       chunk,
+    });
+  }
+
+  public updateCliStreamingEvents(
+    stepIndex: number,
+    events: CliEvent[]
+  ): void {
+    console.log(
+      `🔍 DashboardProvider.updateCliStreamingEvents: stepIndex=${stepIndex}, event count=${events.length}`
+    );
+    this.postMessage({
+      type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
+      stepIndex,
+      events,
     });
   }
 

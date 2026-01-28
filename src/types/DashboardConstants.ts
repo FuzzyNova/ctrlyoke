@@ -19,6 +19,7 @@ export const MESSAGE_TYPES = {
   RETRY_ATTEMPT_CHANGED: "retryAttemptChanged",
   CLI_OUTPUT: "cliOutput",
   CLI_STREAMING_CHUNK: "cliStreamingChunk",
+  CLI_STREAMING_EVENTS: "cliStreamingEvents", // Structured events for Claude/Codex CLI
   STATUS_MESSAGE: "statusMessage",
   EXECUTION_COMPLETED: "executionCompleted",
   QUEUE_EXTENDED: "queueExtended",

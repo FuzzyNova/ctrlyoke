@@ -176,17 +176,19 @@ export class CodexResponseParser
   /**
    * Process streaming chunk for real-time display
    *
-   * Extracts content from JSONL format as it arrives.
+   * Extracts content from JSONL format as it arrives and converts to structured events.
    * Maintains stream buffer in streamState.
+   *
+   * **Returns CliEvent[] for terminal-style rendering with tool call visualization**
    *
    * @param chunk Raw stdout chunk
    * @param streamState Accumulated state (persists across chunks)
-   * @returns Processed content to emit, or undefined to skip
+   * @returns Structured events to emit, or undefined to skip
    */
   processStreamingChunk(
     chunk: string,
     streamState: Map<string, any>
-  ): string | undefined {
+  ): CliEvent[] | undefined {
     // Get or initialize stream buffer
     let streamBuffer = streamState.get("streamBuffer") || "";
     streamBuffer += chunk;
@@ -195,7 +197,7 @@ export class CodexResponseParser
     // Keep incomplete last line in buffer
     streamState.set("streamBuffer", lines[lines.length - 1]);
 
-    let contentToEmit = "";
+    const events: CliEvent[] = [];
 
     // Process complete lines (all except last)
     for (let i = 0; i < lines.length - 1; i++) {
@@ -213,26 +215,41 @@ export class CodexResponseParser
       }
 
       if (json.type === "item.completed" && json.item) {
+        // Extract text content as TEXT event
         if (json.item.type === "agent_message" && json.item.text) {
-          contentToEmit += json.item.text;
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: json.item.text },
+          });
         }
 
+        // Extract command execution as TOOL_CALL event (same format as parse())
         if (json.item.type === "command_execution") {
           const cmd = json.item.command || "unknown";
           const status = json.item.status || "unknown";
-          const exitCode = json.item.exit_code;
+          const toolExitCode = json.item.exit_code;
           const output = json.item.aggregated_output || "";
-          contentToEmit += this.formatCommandExecution(
-            cmd,
-            status,
-            exitCode,
-            output
-          );
+
+          events.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp: Date.now(),
+            data: {
+              name: "Command",
+              parameters: {
+                command: cmd,
+                status,
+                exit_code: toolExitCode,
+                output,
+              },
+              id: json.item.id,
+            },
+          });
         }
       }
     }
 
-    return contentToEmit || undefined;
+    return events.length > 0 ? events : undefined;
   }
 
   /**
@@ -329,22 +346,4 @@ export class CodexResponseParser
   /**
    * Format command execution for display
    */
-  private formatCommandExecution(
-    cmd: string,
-    status: string,
-    exitCode: number | null | undefined,
-    output: string
-  ): string {
-    let formatted = `\n\n🔧 Tool: ${cmd}\n`;
-    formatted += `   Status: ${status}`;
-    if (exitCode !== null && exitCode !== undefined) {
-      formatted += ` (exit code: ${exitCode})`;
-    }
-    if (output.trim()) {
-      const firstLine = output.split("\n")[0].substring(0, 100);
-      formatted += `\n   Output: ${firstLine}${output.length > 100 ? "..." : ""}`;
-    }
-    formatted += `\n\n`;
-    return formatted;
-  }
 }

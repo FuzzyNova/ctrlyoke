@@ -129,17 +129,19 @@ export class ClaudeResponseParser
   /**
    * Process streaming chunk for real-time display
    *
-   * Extracts content from stream-json format as it arrives.
+   * Extracts content from stream-json format as it arrives and converts to structured events.
    * Maintains stream buffer in streamState.
+   *
+   * **Returns CliEvent[] for terminal-style rendering with tool call visualization**
    *
    * @param chunk Raw stdout chunk
    * @param streamState Accumulated state (persists across chunks)
-   * @returns Processed content to emit, or undefined to skip
+   * @returns Structured events to emit, or undefined to skip
    */
   processStreamingChunk(
     chunk: string,
     streamState: Map<string, any>
-  ): string | undefined {
+  ): CliEvent[] | undefined {
     // Get or initialize stream buffer
     let streamBuffer = streamState.get("streamBuffer") || "";
     streamBuffer += chunk;
@@ -148,31 +150,41 @@ export class ClaudeResponseParser
       this.extractJsonObjectsFromStream(streamBuffer);
     streamState.set("streamBuffer", remainder);
 
-    let contentToEmit = "";
+    const events: CliEvent[] = [];
 
     for (const json of objects) {
       if (json.type === "assistant" && json.message?.content) {
+        // Extract text content as TEXT event
         const textContent = json.message.content.find(
           (item: any) => item.type === "text"
         );
         if (textContent?.text) {
-          contentToEmit += textContent.text;
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp: Date.now(),
+            data: { text: textContent.text },
+          });
         }
 
+        // Extract tool use as TOOL_CALL event (same format as parse())
         const toolUse = json.message.content.find(
           (item: any) => item.type === "tool_use"
         );
         if (toolUse) {
-          const toolSummary = this.formatClaudeToolCall(
-            toolUse.name,
-            toolUse.input
-          );
-          contentToEmit += toolSummary;
+          events.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp: Date.now(),
+            data: {
+              name: toolUse.name,
+              parameters: toolUse.input, // Includes old_string/new_string for Edit operations
+              id: toolUse.id,
+            },
+          });
         }
       }
     }
 
-    return contentToEmit || undefined;
+    return events.length > 0 ? events : undefined;
   }
 
   /**
@@ -342,31 +354,6 @@ export class ClaudeResponseParser
     };
   }
 
-  /**
-   * Format Claude tool call for display
-   *
-   * @param toolName Tool name (e.g., "Bash", "Write")
-   * @param input Tool input object
-   * @returns Formatted summary string
-   */
-  private formatClaudeToolCall(toolName: string, input: any): string {
-    let summary = `\n\n[Tool: ${toolName}`;
-
-    if (toolName === "Bash" && input?.command) {
-      summary += ` → ${input.command}`;
-    } else if (toolName === "Write" && input?.file_path) {
-      summary += ` → ${input.file_path}`;
-    } else if (toolName === "Edit" && input?.file_path) {
-      summary += ` → ${input.file_path}`;
-    } else if (toolName === "Read" && input?.file_path) {
-      summary += ` → ${input.file_path}`;
-    } else if (toolName === "WebFetch" && input?.url) {
-      summary += ` → ${input.url}`;
-    }
-
-    summary += "]\n\n";
-    return summary;
-  }
 
   /**
    * Check if error is a Claude CLI invalid session error

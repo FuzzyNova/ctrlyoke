@@ -1145,7 +1145,14 @@ export class CliIntegration extends CopilotIntegration {
                       streamState
                     );
                   if (processedChunk !== undefined) {
-                    this.streamingChunkEmitter.fire(processedChunk);
+                    // Check if response parser returned structured events or plain text
+                    if (Array.isArray(processedChunk)) {
+                      // Modern providers (Claude, Codex) return CliEvent[]
+                      this.streamingEventsEmitter.fire(processedChunk);
+                    } else {
+                      // Legacy providers (Copilot) return string
+                      this.streamingChunkEmitter.fire(processedChunk);
+                    }
                   }
                 } else {
                   // No streaming processor, emit raw chunk

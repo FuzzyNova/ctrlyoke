@@ -171,6 +171,7 @@ export class WorkflowExecutor {
 
       // Set up streaming listener for real-time output (for integrations that support CLI output)
       let streamingDisposable: vscode.Disposable | undefined;
+      let structuredStreamingDisposable: vscode.Disposable | undefined;
       let promptReadyDisposable: vscode.Disposable | undefined;
       if (context.dashboardProvider) {
         // Initialize streaming output with basic prompt text
@@ -206,9 +207,20 @@ export class WorkflowExecutor {
           );
           // Log to Output channel - centralized logging for all streaming content
           Log.append(chunk);
-          // Update dashboard
+          // Update dashboard (plain text streaming - Copilot CLI)
           context.dashboardProvider?.updateCliStreamingChunk(i, chunk);
         });
+
+        // Subscribe to structured streaming events (Claude/Codex CLI)
+        const structuredStreamingDisposable = integration.onStreamingEvents(
+          (events) => {
+            Log.info(
+              `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
+            );
+            // Update dashboard with structured events
+            context.dashboardProvider?.updateCliStreamingEvents(i, events);
+          }
+        );
       }
 
       // Log resolved properties for debugging
@@ -238,6 +250,7 @@ export class WorkflowExecutor {
 
       // Clean up event listeners
       streamingDisposable?.dispose();
+      structuredStreamingDisposable?.dispose();
       promptReadyDisposable?.dispose();
 
       if (!success) {

@@ -215,8 +215,19 @@
   function renderStructuredOutput(output) {
     let html = "";
 
+    // Debug logging to diagnose headless mode structured output issue
+    console.log('[OutputManager] renderStructuredOutput called:', {
+      hasStructured: !!output.structured,
+      hasEvents: !!(output.structured?.events),
+      eventCount: output.structured?.events?.length || 0,
+      hasResponse: !!output.response,
+      responseLength: output.response?.length || 0,
+      isStreaming: output.isStreaming
+    });
+
     // If no structured data, fall back to response text
     if (!output.structured || !output.structured.events) {
+      console.log('[OutputManager] No structured events - using fallback response text');
       if (output.response) {
         html +=
           '<div class="output-response">' +
@@ -225,6 +236,8 @@
       }
       return html;
     }
+
+    console.log('[OutputManager] Rendering', output.structured.events.length, 'structured events');
 
     // Render events in chronological order
     for (const event of output.structured.events) {
@@ -410,6 +423,10 @@
       stepIndex,
       "isStreaming:",
       output.isStreaming,
+      "hasStructured:",
+      !!output.structured,
+      "eventCount:",
+      output.structured?.events?.length || 0,
       "outputCount before:",
       (stateManager.getState().cliOutputs[stepIndex] || []).length
     );
@@ -442,20 +459,32 @@
     if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
       const streamingEntry = outputs[outputs.length - 1];
 
-      // If the streaming entry has accumulated content, PRESERVE it
-      // Only update metadata (elapsed, tokens, isStreaming flag)
+      // If the streaming entry has accumulated content, decide whether to preserve it
       if (streamingEntry.response && streamingEntry.response.length > 0) {
-        console.log(
-          "📊 Dashboard: Preserving streamed response (" +
-            streamingEntry.response.length +
-            " chars), updating metadata only"
-        );
-        // Keep the streamed response, update everything else
-        outputs[outputs.length - 1] = {
-          ...output,
-          response: streamingEntry.response, // Keep streamed content!
-          timestampMs: streamingEntry.timestampMs, // Keep original timestamp
-        };
+        // If the final output has structured data, REPLACE the streamed text
+        // The structured events contain all the information in a better format
+        if (output.structured && output.structured.events && output.structured.events.length > 0) {
+          console.log(
+            "📊 Dashboard: Replacing streamed text (" +
+              streamingEntry.response.length +
+              " chars) with structured output (" +
+              output.structured.events.length +
+              " events)"
+          );
+          outputs[outputs.length - 1] = output; // Use final output with structured data
+        } else {
+          // No structured output - preserve the streamed response
+          console.log(
+            "📊 Dashboard: Preserving streamed response (" +
+              streamingEntry.response.length +
+              " chars), no structured data available"
+          );
+          outputs[outputs.length - 1] = {
+            ...output,
+            response: streamingEntry.response, // Keep streamed content!
+            timestampMs: streamingEntry.timestampMs, // Keep original timestamp
+          };
+        }
       } else {
         // No streamed content, use the final output as-is
         console.log(
@@ -478,7 +507,7 @@
   }
 
   /**
-   * Handle CLI streaming chunk
+   * Handle CLI streaming chunk (plain text - Copilot CLI)
    * @param {number} stepIndex - Step index
    * @param {string} chunk - Streaming chunk
    */
@@ -521,6 +550,59 @@
     stateManager.updateState({ cliOutputs: state.cliOutputs });
 
     // Always render to show streaming updates
+    renderAllCliOutputs();
+  }
+
+  /**
+   * Handle CLI streaming events (structured - Claude/Codex CLI)
+   * @param {number} stepIndex - Step index
+   * @param {Array} events - Array of CliEvent objects
+   */
+  function handleCliStreamingEvents(stepIndex, events) {
+    console.log(
+      `🔍 Dashboard.handleCliStreamingEvents: stepIndex=${stepIndex}, event count=${events.length}`
+    );
+
+    const state = stateManager.getState();
+
+    // Initialize array if needed
+    if (!state.cliOutputs[stepIndex]) {
+      state.cliOutputs[stepIndex] = [];
+    }
+
+    const outputs = state.cliOutputs[stepIndex];
+
+    // Initialize streaming buffer with structured field if needed
+    if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
+      console.log(
+        "🔍 Dashboard.handleCliStreamingEvents: Creating new structured streaming buffer"
+      );
+      outputs.push({
+        prompt: "",
+        response: "",
+        structured: { events: [] }, // Initialize structured events array
+        elapsed: 0,
+        tokens: null,
+        isStreaming: true,
+        timestampMs: getTimestamp(),
+      });
+    }
+
+    // Ensure structured field exists
+    if (!outputs[outputs.length - 1].structured) {
+      outputs[outputs.length - 1].structured = { events: [] };
+    }
+
+    // Append events to the structured events array
+    outputs[outputs.length - 1].structured.events.push(...events);
+    console.log(
+      `🔍 Dashboard.handleCliStreamingEvents: Total event count now: ${outputs[outputs.length - 1].structured.events.length}`
+    );
+
+    // Update state (shallow copy to trigger updates if needed)
+    stateManager.updateState({ cliOutputs: state.cliOutputs });
+
+    // Always render to show streaming updates with terminal-style formatting
     renderAllCliOutputs();
   }
 
@@ -828,6 +910,7 @@
     renderAllCliOutputs,
     handleCliOutput,
     handleCliStreamingChunk,
+    handleCliStreamingEvents,
     handleStatusMessage,
     handleExportOutput,
     toggleOutputSection,

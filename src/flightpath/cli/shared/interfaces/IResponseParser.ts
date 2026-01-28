@@ -1,5 +1,8 @@
 import { CliResult } from "../../../../types/CopilotTypes";
-import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
+import {
+  UniversalCliOutput,
+  CliEvent,
+} from "../../../../types/CliOutputTypes";
 
 /**
  * Response parsing interface
@@ -23,14 +26,20 @@ export interface IResponseParser {
 
   /**
    * Process streaming chunk for real-time display
+   *
+   * **Return types:**
+   * - `string`: Plain text for legacy providers (Copilot CLI) - rendered as fallback text
+   * - `CliEvent[]`: Structured events for modern providers (Claude, Codex) - rendered with terminal styling
+   * - `undefined`: Skip this chunk (incomplete data, waiting for more)
+   *
    * @param chunk Raw stdout chunk
    * @param streamState Accumulated state (persists across chunks)
-   * @returns Processed content to emit, or undefined to skip
+   * @returns Processed content (string or events) to emit, or undefined to skip
    */
   processStreamingChunk?(
     chunk: string,
     streamState: Map<string, any>
-  ): string | undefined;
+  ): string | CliEvent[] | undefined;
 
   /**
    * Extract session/thread ID from CLI output

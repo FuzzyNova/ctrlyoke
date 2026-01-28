@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem, PromptFile } from "../../types/FlightPathTypes";
 import { CliResult } from "../../types/CopilotTypes";
-import { UniversalCliOutput } from "../../types/CliOutputTypes";
+import { UniversalCliOutput, CliEvent } from "../../types/CliOutputTypes";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ContextExpander } from "../../utils/ContextExpander";
 import { Log } from "../../utils/Log";
@@ -40,9 +40,13 @@ export abstract class CopilotIntegration {
   protected responseCompleteEmitter = new vscode.EventEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
-  // Event emitter for streaming response chunks
+  // Event emitter for streaming response chunks (plain text - for Copilot CLI backward compatibility)
   protected streamingChunkEmitter = new vscode.EventEmitter<string>();
   public readonly onStreamingChunk = this.streamingChunkEmitter.event;
+
+  // Event emitter for structured streaming events (for Claude/Codex CLI)
+  protected streamingEventsEmitter = new vscode.EventEmitter<CliEvent[]>();
+  public readonly onStreamingEvents = this.streamingEventsEmitter.event;
 
   // Event emitter for prompt ready (fires when prompt is built but before execution)
   protected promptReadyEmitter = new vscode.EventEmitter<{
@@ -58,6 +62,7 @@ export abstract class CopilotIntegration {
     context.subscriptions.push(this.statusChangeEmitter);
     context.subscriptions.push(this.responseCompleteEmitter);
     context.subscriptions.push(this.streamingChunkEmitter);
+    context.subscriptions.push(this.streamingEventsEmitter);
     context.subscriptions.push(this.promptReadyEmitter);
   }
 

@@ -124,6 +124,12 @@
       );
       outputManager.handleCliStreamingChunk(message.stepIndex, message.chunk);
     };
+    messageHandlers[MESSAGE_TYPES.CLI_STREAMING_EVENTS] = (message) => {
+      console.log(
+        `🔍 Dashboard: Received CLI_STREAMING_EVENTS message, stepIndex=${message.stepIndex}, event count=${message.events?.length}`
+      );
+      outputManager.handleCliStreamingEvents(message.stepIndex, message.events);
+    };
     messageHandlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) =>
       outputManager.handleStatusMessage(message);
 
