@@ -34,7 +34,9 @@
       "Bash(npm run compile:scss:*)",
       "Bash(npm run:*)",
       "Bash(claude:*)",
-      "Bash(codex exec:*)"
+      "Bash(codex exec:*)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []
