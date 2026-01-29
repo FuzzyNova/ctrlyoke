@@ -10,8 +10,190 @@ import {
   ThinkingBlock,
   CliEvent,
   TextData,
+  ToolResultData,
   CLI_EVENT_TYPES,
+  TokenUsage,
 } from "../../../types/CliOutputTypes";
+
+// ============================================================================
+// Codex Log Event Payload Types
+// ============================================================================
+
+/**
+ * Base structure for all Codex log events
+ */
+interface CodexLogEvent {
+  timestamp: string;
+  type: "session_meta" | "turn_context" | "event_msg" | "response_item";
+  payload: CodexEventPayload;
+}
+
+type CodexEventPayload =
+  | CodexSessionMetaPayload
+  | CodexTurnContextPayload
+  | CodexEventMsgPayload
+  | CodexResponseItemPayload;
+
+/**
+ * Session metadata (session_meta event)
+ */
+interface CodexSessionMetaPayload {
+  id: string;
+  timestamp: string;
+  cwd: string;
+  originator: string;
+  cli_version: string;
+  instructions: string;
+  source: string;
+  model_provider: string;
+  model?: string;
+  git?: {
+    commit_hash: string;
+    branch: string;
+    repository_url: string;
+  };
+}
+
+/**
+ * Turn context (turn_context event)
+ */
+interface CodexTurnContextPayload {
+  cwd: string;
+  approval_policy: string;
+  sandbox_policy: {
+    type: string;
+    writable_roots: string[];
+    network_access: boolean;
+    exclude_tmpdir_env_var: boolean;
+    exclude_slash_tmp: boolean;
+  };
+  model: string;
+  effort: string;
+  summary: string;
+  user_instructions: string;
+  truncation_policy: {
+    mode: string;
+    limit: number;
+  };
+}
+
+/**
+ * Event message payloads (event_msg event)
+ */
+type CodexEventMsgPayload =
+  | CodexUserMessagePayload
+  | CodexAgentMessagePayload
+  | CodexTokenCountPayload
+  | CodexTurnCompletedPayload;
+
+interface CodexUserMessagePayload {
+  type: "user_message";
+  message: string;
+  images?: unknown[];
+  local_images?: unknown[];
+  text_elements?: unknown[];
+}
+
+interface CodexAgentMessagePayload {
+  type: "agent_message";
+  message: string;
+}
+
+interface CodexTokenCountPayload {
+  type: "token_count";
+  info: {
+    total_token_usage: CodexTokenUsage;
+    last_token_usage: CodexTokenUsage;
+    model_context_window: number;
+  } | null;
+  rate_limits: {
+    primary: unknown | null;
+    secondary: unknown | null;
+    credits: unknown | null;
+    plan_type: unknown | null;
+  };
+}
+
+interface CodexTokenUsage {
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_output_tokens: number;
+  total_tokens: number;
+}
+
+interface CodexTurnCompletedPayload {
+  type: "turn.completed";
+}
+
+/**
+ * Response item payloads (response_item event)
+ */
+type CodexResponseItemPayload =
+  | CodexMessagePayload
+  | CodexReasoningPayload
+  | CodexFunctionCallPayload
+  | CodexFunctionCallOutputPayload
+  | CodexCustomToolCallPayload
+  | CodexCustomToolCallOutputPayload
+  | CodexAssistantContentPayload;
+
+interface CodexMessagePayload {
+  type: "message";
+  role: "developer" | "assistant";
+  content: Array<{
+    type: "input_text" | "output_text";
+    text: string;
+  }>;
+}
+
+interface CodexReasoningPayload {
+  type: "reasoning";
+  summary: unknown[];
+  content: string | null;
+  encrypted_content: string;
+}
+
+interface CodexFunctionCallPayload {
+  type: "function_call";
+  name: string;
+  arguments: string; // JSON string
+  call_id: string;
+}
+
+interface CodexFunctionCallOutputPayload {
+  type: "function_call_output";
+  call_id: string;
+  output: string;
+}
+
+interface CodexCustomToolCallPayload {
+  type: "custom_tool_call";
+  name: string;
+  input: string;
+  call_id: string;
+  status: "completed" | "in_progress" | "failed";
+}
+
+interface CodexCustomToolCallOutputPayload {
+  type: "custom_tool_call_output";
+  call_id: string;
+  output: string; // JSON-encoded
+}
+
+/**
+ * Assistant content (response_item with role="assistant")
+ */
+interface CodexAssistantContentPayload {
+  role: "assistant";
+  content: Array<{
+    type: "input_text" | "output_text" | "tool_use" | "thinking";
+    text?: string;
+    name?: string;
+    input?: Record<string, unknown>;
+    id?: string;
+  }>;
+}
 
 /**
  * Codex CLI log parser
@@ -117,12 +299,18 @@ export class CodexLogParser extends BaseLogParser {
     let model: string | undefined;
     let cliVersion: string | undefined;
 
+    // Token statistics tracking
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let cachedInputTokens = 0;
+    let reasoningOutputTokens = 0;
+
     for (const event of events) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
 
-      // Track session metadata
+      // Track session metadata (session_meta)
       if (event.type === "session_meta" && event.payload) {
         this.sessionMeta = event.payload;
         sessionId = event.payload.id;
@@ -130,7 +318,39 @@ export class CodexLogParser extends BaseLogParser {
         cliVersion = event.payload.cli_version;
       }
 
-      // Extract text content from response_item events
+      // Extract model from turn_context (if not already set)
+      if (event.type === "turn_context" && event.payload?.model) {
+        if (!model) {
+          model = event.payload.model;
+        }
+      }
+
+      // event_msg:agent_message - Complete agent response text
+      if (
+        event.type === "event_msg" &&
+        event.payload?.type === "agent_message"
+      ) {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp,
+          data: {
+            text: event.payload.message,
+          } as TextData,
+        });
+      }
+
+      // event_msg:token_count - Token usage statistics
+      if (event.type === "event_msg" && event.payload?.type === "token_count") {
+        if (event.payload.info?.total_token_usage) {
+          const usage = event.payload.info.total_token_usage;
+          totalInputTokens = usage.input_tokens || 0;
+          totalOutputTokens = usage.output_tokens || 0;
+          cachedInputTokens = usage.cached_input_tokens || 0;
+          reasoningOutputTokens = usage.reasoning_output_tokens || 0;
+        }
+      }
+
+      // response_item with role="assistant" - Assistant content
       if (
         event.type === "response_item" &&
         event.payload?.role === "assistant"
@@ -181,8 +401,27 @@ export class CodexLogParser extends BaseLogParser {
         }
       }
 
-      // Tool calls emitted as dedicated response_item payloads (function_call)
-      // Arguments may be a JSON string that needs parsing
+      // response_item:reasoning - AI reasoning process (may be encrypted)
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "reasoning"
+      ) {
+        const reasoningText =
+          event.payload.content ||
+          (event.payload.encrypted_content ? "[Encrypted reasoning]" : null);
+        if (reasoningText) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp,
+            data: {
+              text: reasoningText,
+              label: "Reasoning",
+            } as ThinkingBlock,
+          });
+        }
+      }
+
+      // response_item:function_call - Function call request
       if (
         event.type === "response_item" &&
         event.payload?.type === "function_call"
@@ -207,6 +446,74 @@ export class CodexLogParser extends BaseLogParser {
           } as ToolCall,
         });
       }
+
+      // response_item:function_call_output - Function result
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "function_call_output"
+      ) {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: event.payload.call_id,
+            result: {
+              success: true, // Default success, exit code parsing would require output analysis
+              output: event.payload.output,
+            },
+          } as ToolResultData,
+        });
+      }
+
+      // response_item:custom_tool_call - Custom tool call request
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "custom_tool_call"
+      ) {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: event.payload.name,
+            parameters:
+              typeof event.payload.input === "string"
+                ? { input: event.payload.input }
+                : event.payload.input || {},
+            id: event.payload.call_id,
+          } as ToolCall,
+        });
+      }
+
+      // response_item:custom_tool_call_output - Custom tool result
+      if (
+        event.type === "response_item" &&
+        event.payload?.type === "custom_tool_call_output"
+      ) {
+        // Parse JSON output if possible to extract success status
+        let success = true;
+        let output = event.payload.output;
+        try {
+          const parsed = JSON.parse(event.payload.output);
+          output = parsed.output || event.payload.output;
+          success =
+            parsed.metadata?.exit_code === 0 ||
+            parsed.metadata?.exit_code === undefined;
+        } catch {
+          // Use raw output if not JSON
+        }
+
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: event.payload.call_id,
+            result: {
+              success,
+              output,
+            },
+          } as ToolResultData,
+        });
+      }
     }
 
     // Fallback to cached session meta if not found in current events
@@ -216,6 +523,18 @@ export class CodexLogParser extends BaseLogParser {
       cliVersion = this.sessionMeta.cli_version;
     }
 
+    // Build token usage object if we have any token data
+    let usage: TokenUsage | undefined;
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      usage = {
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        totalTokens: totalInputTokens + totalOutputTokens,
+        cachedInputTokens,
+        reasoningOutputTokens,
+      };
+    }
+
     return {
       events: outputEvents,
       metadata: {
@@ -223,6 +542,7 @@ export class CodexLogParser extends BaseLogParser {
         model,
         cliVersion,
         provider: "codex-cli",
+        usage,
       },
     };
   }
@@ -251,9 +571,18 @@ export class CodexLogParser extends BaseLogParser {
    * ```
    */
   isComplete(event: any): boolean {
-    return (
-      event.type === "event_msg" && event.payload?.type === "turn.completed"
-    );
+    // Check for nested payload type (standard format)
+    if (
+      event.type === "event_msg" &&
+      event.payload?.type === "turn.completed"
+    ) {
+      return true;
+    }
+    // Legacy format check (payload.type at top level)
+    if (event.payload?.type === "turn.completed") {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -564,8 +893,12 @@ export class CodexLogParser extends BaseLogParser {
       return event.payload.text;
     }
 
-    // Response item with content array
-    if (event.type === "response_item" && event.payload?.content) {
+    // response_item with assistant role and content array
+    if (
+      event.type === "response_item" &&
+      event.payload?.role === "assistant" &&
+      event.payload?.content
+    ) {
       const textParts = event.payload.content
         .filter(
           (c: any) =>
@@ -575,7 +908,24 @@ export class CodexLogParser extends BaseLogParser {
       return textParts.length > 0 ? textParts.join("") : undefined;
     }
 
-    // Agent message events carry assistant output
+    // response_item with content array (no role check - for backwards compatibility)
+    if (
+      event.type === "response_item" &&
+      event.payload?.content &&
+      Array.isArray(event.payload.content)
+    ) {
+      const textParts = event.payload.content
+        .filter(
+          (c: any) =>
+            (c.type === "input_text" || c.type === "output_text") && c.text
+        )
+        .map((c: any) => c.text);
+      if (textParts.length > 0) {
+        return textParts.join("");
+      }
+    }
+
+    // event_msg:agent_message - Complete agent response
     if (
       event.type === "event_msg" &&
       event.payload?.type === "agent_message" &&

@@ -1,4 +1,3 @@
-import { CliResult } from "../../../types/CopilotTypes";
 import {
   IResponseParser,
   ResponseParserBase,
@@ -7,20 +6,41 @@ import {
   UniversalCliOutput,
   CliEvent,
   CLI_EVENT_TYPES,
-  ToolCall,
+  TokenUsage,
 } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 
 /**
+ * Extended usage statistics from Claude CLI.
+ * Includes cache-related tokens and service tier information.
+ */
+export interface ExtendedUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  service_tier?: string;
+}
+
+/**
  * Claude CLI Response Parser
  *
- * Parses Claude CLI stream-json output format:
- * - stream-json outputs 3 concatenated JSON objects:
- *   1. {"type":"system","subtype":"init",...} - Session metadata
- *   2. {"type":"assistant","message":{...}} - Response at message.content[0].text
- *   3. {"type":"result",...} - Usage stats, session_id, costs
- * - Tool calls: Formatted with tool name and input parameters
- * - Anthropic token format: input_tokens + output_tokens
+ * Parses Claude CLI stream-json output format (NDJSON - one JSON object per line):
+ *
+ * **Message Types Supported:**
+ * 1. `system` (subtype: "init") - Session initialization with metadata
+ * 2. `system` (subtype: "compact_boundary") - Conversation compaction marker
+ * 3. `stream_event` - Real-time streaming (6 subtypes: message_start, content_block_start,
+ *    content_block_delta, content_block_stop, message_delta, message_stop)
+ * 4. `assistant` - Complete assistant response with content blocks (text, tool_use, thinking)
+ * 5. `user` - User messages and tool results
+ * 6. `result` - Final statistics with session_id, usage, costs
+ *
+ * **Content Block Types:**
+ * - `text` - Response text
+ * - `tool_use` - Tool call with name, id, and input parameters
+ * - `thinking` - Claude's extended thinking/reasoning with signature
  *
  * Provides real-time streaming extraction via processStreamingChunk.
  */
@@ -31,69 +51,86 @@ export class ClaudeResponseParser
   /**
    * Parse Claude CLI stream-json output into structured events
    *
-   * @param stdout CLI stdout (concatenated JSON objects)
+   * Processes all message types and content blocks:
+   * - Extracts thinking blocks → THINKING events
+   * - Extracts ALL tool_use blocks → multiple TOOL_CALL events
+   * - Extracts text blocks → TEXT events
+   * - Extracts extended usage stats (cache tokens, service tier)
+   *
+   * @param stdout CLI stdout (NDJSON - one JSON object per line)
    * @param stderr CLI stderr (errors)
    * @param exitCode Process exit code
    * @returns Structured output with events array and metadata
    */
-  parse(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): UniversalCliOutput {
+  parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
-    let usage:
-      | { input_tokens: number; output_tokens: number; total_tokens?: number }
-      | undefined;
+    let usage: ExtendedUsage | undefined;
     let model: string | undefined;
     let isError = false;
     let errorMessage: string | undefined;
+    let cliVersion: string | undefined;
 
     const { objects } = this.extractJsonObjectsFromStream(stdout);
 
     // Extract data from parsed objects and create structured events
     for (const json of objects) {
-      // Extract response from assistant message
-      if (json.type === "assistant" && json.message?.content) {
-        const textContent = json.message.content.find(
-          (item: any) => item.type === "text"
-        );
-        if (textContent?.text) {
-          // Create TEXT event
-          events.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp: Date.now(),
-            data: { text: textContent.text },
-          });
+      // Handle system messages
+      if (json.type === "system") {
+        if (json.subtype === "init") {
+          // Extract session metadata from init message
+          sessionId = json.session_id;
+          model = json.model;
+          cliVersion = json.claude_code_version;
+        } else if (json.subtype === "compact_boundary") {
+          // Log compact boundary for debugging (conversation was compacted)
+          Log.debug(
+            `[ClaudeParser] Compact boundary: trigger=${json.compact_metadata?.trigger}, pre_tokens=${json.compact_metadata?.pre_tokens}`
+          );
         }
+      }
 
-        // Check for tool use
-        const toolUse = json.message.content.find(
-          (item: any) => item.type === "tool_use"
-        );
-        if (toolUse) {
-          // Create TOOL_CALL event with normalized 'parameters' field
-          events.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp: Date.now(),
-            data: {
-              name: toolUse.name,
-              parameters: toolUse.input, // Normalize 'input' → 'parameters'
-              id: toolUse.id,
-            },
-          });
+      // Handle stream_event messages (real-time streaming with --include-partial-messages)
+      if (json.type === "stream_event" && json.event) {
+        this.processStreamEvent(json.event, events);
+      }
+
+      // Extract response from assistant message - process ALL content blocks
+      if (json.type === "assistant" && json.message?.content) {
+        this.processAssistantContent(json.message.content, events);
+
+        // Extract usage from assistant message if available
+        if (json.message.usage) {
+          usage = this.extractExtendedUsageStats(json.message.usage);
         }
+      }
+
+      // Handle user messages (tool results)
+      if (json.type === "user" && json.message?.content) {
+        this.processUserContent(
+          json.message.content,
+          json.tool_use_result,
+          events
+        );
       }
 
       // Extract metadata from result object
       if (json.type === "result") {
+        // Session ID from result takes precedence (always present)
         sessionId = json.session_id;
-        usage = this.extractUsageStats(json);
-        model = json.model;
+        // Extract comprehensive usage stats
+        if (json.usage) {
+          usage = this.extractExtendedUsageStats(json.usage);
+        }
+        // Model from result if not already set
+        if (!model) {
+          model = json.model;
+        }
+        // Check for errors
         if (json.is_error) {
           isError = true;
-          errorMessage = json.result || "Unknown error";
+          errorMessage =
+            json.errors?.join("; ") || json.result || "Unknown error";
         }
       }
     }
@@ -108,29 +145,198 @@ export class ClaudeResponseParser
       });
     }
 
+    // Build normalized token usage with extended cache info
+    let tokenUsage: TokenUsage | undefined;
+    if (usage) {
+      tokenUsage = {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        totalTokens:
+          usage.total_tokens || usage.input_tokens + usage.output_tokens,
+      };
+    }
+
     return {
       events,
       metadata: {
         sessionId,
         model,
-        usage: usage
-          ? {
-              inputTokens: usage.input_tokens,
-              outputTokens: usage.output_tokens,
-              totalTokens:
-                usage.total_tokens || usage.input_tokens + usage.output_tokens,
-            }
-          : undefined,
+        usage: tokenUsage,
+        cliVersion,
         provider: "claude-cli",
       },
     };
   }
 
   /**
+   * Process stream_event for real-time streaming
+   *
+   * Handles 6 stream event subtypes:
+   * - message_start: Initialize message context with usage stats
+   * - content_block_start: Start of text or tool_use block
+   * - content_block_delta: Incremental text/JSON updates
+   * - content_block_stop: End of content block
+   * - message_delta: Stop reason and final usage
+   * - message_stop: End of streaming
+   *
+   * @param event The stream event payload
+   * @param events Array to append events to
+   */
+  private processStreamEvent(event: any, events: CliEvent[]): void {
+    if (!event.type) return;
+
+    switch (event.type) {
+      case "content_block_delta":
+        // Handle incremental content updates
+        if (event.delta) {
+          if (event.delta.type === "text_delta" && event.delta.text) {
+            // Real-time text streaming - append to existing or create new
+            events.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: Date.now(),
+              data: { text: event.delta.text },
+            });
+          }
+          // Note: input_json_delta is handled by accumulating in streamState during streaming
+        }
+        break;
+
+      case "message_start":
+        // Log initial usage stats for debugging
+        if (event.message?.usage) {
+          Log.debug(
+            `[ClaudeParser] Message start: model=${event.message.model}, input_tokens=${event.message.usage.input_tokens}`
+          );
+        }
+        break;
+
+      case "content_block_start":
+        // Log block start for debugging
+        if (event.content_block) {
+          Log.debug(
+            `[ClaudeParser] Content block start: index=${event.index}, type=${event.content_block.type}`
+          );
+        }
+        break;
+
+      case "message_delta":
+        // Log stop reason
+        if (event.delta?.stop_reason) {
+          Log.debug(
+            `[ClaudeParser] Message delta: stop_reason=${event.delta.stop_reason}`
+          );
+        }
+        break;
+
+      // content_block_stop and message_stop don't generate events
+    }
+  }
+
+  /**
+   * Process assistant message content blocks
+   *
+   * Extracts ALL content blocks in order:
+   * - thinking blocks → THINKING events
+   * - text blocks → TEXT events
+   * - tool_use blocks → TOOL_CALL events
+   *
+   * @param content Array of content blocks from assistant message
+   * @param events Array to append events to
+   */
+  private processAssistantContent(content: any[], events: CliEvent[]): void {
+    for (const contentBlock of content) {
+      // Handle thinking blocks (Claude's extended thinking)
+      if (contentBlock.type === "thinking" && contentBlock.thinking) {
+        events.push({
+          type: CLI_EVENT_TYPES.THINKING,
+          timestamp: Date.now(),
+          data: {
+            text: contentBlock.thinking,
+            label: "Extended Thinking",
+            // Note: signature field is available but not included (cryptographic, not user-facing)
+          },
+        });
+      }
+
+      // Handle text blocks
+      if (contentBlock.type === "text" && contentBlock.text) {
+        events.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: contentBlock.text },
+        });
+      }
+
+      // Handle tool_use blocks - process ALL of them (fix for first-only bug)
+      if (contentBlock.type === "tool_use") {
+        events.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp: Date.now(),
+          data: {
+            name: contentBlock.name,
+            parameters: contentBlock.input, // Normalize 'input' → 'parameters'
+            id: contentBlock.id,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Process user message content (tool results)
+   *
+   * Extracts tool_result blocks and creates TOOL_RESULT events
+   *
+   * @param content Array of content blocks from user message
+   * @param toolUseResult Optional structured metadata about tool execution
+   * @param events Array to append events to
+   */
+  private processUserContent(
+    content: any[],
+    toolUseResult: any | undefined,
+    events: CliEvent[]
+  ): void {
+    for (const contentBlock of content) {
+      if (contentBlock.type === "tool_result") {
+        events.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp: Date.now(),
+          data: {
+            toolCallId: contentBlock.tool_use_id,
+            result: {
+              success: true, // Assume success if we got a result
+              output: contentBlock.content,
+            },
+          },
+        });
+      }
+    }
+
+    // If structured tool_use_result metadata is available, log it for debugging
+    if (toolUseResult) {
+      Log.debug(
+        `[ClaudeParser] Tool result metadata: type=${toolUseResult.type}, filePath=${toolUseResult.filePath}`
+      );
+    }
+  }
+
+  /**
    * Process streaming chunk for real-time display
    *
    * Extracts content from stream-json format as it arrives and converts to structured events.
-   * Maintains stream buffer in streamState.
+   * Maintains stream buffer in streamState for accumulating partial JSON objects.
+   *
+   * **Handles stream_event subtypes:**
+   * - message_start: Initialize message context
+   * - content_block_start: Track block type and index
+   * - content_block_delta: Stream text or accumulate tool JSON
+   * - content_block_stop: Emit accumulated tool call
+   * - message_delta: Extract stop reason
+   * - message_stop: End of streaming
+   *
+   * **Also handles complete messages:**
+   * - assistant: Full response with all content blocks
+   * - user: Tool results
    *
    * **Returns CliEvent[] for terminal-style rendering with tool call visualization**
    *
@@ -152,35 +358,104 @@ export class ClaudeResponseParser
 
     const events: CliEvent[] = [];
 
-    for (const json of objects) {
-      if (json.type === "assistant" && json.message?.content) {
-        // Extract text content as TEXT event
-        const textContent = json.message.content.find(
-          (item: any) => item.type === "text"
-        );
-        if (textContent?.text) {
-          events.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp: Date.now(),
-            data: { text: textContent.text },
-          });
-        }
+    // Initialize block tracking state
+    if (!streamState.has("blocks")) {
+      streamState.set("blocks", new Map<number, any>());
+    }
+    const blocks = streamState.get("blocks") as Map<number, any>;
 
-        // Extract tool use as TOOL_CALL event (same format as parse())
-        const toolUse = json.message.content.find(
-          (item: any) => item.type === "tool_use"
-        );
-        if (toolUse) {
-          events.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp: Date.now(),
-            data: {
-              name: toolUse.name,
-              parameters: toolUse.input, // Includes old_string/new_string for Edit operations
-              id: toolUse.id,
-            },
-          });
+    for (const json of objects) {
+      // Handle stream_event messages
+      if (json.type === "stream_event" && json.event) {
+        const event = json.event;
+
+        switch (event.type) {
+          case "content_block_start":
+            // Initialize block tracking
+            if (event.content_block) {
+              blocks.set(event.index, {
+                type: event.content_block.type,
+                id: event.content_block.id,
+                name: event.content_block.name,
+                accumulatedJson: "",
+                accumulatedText: "",
+              });
+            }
+            break;
+
+          case "content_block_delta":
+            if (event.delta) {
+              if (event.delta.type === "text_delta" && event.delta.text) {
+                // Stream text in real-time
+                events.push({
+                  type: CLI_EVENT_TYPES.TEXT,
+                  timestamp: Date.now(),
+                  data: { text: event.delta.text },
+                });
+              } else if (
+                event.delta.type === "input_json_delta" &&
+                event.delta.partial_json
+              ) {
+                // Accumulate tool input JSON for later emission
+                const block = blocks.get(event.index);
+                if (block) {
+                  block.accumulatedJson += event.delta.partial_json;
+                }
+              } else if (
+                event.delta.type === "thinking_delta" &&
+                event.delta.thinking
+              ) {
+                // Stream thinking text in real-time
+                events.push({
+                  type: CLI_EVENT_TYPES.THINKING,
+                  timestamp: Date.now(),
+                  data: {
+                    text: event.delta.thinking,
+                    label: "Extended Thinking",
+                  },
+                });
+              }
+            }
+            break;
+
+          case "content_block_stop":
+            // Emit accumulated tool call when block ends
+            const block = blocks.get(event.index);
+            if (block && block.type === "tool_use" && block.accumulatedJson) {
+              try {
+                const input = JSON.parse(block.accumulatedJson);
+                events.push({
+                  type: CLI_EVENT_TYPES.TOOL_CALL,
+                  timestamp: Date.now(),
+                  data: {
+                    name: block.name,
+                    parameters: input,
+                    id: block.id,
+                  },
+                });
+              } catch (e) {
+                Log.debug(
+                  `[ClaudeParser] Failed to parse accumulated tool JSON: ${block.accumulatedJson.substring(0, 100)}`
+                );
+              }
+            }
+            blocks.delete(event.index);
+            break;
         }
+      }
+
+      // Handle complete assistant messages (non-streaming or end of stream)
+      if (json.type === "assistant" && json.message?.content) {
+        this.processAssistantContent(json.message.content, events);
+      }
+
+      // Handle user messages (tool results)
+      if (json.type === "user" && json.message?.content) {
+        this.processUserContent(
+          json.message.content,
+          json.tool_use_result,
+          events
+        );
       }
     }
 
@@ -354,6 +629,29 @@ export class ClaudeResponseParser
     };
   }
 
+  /**
+   * Extract extended usage statistics with cache tokens and service tier
+   *
+   * Extracts additional fields:
+   * - cache_creation_input_tokens: Tokens used to create cache
+   * - cache_read_input_tokens: Tokens read from cache
+   * - service_tier: Service tier (e.g., "standard")
+   *
+   * @param usage Usage object from Claude response
+   * @returns Extended usage statistics
+   */
+  private extractExtendedUsageStats(usage: any): ExtendedUsage {
+    return {
+      input_tokens: usage.input_tokens || 0,
+      output_tokens: usage.output_tokens || 0,
+      total_tokens:
+        usage.total_tokens ||
+        (usage.input_tokens || 0) + (usage.output_tokens || 0),
+      cache_creation_input_tokens: usage.cache_creation_input_tokens,
+      cache_read_input_tokens: usage.cache_read_input_tokens,
+      service_tier: usage.service_tier,
+    };
+  }
 
   /**
    * Check if error is a Claude CLI invalid session error

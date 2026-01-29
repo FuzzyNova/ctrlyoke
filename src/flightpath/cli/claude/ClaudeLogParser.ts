@@ -15,6 +15,7 @@ import {
   ThinkingBlock,
   CliEvent,
   TextData,
+  ToolResultData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
@@ -30,19 +31,19 @@ import {
  * - File naming: `<session-id>.jsonl` (e.g., `550e8400-e29b-41d4-a716-446655440000.jsonl`)
  * - Index file: `sessions-index.json` (metadata about all sessions)
  *
- * **Event Structure:**
- * ```json
- * {
- *   "type": "assistant" | "user" | "queue-operation",
- *   "message": {
- *     "content": [{"type": "text", "text": "Response..."}],
- *     "stop_reason": "end_turn" | null,
- *     "usage": { "input_tokens": 100, "output_tokens": 50 }
- *   },
- *   "sessionId": "uuid",
- *   "timestamp": "ISO8601"
- * }
- * ```
+ * **Event Types (6 main types):**
+ * 1. `assistant` - Claude responses with text, thinking, tool_use blocks
+ * 2. `user` - User messages and tool_result blocks
+ * 3. `progress` - Hook progress, bash progress, agent progress
+ * 4. `system` - stop_hook_summary, turn_duration, local_command
+ * 5. `file-history-snapshot` - File backup tracking
+ * 6. `summary` - Session summary
+ *
+ * **Content Block Types (in assistant/user events):**
+ * - `text` - Response text (field: `text`)
+ * - `thinking` - Extended thinking (field: `thinking`, NOT `text`)
+ * - `tool_use` - Tool invocation (fields: `id`, `name`, `input`)
+ * - `tool_result` - Tool execution result (in user events)
  *
  * **Session Discovery:**
  * - Uses `findModifiedSessionLogs()` to get recently modified files
@@ -68,32 +69,40 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * Processes Claude JSONL events and combines:
    * - Text content from assistant messages
    * - Tool calls (tool_use events) with normalized 'parameters' field
-   * - Thinking blocks (if present)
-   * - Metadata (session ID, usage stats, model info)
+   * - Thinking blocks (extended thinking feature)
+   * - Tool results from user events
+   * - Metadata (session ID, usage stats including cache tokens, model info)
    *
    * @param events - Array of parsed Claude log events
    * @returns UniversalCliOutput - Standardized response object
    *
    * @remarks
-   * **Response Assembly:**
-   * - Concatenates text from all assistant.message.content[{type: "text"}]
-   * - Collects tool calls from content[{type: "tool_use"}], normalizes `input` → `parameters`
-   * - Extracts thinking blocks from content[{type: "thinking"}]
-   * - Aggregates usage stats from all events (normalized to camelCase)
+   * **Event Types Processed:**
+   * - `assistant` - Claude responses with content blocks
+   * - `user` - Tool results (when content is array with tool_result blocks)
+   * - `progress` - Bash progress (extracted for streaming display)
+   * - `system` - Turn duration (for metadata)
    *
-   * **Metadata Extraction:**
-   * - Session ID from any event.sessionId field
-   * - Model info from assistant events
-   * - Token usage aggregated across events
+   * **Content Block Types:**
+   * - `text` - Response text (field: `text`)
+   * - `thinking` - Extended thinking (field: `thinking`, NOT `text`)
+   * - `tool_use` - Tool invocation (fields: `id`, `name`, `input`)
+   * - `tool_result` - Tool execution result (in user events)
+   *
+   * **Usage Statistics:**
+   * - Standard: input_tokens, output_tokens
+   * - Cache: cache_creation_input_tokens, cache_read_input_tokens
+   * - Service tier: "standard" or other tier identifiers
    *
    * @example
    * ```typescript
    * const events = [
    *   { type: "assistant", message: { content: [{type: "text", text: "Hello"}] }, sessionId: "abc" },
+   *   { type: "user", message: { content: [{type: "tool_result", tool_use_id: "123", content: "result"}] } },
    *   { type: "assistant", message: { stop_reason: "end_turn", usage: {...} } }
    * ];
    * const response = parser.extractResponse(events);
-   * // { text: "Hello", toolCalls: [], thinkingBlocks: [], metadata: {...} }
+   * // { events: [...], metadata: { sessionId, usage: {...}, cacheTokens: {...} } }
    * ```
    */
   extractResponse(events: any[]): UniversalCliOutput {
@@ -101,7 +110,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let sessionId: string | undefined;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let cacheCreationTokens = 0;
+    let cacheReadTokens = 0;
     let model: string | undefined;
+    let turnDurationMs: number | undefined;
 
     for (const event of events) {
       // Extract session ID from any event
@@ -109,16 +121,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         sessionId = event.sessionId;
       }
 
-      // Process assistant messages
-      if (event.type === "assistant" && event.message?.content) {
-        // Get timestamp for this batch of events
-        const timestamp = event.timestamp
-          ? new Date(event.timestamp).getTime()
-          : Date.now();
+      // Get timestamp for events
+      const timestamp = event.timestamp
+        ? new Date(event.timestamp).getTime()
+        : Date.now();
 
+      // Process assistant messages (Claude responses)
+      if (event.type === "assistant" && event.message?.content) {
         // Process content blocks in order they appear
         for (const contentBlock of event.message.content) {
-          // Extract text content
+          // TEXT - Extract text content
           if (contentBlock.type === "text" && contentBlock.text) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.TEXT,
@@ -129,7 +141,19 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             });
           }
 
-          // Extract tool calls and normalize 'input' to 'parameters'
+          // THINKING - Note: field is 'thinking' NOT 'text'
+          if (contentBlock.type === "thinking" && contentBlock.thinking) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp,
+              data: {
+                text: contentBlock.thinking,
+                label: "Extended Thinking",
+              } as ThinkingBlock,
+            });
+          }
+
+          // TOOL_USE - Extract tool calls and normalize 'input' to 'parameters'
           if (contentBlock.type === "tool_use") {
             outputEvents.push({
               type: CLI_EVENT_TYPES.TOOL_CALL,
@@ -141,30 +165,49 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               } as ToolCall,
             });
           }
-
-          // Extract thinking blocks
-          if (contentBlock.type === "thinking" && contentBlock.text) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.THINKING,
-              timestamp,
-              data: {
-                text: contentBlock.text,
-                label: "Thinking",
-              } as ThinkingBlock,
-            });
-          }
         }
 
-        // Extract usage stats
+        // Extract usage stats (including cache tokens)
         if (event.message.usage) {
-          totalInputTokens += event.message.usage.input_tokens || 0;
-          totalOutputTokens += event.message.usage.output_tokens || 0;
+          const usage = event.message.usage;
+          totalInputTokens += usage.input_tokens || 0;
+          totalOutputTokens += usage.output_tokens || 0;
+          cacheCreationTokens += usage.cache_creation_input_tokens || 0;
+          cacheReadTokens += usage.cache_read_input_tokens || 0;
         }
 
         // Extract model info
         if (event.message.model && !model) {
           model = event.message.model;
         }
+      }
+
+      // Process user events for TOOL_RESULT blocks
+      if (event.type === "user" && Array.isArray(event.message?.content)) {
+        for (const block of event.message.content) {
+          if (block.type === "tool_result") {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.TOOL_RESULT,
+              timestamp,
+              data: {
+                toolCallId: block.tool_use_id,
+                result: {
+                  success: !block.is_error,
+                  output:
+                    typeof block.content === "string"
+                      ? block.content
+                      : JSON.stringify(block.content),
+                  error: block.is_error ? block.content : undefined,
+                },
+              } as ToolResultData,
+            });
+          }
+        }
+      }
+
+      // Process system events for turn duration
+      if (event.type === "system" && event.subtype === "turn_duration") {
+        turnDurationMs = event.durationMs;
       }
     }
 
@@ -174,14 +217,26 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         sessionId,
         model,
         provider: "claude-cli",
+        elapsed: turnDurationMs,
         usage:
           totalInputTokens > 0 || totalOutputTokens > 0
             ? {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
                 totalTokens: totalInputTokens + totalOutputTokens,
+                // Extended cache token info stored in custom fields
+                // These will be displayed in formatStatistics()
               }
             : undefined,
+        // Store cache tokens as additional metadata for cost calculation
+        ...(cacheCreationTokens > 0 || cacheReadTokens > 0
+          ? {
+              cacheTokens: {
+                created: cacheCreationTokens,
+                read: cacheReadTokens,
+              },
+            }
+          : {}),
       },
     };
   }
@@ -191,32 +246,63 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    *
    * Claude events are complete when:
    * - Event type is "assistant"
-   * - message.stop_reason is not null (e.g., "end_turn", "max_tokens", "stop_sequence")
+   * - message.stop_reason is not null AND not "tool_use"
    *
    * @param event - Single parsed Claude log event
-   * @returns True if event signals completion
+   * @returns True if event signals final completion
    *
    * @remarks
-   * **Completion Indicators:**
-   * - `stop_reason: "end_turn"` - Normal completion
-   * - `stop_reason: "max_tokens"` - Token limit reached
-   * - `stop_reason: "stop_sequence"` - Stop sequence encountered
-   * - `stop_reason: null` - Still streaming (NOT complete)
+   * **Stop Reason Values:**
+   * - `null` - Still streaming (NOT complete)
+   * - `"end_turn"` - Normal completion ✓ COMPLETE
+   * - `"max_tokens"` - Token limit reached ✓ COMPLETE
+   * - `"stop_sequence"` - Stop sequence encountered ✓ COMPLETE
+   * - `"tool_use"` - Stopped to execute tools (intermediate, NOT final)
+   *
+   * **Important:** `tool_use` stop reason is NOT a final completion.
+   * Claude stops to let the tool execute, then continues after receiving
+   * the tool_result. Only treat as complete when stop_reason indicates
+   * the turn is truly finished.
    *
    * @example
    * ```typescript
+   * // Final completion
    * const event = { type: "assistant", message: { stop_reason: "end_turn" } };
    * if (parser.isComplete(event)) {
-   *   // Response is complete
+   *   // Response is complete - stop watching
+   * }
+   *
+   * // Intermediate (tool execution)
+   * const toolEvent = { type: "assistant", message: { stop_reason: "tool_use" } };
+   * if (!parser.isComplete(toolEvent)) {
+   *   // Keep watching - Claude will continue after tool result
    * }
    * ```
    */
   isComplete(event: any): boolean {
-    return (
-      event.type === "assistant" &&
-      event.message?.stop_reason !== null &&
-      event.message?.stop_reason !== undefined
-    );
+    // Must be an assistant event with a stop_reason
+    if (event.type !== "assistant") {
+      return false;
+    }
+
+    const stopReason = event.message?.stop_reason;
+
+    // Still streaming if stop_reason is null/undefined
+    if (stopReason === null || stopReason === undefined) {
+      return false;
+    }
+
+    // "tool_use" is NOT a final completion - Claude paused to execute tools
+    // and will continue after receiving tool_result
+    if (stopReason === "tool_use") {
+      return false;
+    }
+
+    // All other stop reasons indicate final completion:
+    // - "end_turn" - Normal completion
+    // - "max_tokens" - Token limit reached
+    // - "stop_sequence" - Stop sequence encountered
+    return true;
   }
 
   /**
@@ -435,11 +521,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * @returns Text content to display, or undefined if no displayable content
    *
    * @remarks
-   * **Claude Event Format:**
-   * - `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
+   * **Supported Event Types:**
+   * - `assistant` - Extract text from content blocks
+   * - `progress` (bash_progress) - Extract bash output for real-time display
+   *
+   * **Claude Event Formats:**
+   * - Assistant: `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
+   * - Bash Progress: `{ type: "progress", data: { type: "bash_progress", output: "...", fullOutput: "..." } }`
    */
   extractContentFromEvent(event: any): string | undefined {
-    // Claude: Extract text from content array
+    // Claude assistant: Extract text from content array
     if (event.type === "assistant" && event.message?.content) {
       const textContent = event.message.content
         .filter((c: any) => c.type === "text")
@@ -448,24 +539,40 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return textContent || undefined;
     }
 
+    // Bash progress: Extract output for streaming display
+    if (event.type === "progress" && event.data?.type === "bash_progress") {
+      // Prefer incremental output over fullOutput for streaming
+      return event.data.output || event.data.fullOutput || undefined;
+    }
+
     return undefined;
   }
 
   /**
    * Format Claude metadata into statistics string
    *
-   * @param metadata - Metadata from extractResponse() (sessionId, model, usage)
+   * @param metadata - Metadata from extractResponse() (sessionId, model, usage, cacheTokens)
    * @returns Formatted statistics string
+   *
+   * @remarks
+   * **Metadata Fields:**
+   * - `sessionId` - Session UUID (truncated to 8 chars for display)
+   * - `model` - Model name (e.g., "claude-sonnet-4-5-20250929")
+   * - `usage` - Token counts (input, output, total)
+   * - `cacheTokens` - Cache token counts (created, read) for cost optimization
+   * - `elapsed` - Turn duration in milliseconds
    *
    * @example
    * ```typescript
    * const metadata = {
    *   sessionId: "abc-123",
    *   model: "claude-sonnet-4.5",
-   *   usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 }
+   *   usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+   *   cacheTokens: { created: 1000, read: 500 },
+   *   elapsed: 2500
    * };
    * const stats = parser.formatStatistics(metadata);
-   * // "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out"
+   * // "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out | Cache: 1000 created, 500 read | Duration: 2.5s"
    * ```
    */
   formatStatistics(metadata: any): string {
@@ -489,6 +596,27 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
         );
       }
+    }
+
+    // Cache tokens (important for cost calculation)
+    if (metadata.cacheTokens) {
+      const cache = metadata.cacheTokens;
+      const cacheParts: string[] = [];
+      if (cache.created > 0) {
+        cacheParts.push(`${cache.created} created`);
+      }
+      if (cache.read > 0) {
+        cacheParts.push(`${cache.read} read`);
+      }
+      if (cacheParts.length > 0) {
+        parts.push(`Cache: ${cacheParts.join(", ")}`);
+      }
+    }
+
+    // Turn duration
+    if (metadata.elapsed) {
+      const seconds = (metadata.elapsed / 1000).toFixed(1);
+      parts.push(`Duration: ${seconds}s`);
     }
 
     return parts.join(" | ");

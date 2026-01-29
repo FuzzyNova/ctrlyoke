@@ -19,7 +19,8 @@ export const CLI_EVENT_TYPES = {
  * Type of CLI event.
  * Events are rendered in the order they occurred during the CLI session.
  */
-export type CliEventType = (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+export type CliEventType =
+  (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
 
 /**
  * A single event in the CLI output stream.
@@ -147,4 +148,8 @@ export interface TokenUsage {
   outputTokens: number;
   /** Total tokens (input + output) */
   totalTokens: number;
+  /** Number of cached input tokens (Codex only) */
+  cachedInputTokens?: number;
+  /** Number of reasoning output tokens (Codex only) */
+  reasoningOutputTokens?: number;
 }

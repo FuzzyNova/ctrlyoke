@@ -1,4 +1,3 @@
-import { CliResult } from "../../../types/CopilotTypes";
 import {
   IResponseParser,
   ResponseParserBase,
@@ -7,25 +6,75 @@ import {
   UniversalCliOutput,
   CliEvent,
   CLI_EVENT_TYPES,
-  ToolCall,
 } from "../../../types/CliOutputTypes";
 import { Log } from "../../../utils/Log";
 
+// ============================================================
+// CODEX CLI JSON EVENT TYPE DEFINITIONS
+// Based on docs/schemas/CODEX_JSON_RESPONSE_SCHEMA.md
+// ============================================================
+
+/**
+ * File change entry within a file_change item
+ */
+interface FileUpdateChange {
+  path: string;
+  kind: "add" | "update" | "delete";
+}
+
+/**
+ * Todo item within a todo_list item
+ */
+interface TodoItem {
+  text: string;
+  completed: boolean;
+}
+
 /**
  * Codex CLI JSON event structure (JSONL events format)
+ *
+ * Supports all 8 event types and 8 item types from Codex CLI schema:
+ * - Event types: thread.started, turn.started, turn.completed, turn.failed,
+ *                item.started, item.updated, item.completed, error
+ * - Item types: agent_message, reasoning, command_execution, file_change,
+ *               mcp_tool_call, web_search, todo_list, error
  */
 interface CodexCliJsonEvent {
   type?: string;
   subtype?: string;
+
+  // Item data (for item.started, item.updated, item.completed events)
   item?: {
     id?: string;
-    type?: string; // "agent_message" or "command_execution"
+    type?: string;
     role?: string;
+
+    // agent_message item fields
     text?: string;
-    command?: string; // For command_execution type
-    aggregated_output?: string; // For command_execution type
-    exit_code?: number | null; // For command_execution type
+
+    // command_execution item fields
+    command?: string;
+    aggregated_output?: string;
+    exit_code?: number | null;
     status?: string; // "in_progress", "completed", "failed"
+
+    // file_change item fields
+    changes?: FileUpdateChange[];
+
+    // mcp_tool_call item fields
+    server?: string;
+    tool?: string;
+
+    // web_search item fields
+    query?: string;
+
+    // todo_list item fields
+    items?: TodoItem[];
+
+    // error item fields
+    message?: string;
+
+    // Legacy tool_calls format (for backwards compatibility)
     tool_calls?: Array<{
       type: string;
       function?: {
@@ -34,6 +83,16 @@ interface CodexCliJsonEvent {
       };
     }>;
   };
+
+  // turn.failed event error
+  error?: {
+    message: string;
+  };
+
+  // Top-level error event message
+  message?: string;
+
+  // Thread/session identification
   turn?: {
     id?: string;
     status?: string;
@@ -41,14 +100,16 @@ interface CodexCliJsonEvent {
   thread?: {
     id?: string;
   };
-  thread_id?: string; // Actual field name in Codex output
+  thread_id?: string;
+  session_id?: string;
+
+  // turn.completed usage statistics
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    cached_input_tokens?: number;
     total_tokens?: number;
   };
-  session_id?: string;
-  error?: string;
 }
 
 /**
@@ -77,15 +138,16 @@ export class CodexResponseParser
    * @param exitCode Process exit code
    * @returns Structured output with events array and metadata
    */
-  parse(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): UniversalCliOutput {
+  parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
     let usage:
-      | { input_tokens: number; output_tokens: number; total_tokens?: number }
+      | {
+          input_tokens: number;
+          output_tokens: number;
+          cached_input_tokens?: number;
+          total_tokens?: number;
+        }
       | undefined;
     let isError = false;
     let errorMessage: string | undefined;
@@ -93,56 +155,31 @@ export class CodexResponseParser
     const objects = this.parseJsonLines(stdout);
 
     for (const json of objects) {
-      // Extract response from item.completed events
-      if (json.type === "item.completed" && json.item) {
-        // Agent message (text response)
-        if (json.item.type === "agent_message" && json.item.text) {
-          events.push({
-            type: CLI_EVENT_TYPES.TEXT,
-            timestamp: Date.now(),
-            data: { text: json.item.text },
-          });
-        }
-
-        // Command execution (tool call)
-        if (json.item.type === "command_execution") {
-          const cmd = json.item.command || "unknown";
-          const status = json.item.status || "unknown";
-          const toolExitCode = json.item.exit_code;
-          const output = json.item.aggregated_output || "";
-
-          // Create TOOL_CALL event
-          events.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp: Date.now(),
-            data: {
-              name: "command_execution",
-              parameters: {
-                command: cmd,
-                status,
-                exit_code: toolExitCode,
-                output,
-              },
-              id: json.item.id,
-            },
-          });
-        }
-      }
-
       // Extract session ID from thread.started
       if (json.type === "thread.started" && json.thread_id) {
         sessionId = json.thread_id;
       }
 
-      // Extract usage from turn.completed
+      // Handle turn.failed events
+      if (json.type === "turn.failed" && json.error) {
+        isError = true;
+        errorMessage = json.error.message || "Turn failed";
+      }
+
+      // Handle top-level error events
+      if (json.type === "error" && json.message) {
+        isError = true;
+        errorMessage = json.message;
+      }
+
+      // Extract usage from turn.completed (with cached_input_tokens support)
       if (json.type === "turn.completed") {
         usage = this.extractUsageStats(json);
       }
 
-      // Check for error
-      if (json.error) {
-        isError = true;
-        errorMessage = json.error;
+      // Process item.completed events - extract all item types
+      if (json.type === "item.completed" && json.item) {
+        this.parseItemToEvents(json.item, events);
       }
     }
 
@@ -166,11 +203,144 @@ export class CodexResponseParser
               outputTokens: usage.output_tokens,
               totalTokens:
                 usage.total_tokens || usage.input_tokens + usage.output_tokens,
+              // Note: cached_input_tokens available in usage object for cost calculation
             }
           : undefined,
         provider: "codex-cli",
       },
     };
+  }
+
+  /**
+   * Parse an item into CLI events
+   *
+   * Handles all 8 item types from Codex schema:
+   * - agent_message: Text response
+   * - reasoning: Internal thinking/chain-of-thought
+   * - command_execution: Shell command with output
+   * - file_change: File modifications (add/update/delete)
+   * - mcp_tool_call: MCP tool invocation
+   * - web_search: Web search query
+   * - todo_list: Task list tracking
+   * - error: Item-level error
+   *
+   * @param item Item data from event
+   * @param events Events array to push to
+   */
+  private parseItemToEvents(
+    item: NonNullable<CodexCliJsonEvent["item"]>,
+    events: CliEvent[]
+  ): void {
+    // Agent message (text response)
+    if (item.type === "agent_message" && item.text) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: item.text },
+      });
+    }
+
+    // Reasoning (thinking/chain-of-thought)
+    if (item.type === "reasoning" && item.text) {
+      events.push({
+        type: CLI_EVENT_TYPES.THINKING,
+        timestamp: Date.now(),
+        data: {
+          text: item.text,
+          label: "Reasoning",
+        },
+      });
+    }
+
+    // Command execution (shell command)
+    if (item.type === "command_execution") {
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          name: "command_execution",
+          parameters: {
+            command: item.command || "unknown",
+            status: item.status || "unknown",
+            exit_code: item.exit_code,
+            output: item.aggregated_output || "",
+          },
+          id: item.id,
+        },
+      });
+    }
+
+    // File change
+    if (item.type === "file_change" && item.changes) {
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          name: "file_change",
+          parameters: {
+            changes: item.changes,
+            status: item.status,
+          },
+          id: item.id,
+        },
+      });
+    }
+
+    // MCP tool call
+    if (item.type === "mcp_tool_call") {
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          name: item.tool || "mcp_tool",
+          parameters: {
+            server: item.server,
+            tool: item.tool,
+            status: item.status,
+          },
+          id: item.id,
+        },
+      });
+    }
+
+    // Web search
+    if (item.type === "web_search") {
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          name: "web_search",
+          parameters: {
+            query: item.query,
+          },
+          id: item.id,
+        },
+      });
+    }
+
+    // Todo list
+    if (item.type === "todo_list" && item.items) {
+      events.push({
+        type: CLI_EVENT_TYPES.TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          name: "todo_list",
+          parameters: {
+            items: item.items,
+          },
+          id: item.id,
+        },
+      });
+    }
+
+    // Error item (item-level error, non-fatal)
+    if (item.type === "error" && item.message) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: `Error: ${item.message}` },
+      });
+    }
   }
 
   /**
@@ -181,16 +351,22 @@ export class CodexResponseParser
    *
    * **Returns CliEvent[] for terminal-style rendering with tool call visualization**
    *
+   * Handles:
+   * - item.completed: Final item data for all 8 item types
+   * - item.updated: Progressive updates (e.g., streaming command output)
+   * - turn.failed: Error handling
+   * - error: Top-level errors
+   *
    * @param chunk Raw stdout chunk
    * @param streamState Accumulated state (persists across chunks)
    * @returns Structured events to emit, or undefined to skip
    */
   processStreamingChunk(
     chunk: string,
-    streamState: Map<string, any>
+    streamState: Map<string, unknown>
   ): CliEvent[] | undefined {
     // Get or initialize stream buffer
-    let streamBuffer = streamState.get("streamBuffer") || "";
+    let streamBuffer = (streamState.get("streamBuffer") as string) || "";
     streamBuffer += chunk;
 
     const lines = streamBuffer.split("\n");
@@ -214,38 +390,98 @@ export class CodexResponseParser
         continue;
       }
 
+      // Handle item.completed events - final item data
       if (json.type === "item.completed" && json.item) {
-        // Extract text content as TEXT event
-        if (json.item.type === "agent_message" && json.item.text) {
+        this.parseItemToEvents(json.item, events);
+      }
+
+      // Handle item.updated events - progressive updates for streaming output
+      if (json.type === "item.updated" && json.item) {
+        // Command execution streaming output
+        if (json.item.type === "command_execution" && json.item.id) {
+          const outputKey = `output_${json.item.id}`;
+          const prevOutput = (streamState.get(outputKey) as string) || "";
+          const newOutput = json.item.aggregated_output || "";
+
+          // Calculate delta (new content since last update)
+          if (newOutput.length > prevOutput.length) {
+            const delta = newOutput.substring(prevOutput.length);
+            streamState.set(outputKey, newOutput);
+
+            // Emit delta as text for real-time display
+            if (delta) {
+              events.push({
+                type: CLI_EVENT_TYPES.TEXT,
+                timestamp: Date.now(),
+                data: { text: delta },
+              });
+            }
+          }
+        }
+
+        // Todo list updates (track progress)
+        if (json.item.type === "todo_list" && json.item.items) {
           events.push({
-            type: CLI_EVENT_TYPES.TEXT,
+            type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp: Date.now(),
-            data: { text: json.item.text },
+            data: {
+              name: "todo_list",
+              parameters: {
+                items: json.item.items,
+              },
+              id: json.item.id,
+            },
+          });
+        }
+      }
+
+      // Handle item.started events - show item beginning (for UX feedback)
+      if (json.type === "item.started" && json.item) {
+        // Reasoning started - show thinking indicator
+        if (json.item.type === "reasoning" && json.item.text) {
+          events.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp: Date.now(),
+            data: {
+              text: json.item.text,
+              label: "Reasoning",
+            },
           });
         }
 
-        // Extract command execution as TOOL_CALL event (same format as parse())
-        if (json.item.type === "command_execution") {
-          const cmd = json.item.command || "unknown";
-          const status = json.item.status || "unknown";
-          const toolExitCode = json.item.exit_code;
-          const output = json.item.aggregated_output || "";
-
+        // Command started - show command being executed
+        if (json.item.type === "command_execution" && json.item.command) {
           events.push({
             type: CLI_EVENT_TYPES.TOOL_CALL,
             timestamp: Date.now(),
             data: {
               name: "Command",
               parameters: {
-                command: cmd,
-                status,
-                exit_code: toolExitCode,
-                output,
+                command: json.item.command,
+                status: json.item.status || "in_progress",
               },
               id: json.item.id,
             },
           });
         }
+      }
+
+      // Handle turn.failed events
+      if (json.type === "turn.failed" && json.error) {
+        events.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: `Error: ${json.error.message || "Turn failed"}` },
+        });
+      }
+
+      // Handle top-level error events
+      if (json.type === "error" && json.message) {
+        events.push({
+          type: CLI_EVENT_TYPES.TEXT,
+          timestamp: Date.now(),
+          data: { text: `Error: ${json.message}` },
+        });
       }
     }
 
@@ -325,18 +561,27 @@ export class CodexResponseParser
   /**
    * Extract usage statistics from JSON event
    *
+   * Includes cached_input_tokens for cost calculation:
+   * - input_tokens: Total input tokens (includes cached)
+   * - cached_input_tokens: Tokens served from cache (lower cost)
+   * - output_tokens: Generated output tokens
+   *
    * @param json Event object
    * @returns Usage object if found
    */
-  private extractUsageStats(
-    json: CodexCliJsonEvent
-  ):
-    | { input_tokens: number; output_tokens: number; total_tokens?: number }
+  private extractUsageStats(json: CodexCliJsonEvent):
+    | {
+        input_tokens: number;
+        output_tokens: number;
+        cached_input_tokens?: number;
+        total_tokens?: number;
+      }
     | undefined {
     if (json.usage) {
       return {
         input_tokens: json.usage.input_tokens,
         output_tokens: json.usage.output_tokens,
+        cached_input_tokens: json.usage.cached_input_tokens,
         total_tokens: json.usage.total_tokens,
       };
     }

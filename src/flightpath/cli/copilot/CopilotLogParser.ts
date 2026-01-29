@@ -10,8 +10,190 @@ import {
   ThinkingBlock,
   CliEvent,
   TextData,
+  ToolResultData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+
+// ============================================================================
+// Copilot Log Event Type Definitions
+// ============================================================================
+
+/**
+ * Base event structure - all Copilot log events extend this
+ */
+interface CopilotBaseEvent {
+  type: string;
+  data: Record<string, unknown>;
+  id: string; // UUID
+  timestamp: string; // ISO 8601
+  parentId: string | null;
+}
+
+/**
+ * Session initialization event (1 per session, always first)
+ */
+interface CopilotSessionStartEvent extends CopilotBaseEvent {
+  type: "session.start";
+  data: {
+    sessionId: string;
+    version: number;
+    producer: string;
+    copilotVersion: string;
+    startTime: string;
+    selectedModel: string;
+  };
+  parentId: null;
+}
+
+/**
+ * Session information event (authentication, MCP connections)
+ */
+interface CopilotSessionInfoEvent extends CopilotBaseEvent {
+  type: "session.info";
+  data: {
+    infoType: "authentication" | "mcp" | string;
+    message: string;
+  };
+  parentId: string;
+}
+
+/**
+ * Session error event (model call failures, API errors)
+ */
+interface CopilotSessionErrorEvent extends CopilotBaseEvent {
+  type: "session.error";
+  data: {
+    errorType: "model_call" | string;
+    message: string;
+    stack?: string;
+  };
+  parentId: string;
+}
+
+/**
+ * User message event (prompt with optional file attachments)
+ */
+interface CopilotUserMessageEvent extends CopilotBaseEvent {
+  type: "user.message";
+  data: {
+    content: string;
+    transformedContent: string;
+    attachments: Array<{
+      type: "file";
+      path: string;
+      displayName: string;
+      mentionIndex: number;
+    }>;
+  };
+  parentId: string;
+}
+
+/**
+ * Assistant turn start event (marks beginning of response turn)
+ */
+interface CopilotAssistantTurnStartEvent extends CopilotBaseEvent {
+  type: "assistant.turn_start";
+  data: {
+    turnId: string; // Sequential: "0", "1", "2", ...
+  };
+  parentId: string;
+}
+
+/**
+ * Assistant message event (response content and/or tool requests)
+ */
+interface CopilotAssistantMessageEvent extends CopilotBaseEvent {
+  type: "assistant.message";
+  data: {
+    messageId: string;
+    content: string;
+    toolRequests?: Array<{
+      toolCallId: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    }>;
+  };
+  parentId: string;
+}
+
+/**
+ * Assistant reasoning event (extended chain-of-thought)
+ */
+interface CopilotAssistantReasoningEvent extends CopilotBaseEvent {
+  type: "assistant.reasoning";
+  data: {
+    reasoningId: string;
+    content: string; // Markdown-formatted reasoning
+  };
+  parentId: string;
+}
+
+/**
+ * Tool execution start event (pairs with tool.execution_complete)
+ */
+interface CopilotToolExecutionStartEvent extends CopilotBaseEvent {
+  type: "tool.execution_start";
+  data: {
+    toolCallId: string;
+    toolName: string;
+    arguments: Record<string, unknown>;
+  };
+  parentId: string;
+}
+
+/**
+ * Tool execution complete event (result of tool call)
+ */
+interface CopilotToolExecutionCompleteEvent extends CopilotBaseEvent {
+  type: "tool.execution_complete";
+  data: {
+    toolCallId: string;
+    success: boolean;
+    result: {
+      content: string;
+    };
+    toolTelemetry: {
+      properties?: Record<string, string>;
+      metrics?: {
+        resultLength?: number;
+        resultForLlmLength?: number;
+        responseTokenLimit?: number;
+      };
+      restrictedProperties?: Record<string, unknown>;
+    };
+  };
+  parentId: string;
+}
+
+/**
+ * Assistant turn end event (marks end of response turn)
+ */
+interface CopilotAssistantTurnEndEvent extends CopilotBaseEvent {
+  type: "assistant.turn_end";
+  data: {
+    turnId: string;
+  };
+  parentId: string;
+}
+
+/**
+ * Union type of all Copilot log event types
+ */
+type CopilotLogEvent =
+  | CopilotSessionStartEvent
+  | CopilotSessionInfoEvent
+  | CopilotSessionErrorEvent
+  | CopilotUserMessageEvent
+  | CopilotAssistantTurnStartEvent
+  | CopilotAssistantMessageEvent
+  | CopilotAssistantReasoningEvent
+  | CopilotToolExecutionStartEvent
+  | CopilotToolExecutionCompleteEvent
+  | CopilotAssistantTurnEndEvent;
+
+// ============================================================================
+// CopilotLogParser Implementation
+// ============================================================================
 
 /**
  * Copilot CLI log parser
@@ -27,15 +209,22 @@ import {
  * - **Old format (pre-v0.0.384):** `<session-id>.jsonl` (flat file)
  * - **New format (v0.0.384+):** `<session-id>/events.jsonl` (subdirectory)
  *
- * **Event Types:**
- * - `session.start` - Session initialization (contains session ID)
- * - `user.message` - User prompt sent to Copilot
- * - `assistant.message` - Copilot response content (may be multiple events)
- * - `assistant.turn_end` - Response completion (new format only)
+ * **Supported Event Types (9 types per COPILOT_LOG_SCHEMA.md):**
+ * - `session.start` - Session initialization (sessionId, copilotVersion, selectedModel)
+ * - `session.info` - Informational messages (authentication, MCP connections)
+ * - `session.error` - Session-level errors (model call failures, API errors)
+ * - `user.message` - User prompt with file attachments
+ * - `assistant.turn_start` - Turn begins (sequential turnId)
+ * - `assistant.message` - Response content and tool requests
+ * - `assistant.reasoning` - Chain-of-thought reasoning blocks
+ * - `tool.execution_start` - Tool call initiated (toolCallId, toolName, arguments)
+ * - `tool.execution_complete` - Tool call finished (toolCallId, success, result)
+ * - `assistant.turn_end` - Turn completes (fires after EACH tool, not at final completion!)
  *
  * **Completion Detection:**
- * - New format: Look for `{"type": "assistant.turn_end"}` event
- * - Old format: Heuristic (last assistant.message after 2s timeout)
+ * - **IMPORTANT:** `assistant.turn_end` fires after EACH tool call, not at final completion
+ * - Interactive mode: Use sessionEnd hook (CopilotNotificationMonitor)
+ * - Headless mode: Process exit signals completion
  *
  * @example
  * ```typescript
@@ -47,6 +236,8 @@ import {
  *   const sessionId = parser.extractSessionId(events);
  * }
  * ```
+ *
+ * @see docs/schemas/COPILOT_LOG_SCHEMA.md for complete event type documentation
  */
 export class CopilotLogParser extends BaseLogParser {
   /**
@@ -61,17 +252,20 @@ export class CopilotLogParser extends BaseLogParser {
    * Extract complete response from Copilot log events
    *
    * Combines multiple assistant.message events into a single response object.
-   * Extracts tool requests, thinking blocks, metadata, and session information.
+   * Extracts tool requests, tool results, thinking blocks, metadata, and session information.
    *
    * @param events - Array of parsed Copilot log events
    * @returns UniversalCliOutput - Standardized response object
    *
    * @remarks
-   * **Response Assembly:**
-   * - Concatenates content from all assistant.message events
-   * - Extracts toolRequests from event.data.toolRequests arrays (normalized to `parameters`)
-   * - Extracts thinking blocks from assistant.reasoning events
-   * - Captures model, session ID, and token usage from metadata
+   * **Supported Event Types:**
+   * - `session.start` - Session initialization (sessionId, model)
+   * - `session.info` - Authentication/MCP connection info (logged, not output)
+   * - `session.error` - Session errors (emitted as TEXT with error details)
+   * - `assistant.message` - Response text and tool requests
+   * - `assistant.reasoning` - Chain-of-thought thinking blocks
+   * - `tool.execution_start` - Tool call initiation (emitted as TOOL_CALL)
+   * - `tool.execution_complete` - Tool results (emitted as TOOL_RESULT)
    *
    * **Event Structure:**
    * ```json
@@ -97,15 +291,61 @@ export class CopilotLogParser extends BaseLogParser {
         ? new Date(event.timestamp).getTime()
         : Date.now();
 
-      // Extract text content from assistant messages
-      if (event.type === "assistant.message" && event.data?.content) {
+      // Extract session metadata from session.start event
+      if (event.type === "session.start" && event.data) {
+        sessionId = event.data.sessionId;
+        model = event.data.selectedModel;
+      }
+
+      // Handle session.info events (log for debugging, not emitted as output)
+      if (event.type === "session.info" && event.data) {
+        if (event.data.infoType === "authentication") {
+          Log.debug(`[CopilotLogParser] ${event.data.message}`);
+        }
+        if (event.data.infoType === "mcp") {
+          Log.debug(`[CopilotLogParser] MCP: ${event.data.message}`);
+        }
+      }
+
+      // Handle session.error events (emit as error text)
+      if (event.type === "session.error" && event.data) {
+        const errorCode = event.data.errorType || "UNKNOWN";
+        const errorMessage = event.data.message || "Unknown error";
         outputEvents.push({
           type: CLI_EVENT_TYPES.TEXT,
           timestamp,
           data: {
-            text: event.data.content,
+            text: `Error [${errorCode}]: ${errorMessage}`,
           } as TextData,
         });
+      }
+
+      // Extract text content from assistant messages
+      if (event.type === "assistant.message" && event.data) {
+        if (event.data.content) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: {
+              text: event.data.content,
+            } as TextData,
+          });
+        }
+
+        // Extract tool calls from toolRequests array
+        if (event.data.toolRequests && Array.isArray(event.data.toolRequests)) {
+          for (const req of event.data.toolRequests) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.TOOL_CALL,
+              timestamp,
+              data: {
+                name: req.name,
+                parameters: req.arguments || {},
+                id: req.toolCallId,
+              } as ToolCall,
+            });
+          }
+        }
       }
 
       // Extract thinking/reasoning blocks
@@ -121,38 +361,43 @@ export class CopilotLogParser extends BaseLogParser {
         });
       }
 
-      // Extract tool calls and normalize to 'parameters'
-      // Copilot CLI uses different field names: parameters, args, or arguments
-      if (event.data?.toolRequests && Array.isArray(event.data.toolRequests)) {
-        for (const req of event.data.toolRequests) {
-          outputEvents.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
-            timestamp,
-            data: {
-              name: req.name,
-              parameters: req.parameters || req.arguments || req.args || {},
-              id: req.id,
-            } as ToolCall,
-          });
-        }
+      // Extract tool execution start (alternative source for TOOL_CALL events)
+      // This provides more accurate timestamps than assistant.message.toolRequests
+      if (event.type === "tool.execution_start" && event.data) {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: event.data.toolName,
+            parameters: event.data.arguments || {},
+            id: event.data.toolCallId,
+          } as ToolCall,
+        });
       }
 
-      // Extract session metadata from session.start event
-      if (event.type === "session.start" && event.data) {
-        sessionId = event.data.sessionId;
-        model = event.data.model;
+      // Extract tool execution results
+      if (event.type === "tool.execution_complete" && event.data) {
+        outputEvents.push({
+          type: CLI_EVENT_TYPES.TOOL_RESULT,
+          timestamp,
+          data: {
+            toolCallId: event.data.toolCallId,
+            result: {
+              success: event.data.success,
+              output: event.data.result?.content,
+              error: event.data.success
+                ? undefined
+                : event.data.result?.content,
+            },
+          } as ToolResultData,
+        });
       }
 
-      // Extract token usage from metadata
+      // Extract token usage from metadata (if available)
       if (event.data?.metadata?.usage) {
-        inputTokens +=
-          event.data.metadata.usage.input_tokens ||
-          event.data.metadata.usage.inputTokens ||
-          0;
-        outputTokens +=
-          event.data.metadata.usage.output_tokens ||
-          event.data.metadata.usage.outputTokens ||
-          0;
+        const usage = event.data.metadata.usage;
+        inputTokens += usage.input_tokens || usage.inputTokens || 0;
+        outputTokens += usage.output_tokens || usage.outputTokens || 0;
       }
     }
 
@@ -177,30 +422,40 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * Check if log event indicates completion
    *
-   * **IMPORTANT: Copilot's `assistant.turn_end` fires after EACH tool call, not at final completion!**
+   * **CRITICAL: Copilot's `assistant.turn_end` fires after EACH tool call, not at final completion!**
    *
-   * For example, if Copilot creates, edits, and deletes a file, you'll get:
-   * - `assistant.turn_end` after create (turn 0)
-   * - `assistant.turn_end` after edit (turn 1)
-   * - `assistant.turn_end` after delete (turn 2)
-   * - ... etc for multiple tool calls
+   * This makes log-based completion detection fundamentally unreliable for Copilot CLI.
    *
-   * This makes log-based completion detection unreliable. Instead:
-   * - **Interactive mode**: Use sessionEnd hook (configured in CopilotCliProvider)
-   * - **Headless mode**: Process exit signals completion
+   * **Event Sequence for Multi-Tool Response:**
+   * ```
+   * assistant.message (with toolRequests: [tool1])
+   * tool.execution_start (tool 1)
+   * tool.execution_complete (tool 1)
+   * assistant.turn_end (turn 0) ← FIRES HERE but NOT done!
+   * assistant.message (with toolRequests: [tool2])
+   * tool.execution_start (tool 2)
+   * tool.execution_complete (tool 2)
+   * assistant.turn_end (turn 1) ← FIRES AGAIN
+   * ... continues until no more tools needed
+   * ```
    *
-   * @param event - Single parsed log event
-   * @returns Always false - Copilot does not have reliable log completion signals
+   * **Reliable Completion Detection:**
+   * - **Interactive mode**: sessionEnd hook (via CopilotNotificationMonitor)
+   * - **Headless mode**: Process exit
    *
-   * @remarks
-   * This method intentionally returns `false` to disable log-based completion detection.
-   * Copilot completion is detected via:
-   * - Interactive mode: sessionEnd hook (via CopilotNotificationMonitor)
-   * - Headless mode: Process exit
+   * @param _event - Single parsed log event (unused - always returns false)
+   * @returns Always false - Use sessionEnd hook for reliable completion detection
+   *
+   * @see CopilotNotificationMonitor for interactive mode completion
+   * @see CopilotCliProvider.executePrompt for headless mode completion
    */
-  isComplete(event: any): boolean {
+  isComplete(_event: any): boolean {
     // NEVER detect completion from log files for Copilot - use hooks instead!
-    // Reason: assistant.turn_end fires after EACH tool call, not at final completion
+    // Reason: assistant.turn_end fires after EACH tool call, not at final completion.
+    //
+    // For reliable completion detection:
+    // - Interactive mode: sessionEnd hook configured in CopilotCliProvider
+    // - Headless mode: Process exit signals completion
     return false;
   }
 
@@ -365,7 +620,7 @@ export class CopilotLogParser extends BaseLogParser {
    * @returns Session ID (UUID v4), or null if not found
    *
    * @remarks
-   * **Session ID Format:** UUID v4 (e.g., `550e8400-e29b-41d4-a716-446655440000`)
+   * **Session ID Format:** UUID v4 (e.g., `6e2ec013-11bd-4862-ab32-c5b4d5a71131`)
    *
    * **Extraction Logic:**
    * - Find first `session.start` event
@@ -384,16 +639,29 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * Extract text content from a single Copilot log event for streaming
    *
+   * Used during real-time log monitoring to extract displayable content
+   * as events are written to the log file.
+   *
    * @param event - Single parsed Copilot log event
    * @returns Text content to display, or undefined if no displayable content
    *
    * @remarks
-   * **Copilot Event Formats:**
-   * - `assistant.message`: `{ type: "assistant.message", data: { content: "..." } }`
-   * - `assistant.reasoning`: `{ type: "assistant.reasoning", data: { content: "..." } }`
+   * **Supported Event Types:**
+   * - `assistant.message` - Response text content
+   * - `assistant.reasoning` - Chain-of-thought reasoning (prefixed with [Reasoning])
+   * - `tool.execution_complete` - Tool execution result
+   * - `session.error` - Error messages
+   *
+   * **Event Formats:**
+   * ```json
+   * { "type": "assistant.message", "data": { "content": "..." } }
+   * { "type": "assistant.reasoning", "data": { "content": "..." } }
+   * { "type": "tool.execution_complete", "data": { "result": { "content": "..." } } }
+   * { "type": "session.error", "data": { "message": "..." } }
+   * ```
    */
   extractContentFromEvent(event: any): string | undefined {
-    // Assistant message content
+    // Assistant message content (primary response text)
     if (event.type === "assistant.message" && event.data?.content) {
       return event.data.content;
     }
@@ -403,28 +671,54 @@ export class CopilotLogParser extends BaseLogParser {
       return `[Reasoning] ${event.data.content}`;
     }
 
+    // Tool execution result content
+    if (
+      event.type === "tool.execution_complete" &&
+      event.data?.result?.content
+    ) {
+      return event.data.result.content;
+    }
+
+    // Session error content
+    if (event.type === "session.error" && event.data) {
+      const errorCode = event.data.errorType || "UNKNOWN";
+      const errorMessage = event.data.message || "Unknown error";
+      return `Error [${errorCode}]: ${errorMessage}`;
+    }
+
     return undefined;
   }
 
   /**
-   * Format Copilot metadata into statistics string
+   * Format Copilot metadata into statistics string for display
    *
-   * @param metadata - Metadata from extractResponse() (sessionId, model from session.start event)
-   * @returns Formatted statistics string
+   * Creates a human-readable summary of session metadata including
+   * session ID, model name, and token usage statistics.
+   *
+   * @param metadata - Metadata from extractResponse() (sessionId, model, usage)
+   * @returns Formatted statistics string with pipe-separated values
    *
    * @example
    * ```typescript
-   * const metadata = { sessionId: "abc-123", model: "gpt-5-mini" };
+   * const metadata = {
+   *   sessionId: "6e2ec013-11bd-4862-ab32-c5b4d5a71131",
+   *   model: "gpt-5-mini",
+   *   usage: { inputTokens: 1500, outputTokens: 500 }
+   * };
    * const stats = parser.formatStatistics(metadata);
-   * // "Session: abc-123 | Model: gpt-5-mini"
+   * // "Session: 6e2ec013... | Model: gpt-5-mini | Tokens: 1500 in / 500 out"
    * ```
    */
-  formatStatistics(metadata: any): string {
+  formatStatistics(metadata: {
+    sessionId?: string;
+    model?: string;
+    usage?: { inputTokens?: number; outputTokens?: number };
+  }): string {
     const parts: string[] = [];
 
-    // Session ID (truncated for readability)
+    // Session ID (truncated with ellipsis for readability)
     if (metadata.sessionId) {
-      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}`);
+      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}...`);
     }
 
     // Model name

@@ -10,6 +10,7 @@ import {
   ToolCall,
   ThinkingBlock,
   TextData,
+  ToolResultData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
@@ -158,12 +159,17 @@ suite("ClaudeLogParser", () => {
     });
 
     test("should handle multiple content blocks (text, thinking, tool calls)", () => {
+      // Note: In Claude logs, thinking blocks use 'thinking' field, NOT 'text'
       const events = [
         {
           type: "assistant",
           message: {
             content: [
-              { type: "thinking", text: "I need to analyze this carefully..." },
+              {
+                type: "thinking",
+                thinking: "I need to analyze this carefully...",
+                signature: "test-signature",
+              },
               { type: "text", text: "Based on my analysis, " },
               {
                 type: "tool_use",
@@ -225,6 +231,174 @@ suite("ClaudeLogParser", () => {
       assert.strictEqual(response.metadata.usage!.inputTokens, 80);
       assert.strictEqual(response.metadata.usage!.outputTokens, 35);
       assert.strictEqual(response.metadata.usage!.totalTokens, 115);
+    });
+
+    test("should extract cache tokens from usage stats", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "Response with cache" }],
+            usage: {
+              input_tokens: 100,
+              output_tokens: 50,
+              cache_creation_input_tokens: 1000,
+              cache_read_input_tokens: 500,
+              cache_creation: {
+                ephemeral_5m_input_tokens: 1000,
+                ephemeral_1h_input_tokens: 0,
+              },
+              service_tier: "standard",
+            },
+            stop_reason: "end_turn",
+          },
+          sessionId: "cache-session",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      assert.strictEqual(response.metadata.usage!.inputTokens, 100);
+      assert.strictEqual(response.metadata.usage!.outputTokens, 50);
+      // Cache tokens should be in metadata
+      assert.ok(
+        (response.metadata as any).cacheTokens,
+        "Should have cacheTokens in metadata"
+      );
+      assert.strictEqual((response.metadata as any).cacheTokens.created, 1000);
+      assert.strictEqual((response.metadata as any).cacheTokens.read, 500);
+    });
+
+    test("should extract tool results from user events", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              { type: "text", text: "Let me search for that..." },
+              {
+                type: "tool_use",
+                name: "Grep",
+                input: {
+                  pattern: "newChatSessionPerPrompt",
+                  output_mode: "files_with_matches",
+                },
+                id: "toolu_01Q3NwTz2ifw5qBLKtrZ4zta",
+              },
+            ],
+            stop_reason: "tool_use",
+          },
+          sessionId: "tool-result-session",
+        },
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                tool_use_id: "toolu_01Q3NwTz2ifw5qBLKtrZ4zta",
+                type: "tool_result",
+                content: "Found 13 files\nschemas/prompt-schema.yaml\n...",
+              },
+            ],
+          },
+          sessionId: "tool-result-session",
+          toolUseResult: {
+            mode: "files_with_matches",
+            filenames: [
+              "schemas/prompt-schema.yaml",
+              "schemas/prompt-schema.json",
+            ],
+            numFiles: 13,
+          },
+        },
+        {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "I found the files." }],
+            stop_reason: "end_turn",
+            usage: { input_tokens: 200, output_tokens: 100 },
+          },
+          sessionId: "tool-result-session",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      // Should have text, tool call, tool result, and final text
+      assert.ok(response.events.length >= 3, "Should have multiple events");
+
+      // Find tool result event
+      const toolResults = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.TOOL_RESULT
+      );
+      assert.strictEqual(toolResults.length, 1, "Should have one tool result");
+      const toolResult = toolResults[0].data as any;
+      assert.strictEqual(
+        toolResult.toolCallId,
+        "toolu_01Q3NwTz2ifw5qBLKtrZ4zta"
+      );
+      assert.strictEqual(toolResult.result.success, true);
+      assert.ok(toolResult.result.output.includes("Found 13 files"));
+    });
+
+    test("should handle tool result errors from user events", () => {
+      const events = [
+        {
+          type: "user",
+          message: {
+            role: "user",
+            content: [
+              {
+                tool_use_id: "toolu_error_test",
+                type: "tool_result",
+                content: "Command failed with exit code 1",
+                is_error: true,
+              },
+            ],
+          },
+          sessionId: "error-session",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      const toolResults = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.TOOL_RESULT
+      );
+      assert.strictEqual(toolResults.length, 1);
+      const toolResult = toolResults[0].data as any;
+      assert.strictEqual(toolResult.result.success, false);
+      assert.ok(toolResult.result.error);
+    });
+
+    test("should extract turn duration from system events", () => {
+      const events = [
+        {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "Response" }],
+            stop_reason: "end_turn",
+            usage: { input_tokens: 100, output_tokens: 50 },
+          },
+          sessionId: "duration-session",
+        },
+        {
+          type: "system",
+          subtype: "turn_duration",
+          durationMs: 2500,
+          timestamp: "2026-01-25T20:16:43.098Z",
+          uuid: "duration-uuid",
+        },
+      ];
+
+      const response = parser.extractResponse(events);
+
+      assert.strictEqual(
+        response.metadata.elapsed,
+        2500,
+        "Should extract turn duration"
+      );
     });
 
     test("should handle missing/corrupted data gracefully", () => {
@@ -305,6 +479,20 @@ suite("ClaudeLogParser", () => {
       };
 
       assert.strictEqual(parser.isComplete(incompleteEvent), false);
+    });
+
+    test("should not detect completion when stop_reason is tool_use (intermediate state)", () => {
+      // tool_use means Claude paused to execute a tool and will continue after
+      const intermediateEvent = {
+        type: "assistant",
+        message: { stop_reason: "tool_use" },
+      };
+
+      assert.strictEqual(
+        parser.isComplete(intermediateEvent),
+        false,
+        "tool_use is an intermediate state, not final completion"
+      );
     });
 
     test("should not detect completion when stop_reason is undefined", () => {
@@ -461,7 +649,7 @@ suite("CopilotLogParser", () => {
           type: "session.start",
           data: {
             sessionId: "copilot-session-123",
-            model: "gpt-5",
+            selectedModel: "gpt-5",
           },
           timestamp: "2026-01-17T10:00:00Z",
         },
@@ -524,7 +712,7 @@ suite("CopilotLogParser", () => {
           type: "session.start",
           data: {
             sessionId: "session-abc",
-            model: "claude-sonnet-4.5",
+            selectedModel: "claude-sonnet-4.5",
           },
           timestamp: "2026-01-17T10:00:00Z",
         },
@@ -568,7 +756,7 @@ suite("CopilotLogParser", () => {
           type: "session.start",
           data: {
             sessionId: "merged-session",
-            model: "gpt-5",
+            selectedModel: "gpt-5",
           },
         },
         {
