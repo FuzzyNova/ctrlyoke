@@ -7,11 +7,26 @@
 /**
  * CLI event type constants.
  * Use these constants instead of string literals to avoid typos and ensure consistency.
+ *
+ * Operation-specific types (BASH_COMMAND, FILE_*, etc.) allow the dashboard to render
+ * specialized views without knowing about provider-specific tool formats.
  */
 export const CLI_EVENT_TYPES = {
   TEXT: "text",
-  TOOL_CALL: "toolCall",
   THINKING: "thinking",
+
+  // Operation-specific tool events (normalized from provider formats)
+  BASH_COMMAND: "bashCommand",
+  FILE_READ: "fileRead",
+  FILE_WRITE: "fileWrite",
+  FILE_EDIT: "fileEdit",
+  FILE_DELETE: "fileDelete",
+  MCP_TOOL_CALL: "mcpToolCall",
+  WEB_SEARCH: "webSearch",
+
+  // Generic fallback for unrecognized tools
+  TOOL_CALL: "toolCall",
+
   TOOL_RESULT: "toolResult",
 } as const;
 
@@ -39,7 +54,18 @@ export interface CliEvent {
  * Union type for event data.
  * The actual type depends on the CliEvent.type field.
  */
-export type CliEventData = TextData | ToolCall | ThinkingBlock | ToolResultData;
+export type CliEventData =
+  | TextData
+  | ToolCall
+  | ThinkingBlock
+  | ToolResultData
+  | BashCommandData
+  | FileReadData
+  | FileWriteData
+  | FileEditData
+  | FileDeleteData
+  | McpToolCallData
+  | WebSearchData;
 
 /**
  * Data for a text event (AI response text).
@@ -136,6 +162,120 @@ export interface OutputMetadata {
   elapsed?: number;
   /** Provider identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli') */
   provider?: string;
+}
+
+/**
+ * Data for a bash/shell command execution event.
+ */
+export interface BashCommandData {
+  /** Command executed */
+  command: string;
+  /** Working directory (optional) */
+  workingDir?: string;
+  /** Exit code (0 = success) */
+  exitCode?: number;
+  /** Command output (stdout) */
+  output?: string;
+  /** Error output (stderr) */
+  error?: string;
+  /** Execution status */
+  status?: "in_progress" | "completed" | "failed";
+}
+
+/**
+ * Data for a file read operation.
+ */
+export interface FileReadData {
+  /** File path */
+  path: string;
+  /** File content (if available) */
+  content?: string;
+  /** Success status */
+  success?: boolean;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Data for a file write operation (create new file).
+ */
+export interface FileWriteData {
+  /** File path */
+  path: string;
+  /** Content written */
+  content: string;
+  /** Success status */
+  success?: boolean;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Data for a file edit operation (modify existing file).
+ * Supports both full-content and diff-based edits.
+ */
+export interface FileEditData {
+  /** File path */
+  path: string;
+  /** Old content (before edit) */
+  oldContent?: string;
+  /** New content (after edit) */
+  newContent?: string;
+  /** For multi-file or patch-based edits */
+  changes?: Array<{
+    path: string;
+    kind: "add" | "update" | "delete";
+    oldContent?: string;
+    newContent?: string;
+  }>;
+  /** Success status */
+  success?: boolean;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Data for a file delete operation.
+ */
+export interface FileDeleteData {
+  /** File path */
+  path: string;
+  /** Success status */
+  success?: boolean;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Data for an MCP (Model Context Protocol) tool call.
+ */
+export interface McpToolCallData {
+  /** MCP server name */
+  server: string;
+  /** Tool name */
+  tool: string;
+  /** Tool parameters */
+  parameters?: Record<string, unknown>;
+  /** Tool result (optional) */
+  result?: ToolResult;
+}
+
+/**
+ * Data for a web search operation.
+ */
+export interface WebSearchData {
+  /** Search query */
+  query: string;
+  /** Search results (optional) */
+  results?: Array<{
+    title: string;
+    url: string;
+    snippet?: string;
+  }>;
+  /** Success status */
+  success?: boolean;
+  /** Error message (if failed) */
+  error?: string;
 }
 
 /**

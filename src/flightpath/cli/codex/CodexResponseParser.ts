@@ -215,14 +215,14 @@ export class CodexResponseParser
    * Parse an item into CLI events
    *
    * Handles all 8 item types from Codex schema:
-   * - agent_message: Text response
-   * - reasoning: Internal thinking/chain-of-thought
-   * - command_execution: Shell command with output
-   * - file_change: File modifications (add/update/delete)
-   * - mcp_tool_call: MCP tool invocation
-   * - web_search: Web search query
-   * - todo_list: Task list tracking
-   * - error: Item-level error
+   * - agent_message: Text response → TEXT event
+   * - reasoning: Internal thinking/chain-of-thought → THINKING event
+   * - command_execution: Shell command with output → BASH_COMMAND event
+   * - file_change: File modifications (add/update/delete) → FILE_EDIT event
+   * - mcp_tool_call: MCP tool invocation → MCP_TOOL_CALL event
+   * - web_search: Web search query → WEB_SEARCH event
+   * - todo_list: Task list tracking → TEXT event (formatted)
+   * - error: Item-level error → TEXT event (error message)
    *
    * @param item Item data from event
    * @param events Events array to push to
@@ -252,84 +252,75 @@ export class CodexResponseParser
       });
     }
 
-    // Command execution (shell command)
+    // Command execution (shell command) → BASH_COMMAND event
     if (item.type === "command_execution") {
       events.push({
-        type: CLI_EVENT_TYPES.TOOL_CALL,
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
         timestamp: Date.now(),
         data: {
-          name: "command_execution",
-          parameters: {
-            command: item.command || "unknown",
-            status: item.status || "unknown",
-            exit_code: item.exit_code,
-            output: item.aggregated_output || "",
-          },
-          id: item.id,
+          command: item.command || "unknown",
+          exitCode: item.exit_code ?? undefined,
+          output: item.aggregated_output || "",
+          status: item.status as
+            | "in_progress"
+            | "completed"
+            | "failed"
+            | undefined,
         },
       });
     }
 
-    // File change
+    // File change → FILE_EDIT event (with changes array)
     if (item.type === "file_change" && item.changes) {
       events.push({
-        type: CLI_EVENT_TYPES.TOOL_CALL,
+        type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp: Date.now(),
         data: {
-          name: "file_change",
-          parameters: {
-            changes: item.changes,
-            status: item.status,
-          },
-          id: item.id,
+          path: item.changes[0]?.path || "unknown", // Primary file
+          changes: item.changes.map((change) => ({
+            path: change.path,
+            kind: change.kind,
+          })),
+          success: item.status === "completed",
         },
       });
     }
 
-    // MCP tool call
+    // MCP tool call → MCP_TOOL_CALL event
     if (item.type === "mcp_tool_call") {
       events.push({
-        type: CLI_EVENT_TYPES.TOOL_CALL,
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
         timestamp: Date.now(),
         data: {
-          name: item.tool || "mcp_tool",
-          parameters: {
-            server: item.server,
-            tool: item.tool,
-            status: item.status,
-          },
-          id: item.id,
+          server: item.server || "unknown",
+          tool: item.tool || "unknown",
         },
       });
     }
 
-    // Web search
+    // Web search → WEB_SEARCH event
     if (item.type === "web_search") {
       events.push({
-        type: CLI_EVENT_TYPES.TOOL_CALL,
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
         timestamp: Date.now(),
         data: {
-          name: "web_search",
-          parameters: {
-            query: item.query,
-          },
-          id: item.id,
+          query: item.query || "",
+          success: item.status === "completed",
         },
       });
     }
 
-    // Todo list
+    // Todo list → TEXT event (formatted)
     if (item.type === "todo_list" && item.items) {
+      const todoText = item.items
+        .map(
+          (todo, i) => `${i + 1}. [${todo.completed ? "x" : " "}] ${todo.text}`
+        )
+        .join("\n");
       events.push({
-        type: CLI_EVENT_TYPES.TOOL_CALL,
+        type: CLI_EVENT_TYPES.TEXT,
         timestamp: Date.now(),
-        data: {
-          name: "todo_list",
-          parameters: {
-            items: item.items,
-          },
-          id: item.id,
-        },
+        data: { text: `Todo List:\n${todoText}` },
       });
     }
 

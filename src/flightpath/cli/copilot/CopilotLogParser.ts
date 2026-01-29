@@ -11,6 +11,13 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  BashCommandData,
+  FileReadData,
+  FileWriteData,
+  FileEditData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
@@ -264,7 +271,7 @@ export class CopilotLogParser extends BaseLogParser {
    * - `session.error` - Session errors (emitted as TEXT with error details)
    * - `assistant.message` - Response text and tool requests
    * - `assistant.reasoning` - Chain-of-thought thinking blocks
-   * - `tool.execution_start` - Tool call initiation (emitted as TOOL_CALL)
+   * - `tool.execution_start` - Tool call initiation (emitted as semantic events: BASH_COMMAND, FILE_READ, etc.)
    * - `tool.execution_complete` - Tool results (emitted as TOOL_RESULT)
    *
    * **Event Structure:**
@@ -332,18 +339,16 @@ export class CopilotLogParser extends BaseLogParser {
           });
         }
 
-        // Extract tool calls from toolRequests array
+        // Extract tool calls from toolRequests array and map to semantic event types
         if (event.data.toolRequests && Array.isArray(event.data.toolRequests)) {
           for (const req of event.data.toolRequests) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.TOOL_CALL,
-              timestamp,
-              data: {
-                name: req.name,
-                parameters: req.arguments || {},
-                id: req.toolCallId,
-              } as ToolCall,
-            });
+            const toolEvent = this.mapToolToSemanticEvent(
+              req.name,
+              req.arguments || {},
+              req.toolCallId,
+              timestamp
+            );
+            outputEvents.push(toolEvent);
           }
         }
       }
@@ -361,18 +366,16 @@ export class CopilotLogParser extends BaseLogParser {
         });
       }
 
-      // Extract tool execution start (alternative source for TOOL_CALL events)
+      // Extract tool execution start (alternative source for semantic events)
       // This provides more accurate timestamps than assistant.message.toolRequests
       if (event.type === "tool.execution_start" && event.data) {
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: event.data.toolName,
-            parameters: event.data.arguments || {},
-            id: event.data.toolCallId,
-          } as ToolCall,
-        });
+        const toolEvent = this.mapToolToSemanticEvent(
+          event.data.toolName,
+          event.data.arguments || {},
+          event.data.toolCallId,
+          timestamp
+        );
+        outputEvents.push(toolEvent);
       }
 
       // Extract tool execution results
@@ -773,6 +776,153 @@ export class CopilotLogParser extends BaseLogParser {
     }
 
     return null;
+  }
+
+  /**
+   * Map Copilot tool name to semantic event type
+   *
+   * Converts Copilot-specific tool names to provider-agnostic semantic events.
+   *
+   * **Tool Name Mapping:**
+   * - Shell commands: `powershell`, `bash`, `shell` → BASH_COMMAND
+   * - File operations:
+   *   - `view`, `read` → FILE_READ
+   *   - `write`, `create_file` → FILE_WRITE
+   *   - `edit`, `modify_file`, `replace_string_in_file` → FILE_EDIT
+   *   - `delete`, `delete_file` → FILE_DELETE
+   * - MCP tools: Any tool with server prefix (e.g., `github(...)`) → MCP_TOOL_CALL
+   * - Web search: `web_search`, `search` → WEB_SEARCH
+   * - Unknown tools: Fallback to generic TOOL_CALL
+   *
+   * @param toolName - Copilot tool name
+   * @param args - Tool arguments from Copilot
+   * @param toolCallId - Unique tool call ID
+   * @param timestamp - Event timestamp
+   * @returns CliEvent with semantic type and properly structured data
+   */
+  private mapToolToSemanticEvent(
+    toolName: string,
+    args: Record<string, unknown>,
+    toolCallId: string,
+    timestamp: number
+  ): CliEvent {
+    const lowerName = toolName.toLowerCase();
+
+    // Bash/shell commands
+    if (
+      lowerName === "powershell" ||
+      lowerName === "bash" ||
+      lowerName === "shell"
+    ) {
+      return {
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp,
+        data: {
+          command: (args.command as string) || (args.script as string) || "",
+          workingDir: args.cwd as string | undefined,
+          status: "in_progress",
+        } as BashCommandData,
+      };
+    }
+
+    // File read operations
+    if (
+      lowerName === "view" ||
+      lowerName === "read" ||
+      lowerName === "read_file"
+    ) {
+      return {
+        type: CLI_EVENT_TYPES.FILE_READ,
+        timestamp,
+        data: {
+          path: (args.path as string) || (args.file_path as string) || "",
+        } as FileReadData,
+      };
+    }
+
+    // File write operations (create new file)
+    if (
+      lowerName === "write" ||
+      lowerName === "create_file" ||
+      lowerName === "write_file"
+    ) {
+      return {
+        type: CLI_EVENT_TYPES.FILE_WRITE,
+        timestamp,
+        data: {
+          path: (args.path as string) || (args.file_path as string) || "",
+          content: (args.content as string) || "",
+        } as FileWriteData,
+      };
+    }
+
+    // File edit operations (modify existing file)
+    if (
+      lowerName === "edit" ||
+      lowerName === "modify_file" ||
+      lowerName === "replace_string_in_file" ||
+      lowerName === "multiedit"
+    ) {
+      return {
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        timestamp,
+        data: {
+          path: (args.path as string) || (args.file_path as string) || "",
+          oldContent: args.old_string as string | undefined,
+          newContent: args.new_string as string | undefined,
+        } as FileEditData,
+      };
+    }
+
+    // File delete operations
+    if (lowerName === "delete" || lowerName === "delete_file") {
+      return {
+        type: CLI_EVENT_TYPES.FILE_DELETE,
+        timestamp,
+        data: {
+          path: (args.path as string) || (args.file_path as string) || "",
+        } as FileDeleteData,
+      };
+    }
+
+    // MCP tool calls (format: "server_name(tool_name)" or just MCP server tools)
+    if (toolName.includes("(") && toolName.includes(")")) {
+      // Format: "github(search_repositories)"
+      const match = toolName.match(/^([^(]+)\(([^)]+)\)$/);
+      if (match) {
+        return {
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp,
+          data: {
+            server: match[1],
+            tool: match[2],
+            parameters: args,
+          } as McpToolCallData,
+        };
+      }
+    }
+
+    // Web search operations
+    if (lowerName === "web_search" || lowerName === "search") {
+      return {
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
+        timestamp,
+        data: {
+          query: (args.query as string) || "",
+        } as WebSearchData,
+      };
+    }
+
+    // Fallback: Generic tool call for unknown tools
+    return {
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp,
+      data: {
+        name: toolName,
+        parameters: args,
+        id: toolCallId,
+      } as ToolCall,
+    };
   }
 
   // ========================================================================

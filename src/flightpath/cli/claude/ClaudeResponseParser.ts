@@ -238,7 +238,7 @@ export class ClaudeResponseParser
    * Extracts ALL content blocks in order:
    * - thinking blocks → THINKING events
    * - text blocks → TEXT events
-   * - tool_use blocks → TOOL_CALL events
+   * - tool_use blocks → Semantic event types (BASH_COMMAND, FILE_WRITE, etc.)
    *
    * @param content Array of content blocks from assistant message
    * @param events Array to append events to
@@ -267,19 +267,155 @@ export class ClaudeResponseParser
         });
       }
 
-      // Handle tool_use blocks - process ALL of them (fix for first-only bug)
+      // Handle tool_use blocks - map to semantic event types
       if (contentBlock.type === "tool_use") {
-        events.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp: Date.now(),
-          data: {
-            name: contentBlock.name,
-            parameters: contentBlock.input, // Normalize 'input' → 'parameters'
-            id: contentBlock.id,
-          },
-        });
+        this.mapToolToSemanticEvent(contentBlock, events);
       }
     }
+  }
+
+  /**
+   * Map Claude tool_use block to semantic event type
+   *
+   * Maps Claude-specific tool names to semantic event types:
+   * - "bash" or "shell" → BASH_COMMAND
+   * - "write" → FILE_WRITE
+   * - "edit" or "apply_patch" → FILE_EDIT
+   * - "read" → FILE_READ
+   * - Unknown tools → TOOL_CALL (fallback)
+   *
+   * @param toolUse Tool use content block
+   * @param events Array to append events to
+   */
+  private mapToolToSemanticEvent(toolUse: any, events: CliEvent[]): void {
+    const toolName = toolUse.name;
+    const input = toolUse.input || {};
+
+    // Bash/shell command execution
+    if (toolName === "bash" || toolName === "shell") {
+      events.push({
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: Date.now(),
+        data: {
+          command: input.command || input.cmd || "unknown",
+          workingDir: input.cwd || input.workingDir,
+          exitCode: input.exitCode,
+          output: input.output,
+          error: input.error,
+          status: input.status as
+            | "in_progress"
+            | "completed"
+            | "failed"
+            | undefined,
+        },
+      });
+      return;
+    }
+
+    // File write (create new file)
+    if (toolName === "write") {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_WRITE,
+        timestamp: Date.now(),
+        data: {
+          path: input.path || input.file_path || "unknown",
+          content: input.content || input.file_text || "",
+          success: input.success,
+          error: input.error,
+        },
+      });
+      return;
+    }
+
+    // File edit (modify existing file)
+    if (toolName === "edit" || toolName === "apply_patch") {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        timestamp: Date.now(),
+        data: {
+          path: input.path || input.file_path || "unknown",
+          oldContent: input.old_str || input.oldContent,
+          newContent: input.new_str || input.newContent,
+          success: input.success,
+          error: input.error,
+        },
+      });
+      return;
+    }
+
+    // File read
+    if (toolName === "read") {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_READ,
+        timestamp: Date.now(),
+        data: {
+          path: input.path || input.file_path || "unknown",
+          content: input.content,
+          success: input.success,
+          error: input.error,
+        },
+      });
+      return;
+    }
+
+    // File delete
+    if (toolName === "delete" || toolName === "rm") {
+      events.push({
+        type: CLI_EVENT_TYPES.FILE_DELETE,
+        timestamp: Date.now(),
+        data: {
+          path: input.path || input.file_path || "unknown",
+          success: input.success,
+          error: input.error,
+        },
+      });
+      return;
+    }
+
+    // Web search
+    if (toolName === "web_search" || toolName === "search") {
+      events.push({
+        type: CLI_EVENT_TYPES.WEB_SEARCH,
+        timestamp: Date.now(),
+        data: {
+          query: input.query || "",
+          results: input.results,
+          success: input.success,
+          error: input.error,
+        },
+      });
+      return;
+    }
+
+    // MCP tool call (if tool name contains MCP server prefix)
+    // Format: "server_name.tool_name" or explicit MCP tools
+    if (toolName.includes(".") || toolName.startsWith("mcp_")) {
+      const [server, tool] = toolName.includes(".")
+        ? toolName.split(".", 2)
+        : ["unknown", toolName];
+
+      events.push({
+        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+        timestamp: Date.now(),
+        data: {
+          server,
+          tool,
+          parameters: input,
+        },
+      });
+      return;
+    }
+
+    // Unknown tool - fallback to generic TOOL_CALL
+    events.push({
+      type: CLI_EVENT_TYPES.TOOL_CALL,
+      timestamp: Date.now(),
+      data: {
+        name: toolName,
+        parameters: input,
+        id: toolUse.id,
+      },
+    });
   }
 
   /**
@@ -424,15 +560,15 @@ export class ClaudeResponseParser
             if (block && block.type === "tool_use" && block.accumulatedJson) {
               try {
                 const input = JSON.parse(block.accumulatedJson);
-                events.push({
-                  type: CLI_EVENT_TYPES.TOOL_CALL,
-                  timestamp: Date.now(),
-                  data: {
+                // Map to semantic event type
+                this.mapToolToSemanticEvent(
+                  {
                     name: block.name,
-                    parameters: input,
+                    input,
                     id: block.id,
                   },
-                });
+                  events
+                );
               } catch (e) {
                 Log.debug(
                   `[ClaudeParser] Failed to parse accumulated tool JSON: ${block.accumulatedJson.substring(0, 100)}`

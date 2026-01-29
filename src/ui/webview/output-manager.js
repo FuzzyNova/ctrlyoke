@@ -59,7 +59,7 @@
    */
   function truncate(str, maxLen) {
     if (!str || str.length <= maxLen) return str;
-    return str.substring(0, maxLen - 3) + '...';
+    return str.substring(0, maxLen - 3) + "...";
   }
 
   /**
@@ -75,7 +75,7 @@
     if (parts.length <= 2) return filePath;
 
     // Show "...parent/file.ext"
-    return '...' + parts.slice(-2).join('/');
+    return "..." + parts.slice(-2).join("/");
   }
 
   /**
@@ -85,46 +85,54 @@
    * @returns {string} Formatted parameter string
    */
   function extractKeyParameters(toolName, parameters) {
-    if (!parameters) return '';
+    if (!parameters) return "";
 
     const lowerName = toolName.toLowerCase();
 
     // Bash/Shell commands
-    if (lowerName === 'bash' || lowerName === 'shell') {
+    if (lowerName === "bash" || lowerName === "shell") {
       return truncate(parameters.command, 80);
     }
 
     // File operations
-    if (lowerName === 'write' || lowerName === 'edit' || lowerName === 'read') {
+    if (lowerName === "write" || lowerName === "edit" || lowerName === "read") {
       return shortenPath(parameters.file_path);
     }
 
     // MultiEdit
-    if (lowerName === 'multiedit') {
-      const fileCount = Array.isArray(parameters.files) ? parameters.files.length : 1;
-      return `${fileCount} file${fileCount !== 1 ? 's' : ''}`;
+    if (lowerName === "multiedit") {
+      const fileCount = Array.isArray(parameters.files)
+        ? parameters.files.length
+        : 1;
+      return `${fileCount} file${fileCount !== 1 ? "s" : ""}`;
     }
 
     // Glob
-    if (lowerName === 'glob') {
-      return parameters.pattern || '';
+    if (lowerName === "glob") {
+      return parameters.pattern || "";
     }
 
     // Grep/Search
-    if (lowerName === 'grep' || lowerName === 'search') {
-      const pattern = parameters.pattern ? `"${truncate(parameters.pattern, 40)}"` : '';
-      const path = parameters.path ? `, path: ${shortenPath(parameters.path)}` : '';
+    if (lowerName === "grep" || lowerName === "search") {
+      const pattern = parameters.pattern
+        ? `"${truncate(parameters.pattern, 40)}"`
+        : "";
+      const path = parameters.path
+        ? `, path: ${shortenPath(parameters.path)}`
+        : "";
       return `${pattern}${path}`;
     }
 
     // Task
-    if (lowerName === 'task') {
-      return truncate(parameters.description || parameters.prompt || '', 60);
+    if (lowerName === "task") {
+      return truncate(parameters.description || parameters.prompt || "", 60);
     }
 
     // Default: show first 2-3 key parameters
     const keys = Object.keys(parameters).slice(0, 3);
-    return keys.map(k => `${k}: ${truncate(String(parameters[k]), 30)}`).join(', ');
+    return keys
+      .map((k) => `${k}: ${truncate(String(parameters[k]), 30)}`)
+      .join(", ");
   }
 
   /**
@@ -133,7 +141,7 @@
    * @returns {string} Formatted tool call line
    */
   function formatToolCallTerminalStyle(tool) {
-    if (!tool || !tool.name) return '';
+    if (!tool || !tool.name) return "";
     const params = extractKeyParameters(tool.name, tool.parameters);
     return `● ${tool.name}(${params})`;
   }
@@ -144,9 +152,9 @@
    * @returns {string} Formatted result line
    */
   function formatToolResultTerminalStyle(result) {
-    if (!result) return '';
+    if (!result) return "";
 
-    const prefix = '  ⎿  ';
+    const prefix = "  ⎿  ";
 
     // Error case
     if (!result.success && result.error) {
@@ -159,7 +167,7 @@
     }
 
     // Simple success/failure
-    return prefix + (result.success ? 'Success' : 'Failed');
+    return prefix + (result.success ? "Success" : "Failed");
   }
 
   /**
@@ -169,35 +177,39 @@
    */
   function renderDiffVisualization(parameters) {
     if (!parameters.old_string || !parameters.new_string) {
-      return '';
+      return "";
     }
 
     // Use the diff library (window.Diff is exposed by diff-bundle.js)
     if (!window.Diff) {
-      console.error('Diff library not loaded');
-      return '';
+      console.error("Diff library not loaded");
+      return "";
     }
 
     let html = '<div class="tool-call-diff">';
 
     // Generate line-by-line diff
-    const diff = window.Diff.diffLines(parameters.old_string, parameters.new_string);
+    const diff = window.Diff.diffLines(
+      parameters.old_string,
+      parameters.new_string
+    );
 
     // Render each chunk
     diff.forEach((part) => {
       if (part.added) {
         // Added lines (green)
-        part.value.split('\n').forEach((line, index, array) => {
+        part.value.split("\n").forEach((line, index, array) => {
           // Skip the last empty line if it exists
-          if (index === array.length - 1 && line === '') return;
+          if (index === array.length - 1 && line === "") return;
           html += '<div class="diff-line added">' + escapeHtml(line) + "</div>";
         });
       } else if (part.removed) {
         // Removed lines (red)
-        part.value.split('\n').forEach((line, index, array) => {
+        part.value.split("\n").forEach((line, index, array) => {
           // Skip the last empty line if it exists
-          if (index === array.length - 1 && line === '') return;
-          html += '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
+          if (index === array.length - 1 && line === "") return;
+          html +=
+            '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
         });
       }
       // Unchanged lines are not rendered (part.added === false && part.removed === false)
@@ -215,19 +227,8 @@
   function renderStructuredOutput(output) {
     let html = "";
 
-    // Debug logging to diagnose headless mode structured output issue
-    console.log('[OutputManager] renderStructuredOutput called:', {
-      hasStructured: !!output.structured,
-      hasEvents: !!(output.structured?.events),
-      eventCount: output.structured?.events?.length || 0,
-      hasResponse: !!output.response,
-      responseLength: output.response?.length || 0,
-      isStreaming: output.isStreaming
-    });
-
     // If no structured data, fall back to response text
     if (!output.structured || !output.structured.events) {
-      console.log('[OutputManager] No structured events - using fallback response text');
       if (output.response) {
         html +=
           '<div class="output-response">' +
@@ -237,8 +238,6 @@
       return html;
     }
 
-    console.log('[OutputManager] Rendering', output.structured.events.length, 'structured events');
-
     // Render events in chronological order
     for (const event of output.structured.events) {
       switch (event.type) {
@@ -247,29 +246,171 @@
           if (event.data && event.data.text) {
             html +=
               '<div class="output-text-terminal">' +
-              '● ' + escapeHtml(event.data.text) +
+              "● " +
+              escapeHtml(event.data.text) +
               "</div>\n";
           }
           break;
 
+        case "bashCommand":
+          // Bash command execution - show full command (no truncation)
+          if (event.data) {
+            const status = event.data.status || "unknown";
+            const exitCode =
+              event.data.exitCode !== undefined ? event.data.exitCode : "?";
+            const success = exitCode === 0;
+
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html += "● " + escapeHtml(event.data.command);
+            html +=
+              ' <span class="status-badge ' +
+              (success ? "success" : "error") +
+              '">';
+            html += status + " (exit: " + exitCode + ")";
+            html += "</span></div>";
+
+            // Show output if available
+            if (event.data.output) {
+              html += '<div class="tool-output">';
+              html += "<pre>" + escapeHtml(event.data.output) + "</pre>";
+              html += "</div>";
+            }
+
+            // Show error if available
+            if (event.data.error) {
+              html += '<div class="tool-error">';
+              html += "<pre>" + escapeHtml(event.data.error) + "</pre>";
+              html += "</div>";
+            }
+
+            html += "</div>\n";
+          }
+          break;
+
+        case "fileEdit":
+          // File edit operation - show diff visualization
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+
+            // If changes array exists (Codex format)
+            if (event.data.changes && event.data.changes.length > 0) {
+              for (const change of event.data.changes) {
+                html += '<div class="tool-call-line">';
+                html +=
+                  "● File " + change.kind + ": " + escapeHtml(change.path);
+                html += "</div>";
+
+                // Show diff if old/new content available
+                if (change.oldContent && change.newContent) {
+                  html += renderDiffVisualization({
+                    old_string: change.oldContent,
+                    new_string: change.newContent,
+                  });
+                }
+              }
+            }
+            // Single file edit (Claude/Copilot format)
+            else if (event.data.path) {
+              html += '<div class="tool-call-line">';
+              html += "● Edit file: " + escapeHtml(event.data.path);
+              html += "</div>";
+
+              if (event.data.oldContent && event.data.newContent) {
+                html += renderDiffVisualization({
+                  old_string: event.data.oldContent,
+                  new_string: event.data.newContent,
+                });
+              }
+            }
+
+            html += "</div>\n";
+          }
+          break;
+
+        case "fileWrite":
+          // File write operation
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html += "● Write file: " + escapeHtml(event.data.path);
+            if (event.data.content) {
+              html += " (" + event.data.content.length + " bytes)";
+            }
+            html += "</div>";
+            html += "</div>\n";
+          }
+          break;
+
+        case "fileRead":
+          // File read operation
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html += "● Read file: " + escapeHtml(event.data.path);
+            html += "</div>";
+            html += "</div>\n";
+          }
+          break;
+
+        case "fileDelete":
+          // File delete operation
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html += "● Delete file: " + escapeHtml(event.data.path);
+            html += "</div>";
+            html += "</div>\n";
+          }
+          break;
+
+        case "mcpToolCall":
+          // MCP tool call
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html +=
+              "● MCP: " +
+              escapeHtml(event.data.server) +
+              "." +
+              escapeHtml(event.data.tool);
+            html += "</div>";
+            html += "</div>\n";
+          }
+          break;
+
+        case "webSearch":
+          // Web search operation
+          if (event.data) {
+            html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
+            html += '● Web search: "' + escapeHtml(event.data.query) + '"';
+            html += "</div>";
+            html += "</div>\n";
+          }
+          break;
+
         case "toolCall":
-          // Tool call events - terminal style
+          // Generic tool call (fallback for unrecognized tools)
           if (event.data) {
             const toolLine = formatToolCallTerminalStyle(event.data);
 
             html += '<div class="output-tool-call-terminal">';
-            html += '<div class="tool-call-line">' + escapeHtml(toolLine) + '</div>';
-
-            // Add diff visualization if available (for Edit operations)
-            if (event.data.parameters) {
-              html += renderDiffVisualization(event.data.parameters);
-            }
+            html +=
+              '<div class="tool-call-line">' + escapeHtml(toolLine) + "</div>";
 
             // Add result if available
             if (event.data.result) {
-              const resultLine = formatToolResultTerminalStyle(event.data.result);
-              const resultClass = event.data.result.success ? '' : ' error';
-              html += '<div class="tool-result-line' + resultClass + '">' + escapeHtml(resultLine) + '</div>';
+              const resultLine = formatToolResultTerminalStyle(
+                event.data.result
+              );
+              const resultClass = event.data.result.success ? "" : " error";
+              html +=
+                '<div class="tool-result-line' +
+                resultClass +
+                '">' +
+                escapeHtml(resultLine) +
+                "</div>";
             }
 
             html += "</div>\n";
@@ -279,12 +420,14 @@
         case "thinking":
           // Thinking block events - terminal style
           if (event.data && event.data.text) {
-            const label = (event.data.label && event.data.label !== "Thinking")
-              ? event.data.label
-              : "Thinking";
+            const label =
+              event.data.label && event.data.label !== "Thinking"
+                ? event.data.label
+                : "Thinking";
 
             html += '<div class="output-text-terminal">';
-            html += '● ' + escapeHtml(label) + ': ' + escapeHtml(event.data.text);
+            html +=
+              "● " + escapeHtml(label) + ": " + escapeHtml(event.data.text);
             html += "</div>\n";
           }
           break;
@@ -293,8 +436,13 @@
           // Tool result events (if separate from toolCall)
           if (event.data && event.data.result) {
             const resultLine = formatToolResultTerminalStyle(event.data.result);
-            const resultClass = event.data.result.success ? '' : ' error';
-            html += '<div class="tool-result-line' + resultClass + '">' + escapeHtml(resultLine) + '</div>\n';
+            const resultClass = event.data.result.success ? "" : " error";
+            html +=
+              '<div class="tool-result-line' +
+              resultClass +
+              '">' +
+              escapeHtml(resultLine) +
+              "</div>\n";
           }
           break;
       }
@@ -384,7 +532,7 @@
         if (output.cliCommand) {
           // Format command with working directory prefix (terminal-style)
           // Use the full workspace path if available, otherwise fallback to 'workspace'
-          const workingDir = output.workingDirectory || 'workspace';
+          const workingDir = output.workingDirectory || "workspace";
           html += `<div class="output-cli-command">${escapeHtml(workingDir)}> ${escapeHtml(output.cliCommand)}</div>`;
         }
 
@@ -463,7 +611,11 @@
       if (streamingEntry.response && streamingEntry.response.length > 0) {
         // If the final output has structured data, REPLACE the streamed text
         // The structured events contain all the information in a better format
-        if (output.structured && output.structured.events && output.structured.events.length > 0) {
+        if (
+          output.structured &&
+          output.structured.events &&
+          output.structured.events.length > 0
+        ) {
           console.log(
             "📊 Dashboard: Replacing streamed text (" +
               streamingEntry.response.length +
@@ -732,7 +884,7 @@
           lines.push("```bash");
           // Format command with working directory prefix (terminal-style)
           // Use the full workspace path if available, otherwise fallback to 'workspace'
-          const workingDir = output.workingDirectory || 'workspace';
+          const workingDir = output.workingDirectory || "workspace";
           lines.push(`${workingDir}> ${output.cliCommand}`);
           lines.push("```");
           lines.push("");
@@ -748,44 +900,170 @@
               case "text":
                 // Text events - terminal style with bullet
                 if (event.data && event.data.text) {
-                  lines.push('● ' + event.data.text);
+                  lines.push("● " + event.data.text);
+                  lines.push("");
+                }
+                break;
+
+              case "bashCommand":
+                // Bash command execution - show full command
+                if (event.data) {
+                  const status = event.data.status || "unknown";
+                  const exitCode =
+                    event.data.exitCode !== undefined
+                      ? event.data.exitCode
+                      : "?";
+                  lines.push(
+                    `● ${event.data.command} (${status}, exit: ${exitCode})`
+                  );
+
+                  if (event.data.output) {
+                    lines.push("");
+                    lines.push("```");
+                    lines.push(event.data.output.trim());
+                    lines.push("```");
+                  }
+
+                  if (event.data.error) {
+                    lines.push("");
+                    lines.push("Error:");
+                    lines.push("```");
+                    lines.push(event.data.error.trim());
+                    lines.push("```");
+                  }
+                  lines.push("");
+                }
+                break;
+
+              case "fileEdit":
+                // File edit operation - show diff
+                if (event.data) {
+                  if (event.data.changes && event.data.changes.length > 0) {
+                    event.data.changes.forEach((change) => {
+                      lines.push(`● File ${change.kind}: ${change.path}`);
+
+                      if (
+                        change.oldContent &&
+                        change.newContent &&
+                        window.Diff
+                      ) {
+                        lines.push("");
+                        lines.push("```diff");
+                        const diff = window.Diff.diffLines(
+                          change.oldContent,
+                          change.newContent
+                        );
+                        diff.forEach((part) => {
+                          if (part.added) {
+                            part.value
+                              .split("\n")
+                              .forEach((line, index, array) => {
+                                if (index === array.length - 1 && line === "")
+                                  return;
+                                lines.push("+ " + line);
+                              });
+                          } else if (part.removed) {
+                            part.value
+                              .split("\n")
+                              .forEach((line, index, array) => {
+                                if (index === array.length - 1 && line === "")
+                                  return;
+                                lines.push("- " + line);
+                              });
+                          }
+                        });
+                        lines.push("```");
+                      }
+                      lines.push("");
+                    });
+                  } else if (event.data.path) {
+                    lines.push(`● Edit file: ${event.data.path}`);
+
+                    if (
+                      event.data.oldContent &&
+                      event.data.newContent &&
+                      window.Diff
+                    ) {
+                      lines.push("");
+                      lines.push("```diff");
+                      const diff = window.Diff.diffLines(
+                        event.data.oldContent,
+                        event.data.newContent
+                      );
+                      diff.forEach((part) => {
+                        if (part.added) {
+                          part.value
+                            .split("\n")
+                            .forEach((line, index, array) => {
+                              if (index === array.length - 1 && line === "")
+                                return;
+                              lines.push("+ " + line);
+                            });
+                        } else if (part.removed) {
+                          part.value
+                            .split("\n")
+                            .forEach((line, index, array) => {
+                              if (index === array.length - 1 && line === "")
+                                return;
+                              lines.push("- " + line);
+                            });
+                        }
+                      });
+                      lines.push("```");
+                    }
+                    lines.push("");
+                  }
+                }
+                break;
+
+              case "fileWrite":
+                if (event.data) {
+                  lines.push(`● Write file: ${event.data.path}`);
+                  if (event.data.content) {
+                    lines.push(` (${event.data.content.length} bytes)`);
+                  }
+                  lines.push("");
+                }
+                break;
+
+              case "fileRead":
+                if (event.data) {
+                  lines.push(`● Read file: ${event.data.path}`);
+                  lines.push("");
+                }
+                break;
+
+              case "fileDelete":
+                if (event.data) {
+                  lines.push(`● Delete file: ${event.data.path}`);
+                  lines.push("");
+                }
+                break;
+
+              case "mcpToolCall":
+                if (event.data) {
+                  lines.push(`● MCP: ${event.data.server}.${event.data.tool}`);
+                  lines.push("");
+                }
+                break;
+
+              case "webSearch":
+                if (event.data) {
+                  lines.push(`● Web search: "${event.data.query}"`);
                   lines.push("");
                 }
                 break;
 
               case "toolCall":
-                // Tool call events - terminal style
+                // Generic tool call (fallback)
                 if (event.data) {
                   const toolLine = formatToolCallTerminalStyle(event.data);
                   lines.push(toolLine);
 
-                  // Add diff visualization if available (for Edit operations)
-                  if (event.data.parameters && event.data.parameters.old_string && event.data.parameters.new_string && window.Diff) {
-                    lines.push("");
-                    lines.push("```diff");
-
-                    // Use diff library for proper diff
-                    const diff = window.Diff.diffLines(event.data.parameters.old_string, event.data.parameters.new_string);
-                    diff.forEach((part) => {
-                      if (part.added) {
-                        part.value.split('\n').forEach((line, index, array) => {
-                          if (index === array.length - 1 && line === '') return;
-                          lines.push("+ " + line);
-                        });
-                      } else if (part.removed) {
-                        part.value.split('\n').forEach((line, index, array) => {
-                          if (index === array.length - 1 && line === '') return;
-                          lines.push("- " + line);
-                        });
-                      }
-                      // Unchanged lines are not included in markdown export
-                    });
-
-                    lines.push("```");
-                  }
-
                   if (event.data.result) {
-                    const resultLine = formatToolResultTerminalStyle(event.data.result);
+                    const resultLine = formatToolResultTerminalStyle(
+                      event.data.result
+                    );
                     lines.push(resultLine);
                   }
                   lines.push("");
@@ -795,10 +1073,11 @@
               case "thinking":
                 // Thinking block events - terminal style
                 if (event.data && event.data.text) {
-                  const label = (event.data.label && event.data.label !== "Thinking")
-                    ? event.data.label
-                    : "Thinking";
-                  lines.push('● ' + label + ': ' + event.data.text);
+                  const label =
+                    event.data.label && event.data.label !== "Thinking"
+                      ? event.data.label
+                      : "Thinking";
+                  lines.push("● " + label + ": " + event.data.text);
                   lines.push("");
                 }
                 break;
@@ -806,7 +1085,9 @@
               case "toolResult":
                 // Tool result events (if separate from toolCall)
                 if (event.data && event.data.result) {
-                  const resultLine = formatToolResultTerminalStyle(event.data.result);
+                  const resultLine = formatToolResultTerminalStyle(
+                    event.data.result
+                  );
                   lines.push(resultLine);
                   lines.push("");
                 }

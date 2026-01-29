@@ -1216,7 +1216,7 @@ button:disabled {
 
 /* Terminal-style tool call container */
 .output-tool-call-terminal {
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   margin: 0.5rem 0;
   line-height: 1.6;
 }
@@ -1237,6 +1237,53 @@ button:disabled {
   &.error {
     color: var(--vscode-errorForeground);
   }
+}
+
+/* Status badge for command execution */
+.status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  margin-left: 8px;
+  font-size: 10px;
+  border-radius: 3px;
+  font-weight: 500;
+
+  &.success {
+    background: var(--vscode-testing-iconPassed, rgba(155, 185, 85, 0.2));
+    color: var(--vscode-testing-iconPassed, #9bb955);
+  }
+
+  &.error {
+    background: var(--vscode-testing-iconFailed, rgba(244, 71, 71, 0.2));
+    color: var(--vscode-testing-iconFailed, #f44747);
+  }
+}
+
+/* Tool output/error blocks */
+.tool-output,
+.tool-error {
+  margin: 0.25rem 0 0 1.5rem;
+  padding: 0.5rem;
+  border-radius: 3px;
+  background: var(--vscode-editor-background);
+  border-left: 3px solid var(--vscode-panel-border);
+
+  pre {
+    margin: 0;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--vscode-foreground);
+  }
+}
+
+.tool-error {
+  border-left-color: var(--vscode-errorForeground);
+  background: var(
+    --vscode-inputValidation-errorBackground,
+    rgba(244, 71, 71, 0.1)
+  );
 }
 
 /* Text events: ● Text content */

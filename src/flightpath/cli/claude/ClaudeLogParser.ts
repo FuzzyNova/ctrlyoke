@@ -16,6 +16,13 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  BashCommandData,
+  FileReadData,
+  FileWriteData,
+  FileEditData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
@@ -153,17 +160,94 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             });
           }
 
-          // TOOL_USE - Extract tool calls and normalize 'input' to 'parameters'
+          // TOOL_USE - Map Claude tools to semantic event types
           if (contentBlock.type === "tool_use") {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.TOOL_CALL,
-              timestamp,
-              data: {
-                name: contentBlock.name,
-                parameters: contentBlock.input || {},
-                id: contentBlock.id,
-              } as ToolCall,
-            });
+            const toolName = contentBlock.name;
+            const input = contentBlock.input || {};
+
+            // Map Claude-specific tool names to semantic event types
+            if (toolName === "bash" || toolName === "shell") {
+              // Bash command execution
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                timestamp,
+                data: {
+                  command: input.command || "unknown",
+                  workingDir: input.working_dir || input.cwd,
+                  status: "in_progress",
+                } as BashCommandData,
+              });
+            } else if (toolName === "write") {
+              // File write (create new file)
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_WRITE,
+                timestamp,
+                data: {
+                  path: input.path || "unknown",
+                  content: input.content || "",
+                } as FileWriteData,
+              });
+            } else if (toolName === "edit" || toolName === "apply_patch") {
+              // File edit (modify existing file)
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                timestamp,
+                data: {
+                  path: input.path || "unknown",
+                  oldContent: input.old_content || input.old_str,
+                  newContent: input.new_content || input.new_str,
+                } as FileEditData,
+              });
+            } else if (toolName === "read" || toolName === "read_file") {
+              // File read
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_READ,
+                timestamp,
+                data: {
+                  path: input.path || "unknown",
+                } as FileReadData,
+              });
+            } else if (toolName === "delete" || toolName === "delete_file") {
+              // File delete
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_DELETE,
+                timestamp,
+                data: {
+                  path: input.path || "unknown",
+                } as FileDeleteData,
+              });
+            } else if (toolName.includes("search") || toolName === "web_search") {
+              // Web search
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.WEB_SEARCH,
+                timestamp,
+                data: {
+                  query: input.query || "",
+                } as WebSearchData,
+              });
+            } else if (toolName.includes("mcp_") || input.server) {
+              // MCP tool call (has server field)
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                timestamp,
+                data: {
+                  server: input.server || "unknown",
+                  tool: toolName,
+                  parameters: input,
+                } as McpToolCallData,
+              });
+            } else {
+              // Unknown tool - fallback to generic TOOL_CALL
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.TOOL_CALL,
+                timestamp,
+                data: {
+                  name: toolName,
+                  parameters: input,
+                  id: contentBlock.id,
+                } as ToolCall,
+              });
+            }
           }
         }
 

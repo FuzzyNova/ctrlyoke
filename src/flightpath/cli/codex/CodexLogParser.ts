@@ -11,6 +11,13 @@ import {
   CliEvent,
   TextData,
   ToolResultData,
+  BashCommandData,
+  FileReadData,
+  FileWriteData,
+  FileEditData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
   CLI_EVENT_TYPES,
   TokenUsage,
 } from "../../../types/CliOutputTypes";
@@ -373,17 +380,127 @@ export class CodexLogParser extends BaseLogParser {
               });
             }
 
-            // Tool calls - normalize 'input' to 'parameters'
+            // Tool calls - map to semantic event types based on tool name
             if (item.type === "tool_use") {
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.TOOL_CALL,
-                timestamp,
-                data: {
-                  name: item.name,
-                  parameters: item.input || {},
-                  id: item.id,
-                } as ToolCall,
-              });
+              const toolName = item.name?.toLowerCase() || "";
+              const params = item.input || {};
+
+              // Map bash/shell commands
+              if (
+                toolName === "bash" ||
+                toolName === "shell" ||
+                toolName === "command"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.BASH_COMMAND,
+                  timestamp,
+                  data: {
+                    command: (params as any).command || "",
+                    workingDir: (params as any).workingDir,
+                    status: "in_progress",
+                  } as BashCommandData,
+                });
+              }
+              // Map file read operations
+              else if (
+                toolName === "read_file" ||
+                toolName === "read" ||
+                toolName === "cat"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_READ,
+                  timestamp,
+                  data: {
+                    path: (params as any).path || (params as any).file || "",
+                  } as FileReadData,
+                });
+              }
+              // Map file write operations (create new file)
+              else if (
+                toolName === "write_file" ||
+                toolName === "write" ||
+                toolName === "create_file"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_WRITE,
+                  timestamp,
+                  data: {
+                    path: (params as any).path || (params as any).file || "",
+                    content: (params as any).content || "",
+                  } as FileWriteData,
+                });
+              }
+              // Map file edit operations (modify existing file)
+              else if (
+                toolName === "edit_file" ||
+                toolName === "edit" ||
+                toolName === "modify_file" ||
+                toolName === "multiedit"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_EDIT,
+                  timestamp,
+                  data: {
+                    path: (params as any).path || (params as any).file || "",
+                    oldContent: (params as any).oldContent,
+                    newContent:
+                      (params as any).newContent || (params as any).content,
+                  } as FileEditData,
+                });
+              }
+              // Map file delete operations
+              else if (
+                toolName === "delete_file" ||
+                toolName === "remove_file" ||
+                toolName === "rm"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_DELETE,
+                  timestamp,
+                  data: {
+                    path: (params as any).path || (params as any).file || "",
+                  } as FileDeleteData,
+                });
+              }
+              // Map MCP tool calls (format: "mcp_server_name__tool_name")
+              else if (toolName.includes("__")) {
+                const [server, tool] = toolName.split("__");
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                  timestamp,
+                  data: {
+                    server: server || "unknown",
+                    tool: tool || "unknown",
+                    parameters: params,
+                  } as McpToolCallData,
+                });
+              }
+              // Map web search operations
+              else if (
+                toolName === "web_search" ||
+                toolName === "search" ||
+                toolName === "webfetch"
+              ) {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.WEB_SEARCH,
+                  timestamp,
+                  data: {
+                    query: (params as any).query || "",
+                  } as WebSearchData,
+                });
+              }
+              // Fallback to generic TOOL_CALL for unrecognized tools
+              else {
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.TOOL_CALL,
+                  timestamp,
+                  data: {
+                    name: item.name,
+                    parameters: params,
+                    id: item.id,
+                  } as ToolCall,
+                });
+              }
             }
 
             // Thinking blocks
@@ -436,15 +553,38 @@ export class CodexLogParser extends BaseLogParser {
             params = { raw: params };
           }
         }
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: event.payload.name,
-            parameters: params,
-            id: event.payload.call_id ?? event.payload.id,
-          } as ToolCall,
-        });
+
+        const functionName = event.payload.name?.toLowerCase() || "";
+
+        // Map bash/shell function calls to BASH_COMMAND
+        if (
+          functionName === "bash" ||
+          functionName === "shell" ||
+          functionName === "execute_command" ||
+          functionName === "run_command"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            timestamp,
+            data: {
+              command: (params as any).command || (params as any).cmd || "",
+              workingDir: (params as any).workingDir || (params as any).cwd,
+              status: "in_progress",
+            } as BashCommandData,
+          });
+        }
+        // Fallback to generic TOOL_CALL for other function calls
+        else {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp,
+            data: {
+              name: event.payload.name,
+              parameters: params,
+              id: event.payload.call_id ?? event.payload.id,
+            } as ToolCall,
+          });
+        }
       }
 
       // response_item:function_call_output - Function result
@@ -470,18 +610,135 @@ export class CodexLogParser extends BaseLogParser {
         event.type === "response_item" &&
         event.payload?.type === "custom_tool_call"
       ) {
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_CALL,
-          timestamp,
-          data: {
-            name: event.payload.name,
-            parameters:
-              typeof event.payload.input === "string"
-                ? { input: event.payload.input }
-                : event.payload.input || {},
-            id: event.payload.call_id,
-          } as ToolCall,
-        });
+        const toolName = event.payload.name?.toLowerCase() || "";
+        const input = event.payload.input;
+        let params: Record<string, unknown> =
+          typeof input === "string" ? { input } : input || {};
+
+        // Parse JSON input if it's a string
+        if (typeof input === "string") {
+          try {
+            params = JSON.parse(input);
+          } catch {
+            params = { input };
+          }
+        }
+
+        // Map file read operations
+        if (
+          toolName === "read_file" ||
+          toolName === "read" ||
+          toolName === "cat"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.FILE_READ,
+            timestamp,
+            data: {
+              path: (params as any).path || (params as any).file || "",
+            } as FileReadData,
+          });
+        }
+        // Map file write operations (create new file)
+        else if (
+          toolName === "write_file" ||
+          toolName === "write" ||
+          toolName === "create_file"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.FILE_WRITE,
+            timestamp,
+            data: {
+              path: (params as any).path || (params as any).file || "",
+              content: (params as any).content || "",
+            } as FileWriteData,
+          });
+        }
+        // Map file edit operations (modify existing file)
+        else if (
+          toolName === "edit_file" ||
+          toolName === "edit" ||
+          toolName === "modify_file" ||
+          toolName === "multiedit"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp,
+            data: {
+              path: (params as any).path || (params as any).file || "",
+              oldContent: (params as any).oldContent,
+              newContent: (params as any).newContent || (params as any).content,
+            } as FileEditData,
+          });
+        }
+        // Map file delete operations
+        else if (
+          toolName === "delete_file" ||
+          toolName === "remove_file" ||
+          toolName === "rm"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.FILE_DELETE,
+            timestamp,
+            data: {
+              path: (params as any).path || (params as any).file || "",
+            } as FileDeleteData,
+          });
+        }
+        // Map bash/shell commands
+        else if (
+          toolName === "bash" ||
+          toolName === "shell" ||
+          toolName === "command"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            timestamp,
+            data: {
+              command: (params as any).command || (params as any).cmd || "",
+              workingDir: (params as any).workingDir || (params as any).cwd,
+              status: event.payload.status || "in_progress",
+            } as BashCommandData,
+          });
+        }
+        // Map MCP tool calls (format: "mcp_server__tool")
+        else if (toolName.includes("__")) {
+          const [server, tool] = toolName.split("__");
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+            timestamp,
+            data: {
+              server: server || "unknown",
+              tool: tool || "unknown",
+              parameters: params,
+            } as McpToolCallData,
+          });
+        }
+        // Map web search operations
+        else if (
+          toolName === "web_search" ||
+          toolName === "search" ||
+          toolName === "webfetch"
+        ) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.WEB_SEARCH,
+            timestamp,
+            data: {
+              query: (params as any).query || "",
+            } as WebSearchData,
+          });
+        }
+        // Fallback to generic TOOL_CALL for unrecognized tools
+        else {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_CALL,
+            timestamp,
+            data: {
+              name: event.payload.name,
+              parameters: params,
+              id: event.payload.call_id,
+            } as ToolCall,
+          });
+        }
       }
 
       // response_item:custom_tool_call_output - Custom tool result
