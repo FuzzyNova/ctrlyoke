@@ -1134,6 +1134,16 @@ export class CliIntegration extends CopilotIntegration {
             12 * 60 * 60 * 1000,
           onStdout: shouldStream
             ? (chunk) => {
+                // Debug logging: Log raw CLI output if enabled
+                const logRawOutput = vscode.workspace
+                  .getConfiguration("flightpath")
+                  .get<boolean>("logRawCliOutput", false);
+                if (logRawOutput) {
+                  Log.info(
+                    `[${this.provider.config.displayName} RAW OUTPUT]: ${chunk}`
+                  );
+                }
+
                 // Delegate to provider's response parser for streaming
                 if (this.provider.responseParser.processStreamingChunk) {
                   const processedChunk =
@@ -1603,6 +1613,21 @@ export class CliIntegration extends CopilotIntegration {
               promptText,
               workflowContext,
               async (result) => {
+                // Debug logging: Log raw stdout/stderr if enabled
+                const logRawOutput = vscode.workspace
+                  .getConfiguration("flightpath")
+                  .get<boolean>("logRawCliOutput", false);
+                if (logRawOutput) {
+                  Log.info(
+                    `[${this.provider.config.displayName} FINAL STDOUT]:\n${result.stdout}`
+                  );
+                  if (result.stderr) {
+                    Log.info(
+                      `[${this.provider.config.displayName} FINAL STDERR]:\n${result.stderr}`
+                    );
+                  }
+                }
+
                 // Parse result using provider's response parser (now returns UniversalCliOutput)
                 const parsedOutput = this.provider.responseParser.parse(
                   result.stdout,
@@ -1687,6 +1712,21 @@ export class CliIntegration extends CopilotIntegration {
                   promptText,
                   workflowContext,
                   async (result) => {
+                    // Debug logging: Log raw stdout/stderr if enabled
+                    const logRawOutput = vscode.workspace
+                      .getConfiguration("flightpath")
+                      .get<boolean>("logRawCliOutput", false);
+                    if (logRawOutput) {
+                      Log.info(
+                        `[${this.provider.config.displayName} FINAL STDOUT (retry)]:\n${result.stdout}`
+                      );
+                      if (result.stderr) {
+                        Log.info(
+                          `[${this.provider.config.displayName} FINAL STDERR (retry)]:\n${result.stderr}`
+                        );
+                      }
+                    }
+
                     // Parse result using provider's response parser (now returns UniversalCliOutput)
                     const parsedOutput = this.provider.responseParser.parse(
                       result.stdout,

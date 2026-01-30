@@ -585,7 +585,7 @@ interface ToolUseBlock {
 }
 ```
 
-**Example (Tool Use Response)**:
+**Example (Tool Use Response - Write)**:
 ```json
 {
   "type": "assistant",
@@ -626,6 +626,51 @@ interface ToolUseBlock {
 }
 ```
 
+**Example (Tool Use Response - Edit)**:
+```json
+{
+  "type": "assistant",
+  "message": {
+    "model": "claude-haiku-4-5-20251001",
+    "id": "msg_012VpPPeZ84kQ49GZ38ocULa",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Now I'll make the second edit:"
+      },
+      {
+        "type": "tool_use",
+        "id": "toolu_015FpibSjAnvkjEJv6GCSfc2",
+        "name": "Edit",
+        "input": {
+          "replace_all": false,
+          "file_path": "C:\\dev\\FlightPath\\temp_file.md",
+          "old_string": "## Section 2\nMore text here.",
+          "new_string": "## Section 2\nMore text here. (Second edit applied)"
+        }
+      }
+    ],
+    "stop_reason": null,
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 5,
+      "cache_creation_input_tokens": 184,
+      "cache_read_input_tokens": 31074,
+      "output_tokens": 8,
+      "service_tier": "standard"
+    },
+    "context_management": null
+  },
+  "parent_tool_use_id": null,
+  "session_id": "9d19593c-7d8f-49a5-8634-f5ac12dbf538",
+  "uuid": "83491aaa-3a51-45b8-8c28-a2dc1d1e560b"
+}
+```
+
+**Note**: Edit tool input parameters (in assistant messages) use `old_string` and `new_string` (snake_case). However, tool results (in user messages) may use either `oldString`/`newString` (headless) or `old_string`/`new_string` (terminal).
+
 ---
 
 ### 4. User Message (`type: "user"`)
@@ -655,11 +700,28 @@ interface ToolResultBlock {
 }
 
 interface ToolUseResult {
-  type?: string;                     // Result type (e.g., "create")
-  filePath?: string;
-  content?: string;
-  structuredPatch?: any[];
-  originalFile?: any;
+  type?: string;                     // Result type (e.g., "create", or omitted for edits)
+  filePath?: string;                 // File path affected by operation
+  content?: string;                  // File content (for Write operations)
+
+  // Edit operation fields (dual format - both can appear)
+  oldString?: string;                // Original text (Edit only) - headless mode
+  newString?: string;                // Replacement text (Edit only) - headless mode
+  old_string?: string;               // Original text (Edit only) - interactive terminal
+  new_string?: string;               // Replacement text (Edit only) - interactive terminal
+
+  originalFile?: string;             // Full file content before edit (Edit only)
+  structuredPatch?: UnifiedDiffHunk[]; // Unified diff format (Edit only)
+  userModified?: boolean;            // Whether user modified the edit
+  replaceAll?: boolean;              // Whether replace_all was used
+}
+
+interface UnifiedDiffHunk {
+  oldStart: number;                  // Starting line number in old file
+  oldLines: number;                  // Number of lines in old file
+  newStart: number;                  // Starting line number in new file
+  newLines: number;                  // Number of lines in new file
+  lines: string[];                   // Diff lines (prefixed with " ", "-", "+")
 }
 ```
 
@@ -672,12 +734,25 @@ interface ToolUseResult {
 | `message.content[].tool_use_id` | string | Matches tool_use ID | Always | `"toolu_011pN..."` |
 | `message.content[].type` | string | Always `"tool_result"` | Always | `"tool_result"` |
 | `message.content[].content` | string | Tool output | Always | `"File created..."` |
-| `tool_use_result` | object | Structured metadata | Optional | (see ToolUseResult) |
+| `tool_use_result` | object | Structured metadata with rich diff data | Optional | (see ToolUseResult) |
+| `tool_use_result.filePath` | string | File path affected | If file op | `"C:\\dev\\..."` |
+| `tool_use_result.oldString` | string | Text before edit (headless) | If Edit | `"old text"` |
+| `tool_use_result.newString` | string | Text after edit (headless) | If Edit | `"new text"` |
+| `tool_use_result.old_string` | string | Text before edit (terminal) | If Edit | `"old text"` |
+| `tool_use_result.new_string` | string | Text after edit (terminal) | If Edit | `"new text"` |
+| `tool_use_result.originalFile` | string | Full file before edit | If Edit | `"# File\n..."` |
+| `tool_use_result.structuredPatch` | array | Unified diff hunks | If Edit | (see example) |
 | `parent_tool_use_id` | string \| null | Parent tool use ID | Always | `null` |
 | `session_id` | string | Session UUID | Always | `"9b8c43dd-..."` |
 | `uuid` | string | Message UUID | Always | `"7b1257af-..."` |
 
-**Example**:
+**Note on Edit Field Format**: Claude CLI outputs Edit tool results with different field naming depending on execution mode:
+- **Headless mode** (background process): Uses camelCase (`oldString`, `newString`)
+- **Interactive terminal**: Uses snake_case (`old_string`, `new_string`)
+
+Parsers should check **both formats** to ensure compatibility across all execution modes.
+
+**Example (Write Result)**:
 ```json
 {
   "type": "user",
@@ -703,6 +778,57 @@ interface ToolUseResult {
   }
 }
 ```
+
+**Example (Edit Result with Diff Data)**:
+```json
+{
+  "type": "user",
+  "message": {
+    "role": "user",
+    "content": [
+      {
+        "tool_use_id": "toolu_015FpibSjAnvkjEJv6GCSfc2",
+        "type": "tool_result",
+        "content": "The file C:\\dev\\FlightPath\\temp_file.md has been updated successfully."
+      }
+    ]
+  },
+  "parent_tool_use_id": null,
+  "session_id": "9d19593c-7d8f-49a5-8634-f5ac12dbf538",
+  "uuid": "0b0e74e7-c8e7-407c-bdce-a4b1f819f83d",
+  "tool_use_result": {
+    "filePath": "C:\\dev\\FlightPath\\temp_file.md",
+    "oldString": "## Section 2\nMore text here.",
+    "newString": "## Section 2\nMore text here. (Second edit applied)",
+    "originalFile": "# Test File\n\nThis is the initial content of the test file. (First edit applied)\n\n## Section 1\nSome text here.\n\n## Section 2\nMore text here.\n",
+    "structuredPatch": [
+      {
+        "oldStart": 6,
+        "oldLines": 4,
+        "newStart": 6,
+        "newLines": 4,
+        "lines": [
+          " Some text here.",
+          " ",
+          " ## Section 2",
+          "-More text here.",
+          "+More text here. (Second edit applied)"
+        ]
+      }
+    ],
+    "userModified": false,
+    "replaceAll": false
+  }
+}
+```
+
+**Note**: Edit operations provide rich diff data in `tool_use_result`:
+- `oldString`/`newString`: The exact strings that were searched/replaced
+- `originalFile`: Complete file content before the edit (useful for rendering full context)
+- `structuredPatch`: Unified diff format showing changes with line numbers
+  - Lines prefixed with " " are context (unchanged)
+  - Lines prefixed with "-" were removed
+  - Lines prefixed with "+" were added
 
 ---
 
@@ -1523,6 +1649,10 @@ interface UserMessage {
     type?: string;
     filePath?: string;
     content?: string;
+    oldString?: string;           // Edit: original text (headless mode)
+    newString?: string;           // Edit: replacement text (headless mode)
+    old_string?: string;          // Edit: original text (interactive terminal)
+    new_string?: string;          // Edit: replacement text (interactive terminal)
     structuredPatch?: any[];
     originalFile?: any;
   };

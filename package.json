@@ -683,6 +683,13 @@
           "description": "[CLI Modes] Show CLI output in the Output panel",
           "markdownDescription": "**CLI Modes Only.** Show CLI output (prompts, responses, statistics) in the **Output** panel for visibility during workflow execution. Disable for background-only execution."
         },
+        "flightpath.logRawCliOutput": {
+          "order": 201.5,
+          "type": "boolean",
+          "default": false,
+          "description": "[Debug] Log raw CLI output for debugging",
+          "markdownDescription": "**Debug Mode.** Log raw unparsed output from all CLI providers (Copilot, Claude, Codex) to the Output panel. Useful for debugging parser issues. **Warning:** Extremely verbose, only enable when troubleshooting."
+        },
         "flightpath.showCliCommand": {
           "order": 202,
           "type": "boolean",

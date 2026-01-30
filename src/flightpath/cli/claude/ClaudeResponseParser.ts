@@ -329,13 +329,20 @@ export class ClaudeResponseParser
 
     // File edit (modify existing file)
     if (toolName === "edit" || toolName === "apply_patch") {
+      const oldContent = input.oldString || input.old_string || input.oldContent;
+      const newContent = input.newString || input.new_string || input.newContent;
+
+      Log.debug(
+        `[ClaudeParser] Edit operation - old_string=${oldContent ? "present" : "missing"}, new_string=${newContent ? "present" : "missing"}, input keys=${Object.keys(input).join(", ")}`
+      );
+
       events.push({
         type: CLI_EVENT_TYPES.FILE_EDIT,
         timestamp: Date.now(),
         data: {
           path: input.path || input.file_path || "unknown",
-          oldContent: input.old_str || input.oldContent,
-          newContent: input.new_str || input.newContent,
+          oldContent,
+          newContent,
           success: input.success,
           error: input.error,
         },
@@ -421,7 +428,9 @@ export class ClaudeResponseParser
   /**
    * Process user message content (tool results)
    *
-   * Extracts tool_result blocks and creates TOOL_RESULT events
+   * Extracts tool_result blocks and creates TOOL_RESULT events.
+   * Also processes structured tool_use_result metadata to create semantic events
+   * (FILE_EDIT, FILE_WRITE, FILE_READ, etc.)
    *
    * @param content Array of content blocks from user message
    * @param toolUseResult Optional structured metadata about tool execution
@@ -448,11 +457,54 @@ export class ClaudeResponseParser
       }
     }
 
-    // If structured tool_use_result metadata is available, log it for debugging
+    // Process structured tool_use_result metadata to create semantic events
     if (toolUseResult) {
       Log.debug(
         `[ClaudeParser] Tool result metadata: type=${toolUseResult.type}, filePath=${toolUseResult.filePath}`
       );
+
+      // File edit result (Edit tool)
+      if (toolUseResult.oldString && toolUseResult.newString) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: toolUseResult.filePath || "unknown",
+            oldContent: toolUseResult.oldString,
+            newContent: toolUseResult.newString,
+            success: true,
+          },
+        });
+        return;
+      }
+
+      // File write result (Write tool)
+      if (toolUseResult.type === "write" || toolUseResult.content) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp: Date.now(),
+          data: {
+            path: toolUseResult.filePath || toolUseResult.path || "unknown",
+            content: toolUseResult.content || "",
+            success: true,
+          },
+        });
+        return;
+      }
+
+      // File read result (Read tool)
+      if (toolUseResult.type === "text" && toolUseResult.file) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp: Date.now(),
+          data: {
+            path: toolUseResult.file.filePath || "unknown",
+            content: toolUseResult.file.content || "",
+            success: true,
+          },
+        });
+        return;
+      }
     }
   }
 
