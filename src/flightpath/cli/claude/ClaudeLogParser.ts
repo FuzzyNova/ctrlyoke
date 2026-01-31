@@ -77,7 +77,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - Text content from assistant messages
    * - Tool calls (tool_use events) with normalized 'parameters' field
    * - Thinking blocks (extended thinking feature)
-   * - Tool results from user events
+   * - Tool results from user events (both content and structured metadata)
    * - Metadata (session ID, usage stats including cache tokens, model info)
    *
    * @param events - Array of parsed Claude log events
@@ -86,7 +86,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * @remarks
    * **Event Types Processed:**
    * - `assistant` - Claude responses with content blocks
-   * - `user` - Tool results (when content is array with tool_result blocks)
+   * - `user` - Tool results (tool_result blocks + toolUseResult metadata)
    * - `progress` - Bash progress (extracted for streaming display)
    * - `system` - Turn duration (for metadata)
    *
@@ -95,6 +95,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - `thinking` - Extended thinking (field: `thinking`, NOT `text`)
    * - `tool_use` - Tool invocation (fields: `id`, `name`, `input`)
    * - `tool_result` - Tool execution result (in user events)
+   *
+   * **Tool Result Metadata (toolUseResult field):**
+   * - Edit operations: Extracts `structuredPatch` for line-number-based diffs
+   * - Edit operations: Extracts `originalFile` for full file context
+   * - Edit operations: Supports both camelCase (oldString) and snake_case (old_string)
+   * - Write operations: Extracts file creation metadata
+   * - Read operations: Extracts file read results
    *
    * **Usage Statistics:**
    * - Standard: input_tokens, output_tokens
@@ -105,7 +112,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * ```typescript
    * const events = [
    *   { type: "assistant", message: { content: [{type: "text", text: "Hello"}] }, sessionId: "abc" },
-   *   { type: "user", message: { content: [{type: "tool_result", tool_use_id: "123", content: "result"}] } },
+   *   { type: "user", message: { content: [{type: "tool_result", tool_use_id: "123", content: "result"}] },
+   *     toolUseResult: { oldString: "old", newString: "new", structuredPatch: [...] } },
    *   { type: "assistant", message: { stop_reason: "end_turn", usage: {...} } }
    * ];
    * const response = parser.extractResponse(events);
@@ -284,6 +292,66 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                   error: block.is_error ? block.content : undefined,
                 },
               } as ToolResultData,
+            });
+          }
+        }
+
+        // Process structured tool_use_result metadata for rich diff data
+        // This contains accurate line numbers and full file context for Edit operations
+        if (event.toolUseResult) {
+          const toolUseResult = event.toolUseResult;
+
+          // File edit result (Edit tool) - check both camelCase and snake_case
+          // Headless mode uses camelCase (oldString/newString)
+          // Interactive terminal uses snake_case (old_string/new_string)
+          const oldString = toolUseResult.oldString || toolUseResult.old_string;
+          const newString = toolUseResult.newString || toolUseResult.new_string;
+
+          if (oldString && newString) {
+            Log.debug(
+              `[ClaudeLogParser] Edit operation - oldString=${oldString ? "present" : "missing"}, newString=${newString ? "present" : "missing"}, structuredPatch=${toolUseResult.structuredPatch ? `${toolUseResult.structuredPatch.length} hunks` : "missing"}`
+            );
+
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              data: {
+                path: toolUseResult.filePath || "unknown",
+                oldContent: oldString,
+                newContent: newString,
+                structuredPatch: toolUseResult.structuredPatch,
+                originalFile: toolUseResult.originalFile,
+                userModified: toolUseResult.userModified,
+                replaceAll: toolUseResult.replaceAll,
+                success: true,
+              } as FileEditData,
+            });
+          }
+          // File write result (Write tool)
+          else if (
+            toolUseResult.type === "create" ||
+            toolUseResult.content
+          ) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_WRITE,
+              timestamp,
+              data: {
+                path: toolUseResult.filePath || toolUseResult.path || "unknown",
+                content: toolUseResult.content || "",
+                success: true,
+              } as FileWriteData,
+            });
+          }
+          // File read result (Read tool)
+          else if (toolUseResult.type === "text" && toolUseResult.file) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_READ,
+              timestamp,
+              data: {
+                path: toolUseResult.file.filePath || "unknown",
+                content: toolUseResult.file.content || "",
+                success: true,
+              } as FileReadData,
             });
           }
         }

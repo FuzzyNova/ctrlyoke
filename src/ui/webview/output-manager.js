@@ -171,12 +171,71 @@
   }
 
   /**
+   * Render diff from structured patch (unified diff format with accurate line numbers)
+   * @param {Array} hunks - Array of unified diff hunks
+   * @returns {string} HTML string with diff visualization
+   */
+  function renderUnifiedDiff(hunks) {
+    let html = '<div class="tool-call-diff">';
+
+    hunks.forEach((hunk) => {
+      let oldLineNum = hunk.oldStart;
+      let newLineNum = hunk.newStart;
+
+      hunk.lines.forEach((line) => {
+        const prefix = line[0];
+        const content = line.slice(1); // Remove prefix character
+
+        if (prefix === "+") {
+          // Added line - only show new line number
+          html += '<div class="diff-line added">';
+          html += '<span class="line-num old"></span>';
+          html += '<span class="line-num new">' + newLineNum + "</span>";
+          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html += "</div>";
+          newLineNum++;
+        } else if (prefix === "-") {
+          // Removed line - only show old line number
+          html += '<div class="diff-line removed">';
+          html += '<span class="line-num old">' + oldLineNum + "</span>";
+          html += '<span class="line-num new"></span>';
+          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html += "</div>";
+          oldLineNum++;
+        } else {
+          // Context line (space prefix) - show both line numbers
+          html += '<div class="diff-line context">';
+          html += '<span class="line-num old">' + oldLineNum + "</span>";
+          html += '<span class="line-num new">' + newLineNum + "</span>";
+          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html += "</div>";
+          oldLineNum++;
+          newLineNum++;
+        }
+      });
+    });
+
+    html += "</div>";
+    return html;
+  }
+
+  /**
    * Render diff visualization for Edit operations using proper diff algorithm
-   * @param {Object} parameters - Tool parameters
+   * @param {Object} parameters - Tool parameters with oldContent/newContent fields
    * @returns {string} HTML string with diff visualization
    */
   function renderDiffVisualization(parameters) {
-    if (!parameters.old_string || !parameters.new_string) {
+    // Prefer structured patch with accurate line numbers (Claude CLI provides this)
+    if (
+      parameters.structuredPatch &&
+      Array.isArray(parameters.structuredPatch) &&
+      parameters.structuredPatch.length > 0
+    ) {
+      return renderUnifiedDiff(parameters.structuredPatch);
+    }
+
+    // Fallback: Generate diff from oldContent/newContent (other providers or when patch unavailable)
+    if (!parameters.oldContent || !parameters.newContent) {
       return "";
     }
 
@@ -190,29 +249,51 @@
 
     // Generate line-by-line diff
     const diff = window.Diff.diffLines(
-      parameters.old_string,
-      parameters.new_string
+      parameters.oldContent,
+      parameters.newContent
     );
 
-    // Render each chunk
+    // Track line numbers for old (left) and new (right) files
+    // NOTE: These start at 1 because we don't have actual file position data
+    let oldLineNum = 1;
+    let newLineNum = 1;
+
+    // Render each chunk with line numbers and context
     diff.forEach((part) => {
-      if (part.added) {
-        // Added lines (green)
-        part.value.split("\n").forEach((line, index, array) => {
-          // Skip the last empty line if it exists
-          if (index === array.length - 1 && line === "") return;
-          html += '<div class="diff-line added">' + escapeHtml(line) + "</div>";
-        });
-      } else if (part.removed) {
-        // Removed lines (red)
-        part.value.split("\n").forEach((line, index, array) => {
-          // Skip the last empty line if it exists
-          if (index === array.length - 1 && line === "") return;
-          html +=
-            '<div class="diff-line removed">' + escapeHtml(line) + "</div>";
-        });
+      const lines = part.value.split("\n");
+      // Remove last empty line if it exists (trailing newline artifact)
+      if (lines[lines.length - 1] === "") {
+        lines.pop();
       }
-      // Unchanged lines are not rendered (part.added === false && part.removed === false)
+
+      lines.forEach((line) => {
+        if (part.added) {
+          // Added lines (green) - only increment new file line number
+          html += '<div class="diff-line added">';
+          html += '<span class="line-num old"></span>'; // Empty old line number
+          html += '<span class="line-num new">' + newLineNum + "</span>";
+          html += '<span class="line-content">' + escapeHtml(line) + "</span>";
+          html += "</div>";
+          newLineNum++;
+        } else if (part.removed) {
+          // Removed lines (red) - only increment old file line number
+          html += '<div class="diff-line removed">';
+          html += '<span class="line-num old">' + oldLineNum + "</span>";
+          html += '<span class="line-num new"></span>'; // Empty new line number
+          html += '<span class="line-content">' + escapeHtml(line) + "</span>";
+          html += "</div>";
+          oldLineNum++;
+        } else {
+          // Unchanged context lines - increment both line numbers
+          html += '<div class="diff-line context">';
+          html += '<span class="line-num old">' + oldLineNum + "</span>";
+          html += '<span class="line-num new">' + newLineNum + "</span>";
+          html += '<span class="line-content">' + escapeHtml(line) + "</span>";
+          html += "</div>";
+          oldLineNum++;
+          newLineNum++;
+        }
+      });
     });
 
     html += "</div>";
@@ -303,10 +384,7 @@
 
                 // Show diff if old/new content available
                 if (change.oldContent && change.newContent) {
-                  html += renderDiffVisualization({
-                    old_string: change.oldContent,
-                    new_string: change.newContent,
-                  });
+                  html += renderDiffVisualization(change);
                 }
               }
             }
@@ -317,10 +395,7 @@
               html += "</div>";
 
               if (event.data.oldContent && event.data.newContent) {
-                html += renderDiffVisualization({
-                  old_string: event.data.oldContent,
-                  new_string: event.data.newContent,
-                });
+                html += renderDiffVisualization(event.data);
               }
             }
 
@@ -795,6 +870,100 @@
   }
 
   /**
+   * Format structured patch for markdown export (unified diff format with accurate line numbers)
+   * @param {Array} hunks - Array of unified diff hunks
+   * @returns {string[]} Array of markdown diff lines
+   */
+  function formatStructuredPatchForMarkdown(hunks) {
+    const diffLines = [];
+
+    hunks.forEach((hunk) => {
+      let oldLineNum = hunk.oldStart;
+      let newLineNum = hunk.newStart;
+
+      hunk.lines.forEach((line) => {
+        const prefix = line[0];
+        const content = line.slice(1); // Remove prefix
+
+        if (prefix === "+") {
+          // Added line - show new line number
+          diffLines.push(`+${String(newLineNum).padStart(4)} | ${content}`);
+          newLineNum++;
+        } else if (prefix === "-") {
+          // Removed line - show old line number
+          diffLines.push(`-${String(oldLineNum).padStart(4)} | ${content}`);
+          oldLineNum++;
+        } else {
+          // Context line - show both line numbers (old file)
+          diffLines.push(` ${String(oldLineNum).padStart(4)} | ${content}`);
+          oldLineNum++;
+          newLineNum++;
+        }
+      });
+    });
+
+    return diffLines;
+  }
+
+  /**
+   * Format diff for markdown export with line numbers and context
+   * @param {string} oldContent - Original content
+   * @param {string} newContent - New content
+   * @param {Array} [structuredPatch] - Optional structured patch with accurate line numbers
+   * @returns {string[]} Array of markdown diff lines
+   */
+  function formatDiffForMarkdown(oldContent, newContent, structuredPatch) {
+    // Prefer structured patch with accurate line numbers
+    if (
+      structuredPatch &&
+      Array.isArray(structuredPatch) &&
+      structuredPatch.length > 0
+    ) {
+      return formatStructuredPatchForMarkdown(structuredPatch);
+    }
+
+    // Fallback: Generate diff from content
+    const diffLines = [];
+
+    if (!window.Diff) {
+      return diffLines;
+    }
+
+    const diff = window.Diff.diffLines(oldContent, newContent);
+
+    // NOTE: Line numbers start at 1 because we don't have actual file position data
+    let oldLineNum = 1;
+    let newLineNum = 1;
+
+    diff.forEach((part) => {
+      const lines = part.value.split("\n");
+      // Remove last empty line if it exists
+      if (lines[lines.length - 1] === "") {
+        lines.pop();
+      }
+
+      lines.forEach((line) => {
+        if (part.added) {
+          // Added line - show new line number
+          diffLines.push(`+${String(newLineNum).padStart(4)} | ${line}`);
+          newLineNum++;
+        } else if (part.removed) {
+          // Removed line - show old line number
+          diffLines.push(`-${String(oldLineNum).padStart(4)} | ${line}`);
+          oldLineNum++;
+        } else {
+          // Context line - show both line numbers
+          diffLines.push(` ${String(oldLineNum).padStart(4)} | ${line}`);
+          oldLineNum++;
+          newLineNum++;
+        }
+      });
+    });
+
+    return diffLines;
+  }
+
+  /**
    * Generate markdown-formatted output for export
    * @returns {string} Markdown content
    */
@@ -942,36 +1111,15 @@
                     event.data.changes.forEach((change) => {
                       lines.push(`● File ${change.kind}: ${change.path}`);
 
-                      if (
-                        change.oldContent &&
-                        change.newContent &&
-                        window.Diff
-                      ) {
+                      if (change.oldContent && change.newContent) {
                         lines.push("");
                         lines.push("```diff");
-                        const diff = window.Diff.diffLines(
+                        const diffLines = formatDiffForMarkdown(
                           change.oldContent,
-                          change.newContent
+                          change.newContent,
+                          change.structuredPatch
                         );
-                        diff.forEach((part) => {
-                          if (part.added) {
-                            part.value
-                              .split("\n")
-                              .forEach((line, index, array) => {
-                                if (index === array.length - 1 && line === "")
-                                  return;
-                                lines.push("+ " + line);
-                              });
-                          } else if (part.removed) {
-                            part.value
-                              .split("\n")
-                              .forEach((line, index, array) => {
-                                if (index === array.length - 1 && line === "")
-                                  return;
-                                lines.push("- " + line);
-                              });
-                          }
-                        });
+                        diffLines.forEach((line) => lines.push(line));
                         lines.push("```");
                       }
                       lines.push("");
@@ -979,36 +1127,15 @@
                   } else if (event.data.path) {
                     lines.push(`● Edit file: ${event.data.path}`);
 
-                    if (
-                      event.data.oldContent &&
-                      event.data.newContent &&
-                      window.Diff
-                    ) {
+                    if (event.data.oldContent && event.data.newContent) {
                       lines.push("");
                       lines.push("```diff");
-                      const diff = window.Diff.diffLines(
+                      const diffLines = formatDiffForMarkdown(
                         event.data.oldContent,
-                        event.data.newContent
+                        event.data.newContent,
+                        event.data.structuredPatch
                       );
-                      diff.forEach((part) => {
-                        if (part.added) {
-                          part.value
-                            .split("\n")
-                            .forEach((line, index, array) => {
-                              if (index === array.length - 1 && line === "")
-                                return;
-                              lines.push("+ " + line);
-                            });
-                        } else if (part.removed) {
-                          part.value
-                            .split("\n")
-                            .forEach((line, index, array) => {
-                              if (index === array.length - 1 && line === "")
-                                return;
-                              lines.push("- " + line);
-                            });
-                        }
-                      });
+                      diffLines.forEach((line) => lines.push(line));
                       lines.push("```");
                     }
                     lines.push("");

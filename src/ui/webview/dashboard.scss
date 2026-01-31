@@ -1306,36 +1306,99 @@ button:disabled {
   background: var(--vscode-editor-background);
 
   .diff-line {
-    padding: 2px 8px;
+    display: flex;
+    align-items: baseline;
     white-space: pre;
     font-family: inherit;
     line-height: 1.4;
+    padding: 1px 0;
 
+    // Line numbers (old file, new file)
+    .line-num {
+      display: inline-block;
+      width: 40px;
+      text-align: right;
+      padding: 0 6px;
+      user-select: none;
+      font-size: 10px;
+      opacity: 0.6;
+      flex-shrink: 0;
+
+      &.old {
+        color: var(--vscode-editorLineNumber-foreground, #858585);
+      }
+
+      &.new {
+        color: var(--vscode-editorLineNumber-foreground, #858585);
+        border-right: 1px solid
+          var(--vscode-editorLineNumber-foreground, #858585);
+        margin-right: 8px;
+      }
+    }
+
+    // Line content
+    .line-content {
+      flex: 1;
+      padding: 2px 8px 2px 0;
+      overflow-x: auto;
+    }
+
+    // Added lines (green)
     &.added {
       background: var(
         --vscode-diffEditor-insertedTextBackground,
         rgba(155, 185, 85, 0.2)
       );
-      color: var(--vscode-terminal-ansiGreen, #89d185);
 
-      &::before {
-        content: "+ ";
+      .line-content {
         color: var(--vscode-terminal-ansiGreen, #89d185);
-        font-weight: bold;
+
+        &::before {
+          content: "+ ";
+          color: var(--vscode-terminal-ansiGreen, #89d185);
+          font-weight: bold;
+        }
+      }
+
+      .line-num.new {
+        color: var(--vscode-terminal-ansiGreen, #89d185);
+        opacity: 0.8;
       }
     }
 
+    // Removed lines (red)
     &.removed {
       background: var(
         --vscode-diffEditor-removedTextBackground,
         rgba(255, 0, 0, 0.2)
       );
-      color: var(--vscode-terminal-ansiRed, #f14c4c);
 
-      &::before {
-        content: "- ";
+      .line-content {
         color: var(--vscode-terminal-ansiRed, #f14c4c);
-        font-weight: bold;
+
+        &::before {
+          content: "- ";
+          color: var(--vscode-terminal-ansiRed, #f14c4c);
+          font-weight: bold;
+        }
+      }
+
+      .line-num.old {
+        color: var(--vscode-terminal-ansiRed, #f14c4c);
+        opacity: 0.8;
+      }
+    }
+
+    // Context lines (unchanged)
+    &.context {
+      background: transparent;
+
+      .line-content {
+        color: var(--vscode-editor-foreground, #cccccc);
+
+        &::before {
+          content: "  ";
+        }
       }
     }
   }

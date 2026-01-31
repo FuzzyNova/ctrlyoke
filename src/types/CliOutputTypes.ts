@@ -211,6 +211,23 @@ export interface FileWriteData {
 }
 
 /**
+ * Unified diff hunk with line numbers (git diff format).
+ * Used by Claude CLI to provide accurate line positions.
+ */
+export interface UnifiedDiffHunk {
+  /** Starting line number in old file */
+  oldStart: number;
+  /** Number of lines in old file */
+  oldLines: number;
+  /** Starting line number in new file */
+  newStart: number;
+  /** Number of lines in new file */
+  newLines: number;
+  /** Diff lines with prefixes: " " (context), "-" (removed), "+" (added) */
+  lines: string[];
+}
+
+/**
  * Data for a file edit operation (modify existing file).
  * Supports both full-content and diff-based edits.
  */
@@ -228,6 +245,14 @@ export interface FileEditData {
     oldContent?: string;
     newContent?: string;
   }>;
+  /** Structured diff hunks with accurate line numbers (Claude CLI) */
+  structuredPatch?: UnifiedDiffHunk[];
+  /** Full file content before edit (Claude CLI) */
+  originalFile?: string;
+  /** Whether user manually modified the edit (Claude CLI) */
+  userModified?: boolean;
+  /** Whether replace_all flag was used (Claude CLI) */
+  replaceAll?: boolean;
   /** Success status */
   success?: boolean;
   /** Error message (if failed) */

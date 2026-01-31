@@ -472,6 +472,10 @@ export class ClaudeResponseParser
             path: toolUseResult.filePath || "unknown",
             oldContent: toolUseResult.oldString,
             newContent: toolUseResult.newString,
+            structuredPatch: toolUseResult.structuredPatch,
+            originalFile: toolUseResult.originalFile,
+            userModified: toolUseResult.userModified,
+            replaceAll: toolUseResult.replaceAll,
             success: true,
           },
         });
