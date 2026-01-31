@@ -102,24 +102,150 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
     filesCacheTimestamp &&
     now - filesCacheTimestamp < CACHE_DURATION_MS
   ) {
+    Log.debug(`[Completions] Returning cached files (${filesCache.length} files)`);
     return filesCache;
   }
 
   const respectGitignore = ConfigurationUtils.shouldRespectGitignoreForCompletions();
 
-  // ON (true):  Let VS Code respect .gitignore, .ignore, files.exclude, etc.
-  // OFF (false): Show ALL files (only exclude .git database - never useful)
-  const exclude = respectGitignore
-    ? undefined  // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
-    : "**/.git/**";  // Only exclude Git database - show EVERYTHING else
+  // Get ALL files (only exclude .git database directory - never useful in prompts)
+  // NOTE: VS Code's findFiles() does NOT respect .gitignore regardless of exclude parameter
+  // See: https://github.com/microsoft/vscode/issues/48674
+  const files = await vscode.workspace.findFiles(
+    "**/*",
+    "**/.git/**"  // Only exclude Git database directory
+  );
 
-  const files = await vscode.workspace.findFiles("**/*", exclude);
+  Log.info(`[Completions] Found ${files.length} total files before filtering`);
+
+  // OFF: Return ALL files (node_modules, dist, logs, everything)
+  // ON:  Filter out gitignored files using Git extension API
+  const filteredFiles = respectGitignore
+    ? await filterGitIgnoredFiles(files)
+    : files;
+
+  Log.info(`[Completions] Returning ${filteredFiles.length} files (respectGitignore=${respectGitignore}, filtered out ${files.length - filteredFiles.length})`);
+
+  // Sample a few files for debugging (first 10)
+  if (filteredFiles.length > 0) {
+    const sample = filteredFiles.slice(0, 10).map(f => vscode.workspace.asRelativePath(f));
+    Log.debug(`[Completions] Sample files: ${sample.join(', ')}`);
+  }
 
   // Update cache
-  filesCache = files;
+  filesCache = filteredFiles;
   filesCacheTimestamp = now;
 
-  return files;
+  return filteredFiles;
+}
+
+/**
+ * Track if we're currently filtering to prevent recursive calls
+ */
+let isFiltering = false;
+
+/**
+ * Filter out gitignored files using Git extension API
+ * @param files All workspace files
+ * @returns Files that are NOT gitignored
+ */
+async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]> {
+  // Guard against recursive or concurrent calls
+  if (isFiltering) {
+    Log.warn("[Completions] filterGitIgnoredFiles called recursively - returning files unfiltered");
+    return files;
+  }
+
+  isFiltering = true;
+  try {
+    Log.debug("[Completions] Starting gitignore filtering");
+
+    // Get Git extension
+    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    if (!gitExtension) {
+      Log.warn("[Completions] Git extension not found, cannot filter .gitignore files");
+      return files;
+    }
+
+    if (!gitExtension.isActive) {
+      await gitExtension.activate();
+    }
+
+    const gitApi = gitExtension.exports.getAPI(1);
+    if (!gitApi) {
+      Log.warn("[Completions] Git API not available");
+      return files;
+    }
+
+    Log.debug(`[Completions] Git API available, repositories: ${gitApi.repositories.length}`);
+
+    // Group files by repository (using repo path as key to avoid object identity issues)
+    const filesByRepoPath = new Map<string, { repo: any; files: vscode.Uri[] }>();
+    const nonGitFiles: vscode.Uri[] = [];
+
+    for (const file of files) {
+      const repo = gitApi.getRepository(file);
+      if (repo) {
+        const repoPath = repo.rootUri.fsPath;
+        if (!filesByRepoPath.has(repoPath)) {
+          filesByRepoPath.set(repoPath, { repo, files: [] });
+        }
+        filesByRepoPath.get(repoPath)!.files.push(file);
+      } else {
+        // Not in a Git repo - keep it
+        nonGitFiles.push(file);
+      }
+    }
+
+    Log.debug(`[Completions] Grouped into ${filesByRepoPath.size} repositories, ${nonGitFiles.length} non-git files`);
+
+    // Check gitignore status per repository
+    const filteredFiles: vscode.Uri[] = [...nonGitFiles];
+    let repoIndex = 0;
+
+    for (const [repoPath, { repo, files: repoFiles }] of filesByRepoPath.entries()) {
+      repoIndex++;
+      Log.debug(`[Completions] Processing repo ${repoIndex}/${filesByRepoPath.size}: ${repoFiles.length} files from ${repoPath}`);
+
+      // Process in batches to avoid overwhelming the Git API
+      const BATCH_SIZE = 500;
+      const keptFiles: vscode.Uri[] = [];
+
+      for (let i = 0; i < repoFiles.length; i += BATCH_SIZE) {
+        const batch = repoFiles.slice(i, i + BATCH_SIZE);
+        const filePaths = batch.map(uri => uri.fsPath);
+
+        Log.debug(`[Completions] Checking batch ${i}-${Math.min(i + BATCH_SIZE, repoFiles.length)} (${batch.length} files)`);
+
+        try {
+          const ignoredSet = await repo.checkIgnore(filePaths);
+          Log.debug(`[Completions] checkIgnore returned ${ignoredSet.size} ignored files`);
+
+          // Keep only non-ignored files
+          const kept = batch.filter(uri => !ignoredSet.has(uri.fsPath));
+          keptFiles.push(...kept);
+        } catch (batchError) {
+          Log.error(`[Completions] Failed to check batch ${i}-${i + BATCH_SIZE}:`, batchError);
+          // On error, keep all files in this batch (fail open)
+          keptFiles.push(...batch);
+        }
+      }
+
+      filteredFiles.push(...keptFiles);
+
+      const filteredCount = repoFiles.length - keptFiles.length;
+      Log.debug(`[Completions] Filtered ${filteredCount} gitignored files from ${repoPath} (kept ${keptFiles.length})`);
+    }
+
+    Log.debug("[Completions] Gitignore filtering complete");
+    return filteredFiles;
+
+  } catch (error) {
+    Log.error("[Completions] Failed to filter gitignored files:", error);
+    return files; // Fallback: return all files
+  } finally {
+    isFiltering = false;
+  }
 }
 
 /**
