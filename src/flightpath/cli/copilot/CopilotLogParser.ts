@@ -18,6 +18,7 @@ import {
   FileDeleteData,
   McpToolCallData,
   WebSearchData,
+  UnifiedDiffHunk,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
 
@@ -158,6 +159,7 @@ interface CopilotToolExecutionCompleteEvent extends CopilotBaseEvent {
     success: boolean;
     result: {
       content: string;
+      detailedContent?: string; // Unified diff for file edits
     };
     toolTelemetry: {
       properties?: Record<string, string>;
@@ -165,6 +167,8 @@ interface CopilotToolExecutionCompleteEvent extends CopilotBaseEvent {
         resultLength?: number;
         resultForLlmLength?: number;
         responseTokenLimit?: number;
+        linesAdded?: number; // Lines added in edit operations
+        linesRemoved?: number; // Lines removed in edit operations
       };
       restrictedProperties?: Record<string, unknown>;
     };
@@ -293,6 +297,12 @@ export class CopilotLogParser extends BaseLogParser {
     let inputTokens = 0;
     let outputTokens = 0;
 
+    // Track pending tool calls to associate execution_start with execution_complete
+    const pendingTools = new Map<
+      string,
+      { toolName: string; args: Record<string, unknown>; timestamp: number }
+    >();
+
     for (const event of events) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
@@ -339,18 +349,9 @@ export class CopilotLogParser extends BaseLogParser {
           });
         }
 
-        // Extract tool calls from toolRequests array and map to semantic event types
-        if (event.data.toolRequests && Array.isArray(event.data.toolRequests)) {
-          for (const req of event.data.toolRequests) {
-            const toolEvent = this.mapToolToSemanticEvent(
-              req.name,
-              req.arguments || {},
-              req.toolCallId,
-              timestamp
-            );
-            outputEvents.push(toolEvent);
-          }
-        }
+        // Note: tool calls are extracted from tool.execution_start (not toolRequests)
+        // because tool.execution_start provides more accurate timestamps and allows
+        // us to add structuredPatch from tool.execution_complete
       }
 
       // Extract thinking/reasoning blocks
@@ -366,9 +367,15 @@ export class CopilotLogParser extends BaseLogParser {
         });
       }
 
-      // Extract tool execution start (alternative source for semantic events)
-      // This provides more accurate timestamps than assistant.message.toolRequests
+      // Store tool execution start data for later association with completion
       if (event.type === "tool.execution_start" && event.data) {
+        pendingTools.set(event.data.toolCallId, {
+          toolName: event.data.toolName,
+          args: event.data.arguments || {},
+          timestamp,
+        });
+
+        // Emit semantic events for all tools immediately (for real-time feedback)
         const toolEvent = this.mapToolToSemanticEvent(
           event.data.toolName,
           event.data.arguments || {},
@@ -378,8 +385,59 @@ export class CopilotLogParser extends BaseLogParser {
         outputEvents.push(toolEvent);
       }
 
-      // Extract tool execution results
+      // Emit FILE_EDIT with diff data from tool.execution_complete
       if (event.type === "tool.execution_complete" && event.data) {
+        const pendingTool = pendingTools.get(event.data.toolCallId);
+
+        // Check if this is an edit operation with diff data
+        if (pendingTool && event.data.result?.detailedContent) {
+          const lowerName = pendingTool.toolName.toLowerCase();
+          const isEditTool =
+            lowerName === "edit" ||
+            lowerName === "modify_file" ||
+            lowerName === "replace_string_in_file" ||
+            lowerName === "multiedit";
+
+          if (isEditTool) {
+            // Parse unified diff to get structured patch with line numbers
+            const structuredPatch = this.parseUnifiedDiff(
+              event.data.result.detailedContent
+            );
+
+            // Debug: Log parsing results
+            Log.debug(
+              `[CopilotLogParser] Parsed structuredPatch:`,
+              structuredPatch
+                ? `${structuredPatch.length} hunks`
+                : "undefined (parsing failed)"
+            );
+
+            // Emit second FILE_EDIT event with full data (oldContent/newContent + structuredPatch)
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              timestamp,
+              data: {
+                path:
+                  (pendingTool.args.path as string) ||
+                  (pendingTool.args.file_path as string) ||
+                  "",
+                // Include old/new content as fallback if structuredPatch fails to parse
+                oldContent:
+                  (pendingTool.args.old_str ||
+                    pendingTool.args.old_string) as string | undefined,
+                newContent:
+                  (pendingTool.args.new_str ||
+                    pendingTool.args.new_string) as string | undefined,
+                structuredPatch,
+              } as FileEditData,
+            });
+
+            // Clean up
+            pendingTools.delete(event.data.toolCallId);
+          }
+        }
+
+        // Always emit TOOL_RESULT
         outputEvents.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp,
@@ -868,8 +926,8 @@ export class CopilotLogParser extends BaseLogParser {
         timestamp,
         data: {
           path: (args.path as string) || (args.file_path as string) || "",
-          oldContent: args.old_string as string | undefined,
-          newContent: args.new_string as string | undefined,
+          // Don't include oldContent/newContent here - they'll be added via structuredPatch
+          // from tool.execution_complete (prevents client-side diff generation with wrong line numbers)
         } as FileEditData,
       };
     }
@@ -923,6 +981,100 @@ export class CopilotLogParser extends BaseLogParser {
         id: toolCallId,
       } as ToolCall,
     };
+  }
+
+  /**
+   * Parse unified diff format into structured patch hunks
+   *
+   * Extracts line numbers and diff lines from Git-style unified diff format.
+   *
+   * @param diffText - Unified diff string (from tool.execution_complete detailedContent)
+   * @returns Array of diff hunks with line numbers, or undefined if parsing fails
+   *
+   * @example
+   * ```typescript
+   * const diff = `
+   * diff --git a/file.md b/file.md
+   * @@ -1,4 +1,4 @@
+   *  First line
+   * -Second line
+   * +Second line - edited
+   *  Third line
+   * `;
+   * const hunks = parser.parseUnifiedDiff(diff);
+   * // [{ oldStart: 1, oldLines: 4, newStart: 1, newLines: 4, lines: [...] }]
+   * ```
+   *
+   * @remarks
+   * **Unified Diff Format:**
+   * - `@@ -oldStart,oldCount +newStart,newCount @@` - Hunk header with line numbers
+   * - Lines prefixed with " " (space) - Context (unchanged)
+   * - Lines prefixed with "-" - Removed from old file
+   * - Lines prefixed with "+" - Added to new file
+   *
+   * **Output Format:** Matches Claude CLI's structuredPatch format for compatibility
+   */
+  private parseUnifiedDiff(diffText: string): UnifiedDiffHunk[] | undefined {
+    if (!diffText) {
+      return undefined;
+    }
+
+    const hunks: UnifiedDiffHunk[] = [];
+    const lines = diffText.split("\n");
+    let currentHunk: UnifiedDiffHunk | null = null;
+
+    for (const line of lines) {
+      // Match hunk header: @@ -1,4 +1,4 @@
+      const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      if (hunkMatch) {
+        // Save previous hunk if exists
+        if (currentHunk) {
+          hunks.push(currentHunk);
+        }
+
+        // Parse line numbers from header
+        const oldStart = parseInt(hunkMatch[1], 10);
+        const oldLines = hunkMatch[2] ? parseInt(hunkMatch[2], 10) : 1;
+        const newStart = parseInt(hunkMatch[3], 10);
+        const newLines = hunkMatch[4] ? parseInt(hunkMatch[4], 10) : 1;
+
+        currentHunk = {
+          oldStart,
+          oldLines,
+          newStart,
+          newLines,
+          lines: [],
+        };
+        continue;
+      }
+
+      // Collect diff lines (must be inside a hunk)
+      if (currentHunk) {
+        // Only include lines with diff prefixes: " " (context), "-" (removed), "+" (added)
+        if (
+          line.startsWith(" ") ||
+          line.startsWith("-") ||
+          line.startsWith("+")
+        ) {
+          currentHunk.lines.push(line);
+        }
+        // Stop collecting if we hit a non-diff line (e.g., "diff --git")
+        else if (line.startsWith("diff ") || line.startsWith("index ")) {
+          // Save current hunk and reset
+          if (currentHunk.lines.length > 0) {
+            hunks.push(currentHunk);
+          }
+          currentHunk = null;
+        }
+      }
+    }
+
+    // Save last hunk
+    if (currentHunk && currentHunk.lines.length > 0) {
+      hunks.push(currentHunk);
+    }
+
+    return hunks.length > 0 ? hunks : undefined;
   }
 
   // ========================================================================

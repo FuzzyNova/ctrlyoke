@@ -382,8 +382,11 @@
                   "● File " + change.kind + ": " + escapeHtml(change.path);
                 html += "</div>";
 
-                // Show diff if old/new content available
-                if (change.oldContent && change.newContent) {
+                // Show diff if we have structuredPatch OR old/new content
+                if (
+                  change.structuredPatch ||
+                  (change.oldContent && change.newContent)
+                ) {
                   html += renderDiffVisualization(change);
                 }
               }
@@ -394,7 +397,11 @@
               html += "● Edit file: " + escapeHtml(event.data.path);
               html += "</div>";
 
-              if (event.data.oldContent && event.data.newContent) {
+              // Render diff if we have structuredPatch OR oldContent/newContent
+              if (
+                event.data.structuredPatch ||
+                (event.data.oldContent && event.data.newContent)
+              ) {
                 html += renderDiffVisualization(event.data);
               }
             }
@@ -1111,7 +1118,11 @@
                     event.data.changes.forEach((change) => {
                       lines.push(`● File ${change.kind}: ${change.path}`);
 
-                      if (change.oldContent && change.newContent) {
+                      // Render diff if we have structuredPatch OR oldContent/newContent
+                      if (
+                        change.structuredPatch ||
+                        (change.oldContent && change.newContent)
+                      ) {
                         lines.push("");
                         lines.push("```diff");
                         const diffLines = formatDiffForMarkdown(
@@ -1127,7 +1138,11 @@
                   } else if (event.data.path) {
                     lines.push(`● Edit file: ${event.data.path}`);
 
-                    if (event.data.oldContent && event.data.newContent) {
+                    // Render diff if we have structuredPatch OR oldContent/newContent
+                    if (
+                      event.data.structuredPatch ||
+                      (event.data.oldContent && event.data.newContent)
+                    ) {
                       lines.push("");
                       lines.push("```diff");
                       const diffLines = formatDiffForMarkdown(
