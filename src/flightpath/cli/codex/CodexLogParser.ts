@@ -20,6 +20,7 @@ import {
   WebSearchData,
   CLI_EVENT_TYPES,
   TokenUsage,
+  UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 
 // ============================================================================
@@ -207,17 +208,18 @@ interface CodexAssistantContentPayload {
  *
  * Parses Codex CLI session logs to extract responses, session IDs, and
  * detect completion. Handles nested payload structure and date-based
- * directory hierarchy.
+ * directory hierarchy with recursive search.
  *
  * @remarks
- * **Log Location:** `~/.codex/sessions/YYYY/MM/DD/`
+ * **Log Location:** `~/.codex/sessions/` (searched recursively)
  *
  * **File Naming:** `rollout-<timestamp>-<session-id>.jsonl`
  *
  * **Directory Structure:**
- * - Date-based hierarchy (YYYY/MM/DD)
+ * - Date-based hierarchy (YYYY/MM/DD) created by Codex as needed
  * - No index file (unlike Copilot)
  * - Multiple sessions per day in same directory
+ * - Recursive search handles missing date directories gracefully
  *
  * **Event Structure (Nested Payloads):**
  * ```json
@@ -239,6 +241,11 @@ interface CodexAssistantContentPayload {
  * - `event_msg` - Control events (completion, errors)
  *
  * **Completion Signal:** `{"type": "event_msg", "payload": {"type": "turn.completed"}}`
+ *
+ * **Session Discovery:**
+ * - Fast path: Direct session ID lookup (recursive search)
+ * - Fallback: Prompt text matching across all recent log files
+ * - Robust: Works even when date directory doesn't exist yet (first session of the day)
  *
  * @example
  * ```typescript
@@ -428,6 +435,34 @@ export class CodexLogParser extends BaseLogParser {
                     path: (params as any).path || (params as any).file || "",
                     content: (params as any).content || "",
                   } as FileWriteData,
+                });
+              }
+              // Map apply_patch operations (Codex patch format with structured diff)
+              else if (toolName === "apply_patch") {
+                // params.input should contain the patch string
+                const patchInput = (params as any).input || "";
+                let filePath = "unknown";
+                const fileMatch = patchInput.match(
+                  /\*\*\* (?:Add|Update) File: (.+)/
+                );
+                if (fileMatch) {
+                  filePath = fileMatch[1].trim();
+                }
+
+                // Parse patch to extract structured diff
+                const structuredPatch = this.parseApplyPatch(patchInput);
+
+                Log.debug(
+                  `[CodexLogParser] apply_patch (tool_use) - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
+                );
+
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_EDIT,
+                  timestamp,
+                  data: {
+                    path: filePath,
+                    structuredPatch,
+                  } as FileEditData,
                 });
               }
               // Map file edit operations (modify existing file)
@@ -653,6 +688,36 @@ export class CodexLogParser extends BaseLogParser {
             } as FileWriteData,
           });
         }
+        // Map apply_patch operations (Codex patch format with structured diff)
+        else if (toolName === "apply_patch") {
+          // Extract file path from patch input
+          const patchInput =
+            typeof input === "string" ? input : (params as any).input || "";
+          let filePath = "unknown";
+          const fileMatch = patchInput.match(
+            /\*\*\* (?:Add|Update) File: (.+)/
+          );
+          if (fileMatch) {
+            filePath = fileMatch[1].trim();
+          }
+
+          // Parse patch to extract structured diff
+          const structuredPatch = this.parseApplyPatch(patchInput);
+
+          Log.debug(
+            `[CodexLogParser] apply_patch - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
+          );
+
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.FILE_EDIT,
+            timestamp,
+            data: {
+              path: filePath,
+              structuredPatch,
+              // Note: oldContent/newContent not available in apply_patch format
+            } as FileEditData,
+          });
+        }
         // Map file edit operations (modify existing file)
         else if (
           toolName === "edit_file" ||
@@ -845,7 +910,7 @@ export class CodexLogParser extends BaseLogParser {
   /**
    * Discover session log file for a prompt
    *
-   * Searches `~/.codex/sessions/YYYY/MM/DD/` for the log file corresponding
+   * Searches `~/.codex/sessions/` recursively for the log file corresponding
    * to a specific prompt execution. Uses session ID (if provided) or prompt text matching.
    *
    * @param promptText - The prompt text sent to Codex CLI (not used when sessionId provided)
@@ -855,18 +920,17 @@ export class CodexLogParser extends BaseLogParser {
    *
    * @remarks
    * **Discovery Algorithm:**
-   * 1. If sessionId provided: Search for file matching `rollout-*-{sessionId}.jsonl`
-   * 2. Otherwise: Calculate today's date directory (YYYY/MM/DD)
-   * 3. Find all `.jsonl` files modified after startTime
-   * 4. Sort by modification time (newest first)
-   * 5. Read first 10 events from each candidate
-   * 6. Look for user message in response_items or event_msg
-   * 7. Return first matching log file path
+   * 1. If sessionId provided: Search recursively for file matching `rollout-*-{sessionId}.jsonl`
+   * 2. Otherwise: Find all `rollout-*.jsonl` files recursively, modified after startTime
+   * 3. Sort by modification time (newest first)
+   * 4. Read first 10 events from each candidate
+   * 5. Look for user message in response_items or event_msg
+   * 6. Return first matching log file path
    *
-   * **Date Hierarchy:**
+   * **Directory Structure:**
    * - Base: `~/.codex/sessions/`
-   * - Today: `~/.codex/sessions/2026/01/19/`
-   * - Falls back to parent directories if current day has no matches
+   * - Date hierarchy: `YYYY/MM/DD/` (created as needed by Codex)
+   * - Recursive search handles missing date directories gracefully
    *
    * **Prompt Matching:**
    * - Uses first 100 chars of prompt for fuzzy matching
@@ -874,6 +938,11 @@ export class CodexLogParser extends BaseLogParser {
    * - Searches in turn_context and response_item events
    *
    * **File Naming:** `rollout-<timestamp>-<session-id>.jsonl`
+   *
+   * **Robustness:**
+   * - No longer requires date directory to exist (handles first session of the day)
+   * - Works with session resume (searches all dates, not just today)
+   * - Retry logic handles async file creation
    */
   async discoverSessionLog(
     promptText: string,
@@ -881,46 +950,27 @@ export class CodexLogParser extends BaseLogParser {
     sessionId?: string
   ): Promise<string | null> {
     try {
-      // Calculate today's date directory
-      const year = startTime.getFullYear().toString();
-      const month = (startTime.getMonth() + 1).toString().padStart(2, "0");
-      const day = startTime.getDate().toString().padStart(2, "0");
-
       const basePath = path.join(os.homedir(), ".codex", "sessions");
-      const datePath = path.join(basePath, year, month, day);
 
-      if (!fs.existsSync(datePath)) {
-        Log.debug(`[CodexLogParser] Date directory not found: ${datePath}`);
-        return null;
-      }
-
-      // FAST PATH: If session ID provided, search for matching file directly
+      // FAST PATH: If session ID provided, search for matching file recursively
       if (sessionId) {
         Log.debug(
-          `[CodexLogParser] Using session ID ${sessionId} to find log file`
+          `[CodexLogParser] Using session ID ${sessionId} to find log file in ${basePath}`
         );
 
         // Retry with backoff: Codex writes log file asynchronously after session start
         // When resuming, the file may exist but not be updated yet
         const result = await retryWithBackoff(
           async () => {
-            // Codex file pattern: rollout-<timestamp>-<session-id>.jsonl
-            if (!fs.existsSync(datePath)) {
-              return null; // Date directory doesn't exist yet, retry
-            }
-
-            const files = fs.readdirSync(datePath);
-            const matchingFile = files.find((file) =>
-              file.endsWith(`-${sessionId}.jsonl`)
-            );
+            // Search recursively for rollout-*-<sessionId>.jsonl in base sessions directory
+            const matchingFile = this.findSessionFileRecursive(basePath, sessionId);
 
             if (matchingFile) {
-              const logPath = path.join(datePath, matchingFile);
-              const stats = fs.statSync(logPath);
+              const stats = fs.statSync(matchingFile);
 
               // Verify file is recent (handles resume case where file exists but isn't updated yet)
               if (stats.mtime >= startTime) {
-                return logPath; // Success - file exists and is recent
+                return matchingFile; // Success - file exists and is recent
               } else {
                 Log.debug(
                   `[CodexLogParser] Session log exists but not yet updated (mtime: ${stats.mtime.toISOString()}, startTime: ${startTime.toISOString()}), will retry...`
@@ -950,13 +1000,13 @@ export class CodexLogParser extends BaseLogParser {
           return result;
         } else {
           Log.debug(
-            `[CodexLogParser] No log file found for session ${sessionId} in ${datePath}`
+            `[CodexLogParser] No log file found for session ${sessionId} in ${basePath}`
           );
           return null;
         }
       }
 
-      // FALLBACK: Find all .jsonl files modified after startTime
+      // FALLBACK: Find all .jsonl files modified after startTime (search recursively)
       // Retry with backoff: Codex may take a moment to create the log file
       // Normalize for path escaping: Codex may double backslashes in file paths
       const promptPrefix = this.normalizePromptForMatching(
@@ -965,24 +1015,8 @@ export class CodexLogParser extends BaseLogParser {
 
       const result = await retryWithBackoff(
         async () => {
-          const files = fs.readdirSync(datePath);
-          const candidates: Array<{ path: string; mtime: Date }> = [];
-
-          for (const file of files) {
-            if (!file.endsWith(".jsonl")) {
-              continue;
-            }
-
-            const filePath = path.join(datePath, file);
-            const stats = fs.statSync(filePath);
-
-            if (stats.mtime >= startTime) {
-              candidates.push({
-                path: filePath,
-                mtime: stats.mtime,
-              });
-            }
-          }
+          // Get all rollout-*.jsonl files recursively
+          const candidates = this.findModifiedRolloutFiles(basePath, startTime);
 
           if (candidates.length === 0) {
             return null; // No candidates yet, will retry
@@ -1274,6 +1308,267 @@ export class CodexLogParser extends BaseLogParser {
     }
 
     return null;
+  }
+
+  /**
+   * Parse Codex apply_patch format and convert to UnifiedDiffHunk
+   *
+   * Codex uses a custom patch format:
+   * ```
+   * *** Begin Patch
+   * *** Update File: path/to/file.ext
+   * @@
+   * -removed line
+   * +added line
+   *  context line
+   * *** End Patch
+   * ```
+   *
+   * @param patchInput - The patch input string from apply_patch tool
+   * @returns Array of UnifiedDiffHunk objects, or undefined if parse fails
+   *
+   * @remarks
+   * **Patch Format:**
+   * - `*** Begin Patch` - Start marker
+   * - `*** Add File:` or `*** Update File:` - Operation type and file path
+   * - `@@` - Hunk separator
+   * - Lines prefixed with `-` are removed
+   * - Lines prefixed with `+` are added
+   * - Lines with space prefix (or no prefix) are context
+   * - `*** End Patch` - End marker
+   *
+   * **Line Number Inference:**
+   * Since Codex patches don't include explicit line numbers, we infer them:
+   * - Start at line 1 for new files
+   * - Track line numbers as we parse the diff
+   * - Removed lines increment old line counter
+   * - Added lines increment new line counter
+   * - Context lines increment both counters
+   */
+  private parseApplyPatch(patchInput: string): UnifiedDiffHunk[] | undefined {
+    try {
+      const lines = patchInput.split("\n");
+      const hunks: UnifiedDiffHunk[] = [];
+      let currentHunk: UnifiedDiffHunk | null = null;
+      let oldLineNum = 1;
+      let newLineNum = 1;
+      let inPatch = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Start of patch
+        if (line.startsWith("*** Begin Patch")) {
+          inPatch = true;
+          continue;
+        }
+
+        // End of patch
+        if (line.startsWith("*** End Patch")) {
+          // Finalize current hunk if exists
+          if (currentHunk && currentHunk.lines.length > 0) {
+            hunks.push(currentHunk);
+          }
+          break;
+        }
+
+        if (!inPatch) {
+          continue;
+        }
+
+        // File operation markers (skip, but could extract file path if needed)
+        if (line.startsWith("*** Add File:") || line.startsWith("*** Update File:")) {
+          // Reset line counters for new file
+          oldLineNum = 1;
+          newLineNum = 1;
+          continue;
+        }
+
+        // Hunk separator
+        if (line === "@@" || line.startsWith("@@")) {
+          // Finalize previous hunk
+          if (currentHunk && currentHunk.lines.length > 0) {
+            hunks.push(currentHunk);
+          }
+
+          // Start new hunk
+          currentHunk = {
+            oldStart: oldLineNum,
+            oldLines: 0,
+            newStart: newLineNum,
+            newLines: 0,
+            lines: [],
+          };
+          continue;
+        }
+
+        // Parse diff lines
+        if (currentHunk) {
+          if (line.startsWith("+")) {
+            // Added line
+            currentHunk.lines.push(line); // Keep the + prefix
+            currentHunk.newLines++;
+            newLineNum++;
+          } else if (line.startsWith("-")) {
+            // Removed line
+            currentHunk.lines.push(line); // Keep the - prefix
+            currentHunk.oldLines++;
+            oldLineNum++;
+          } else if (line.startsWith(" ") || line.length === 0) {
+            // Context line (space prefix or empty)
+            currentHunk.lines.push(" " + line.substring(1)); // Ensure space prefix
+            currentHunk.oldLines++;
+            currentHunk.newLines++;
+            oldLineNum++;
+            newLineNum++;
+          } else {
+            // Treat unprefixed lines as context
+            currentHunk.lines.push(" " + line);
+            currentHunk.oldLines++;
+            currentHunk.newLines++;
+            oldLineNum++;
+            newLineNum++;
+          }
+        }
+      }
+
+      // Finalize last hunk if exists
+      if (currentHunk && currentHunk.lines.length > 0) {
+        hunks.push(currentHunk);
+      }
+
+      return hunks.length > 0 ? hunks : undefined;
+    } catch (error) {
+      Log.debug(`[CodexLogParser] Failed to parse apply_patch input: ${error}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * Find session file recursively by session ID
+   *
+   * Searches base sessions directory recursively for rollout-*-<sessionId>.jsonl file.
+   * Handles date-based directory structure (YYYY/MM/DD) without requiring specific date.
+   *
+   * @param basePath - Base sessions directory (~/.codex/sessions)
+   * @param sessionId - Session ID to search for
+   * @returns Absolute path to log file, or null if not found
+   *
+   * @remarks
+   * **Search Strategy:**
+   * - Recursively traverses all subdirectories
+   * - Matches files ending with `-${sessionId}.jsonl`
+   * - Returns first match found (should be unique)
+   *
+   * **Use Case:**
+   * Fast path for session resume when we know the session ID.
+   * Avoids needing to know or check if date directory exists.
+   */
+  private findSessionFileRecursive(
+    basePath: string,
+    sessionId: string
+  ): string | null {
+    try {
+      if (!fs.existsSync(basePath)) {
+        return null;
+      }
+
+      const searchDir = (dir: string): string | null => {
+        try {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+
+            if (entry.isDirectory()) {
+              // Recurse into subdirectories
+              const found = searchDir(fullPath);
+              if (found) {
+                return found;
+              }
+            } else if (entry.isFile() && entry.name.endsWith(`-${sessionId}.jsonl`)) {
+              // Found matching file
+              return fullPath;
+            }
+          }
+
+          return null;
+        } catch (error) {
+          // Skip directories we can't read
+          return null;
+        }
+      };
+
+      return searchDir(basePath);
+    } catch (error) {
+      Log.debug(`[CodexLogParser] Error searching for session file: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Find all rollout-*.jsonl files modified after startTime
+   *
+   * Recursively searches base sessions directory for recently modified log files.
+   *
+   * @param basePath - Base sessions directory (~/.codex/sessions)
+   * @param startTime - Only include files modified after this time
+   * @returns Array of candidate files with paths and modification times
+   *
+   * @remarks
+   * **Search Strategy:**
+   * - Recursively traverses all subdirectories
+   * - Filters for rollout-*.jsonl files
+   * - Checks modification time (with 10s buffer before startTime)
+   * - Returns unsorted list (caller sorts by mtime)
+   *
+   * **Use Case:**
+   * Fallback for prompt text matching when no session ID available.
+   */
+  private findModifiedRolloutFiles(
+    basePath: string,
+    startTime: Date
+  ): Array<{ path: string; mtime: Date }> {
+    const candidates: Array<{ path: string; mtime: Date }> = [];
+
+    // Allow 10 second buffer before startTime (CLI may write logs slightly before)
+    const bufferTime = new Date(startTime.getTime() - 10000);
+
+    const searchDir = (dir: string): void => {
+      try {
+        if (!fs.existsSync(dir)) {
+          return;
+        }
+
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+
+          if (entry.isDirectory()) {
+            // Recurse into subdirectories
+            searchDir(fullPath);
+          } else if (entry.isFile() && entry.name.startsWith("rollout-") && entry.name.endsWith(".jsonl")) {
+            // Check modification time
+            try {
+              const stats = fs.statSync(fullPath);
+              if (stats.mtime >= bufferTime) {
+                candidates.push({ path: fullPath, mtime: stats.mtime });
+              }
+            } catch (error) {
+              // Skip files we can't stat
+              continue;
+            }
+          }
+        }
+      } catch (error) {
+        // Skip directories we can't read
+        return;
+      }
+    };
+
+    searchDir(basePath);
+    return candidates;
   }
 
   /**
