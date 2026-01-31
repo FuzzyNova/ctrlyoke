@@ -685,25 +685,33 @@ suite("CopilotLogParser", () => {
           type: "assistant.message",
           data: {
             content: "I'll create the file now.",
-            toolRequests: [
-              {
-                name: "write_file",
-                arguments: { path: "test.ts", content: "export const x = 1;" },
-              },
-            ],
           },
+          timestamp: new Date().toISOString(),
+        },
+        {
+          type: "tool.execution_start",
+          data: {
+            toolCallId: "tool-1",
+            toolName: "write_file",
+            arguments: { path: "test.ts", content: "export const x = 1;" },
+          },
+          timestamp: new Date().toISOString(),
         },
       ];
 
       const response = parser.extractResponse(events);
 
       assert.strictEqual(extractText(response), "I'll create the file now.");
-      assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
-      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
-        path: "test.ts",
-        content: "export const x = 1;",
-      });
+      // Tool calls are now converted to semantic events (FILE_WRITE)
+      const fileWriteEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.FILE_WRITE
+      );
+      assert.strictEqual(fileWriteEvents.length, 1);
+      assert.strictEqual((fileWriteEvents[0].data as any).path, "test.ts");
+      assert.strictEqual(
+        (fileWriteEvents[0].data as any).content,
+        "export const x = 1;"
+      );
     });
 
     test("should extract session metadata from session.start event", () => {
@@ -1004,13 +1012,16 @@ suite("CodexLogParser", () => {
       const response = parser.extractResponse(events);
 
       assert.strictEqual(extractText(response), "Creating file...");
-      assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
-      assert.strictEqual(extractToolCalls(response)[0].id, "tool-codex-1");
-      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
-        path: "app.ts",
-        content: "export const app = 'FlightPath';",
-      });
+      // Tool calls are now converted to semantic events (FILE_WRITE)
+      const fileWriteEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.FILE_WRITE
+      );
+      assert.strictEqual(fileWriteEvents.length, 1);
+      assert.strictEqual((fileWriteEvents[0].data as any).path, "app.ts");
+      assert.strictEqual(
+        (fileWriteEvents[0].data as any).content,
+        "export const app = 'FlightPath';"
+      );
     });
 
     test("should extract tool calls from function_call payload type", () => {
@@ -1028,12 +1039,12 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "shell");
-      assert.strictEqual(extractToolCalls(response)[0].id, "call-123");
-      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
-        command: "npm test",
-      });
+      // Shell commands are converted to BASH_COMMAND events
+      const bashEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.strictEqual(bashEvents.length, 1);
+      assert.strictEqual((bashEvents[0].data as any).command, "npm test");
     });
 
     test("should parse function_call arguments when passed as JSON string", () => {
@@ -1074,12 +1085,16 @@ suite("CodexLogParser", () => {
 
       const response = parser.extractResponse(events);
 
-      assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "shell");
-      // Should fallback to { raw: "{invalid json}" }
-      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
-        raw: "{invalid json}",
-      });
+      // Shell commands are converted to BASH_COMMAND events
+      // Malformed JSON is wrapped in { raw: ... }, but command extraction still tries params.command
+      // which doesn't exist, so command becomes empty string
+      const bashEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.BASH_COMMAND
+      );
+      assert.strictEqual(bashEvents.length, 1);
+      assert.strictEqual((bashEvents[0].data as any).command, "");
+      assert.strictEqual((bashEvents[0].data as any).status, "in_progress");
+      assert.strictEqual((bashEvents[0].data as any).workingDir, undefined);
     });
 
     test("should extract thinking blocks from thinking type", () => {

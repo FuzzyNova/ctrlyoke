@@ -1517,35 +1517,6 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Get model for a provider
-   */
-  private getModelForProvider(provider: Provider): string {
-    const config = vscode.workspace.getConfiguration("flightpath");
-
-    switch (provider) {
-      case Provider.CopilotCli:
-        return (
-          config.get<string>("copilotCliModel") || DEFAULT_MODELS["copilot-cli"]
-        );
-      case Provider.CopilotChat:
-        return (
-          config.get<string>("copilotChatModel") ||
-          DEFAULT_MODELS["copilot-chat"]
-        );
-      case Provider.ClaudeCli:
-        return (
-          config.get<string>("claudeCliModel") || DEFAULT_MODELS["claude-cli"]
-        );
-      case Provider.CodexCli:
-        return (
-          config.get<string>("codexCliModel") || DEFAULT_MODELS["codex-cli"]
-        );
-      default:
-        return DEFAULT_MODELS["copilot-cli"];
-    }
-  }
-
-  /**
    * Set settings provider reference (called from extension.ts)
    */
   public setSettingsProvider(provider: FlightPathSettingsProvider): void {

@@ -71,6 +71,9 @@ export const MESSAGE_TYPES = {
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
+  GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
+  UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
+  CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value
 
   // Workflow Properties - Settings Panel <-> Extension
   UPDATE_WORKFLOW_PROPERTY: "updateWorkflowProperty", // Webview -> Extension: Save workflow property (to working file or pending)

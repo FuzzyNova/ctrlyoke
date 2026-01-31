@@ -1135,9 +1135,7 @@ export class CliIntegration extends CopilotIntegration {
           onStdout: shouldStream
             ? (chunk) => {
                 // Debug logging: Log raw CLI output if enabled
-                const logRawOutput = vscode.workspace
-                  .getConfiguration("flightpath")
-                  .get<boolean>("logRawCliOutput", false);
+                const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
                 if (logRawOutput) {
                   Log.info(
                     `[${this.provider.config.displayName} RAW OUTPUT]: ${chunk}`
@@ -1614,9 +1612,7 @@ export class CliIntegration extends CopilotIntegration {
               workflowContext,
               async (result) => {
                 // Debug logging: Log raw stdout/stderr if enabled
-                const logRawOutput = vscode.workspace
-                  .getConfiguration("flightpath")
-                  .get<boolean>("logRawCliOutput", false);
+                const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
                 if (logRawOutput) {
                   Log.info(
                     `[${this.provider.config.displayName} FINAL STDOUT]:\n${result.stdout}`

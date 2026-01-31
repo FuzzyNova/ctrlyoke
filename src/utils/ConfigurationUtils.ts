@@ -62,6 +62,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if raw CLI output should be logged for debugging
+   */
+  shouldLogRawCliOutput(): boolean {
+    return getConfig().get<boolean>("logRawCliOutput", false);
+  },
+
+  /**
    * Check if prompt files should open in the second editor group
    */
   shouldOpenPromptsInSecondGroup(): boolean {
@@ -159,10 +166,37 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the default CLI model
+   * Check if .gitignore should be respected for completions
+   */
+  shouldRespectGitignoreForCompletions(): boolean {
+    return getConfig().get<boolean>("respectGitignoreForCompletions", true);
+  },
+
+  /**
+   * Get the default CLI model (Copilot CLI)
    */
   getCliModel(): string {
     return getConfig().get<string>("copilotCliModel", "claude-sonnet-4.5");
+  },
+
+  /**
+   * Get model for a specific provider
+   * Maps provider enum to the appropriate model setting
+   */
+  getModelForProvider(provider: Provider): string {
+    switch (provider) {
+      case Provider.CopilotCli:
+        return ConfigurationUtils.getCliModel();
+      case Provider.CopilotChat:
+        return ConfigurationUtils.getCopilotChatModel();
+      case Provider.ClaudeCli:
+        return ConfigurationUtils.getClaudeCliModel();
+      case Provider.CodexCli:
+        return ConfigurationUtils.getCodexCliModel();
+      default:
+        // Fallback to Copilot CLI model
+        return ConfigurationUtils.getCliModel();
+    }
   },
 
   /**
@@ -392,6 +426,19 @@ export const ConfigurationUtils = {
   // ============================================================
   // SETTINGS UPDATE HELPERS
   // ============================================================
+
+  /**
+   * Get a FlightPath configuration value
+   * @param key The setting key (without 'flightpath.' prefix)
+   * @param defaultValue The default value if setting is not defined
+   * @returns The configuration value
+   */
+  getConfigValue<T>(key: string, defaultValue?: T): T | undefined {
+    if (defaultValue !== undefined) {
+      return getConfig().get<T>(key, defaultValue);
+    }
+    return getConfig().get<T>(key);
+  },
 
   /**
    * Update a FlightPath configuration setting

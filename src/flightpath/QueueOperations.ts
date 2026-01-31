@@ -13,6 +13,7 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "../types/DashboardConstants";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import * as vscode from "vscode";
 
 /**
@@ -83,9 +84,9 @@ export function getQueueStatus(
   const state = queue.getState();
 
   // Get queue size limits from settings
-  const config = vscode.workspace.getConfiguration("flightpath");
-  const maxQueueSize = config.get<number>("maxQueueSize", 100);
-  const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+  const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
+  const maxQueueSize = queueConfig.maxQueueSize;
+  const unlimitedMode = queueConfig.unlimitedMode;
 
   const effectiveMaxSize = unlimitedMode ? Infinity : maxQueueSize;
   const remainingSlots = unlimitedMode
@@ -143,9 +144,9 @@ export async function appendToQueue(
   }
 
   // 2. Check queue size limits
-  const config = vscode.workspace.getConfiguration("flightpath");
-  const maxQueueSize = config.get<number>("maxQueueSize", 100);
-  const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+  const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
+  const maxQueueSize = queueConfig.maxQueueSize;
+  const unlimitedMode = queueConfig.unlimitedMode;
 
   const state = queue.getState();
   const currentSize = state.prompts.length;

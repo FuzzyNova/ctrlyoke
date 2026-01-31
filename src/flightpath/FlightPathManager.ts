@@ -596,9 +596,9 @@ export class FlightPathManager {
       }
 
       // 4. Check queue size limit
-      const config = vscode.workspace.getConfiguration("flightpath");
-      const maxQueueSize = config.get<number>("maxQueueSize", 100);
-      const unlimitedMode = config.get<boolean>("unlimitedMode", false);
+      const queueConfig = ConfigurationUtils.getDynamicQueueConfig();
+      const maxQueueSize = queueConfig.maxQueueSize;
+      const unlimitedMode = queueConfig.unlimitedMode;
       const newSize = currentSize + parsed.prompts.length;
 
       if (!unlimitedMode && newSize > maxQueueSize) {

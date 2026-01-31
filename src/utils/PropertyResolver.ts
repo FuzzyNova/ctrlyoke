@@ -320,18 +320,6 @@ export class PropertyResolver {
    * @returns Provider-specific default model
    */
   private static getModelForProvider(provider: Provider): string {
-    switch (provider) {
-      case Provider.CopilotCli:
-        return ConfigurationUtils.getCliModel();
-      case Provider.CopilotChat:
-        return ConfigurationUtils.getCopilotChatModel();
-      case Provider.ClaudeCli:
-        return ConfigurationUtils.getClaudeCliModel();
-      case Provider.CodexCli:
-        return ConfigurationUtils.getCodexCliModel();
-      default:
-        // Fallback to Copilot CLI model (should never happen with typed Provider enum)
-        return ConfigurationUtils.getCliModel();
-    }
+    return ConfigurationUtils.getModelForProvider(provider);
   }
 }

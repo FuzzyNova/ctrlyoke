@@ -92,6 +92,7 @@
     executionModeRadios: document.querySelectorAll(
       'input[name="execution-mode"]'
     ),
+    respectGitignoreCheckbox: document.getElementById("respect-gitignore"),
 
     // Buttons
     moreSettingsBtn: document.getElementById("more-settings-btn"),
@@ -236,6 +237,15 @@
     });
   });
 
+  // Respect gitignore checkbox
+  elements.respectGitignoreCheckbox.addEventListener("change", (e) => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.UPDATE_CONFIG,
+      key: "respectGitignoreForCompletions",
+      value: e.target.checked,
+    });
+  });
+
   // "Set as Default" buttons
   elements.setDefaultButtons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -278,6 +288,11 @@
         break;
       case MESSAGE_TYPES.AGENTS_UPDATE:
         handleAgentsUpdate(message.data);
+        break;
+      case MESSAGE_TYPES.CONFIG_VALUE:
+        if (message.key === "respectGitignoreForCompletions") {
+          elements.respectGitignoreCheckbox.checked = message.value ?? true;
+        }
         break;
     }
   });
@@ -645,6 +660,12 @@
       value: value,
     });
   }
+
+  // Request initial config value for respect gitignore checkbox
+  vscode.postMessage({
+    type: MESSAGE_TYPES.GET_CONFIG,
+    key: "respectGitignoreForCompletions",
+  });
 
   // Request initial state
   vscode.postMessage({ type: MESSAGE_TYPES.READY });

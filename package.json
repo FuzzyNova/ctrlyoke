@@ -550,15 +550,22 @@
           "description": "Automatically attach files referenced with #file: syntax",
           "markdownDescription": "Automatically process `#file:` references in prompts and attach file content as XML. Disable to send prompts as-is without automatic file attachment."
         },
-        "flightpath.openPromptsInSecondGroup": {
+        "flightpath.respectGitignoreForCompletions": {
           "order": 17,
+          "type": "boolean",
+          "default": true,
+          "description": "Respect .gitignore files when showing file and symbol completions",
+          "markdownDescription": "When enabled (default), FlightPath excludes gitignored files from `@` file completions and `#` symbol completions. This filters out build artifacts, dependencies, and IDE config files.\n\nDisable if you need to reference files in `.gitignore` (e.g., debugging build outputs, including error logs, referencing dependencies).\n\n**Applies to:** Dashboard prompt editor and VS Code editor (when editing `.flightpath.yml` files).\n\n**Toggle quickly:** Use checkbox in Settings panel → Session Settings (Quick Access)."
+        },
+        "flightpath.openPromptsInSecondGroup": {
+          "order": 18,
           "type": "boolean",
           "default": false,
           "description": "Open prompt files in a separate editor group (right side)",
           "markdownDescription": "When enabled, prompt files open in the second editor group (right side) instead of the active editor. This keeps your main code files visible for `#selection` references while editing prompts."
         },
         "flightpath.maxPromptExecutionTime": {
-          "order": 18,
+          "order": 19,
           "type": "number",
           "default": 10800,
           "minimum": -1,
@@ -567,7 +574,7 @@
           "markdownDescription": "Maximum time in seconds to wait for a single prompt to complete. Default is **3 hours** (10800s). Use **-1** for unlimited timeout. Range: **-1** (unlimited) or **5 minutes** (300) to **24 hours** (86400). This catches hung prompts while allowing long-running operations."
         },
         "flightpath.maxWorkflowExecutionTime": {
-          "order": 19,
+          "order": 20,
           "type": "number",
           "default": 86400,
           "minimum": -1,

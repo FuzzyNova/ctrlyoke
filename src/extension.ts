@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
+import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { QUEUE_POSITION } from "./types/DashboardConstants";
@@ -232,6 +233,10 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
     console.log("FlightPath: Registered link provider for prompt files");
+
+    // Initialize completion helpers with config watcher
+    initializeCompletionHelpers(context);
+    console.log("FlightPath: Initialized completion helpers with config watcher");
 
     // Register Language Model Tools (for VS Code Chat integration)
     registerLanguageModelTools(context);

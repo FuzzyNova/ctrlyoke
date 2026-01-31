@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getWorkspaceSymbols } from "../utils/AttachmentBuilders";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 
 /**
@@ -104,11 +105,15 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
     return filesCache;
   }
 
-  // Find all files in workspace, excluding common directories
-  const files = await vscode.workspace.findFiles(
-    "**/*",
-    "{**/node_modules/**,**/.git/**,**/dist/**,**/out/**,**/build/**,**/.vscode/**}"
-  );
+  const respectGitignore = ConfigurationUtils.shouldRespectGitignoreForCompletions();
+
+  // ON (true):  Let VS Code respect .gitignore, .ignore, files.exclude, etc.
+  // OFF (false): Show ALL files (only exclude .git database - never useful)
+  const exclude = respectGitignore
+    ? undefined  // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
+    : "**/.git/**";  // Only exclude Git database - show EVERYTHING else
+
+  const files = await vscode.workspace.findFiles("**/*", exclude);
 
   // Update cache
   filesCache = files;
@@ -123,6 +128,33 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
 export function clearFilesCache(): void {
   filesCache = [];
   filesCacheTimestamp = 0;
+}
+
+/**
+ * Configuration change watcher for cache invalidation
+ */
+let configWatcher: vscode.Disposable | undefined;
+
+/**
+ * Initialize configuration watcher to clear cache on setting change
+ */
+export function initializeCompletionHelpers(context: vscode.ExtensionContext): void {
+  // Clear cache when gitignore setting changes
+  configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+    if (e.affectsConfiguration('flightpath.respectGitignoreForCompletions')) {
+      clearFilesCache();
+      Log.info("[Completions] Cache cleared due to gitignore setting change");
+    }
+  });
+
+  context.subscriptions.push(configWatcher);
+}
+
+/**
+ * Dispose resources
+ */
+export function disposeCompletionHelpers(): void {
+  configWatcher?.dispose();
 }
 
 /**

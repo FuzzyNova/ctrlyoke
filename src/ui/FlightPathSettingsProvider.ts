@@ -3,7 +3,11 @@ import * as path from "path";
 import * as fs from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { MESSAGE_TYPES, PROVIDER_IDS } from "../types/DashboardConstants";
+import {
+  MESSAGE_TYPES,
+  PROVIDER_IDS,
+  DEFAULT_MODELS,
+} from "../types/DashboardConstants";
 import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
@@ -62,13 +66,18 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     [PROVIDER_IDS.CODEX_CLI]: "codexCliModel",
   };
 
-  // Default models per provider
-  private static readonly DEFAULT_MODELS: Record<string, string> = {
-    [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
-    [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
-    [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
-    [PROVIDER_IDS.CODEX_CLI]: "gpt-5.1-codex",
-  };
+  // Validation constants
+  private static readonly VALID_PROVIDERS = [
+    PROVIDER_IDS.COPILOT_CLI,
+    PROVIDER_IDS.COPILOT_CHAT,
+    PROVIDER_IDS.CLAUDE_CLI,
+    PROVIDER_IDS.CODEX_CLI,
+  ] as const;
+
+  private static readonly VALID_EXECUTION_MODES = [
+    "interactive",
+    "headless",
+  ] as const;
 
   // Reference to dashboard provider for workflow property updates
   private dashboardProvider?: any;
@@ -106,6 +115,25 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     // Discover available agents
     this.discoverAgents();
+  }
+
+  /**
+   * Helper method to update a setting with consistent logging
+   * @param key Setting key (without 'flightpath.' prefix)
+   * @param value New value
+   * @param successMessage Message to log on success
+   */
+  private async updateSettingWithLogging(
+    key: string,
+    value: any,
+    successMessage: string
+  ): Promise<void> {
+    try {
+      await ConfigurationUtils.updateSetting(key, value);
+      Log.info(successMessage);
+    } catch (error) {
+      Log.error(`Failed to update setting '${key}':`, error);
+    }
   }
 
   /**
@@ -185,6 +213,12 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
           message.value,
           message.provider
         );
+        break;
+      case MESSAGE_TYPES.GET_CONFIG:
+        this.handleGetConfig(message.key);
+        break;
+      case MESSAGE_TYPES.UPDATE_CONFIG:
+        this.handleUpdateConfig(message.key, message.value);
         break;
     }
   }
@@ -424,40 +458,20 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   private getModelForProvider(provider: Provider): string {
-    // Return the appropriate model based on provider
-    switch (provider) {
-      case Provider.CopilotCli:
-        return ConfigurationUtils.getCliModel();
-      case Provider.CopilotChat:
-        // Chat model uses same setting as CLI model for now
-        return ConfigurationUtils.getCliModel();
-      case Provider.ClaudeCli:
-        return ConfigurationUtils.getClaudeCliModel();
-      case Provider.CodexCli:
-        return ConfigurationUtils.getCodexCliModel();
-      default:
-        return ConfigurationUtils.getCliModel();
-    }
+    return ConfigurationUtils.getModelForProvider(provider);
   }
 
   private async handleProviderChange(provider: string): Promise<void> {
-    const validProviders: string[] = [
-      PROVIDER_IDS.COPILOT_CLI,
-      PROVIDER_IDS.COPILOT_CHAT,
-      PROVIDER_IDS.CLAUDE_CLI,
-      PROVIDER_IDS.CODEX_CLI,
-    ];
-    if (!validProviders.includes(provider)) {
+    if (!FlightPathSettingsProvider.VALID_PROVIDERS.includes(provider as any)) {
       Log.error(`Invalid provider: ${provider}`);
       return;
     }
 
-    try {
-      await ConfigurationUtils.updateSetting("provider", provider);
-      Log.info(`✅ Provider changed to: ${provider}`);
-    } catch (error) {
-      Log.error("Failed to update provider setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      "provider",
+      provider,
+      `✅ Provider changed to: ${provider}`
+    );
   }
 
   private async handleModelChange(
@@ -470,62 +484,55 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    try {
-      await ConfigurationUtils.updateSetting(settingKey, model);
-      Log.info(`✅ Model changed to: ${model} (for ${provider})`);
-    } catch (error) {
-      Log.error("Failed to update model setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      settingKey,
+      model,
+      `✅ Model changed to: ${model} (for ${provider})`
+    );
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
     // No validation - accept any discovered agent name (or empty string)
-    try {
-      await ConfigurationUtils.updateSetting("customAgent", agent);
-      Log.info(`✅ Custom agent changed to: ${agent || "(none)"}`);
-    } catch (error) {
-      Log.error("Failed to update custom agent setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      "customAgent",
+      agent,
+      `✅ Custom agent changed to: ${agent || "(none)"}`
+    );
   }
 
   private async handleExecutionModeChange(
     executionMode: string
   ): Promise<void> {
-    const validModes = ["interactive", "headless"];
-    if (!validModes.includes(executionMode)) {
+    if (
+      !FlightPathSettingsProvider.VALID_EXECUTION_MODES.includes(
+        executionMode as any
+      )
+    ) {
       Log.error(`Invalid execution mode: ${executionMode}`);
       return;
     }
 
-    try {
-      await ConfigurationUtils.updateSetting("cliExecutionMode", executionMode);
-      Log.info(`✅ Execution mode changed to: ${executionMode}`);
-    } catch (error) {
-      Log.error("Failed to update cliExecutionMode setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      "cliExecutionMode",
+      executionMode,
+      `✅ Execution mode changed to: ${executionMode}`
+    );
   }
 
   private async handleResumeSessionChange(enabled: boolean): Promise<void> {
-    try {
-      await ConfigurationUtils.updateSetting(
-        "resumeExistingSession",
-        enabled
-      );
-      Log.info(
-        `✅ Resume existing session ${enabled ? "enabled" : "disabled"}`
-      );
-    } catch (error) {
-      Log.error("Failed to update resumeExistingSession setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      "resumeExistingSession",
+      enabled,
+      `✅ Resume existing session ${enabled ? "enabled" : "disabled"}`
+    );
   }
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
-    try {
-      await ConfigurationUtils.updateSetting("enableDynamicQueue", enabled);
-      Log.info(`✅ Dynamic queue ${enabled ? "enabled" : "disabled"}`);
-    } catch (error) {
-      Log.error("Failed to update enableDynamicQueue setting:", error);
-    }
+    await this.updateSettingWithLogging(
+      "enableDynamicQueue",
+      enabled,
+      `✅ Dynamic queue ${enabled ? "enabled" : "disabled"}`
+    );
   }
 
   private handleOpenSettings(): void {
@@ -535,6 +542,38 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       "@flightpath"
     );
     Log.info("📋 Opened VS Code settings for FlightPath");
+  }
+
+  /**
+   * Handle config value request from webview
+   * Sends current config value back to webview
+   */
+  private handleGetConfig(key: string): void {
+    if (!this.view) {
+      return;
+    }
+
+    // Get value from VS Code configuration
+    const value = ConfigurationUtils.getConfigValue<boolean>(key);
+
+    // Send value back to webview
+    this.view.webview.postMessage({
+      type: MESSAGE_TYPES.CONFIG_VALUE,
+      key: key,
+      value: value,
+    });
+  }
+
+  /**
+   * Handle config update request from webview
+   * Updates VS Code global setting
+   */
+  private async handleUpdateConfig(key: string, value: any): Promise<void> {
+    await this.updateSettingWithLogging(
+      key,
+      value,
+      `✅ Config updated: ${key} = ${JSON.stringify(value)}`
+    );
   }
 
   /**
@@ -643,32 +682,31 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     value: any,
     provider?: string
   ): Promise<void> {
-    try {
-      // Map property names to VS Code setting keys
-      const settingMap: Record<string, string> = {
-        provider: "provider",
-        model: this.getModelSettingKey(
-          provider || ConfigurationUtils.getIntegrationMode()
-        ),
-        agent: "customAgent",
-        resumeSession: "resumeExistingSession",
-        allowDynamicExtension: "enableDynamicQueue",
-      };
+    // Map property names to VS Code setting keys
+    const settingMap: Record<string, string> = {
+      provider: "provider",
+      model: this.getModelSettingKey(
+        provider || ConfigurationUtils.getIntegrationMode()
+      ),
+      agent: "customAgent",
+      resumeSession: "resumeExistingSession",
+      allowDynamicExtension: "enableDynamicQueue",
+    };
 
-      const settingKey = settingMap[property];
-      if (!settingKey) {
-        Log.error(`Unknown property for setAsDefault: ${property}`);
-        return;
-      }
-
-      await ConfigurationUtils.updateSetting(settingKey, value);
-      Log.info(`✅ Set as default: ${property} = ${JSON.stringify(value)}`);
-
-      // Refresh UI to reflect new global setting
-      this.sendInitialState();
-    } catch (error) {
-      Log.error(`Failed to set ${property} as default:`, error);
+    const settingKey = settingMap[property];
+    if (!settingKey) {
+      Log.error(`Unknown property for setAsDefault: ${property}`);
+      return;
     }
+
+    await this.updateSettingWithLogging(
+      settingKey,
+      value,
+      `✅ Set as default: ${property} = ${JSON.stringify(value)}`
+    );
+
+    // Refresh UI to reflect new global setting
+    this.sendInitialState();
   }
 
   /**
