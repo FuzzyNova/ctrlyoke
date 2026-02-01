@@ -17,6 +17,52 @@
 - Dashboard UI to cycle through previous runs
 - User setting to control history retention (default: enabled, 10 runs max)
 
+## Key Architectural Decision: Reuse CliEvent Format
+
+**Design Choice:** Output history stores events using the existing `CliEvent[]` format from `CliOutputTypes.ts` instead of creating custom history types.
+
+**Benefits:**
+
+1. **Zero Duplication:** No need for separate history types (`PromptAttemptOutput`, custom rendering, etc.)
+2. **Reuse Existing Rendering:** `output-manager.js` already renders `CliEvent[]` perfectly via `renderStructuredOutput()`
+3. **Consistency:** Runtime display and history display use identical format and rendering logic
+4. **Future-Proof:** New CLI event types (tools, thinking, etc.) automatically work in history
+5. **Simplified Implementation:** Convert history → runtime format → render (single code path)
+6. **Type Safety:** Leverage existing well-tested types from `CliOutputTypes.ts`
+
+**Implementation Pattern:**
+
+```typescript
+// History storage (PromptAttemptOutput):
+{
+  attemptIndex: 0,
+  prompt: "...",
+  cliCommand: "...",
+  workingDirectory: "/workspace",
+  events: CliEvent[],        // Same format as runtime!
+  metadata: OutputMetadata,  // Same format as runtime!
+  status: "success",
+  timestampMs: 123456789
+}
+
+// History rendering (output-manager.js):
+function renderHistoryOutputs(history) {
+  // Convert history format → runtime output format
+  const runtimeOutput = {
+    structured: {
+      events: attempt.events,      // Direct reuse!
+      metadata: attempt.metadata   // Direct reuse!
+    }
+  };
+
+  // REUSE existing rendering logic
+  html += renderStructuredOutput(runtimeOutput);
+}
+```
+
+**Alternative Considered:** Custom history types with separate rendering logic.
+**Rejected Because:** Creates duplication, maintenance burden, and inconsistency between runtime and history display.
+
 ---
 
 ## Architecture
@@ -81,12 +127,16 @@ export interface WorkingFile extends PromptFile {
 **File:** `src/types/OutputHistoryTypes.ts` (NEW)
 
 ```typescript
-import { Provider, StepStatus, ExecutionState } from "./FlightPathTypes";
+import { ExecutionState } from "./FlightPathTypes";
 import { StatusMessageSeverity } from "./DashboardConstants";
+import { CliEvent, OutputMetadata } from "./CliOutputTypes";
 
 /**
  * Complete output history for a single workflow run
  * Stored in .flightpath/.history/<workflow-id>/run-N-<timestamp>.json
+ *
+ * IMPORTANT: Uses existing CliEvent[] format from CliOutputTypes.ts
+ * This allows reuse of output-manager.js rendering logic (renderStructuredOutput)
  */
 export interface WorkflowOutputHistory {
   // Metadata
@@ -112,21 +162,31 @@ export interface WorkflowOutputHistory {
 
 /**
  * Output data for a single prompt (may have multiple attempts due to retries)
+ *
+ * Uses UniversalCliOutput format for consistency with runtime display.
+ * Each attempt stores events in the same CliEvent[] format used by output-manager.js
  */
 export interface PromptOutputData {
   // Prompt context
   promptText: string;        // For validation/matching
   promptId?: string;         // If prompt has ID
   sessionId?: string;        // CLI session ID (for resume)
-  provider: Provider;
+  provider: string;          // Provider identifier (copilot-cli, claude-cli, codex-cli)
   model: string;
 
   // Array of attempts (initial + retries)
+  // Each attempt uses the same CliEvent[] format as runtime
   attempts: PromptAttemptOutput[];
 }
 
 /**
  * Single attempt output (initial or retry)
+ *
+ * Stores CLI events in CliEvent[] format from CliOutputTypes.ts.
+ * This matches the runtime format used by output-manager.js, enabling:
+ * - Direct reuse of renderStructuredOutput() for history display
+ * - Consistent event types (text, bashCommand, fileEdit, etc.)
+ * - Full support for all CLI event types (tools, thinking, etc.)
  */
 export interface PromptAttemptOutput {
   attemptIndex: number;      // 0 = initial, 1+ = retries
@@ -134,23 +194,24 @@ export interface PromptAttemptOutput {
   // CLI execution details
   prompt?: string;           // Actual prompt sent (may differ from promptText due to automation instructions)
   cliCommand?: string;       // Full CLI command executed (for debugging)
-  response: string;          // Full response text from CLI
+  workingDirectory?: string; // Working directory for CLI execution
 
-  // Metadata
-  tokens?: {
-    prompt: number;
-    completion: number;
-  };
-  elapsed?: number;          // Execution time in seconds
-  timestampMs: number;       // When this attempt started
+  // Structured events (same format as runtime - CliEvent[] from CliOutputTypes.ts)
+  events: CliEvent[];        // Chronological events: text, tools, thinking, etc.
+
+  // Response metadata (from CliOutputTypes.OutputMetadata)
+  metadata: OutputMetadata;  // Tokens, elapsed time, session ID, model, provider
 
   // Result
-  status: StepStatus;        // success, failure, error, skipped
+  status: "success" | "failure" | "error" | "skipped";
   error?: string;            // Error message if failed
 
   // End condition
   endConditionResult?: boolean;
   scriptOutput?: string;     // End condition script output
+
+  // Timestamp
+  timestampMs: number;       // When this attempt started
 }
 
 /**
@@ -233,9 +294,14 @@ export class OutputHistoryManager {
    * Called after each prompt completes (initial or retry).
    * Appends to attempts array if retry, replaces if initial.
    *
+   * Output data uses CliEvent[] format from CliOutputTypes.ts, enabling:
+   * - Direct reuse of output-manager.js rendering logic
+   * - Consistent format between runtime and history
+   * - Automatic support for all CLI event types
+   *
    * @param historyFilePath - Path to current run history file
    * @param stepIndex - Prompt index in workflow (0-based)
-   * @param outputData - Complete output data for this prompt
+   * @param outputData - Complete output data with CliEvent[] and OutputMetadata
    */
   async savePromptOutput(
     historyFilePath: string,
@@ -473,7 +539,10 @@ constructor(private workspaceFolder: vscode.WorkspaceFolder) {
 
      // After prompt completes successfully
      if (this.currentHistoryFilePath && result.success) {
-       // Collect output data from dashboard state or result
+       // Get the CLI output data (already in CliEvent[] format from dashboard)
+       const cliOutput = this.dashboardProvider.getCliOutput(stepIndex, attemptIndex);
+
+       // Collect output data using existing UniversalCliOutput format
        const outputData: PromptOutputData = {
          promptText: currentPrompt.prompt,
          promptId: currentPrompt.id,
@@ -484,12 +553,27 @@ constructor(private workspaceFolder: vscode.WorkspaceFolder) {
            attemptIndex: retryCount || 0,
            prompt: result.prompt,
            cliCommand: result.cliCommand,
-           response: result.response,
-           tokens: result.tokens,
-           elapsed: result.elapsed,
-           timestampMs: Date.now(),
+           workingDirectory: result.workingDirectory,
+
+           // Store events in CliEvent[] format (same as runtime)
+           events: cliOutput?.structured?.events || [],
+
+           // Store metadata using OutputMetadata format
+           metadata: cliOutput?.structured?.metadata || {
+             sessionId: currentPrompt._runtime?.sessionId,
+             model: resolvedProps.model,
+             provider: resolvedProps.provider,
+             usage: result.tokens ? {
+               inputTokens: result.tokens.prompt,
+               outputTokens: result.tokens.completion,
+               totalTokens: result.tokens.prompt + result.tokens.completion
+             } : undefined,
+             elapsed: result.elapsed
+           },
+
            status: STEP_STATUS.SUCCESS,
-           endConditionResult: result.endConditionPassed
+           endConditionResult: result.endConditionPassed,
+           timestampMs: Date.now()
          }]
        };
 
@@ -849,6 +933,9 @@ function updateRunNavigation() {
 
 /**
  * Render outputs from history object
+ *
+ * SIMPLIFIED: Since history uses CliEvent[] format, we can reuse renderAllCliOutputs logic!
+ * Just need to convert history format to the expected state format.
  */
 function renderHistoryOutputs(history) {
   if (!history || !history.promptOutputs) {
@@ -857,15 +944,15 @@ function renderHistoryOutputs(history) {
     return;
   }
 
-  // Build chronological message list similar to renderAllCliOutputs
+  // Build chronological message list (same logic as renderAllCliOutputs)
   const allMessages = [];
 
   // Iterate through promptOutputs
   for (const [stepIndex, promptData] of Object.entries(history.promptOutputs)) {
     const statusMessages = history.statusMessages?.[stepIndex] || [];
 
-    // Add status messages
-    statusMessages.forEach((msg, index) => {
+    // Add status messages (same as runtime)
+    statusMessages.forEach((msg) => {
       allMessages.push({
         type: 'status',
         stepIndex: parseInt(stepIndex),
@@ -877,13 +964,27 @@ function renderHistoryOutputs(history) {
     // Add prompt attempts
     promptData.attempts.forEach((attempt) => {
       allMessages.push({
-        type: 'prompt-output',
+        type: 'copilot-cli',
         stepIndex: parseInt(stepIndex),
         timestamp: attempt.timestampMs,
         data: {
-          promptData,
-          attempt
-        }
+          // Convert history format to runtime output format
+          prompt: attempt.prompt,
+          cliCommand: attempt.cliCommand,
+          workingDirectory: attempt.workingDirectory,
+          structured: {
+            events: attempt.events,  // CliEvent[] - already in correct format!
+            metadata: attempt.metadata  // OutputMetadata - already in correct format!
+          },
+          tokens: attempt.metadata.usage ? {
+            prompt: attempt.metadata.usage.inputTokens,
+            completion: attempt.metadata.usage.outputTokens
+          } : undefined,
+          elapsed: attempt.metadata.elapsed,
+          timestampMs: attempt.timestampMs,
+          isStreaming: false
+        },
+        attemptIndex: attempt.attemptIndex
       });
     });
   }
@@ -891,57 +992,54 @@ function renderHistoryOutputs(history) {
   // Sort by timestamp
   allMessages.sort((a, b) => a.timestamp - b.timestamp);
 
-  // Render messages
+  // Render messages using EXISTING logic from renderAllCliOutputs
   let html = '';
   allMessages.forEach((item) => {
     if (item.type === 'status') {
-      html += renderStatusMessage(item.data);
-    } else if (item.type === 'prompt-output') {
-      html += renderPromptOutput(
-        item.stepIndex,
-        item.data.promptData,
-        item.data.attempt
-      );
+      const statusMsg = item.data;
+      const severityClass = statusMsg.severity
+        ? `status-${statusMsg.severity}`
+        : 'status-info';
+      html += `<div class="status-message ${severityClass}">`;
+      html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
+      html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
+      html += '</div>';
+    } else if (item.type === 'copilot-cli') {
+      const output = item.data;
+      const attemptIndex = item.attemptIndex;
+      const stepIndex = item.stepIndex;
+      const attemptLabel =
+        attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
+
+      html += '<div class="cli-output-item">';
+      html += `<div class="output-header">[Prompt ${stepIndex + 1}] ${attemptLabel}</div>`;
+
+      if (output.prompt) {
+        html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
+      }
+
+      if (output.cliCommand) {
+        const workingDir = output.workingDirectory || 'workspace';
+        html += `<div class="output-cli-command">${escapeHtml(workingDir)}> ${escapeHtml(output.cliCommand)}</div>`;
+      }
+
+      // REUSE existing renderStructuredOutput function!
+      html += renderStructuredOutput(output);
+
+      if (output.tokens) {
+        const total = output.tokens.prompt + output.tokens.completion;
+        html += `<div class="output-stats">Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total</div>`;
+      }
+
+      if (output.elapsed !== undefined) {
+        html += `<div class="output-stats">${output.elapsed}s</div>`;
+      }
+
+      html += '</div>';
     }
   });
 
   elements.outputContent.innerHTML = html;
-}
-
-/**
- * Render single prompt output from history
- */
-function renderPromptOutput(stepIndex, promptData, attempt) {
-  const attemptLabel = attempt.attemptIndex === 0
-    ? 'Initial Attempt'
-    : `Retry ${attempt.attemptIndex}`;
-
-  let html = '<div class="cli-output-item">';
-  html += `<div class="output-header">[Prompt ${stepIndex + 1}] ${attemptLabel}</div>`;
-
-  if (attempt.prompt) {
-    html += `<div class="output-prompt">${escapeHtml(attempt.prompt)}</div>`;
-  }
-
-  if (attempt.cliCommand) {
-    html += `<div class="output-cli-command">$ ${escapeHtml(attempt.cliCommand)}</div>`;
-  }
-
-  if (attempt.response) {
-    html += `<div class="output-response">${escapeHtml(attempt.response)}</div>`;
-  }
-
-  if (attempt.tokens) {
-    const total = attempt.tokens.prompt + attempt.tokens.completion;
-    html += `<div class="output-stats">Tokens: ${attempt.tokens.prompt} prompt / ${attempt.tokens.completion} completion / ${total} total</div>`;
-  }
-
-  if (attempt.elapsed !== undefined) {
-    html += `<div class="output-stats">${attempt.elapsed}s</div>`;
-  }
-
-  html += '</div>';
-  return html;
 }
 
 /**

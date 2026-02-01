@@ -177,53 +177,30 @@ export class AgentExpander {
 }
 ```
 
-**Agent Content Format Options**:
+**Agent Content Format**:
 
-**Option A: Attachment-Style XML** (matches ContextExpander pattern):
+Following GitHub Copilot's pattern with `<modeInstructions>`, we use semantically specific XML tags:
 
-````xml
-<attachment id="agent:flightpath-orchestrator">
-Custom Agent: flightpath-orchestrator
-```chatagent
-[full agent file content]
-````
+```
+[all <attachment> XML blocks from ContextExpander]
 
-</attachment>
+<agentInstructions>
+[full agent file content, including frontmatter]
+</agentInstructions>
 
 [user's original prompt]
-
 ```
 
-**Option B: Direct Instruction** (simpler, more explicit):
-```
+**Rationale**:
 
-You are now using the custom agent definition below. Follow its instructions carefully.
-
----BEGIN AGENT DEFINITION---
-[full agent file content]
----END AGENT DEFINITION---
-
-Now execute this task:
-[user's original prompt]
-
-```
-
-**Option C: System Prompt Style** (what providers do internally):
-```
-
-CUSTOM AGENT ROLE:
-[agent content extracted from frontmatter and body]
-
-USER REQUEST:
-[user's original prompt]
-
-````
-
-**Recommendation**: Start with **Option B** (Direct Instruction) because:
-- Most explicit and clear to LLMs
-- Doesn't require XML parsing
-- Easy to debug and understand
-- Similar to how Copilot CLI likely handles agents internally
+- **XML structure**: Semantically clear `<agentInstructions>` wrapper (similar to Copilot's `<modeInstructions>`)
+- **Positioning**: Agent comes AFTER all attachments but BEFORE user prompt
+  - Attachments provide context/files the agent may reference
+  - Agent instructions define the role/behavior
+  - User prompt gets the most weight (positioned last)
+- **LLM-friendly**: XML tags are well-understood by modern LLMs
+- **Debuggable**: Easy to inspect final prompt structure
+- **Consistent**: Matches ContextExpander's attachment pattern
 
 #### 2. Modify `CopilotIntegration.buildPromptText()` (Base Class)
 
@@ -246,7 +223,11 @@ protected async buildPromptText(
 ): Promise<string> {
   let finalPrompt = prompt.prompt;
 
-  // 1. Expand agent if specified
+  // 1. Expand context references (#file:, @file, etc.) FIRST
+  const expander = new ContextExpander(this.workspaceRoot);
+  finalPrompt = await expander.expandContext(finalPrompt);
+
+  // 2. Expand agent if specified (AFTER context, BEFORE user prompt)
   const agentName = resolvedProperties?.agent;
   if (agentName) {
     const agentContent = await AgentExpander.expandAgent(
@@ -254,26 +235,58 @@ protected async buildPromptText(
       this.workspaceRoot
     );
     if (agentContent) {
-      finalPrompt = `${agentContent}\n\n${finalPrompt}`;
-      Log.info(`🤖 Agent "${agentName}" instructions prepended to prompt`);
+      // Insert agent instructions between attachments and user prompt
+      finalPrompt = this.insertAgentInstructions(finalPrompt, agentContent);
+      Log.info(`🤖 Agent "${agentName}" instructions added to prompt`);
     } else {
       Log.warn(`⚠️ Agent "${agentName}" not found, continuing without agent`);
     }
   }
 
-  // 2. Expand context references (#file:, @file, etc.)
-  const expander = new ContextExpander(this.workspaceRoot);
-  finalPrompt = await expander.expandContext(finalPrompt);
-
   return finalPrompt;
+}
+
+/**
+ * Inserts agent instructions between attachments and user prompt
+ *
+ * Structure: [attachments] → <agentInstructions> → [user prompt]
+ */
+private insertAgentInstructions(expandedPrompt: string, agentContent: string): string {
+  // Find the end of the last </attachment> tag
+  const lastAttachmentEnd = expandedPrompt.lastIndexOf('</attachment>');
+
+  if (lastAttachmentEnd === -1) {
+    // No attachments - prepend agent before entire prompt
+    return `<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${expandedPrompt}`;
+  }
+
+  // Split at end of last attachment
+  const afterAttachmentTag = lastAttachmentEnd + '</attachment>'.length;
+  const attachmentSection = expandedPrompt.substring(0, afterAttachmentTag);
+  const userPromptSection = expandedPrompt.substring(afterAttachmentTag);
+
+  // Insert agent instructions between attachments and user prompt
+  return `${attachmentSection}\n\n<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${userPromptSection.trim()}`;
 }
 ```
 
-**Key Decision**: Agent expansion happens BEFORE context expansion because:
+**Key Decision**: Expansion order matters!
 
-- Agent instructions should wrap the entire prompt
-- Context attachments are part of the user's request
-- Natural reading order: Agent role → User request with attachments
+1. **Context expansion FIRST**: Generates all `<attachment>` blocks
+2. **Agent insertion SECOND**: Positions `<agentInstructions>` after attachments
+3. **User prompt LAST**: Remains at the end for maximum weight
+
+**Final structure**:
+```
+<attachment>file1 content</attachment>
+<attachment>file2 content</attachment>
+
+<agentInstructions>
+agent definition
+</agentInstructions>
+
+User's original prompt text
+```
 
 #### 3. Remove `--agent` Flags from All Providers
 
@@ -417,63 +430,76 @@ You are an AI workflow architect...
 
 ## Prompt Template Design
 
-### Key Questions
+### Final Template Structure
 
-1. **Where to position agent instructions?**
-   - Before the user's prompt (recommended)
-   - After the user's prompt (less intuitive)
-
-2. **How to frame the instructions?**
-   - Explicit instruction to "be" the agent
-   - Implicit inclusion (just prepend content)
-
-3. **Should we reference a "temp file"?**
-   - No, just inline the content directly
-   - Avoids file system overhead and complexity
-
-### Proposed Template (Option B - Direct Instruction)
+Following GitHub Copilot's pattern with `<modeInstructions>`, we use this structure:
 
 ```
-You are now using the custom agent definition below. Follow its instructions carefully.
+[All <attachment> blocks from ContextExpander]
 
----BEGIN AGENT DEFINITION---
+<agentInstructions>
 [full agent file content, including frontmatter]
----END AGENT DEFINITION---
+</agentInstructions>
 
-Now execute this task:
-[user's original prompt with expanded context attachments]
+[user's original prompt]
 ```
 
-**Benefits**:
+### Key Design Decisions
 
-- Clear separation of agent vs user instructions
-- Explicit instruction to follow agent definition
-- No ambiguity about what to do
-- Mirrors how providers likely handle agents internally
+1. **XML wrapper**: Use `<agentInstructions>` tag (semantically specific, LLM-friendly)
+2. **Positioning**: After attachments, before user prompt
+   - Attachments first (provide context/files)
+   - Agent instructions second (define role/behavior)
+   - User prompt last (maximum weight)
+3. **Raw content**: Include entire agent file as-is (frontmatter + body)
+   - No parsing needed for MVP
+   - LLMs understand YAML frontmatter and markdown
+4. **No temp files**: Inline content directly
+   - Simpler implementation
+   - Better debuggability
+   - No file system overhead
 
-### Alternative Template (Option C - System Prompt Style)
+### Example Final Prompt
 
 ```
-ROLE:
-You are acting as the following custom agent:
+<attachment id="file:src/extension.ts">
+File: src/extension.ts
+```typescript
+export function activate(context: vscode.ExtensionContext) {
+  // Extension code...
+}
+```
+</attachment>
 
-[agent content]
+<agentInstructions>
+---
+name: flightpath-orchestrator
+description: Creates structured FlightPath workflow files
+tools: ["search", "fetch", "githubRepo"]
+model: Claude Sonnet 4.5
+---
 
-TASK:
-[user's prompt]
+# FlightPath Orchestrator
+
+You are an AI workflow architect specialized in creating FlightPath workflows...
+
+## Your Purpose
+
+1. **Understand** the user's feature request
+2. **Analyze** the codebase structure
+3. **Create** a structured .flightpath.yaml workflow
+</agentInstructions>
+
+Help me create a workflow to add authentication to this extension.
 ```
 
-**Benefits**:
+### Benefits
 
-- More concise
-- Natural LLM framing (role → task)
-
-**Drawbacks**:
-
-- Requires parsing frontmatter to extract role description
-- More work for MVP
-
-**Recommendation**: Use **Option B** for MVP, consider **Option C** for v2 if needed.
+- **Consistency**: Matches Copilot's `<modeInstructions>` pattern
+- **Clarity**: Clear semantic separation of content types
+- **Weight**: User prompt positioned last for maximum LLM attention
+- **Simplicity**: No complex parsing, string manipulation, or temp files
+- **Debuggability**: Easy to inspect final prompt structure
 
 ---
 
@@ -492,13 +518,15 @@ TASK:
 - [ ] Create `AgentExpander.ts` with `expandAgent()` method
   - [ ] Use AgentDiscovery to find agent file
   - [ ] Read file content with fs.promises.readFile()
-  - [ ] Format with "BEGIN/END AGENT DEFINITION" wrapper
+  - [ ] Return raw agent content (no wrapper - parent handles XML)
   - [ ] Handle missing agents gracefully (return null + log warning)
   - [ ] Add unit tests
 - [ ] Modify `CopilotIntegration.buildPromptText()`
   - [ ] Add optional `resolvedProperties` parameter
-  - [ ] Call `AgentExpander.expandAgent()` before context expansion
-  - [ ] Prepend agent content if found
+  - [ ] Call context expansion FIRST (generates attachments)
+  - [ ] Call `AgentExpander.expandAgent()` SECOND
+  - [ ] Add `insertAgentInstructions()` helper to position agent after attachments
+  - [ ] Wrap agent content in `<agentInstructions>` tags
   - [ ] Log agent usage with emoji 🤖
 - [ ] Modify `CliIntegration` to pass `resolvedProperties` to `buildPromptText()`
 - [ ] Test with Copilot CLI (should work immediately)
@@ -629,11 +657,13 @@ TASK:
 
 **Issue**: Does agent content come before or after context attachments?
 
-**Solution**: Agent BEFORE context is correct because:
+**Solution**: Agent AFTER attachments, BEFORE user prompt is correct because:
 
-- Agent defines the role
-- Context is part of the user's request
-- Natural reading order: Role → Task
+- Context attachments provide files/data the agent may need to reference
+- Agent instructions define the role and how to use that context
+- User prompt gets maximum weight by being positioned last
+- Natural reading order: Context → Role → Task
+- Matches GitHub Copilot's pattern (`<modeInstructions>` comes after attachments)
 
 ### Challenge 4: Provider Model Override
 
@@ -719,10 +749,10 @@ TASK:
 ## Open Questions
 
 1. **Should we parse agent frontmatter or include raw?**
-   - Recommendation: Include raw for MVP, parse in Phase 2
+   - ✅ **DECIDED**: Include raw for MVP, parse in Phase 2 if needed
 
 2. **What's the exact prompt template format?**
-   - Recommendation: "BEGIN/END AGENT DEFINITION" wrapper (Option B)
+   - ✅ **DECIDED**: `<agentInstructions>` XML wrapper, positioned after attachments, before user prompt
 
 3. **Should agent model override user-selected model?**
    - Recommendation: No, user selection takes precedence
