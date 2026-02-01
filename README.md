@@ -1,42 +1,77 @@
 # FlightPath 🚀
 
-**Automate GitHub Copilot with structured prompt workflows**
+**Universal AI CLI Automation Platform for VS Code**
 
-FlightPath is a VS Code extension that enables developers to create automated, sequential workflows using GitHub Copilot through YAML/JSON-based prompt files with programmable end conditions.
+FlightPath is a VS Code extension that transforms AI assistants into automated agents through structured YAML/JSON workflows. Execute multi-step AI workflows with validation, session management, and dynamic task planning across multiple AI providers. Built the prompt queue yourself or have AI build it for you.
+
+## 🤖 Multi-Provider AI Support
+
+**One workflow format, multiple AI providers** - FlightPath works seamlessly with:
+
+| Provider               | Model Options                         | Execution Mode           |
+| ---------------------- | ------------------------------------- | ------------------------ |
+| **GitHub Copilot CLI** | Claude Sonnet 4.5/4, Haiku 4.5, GPT-5 | CLI (Default)            |
+| **Claude Code CLI**    | Sonnet, Sonnet[1m], Opus, Haiku       | CLI                      |
+| **Codex CLI**          | GPT-5.2, GPT-5.1 Codex variants       | CLI                      |
+| **Copilot Chat**       | All Copilot models (22+)              | UI Automation (Fallback) |
+
+**Zero core changes architecture**: Adding new providers requires NO modifications to FlightPath's core - each provider is completely isolated with its own response parser, completion detection, and tool permission mapping.
 
 ## 🎯 Zero-Interaction Automation
 
-**Press "Take Off" and walk away** - FlightPath features proven, zero-interaction Copilot Chat automation:
+**Press "Take Off" and walk away** - FlightPath features proven, zero-interaction automation across all providers:
 
-- ✅ **Automatic Prompt Execution**: Prompts are typed and submitted automatically
-- ✅ **Response Detection**: Language Model Tool API detects when Copilot finishes responding
-- ✅ **Native Copilot Syntax**: Full support for `@workspace`, `#file`, slash commands
-- ✅ **Real-Time Progress**: Watch workflows execute with live status updates
+- ✅ **Automatic Execution**: Prompts sent and processed without user interaction
+- ✅ **Smart Completion Detection**: Provider-specific detection (logs, hooks, events)
+- ✅ **Context Awareness**: Full support for `@workspace`, `#file`, slash commands
+- ✅ **Real-Time Progress**: Live status updates and CLI output streaming
+- ✅ **Session Continuity**: Resume conversations across prompts and restarts
 
-📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[Full Documentation](./docs/COPILOT_INTEGRATION.md)** | ✨ **[XML Prompting Guidelines](./docs/XML_PROMPTING_GUIDELINES.md)**
+📚 **[Quick Start Guide](./QUICK_START.md)** | 📖 **[CLI Integration Docs](./docs/COPILOT_CLI_DESIGN.md)** | ✨ **[XML Prompting Guidelines](./docs/XML_PROMPTING_GUIDELINES.md)**
 
 ## ✨ Features
 
-### Core Functionality
+### Multi-Provider Architecture
 
-- **🤖 Zero-Interaction Automation**: True "set-and-forget" Copilot Chat integration
-- **📝 Structured Prompt Sequences**: Define multi-step workflows using YAML/JSON files
-- **🎯 Final-Form Prompts**: Store prompts with context variables (@workspace, #file, slash commands) ready to send
-- **➕ Queue Append & Dynamic Extension**: Add prompts to running workflows manually (context menu) or autonomously (MCP-based AI extension) - preserves dashboard history ([docs](./docs/QUEUE_APPEND_FEATURE.md))
+- **🔌 Provider Flexibility**: Switch between Copilot CLI, Claude CLI, Codex CLI, or Copilot Chat
+- **🏗️ Composition-Based Design**: Single generic integration class works with all providers via interface
+- **📦 Zero Core Changes**: Add new AI providers without modifying FlightPath's core code
+- **🔄 Automatic Tool Mapping**: Unified permission system auto-converts to provider-specific formats
+- **📊 Provider-Specific Features**: Hook-based detection (Claude), JSONL events (Codex), log parsing (Copilot)
+
+### Core Workflow Automation
+
+- **🤖 Zero-Interaction Execution**: True "set-and-forget" automation across all providers
+- **📝 Structured Workflows**: Define multi-step sequences using YAML/JSON/Markdown files
+- **🎯 Final-Form Prompts**: Prompts stored with context variables (@workspace, #file, slash commands) ready to send
+- **➕ Dynamic Queue Extension**: AI agents can autonomously extend workflows via MCP tools ([docs](./docs/QUEUE_APPEND_FEATURE.md))
 - **✨ Intelligent Autocomplete**: File and selection completions for prompt files ([docs](./docs/ENHANCED_PROMPT_EDITING.md))
-- **⏯️ Queue Management**: Pause, resume, and monitor execution progress
-- **📊 WebView Dashboard**: Real-time visual tracking of workflow execution with live CLI output ([docs](./docs/DASHBOARD_TESTING.md))
-- **📊 Status Bar Integration**: Real-time workflow status and progress tracking
+- **⏯️ Execution Control**: Pause, resume, stop workflows with full state preservation
+- **📊 WebView Dashboard**: Real-time visual tracking with live CLI output streaming ([docs](./docs/DASHBOARD_TESTING.md))
+- **📊 Status Bar Integration**: Live workflow status and progress tracking
 
-### Copilot Chat Automation
+### Execution Modes & Integration
 
-- **Direct Text Insertion**: Zero interaction - validated and proven approach
-- **Response Detection**: Language Model Tool API detects completion automatically
-- **Submit Verification**: Clipboard-based verification ensures prompts are sent
-- **Streaming Detection**: Monitors chat stability before proceeding to next prompt
-- **XML-Structured Prompts**: Uses XML tags for clarity and better AI comprehension (see [XML Guidelines](./docs/XML_PROMPTING_GUIDELINES.md))
+**CLI Mode** (Recommended - Default for all CLI providers):
+
+- **Interactive Terminal**: Live output with TUI, Ctrl+C abort capability
+- **Headless Background**: Silent execution for complete automation
+- **Log-Based Detection**: Parses provider logs for session IDs and completion
+- **Hook-Based Detection**: Native completion signals (Claude stop hook, Codex notify)
+- **Event Streaming**: Structured JSONL/JSON events for real-time updates
+
+**Chat Mode** (Copilot Chat UI - Fallback):
+
+- **Direct Text Insertion**: Zero-interaction automation - validated approach
+- **Language Model Tool API**: Detects completion automatically
+- **Streaming Detection**: Monitors chat stability before proceeding
+- **Submit Verification**: Clipboard-based verification ensures prompts sent
+
+**Universal Features** (All Modes):
+
+- **XML-Structured Instructions**: Clear separation of user prompts and automation directives ([XML Guidelines](./docs/XML_PROMPTING_GUIDELINES.md))
 - **Smart Context Formatting**: Automatic `@workspace`, `#file:path`, slash commands
-- **Background Polling**: Detects Copilot availability on startup (5s intervals, 30s max)
+- **Availability Detection**: Background polling for provider readiness
 
 ### File Format Support
 
@@ -115,14 +150,42 @@ prompts:
 
 ## 📋 Requirements
 
+### Core Requirements
+
 - **VS Code**: Version 1.85.0 or higher
-- **Node.js**: Version 18+ (for end condition scripts)
-- **GitHub Copilot**: Recommended but not required (manual fallback available)
+- **Node.js**: Version 18+ (for end condition scripts and MCP server)
+
+### AI Provider Requirements (Choose One or More)
+
+**GitHub Copilot CLI** (Recommended):
+
+- Install: `npm install -g @github/copilot-cli`
+- Requires: GitHub Copilot subscription
+- Models: Claude Sonnet 4.5/4, Haiku 4.5, GPT-5
+
+**Claude Code CLI**:
+
+- Install: Follow [Claude Code installation guide](https://github.com/anthropics/claude-code)
+- Requires: Anthropic API key
+- Models: Sonnet, Sonnet[1m] (extended context), Opus, Haiku
+
+**Codex CLI**:
+
+- Install: Follow [Codex CLI installation guide](https://github.com/openai/codex-cli)
+- Requires: OpenAI API key
+- Models: GPT-5.2, GPT-5.1 Codex variants
+
+**Copilot Chat** (Fallback):
+
+- Install: GitHub Copilot extension in VS Code
+- Requires: GitHub Copilot subscription
+- Models: 22+ Copilot models
 
 ### Optional Dependencies
 
 - **Python**: For Python-based end condition scripts
 - **Git**: For workspace context and file operations
+- **MCP Server**: Auto-started when dynamic queue enabled
 
 ## 🚀 Getting Started
 
@@ -275,41 +338,65 @@ Alternatively, edit your `settings.json`:
 
 ## 🎯 How Automation Works
 
-FlightPath uses a proven single-strategy approach for reliable automation:
+FlightPath uses **provider-specific strategies** optimized for each AI platform:
 
-### Direct Text Insertion with Verification
+### CLI Mode (Copilot, Claude, Codex)
 
-- **Status**: Proven and validated through extensive testing
-- **Experience**: Zero interaction required
-- **Process**:
-  1. **Background Polling**: Detects Copilot availability on startup
-  2. **Focus Chat**: Opens Copilot Chat in configured location (panel/tab/window)
-  3. **Clear Input**: Selects and clears any existing text
-  4. **Type Prompt**: Types formatted prompt with context (@workspace, #file, etc.)
-  5. **Submit & Verify**: Submits and verifies prompt appears in chat (with retry)
-  6. **Wait for Tool**: Language Model Tool signals when Copilot finishes
-  7. **Streaming Check**: Monitors chat stability before next prompt (3 consecutive stable checks)
+**Recommended approach** - Most reliable, fully deterministic:
+
+1. **Provider Detection**: Checks CLI availability (`copilot`/`claude`/`codex` command)
+2. **Session Resolution**: Determines new vs. resumed session per-prompt
+3. **Tool Permissions**: Applies allow/deny patterns with provider-specific conversion
+4. **Execution Launch**:
+   - **Interactive**: Opens VS Code terminal with TUI (live output, Ctrl+C abort)
+   - **Headless**: Silent background process (for complete automation)
+5. **Prompt Delivery**:
+   - Simple prompts (≤300 chars): Direct via command args
+   - Complex prompts: Temporary file with `--prompt-file` flag
+6. **Completion Detection**:
+   - **Copilot**: Log file parsing for session IDs and completion markers
+   - **Claude**: Stop hook callback (`--stop-hook`) for native completion signal
+   - **Codex**: JSONL events + notify hook for structured turn completion
+7. **Response Parsing**: Provider-specific parsers extract structured events (thinking, tokens, tool calls)
+8. **Next Prompt**: Continues with resolved session ID for continuity
+
+### Chat Mode (Copilot Chat UI - Fallback)
+
+**When CLI unavailable** - Proven through extensive testing:
+
+1. **Background Polling**: Detects Copilot Chat availability on startup
+2. **Focus Chat**: Opens Copilot Chat in configured location (panel/tab/window)
+3. **Clear Input**: Selects and clears any existing text
+4. **Type Prompt**: Types formatted prompt with context (@workspace, #file, etc.)
+5. **Submit & Verify**: Submits and verifies prompt appears in chat (with retry)
+6. **Language Model Tool API**: Detects when Copilot finishes responding
+7. **Log Monitoring**: Two-tier log discovery (context.logUri + fallback search)
+8. **Streaming Check**: Monitors chat stability before next prompt (3 consecutive stable checks)
+
+### Provider Auto-Selection
+
+FlightPath automatically falls back through providers:
+
+```
+Preferred Provider (setting: flightpath.provider)
+    ↓ (if unavailable)
+Copilot Chat (if GitHub Copilot extension active)
+    ↓ (if unavailable)
+Error: No AI provider available
+```
 
 ### What If It Fails?
 
-If Copilot Chat isn't available or automation fails, FlightPath shows a clear error message with:
+FlightPath provides clear error messages with:
 
-- **Requirements**: What's needed for automation to work
+- **Provider Requirements**: What's needed for each mode
 - **Troubleshooting Steps**: How to resolve common issues
 - **Manual Retry**: Option to restart detection
+- **Alternative Providers**: Suggestions for fallback options
 
 No silent fallbacks - you always know the system state!
 
-## 🐛 Known Issues
-
-- End condition scripts run in separate processes (security feature)
-- Windows PowerShell execution policy may require configuration
-- Large workspace file inclusion may impact performance
-- Automation requires active GitHub Copilot Chat extension
-
-## 🛠️ Current Features
-
-### ✅ Implemented
+### Feature
 
 - **CLI Mode** (Default): Deterministic Copilot automation via CLI with model selection
 - **Chat Mode**: UI-based automation with Language Model Tool API response detection
@@ -327,14 +414,6 @@ No silent fallbacks - you always know the system state!
 - Command registration and lifecycle management
 - 215+ automated tests
 
-### 🔮 Planned Features
-
-- Custom tool permissions for CLI mode
-- Workflow templates and snippets
-- Integration with VS Code notebooks
-
 ---
-
-**Ready for takeoff? 🚀 Try the Command Palette: `FlightPath: Take Off`**
 
 **Enjoy!**
