@@ -4,6 +4,8 @@
  * Claude CLI, Codex CLI, and any future CLI integrations.
  */
 
+import type { FileOperationStatus } from "./DashboardConstants";
+
 /**
  * CLI event type constants.
  * Use these constants instead of string literals to avoid typos and ensure consistency.
@@ -179,7 +181,7 @@ export interface BashCommandData {
   /** Error output (stderr) */
   error?: string;
   /** Execution status */
-  status?: "in_progress" | "completed" | "failed";
+  status?: FileOperationStatus;
 }
 
 /**
@@ -190,6 +192,8 @@ export interface FileReadData {
   path: string;
   /** File content (if available) */
   content?: string;
+  /** Read lifecycle stage */
+  status?: FileOperationStatus;
   /** Success status */
   success?: boolean;
   /** Error message (if failed) */
@@ -204,6 +208,8 @@ export interface FileWriteData {
   path: string;
   /** Content written */
   content: string;
+  /** Write lifecycle stage */
+  status?: FileOperationStatus;
   /** Success status */
   success?: boolean;
   /** Error message (if failed) */
@@ -238,6 +244,8 @@ export interface FileEditData {
   oldContent?: string;
   /** New content (after edit) */
   newContent?: string;
+  /** Edit lifecycle stage */
+  status?: FileOperationStatus;
   /** For multi-file or patch-based edits */
   changes?: Array<{
     path: string;

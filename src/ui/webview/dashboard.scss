@@ -1239,23 +1239,19 @@ button:disabled {
   }
 }
 
-/* Status badge for command execution */
+/* Status text for command execution (no badge background) */
 .status-badge {
-  display: inline-block;
-  padding: 2px 6px;
+  display: inline;
   margin-left: 8px;
-  font-size: 10px;
-  border-radius: 3px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 400;
 
   &.success {
-    background: var(--vscode-testing-iconPassed, rgba(155, 185, 85, 0.2));
-    color: var(--vscode-testing-iconPassed, #9bb955);
+    color: var(--vscode-testing-iconPassed, #73c991);
   }
 
   &.error {
-    background: var(--vscode-testing-iconFailed, rgba(244, 71, 71, 0.2));
-    color: var(--vscode-testing-iconFailed, #f44747);
+    color: var(--vscode-errorForeground, #f48771);
   }
 }
 

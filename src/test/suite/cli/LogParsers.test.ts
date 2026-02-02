@@ -1093,7 +1093,7 @@ suite("CodexLogParser", () => {
       );
       assert.strictEqual(bashEvents.length, 1);
       assert.strictEqual((bashEvents[0].data as any).command, "");
-      assert.strictEqual((bashEvents[0].data as any).status, "in_progress");
+      assert.strictEqual((bashEvents[0].data as any).status, "initiated");
       assert.strictEqual((bashEvents[0].data as any).workingDir, undefined);
     });
 

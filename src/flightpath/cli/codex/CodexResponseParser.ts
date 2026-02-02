@@ -7,6 +7,7 @@ import {
   CliEvent,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 // ============================================================
@@ -177,6 +178,11 @@ export class CodexResponseParser
         usage = this.extractUsageStats(json);
       }
 
+      // Process item.started events - INITIATED events for bash commands
+      if (json.type === "item.started" && json.item) {
+        this.parseItemStartedToEvents(json.item, events);
+      }
+
       // Process item.completed events - extract all item types
       if (json.type === "item.completed" && json.item) {
         this.parseItemToEvents(json.item, events);
@@ -209,6 +215,32 @@ export class CodexResponseParser
         provider: "codex-cli",
       },
     };
+  }
+
+  /**
+   * Parse item.started event into CLI events
+   *
+   * Creates INITIATED events for bash commands:
+   * - command_execution: Shell command beginning → BASH_COMMAND with INITIATED status
+   *
+   * @param item Item data from item.started event
+   * @param events Events array to push to
+   */
+  private parseItemStartedToEvents(
+    item: NonNullable<CodexCliJsonEvent["item"]>,
+    events: CliEvent[]
+  ): void {
+    // Command execution started → BASH_COMMAND with INITIATED status
+    if (item.type === "command_execution" && item.command) {
+      events.push({
+        type: CLI_EVENT_TYPES.BASH_COMMAND,
+        timestamp: Date.now(),
+        data: {
+          command: item.command,
+          status: OPERATION_STATUS.INITIATED,
+        },
+      });
+    }
   }
 
   /**
@@ -254,18 +286,26 @@ export class CodexResponseParser
 
     // Command execution (shell command) → BASH_COMMAND event
     if (item.type === "command_execution") {
+      // Strip ANSI escape codes from output for clean display
+      const cleanOutput = item.aggregated_output
+        ? this.stripAnsiCodes(item.aggregated_output)
+        : "";
+
       events.push({
         type: CLI_EVENT_TYPES.BASH_COMMAND,
         timestamp: Date.now(),
         data: {
           command: item.command || "unknown",
           exitCode: item.exit_code ?? undefined,
-          output: item.aggregated_output || "",
-          status: item.status as
-            | "in_progress"
-            | "completed"
-            | "failed"
-            | undefined,
+          output: cleanOutput,
+          status:
+            item.status === "in_progress"
+              ? OPERATION_STATUS.INITIATED
+              : item.status === "completed"
+                ? OPERATION_STATUS.COMPLETED
+                : item.status === "failed"
+                  ? OPERATION_STATUS.FAILED
+                  : undefined,
         },
       });
     }
@@ -399,12 +439,13 @@ export class CodexResponseParser
             const delta = newOutput.substring(prevOutput.length);
             streamState.set(outputKey, newOutput);
 
-            // Emit delta as text for real-time display
+            // Emit delta as text for real-time display (strip ANSI codes)
             if (delta) {
+              const cleanDelta = this.stripAnsiCodes(delta);
               events.push({
                 type: CLI_EVENT_TYPES.TEXT,
                 timestamp: Date.now(),
-                data: { text: delta },
+                data: { text: cleanDelta },
               });
             }
           }
@@ -440,18 +481,14 @@ export class CodexResponseParser
           });
         }
 
-        // Command started - show command being executed
+        // Command started - BASH_COMMAND with INITIATED status
         if (json.item.type === "command_execution" && json.item.command) {
           events.push({
-            type: CLI_EVENT_TYPES.TOOL_CALL,
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
             timestamp: Date.now(),
             data: {
-              name: "Command",
-              parameters: {
-                command: json.item.command,
-                status: json.item.status || "in_progress",
-              },
-              id: json.item.id,
+              command: json.item.command,
+              status: OPERATION_STATUS.INITIATED,
             },
           });
         }

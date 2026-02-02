@@ -148,6 +148,15 @@ export const STATUS_MESSAGE_SEVERITY = {
 } as const;
 
 // ============================================================================
+// FILE OPERATION STATUS - Status values for file operations (Edit, Write, Read)
+// ============================================================================
+export const OPERATION_STATUS = {
+  INITIATED: "initiated",
+  COMPLETED: "completed",
+  FAILED: "failed",
+} as const;
+
+// ============================================================================
 // PROVIDER IDS - Copilot integration modes
 // ============================================================================
 export const PROVIDER_IDS = {
@@ -272,3 +281,5 @@ export type StatusMessageSeverity =
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];
 export type QueuePosition =
   (typeof QUEUE_POSITION)[keyof typeof QUEUE_POSITION];
+export type FileOperationStatus =
+  (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];

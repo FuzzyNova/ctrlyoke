@@ -25,6 +25,7 @@ import {
   WebSearchData,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 
 /**
  * Claude CLI Log Parser
@@ -175,14 +176,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
 
             // Map Claude-specific tool names to semantic event types
             if (toolName === "bash" || toolName === "shell") {
-              // Bash command execution
+              // Bash command execution (INITIATED event)
               outputEvents.push({
                 type: CLI_EVENT_TYPES.BASH_COMMAND,
                 timestamp,
                 data: {
                   command: input.command || "unknown",
                   workingDir: input.working_dir || input.cwd,
-                  status: "in_progress",
+                  status: OPERATION_STATUS.INITIATED,
                 } as BashCommandData,
               });
             } else if (toolName === "write") {
@@ -193,6 +194,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 data: {
                   path: input.path || "unknown",
                   content: input.content || "",
+                  status: OPERATION_STATUS.INITIATED,
                 } as FileWriteData,
               });
             } else if (toolName === "edit" || toolName === "apply_patch") {
@@ -204,6 +206,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                   path: input.path || "unknown",
                   oldContent: input.old_content || input.old_str,
                   newContent: input.new_content || input.new_str,
+                  status: OPERATION_STATUS.INITIATED,
                 } as FileEditData,
               });
             } else if (toolName === "read" || toolName === "read_file") {
@@ -213,6 +216,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 timestamp,
                 data: {
                   path: input.path || "unknown",
+                  status: OPERATION_STATUS.INITIATED,
                 } as FileReadData,
               });
             } else if (toolName === "delete" || toolName === "delete_file") {
@@ -224,7 +228,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                   path: input.path || "unknown",
                 } as FileDeleteData,
               });
-            } else if (toolName.includes("search") || toolName === "web_search") {
+            } else if (
+              toolName.includes("search") ||
+              toolName === "web_search"
+            ) {
               // Web search
               outputEvents.push({
                 type: CLI_EVENT_TYPES.WEB_SEARCH,
@@ -323,21 +330,20 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 originalFile: toolUseResult.originalFile,
                 userModified: toolUseResult.userModified,
                 replaceAll: toolUseResult.replaceAll,
+                status: OPERATION_STATUS.COMPLETED,
                 success: true,
               } as FileEditData,
             });
           }
           // File write result (Write tool)
-          else if (
-            toolUseResult.type === "create" ||
-            toolUseResult.content
-          ) {
+          else if (toolUseResult.type === "create" || toolUseResult.content) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.FILE_WRITE,
               timestamp,
               data: {
                 path: toolUseResult.filePath || toolUseResult.path || "unknown",
                 content: toolUseResult.content || "",
+                status: OPERATION_STATUS.COMPLETED,
                 success: true,
               } as FileWriteData,
             });
@@ -350,8 +356,29 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
               data: {
                 path: toolUseResult.file.filePath || "unknown",
                 content: toolUseResult.file.content || "",
+                status: OPERATION_STATUS.COMPLETED,
                 success: true,
               } as FileReadData,
+            });
+          }
+          // Bash command result
+          else if (toolUseResult.command || toolUseResult.type === "bash") {
+            const exitCode =
+              toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              timestamp,
+              data: {
+                command: toolUseResult.command || "unknown",
+                workingDir: toolUseResult.workingDir || toolUseResult.cwd,
+                exitCode,
+                output: toolUseResult.output || toolUseResult.stdout,
+                error: toolUseResult.error || toolUseResult.stderr,
+                status:
+                  exitCode === 0
+                    ? OPERATION_STATUS.COMPLETED
+                    : OPERATION_STATUS.FAILED,
+              } as BashCommandData,
             });
           }
         }

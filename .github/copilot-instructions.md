@@ -809,9 +809,3 @@ See **`webview.instructions.md` - propertyFlow section** for comprehensive check
 - **Schema**: prompt-schema.json (JSON schema validation)
 - **Constants**: DashboardConstants.ts (MESSAGE_TYPES for communication)
 - **Models**: ModelConstants.ts (if property relates to model selection)
-
-**See related docs:**
-
-- [WORKFLOW_PROPERTIES.md](docs/WORKFLOW_PROPERTIES.md) - User guide for workflow-level properties
-- [SESSION_MANAGEMENT.md](docs/SESSION_MANAGEMENT.md) - Example: session ID properties
-- [WebView Instructions - propertyFlow](../.github/instructions/webview.instructions.md) - Detailed checklist

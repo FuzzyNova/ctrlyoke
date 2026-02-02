@@ -21,6 +21,7 @@ import {
   UnifiedDiffHunk,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -385,24 +386,97 @@ export class CopilotLogParser extends BaseLogParser {
         outputEvents.push(toolEvent);
       }
 
-      // Emit FILE_EDIT with diff data from tool.execution_complete
+      // Emit COMPLETED events for bash commands and file operations from tool.execution_complete
       if (event.type === "tool.execution_complete" && event.data) {
         const pendingTool = pendingTools.get(event.data.toolCallId);
+        const success = event.data.success;
+        const result = event.data.result?.content || "";
 
-        // Check if this is an edit operation with diff data
-        if (pendingTool && event.data.result?.detailedContent) {
+        if (pendingTool) {
           const lowerName = pendingTool.toolName.toLowerCase();
-          const isEditTool =
+
+          // BASH COMMAND - Emit COMPLETED event with output/error
+          if (
+            lowerName === "powershell" ||
+            lowerName === "bash" ||
+            lowerName === "shell"
+          ) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              timestamp,
+              data: {
+                command:
+                  (pendingTool.args.command as string) ||
+                  (pendingTool.args.script as string) ||
+                  "",
+                workingDir: pendingTool.args.cwd as string | undefined,
+                exitCode: success ? 0 : 1,
+                output: success ? result : undefined,
+                error: success ? undefined : result,
+                status: success
+                  ? OPERATION_STATUS.COMPLETED
+                  : OPERATION_STATUS.FAILED,
+              } as BashCommandData,
+            });
+            pendingTools.delete(event.data.toolCallId);
+          }
+          // FILE_READ - Emit COMPLETED event with content
+          else if (
+            lowerName === "view" ||
+            lowerName === "read" ||
+            lowerName === "read_file"
+          ) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_READ,
+              timestamp,
+              data: {
+                path:
+                  (pendingTool.args.path as string) ||
+                  (pendingTool.args.file_path as string) ||
+                  "",
+                content: success ? result : undefined,
+                status: success
+                  ? OPERATION_STATUS.COMPLETED
+                  : OPERATION_STATUS.FAILED,
+                success,
+              } as FileReadData,
+            });
+            pendingTools.delete(event.data.toolCallId);
+          }
+          // FILE_WRITE - Emit COMPLETED event
+          else if (
+            lowerName === "write" ||
+            lowerName === "create_file" ||
+            lowerName === "write_file"
+          ) {
+            outputEvents.push({
+              type: CLI_EVENT_TYPES.FILE_WRITE,
+              timestamp,
+              data: {
+                path:
+                  (pendingTool.args.path as string) ||
+                  (pendingTool.args.file_path as string) ||
+                  "",
+                content: (pendingTool.args.content as string) || "",
+                status: success
+                  ? OPERATION_STATUS.COMPLETED
+                  : OPERATION_STATUS.FAILED,
+                success,
+              } as FileWriteData,
+            });
+            pendingTools.delete(event.data.toolCallId);
+          }
+          // FILE_EDIT - Emit COMPLETED event with diff data
+          else if (
             lowerName === "edit" ||
             lowerName === "modify_file" ||
             lowerName === "replace_string_in_file" ||
-            lowerName === "multiedit";
-
-          if (isEditTool) {
+            lowerName === "multiedit"
+          ) {
             // Parse unified diff to get structured patch with line numbers
-            const structuredPatch = this.parseUnifiedDiff(
-              event.data.result.detailedContent
-            );
+            const structuredPatch = event.data.result?.detailedContent
+              ? this.parseUnifiedDiff(event.data.result.detailedContent)
+              : undefined;
 
             // Debug: Log parsing results
             Log.debug(
@@ -412,7 +486,7 @@ export class CopilotLogParser extends BaseLogParser {
                 : "undefined (parsing failed)"
             );
 
-            // Emit second FILE_EDIT event with full data (oldContent/newContent + structuredPatch)
+            // Emit FILE_EDIT COMPLETED event with full data (oldContent/newContent + structuredPatch)
             outputEvents.push({
               type: CLI_EVENT_TYPES.FILE_EDIT,
               timestamp,
@@ -422,17 +496,17 @@ export class CopilotLogParser extends BaseLogParser {
                   (pendingTool.args.file_path as string) ||
                   "",
                 // Include old/new content as fallback if structuredPatch fails to parse
-                oldContent:
-                  (pendingTool.args.old_str ||
-                    pendingTool.args.old_string) as string | undefined,
-                newContent:
-                  (pendingTool.args.new_str ||
-                    pendingTool.args.new_string) as string | undefined,
+                oldContent: (pendingTool.args.old_str ||
+                  pendingTool.args.old_string) as string | undefined,
+                newContent: (pendingTool.args.new_str ||
+                  pendingTool.args.new_string) as string | undefined,
                 structuredPatch,
+                status: success
+                  ? OPERATION_STATUS.COMPLETED
+                  : OPERATION_STATUS.FAILED,
+                success,
               } as FileEditData,
             });
-
-            // Clean up
             pendingTools.delete(event.data.toolCallId);
           }
         }
@@ -878,7 +952,7 @@ export class CopilotLogParser extends BaseLogParser {
         data: {
           command: (args.command as string) || (args.script as string) || "",
           workingDir: args.cwd as string | undefined,
-          status: "in_progress",
+          status: OPERATION_STATUS.INITIATED,
         } as BashCommandData,
       };
     }
@@ -894,6 +968,7 @@ export class CopilotLogParser extends BaseLogParser {
         timestamp,
         data: {
           path: (args.path as string) || (args.file_path as string) || "",
+          status: OPERATION_STATUS.INITIATED,
         } as FileReadData,
       };
     }
@@ -910,6 +985,7 @@ export class CopilotLogParser extends BaseLogParser {
         data: {
           path: (args.path as string) || (args.file_path as string) || "",
           content: (args.content as string) || "",
+          status: OPERATION_STATUS.INITIATED,
         } as FileWriteData,
       };
     }
@@ -926,6 +1002,7 @@ export class CopilotLogParser extends BaseLogParser {
         timestamp,
         data: {
           path: (args.path as string) || (args.file_path as string) || "",
+          status: OPERATION_STATUS.INITIATED,
           // Don't include oldContent/newContent here - they'll be added via structuredPatch
           // from tool.execution_complete (prevents client-side diff generation with wrong line numbers)
         } as FileEditData,
@@ -1025,7 +1102,9 @@ export class CopilotLogParser extends BaseLogParser {
 
     for (const line of lines) {
       // Match hunk header: @@ -1,4 +1,4 @@
-      const hunkMatch = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      const hunkMatch = line.match(
+        /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+      );
       if (hunkMatch) {
         // Save previous hunk if exists
         if (currentHunk) {

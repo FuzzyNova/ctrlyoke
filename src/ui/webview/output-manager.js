@@ -15,7 +15,8 @@
  */
 (function () {
   // Import constants and utilities from global scope
-  const { MESSAGE_TYPES, STEP_STATUS } = window.FlightPathConstants;
+  const { MESSAGE_TYPES, STEP_STATUS, OPERATION_STATUS } =
+    window.FlightPathConstants;
   const { getTimestamp, formatTime, escapeHtml } = window.FlightPathUtilities;
 
   // Dependencies
@@ -191,7 +192,8 @@
           html += '<div class="diff-line added">';
           html += '<span class="line-num old"></span>';
           html += '<span class="line-num new">' + newLineNum + "</span>";
-          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html +=
+            '<span class="line-content">' + escapeHtml(content) + "</span>";
           html += "</div>";
           newLineNum++;
         } else if (prefix === "-") {
@@ -199,7 +201,8 @@
           html += '<div class="diff-line removed">';
           html += '<span class="line-num old">' + oldLineNum + "</span>";
           html += '<span class="line-num new"></span>';
-          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html +=
+            '<span class="line-content">' + escapeHtml(content) + "</span>";
           html += "</div>";
           oldLineNum++;
         } else {
@@ -207,7 +210,8 @@
           html += '<div class="diff-line context">';
           html += '<span class="line-num old">' + oldLineNum + "</span>";
           html += '<span class="line-num new">' + newLineNum + "</span>";
-          html += '<span class="line-content">' + escapeHtml(content) + "</span>";
+          html +=
+            '<span class="line-content">' + escapeHtml(content) + "</span>";
           html += "</div>";
           oldLineNum++;
           newLineNum++;
@@ -388,19 +392,39 @@
                   (change.oldContent && change.newContent)
                 ) {
                   html += renderDiffVisualization(change);
+                } else {
+                  // No diff data available from provider
+                  html += '<div class="tool-result-line">';
+                  html += "  ⎿  (Diff not available)";
+                  html += "</div>";
                 }
               }
             }
             // Single file edit (Claude/Copilot format)
             else if (event.data.path) {
               html += '<div class="tool-call-line">';
-              html += "● Edit file: " + escapeHtml(event.data.path);
+
+              // Show different output based on status
+              if (event.data.status === OPERATION_STATUS.INITIATED) {
+                html +=
+                  "● Editing " + escapeHtml(event.data.path) + " (starting...)";
+              } else if (event.data.status === OPERATION_STATUS.FAILED) {
+                html += "● Edit failed: " + escapeHtml(event.data.path);
+                if (event.data.error) {
+                  html += " - " + escapeHtml(event.data.error);
+                }
+              } else {
+                // Completed or legacy (no status)
+                html += "● Edited " + escapeHtml(event.data.path);
+              }
+
               html += "</div>";
 
-              // Render diff if we have structuredPatch OR oldContent/newContent
+              // Only render diff for completed edits (with structuredPatch OR oldContent/newContent)
               if (
-                event.data.structuredPatch ||
-                (event.data.oldContent && event.data.newContent)
+                event.data.status !== OPERATION_STATUS.INITIATED &&
+                (event.data.structuredPatch ||
+                  (event.data.oldContent && event.data.newContent))
               ) {
                 html += renderDiffVisualization(event.data);
               }
@@ -415,10 +439,23 @@
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
             html += '<div class="tool-call-line">';
-            html += "● Write file: " + escapeHtml(event.data.path);
-            if (event.data.content) {
-              html += " (" + event.data.content.length + " bytes)";
+
+            if (event.data.status === OPERATION_STATUS.INITIATED) {
+              html +=
+                "● Writing " + escapeHtml(event.data.path) + " (starting...)";
+            } else if (event.data.status === OPERATION_STATUS.FAILED) {
+              html += "● Write failed: " + escapeHtml(event.data.path);
+              if (event.data.error) {
+                html += " - " + escapeHtml(event.data.error);
+              }
+            } else {
+              // Completed or legacy
+              html += "● Wrote " + escapeHtml(event.data.path);
+              if (event.data.content) {
+                html += " (" + event.data.content.length + " bytes)";
+              }
             }
+
             html += "</div>";
             html += "</div>\n";
           }
@@ -429,7 +466,20 @@
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
             html += '<div class="tool-call-line">';
-            html += "● Read file: " + escapeHtml(event.data.path);
+
+            if (event.data.status === OPERATION_STATUS.INITIATED) {
+              html +=
+                "● Reading " + escapeHtml(event.data.path) + " (starting...)";
+            } else if (event.data.status === OPERATION_STATUS.FAILED) {
+              html += "● Read failed: " + escapeHtml(event.data.path);
+              if (event.data.error) {
+                html += " - " + escapeHtml(event.data.error);
+              }
+            } else {
+              // Completed or legacy
+              html += "● Read " + escapeHtml(event.data.path);
+            }
+
             html += "</div>";
             html += "</div>\n";
           }
@@ -1132,16 +1182,30 @@
                         );
                         diffLines.forEach((line) => lines.push(line));
                         lines.push("```");
+                      } else {
+                        // No diff data available
+                        lines.push("  ⎿  (Diff not available)");
                       }
                       lines.push("");
                     });
                   } else if (event.data.path) {
-                    lines.push(`● Edit file: ${event.data.path}`);
+                    // Show different output based on status
+                    if (event.data.status === OPERATION_STATUS.INITIATED) {
+                      lines.push(`● Editing ${event.data.path} (starting...)`);
+                    } else if (event.data.status === OPERATION_STATUS.FAILED) {
+                      lines.push(`● Edit failed: ${event.data.path}`);
+                      if (event.data.error) {
+                        lines.push(`  Error: ${event.data.error}`);
+                      }
+                    } else {
+                      lines.push(`● Edited ${event.data.path}`);
+                    }
 
-                    // Render diff if we have structuredPatch OR oldContent/newContent
+                    // Only render diff for completed edits
                     if (
-                      event.data.structuredPatch ||
-                      (event.data.oldContent && event.data.newContent)
+                      event.data.status !== OPERATION_STATUS.INITIATED &&
+                      (event.data.structuredPatch ||
+                        (event.data.oldContent && event.data.newContent))
                     ) {
                       lines.push("");
                       lines.push("```diff");
@@ -1160,9 +1224,18 @@
 
               case "fileWrite":
                 if (event.data) {
-                  lines.push(`● Write file: ${event.data.path}`);
-                  if (event.data.content) {
-                    lines.push(` (${event.data.content.length} bytes)`);
+                  if (event.data.status === OPERATION_STATUS.INITIATED) {
+                    lines.push(`● Writing ${event.data.path} (starting...)`);
+                  } else if (event.data.status === OPERATION_STATUS.FAILED) {
+                    lines.push(`● Write failed: ${event.data.path}`);
+                    if (event.data.error) {
+                      lines.push(`  Error: ${event.data.error}`);
+                    }
+                  } else {
+                    lines.push(`● Wrote ${event.data.path}`);
+                    if (event.data.content) {
+                      lines.push(` (${event.data.content.length} bytes)`);
+                    }
                   }
                   lines.push("");
                 }
@@ -1170,7 +1243,16 @@
 
               case "fileRead":
                 if (event.data) {
-                  lines.push(`● Read file: ${event.data.path}`);
+                  if (event.data.status === OPERATION_STATUS.INITIATED) {
+                    lines.push(`● Reading ${event.data.path} (starting...)`);
+                  } else if (event.data.status === OPERATION_STATUS.FAILED) {
+                    lines.push(`● Read failed: ${event.data.path}`);
+                    if (event.data.error) {
+                      lines.push(`  Error: ${event.data.error}`);
+                    }
+                  } else {
+                    lines.push(`● Read ${event.data.path}`);
+                  }
                   lines.push("");
                 }
                 break;

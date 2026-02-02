@@ -7,7 +7,9 @@ import {
   CliEvent,
   CLI_EVENT_TYPES,
   TokenUsage,
+  BashCommandData,
 } from "../../../types/CliOutputTypes";
+import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -291,7 +293,7 @@ export class ClaudeResponseParser
     const toolName = toolUse.name;
     const input = toolUse.input || {};
 
-    // Bash/shell command execution
+    // Bash/shell command execution (INITIATED event)
     if (toolName === "bash" || toolName === "shell") {
       events.push({
         type: CLI_EVENT_TYPES.BASH_COMMAND,
@@ -299,14 +301,7 @@ export class ClaudeResponseParser
         data: {
           command: input.command || input.cmd || "unknown",
           workingDir: input.cwd || input.workingDir,
-          exitCode: input.exitCode,
-          output: input.output,
-          error: input.error,
-          status: input.status as
-            | "in_progress"
-            | "completed"
-            | "failed"
-            | undefined,
+          status: OPERATION_STATUS.INITIATED,
         },
       });
       return;
@@ -320,6 +315,7 @@ export class ClaudeResponseParser
         data: {
           path: input.path || input.file_path || "unknown",
           content: input.content || input.file_text || "",
+          status: OPERATION_STATUS.INITIATED,
           success: input.success,
           error: input.error,
         },
@@ -329,8 +325,10 @@ export class ClaudeResponseParser
 
     // File edit (modify existing file)
     if (toolName === "edit" || toolName === "apply_patch") {
-      const oldContent = input.oldString || input.old_string || input.oldContent;
-      const newContent = input.newString || input.new_string || input.newContent;
+      const oldContent =
+        input.oldString || input.old_string || input.oldContent;
+      const newContent =
+        input.newString || input.new_string || input.newContent;
 
       Log.debug(
         `[ClaudeParser] Edit operation - old_string=${oldContent ? "present" : "missing"}, new_string=${newContent ? "present" : "missing"}, input keys=${Object.keys(input).join(", ")}`
@@ -343,6 +341,7 @@ export class ClaudeResponseParser
           path: input.path || input.file_path || "unknown",
           oldContent,
           newContent,
+          status: OPERATION_STATUS.INITIATED,
           success: input.success,
           error: input.error,
         },
@@ -358,6 +357,7 @@ export class ClaudeResponseParser
         data: {
           path: input.path || input.file_path || "unknown",
           content: input.content,
+          status: OPERATION_STATUS.INITIATED,
           success: input.success,
           error: input.error,
         },
@@ -476,6 +476,7 @@ export class ClaudeResponseParser
             originalFile: toolUseResult.originalFile,
             userModified: toolUseResult.userModified,
             replaceAll: toolUseResult.replaceAll,
+            status: OPERATION_STATUS.COMPLETED,
             success: true,
           },
         });
@@ -490,6 +491,7 @@ export class ClaudeResponseParser
           data: {
             path: toolUseResult.filePath || toolUseResult.path || "unknown",
             content: toolUseResult.content || "",
+            status: OPERATION_STATUS.COMPLETED,
             success: true,
           },
         });
@@ -504,8 +506,30 @@ export class ClaudeResponseParser
           data: {
             path: toolUseResult.file.filePath || "unknown",
             content: toolUseResult.file.content || "",
+            status: OPERATION_STATUS.COMPLETED,
             success: true,
           },
+        });
+        return;
+      }
+      // Bash command result (COMPLETED event)
+      if (toolUseResult.command || toolUseResult.type === "bash") {
+        const exitCode =
+          toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
+        events.push({
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: Date.now(),
+          data: {
+            command: toolUseResult.command || "unknown",
+            workingDir: toolUseResult.workingDir || toolUseResult.cwd,
+            exitCode,
+            output: toolUseResult.output || toolUseResult.stdout,
+            error: toolUseResult.error || toolUseResult.stderr,
+            status:
+              exitCode === 0
+                ? OPERATION_STATUS.COMPLETED
+                : OPERATION_STATUS.FAILED,
+          } as BashCommandData,
         });
         return;
       }

@@ -22,6 +22,7 @@ import {
   TokenUsage,
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
+import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -276,6 +277,15 @@ export class CodexLogParser extends BaseLogParser {
   private sessionMeta: any = null;
 
   /**
+   * Tool call tracking map
+   *
+   * Maps call_id to tool metadata for correlating INITIATED and COMPLETED events.
+   * Key: call_id, Value: { type: CLI_EVENT_TYPES, toolName: string }
+   */
+  private toolCallMap: Map<string, { type: string; toolName: string }> =
+    new Map();
+
+  /**
    * Extract complete response from Codex log events
    *
    * Combines multiple response_item events with nested payloads into a single
@@ -391,6 +401,7 @@ export class CodexLogParser extends BaseLogParser {
             if (item.type === "tool_use") {
               const toolName = item.name?.toLowerCase() || "";
               const params = item.input || {};
+              const callId = item.id;
 
               // Map bash/shell commands
               if (
@@ -398,13 +409,21 @@ export class CodexLogParser extends BaseLogParser {
                 toolName === "shell" ||
                 toolName === "command"
               ) {
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.BASH_COMMAND,
+                    toolName: "bash",
+                  });
+                }
+
                 outputEvents.push({
                   type: CLI_EVENT_TYPES.BASH_COMMAND,
                   timestamp,
                   data: {
                     command: (params as any).command || "",
                     workingDir: (params as any).workingDir,
-                    status: "in_progress",
+                    status: OPERATION_STATUS.INITIATED,
                   } as BashCommandData,
                 });
               }
@@ -414,11 +433,20 @@ export class CodexLogParser extends BaseLogParser {
                 toolName === "read" ||
                 toolName === "cat"
               ) {
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.FILE_READ,
+                    toolName: "read_file",
+                  });
+                }
+
                 outputEvents.push({
                   type: CLI_EVENT_TYPES.FILE_READ,
                   timestamp,
                   data: {
                     path: (params as any).path || (params as any).file || "",
+                    status: OPERATION_STATUS.INITIATED,
                   } as FileReadData,
                 });
               }
@@ -428,12 +456,21 @@ export class CodexLogParser extends BaseLogParser {
                 toolName === "write" ||
                 toolName === "create_file"
               ) {
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.FILE_WRITE,
+                    toolName: "write_file",
+                  });
+                }
+
                 outputEvents.push({
                   type: CLI_EVENT_TYPES.FILE_WRITE,
                   timestamp,
                   data: {
                     path: (params as any).path || (params as any).file || "",
                     content: (params as any).content || "",
+                    status: OPERATION_STATUS.INITIATED,
                   } as FileWriteData,
                 });
               }
@@ -452,6 +489,14 @@ export class CodexLogParser extends BaseLogParser {
                 // Parse patch to extract structured diff
                 const structuredPatch = this.parseApplyPatch(patchInput);
 
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.FILE_EDIT,
+                    toolName: "apply_patch",
+                  });
+                }
+
                 Log.debug(
                   `[CodexLogParser] apply_patch (tool_use) - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
                 );
@@ -462,6 +507,7 @@ export class CodexLogParser extends BaseLogParser {
                   data: {
                     path: filePath,
                     structuredPatch,
+                    status: OPERATION_STATUS.INITIATED,
                   } as FileEditData,
                 });
               }
@@ -472,6 +518,14 @@ export class CodexLogParser extends BaseLogParser {
                 toolName === "modify_file" ||
                 toolName === "multiedit"
               ) {
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.FILE_EDIT,
+                    toolName: "edit_file",
+                  });
+                }
+
                 outputEvents.push({
                   type: CLI_EVENT_TYPES.FILE_EDIT,
                   timestamp,
@@ -480,6 +534,7 @@ export class CodexLogParser extends BaseLogParser {
                     oldContent: (params as any).oldContent,
                     newContent:
                       (params as any).newContent || (params as any).content,
+                    status: OPERATION_STATUS.INITIATED,
                   } as FileEditData,
                 });
               }
@@ -489,11 +544,20 @@ export class CodexLogParser extends BaseLogParser {
                 toolName === "remove_file" ||
                 toolName === "rm"
               ) {
+                // Track call for correlation with output
+                if (callId) {
+                  this.toolCallMap.set(callId, {
+                    type: CLI_EVENT_TYPES.FILE_DELETE,
+                    toolName: "delete_file",
+                  });
+                }
+
                 outputEvents.push({
                   type: CLI_EVENT_TYPES.FILE_DELETE,
                   timestamp,
                   data: {
                     path: (params as any).path || (params as any).file || "",
+                    status: OPERATION_STATUS.INITIATED,
                   } as FileDeleteData,
                 });
               }
@@ -591,20 +655,31 @@ export class CodexLogParser extends BaseLogParser {
 
         const functionName = event.payload.name?.toLowerCase() || "";
 
-        // Map bash/shell function calls to BASH_COMMAND
+        // Map bash/shell function calls to BASH_COMMAND (INITIATED)
         if (
           functionName === "bash" ||
           functionName === "shell" ||
           functionName === "execute_command" ||
-          functionName === "run_command"
+          functionName === "run_command" ||
+          functionName === "shell_command"
         ) {
+          const callId = event.payload.call_id ?? event.payload.id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              toolName: functionName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.BASH_COMMAND,
             timestamp,
             data: {
               command: (params as any).command || (params as any).cmd || "",
               workingDir: (params as any).workingDir || (params as any).cwd,
-              status: "in_progress",
+              status: OPERATION_STATUS.INITIATED,
             } as BashCommandData,
           });
         }
@@ -622,22 +697,59 @@ export class CodexLogParser extends BaseLogParser {
         }
       }
 
-      // response_item:function_call_output - Function result
+      // response_item:function_call_output - Function result (COMPLETED event)
       if (
         event.type === "response_item" &&
         event.payload?.type === "function_call_output"
       ) {
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp,
-          data: {
-            toolCallId: event.payload.call_id,
-            result: {
-              success: true, // Default success, exit code parsing would require output analysis
-              output: event.payload.output,
-            },
-          } as ToolResultData,
-        });
+        const callId = event.payload.call_id;
+        const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
+
+        // Check if this is a bash command result
+        if (toolInfo?.type === CLI_EVENT_TYPES.BASH_COMMAND) {
+          // Parse exit code from output (format: "Exit code: 0\n...")
+          const output = event.payload.output || "";
+          const exitCodeMatch = output.match(/Exit code: (\d+)/);
+          const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : 0;
+          const success = exitCode === 0;
+
+          // Extract stdout/stderr from output
+          // Format: "Exit code: X\nWall time: Y\nTotal output lines: Z\nOutput:\n<content>"
+          const outputMatch = output.match(/Output:\n([\s\S]*)$/);
+          const stdout = outputMatch ? outputMatch[1] : output;
+
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.BASH_COMMAND,
+            timestamp,
+            data: {
+              command: "", // Command not in output, was in INITIATED event
+              exitCode,
+              output: stdout,
+              error: success ? undefined : stdout,
+              status: success
+                ? OPERATION_STATUS.COMPLETED
+                : OPERATION_STATUS.FAILED,
+            } as BashCommandData,
+          });
+
+          // Clean up tracking
+          if (callId) {
+            this.toolCallMap.delete(callId);
+          }
+        } else {
+          // Generic tool result for non-bash commands
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: callId,
+              result: {
+                success: true, // Default success for non-bash tools
+                output: event.payload.output,
+              },
+            } as ToolResultData,
+          });
+        }
       }
 
       // response_item:custom_tool_call - Custom tool call request
@@ -665,11 +777,22 @@ export class CodexLogParser extends BaseLogParser {
           toolName === "read" ||
           toolName === "cat"
         ) {
+          const callId = event.payload.call_id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.FILE_READ,
+              toolName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.FILE_READ,
             timestamp,
             data: {
               path: (params as any).path || (params as any).file || "",
+              status: OPERATION_STATUS.INITIATED,
             } as FileReadData,
           });
         }
@@ -679,17 +802,30 @@ export class CodexLogParser extends BaseLogParser {
           toolName === "write" ||
           toolName === "create_file"
         ) {
+          const callId = event.payload.call_id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.FILE_WRITE,
+              toolName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.FILE_WRITE,
             timestamp,
             data: {
               path: (params as any).path || (params as any).file || "",
               content: (params as any).content || "",
+              status: OPERATION_STATUS.INITIATED,
             } as FileWriteData,
           });
         }
         // Map apply_patch operations (Codex patch format with structured diff)
         else if (toolName === "apply_patch") {
+          const callId = event.payload.call_id;
+
           // Extract file path from patch input
           const patchInput =
             typeof input === "string" ? input : (params as any).input || "";
@@ -704,6 +840,14 @@ export class CodexLogParser extends BaseLogParser {
           // Parse patch to extract structured diff
           const structuredPatch = this.parseApplyPatch(patchInput);
 
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              toolName,
+            });
+          }
+
           Log.debug(
             `[CodexLogParser] apply_patch - file=${filePath}, structuredPatch=${structuredPatch ? `${structuredPatch.length} hunks` : "none"}`
           );
@@ -714,6 +858,7 @@ export class CodexLogParser extends BaseLogParser {
             data: {
               path: filePath,
               structuredPatch,
+              status: OPERATION_STATUS.INITIATED,
               // Note: oldContent/newContent not available in apply_patch format
             } as FileEditData,
           });
@@ -725,6 +870,16 @@ export class CodexLogParser extends BaseLogParser {
           toolName === "modify_file" ||
           toolName === "multiedit"
         ) {
+          const callId = event.payload.call_id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.FILE_EDIT,
+              toolName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.FILE_EDIT,
             timestamp,
@@ -732,6 +887,7 @@ export class CodexLogParser extends BaseLogParser {
               path: (params as any).path || (params as any).file || "",
               oldContent: (params as any).oldContent,
               newContent: (params as any).newContent || (params as any).content,
+              status: OPERATION_STATUS.INITIATED,
             } as FileEditData,
           });
         }
@@ -741,11 +897,22 @@ export class CodexLogParser extends BaseLogParser {
           toolName === "remove_file" ||
           toolName === "rm"
         ) {
+          const callId = event.payload.call_id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.FILE_DELETE,
+              toolName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.FILE_DELETE,
             timestamp,
             data: {
               path: (params as any).path || (params as any).file || "",
+              status: OPERATION_STATUS.INITIATED,
             } as FileDeleteData,
           });
         }
@@ -755,13 +922,23 @@ export class CodexLogParser extends BaseLogParser {
           toolName === "shell" ||
           toolName === "command"
         ) {
+          const callId = event.payload.call_id;
+
+          // Track call for correlation with output
+          if (callId) {
+            this.toolCallMap.set(callId, {
+              type: CLI_EVENT_TYPES.BASH_COMMAND,
+              toolName,
+            });
+          }
+
           outputEvents.push({
             type: CLI_EVENT_TYPES.BASH_COMMAND,
             timestamp,
             data: {
               command: (params as any).command || (params as any).cmd || "",
               workingDir: (params as any).workingDir || (params as any).cwd,
-              status: event.payload.status || "in_progress",
+              status: OPERATION_STATUS.INITIATED,
             } as BashCommandData,
           });
         }
@@ -806,35 +983,129 @@ export class CodexLogParser extends BaseLogParser {
         }
       }
 
-      // response_item:custom_tool_call_output - Custom tool result
+      // response_item:custom_tool_call_output - Custom tool result (COMPLETED event)
       if (
         event.type === "response_item" &&
         event.payload?.type === "custom_tool_call_output"
       ) {
-        // Parse JSON output if possible to extract success status
-        let success = true;
-        let output = event.payload.output;
+        const callId = event.payload.call_id;
+        const toolInfo = callId ? this.toolCallMap.get(callId) : undefined;
+
+        // Parse JSON output to extract metadata
+        let parsedOutput: any = {};
+        let outputText = event.payload.output;
         try {
-          const parsed = JSON.parse(event.payload.output);
-          output = parsed.output || event.payload.output;
-          success =
-            parsed.metadata?.exit_code === 0 ||
-            parsed.metadata?.exit_code === undefined;
+          parsedOutput = JSON.parse(event.payload.output);
+          outputText = parsedOutput.output || event.payload.output;
         } catch {
           // Use raw output if not JSON
         }
 
-        outputEvents.push({
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp,
-          data: {
-            toolCallId: event.payload.call_id,
-            result: {
-              success,
-              output,
-            },
-          } as ToolResultData,
-        });
+        const exitCode = parsedOutput.metadata?.exit_code;
+        const success = exitCode === 0 || exitCode === undefined;
+
+        // Emit type-specific COMPLETED event based on original tool call
+        if (toolInfo) {
+          const status = success
+            ? OPERATION_STATUS.COMPLETED
+            : OPERATION_STATUS.FAILED;
+
+          switch (toolInfo.type) {
+            case CLI_EVENT_TYPES.BASH_COMMAND:
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.BASH_COMMAND,
+                timestamp,
+                data: {
+                  command: "", // Command not in output, was in INITIATED event
+                  exitCode: exitCode ?? 0,
+                  output: outputText,
+                  error: success ? undefined : outputText,
+                  status,
+                } as BashCommandData,
+              });
+              break;
+
+            case CLI_EVENT_TYPES.FILE_READ:
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_READ,
+                timestamp,
+                data: {
+                  path: "", // Path not in output, was in INITIATED event
+                  content: outputText,
+                  status,
+                  success,
+                } as FileReadData,
+              });
+              break;
+
+            case CLI_EVENT_TYPES.FILE_WRITE:
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_WRITE,
+                timestamp,
+                data: {
+                  path: "", // Path not in output, was in INITIATED event
+                  content: "", // Content not in output, was in INITIATED event
+                  status,
+                  success,
+                } as FileWriteData,
+              });
+              break;
+
+            case CLI_EVENT_TYPES.FILE_EDIT:
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_EDIT,
+                timestamp,
+                data: {
+                  path: "", // Path not in output, was in INITIATED event
+                  status,
+                  success,
+                } as FileEditData,
+              });
+              break;
+
+            case CLI_EVENT_TYPES.FILE_DELETE:
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.FILE_DELETE,
+                timestamp,
+                data: {
+                  path: "", // Path not in output, was in INITIATED event
+                  status,
+                  success,
+                } as FileDeleteData,
+              });
+              break;
+
+            default:
+              // Fallback to generic TOOL_RESULT for unknown types
+              outputEvents.push({
+                type: CLI_EVENT_TYPES.TOOL_RESULT,
+                timestamp,
+                data: {
+                  toolCallId: callId,
+                  result: {
+                    success,
+                    output: outputText,
+                  },
+                } as ToolResultData,
+              });
+          }
+
+          // Clean up tracking
+          this.toolCallMap.delete(callId);
+        } else {
+          // No tracking info, emit generic TOOL_RESULT
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TOOL_RESULT,
+            timestamp,
+            data: {
+              toolCallId: callId,
+              result: {
+                success,
+                output: outputText,
+              },
+            } as ToolResultData,
+          });
+        }
       }
     }
 
@@ -963,7 +1234,10 @@ export class CodexLogParser extends BaseLogParser {
         const result = await retryWithBackoff(
           async () => {
             // Search recursively for rollout-*-<sessionId>.jsonl in base sessions directory
-            const matchingFile = this.findSessionFileRecursive(basePath, sessionId);
+            const matchingFile = this.findSessionFileRecursive(
+              basePath,
+              sessionId
+            );
 
             if (matchingFile) {
               const stats = fs.statSync(matchingFile);
@@ -1377,7 +1651,10 @@ export class CodexLogParser extends BaseLogParser {
         }
 
         // File operation markers (skip, but could extract file path if needed)
-        if (line.startsWith("*** Add File:") || line.startsWith("*** Update File:")) {
+        if (
+          line.startsWith("*** Add File:") ||
+          line.startsWith("*** Update File:")
+        ) {
           // Reset line counters for new file
           oldLineNum = 1;
           newLineNum = 1;
@@ -1486,7 +1763,10 @@ export class CodexLogParser extends BaseLogParser {
               if (found) {
                 return found;
               }
-            } else if (entry.isFile() && entry.name.endsWith(`-${sessionId}.jsonl`)) {
+            } else if (
+              entry.isFile() &&
+              entry.name.endsWith(`-${sessionId}.jsonl`)
+            ) {
               // Found matching file
               return fullPath;
             }
@@ -1548,7 +1828,11 @@ export class CodexLogParser extends BaseLogParser {
           if (entry.isDirectory()) {
             // Recurse into subdirectories
             searchDir(fullPath);
-          } else if (entry.isFile() && entry.name.startsWith("rollout-") && entry.name.endsWith(".jsonl")) {
+          } else if (
+            entry.isFile() &&
+            entry.name.startsWith("rollout-") &&
+            entry.name.endsWith(".jsonl")
+          ) {
             // Check modification time
             try {
               const stats = fs.statSync(fullPath);
