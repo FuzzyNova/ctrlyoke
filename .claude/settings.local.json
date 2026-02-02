@@ -36,7 +36,8 @@
       "Bash(claude:*)",
       "Bash(codex exec:*)",
       "WebFetch(domain:gist.github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:code.visualstudio.com)"
     ],
     "deny": [],
     "ask": []

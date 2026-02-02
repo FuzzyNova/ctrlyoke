@@ -248,12 +248,12 @@ export class WorkflowExecutor {
         }
       );
 
-      // Clean up event listeners
-      streamingDisposable?.dispose();
-      structuredStreamingDisposable?.dispose();
-      promptReadyDisposable?.dispose();
-
       if (!success) {
+        // Clean up event listeners immediately on failure
+        streamingDisposable?.dispose();
+        structuredStreamingDisposable?.dispose();
+        promptReadyDisposable?.dispose();
+
         const shouldContinue = await this.handlePromptSendFailure(
           integration,
           context,
@@ -276,6 +276,12 @@ export class WorkflowExecutor {
       );
       const responseText = await responsePromise;
       Log.info(`✅ Prompt ${i + 1} completed`);
+
+      // Clean up event listeners
+      // This prevents the next prompt's subscriptions from overlapping with this one
+      streamingDisposable?.dispose();
+      structuredStreamingDisposable?.dispose();
+      promptReadyDisposable?.dispose();
 
       // Calculate duration
       const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));

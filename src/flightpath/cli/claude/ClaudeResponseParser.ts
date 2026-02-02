@@ -523,8 +523,9 @@ export class ClaudeResponseParser
             command: toolUseResult.command || "unknown",
             workingDir: toolUseResult.workingDir || toolUseResult.cwd,
             exitCode,
-            output: toolUseResult.output || toolUseResult.stdout,
-            error: toolUseResult.error || toolUseResult.stderr,
+            // Prefer stdout over output - stdout has full content while output may have <persisted-output> message
+            output: toolUseResult.stdout || toolUseResult.output,
+            error: toolUseResult.stderr || toolUseResult.error,
             status:
               exitCode === 0
                 ? OPERATION_STATUS.COMPLETED
@@ -660,10 +661,9 @@ export class ClaudeResponseParser
         }
       }
 
-      // Handle complete assistant messages (non-streaming or end of stream)
-      if (json.type === "assistant" && json.message?.content) {
-        this.processAssistantContent(json.message.content, events);
-      }
+      // ✅ REMOVED: assistant message processing (causes duplicates during streaming)
+      // Assistant messages are accumulated state - only process in final parse() method
+      // Stream events provide real-time deltas - process those instead
 
       // Handle user messages (tool results)
       if (json.type === "user" && json.message?.content) {

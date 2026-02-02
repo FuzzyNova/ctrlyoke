@@ -50,6 +50,36 @@
     elements.btnCollapseOutput.addEventListener("click", () => {
       toggleOutputSection();
     });
+
+    // Bash output expand/collapse (event delegation)
+    elements.outputContent.addEventListener("click", (e) => {
+      if (e.target.classList.contains("bash-expand-link")) {
+        e.preventDefault();
+        const containerId = e.target.dataset.container;
+        const container = document.getElementById(containerId);
+
+        if (container) {
+          const truncatedSpan = container.querySelector(".bash-content-truncated");
+          const fullSpan = container.querySelector(".bash-content-full");
+          const isExpanded = fullSpan.style.display !== "none";
+
+          if (isExpanded) {
+            // Collapse - show truncated
+            truncatedSpan.style.display = "";
+            fullSpan.style.display = "none";
+            const hiddenLines =
+              fullSpan.textContent.split("\n").length -
+              truncatedSpan.textContent.split("\n").length;
+            e.target.textContent = `[show ${hiddenLines} more line${hiddenLines !== 1 ? "s" : ""}]`;
+          } else {
+            // Expand - show full
+            truncatedSpan.style.display = "none";
+            fullSpan.style.display = "";
+            e.target.textContent = "[show less]";
+          }
+        }
+      }
+    });
   }
 
   /**
@@ -61,6 +91,39 @@
   function truncate(str, maxLen) {
     if (!str || str.length <= maxLen) return str;
     return str.substring(0, maxLen - 3) + "...";
+  }
+
+  /**
+   * Render bash output/error with smart truncation
+   * @param {string} content - Output or error content
+   * @param {string} type - "output" or "error"
+   * @param {number} maxLines - Maximum lines to show before truncating
+   * @returns {string} HTML string with expandable content
+   */
+  function renderBashContent(content, type = "output", maxLines = 10) {
+    if (!content) return "";
+
+    const lines = content.split("\n");
+    const isTruncated = lines.length > maxLines;
+    const truncatedContent = isTruncated
+      ? lines.slice(0, maxLines).join("\n")
+      : content;
+
+    const cssClass = type === "error" ? "tool-error-line" : "tool-result-line";
+    const containerId = `bash-${type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    let html = `<div class="${cssClass}">`;
+    html += `  ⎿  <div class="bash-content-container" id="${containerId}">`;
+    html += `<span class="bash-content-truncated">${escapeHtml(truncatedContent)}</span>`;
+    html += `<span class="bash-content-full" style="display: none;">${escapeHtml(content)}</span>`;
+
+    if (isTruncated) {
+      const hiddenLines = lines.length - maxLines;
+      html += ` <a href="#" class="bash-expand-link" data-container="${containerId}" style="color: #569CD6; text-decoration: none; font-size: 0.9em;">[show ${hiddenLines} more line${hiddenLines !== 1 ? "s" : ""}]</a>`;
+    }
+
+    html += "</div></div>";
+    return html;
   }
 
   /**
@@ -338,35 +401,45 @@
           break;
 
         case "bashCommand":
-          // Bash command execution - show full command (no truncation)
+          // Bash command execution - standardized rendering (all providers)
           if (event.data) {
-            const status = event.data.status || "unknown";
-            const exitCode =
-              event.data.exitCode !== undefined ? event.data.exitCode : "?";
-            const success = exitCode === 0;
-
             html += '<div class="output-tool-call-terminal">';
             html += '<div class="tool-call-line">';
             html += "● " + escapeHtml(event.data.command);
-            html +=
-              ' <span class="status-badge ' +
-              (success ? "success" : "error") +
-              '">';
-            html += status + " (exit: " + exitCode + ")";
-            html += "</span></div>";
 
-            // Show output if available
-            if (event.data.output) {
-              html += '<div class="tool-output">';
-              html += "<pre>" + escapeHtml(event.data.output) + "</pre>";
-              html += "</div>";
+            // Status badge
+            if (event.data.status === OPERATION_STATUS.INITIATED) {
+              // Orange badge for running commands
+              html += ' <span class="status-badge running">';
+              html += "running";
+              html += "</span>";
+            } else if (
+              event.data.status === OPERATION_STATUS.COMPLETED ||
+              event.data.status === OPERATION_STATUS.FAILED
+            ) {
+              // Green (success) or red (error) badge with exit code
+              const exitCode =
+                event.data.exitCode !== undefined ? event.data.exitCode : "?";
+              const success = exitCode === 0;
+              html +=
+                ' <span class="status-badge ' +
+                (success ? "success" : "error") +
+                '">';
+              html += "(exit: " + exitCode + ")";
+              html += "</span>";
             }
 
-            // Show error if available
-            if (event.data.error) {
-              html += '<div class="tool-error">';
-              html += "<pre>" + escapeHtml(event.data.error) + "</pre>";
-              html += "</div>";
+            html += "</div>";
+
+            // Show output/error with ⎿ prefix (completed only)
+            if (event.data.status !== OPERATION_STATUS.INITIATED) {
+              if (event.data.output) {
+                html += renderBashContent(event.data.output, "output", 10);
+              }
+
+              if (event.data.error) {
+                html += renderBashContent(event.data.error, "error", 10);
+              }
             }
 
             html += "</div>\n";
@@ -374,60 +447,33 @@
           break;
 
         case "fileEdit":
-          // File edit operation - show diff visualization
-          if (event.data) {
+          // File edit operation - status-based rendering (all providers)
+          if (event.data && event.data.path) {
             html += '<div class="output-tool-call-terminal">';
+            html += '<div class="tool-call-line">';
 
-            // If changes array exists (Codex format)
-            if (event.data.changes && event.data.changes.length > 0) {
-              for (const change of event.data.changes) {
-                html += '<div class="tool-call-line">';
-                html +=
-                  "● File " + change.kind + ": " + escapeHtml(change.path);
-                html += "</div>";
-
-                // Show diff if we have structuredPatch OR old/new content
-                if (
-                  change.structuredPatch ||
-                  (change.oldContent && change.newContent)
-                ) {
-                  html += renderDiffVisualization(change);
-                } else {
-                  // No diff data available from provider
-                  html += '<div class="tool-result-line">';
-                  html += "  ⎿  (Diff not available)";
-                  html += "</div>";
-                }
+            // Status-based rendering
+            if (event.data.status === OPERATION_STATUS.INITIATED) {
+              html += "● Editing " + escapeHtml(event.data.path);
+            } else if (event.data.status === OPERATION_STATUS.FAILED) {
+              html += "● Edit failed: " + escapeHtml(event.data.path);
+              if (event.data.error) {
+                html += " - " + escapeHtml(event.data.error);
               }
+            } else {
+              // COMPLETED or legacy (no status)
+              html += "● Edited " + escapeHtml(event.data.path);
             }
-            // Single file edit (Claude/Copilot format)
-            else if (event.data.path) {
-              html += '<div class="tool-call-line">';
 
-              // Show different output based on status
-              if (event.data.status === OPERATION_STATUS.INITIATED) {
-                html +=
-                  "● Editing " + escapeHtml(event.data.path) + " (starting...)";
-              } else if (event.data.status === OPERATION_STATUS.FAILED) {
-                html += "● Edit failed: " + escapeHtml(event.data.path);
-                if (event.data.error) {
-                  html += " - " + escapeHtml(event.data.error);
-                }
-              } else {
-                // Completed or legacy (no status)
-                html += "● Edited " + escapeHtml(event.data.path);
-              }
+            html += "</div>";
 
-              html += "</div>";
-
-              // Only render diff for completed edits (with structuredPatch OR oldContent/newContent)
-              if (
-                event.data.status !== OPERATION_STATUS.INITIATED &&
-                (event.data.structuredPatch ||
-                  (event.data.oldContent && event.data.newContent))
-              ) {
-                html += renderDiffVisualization(event.data);
-              }
+            // Only render diff for completed edits
+            if (
+              event.data.status !== OPERATION_STATUS.INITIATED &&
+              (event.data.structuredPatch ||
+                (event.data.oldContent && event.data.newContent))
+            ) {
+              html += renderDiffVisualization(event.data);
             }
 
             html += "</div>\n";
@@ -1132,93 +1178,79 @@
                 break;
 
               case "bashCommand":
-                // Bash command execution - show full command
+                // Bash command execution - standardized rendering (all providers)
                 if (event.data) {
-                  const status = event.data.status || "unknown";
-                  const exitCode =
-                    event.data.exitCode !== undefined
-                      ? event.data.exitCode
-                      : "?";
-                  lines.push(
-                    `● ${event.data.command} (${status}, exit: ${exitCode})`
-                  );
+                  lines.push(`● ${event.data.command}`);
 
-                  if (event.data.output) {
-                    lines.push("");
-                    lines.push("```");
-                    lines.push(event.data.output.trim());
-                    lines.push("```");
+                  // Show output/error with ⎿ prefix (completed only)
+                  if (event.data.status !== OPERATION_STATUS.INITIATED) {
+                    if (event.data.output) {
+                      lines.push("");
+                      lines.push("  ⎿  Output:");
+                      lines.push("```");
+                      lines.push(event.data.output.trim());
+                      lines.push("```");
+                    }
+
+                    if (event.data.error) {
+                      lines.push("");
+                      lines.push("  ⎿  Error:");
+                      lines.push("```");
+                      lines.push(event.data.error.trim());
+                      lines.push("```");
+                    }
+
+                    // Show exit code at the end
+                    if (
+                      event.data.status === OPERATION_STATUS.COMPLETED ||
+                      event.data.status === OPERATION_STATUS.FAILED
+                    ) {
+                      const exitCode =
+                        event.data.exitCode !== undefined
+                          ? event.data.exitCode
+                          : "?";
+                      lines.push("");
+                      lines.push(`  ⎿  (exit: ${exitCode})`);
+                    }
                   }
 
-                  if (event.data.error) {
-                    lines.push("");
-                    lines.push("Error:");
-                    lines.push("```");
-                    lines.push(event.data.error.trim());
-                    lines.push("```");
-                  }
                   lines.push("");
                 }
                 break;
 
               case "fileEdit":
-                // File edit operation - show diff
-                if (event.data) {
-                  if (event.data.changes && event.data.changes.length > 0) {
-                    event.data.changes.forEach((change) => {
-                      lines.push(`● File ${change.kind}: ${change.path}`);
-
-                      // Render diff if we have structuredPatch OR oldContent/newContent
-                      if (
-                        change.structuredPatch ||
-                        (change.oldContent && change.newContent)
-                      ) {
-                        lines.push("");
-                        lines.push("```diff");
-                        const diffLines = formatDiffForMarkdown(
-                          change.oldContent,
-                          change.newContent,
-                          change.structuredPatch
-                        );
-                        diffLines.forEach((line) => lines.push(line));
-                        lines.push("```");
-                      } else {
-                        // No diff data available
-                        lines.push("  ⎿  (Diff not available)");
-                      }
-                      lines.push("");
-                    });
-                  } else if (event.data.path) {
-                    // Show different output based on status
-                    if (event.data.status === OPERATION_STATUS.INITIATED) {
-                      lines.push(`● Editing ${event.data.path} (starting...)`);
-                    } else if (event.data.status === OPERATION_STATUS.FAILED) {
-                      lines.push(`● Edit failed: ${event.data.path}`);
-                      if (event.data.error) {
-                        lines.push(`  Error: ${event.data.error}`);
-                      }
-                    } else {
-                      lines.push(`● Edited ${event.data.path}`);
+                // File edit operation - status-based rendering (all providers)
+                if (event.data && event.data.path) {
+                  // Status-based rendering
+                  if (event.data.status === OPERATION_STATUS.INITIATED) {
+                    lines.push(`● Editing ${event.data.path}`);
+                  } else if (event.data.status === OPERATION_STATUS.FAILED) {
+                    lines.push(`● Edit failed: ${event.data.path}`);
+                    if (event.data.error) {
+                      lines.push(`  Error: ${event.data.error}`);
                     }
-
-                    // Only render diff for completed edits
-                    if (
-                      event.data.status !== OPERATION_STATUS.INITIATED &&
-                      (event.data.structuredPatch ||
-                        (event.data.oldContent && event.data.newContent))
-                    ) {
-                      lines.push("");
-                      lines.push("```diff");
-                      const diffLines = formatDiffForMarkdown(
-                        event.data.oldContent,
-                        event.data.newContent,
-                        event.data.structuredPatch
-                      );
-                      diffLines.forEach((line) => lines.push(line));
-                      lines.push("```");
-                    }
-                    lines.push("");
+                  } else {
+                    // COMPLETED or legacy (no status)
+                    lines.push(`● Edited ${event.data.path}`);
                   }
+
+                  // Only render diff for completed edits
+                  if (
+                    event.data.status !== OPERATION_STATUS.INITIATED &&
+                    (event.data.structuredPatch ||
+                      (event.data.oldContent && event.data.newContent))
+                  ) {
+                    lines.push("");
+                    lines.push("```diff");
+                    const diffLines = formatDiffForMarkdown(
+                      event.data.oldContent,
+                      event.data.newContent,
+                      event.data.structuredPatch
+                    );
+                    diffLines.forEach((line) => lines.push(line));
+                    lines.push("```");
+                  }
+                  lines.push("");
                 }
                 break;
 

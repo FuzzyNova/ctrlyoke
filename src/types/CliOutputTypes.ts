@@ -246,13 +246,6 @@ export interface FileEditData {
   newContent?: string;
   /** Edit lifecycle stage */
   status?: FileOperationStatus;
-  /** For multi-file or patch-based edits */
-  changes?: Array<{
-    path: string;
-    kind: "add" | "update" | "delete";
-    oldContent?: string;
-    newContent?: string;
-  }>;
   /** Structured diff hunks with accurate line numbers (Claude CLI) */
   structuredPatch?: UnifiedDiffHunk[];
   /** Full file content before edit (Claude CLI) */

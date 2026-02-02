@@ -241,6 +241,20 @@ export class CodexResponseParser
         },
       });
     }
+
+    // File change started → FILE_EDIT with INITIATED status (one event per file)
+    if (item.type === "file_change" && item.changes) {
+      for (const change of item.changes) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
+            path: change.path,
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+      }
+    }
   }
 
   /**
@@ -310,20 +324,23 @@ export class CodexResponseParser
       });
     }
 
-    // File change → FILE_EDIT event (with changes array)
+    // File change → FILE_EDIT event (one event per file)
     if (item.type === "file_change" && item.changes) {
-      events.push({
-        type: CLI_EVENT_TYPES.FILE_EDIT,
-        timestamp: Date.now(),
-        data: {
-          path: item.changes[0]?.path || "unknown", // Primary file
-          changes: item.changes.map((change) => ({
+      for (const change of item.changes) {
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: Date.now(),
+          data: {
             path: change.path,
-            kind: change.kind,
-          })),
-          success: item.status === "completed",
-        },
-      });
+            // Note: Codex CLI doesn't provide oldContent/newContent in events
+            status:
+              item.status === "completed"
+                ? OPERATION_STATUS.COMPLETED
+                : OPERATION_STATUS.FAILED,
+            success: item.status === "completed",
+          },
+        });
+      }
     }
 
     // MCP tool call → MCP_TOOL_CALL event
