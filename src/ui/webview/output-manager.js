@@ -15,7 +15,7 @@
  */
 (function () {
   // Import constants and utilities from global scope
-  const { MESSAGE_TYPES, STEP_STATUS, OPERATION_STATUS } =
+  const { MESSAGE_TYPES, STEP_STATUS, OPERATION_STATUS, CLI_EVENT_TYPES } =
     window.FlightPathConstants;
   const { getTimestamp, formatTime, escapeHtml } = window.FlightPathUtilities;
 
@@ -59,7 +59,9 @@
         const container = document.getElementById(containerId);
 
         if (container) {
-          const truncatedSpan = container.querySelector(".bash-content-truncated");
+          const truncatedSpan = container.querySelector(
+            ".bash-content-truncated"
+          );
           const fullSpan = container.querySelector(".bash-content-full");
           const isExpanded = fullSpan.style.display !== "none";
 
@@ -389,18 +391,17 @@
     // Render events in chronological order
     for (const event of output.structured.events) {
       switch (event.type) {
-        case "text":
-          // Text events - terminal style with bullet
+        case CLI_EVENT_TYPES.TEXT:
+          // Text events - no bullet
           if (event.data && event.data.text) {
             html +=
               '<div class="output-text-terminal">' +
-              "● " +
               escapeHtml(event.data.text) +
               "</div>\n";
           }
           break;
 
-        case "bashCommand":
+        case CLI_EVENT_TYPES.BASH_COMMAND:
           // Bash command execution - standardized rendering (all providers)
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -446,7 +447,7 @@
           }
           break;
 
-        case "fileEdit":
+        case CLI_EVENT_TYPES.FILE_EDIT:
           // File edit operation - status-based rendering (all providers)
           if (event.data && event.data.path) {
             html += '<div class="output-tool-call-terminal">';
@@ -480,7 +481,7 @@
           }
           break;
 
-        case "fileWrite":
+        case CLI_EVENT_TYPES.FILE_WRITE:
           // File write operation
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -507,7 +508,7 @@
           }
           break;
 
-        case "fileRead":
+        case CLI_EVENT_TYPES.FILE_READ:
           // File read operation
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -531,7 +532,7 @@
           }
           break;
 
-        case "fileDelete":
+        case CLI_EVENT_TYPES.FILE_DELETE:
           // File delete operation
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -542,7 +543,7 @@
           }
           break;
 
-        case "mcpToolCall":
+        case CLI_EVENT_TYPES.MCP_TOOL_CALL:
           // MCP tool call
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -557,7 +558,7 @@
           }
           break;
 
-        case "webSearch":
+        case CLI_EVENT_TYPES.WEB_SEARCH:
           // Web search operation
           if (event.data) {
             html += '<div class="output-tool-call-terminal">';
@@ -568,7 +569,7 @@
           }
           break;
 
-        case "toolCall":
+        case CLI_EVENT_TYPES.TOOL_CALL:
           // Generic tool call (fallback for unrecognized tools)
           if (event.data) {
             const toolLine = formatToolCallTerminalStyle(event.data);
@@ -595,7 +596,7 @@
           }
           break;
 
-        case "thinking":
+        case CLI_EVENT_TYPES.THINKING:
           // Thinking block events - terminal style
           if (event.data && event.data.text) {
             const label =
@@ -610,7 +611,7 @@
           }
           break;
 
-        case "toolResult":
+        case CLI_EVENT_TYPES.TOOL_RESULT:
           // Tool result events (if separate from toolCall)
           if (event.data && event.data.result) {
             const resultLine = formatToolResultTerminalStyle(event.data.result);
@@ -1169,15 +1170,15 @@
 
           output.structured.events.forEach((event) => {
             switch (event.type) {
-              case "text":
+              case CLI_EVENT_TYPES.TEXT:
                 // Text events - terminal style with bullet
                 if (event.data && event.data.text) {
-                  lines.push("● " + event.data.text);
+                  lines.push(event.data.text);
                   lines.push("");
                 }
                 break;
 
-              case "bashCommand":
+              case CLI_EVENT_TYPES.BASH_COMMAND:
                 // Bash command execution - standardized rendering (all providers)
                 if (event.data) {
                   lines.push(`● ${event.data.command}`);
@@ -1218,7 +1219,7 @@
                 }
                 break;
 
-              case "fileEdit":
+              case CLI_EVENT_TYPES.FILE_EDIT:
                 // File edit operation - status-based rendering (all providers)
                 if (event.data && event.data.path) {
                   // Status-based rendering
@@ -1254,7 +1255,7 @@
                 }
                 break;
 
-              case "fileWrite":
+              case CLI_EVENT_TYPES.FILE_WRITE:
                 if (event.data) {
                   if (event.data.status === OPERATION_STATUS.INITIATED) {
                     lines.push(`● Writing ${event.data.path} (starting...)`);
@@ -1273,7 +1274,7 @@
                 }
                 break;
 
-              case "fileRead":
+              case CLI_EVENT_TYPES.FILE_READ:
                 if (event.data) {
                   if (event.data.status === OPERATION_STATUS.INITIATED) {
                     lines.push(`● Reading ${event.data.path} (starting...)`);
@@ -1289,28 +1290,28 @@
                 }
                 break;
 
-              case "fileDelete":
+              case CLI_EVENT_TYPES.FILE_DELETE:
                 if (event.data) {
                   lines.push(`● Delete file: ${event.data.path}`);
                   lines.push("");
                 }
                 break;
 
-              case "mcpToolCall":
+              case CLI_EVENT_TYPES.MCP_TOOL_CALL:
                 if (event.data) {
                   lines.push(`● MCP: ${event.data.server}.${event.data.tool}`);
                   lines.push("");
                 }
                 break;
 
-              case "webSearch":
+              case CLI_EVENT_TYPES.WEB_SEARCH:
                 if (event.data) {
                   lines.push(`● Web search: "${event.data.query}"`);
                   lines.push("");
                 }
                 break;
 
-              case "toolCall":
+              case CLI_EVENT_TYPES.TOOL_CALL:
                 // Generic tool call (fallback)
                 if (event.data) {
                   const toolLine = formatToolCallTerminalStyle(event.data);
@@ -1326,7 +1327,7 @@
                 }
                 break;
 
-              case "thinking":
+              case CLI_EVENT_TYPES.THINKING:
                 // Thinking block events - terminal style
                 if (event.data && event.data.text) {
                   const label =
@@ -1338,7 +1339,7 @@
                 }
                 break;
 
-              case "toolResult":
+              case CLI_EVENT_TYPES.TOOL_RESULT:
                 // Tool result events (if separate from toolCall)
                 if (event.data && event.data.result) {
                   const resultLine = formatToolResultTerminalStyle(

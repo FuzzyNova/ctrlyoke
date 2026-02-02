@@ -4,40 +4,12 @@
  * Claude CLI, Codex CLI, and any future CLI integrations.
  */
 
-import type { FileOperationStatus } from "./DashboardConstants";
+import type { FileOperationStatus, CliEventType } from "./DashboardConstants";
+import { CLI_EVENT_TYPES } from "./DashboardConstants";
 
-/**
- * CLI event type constants.
- * Use these constants instead of string literals to avoid typos and ensure consistency.
- *
- * Operation-specific types (BASH_COMMAND, FILE_*, etc.) allow the dashboard to render
- * specialized views without knowing about provider-specific tool formats.
- */
-export const CLI_EVENT_TYPES = {
-  TEXT: "text",
-  THINKING: "thinking",
-
-  // Operation-specific tool events (normalized from provider formats)
-  BASH_COMMAND: "bashCommand",
-  FILE_READ: "fileRead",
-  FILE_WRITE: "fileWrite",
-  FILE_EDIT: "fileEdit",
-  FILE_DELETE: "fileDelete",
-  MCP_TOOL_CALL: "mcpToolCall",
-  WEB_SEARCH: "webSearch",
-
-  // Generic fallback for unrecognized tools
-  TOOL_CALL: "toolCall",
-
-  TOOL_RESULT: "toolResult",
-} as const;
-
-/**
- * Type of CLI event.
- * Events are rendered in the order they occurred during the CLI session.
- */
-export type CliEventType =
-  (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+// Re-export for backward compatibility (CLI parsers import from this file)
+export { CLI_EVENT_TYPES };
+export type { CliEventType };
 
 /**
  * A single event in the CLI output stream.

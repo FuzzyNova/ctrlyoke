@@ -269,6 +269,28 @@ export const END_CONDITION_PROPERTIES = {
 } as const;
 
 // ============================================================================
+// CLI EVENT TYPES - CLI output event types for structured output rendering
+// ============================================================================
+export const CLI_EVENT_TYPES = {
+  TEXT: "text",
+  THINKING: "thinking",
+
+  // Operation-specific tool events (normalized from provider formats)
+  BASH_COMMAND: "bashCommand",
+  FILE_READ: "fileRead",
+  FILE_WRITE: "fileWrite",
+  FILE_EDIT: "fileEdit",
+  FILE_DELETE: "fileDelete",
+  MCP_TOOL_CALL: "mcpToolCall",
+  WEB_SEARCH: "webSearch",
+
+  // Generic fallback for unrecognized tools
+  TOOL_CALL: "toolCall",
+
+  TOOL_RESULT: "toolResult",
+} as const;
+
+// ============================================================================
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -283,3 +305,5 @@ export type QueuePosition =
   (typeof QUEUE_POSITION)[keyof typeof QUEUE_POSITION];
 export type FileOperationStatus =
   (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
+export type CliEventType =
+  (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
