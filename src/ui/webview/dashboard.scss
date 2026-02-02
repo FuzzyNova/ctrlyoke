@@ -1301,7 +1301,10 @@ button:disabled {
   font-family: var(--vscode-editor-font-family);
   font-size: 11px;
   border-radius: 3px;
-  overflow: hidden;
+  /* Allow a single horizontal scrollbar for the entire diff block when lines overflow */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--vscode-panel-border, var(--border-color));
   background: var(--vscode-editor-background);
 
@@ -1338,9 +1341,13 @@ button:disabled {
 
     // Line content
     .line-content {
-      flex: 1;
+      /* Allow the container (.tool-call-diff) to handle horizontal scrolling
+         and prevent each line from creating its own scrollbar. */
+      flex: 1 1 auto;
+      min-width: 0; /* Important for flex items to be constrained correctly */
       padding: 2px 8px 2px 0;
-      overflow-x: auto;
+      overflow: visible;
+      white-space: pre; /* preserve spacing and alignment */
     }
 
     // Added lines (green)
