@@ -1,9 +1,58 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { CliOutput, StatusMessage } from "../output";
+import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
+import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
+import { MESSAGE_TYPES } from "../../types/messages";
 
+// VS Code API type
+declare const acquireVsCodeApi: () => {
+  postMessage: (message: unknown) => void;
+  getState: () => unknown;
+  setState: (state: unknown) => void;
+};
+
+// Get vscode API (singleton pattern)
+let vscodeApi: ReturnType<typeof acquireVsCodeApi> | null = null;
+const getVsCodeApi = () => {
+  if (!vscodeApi && typeof acquireVsCodeApi !== "undefined") {
+    vscodeApi = acquireVsCodeApi();
+  }
+  return vscodeApi;
+};
+
+/**
+ * Combined message type for chronological sorting
+ */
+interface OutputMessage {
+  type: "status" | "cli";
+  stepIndex: number;
+  timestamp: number;
+  data: OutputStatusMessage | CliOutputItem;
+  attemptIndex?: number;
+}
+
+/**
+ * OutputSection Component
+ *
+ * Renders all CLI outputs and status messages in chronological order.
+ * Features:
+ * - Collapsible section header
+ * - Auto-scroll toggle
+ * - Export to markdown
+ * - Empty state display
+ * - Streaming indicator support
+ */
 export const OutputSection: React.FC = () => {
-  const { currentStep, cliOutputs } = useWorkflowStore();
+  const {
+    fileName,
+    executionState,
+    currentStep,
+    totalSteps,
+    cliOutputs,
+    statusMessages,
+  } = useWorkflowStore();
   const {
     outputCollapsed,
     toggleOutputCollapse,
@@ -12,103 +61,176 @@ export const OutputSection: React.FC = () => {
   } = useUiStore();
   const outputRef = useRef<HTMLDivElement>(null);
 
+  // Build chronologically sorted list of all messages
+  const allMessages = useMemo((): OutputMessage[] => {
+    const messages: OutputMessage[] = [];
+
+    // Iterate through all steps
+    for (let stepIndex = 0; stepIndex < totalSteps; stepIndex++) {
+      // Add status messages
+      const stepStatusMessages = statusMessages[stepIndex] || [];
+      stepStatusMessages.forEach((statusMsg, index) => {
+        messages.push({
+          type: "status",
+          stepIndex,
+          timestamp: statusMsg.timestamp || stepIndex * 10000 + index,
+          data: {
+            message: statusMsg.message,
+            severity: statusMsg.severity,
+            timestamp: formatTime(statusMsg.timestamp),
+            timestampMs: statusMsg.timestamp,
+          },
+        });
+      });
+
+      // Add CLI outputs
+      const stepOutputs = cliOutputs[stepIndex] || [];
+      stepOutputs.forEach((output, attemptIndex) => {
+        messages.push({
+          type: "cli",
+          stepIndex,
+          timestamp:
+            (output as CliOutputItem & { timestampMs?: number }).timestampMs ||
+            stepIndex * 10000 + stepStatusMessages.length + attemptIndex,
+          data: output as unknown as CliOutputItem,
+          attemptIndex,
+        });
+      });
+    }
+
+    // Sort by timestamp
+    return messages.sort((a, b) => a.timestamp - b.timestamp);
+  }, [cliOutputs, statusMessages, totalSteps]);
+
   // Auto-scroll effect
   useEffect(() => {
     if (autoscrollEnabled && outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [cliOutputs, currentStep, autoscrollEnabled]);
+  }, [allMessages, autoscrollEnabled]);
 
-  const handleExport = () => {
-    // TODO: Implement export handler
-    console.log("Export output");
-  };
+  // Export handler
+  const handleExport = useCallback(() => {
+    const vscode = getVsCodeApi();
+    if (!vscode) return;
 
-  const currentOutputs = cliOutputs[currentStep] || [];
+    const markdownContent = generateMarkdownExport(
+      allMessages.map((msg) => ({
+        type: msg.type,
+        stepIndex: msg.stepIndex,
+        timestamp: msg.timestamp,
+        data: msg.data,
+        attemptIndex: msg.attemptIndex,
+      })),
+      {
+        fileName: fileName || "Unknown",
+        executionState,
+        currentStep,
+        totalSteps,
+      }
+    );
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.EXPORT_OUTPUT,
+      content: markdownContent,
+      fileName,
+    });
+  }, [allMessages, fileName, executionState, currentStep, totalSteps]);
+
+  // Check if there's any output
+  const hasOutput = allMessages.length > 0;
 
   return (
-    <div className="flex flex-col h-full border-r border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)]">
-        <div className="flex items-center gap-2">
-          <i className="codicon codicon-terminal text-[var(--vscode-foreground)]"></i>
-          <span className="text-sm font-medium text-[var(--vscode-foreground)]">
-            Output
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {/* Autoscroll toggle */}
+    <section
+      id="output-section"
+      className={`output-section ${outputCollapsed ? "collapsed" : ""}`}
+    >
+      {/* Section Header */}
+      <div className="section-header output-controls">
+        <div className="section-title-group">
           <button
-            className={`p-1 rounded transition-colors ${
-              autoscrollEnabled
-                ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]"
-                : "hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-foreground)]"
-            }`}
-            onClick={() => setAutoscroll(!autoscrollEnabled)}
-            title={
-              autoscrollEnabled ? "Disable autoscroll" : "Enable autoscroll"
-            }
-          >
-            <i className="codicon codicon-arrow-down"></i>
-          </button>
-
-          {/* Export button */}
-          <button
-            className="p-1 rounded hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
-            onClick={handleExport}
-            title="Export output"
-            disabled={currentOutputs.length === 0}
-          >
-            <i className="codicon codicon-export text-[var(--vscode-foreground)]"></i>
-          </button>
-
-          {/* Collapse button */}
-          <button
-            className="p-1 rounded hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
+            className="collapse-btn"
             onClick={toggleOutputCollapse}
-            title={outputCollapsed ? "Expand" : "Collapse"}
+            title={outputCollapsed ? "Expand output" : "Collapse output"}
+            aria-label={outputCollapsed ? "Expand output" : "Collapse output"}
+            aria-expanded={!outputCollapsed}
           >
             <i
               className={`codicon ${
                 outputCollapsed
                   ? "codicon-chevron-right"
                   : "codicon-chevron-down"
-              } text-[var(--vscode-foreground)]`}
-            ></i>
+              }`}
+            />
+          </button>
+          <h2 className="section-title">
+            <i className="codicon codicon-terminal" /> Output
+          </h2>
+        </div>
+
+        <div className="output-controls-right">
+          {/* Auto-scroll checkbox */}
+          <label
+            className="autoscroll-label"
+            title="Auto-scroll to latest output"
+          >
+            <input
+              type="checkbox"
+              id="autoscroll-checkbox"
+              checked={autoscrollEnabled}
+              onChange={(e) => setAutoscroll(e.target.checked)}
+            />
+            <span>Auto-scroll</span>
+          </label>
+
+          {/* Export button */}
+          <button
+            className="icon-btn"
+            id="export-btn"
+            title="Export output to markdown"
+            onClick={handleExport}
+            disabled={!hasOutput}
+          >
+            <i className="codicon codicon-export" />
           </button>
         </div>
       </div>
 
-      {/* Output area */}
+      {/* Output Content */}
       {!outputCollapsed && (
-        <div
-          ref={outputRef}
-          className="flex-1 overflow-y-auto p-3 font-mono text-sm"
-        >
-          {currentOutputs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <i className="codicon codicon-output text-4xl text-[var(--vscode-descriptionForeground)] mb-3"></i>
-              <p className="text-sm text-[var(--vscode-descriptionForeground)]">
-                No output yet
-              </p>
-              <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-                Run a workflow to see output here
-              </p>
-            </div>
+        <div ref={outputRef} id="output-content" className="output-content">
+          {!hasOutput ? (
+            <p className="empty-state">
+              Output will appear here during execution
+            </p>
           ) : (
-            <div className="space-y-2">
-              {currentOutputs.map((output, index) => (
-                <div
-                  key={index}
-                  className="text-[var(--vscode-terminal-foreground)] whitespace-pre-wrap break-words"
-                >
-                  {output}
-                </div>
-              ))}
-            </div>
+            allMessages.map((item, index) => {
+              if (item.type === "status") {
+                const statusData = item.data as OutputStatusMessage;
+                return (
+                  <StatusMessage
+                    key={`status-${index}`}
+                    message={statusData.message}
+                    severity={statusData.severity}
+                    timestamp={statusData.timestamp}
+                    timestampMs={statusData.timestampMs}
+                  />
+                );
+              } else {
+                const cliData = item.data as CliOutputItem;
+                return (
+                  <CliOutput
+                    key={`cli-${index}`}
+                    output={cliData}
+                    stepIndex={item.stepIndex}
+                    attemptIndex={item.attemptIndex || 0}
+                  />
+                );
+              }
+            })
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 };

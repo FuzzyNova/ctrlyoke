@@ -14,8 +14,14 @@ export default defineConfig({
           src: "../webview/dictionaries/**/*",
           dest: "dictionaries",
         },
-        // TODO: Copy codicons and custom icons once they're set up properly
-        // For now, these will be loaded from the main webview directory
+        // Copy typo.js for spell checking
+        {
+          src: "../webview/typo.js",
+          dest: ".",
+        },
+        // NOTE: Codicons and custom-icons.css are loaded via <link> tags in index.html
+        // with URLs injected by the VS Code extension at runtime. The extension copies
+        // these files during build (see esbuild.js copyWebviewPlugin).
       ],
     }),
   ],
@@ -27,11 +33,18 @@ export default defineConfig({
     emptyOutDir: true,
     minify: "esbuild",
     sourcemap: true,
+    // Webview requirements: single bundle, predictable names (no hashes)
+    cssCodeSplit: false,
+    // CodeMirror bundle is large - this is intentional for webview
+    chunkSizeWarningLimit: 3000,
     rollupOptions: {
       output: {
-        entryFileNames: "assets/[name]-[hash].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash].[ext]",
+        // Predictable names for extension to reference
+        entryFileNames: "assets/[name].js",
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name].[ext]",
+        // Disable code splitting - bundle everything into single file
+        manualChunks: undefined,
       },
     },
   },

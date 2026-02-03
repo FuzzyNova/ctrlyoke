@@ -1,112 +1,222 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
+import { WorkflowControls } from "../workflow/WorkflowControls";
+import { WorkflowStatus } from "../workflow/WorkflowStatus";
 
+/**
+ * Execution state badge configuration
+ */
+interface StateBadgeConfig {
+  icon: string;
+  text: string;
+  className: string;
+}
+
+const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
+  [EXECUTION_STATES.IDLE]: {
+    icon: "circle-outline",
+    text: "Idle",
+    className: "execution-state-idle",
+  },
+  [EXECUTION_STATES.RUNNING]: {
+    icon: "play",
+    text: "Running",
+    className: "execution-state-running",
+  },
+  [EXECUTION_STATES.PAUSED]: {
+    icon: "debug-pause",
+    text: "Paused",
+    className: "execution-state-paused",
+  },
+  [EXECUTION_STATES.STOPPED]: {
+    icon: "circle-slash",
+    text: "Stopped",
+    className: "execution-state-stopped",
+  },
+  [EXECUTION_STATES.CANCELLING]: {
+    icon: "close",
+    text: "Cancelling",
+    className: "execution-state-cancelling",
+  },
+  [EXECUTION_STATES.COMPLETED]: {
+    icon: "check",
+    text: "Completed",
+    className: "execution-state-completed",
+  },
+  [EXECUTION_STATES.ERROR]: {
+    icon: "error",
+    text: "Error",
+    className: "execution-state-error",
+  },
+};
+
+/**
+ * Header Component
+ *
+ * Layout: Left (WorkflowControls) | Center (WorkflowStatus) | Right (Control buttons + Settings)
+ *
+ * Features:
+ * - WorkflowControls: Split button for New/Load/Queue workflow actions
+ * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
+ * - Control buttons: Run/Pause/Stop based on execution state
+ * - Settings toggle: Opens/closes settings drawer
+ */
 export const Header: React.FC = () => {
-  const { workflowName, fileName, executionState } = useWorkflowStore();
-  const { toggleSettingsDrawer } = useUiStore();
+  const vscode = useVsCodeApi();
+  const { fileName, executionState } = useWorkflowStore();
+  const { settingsDrawerOpen, toggleSettingsDrawer } = useUiStore();
 
-  const handleNew = () => {
-    // TODO: Implement new workflow handler
-    console.log("New workflow");
-  };
+  // Derived state
+  const isIdle = executionState === EXECUTION_STATES.IDLE;
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isPaused = executionState === EXECUTION_STATES.PAUSED;
+  const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
+  const isError = executionState === EXECUTION_STATES.ERROR;
+  const isStopped = executionState === EXECUTION_STATES.STOPPED;
 
-  const handleLoad = () => {
-    // TODO: Implement load workflow handler
-    console.log("Load workflow");
-  };
+  // Button enable states
+  const canRun =
+    fileName !== null && (isIdle || isCompleted || isError || isStopped);
+  const canPause = isRunning;
+  const canResume = isPaused;
+  const canStop = isRunning || isPaused;
 
-  const handleRun = () => {
-    // TODO: Implement run handler
-    console.log("Run workflow");
-  };
+  // Run button shows "Re-run" if completed/error
+  const isRerun = isCompleted || isError;
 
-  const getExecutionStateColor = () => {
-    switch (executionState) {
-      case "running":
-        return "text-blue-500";
-      case "paused":
-        return "text-yellow-500";
-      case "completed":
-        return "text-green-500";
-      case "error":
-        return "text-red-500";
-      default:
-        return "text-[var(--vscode-foreground)]";
-    }
-  };
+  // Handlers
+  const handleRun = useCallback(() => {
+    if (!canRun) return;
+    vscode.postMessage({ type: MESSAGE_TYPES.RUN });
+  }, [vscode, canRun]);
 
-  const getExecutionStateText = () => {
-    switch (executionState) {
-      case "running":
-        return "Running";
-      case "paused":
-        return "Paused";
-      case "completed":
-        return "Completed";
-      case "error":
-        return "Error";
-      default:
-        return "Ready";
-    }
-  };
+  const handlePause = useCallback(() => {
+    if (!canPause) return;
+    vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+  }, [vscode, canPause]);
+
+  const handleResume = useCallback(() => {
+    if (!canResume) return;
+    vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+  }, [vscode, canResume]);
+
+  const handleStop = useCallback(() => {
+    if (!canStop) return;
+    vscode.postMessage({ type: MESSAGE_TYPES.STOP });
+  }, [vscode, canStop]);
 
   return (
-    <header className="flex items-center justify-between px-4 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]">
-      {/* Left: Workflow controls */}
-      <div className="flex items-center gap-2">
-        <button
-          className="px-3 py-1 text-sm rounded bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
-          onClick={handleNew}
-        >
-          <i className="codicon codicon-add mr-1"></i>
-          New
-        </button>
-        <button
-          className="px-3 py-1 text-sm rounded bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
-          onClick={handleLoad}
-        >
-          <i className="codicon codicon-folder-opened mr-1"></i>
-          Load
-        </button>
+    <header className="header flex items-center justify-between gap-4 px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
+      {/* Left Section: Workflow Controls */}
+      <div className="header-left flex items-center gap-2 flex-shrink-0">
+        <WorkflowControls />
       </div>
 
-      {/* Center: Workflow status */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <i className="codicon codicon-file text-[var(--vscode-foreground)]"></i>
-          <span className="text-sm text-[var(--vscode-foreground)]">
-            {workflowName || fileName || "No workflow loaded"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <i
-            className={`codicon codicon-circle-filled text-xs ${getExecutionStateColor()}`}
-          ></i>
-          <span className={`text-sm ${getExecutionStateColor()}`}>
-            {getExecutionStateText()}
-          </span>
-        </div>
+      {/* Center Section: Workflow Status */}
+      <div className="header-center flex-1 flex items-center justify-center min-w-0">
+        <WorkflowStatus className="max-w-[500px]" />
       </div>
 
-      {/* Right: Execution controls + Settings */}
-      <div className="flex items-center gap-2">
+      {/* Right Section: Control Buttons + Settings Toggle */}
+      <div className="header-right flex items-center gap-1 flex-shrink-0">
+        {/* Run/Re-run Button */}
         <button
-          className="px-4 py-1 text-sm rounded bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`control-button flex items-center justify-center gap-1 px-3 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+            canRun
+              ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]"
+              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+          }`}
           onClick={handleRun}
-          disabled={executionState === "running" || !fileName}
+          disabled={!canRun}
+          title={
+            !fileName
+              ? "Load a workflow to run"
+              : isRerun
+                ? "Re-run workflow from beginning"
+                : "Run workflow"
+          }
+          aria-label={isRerun ? "Re-run workflow" : "Run workflow"}
         >
-          <i className="codicon codicon-play mr-1"></i>
-          Run
+          <i
+            className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"}`}
+          />
+          <span className="button-text">{isRerun ? "Re-run" : "Run"}</span>
         </button>
+
+        {/* Pause/Resume Button */}
         <button
-          className="p-2 rounded hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
-          onClick={toggleSettingsDrawer}
-          title="Settings"
+          className={`control-button flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+            canPause || canResume
+              ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+          }`}
+          onClick={isPaused ? handleResume : handlePause}
+          disabled={!canPause && !canResume}
+          title={isPaused ? "Resume execution" : "Pause execution"}
+          aria-label={isPaused ? "Resume" : "Pause"}
         >
-          <i className="codicon codicon-settings-gear text-[var(--vscode-foreground)]"></i>
+          <i
+            className={`codicon ${isPaused ? "codicon-debug-continue" : "codicon-debug-pause"}`}
+          />
+        </button>
+
+        {/* Stop Button */}
+        <button
+          className={`control-button flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+            canStop
+              ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+          }`}
+          onClick={handleStop}
+          disabled={!canStop}
+          title="Stop execution"
+          aria-label="Stop"
+        >
+          <i className="codicon codicon-debug-stop" />
+        </button>
+
+        {/* Divider */}
+        <span className="button-divider h-4 w-px bg-[var(--vscode-panel-border)] mx-1" />
+
+        {/* Settings Toggle */}
+        <button
+          className={`settings-toggle flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-transparent transition-colors ${
+            settingsDrawerOpen
+              ? "bg-[var(--vscode-button-secondaryHoverBackground)] text-[var(--vscode-button-secondaryForeground)]"
+              : "hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-foreground)]"
+          }`}
+          onClick={toggleSettingsDrawer}
+          title={settingsDrawerOpen ? "Close settings" : "Open settings"}
+          aria-label={settingsDrawerOpen ? "Close settings" : "Open settings"}
+          aria-pressed={settingsDrawerOpen}
+        >
+          <i className="codicon codicon-settings-gear" />
         </button>
       </div>
     </header>
+  );
+};
+
+/**
+ * ExecutionStateBadge - Standalone badge component for use elsewhere
+ * (Exported for potential reuse in other components)
+ */
+export const ExecutionStateBadge: React.FC<{
+  state: string;
+  className?: string;
+}> = ({ state, className = "" }) => {
+  const config =
+    STATE_BADGE_CONFIG[state] || STATE_BADGE_CONFIG[EXECUTION_STATES.IDLE];
+
+  return (
+    <span
+      className={`execution-state-badge inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${config.className} ${className}`}
+    >
+      <i className={`codicon codicon-${config.icon} text-[13px]`} />
+      <span className="execution-state-text">{config.text}</span>
+    </span>
   );
 };

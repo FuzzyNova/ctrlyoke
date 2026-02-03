@@ -1,12 +1,17 @@
+const path = require("path");
+
+// Get directory of this config file
+const srcDir = __dirname;
+
 module.exports = {
   content: [
-    "./index.html",
-    "./main.tsx",
-    "./App.tsx",
-    "./components/**/*.{ts,tsx}",
-    "./hooks/**/*.{ts,tsx}",
-    "./store/**/*.{ts,tsx}",
-    "./utils/**/*.{ts,tsx}",
+    path.join(srcDir, "index.html"),
+    path.join(srcDir, "main.tsx"),
+    path.join(srcDir, "App.tsx"),
+    path.join(srcDir, "components/**/*.{ts,tsx}"),
+    path.join(srcDir, "hooks/**/*.{ts,tsx}"),
+    path.join(srcDir, "store/**/*.{ts,tsx}"),
+    path.join(srcDir, "utils/**/*.{ts,tsx}"),
   ],
   darkMode: "class",
 

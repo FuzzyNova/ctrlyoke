@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -6,86 +6,13 @@ import { useUiStore } from "@store/uiStore";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { MESSAGE_TYPES, IncomingMessage } from "@/types/messages";
-
-// Temporary placeholder components (will be implemented in future phases)
-// Using divs with Tailwind classes to demonstrate layout structure
-const Header = () => (
-  <header className="flex items-center justify-between px-4 py-2 border-b border-vscode-border flex-shrink-0 bg-vscode-bg">
-    <div className="flex items-center gap-2">
-      <span className="text-sm font-semibold">FlightPath Dashboard</span>
-    </div>
-    <div className="flex items-center gap-2">
-      <button className="px-3 py-1 text-sm rounded bg-vscode-primary text-vscode-primary-fg hover:bg-vscode-primary-hover">
-        Run Workflow
-      </button>
-    </div>
-  </header>
-);
-
-const PromptsPanel = () => (
-  <div className="h-full flex flex-col bg-vscode-bg border-r border-vscode-border">
-    <div className="flex items-center justify-between p-2 border-b border-vscode-border">
-      <div className="flex items-center gap-2">
-        <i className="codicon codicon-tasklist" />
-        <h3 className="font-semibold text-sm">Prompts</h3>
-      </div>
-      <span className="text-xs text-gray-500">0 / 0</span>
-    </div>
-    <div className="flex-1 overflow-y-auto p-2">
-      <div className="text-center text-gray-500 mt-4 text-sm">
-        Select a prompt file to begin
-      </div>
-    </div>
-  </div>
-);
-
-const OutputSection = () => (
-  <div className="h-full flex flex-col bg-vscode-bg border-b border-vscode-border">
-    <div className="flex items-center justify-between p-2 border-b border-vscode-border">
-      <div className="flex items-center gap-2">
-        <i className="codicon codicon-output" />
-        <h3 className="font-semibold text-sm">Output</h3>
-      </div>
-    </div>
-    <div className="flex-1 overflow-y-auto p-2">
-      <div className="text-center text-gray-500 mt-4 text-sm">
-        CLI output will appear here
-      </div>
-    </div>
-  </div>
-);
-
-const EditorSection = () => (
-  <div className="h-full flex flex-col bg-vscode-bg">
-    <div className="flex items-center justify-between p-2 border-b border-vscode-border">
-      <div className="flex items-center gap-2">
-        <i className="codicon codicon-edit" />
-        <h3 className="font-semibold text-sm">Editor</h3>
-      </div>
-    </div>
-    <div className="flex-1 overflow-y-auto p-2">
-      <div className="text-center text-gray-500 mt-4 text-sm">
-        Prompt editor will appear here
-      </div>
-    </div>
-  </div>
-);
-
-const SettingsDrawer = () => (
-  <div className="h-full flex flex-col bg-vscode-bg border-l border-vscode-border">
-    <div className="flex items-center justify-between p-2 border-b border-vscode-border">
-      <div className="flex items-center gap-2">
-        <i className="codicon codicon-settings-gear" />
-        <h3 className="font-semibold text-sm">Settings</h3>
-      </div>
-    </div>
-    <div className="flex-1 overflow-y-auto p-4">
-      <div className="text-center text-gray-500 mt-4 text-sm">
-        Workflow properties and settings will appear here
-      </div>
-    </div>
-  </div>
-);
+import {
+  Header,
+  PromptsPanel,
+  OutputSection,
+  EditorSection,
+  SettingsDrawer,
+} from "./components/layout";
 
 function App() {
   const vscode = useVsCodeApi();
@@ -136,38 +63,44 @@ function App() {
   }, []);
 
   return (
-    <div className="h-screen w-full flex flex-col bg-vscode-bg text-vscode-fg">
+    <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
       <Header />
 
-      <Group direction="horizontal" className="flex-1">
+      <Group
+        orientation="horizontal"
+        className="flex-1"
+        id="flightpath-main-layout"
+      >
         {/* Prompts Panel (Left) */}
         <Panel defaultSize={20} minSize={10} maxSize={40} id="prompts-panel">
           <PromptsPanel />
         </Panel>
 
-        <Separator className="w-1 bg-vscode-border hover:bg-blue-500 cursor-col-resize transition-colors" />
+        <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
 
         {/* Main Content (Center) - Vertical split */}
-        <Group direction="vertical">
-          <Panel defaultSize={50} minSize={20} id="output-panel">
-            <OutputSection />
-          </Panel>
+        <Panel id="main-content">
+          <Group orientation="vertical" id="flightpath-vertical-layout">
+            <Panel defaultSize={50} minSize={20} id="output-panel">
+              <OutputSection />
+            </Panel>
 
-          <Separator className="h-1 bg-vscode-border hover:bg-blue-500 cursor-row-resize transition-colors" />
+            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
-          <Panel defaultSize={50} minSize={20} id="editor-panel">
-            <EditorSection />
-          </Panel>
-        </Group>
+            <Panel defaultSize={50} minSize={20} id="editor-panel">
+              <EditorSection />
+            </Panel>
+          </Group>
+        </Panel>
 
         {/* Settings Drawer (Right - Conditional) */}
         {settingsDrawerOpen && (
           <>
-            <Separator className="w-1 bg-vscode-border hover:bg-blue-500 cursor-col-resize transition-colors" />
+            <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
             <Panel
-              defaultSize={30}
-              minSize={20}
-              maxSize={50}
+              defaultSize={25}
+              minSize={15}
+              maxSize={40}
               id="settings-panel"
             >
               <SettingsDrawer />

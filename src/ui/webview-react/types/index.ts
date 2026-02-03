@@ -4,3 +4,4 @@
 
 export * from "./vscode";
 export * from "./messages";
+export * from "./cliEvents";

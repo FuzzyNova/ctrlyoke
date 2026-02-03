@@ -157,25 +157,50 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     context: vscode.WebviewViewResolveContext,
     token: vscode.CancellationToken
   ): void | Thenable<void> {
+    console.log("FlightPath: resolveWebviewView called");
     this.view = webviewView;
 
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, "out", "ui", "webview-react"),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          "out",
+          "ui",
+          "webview-react"
+        ),
         vscode.Uri.joinPath(this.context.extensionUri, "images"),
       ],
     };
 
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    const html = this._getHtmlForWebview(webviewView.webview);
+    console.log("FlightPath: Generated HTML length:", html.length);
+    console.log("FlightPath: HTML preview:", html.substring(0, 500));
+
+    // Write full HTML to debug file for inspection
+    const fs = require("fs");
+    const path = require("path");
+    const debugPath = path.join(
+      this.context.extensionPath,
+      "out",
+      "debug-webview.html"
+    );
+    try {
+      fs.writeFileSync(debugPath, html, "utf8");
+      console.log("FlightPath: Full HTML written to:", debugPath);
+    } catch (err) {
+      console.error("FlightPath: Failed to write debug HTML:", err);
+    }
+
+    webviewView.webview.html = html;
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
+      console.log("FlightPath: Received message from webview:", message.type);
       this.handleWebviewMessage(message);
     });
 
-    // Send initial state when webview is ready
-    this.sendInitialState();
+    console.log("FlightPath: Webview initialized, waiting for READY message");
   }
 
   /**
@@ -192,23 +217,77 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
     let html = fsSync.readFileSync(htmlPath.fsPath, "utf-8");
 
-    // Replace asset paths with webview URIs
-    const assetsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "out", "ui", "webview-react", "assets")
+    // Get base URI for webview resources
+    const webviewRootUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react"
+      )
     );
 
-    html = html.replace(/\/assets\//g, `${assetsUri}/`);
+    // Replace all relative paths with webview URIs
+    // Vite outputs: /assets/index-[hash].js, /assets/index-[hash].css, etc.
+    html = html.replace(/\/assets\//g, `${webviewRootUri}/assets/`);
 
     // Replace {{typoUri}} placeholder with actual webview URI for typo.js
     const typoJsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, "out", "ui", "webview-react", "typo.js")
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react",
+        "typo.js"
+      )
     );
     html = html.replace(/\{\{typoUri\}\}/g, typoJsUri.toString());
 
-    // Add CSP meta tag if not present
-    if (!html.includes("<meta http-equiv=\"Content-Security-Policy\"")) {
-      const cspMetaTag = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data:;">`;
-      html = html.replace("</head>", `${cspMetaTag}\n</head>`);
+    // Inject VS Code API capture script BEFORE any other scripts
+    // acquireVsCodeApi() can only be called once, so we capture it and make it globally available
+    // This must run before the React module script loads
+    const vscodeApiScript = `<script>
+window.vscodeApi = acquireVsCodeApi();
+console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
+</script>`;
+
+    // Inject AFTER typo.js script tag but BEFORE the module scripts
+    const beforeReplace = html;
+    html = html.replace(
+      /<script type="module"/,
+      `${vscodeApiScript}\n    <script type="module"`
+    );
+
+    if (html === beforeReplace) {
+      console.log(
+        "FlightPath: WARNING - Failed to inject VS Code API script (no module script found)"
+      );
+    } else {
+      console.log("FlightPath: Injected VS Code API capture script");
+      console.log("FlightPath: Injected script content:", vscodeApiScript);
+    }
+
+    // Replace CSP meta tag with correct policy for VS Code webview
+    // - script-src: Allow VS Code webview scripts (for acquireVsCodeApi)
+    // - style-src: Allow inline styles (Tailwind uses style tags)
+    // - font-src: Allow webview fonts
+    // - img-src: Allow webview images and data URIs
+    // - connect-src: Allow source map loading in dev tools
+    const cspContent = `default-src 'none'; script-src ${webview.cspSource} 'unsafe-inline'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: https:; connect-src ${webview.cspSource};`;
+
+    if (html.includes('<meta http-equiv="Content-Security-Policy"')) {
+      // Replace existing CSP
+      html = html.replace(
+        /<meta http-equiv="Content-Security-Policy" content="[^"]*">/,
+        `<meta http-equiv="Content-Security-Policy" content="${cspContent}">`
+      );
+    } else {
+      // Add CSP before closing </head>
+      html = html.replace(
+        "</head>",
+        `    <meta http-equiv="Content-Security-Policy" content="${cspContent}">
+  </head>`
+      );
     }
 
     return html;
@@ -518,10 +597,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public updateCliStreamingEvents(
-    stepIndex: number,
-    events: CliEvent[]
-  ): void {
+  public updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.CLI_STREAMING_EVENTS,
       stepIndex,
@@ -1252,7 +1328,9 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleExecutionModeChange(mode: string): Promise<void> {
-    if (!FlightPathWebviewProvider.VALID_EXECUTION_MODES.includes(mode as any)) {
+    if (
+      !FlightPathWebviewProvider.VALID_EXECUTION_MODES.includes(mode as any)
+    ) {
       Log.error(`Invalid execution mode: ${mode}`);
       return;
     }
@@ -1323,9 +1401,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleGetConfig(key: string): Promise<void> {
-    const value = vscode.workspace
-      .getConfiguration("flightpath")
-      .get(key);
+    const value = vscode.workspace.getConfiguration("flightpath").get(key);
 
     this.postMessage({
       type: MESSAGE_TYPES.CONFIG_VALUE,
@@ -1368,7 +1444,10 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     for (const [property, value] of Object.entries(
       this.pendingWorkflowProperties
     )) {
-      await this.flightPathManager.updateWorkflowPropertyInQueue(property, value);
+      await this.flightPathManager.updateWorkflowPropertyInQueue(
+        property,
+        value
+      );
     }
 
     this.pendingWorkflowProperties = {};

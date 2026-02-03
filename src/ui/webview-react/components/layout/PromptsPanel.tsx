@@ -1,125 +1,158 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { useEditorStore } from "@store/editorStore";
+import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
+import { PromptCounter } from "../prompts/PromptCounter";
+import {
+  STEP_STATUS,
+  EXECUTION_STATES,
+  type StepStatus,
+} from "../../types/messages";
 
+/**
+ * PromptsPanel - Left panel showing the list of prompts in the workflow
+ *
+ * Features:
+ * - Collapsible header with prompt count
+ * - List of PromptItem components with status
+ * - Click to select prompt for editing
+ * - Empty state when no prompts loaded
+ * - Retry and end condition result display
+ */
 export const PromptsPanel: React.FC = () => {
-  const { prompts, currentStep } = useWorkflowStore();
+  const { prompts, currentStep, executionState, retryStates, cliOutputs } =
+    useWorkflowStore();
   const { promptsCollapsed, togglePromptsCollapse } = useUiStore();
+  const { selectedPromptIndex, selectPrompt } = useEditorStore();
 
-  const getPromptStatus = (index: number): string => {
-    if (index < currentStep) return "completed";
-    if (index === currentStep) return "active";
-    return "pending";
+  // Handle clicking a prompt to edit it
+  const handlePromptClick = useCallback(
+    (index: number) => {
+      // Get the prompt data
+      const prompt = prompts[index];
+      if (prompt) {
+        // Select the prompt for editing
+        selectPrompt(index, prompt);
+      }
+    },
+    [prompts, selectPrompt]
+  );
+
+  // Determine if workflow is running
+  const isRunning = executionState === EXECUTION_STATES.RUNNING;
+
+  // Get the status for a prompt based on workflow state
+  const getPromptStatus = (
+    promptData: (typeof prompts)[0],
+    index: number
+  ): StepStatus => {
+    // If prompt has explicit status, use it
+    if (promptData.status) {
+      return promptData.status;
+    }
+    // Otherwise derive from position
+    if (isRunning && index === currentStep) {
+      return STEP_STATUS.RUNNING;
+    }
+    if (index < currentStep) {
+      return STEP_STATUS.COMPLETED;
+    }
+    return STEP_STATUS.PENDING;
   };
 
-  const getStatusIcon = (status: string): string => {
-    switch (status) {
-      case "completed":
-        return "codicon-check";
-      case "active":
-        return "codicon-sync";
-      case "pending":
-        return "codicon-circle-outline";
-      default:
-        return "codicon-circle-outline";
-    }
+  // Get latest output for a step
+  const getLatestOutput = (index: number) => {
+    const outputs = cliOutputs[index];
+    if (!outputs || outputs.length === 0) return null;
+    return outputs[outputs.length - 1];
   };
 
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case "completed":
-        return "text-green-500";
-      case "active":
-        return "text-blue-500";
-      case "pending":
-        return "text-[var(--vscode-descriptionForeground)]";
-      default:
-        return "text-[var(--vscode-foreground)]";
+  // Build details object for a prompt
+  const getPromptDetails = (
+    _prompt: (typeof prompts)[0],
+    index: number
+  ): PromptDetails => {
+    void _prompt; // Reserved for future use (end condition results)
+    const output = getLatestOutput(index);
+    const details: PromptDetails = {};
+
+    if (output?.elapsed) {
+      details.duration = output.elapsed / 1000;
     }
+
+    // TODO: End condition results would come from workflow state
+    // This will be populated when end condition evaluation is complete
+
+    return details;
   };
 
   return (
     <div className="flex flex-col h-full border-r border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)]">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0">
         <div className="flex items-center gap-2">
-          <i className="codicon codicon-list-unordered text-[var(--vscode-foreground)]"></i>
+          <i className="codicon codicon-list-unordered text-[var(--vscode-foreground)]" />
           <span className="text-sm font-medium text-[var(--vscode-foreground)]">
             Prompts
           </span>
-          <span className="text-xs text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-badge-background)] px-2 py-0.5 rounded">
-            {prompts.length}
-          </span>
+          <PromptCounter />
         </div>
         <button
-          className="p-1 rounded hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
+          className="p-1 rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] transition-colors"
           onClick={togglePromptsCollapse}
-          title={promptsCollapsed ? "Expand" : "Collapse"}
+          title={
+            promptsCollapsed
+              ? "Expand prompts section"
+              : "Collapse prompts section"
+          }
+          aria-label={promptsCollapsed ? "Expand prompts" : "Collapse prompts"}
         >
           <i
             className={`codicon ${
               promptsCollapsed
                 ? "codicon-chevron-right"
                 : "codicon-chevron-down"
-            } text-[var(--vscode-foreground)]`}
-          ></i>
+            } text-[var(--vscode-foreground)] transition-transform`}
+          />
         </button>
       </div>
 
-      {/* Prompt list */}
+      {/* Prompt list - shown when not collapsed */}
       {!promptsCollapsed && (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {prompts.length === 0 ? (
+            /* Empty state */
             <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-              <i className="codicon codicon-inbox text-4xl text-[var(--vscode-descriptionForeground)] mb-3"></i>
-              <p className="text-sm text-[var(--vscode-descriptionForeground)]">
+              <p className="text-xs italic text-[var(--vscode-descriptionForeground)]">
                 No prompts loaded
-              </p>
-              <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
-                Load a workflow to get started
               </p>
             </div>
           ) : (
-            <div className="py-2">
+            /* Prompt items */
+            <div className="py-1">
               {prompts.map((prompt, index) => {
-                const status = getPromptStatus(index);
-                const statusIcon = getStatusIcon(status);
-                const statusColor = getStatusColor(status);
+                const status = getPromptStatus(prompt, index);
+                const retryState = retryStates[index];
+                const details = getPromptDetails(prompt, index);
+                const latestOutput = getLatestOutput(index);
+                const isCurrent = isRunning && index === currentStep;
+                const isSelected = selectedPromptIndex === index;
 
                 return (
-                  <div
-                    key={index}
-                    className={`px-3 py-2 cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)] transition-colors ${
-                      status === "active"
-                        ? "bg-[var(--vscode-list-activeSelectionBackground)]"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <i
-                        className={`codicon ${statusIcon} ${statusColor} mt-0.5 ${
-                          status === "active" ? "animate-spin" : ""
-                        }`}
-                      ></i>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-medium text-[var(--vscode-descriptionForeground)]">
-                            #{index + 1}
-                          </span>
-                          {prompt.id && (
-                            <span className="text-xs text-[var(--vscode-foreground)] truncate">
-                              {prompt.id}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-[var(--vscode-foreground)] line-clamp-2">
-                          {typeof prompt.prompt === "string"
-                            ? prompt.prompt
-                            : "External file reference"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <PromptItem
+                    key={`prompt-${index}-${prompt.id || ""}`}
+                    text={prompt.prompt}
+                    index={index}
+                    id={prompt.id}
+                    status={status}
+                    retryState={retryState}
+                    details={details}
+                    latestOutput={latestOutput}
+                    isCurrent={isCurrent}
+                    isSelected={isSelected}
+                    onClick={() => handlePromptClick(index)}
+                  />
                 );
               })}
             </div>

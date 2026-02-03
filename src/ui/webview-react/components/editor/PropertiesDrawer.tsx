@@ -1,377 +1,391 @@
-import React, { useState } from "react";
-import { useEditorStore } from "@store/editorStore";
-import { useSettingsStore } from "@store/settingsStore";
-import { Collapsible } from "../shared";
+import React, { useEffect, useState } from "react";
+import {
+  useEditorStore,
+  END_CONDITION_DEFAULTS,
+} from "../../store/editorStore";
+import { useSettingsStore } from "../../store/settingsStore";
+import { PROVIDER_IDS, type ProviderId } from "../../types/messages";
 
-export const PropertiesDrawer: React.FC = () => {
-  const { selectedPromptIndex, originalPromptData } = useEditorStore();
-  const { modelOptions, availableAgents } = useSettingsStore();
+interface PropertiesDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
 
-  // Local state for form controls
-  const [provider, setProvider] = useState<string>(
-    originalPromptData?.provider || "copilot-cli"
-  );
-  const [model, setModel] = useState<string>(originalPromptData?.model || "");
-  const [agent, setAgent] = useState<string>(originalPromptData?.agent || "");
-  const [resumeSession, setResumeSession] = useState<boolean>(
-    originalPromptData?.resumeSession ?? false
-  );
-  const [sessionId, setSessionId] = useState<string>(
-    originalPromptData?.sessionId || ""
-  );
-  const [allowDynamicExtension, setAllowDynamicExtension] = useState<boolean>(
-    originalPromptData?.allowDynamicExtension ?? false
+/**
+ * PropertiesDrawer - Slide-up panel for prompt properties
+ *
+ * Features:
+ * - Provider dropdown (from settingsStore)
+ * - Model dropdown (dynamic based on provider)
+ * - Agent dropdown
+ * - Resume Session dropdown and Session ID input
+ * - Allow Dynamic Extension dropdown
+ * - End Condition section (collapsible)
+ *   - Enable checkbox
+ *   - Script, Returns, Timeout, Max Retries, Retry Prompt fields
+ */
+export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
+  isOpen,
+  onClose,
+}) => {
+  const {
+    properties,
+    setProperty,
+    setEndCondition,
+    updateEndConditionField,
+    clearEndCondition,
+  } = useEditorStore();
+  const { availableAgents, globalSettings, getModelsForProvider } =
+    useSettingsStore();
+
+  // End condition expanded state
+  const [endConditionExpanded, setEndConditionExpanded] = useState(
+    !!properties.endCondition
   );
 
-  // End condition state
-  const [hasEndCondition, setHasEndCondition] = useState<boolean>(
-    !!originalPromptData?.endCondition
-  );
-  const [endConditionScript, setEndConditionScript] = useState<string>(
-    originalPromptData?.endCondition?.script || ""
-  );
-  const [endConditionReturns, setEndConditionReturns] = useState<string>(
-    originalPromptData?.endCondition?.returns || ""
-  );
-  const [endConditionTimeout, setEndConditionTimeout] = useState<number>(
-    originalPromptData?.endCondition?.timeout || 30000
-  );
-  const [endConditionMaxRetries, setEndConditionMaxRetries] = useState<number>(
-    originalPromptData?.endCondition?.maxRetries ?? 0
-  );
-  const [endConditionRetryPrompt, setEndConditionRetryPrompt] =
-    useState<string>(originalPromptData?.endCondition?.retryPrompt || "");
+  // Sync expanded state when endCondition changes
+  useEffect(() => {
+    setEndConditionExpanded(!!properties.endCondition);
+  }, [properties.endCondition]);
 
-  // Update local state when originalPromptData changes
-  React.useEffect(() => {
-    if (originalPromptData) {
-      setProvider(originalPromptData.provider || "copilot-cli");
-      setModel(originalPromptData.model || "");
-      setAgent(originalPromptData.agent || "");
-      setResumeSession(originalPromptData.resumeSession ?? false);
-      setSessionId(originalPromptData.sessionId || "");
-      setAllowDynamicExtension(
-        originalPromptData.allowDynamicExtension ?? false
-      );
+  // Get models for current provider
+  const currentProvider =
+    properties.provider === "default"
+      ? globalSettings.provider
+      : (properties.provider as ProviderId);
+  const models = getModelsForProvider(currentProvider);
 
-      setHasEndCondition(!!originalPromptData.endCondition);
-      if (originalPromptData.endCondition) {
-        setEndConditionScript(originalPromptData.endCondition.script || "");
-        setEndConditionReturns(originalPromptData.endCondition.returns || "");
-        setEndConditionTimeout(
-          originalPromptData.endCondition.timeout || 30000
-        );
-        setEndConditionMaxRetries(
-          originalPromptData.endCondition.maxRetries ?? 0
-        );
-        setEndConditionRetryPrompt(
-          originalPromptData.endCondition.retryPrompt || ""
-        );
-      }
-    }
-  }, [originalPromptData]);
-
+  // Handle provider change - also reset model to default
   const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider);
-    sendUpdate({ provider: newProvider });
+    setProperty("provider", newProvider);
+    // Reset model when provider changes
+    setProperty("model", "default");
   };
 
-  const handleModelChange = (newModel: string) => {
-    setModel(newModel);
-    sendUpdate({ model: newModel });
+  // Handle end condition enable/disable
+  const handleEndConditionToggle = () => {
+    if (properties.endCondition) {
+      clearEndCondition();
+      setEndConditionExpanded(false);
+    } else {
+      setEndCondition({ ...END_CONDITION_DEFAULTS });
+      setEndConditionExpanded(true);
+    }
   };
-
-  const handleAgentChange = (newAgent: string) => {
-    setAgent(newAgent);
-    sendUpdate({ agent: newAgent });
-  };
-
-  const handleResumeSessionChange = (resume: boolean) => {
-    setResumeSession(resume);
-    sendUpdate({ resumeSession: resume });
-  };
-
-  const handleSessionIdChange = (id: string) => {
-    setSessionId(id);
-    sendUpdate({ sessionId: id });
-  };
-
-  const handleAllowDynamicExtensionChange = (allow: boolean) => {
-    setAllowDynamicExtension(allow);
-    sendUpdate({ allowDynamicExtension: allow });
-  };
-
-  const handleEndConditionChange = () => {
-    const endCondition = hasEndCondition
-      ? {
-          script: endConditionScript,
-          returns: endConditionReturns,
-          timeout: endConditionTimeout,
-          maxRetries: endConditionMaxRetries,
-          retryPrompt: endConditionRetryPrompt,
-        }
-      : null;
-
-    sendUpdate({ endCondition });
-  };
-
-  const sendUpdate = (updates: any) => {
-    if (selectedPromptIndex === null) return;
-
-    window.postMessage({
-      type: "updatePrompt",
-      index: selectedPromptIndex,
-      ...updates,
-    });
-  };
-
-  if (selectedPromptIndex === null) {
-    return (
-      <div className="flex items-center justify-center h-full p-4">
-        <div className="text-center">
-          <i className="codicon codicon-info text-2xl text-[var(--vscode-descriptionForeground)] mb-2"></i>
-          <p className="text-sm text-[var(--vscode-descriptionForeground)]">
-            Select a prompt to edit its properties
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-4 space-y-4">
-      {/* Provider */}
-      <div>
-        <label
-          htmlFor="provider-select"
-          className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-        >
-          Provider
-        </label>
-        <select
-          id="provider-select"
-          value={provider}
-          onChange={(e) => handleProviderChange(e.target.value)}
-          className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-        >
-          <option value="copilot-cli">Copilot CLI</option>
-          <option value="copilot-chat">Copilot Chat</option>
-          <option value="claude-cli">Claude CLI</option>
-          <option value="codex-cli">Codex CLI</option>
-        </select>
-      </div>
+    <div
+      className={`properties-drawer absolute bottom-0 left-[1px] right-[1px] bg-[var(--vscode-sideBar-background)] border-t-2 border-[var(--vscode-panel-border)] shadow-lg transition-transform duration-300 z-[100] max-h-full flex flex-col ${
+        isOpen ? "translate-y-[2px]" : "translate-y-full"
+      }`}
+    >
+      {/* Drawer Content */}
+      <div className="drawer-content flex flex-col h-full overflow-hidden">
+        {/* Header */}
+        <div className="drawer-header flex items-center justify-between px-4 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-dropBackground)] sticky top-0 z-10">
+          <h3 className="text-xs font-semibold text-[var(--vscode-foreground)] uppercase">
+            Prompt Properties
+          </h3>
+          <button
+            className="btn-close-drawer w-7 h-7 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-[var(--vscode-toolbar-hoverBackground)] transition-all"
+            onClick={onClose}
+            title="Close properties drawer"
+          >
+            <i className="codicon codicon-close" />
+          </button>
+        </div>
 
-      {/* Model */}
-      <div>
-        <label
-          htmlFor="model-select"
-          className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-        >
-          Model
-        </label>
-        <select
-          id="model-select"
-          value={model}
-          onChange={(e) => handleModelChange(e.target.value)}
-          className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-        >
-          <option value="">Default</option>
-          {Object.entries(modelOptions).map(([providerKey, models]) =>
-            (models as string[]).map((m) => (
-              <option key={`${providerKey}-${m}`} value={m}>
-                {m}
-              </option>
-            ))
-          )}
-        </select>
-      </div>
+        {/* Body */}
+        <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4">
+          <div className="space-y-4">
+            {/* Provider */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-provider"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Provider
+              </label>
+              <select
+                id="prop-provider"
+                value={properties.provider}
+                onChange={(e) => handleProviderChange(e.target.value)}
+                className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              >
+                <option value="default">Default</option>
+                <option value={PROVIDER_IDS.COPILOT_CLI}>Copilot CLI</option>
+                <option value={PROVIDER_IDS.COPILOT_CHAT}>Copilot Chat</option>
+                <option value={PROVIDER_IDS.CLAUDE_CLI}>Claude CLI</option>
+                <option value={PROVIDER_IDS.CODEX_CLI}>Codex CLI</option>
+              </select>
+            </div>
 
-      {/* Agent */}
-      <div>
-        <label
-          htmlFor="agent-select"
-          className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-        >
-          Agent
-        </label>
-        <select
-          id="agent-select"
-          value={agent}
-          onChange={(e) => handleAgentChange(e.target.value)}
-          className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-        >
-          <option value="">None</option>
-          {availableAgents.map((a: any) => (
-            <option key={a.path} value={a.path}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </div>
+            {/* Model */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-model"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Model
+              </label>
+              <select
+                id="prop-model"
+                value={properties.model}
+                onChange={(e) => setProperty("model", e.target.value)}
+                className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              >
+                <option value="default">Default</option>
+                {models.length === 0 ? (
+                  <option value="" disabled>
+                    Loading models...
+                  </option>
+                ) : (
+                  models.map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
 
-      {/* Resume Session */}
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="resume-session"
-          checked={resumeSession}
-          onChange={(e) => handleResumeSessionChange(e.target.checked)}
-          className="rounded border-[var(--vscode-input-border)]"
-        />
-        <label
-          htmlFor="resume-session"
-          className="text-xs text-[var(--vscode-foreground)]"
-        >
-          Resume Session
-        </label>
-      </div>
+            {/* Agent */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-agent"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Agent
+              </label>
+              <select
+                id="prop-agent"
+                value={properties.agent}
+                onChange={(e) => setProperty("agent", e.target.value)}
+                className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              >
+                <option value="">None</option>
+                {availableAgents.map((agent) => (
+                  <option key={agent.path} value={agent.path}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Session ID (enabled only when resume is true) */}
-      <div>
-        <label
-          htmlFor="session-id"
-          className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-        >
-          Session ID
-        </label>
-        <input
-          type="text"
-          id="session-id"
-          value={sessionId}
-          onChange={(e) => handleSessionIdChange(e.target.value)}
-          disabled={!resumeSession}
-          placeholder="Auto-resume from previous"
-          className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
-        />
-      </div>
+            {/* Resume Session */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-resume-session"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Resume Session
+              </label>
+              <select
+                id="prop-resume-session"
+                value={properties.resumeSession}
+                onChange={(e) => setProperty("resumeSession", e.target.value)}
+                className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              >
+                <option value="default">Default</option>
+                <option value="yes">Yes - Resume previous session</option>
+                <option value="no">No - Start new session</option>
+              </select>
+            </div>
 
-      {/* Allow Dynamic Extension */}
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="allow-dynamic-extension"
-          checked={allowDynamicExtension}
-          onChange={(e) => handleAllowDynamicExtensionChange(e.target.checked)}
-          className="rounded border-[var(--vscode-input-border)]"
-        />
-        <label
-          htmlFor="allow-dynamic-extension"
-          className="text-xs text-[var(--vscode-foreground)]"
-        >
-          Allow Dynamic Extension
-        </label>
-      </div>
+            {/* Session ID (enabled only when resume session is "yes") */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-session-id"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Session ID
+              </label>
+              <input
+                type="text"
+                id="prop-session-id"
+                value={properties.sessionId}
+                onChange={(e) => setProperty("sessionId", e.target.value)}
+                disabled={properties.resumeSession !== "yes"}
+                placeholder={
+                  properties.resumeSession !== "yes"
+                    ? "Enable Resume Session to input session ID"
+                    : "Enter session ID or prompt number (e.g., 1, 2)"
+                }
+                className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+              />
+            </div>
 
-      {/* End Condition Section */}
-      <Collapsible
-        title="End Condition"
-        defaultOpen={hasEndCondition}
-        onToggle={(isOpen) => {
-          setHasEndCondition(isOpen);
-          if (!isOpen) {
-            sendUpdate({ endCondition: null });
-          }
-        }}
-      >
-        <div className="space-y-3 pt-2">
-          {/* Script */}
-          <div>
-            <label
-              htmlFor="end-condition-script"
-              className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-            >
-              Script
-            </label>
-            <input
-              type="text"
-              id="end-condition-script"
-              value={endConditionScript}
-              onChange={(e) => setEndConditionScript(e.target.value)}
-              onBlur={handleEndConditionChange}
-              placeholder="npm test"
-              className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-            />
-          </div>
+            {/* Allow Dynamic Extension */}
+            <div className="prop-group">
+              <label
+                htmlFor="prop-allow-dynamic"
+                className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+              >
+                Allow Dynamic Extension
+              </label>
+              <select
+                id="prop-allow-dynamic"
+                value={properties.allowDynamicExtension}
+                onChange={(e) =>
+                  setProperty("allowDynamicExtension", e.target.value)
+                }
+                className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              >
+                <option value="default">Default</option>
+                <option value="yes">Yes - Allow AI to extend workflow</option>
+                <option value="no">No - Disable dynamic extension</option>
+              </select>
+            </div>
 
-          {/* Returns */}
-          <div>
-            <label
-              htmlFor="end-condition-returns"
-              className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-            >
-              Expected Return
-            </label>
-            <input
-              type="text"
-              id="end-condition-returns"
-              value={endConditionReturns}
-              onChange={(e) => setEndConditionReturns(e.target.value)}
-              onBlur={handleEndConditionChange}
-              placeholder="true"
-              className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-            />
-          </div>
+            {/* End Condition Section */}
+            <div className="prop-group">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="prop-end-enabled"
+                  checked={!!properties.endCondition}
+                  onChange={handleEndConditionToggle}
+                  className="w-4 h-4 rounded border-[var(--vscode-input-border)]"
+                />
+                <label
+                  htmlFor="prop-end-enabled"
+                  className="prop-label text-xs font-medium text-[var(--vscode-foreground)]"
+                >
+                  Enable End Condition
+                </label>
+              </div>
 
-          {/* Timeout */}
-          <div>
-            <label
-              htmlFor="end-condition-timeout"
-              className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-            >
-              Timeout (ms)
-            </label>
-            <input
-              type="number"
-              id="end-condition-timeout"
-              value={endConditionTimeout}
-              onChange={(e) =>
-                setEndConditionTimeout(parseInt(e.target.value) || 30000)
-              }
-              onBlur={handleEndConditionChange}
-              className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-            />
-          </div>
+              {/* End condition details (collapsible) */}
+              <div
+                className={`prop-end-details space-y-3 pl-6 overflow-hidden transition-all duration-200 ${
+                  endConditionExpanded && properties.endCondition
+                    ? "max-h-[500px] opacity-100"
+                    : "max-h-0 opacity-0"
+                }`}
+              >
+                {/* Script */}
+                <div>
+                  <label
+                    htmlFor="prop-end-script"
+                    className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+                  >
+                    Script
+                  </label>
+                  <input
+                    type="text"
+                    id="prop-end-script"
+                    value={properties.endCondition?.script || ""}
+                    onChange={(e) =>
+                      updateEndConditionField("script", e.target.value)
+                    }
+                    disabled={!properties.endCondition}
+                    placeholder="npm test"
+                    className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                  />
+                </div>
 
-          {/* Max Retries */}
-          <div>
-            <label
-              htmlFor="end-condition-max-retries"
-              className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-            >
-              Max Retries
-            </label>
-            <input
-              type="number"
-              id="end-condition-max-retries"
-              value={endConditionMaxRetries}
-              onChange={(e) =>
-                setEndConditionMaxRetries(parseInt(e.target.value) || 0)
-              }
-              onBlur={handleEndConditionChange}
-              className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-            />
-          </div>
+                {/* Returns */}
+                <div>
+                  <label
+                    htmlFor="prop-end-returns"
+                    className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+                  >
+                    Expected Return
+                  </label>
+                  <input
+                    type="text"
+                    id="prop-end-returns"
+                    value={properties.endCondition?.returns || ""}
+                    onChange={(e) =>
+                      updateEndConditionField("returns", e.target.value)
+                    }
+                    disabled={!properties.endCondition}
+                    placeholder="true"
+                    className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                  />
+                </div>
 
-          {/* Retry Prompt */}
-          <div>
-            <label
-              htmlFor="end-condition-retry-prompt"
-              className="block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
-            >
-              Retry Prompt
-            </label>
-            <textarea
-              id="end-condition-retry-prompt"
-              value={endConditionRetryPrompt}
-              onChange={(e) => setEndConditionRetryPrompt(e.target.value)}
-              onBlur={handleEndConditionChange}
-              placeholder="Validation failed: {error}&#10;&#10;Please fix the issues."
-              rows={3}
-              className="w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-            />
+                {/* Timeout */}
+                <div>
+                  <label
+                    htmlFor="prop-end-timeout"
+                    className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+                  >
+                    Timeout (ms)
+                  </label>
+                  <input
+                    type="number"
+                    id="prop-end-timeout"
+                    value={properties.endCondition?.timeout ?? 30000}
+                    onChange={(e) =>
+                      updateEndConditionField(
+                        "timeout",
+                        parseInt(e.target.value) || 30000
+                      )
+                    }
+                    disabled={!properties.endCondition}
+                    min={1000}
+                    max={300000}
+                    className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Max Retries */}
+                <div>
+                  <label
+                    htmlFor="prop-end-retries"
+                    className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+                  >
+                    Max Retries
+                  </label>
+                  <input
+                    type="number"
+                    id="prop-end-retries"
+                    value={properties.endCondition?.maxRetries ?? 0}
+                    onChange={(e) =>
+                      updateEndConditionField(
+                        "maxRetries",
+                        parseInt(e.target.value) || 0
+                      )
+                    }
+                    disabled={!properties.endCondition}
+                    min={-1}
+                    max={100}
+                    className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                  />
+                  <span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                    Use -1 for unlimited retries
+                  </span>
+                </div>
+
+                {/* Retry Prompt */}
+                <div>
+                  <label
+                    htmlFor="prop-end-retry-prompt"
+                    className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
+                  >
+                    Retry Prompt
+                  </label>
+                  <textarea
+                    id="prop-end-retry-prompt"
+                    value={properties.endCondition?.retryPrompt || ""}
+                    onChange={(e) =>
+                      updateEndConditionField("retryPrompt", e.target.value)
+                    }
+                    disabled={!properties.endCondition}
+                    placeholder="Validation failed: {error}&#10;&#10;Please fix the issues."
+                    rows={3}
+                    className="prop-input w-full px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 resize-y"
+                  />
+                  <span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                    Use {"{error}"} placeholder for validation error message
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </Collapsible>
+      </div>
     </div>
   );
 };

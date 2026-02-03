@@ -6,20 +6,41 @@ interface VsCodeApi {
   setState: (state: any) => void;
 }
 
+// Declare global window extension for vscodeApi
+declare global {
+  interface Window {
+    vscodeApi?: VsCodeApi;
+  }
+}
+
 let vscodeApi: VsCodeApi | undefined;
+
+// Initialize immediately from window (set by inline script)
+if (typeof window !== "undefined" && window.vscodeApi && !vscodeApi) {
+  vscodeApi = window.vscodeApi;
+  console.log("FlightPath: VS Code API initialized from window.vscodeApi");
+}
 
 export function useVsCodeApi(): VsCodeApi {
   const [api, setApi] = useState<VsCodeApi | undefined>(vscodeApi);
 
   useEffect(() => {
     if (!vscodeApi) {
-      // @ts-ignore - Injected by VS Code
-      vscodeApi = acquireVsCodeApi();
+      // Use the globally captured API from the inline script
+      vscodeApi = window.vscodeApi;
+      if (!vscodeApi) {
+        console.error("FlightPath: window.vscodeApi is undefined!");
+        throw new Error(
+          "VS Code API not available - window.vscodeApi is undefined"
+        );
+      }
+      console.log("FlightPath: VS Code API loaded in useEffect");
       setApi(vscodeApi);
     }
   }, []);
 
   if (!api) {
+    console.error("FlightPath: api is undefined in useVsCodeApi hook");
     throw new Error("VS Code API not available");
   }
 
@@ -28,8 +49,12 @@ export function useVsCodeApi(): VsCodeApi {
 
 export function getVsCodeApi(): VsCodeApi {
   if (!vscodeApi) {
-    // @ts-ignore
-    vscodeApi = acquireVsCodeApi();
+    vscodeApi = window.vscodeApi;
+    if (!vscodeApi) {
+      throw new Error(
+        "VS Code API not available - window.vscodeApi is undefined"
+      );
+    }
   }
   return vscodeApi;
 }

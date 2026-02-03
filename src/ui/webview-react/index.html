@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src {{cspSource}} 'unsafe-inline'; font-src {{cspSource}}; img-src {{cspSource}} data:; script-src {{cspSource}} 'unsafe-inline';"
+    />
     <title>FlightPath</title>
+
+    <!-- VS Code Codicons (URL injected by extension at runtime) -->
+    <link rel="stylesheet" href="{{codiconsUri}}" />
+
+    <!-- FlightPath Custom Icons (URL injected by extension at runtime) -->
+    <link rel="stylesheet" href="{{customIconsUri}}" />
+
     <!-- Typo.js for spell checking (no npm alternative) -->
     <!-- Note: Path will be replaced with webview URI by FlightPathWebviewProvider -->
     <script src="{{typoUri}}"></script>
