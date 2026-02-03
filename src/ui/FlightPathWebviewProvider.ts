@@ -231,7 +231,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     // Vite outputs: /assets/index-[hash].js, /assets/index-[hash].css, etc.
     html = html.replace(/\/assets\//g, `${webviewRootUri}/assets/`);
 
-    // Replace {{typoUri}} placeholder with actual webview URI for typo.js
+    // Replace placeholder URIs with actual webview resource URIs
     const typoJsUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this.context.extensionUri,
@@ -241,7 +241,56 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
         "typo.js"
       )
     );
+    const codiconsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react",
+        "codicons",
+        "codicon.css"
+      )
+    );
+    const customIconsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react",
+        "custom-icons.css"
+      )
+    );
+    const affUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react",
+        "dictionaries",
+        "en_US",
+        "en_US.aff"
+      )
+    );
+    const dicUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "out",
+        "ui",
+        "webview-react",
+        "dictionaries",
+        "en_US",
+        "en_US.dic"
+      )
+    );
     html = html.replace(/\{\{typoUri\}\}/g, typoJsUri.toString());
+    html = html.replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString());
+    html = html.replace(/\{\{customIconsUri\}\}/g, customIconsUri.toString());
+
+    // Inject dictionary URIs as data attributes on <body> for Typo.js spell checking
+    html = html.replace(
+      "<body>",
+      `<body data-aff-uri="${affUri}" data-dic-uri="${dicUri}">`
+    );
 
     // Inject VS Code API capture script BEFORE any other scripts
     // acquireVsCodeApi() can only be called once, so we capture it and make it globally available
@@ -275,18 +324,17 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     // - connect-src: Allow source map loading in dev tools
     const cspContent = `default-src 'none'; script-src ${webview.cspSource} 'unsafe-inline'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: https:; connect-src ${webview.cspSource};`;
 
-    if (html.includes('<meta http-equiv="Content-Security-Policy"')) {
-      // Replace existing CSP
-      html = html.replace(
-        /<meta http-equiv="Content-Security-Policy" content="[^"]*">/,
-        `<meta http-equiv="Content-Security-Policy" content="${cspContent}">`
-      );
-    } else {
-      // Add CSP before closing </head>
+    // Replace existing CSP meta tag — regex handles multi-line tags and both /> and > closings
+    const htmlBeforeCsp = html;
+    html = html.replace(
+      /<meta\s+http-equiv="Content-Security-Policy"\s+content="[^"]*"\s*\/?>/,
+      `<meta http-equiv="Content-Security-Policy" content="${cspContent}" />`
+    );
+    if (html === htmlBeforeCsp) {
+      // No existing CSP tag found, add one before </head>
       html = html.replace(
         "</head>",
-        `    <meta http-equiv="Content-Security-Policy" content="${cspContent}">
-  </head>`
+        `    <meta http-equiv="Content-Security-Policy" content="${cspContent}" />\n  </head>`
       );
     }
 

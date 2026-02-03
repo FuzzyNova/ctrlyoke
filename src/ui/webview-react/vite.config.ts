@@ -19,9 +19,21 @@ export default defineConfig({
           src: "../webview/typo.js",
           dest: ".",
         },
-        // NOTE: Codicons and custom-icons.css are loaded via <link> tags in index.html
-        // with URLs injected by the VS Code extension at runtime. The extension copies
-        // these files during build (see esbuild.js copyWebviewPlugin).
+        // Copy codicon CSS from @vscode/codicons package
+        {
+          src: "../../../node_modules/@vscode/codicons/dist/codicon.css",
+          dest: "codicons",
+        },
+        // Copy codicon font file
+        {
+          src: "../../../node_modules/@vscode/codicons/dist/codicon.ttf",
+          dest: "codicons",
+        },
+        // Copy generated custom-icons.css (produced by generate-custom-icons script)
+        {
+          src: "../webview/custom-icons.css",
+          dest: ".",
+        },
       ],
     }),
   ],
