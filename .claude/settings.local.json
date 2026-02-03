@@ -37,7 +37,8 @@
       "Bash(codex exec:*)",
       "WebFetch(domain:gist.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:code.visualstudio.com)"
+      "WebFetch(domain:code.visualstudio.com)",
+      "WebFetch(domain:react-resizable-panels.vercel.app)"
     ],
     "deny": [],
     "ask": []

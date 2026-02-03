@@ -72,7 +72,7 @@ function App() {
         id="flightpath-main-layout"
       >
         {/* Prompts Panel (Left) */}
-        <Panel defaultSize={20} minSize={10} maxSize={40} id="prompts-panel">
+        <Panel defaultSize="20" minSize="10" maxSize="40" id="prompts-panel">
           <PromptsPanel />
         </Panel>
 
@@ -81,13 +81,13 @@ function App() {
         {/* Main Content (Center) - Vertical split */}
         <Panel id="main-content">
           <Group orientation="vertical" id="flightpath-vertical-layout">
-            <Panel defaultSize={50} minSize={20} id="output-panel">
+            <Panel defaultSize="50" minSize="20" id="output-panel">
               <OutputSection />
             </Panel>
 
             <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
-            <Panel defaultSize={50} minSize={20} id="editor-panel">
+            <Panel defaultSize="50" minSize="20" id="editor-panel">
               <EditorSection />
             </Panel>
           </Group>
@@ -98,9 +98,9 @@ function App() {
           <>
             <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
             <Panel
-              defaultSize={25}
-              minSize={15}
-              maxSize={40}
+              defaultSize="25"
+              minSize="15"
+              maxSize="40"
               id="settings-panel"
             >
               <SettingsDrawer />
