@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* TODO: Import VS Code icon fonts (copied by vite-plugin-static-copy) */
+/* @import "../codicons/codicon.css"; */
+
+/* TODO: Import custom icons CSS (auto-generated from SVG files, copied by plugin) */
+/* @import "../custom-icons.css"; */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-editor-foreground);
+    background: var(--vscode-editor-background);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-3 py-1.5 rounded transition-colors;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--vscode-button-hoverBackground);
+  }
+
+  .btn-secondary {
+    @apply px-3 py-1.5 rounded transition-colors;
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+  }
+
+  .input-field {
+    @apply px-2 py-1 rounded;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+  }
+
+  .input-field:focus {
+    @apply outline-none;
+    ring: 1px;
+    ring-color: var(--vscode-button-background);
+  }
+
+  .resize-handle {
+    @apply transition-colors;
+    background-color: var(--vscode-panel-border);
+  }
+
+  .resize-handle:hover {
+    background-color: var(--vscode-button-background);
+  }
+
+  .resize-handle[data-panel-group-direction="horizontal"] {
+    @apply cursor-col-resize;
+    width: 0.25rem;
+  }
+
+  .resize-handle[data-panel-group-direction="vertical"] {
+    @apply cursor-row-resize;
+    height: 0.25rem;
+  }
+}

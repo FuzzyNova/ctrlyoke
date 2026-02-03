@@ -5,6 +5,7 @@ import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
 import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
+import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
 import { QUEUE_POSITION } from "./types/DashboardConstants";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
@@ -14,6 +15,7 @@ import { Log, LogLevel } from "./utils/Log";
 let flightPathManager: FlightPathManager;
 let dashboardProvider: FlightPathDashboardProvider;
 let settingsProvider: FlightPathSettingsProvider;
+let webviewProvider: FlightPathWebviewProvider; // React UI provider
 
 /**
  * Register Language Model Tools for VS Code Chat integration
@@ -89,10 +91,10 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           const result = await appendToQueue(promptQueue, request);
 
           // Update dashboard with extended prompts
-          if (dashboardProvider) {
+          if (webviewProvider) {
             const updatedState = promptQueue.getState();
-            dashboardProvider.updatePromptsExtended(updatedState.prompts);
-            dashboardProvider.updateProgress(
+            webviewProvider.updatePromptsExtended(updatedState.prompts);
+            webviewProvider.updateProgress(
               updatedState.currentIndex,
               updatedState.prompts.length
             );
@@ -159,37 +161,27 @@ export async function activate(context: vscode.ExtensionContext) {
       });
     }
 
-    // Register dashboard provider
-    dashboardProvider = new FlightPathDashboardProvider(context);
+    // Register React webview provider (Phase 4 - unified provider)
+    webviewProvider = new FlightPathWebviewProvider(context);
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
         "flightpath.dashboard",
-        dashboardProvider,
+        webviewProvider,
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-    console.log("FlightPath: Dashboard provider registered");
+    console.log("FlightPath: React webview provider registered");
 
-    // Register settings provider
-    settingsProvider = new FlightPathSettingsProvider(context);
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(
-        "flightpath.settings",
-        settingsProvider,
-        { webviewOptions: { retainContextWhenHidden: true } }
-      )
-    );
-    console.log("FlightPath: Settings provider registered");
+    // Initialize FlightPath manager with React webview provider
+    flightPathManager = new FlightPathManager(context, webviewProvider);
 
-    // Connect dashboard and settings providers (bidirectional)
-    dashboardProvider.setSettingsProvider(settingsProvider);
-    settingsProvider.setDashboardProvider(dashboardProvider);
+    // Set manager reference in webview provider (for getting current state)
+    webviewProvider.setFlightPathManager(flightPathManager);
 
-    // Initialize FlightPath manager with dashboard provider
-    flightPathManager = new FlightPathManager(context, dashboardProvider);
-
-    // Set manager reference in dashboard (for getting current state)
-    dashboardProvider.setFlightPathManager(flightPathManager);
+    // TODO: Remove old dashboard/settings providers after React migration complete
+    // Keeping for reference during Phase 4 development
+    // dashboardProvider = new FlightPathDashboardProvider(context);
+    // settingsProvider = new FlightPathSettingsProvider(context);
 
     await flightPathManager.initialize();
 
@@ -406,7 +398,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       // Focus the dashboard panel first
       await vscode.commands.executeCommand("flightpath.dashboard.focus");
       // Then open the modal
-      dashboardProvider.openNewWorkflowModal();
+      webviewProvider.openNewWorkflowModal();
     }
   );
 

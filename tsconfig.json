@@ -14,5 +14,10 @@
     "declaration": false,
     "declarationMap": false
   },
-  "exclude": ["node_modules", ".vscode-test", "manual-test"]
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "manual-test",
+    "src/ui/webview-react"
+  ]
 }

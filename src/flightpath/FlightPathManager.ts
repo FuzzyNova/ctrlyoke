@@ -70,7 +70,7 @@ export class FlightPathManager {
 
   constructor(
     context: vscode.ExtensionContext,
-    dashboardProvider?: FlightPathDashboardProvider
+    dashboardProvider?: FlightPathDashboardProvider | any // TODO: Create common interface for React/vanilla providers
   ) {
     this.context = context;
     this.dashboardProvider = dashboardProvider;
