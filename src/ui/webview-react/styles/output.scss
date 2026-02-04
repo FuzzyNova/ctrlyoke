@@ -17,13 +17,6 @@
   background: var(--bg-primary);
   border-top: 1px solid var(--border-color);
 
-  &.collapsed {
-    flex: 0 0 auto;
-
-    .output-content {
-      display: none;
-    }
-  }
 }
 
 .output-controls {

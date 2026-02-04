@@ -96,28 +96,22 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     {
       label: "From Template...",
       value: "from-template",
+      icon: <i className="custom-icon icon-from-template" />,
       onClick: handleFromTemplate,
-      shortcut: "Ctrl+Shift+T",
       disabled: isExecuting,
     },
     {
       label: "Load from File...",
       value: "load-file",
+      icon: <i className="custom-icon icon-load-from-file" />,
       onClick: handleLoadFile,
-      shortcut: "Ctrl+Shift+L",
       disabled: isExecuting,
-    },
-    {
-      label: "",
-      value: "divider-1",
-      onClick: () => {},
-      divider: true,
     },
     {
       label: "Queue File...",
       value: "queue-file",
+      icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
-      shortcut: "Ctrl+Shift+Q",
       disabled: !hasQueue || isExecuting,
     },
   ];

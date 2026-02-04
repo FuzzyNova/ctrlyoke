@@ -1,5 +1,10 @@
-import { useEffect } from "react";
-import { Panel, Group, Separator } from "react-resizable-panels";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+  Panel,
+  Group,
+  Separator,
+  PanelImperativeHandle,
+} from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { useUiStore } from "@store/uiStore";
@@ -11,12 +16,27 @@ import {
   PromptsPanel,
   OutputSection,
   EditorSection,
-  SettingsDrawer,
+  SettingsPanel,
 } from "./components/layout";
 
 function App() {
   const vscode = useVsCodeApi();
-  const settingsDrawerOpen = useUiStore((state) => state.settingsDrawerOpen);
+
+  // Panel imperative refs for programmatic collapse/expand
+  const settingsRef = useRef<PanelImperativeHandle>(null);
+  const promptsRef = useRef<PanelImperativeHandle>(null);
+  const outputRef = useRef<PanelImperativeHandle>(null);
+  const editorRef = useRef<PanelImperativeHandle>(null);
+
+  // Collapse state from store (source of truth)
+  const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
+  const setSettingsCollapsed = useUiStore((s) => s.setSettingsCollapsed);
+  const promptsCollapsed = useUiStore((s) => s.promptsCollapsed);
+  const setPromptsCollapsed = useUiStore((s) => s.setPromptsCollapsed);
+  const outputCollapsed = useUiStore((s) => s.outputCollapsed);
+  const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
+  const editorCollapsed = useUiStore((s) => s.editorCollapsed);
+  const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
 
   // Zustand stores
   const workflowStore = useWorkflowStore();
@@ -62,51 +82,120 @@ function App() {
     vscode.postMessage({ type: MESSAGE_TYPES.READY });
   }, []);
 
+  // Initial collapse sync — runs before first paint to avoid flash
+  useLayoutEffect(() => {
+    if (settingsCollapsed) settingsRef.current?.collapse();
+    if (promptsCollapsed) promptsRef.current?.collapse();
+    if (outputCollapsed) outputRef.current?.collapse();
+    if (editorCollapsed) editorRef.current?.collapse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ongoing store → panel sync
+  useEffect(() => {
+    if (settingsCollapsed) settingsRef.current?.collapse();
+    else settingsRef.current?.expand();
+  }, [settingsCollapsed]);
+
+  useEffect(() => {
+    if (promptsCollapsed) promptsRef.current?.collapse();
+    else promptsRef.current?.expand();
+  }, [promptsCollapsed]);
+
+  useEffect(() => {
+    if (outputCollapsed) outputRef.current?.collapse();
+    else outputRef.current?.expand();
+  }, [outputCollapsed]);
+
+  useEffect(() => {
+    if (editorCollapsed) editorRef.current?.collapse();
+    else editorRef.current?.expand();
+  }, [editorCollapsed]);
+
   return (
     <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
       <Header />
 
+      {/* Main layout: Prompts (left) | Output/Editor (center) | Settings (right) */}
       <Group
         orientation="horizontal"
         className="flex-1"
         id="flightpath-main-layout"
       >
-        {/* Prompts Panel (Left) */}
-        <Panel defaultSize="20" minSize="10" maxSize="40" id="prompts-panel">
+        {/* Prompts Panel (Left - collapsible) */}
+        <Panel
+          panelRef={promptsRef}
+          defaultSize="20"
+          collapsible
+          collapsedSize="3"
+          minSize="10"
+          maxSize="40"
+          id="prompts-panel"
+          onResize={() => {
+            setPromptsCollapsed(promptsRef.current?.isCollapsed() ?? false);
+          }}
+        >
           <PromptsPanel />
         </Panel>
 
         <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
 
-        {/* Main Content (Center) - Vertical split */}
-        <Panel id="main-content">
-          <Group orientation="vertical" id="flightpath-vertical-layout">
-            <Panel defaultSize="50" minSize="20" id="output-panel">
+        {/* Center content — vertical split: Output (top) / Editor (bottom) */}
+        <Panel id="center-content">
+          <Group
+            orientation="vertical"
+            className="h-full"
+            id="flightpath-vertical-layout"
+          >
+            <Panel
+              panelRef={outputRef}
+              defaultSize="60"
+              collapsible
+              collapsedSize="5"
+              minSize="20"
+              id="output-panel"
+              onResize={() => {
+                setOutputCollapsed(outputRef.current?.isCollapsed() ?? false);
+              }}
+            >
               <OutputSection />
             </Panel>
 
             <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
-            <Panel defaultSize="50" minSize="20" id="editor-panel">
+            <Panel
+              panelRef={editorRef}
+              defaultSize="40"
+              collapsible
+              collapsedSize="5"
+              minSize="20"
+              id="editor-panel"
+              onResize={() => {
+                setEditorCollapsed(editorRef.current?.isCollapsed() ?? false);
+              }}
+            >
               <EditorSection />
             </Panel>
           </Group>
         </Panel>
 
-        {/* Settings Drawer (Right - Conditional) */}
-        {settingsDrawerOpen && (
-          <>
-            <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
-            <Panel
-              defaultSize="25"
-              minSize="15"
-              maxSize="40"
-              id="settings-panel"
-            >
-              <SettingsDrawer />
-            </Panel>
-          </>
-        )}
+        <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
+
+        {/* Settings Panel (Right - collapsible) */}
+        <Panel
+          panelRef={settingsRef}
+          defaultSize="20"
+          collapsible
+          collapsedSize="3"
+          minSize="15"
+          maxSize="40"
+          id="settings-panel"
+          onResize={() => {
+            setSettingsCollapsed(settingsRef.current?.isCollapsed() ?? false);
+          }}
+        >
+          <SettingsPanel />
+        </Panel>
       </Group>
     </div>
   );

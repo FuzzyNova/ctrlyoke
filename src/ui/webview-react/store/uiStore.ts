@@ -31,9 +31,11 @@ interface UiState {
   outputCollapsed: boolean;
   editorCollapsed: boolean;
 
-  // Drawer states
+  // Drawer state
   propertiesDrawerOpen: boolean;
-  settingsDrawerOpen: boolean;
+
+  // Settings panel collapse
+  settingsCollapsed: boolean;
 
   // Output panel state
   autoscrollEnabled: boolean;
@@ -76,11 +78,12 @@ interface UiActions {
 
   // Drawer toggles
   togglePropertiesDrawer: () => void;
-  toggleSettingsDrawer: () => void;
   openPropertiesDrawer: () => void;
   closePropertiesDrawer: () => void;
-  openSettingsDrawer: () => void;
-  closeSettingsDrawer: () => void;
+
+  // Settings panel
+  toggleSettingsCollapse: () => void;
+  setSettingsCollapsed: (collapsed: boolean) => void;
 
   // Output panel
   setAutoscroll: (enabled: boolean) => void;
@@ -120,7 +123,7 @@ const initialState: UiState = {
   outputCollapsed: false,
   editorCollapsed: false,
   propertiesDrawerOpen: false,
-  settingsDrawerOpen: false,
+  settingsCollapsed: true,
   autoscrollEnabled: true,
   selectedOutputStep: null,
   newWorkflowModalOpen: false,
@@ -140,6 +143,7 @@ const persistedFields = [
   "promptsCollapsed",
   "outputCollapsed",
   "editorCollapsed",
+  "settingsCollapsed",
   "autoscrollEnabled",
   "defaultTemplateId",
 ] as const;
@@ -173,32 +177,20 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       togglePropertiesDrawer: () =>
-        set((state) => ({
-          propertiesDrawerOpen: !state.propertiesDrawerOpen,
-          // Close settings drawer when opening properties
-          settingsDrawerOpen: state.propertiesDrawerOpen
-            ? state.settingsDrawerOpen
-            : false,
-        })),
+        set((state) => ({ propertiesDrawerOpen: !state.propertiesDrawerOpen })),
 
-      toggleSettingsDrawer: () =>
-        set((state) => ({
-          settingsDrawerOpen: !state.settingsDrawerOpen,
-          // Close properties drawer when opening settings
-          propertiesDrawerOpen: state.settingsDrawerOpen
-            ? state.propertiesDrawerOpen
-            : false,
-        })),
-
-      openPropertiesDrawer: () =>
-        set({ propertiesDrawerOpen: true, settingsDrawerOpen: false }),
+      openPropertiesDrawer: () => set({ propertiesDrawerOpen: true }),
 
       closePropertiesDrawer: () => set({ propertiesDrawerOpen: false }),
 
-      openSettingsDrawer: () =>
-        set({ settingsDrawerOpen: true, propertiesDrawerOpen: false }),
+      // ============================================================================
+      // SETTINGS PANEL
+      // ============================================================================
 
-      closeSettingsDrawer: () => set({ settingsDrawerOpen: false }),
+      toggleSettingsCollapse: () =>
+        set((state) => ({ settingsCollapsed: !state.settingsCollapsed })),
+
+      setSettingsCollapsed: (collapsed) => set({ settingsCollapsed: collapsed }),
 
       // ============================================================================
       // OUTPUT PANEL
@@ -276,7 +268,6 @@ export const useUiStore = create<UiState & UiActions>()(
         set({
           // Reset non-persisted state
           propertiesDrawerOpen: false,
-          settingsDrawerOpen: false,
           selectedOutputStep: null,
           newWorkflowModalOpen: false,
           templates: [],

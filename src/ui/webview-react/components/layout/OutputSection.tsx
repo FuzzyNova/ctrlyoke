@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { CliOutput, StatusMessage } from "../output";
+import { PanelBar } from "../shared";
 import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
 import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
 import { MESSAGE_TYPES } from "../../types/messages";
@@ -140,36 +141,39 @@ export const OutputSection: React.FC = () => {
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
 
+  if (outputCollapsed) {
+    return (
+      <PanelBar
+        orientation="horizontal"
+        icon="terminal"
+        title="Output"
+        onClick={toggleOutputCollapse}
+      />
+    );
+  }
+
   return (
-    <section
-      id="output-section"
-      className={`output-section ${outputCollapsed ? "collapsed" : ""}`}
-    >
+    <section id="output-section" className="output-section flex flex-col h-full">
       {/* Section Header */}
-      <div className="section-header output-controls">
-        <div className="section-title-group">
-          <button
-            className="collapse-btn"
-            onClick={toggleOutputCollapse}
-            title={outputCollapsed ? "Expand output" : "Collapse output"}
-            aria-label={outputCollapsed ? "Expand output" : "Collapse output"}
-            aria-expanded={!outputCollapsed}
-          >
-            <i
-              className={`codicon ${
-                outputCollapsed
-                  ? "codicon-chevron-right"
-                  : "codicon-chevron-down"
-              }`}
-            />
-          </button>
-          <h2 className="section-title">
-            <i className="codicon codicon-terminal" /> Output
-          </h2>
+      <div className="section-header output-controls flex items-center px-2 py-1.5 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
+        {/* Left: clickable collapse area */}
+        <div
+          className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+          onClick={toggleOutputCollapse}
+          role="button"
+          aria-label="Collapse output"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && toggleOutputCollapse()}
+        >
+          <i className="codicon codicon-chevron-down text-[12px]" />
+          <i className="codicon codicon-terminal text-[14px]" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide">
+            Output
+          </span>
         </div>
 
-        <div className="output-controls-right">
-          {/* Auto-scroll checkbox */}
+        {/* Right: controls */}
+        <div className="output-controls-right ml-auto flex items-center gap-2">
           <label
             className="autoscroll-label"
             title="Auto-scroll to latest output"
@@ -183,7 +187,6 @@ export const OutputSection: React.FC = () => {
             <span>Auto-scroll</span>
           </label>
 
-          {/* Export button */}
           <button
             className="icon-btn"
             id="export-btn"
@@ -197,40 +200,38 @@ export const OutputSection: React.FC = () => {
       </div>
 
       {/* Output Content */}
-      {!outputCollapsed && (
-        <div ref={outputRef} id="output-content" className="output-content">
-          {!hasOutput ? (
-            <p className="empty-state">
-              Output will appear here during execution
-            </p>
-          ) : (
-            allMessages.map((item, index) => {
-              if (item.type === "status") {
-                const statusData = item.data as OutputStatusMessage;
-                return (
-                  <StatusMessage
-                    key={`status-${index}`}
-                    message={statusData.message}
-                    severity={statusData.severity}
-                    timestamp={statusData.timestamp}
-                    timestampMs={statusData.timestampMs}
-                  />
-                );
-              } else {
-                const cliData = item.data as CliOutputItem;
-                return (
-                  <CliOutput
-                    key={`cli-${index}`}
-                    output={cliData}
-                    stepIndex={item.stepIndex}
-                    attemptIndex={item.attemptIndex || 0}
-                  />
-                );
-              }
-            })
-          )}
-        </div>
-      )}
+      <div ref={outputRef} id="output-content" className="output-content flex-1 overflow-y-auto">
+        {!hasOutput ? (
+          <p className="empty-state">
+            Output will appear here during execution
+          </p>
+        ) : (
+          allMessages.map((item, index) => {
+            if (item.type === "status") {
+              const statusData = item.data as OutputStatusMessage;
+              return (
+                <StatusMessage
+                  key={`status-${index}`}
+                  message={statusData.message}
+                  severity={statusData.severity}
+                  timestamp={statusData.timestamp}
+                  timestampMs={statusData.timestampMs}
+                />
+              );
+            } else {
+              const cliData = item.data as CliOutputItem;
+              return (
+                <CliOutput
+                  key={`cli-${index}`}
+                  output={cliData}
+                  stepIndex={item.stepIndex}
+                  attemptIndex={item.attemptIndex || 0}
+                />
+              );
+            }
+          })
+        )}
+      </div>
     </section>
   );
 };

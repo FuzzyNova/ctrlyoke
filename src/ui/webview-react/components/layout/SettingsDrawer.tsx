@@ -11,7 +11,7 @@ import {
   PROVIDER_IDS,
   type ProviderId,
 } from "../../types/messages";
-import { Button } from "../shared";
+import { PanelBar } from "../shared";
 
 /**
  * Provider display information
@@ -157,17 +157,17 @@ const FormField: React.FC<{
 );
 
 /**
- * SettingsDrawer Component
+ * SettingsPanel Component
  *
- * Slide-in panel from the right side for configuring:
+ * Collapsible panel for configuring:
  * - Provider settings (provider, model, agent)
  * - Workflow properties (execution mode, resume session, dynamic queue)
  * - End condition configuration
  * - Quick access to VS Code settings
  */
-export const SettingsDrawer: React.FC = () => {
+export const SettingsPanel: React.FC = () => {
   const vscode = useVsCodeApi();
-  const { settingsDrawerOpen, toggleSettingsDrawer } = useUiStore();
+  const { settingsCollapsed, toggleSettingsCollapse } = useUiStore();
   const {
     availableAgents,
     providerStatus,
@@ -384,23 +384,46 @@ export const SettingsDrawer: React.FC = () => {
   // RENDER
   // ============================================================================
 
-  if (!settingsDrawerOpen) return null;
+  if (settingsCollapsed) {
+    return (
+      <PanelBar
+        orientation="vertical"
+        icon="settings-gear"
+        title="Settings"
+        onClick={toggleSettingsCollapse}
+      />
+    );
+  }
 
   const endCondition = workflowProperties.endCondition || {};
 
   return (
-    <div className="fixed inset-y-0 right-0 w-80 bg-[var(--vscode-sideBar-background)] border-l border-[var(--vscode-panel-border)] shadow-lg z-40 flex flex-col animate-slide-in-right">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--vscode-panel-border)]">
-        <h2 className="text-sm font-semibold text-[var(--vscode-foreground)]">
-          Workflow Settings
-        </h2>
+    <div className="flex flex-col h-full bg-[var(--vscode-sideBar-background)]">
+      {/* Section Header - clickable to collapse */}
+      <div
+        className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--vscode-panel-border)] cursor-pointer select-none"
+        onClick={toggleSettingsCollapse}
+        role="button"
+        aria-label="Collapse settings"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && toggleSettingsCollapse()}
+      >
+        <div className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors">
+          <i className="codicon codicon-chevron-down text-[12px]" />
+          <i className="codicon codicon-settings-gear text-[14px]" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
+            Settings
+          </span>
+        </div>
         <button
-          onClick={toggleSettingsDrawer}
-          className="p-1 rounded hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-foreground)] transition-colors"
-          aria-label="Close settings"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenSettings();
+          }}
+          className="text-[11px] text-[var(--vscode-textLink-foreground)] hover:underline hover:bg-[var(--vscode-list-hoverBackground)] px-1 py-0.5 rounded"
+          title="Open VS Code settings"
         >
-          <i className="codicon codicon-close" />
+          More...
         </button>
       </div>
 
@@ -838,17 +861,6 @@ export const SettingsDrawer: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-[var(--vscode-panel-border)]">
-        <Button
-          variant="secondary"
-          onClick={handleOpenSettings}
-          className="w-full flex items-center justify-center gap-2"
-        >
-          <i className="codicon codicon-settings-gear" />
-          More Settings...
-        </Button>
-      </div>
     </div>
   );
 };

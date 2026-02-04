@@ -1,6 +1,5 @@
 import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
-import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { WorkflowControls } from "../workflow/WorkflowControls";
@@ -62,12 +61,10 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
  * - WorkflowStatus: Workflow name + execution state badge (editable name, recent workflows dropdown)
  * - Control buttons: Run/Pause/Stop based on execution state
- * - Settings toggle: Opens/closes settings drawer
  */
 export const Header: React.FC = () => {
   const vscode = useVsCodeApi();
   const { fileName, executionState } = useWorkflowStore();
-  const { settingsDrawerOpen, toggleSettingsDrawer } = useUiStore();
 
   // Derived state
   const isIdle = executionState === EXECUTION_STATES.IDLE;
@@ -120,7 +117,7 @@ export const Header: React.FC = () => {
         <WorkflowStatus className="max-w-[500px]" />
       </div>
 
-      {/* Right Section: Control Buttons + Settings Toggle */}
+      {/* Right Section: Control Buttons */}
       <div className="header-right flex items-center gap-1 flex-shrink-0">
         {/* Run/Re-run Button */}
         <button
@@ -178,23 +175,6 @@ export const Header: React.FC = () => {
           <i className="codicon codicon-debug-stop" />
         </button>
 
-        {/* Divider */}
-        <span className="button-divider h-4 w-px bg-[var(--vscode-panel-border)] mx-1" />
-
-        {/* Settings Toggle */}
-        <button
-          className={`settings-toggle flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-transparent transition-colors ${
-            settingsDrawerOpen
-              ? "bg-[var(--vscode-button-secondaryHoverBackground)] text-[var(--vscode-button-secondaryForeground)]"
-              : "hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-foreground)]"
-          }`}
-          onClick={toggleSettingsDrawer}
-          title={settingsDrawerOpen ? "Close settings" : "Open settings"}
-          aria-label={settingsDrawerOpen ? "Close settings" : "Open settings"}
-          aria-pressed={settingsDrawerOpen}
-        >
-          <i className="codicon codicon-settings-gear" />
-        </button>
       </div>
     </header>
   );

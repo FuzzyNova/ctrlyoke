@@ -6,3 +6,4 @@ export {
   type SplitButtonProps,
 } from "./SplitButton";
 export { Collapsible } from "./Collapsible";
+export { PanelBar } from "./PanelBar";

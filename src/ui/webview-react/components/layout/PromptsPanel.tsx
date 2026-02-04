@@ -4,6 +4,7 @@ import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
 import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
 import { PromptCounter } from "../prompts/PromptCounter";
+import { PanelBar } from "../shared";
 import {
   STEP_STATUS,
   EXECUTION_STATES,
@@ -87,78 +88,75 @@ export const PromptsPanel: React.FC = () => {
     return details;
   };
 
+  if (promptsCollapsed) {
+    return (
+      <PanelBar
+        orientation="vertical"
+        icon="list-unordered"
+        title="Prompts"
+        onClick={togglePromptsCollapse}
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full border-r border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <i className="codicon codicon-list-unordered text-[var(--vscode-foreground)]" />
-          <span className="text-sm font-medium text-[var(--vscode-foreground)]">
-            Prompts
-          </span>
+    <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
+      {/* Header - clickable to collapse */}
+      <div
+        className="flex items-center px-2 py-1.5 border-b border-[var(--vscode-panel-border)] flex-shrink-0 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+        onClick={togglePromptsCollapse}
+        role="button"
+        aria-label="Collapse prompts"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && togglePromptsCollapse()}
+      >
+        <i className="codicon codicon-chevron-down text-[12px]" />
+        <i className="codicon codicon-list-unordered text-[14px] ml-1" />
+        <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
+          Prompts
+        </span>
+        <span className="ml-auto">
           <PromptCounter />
-        </div>
-        <button
-          className="p-1 rounded hover:bg-[var(--vscode-toolbar-hoverBackground)] transition-colors"
-          onClick={togglePromptsCollapse}
-          title={
-            promptsCollapsed
-              ? "Expand prompts section"
-              : "Collapse prompts section"
-          }
-          aria-label={promptsCollapsed ? "Expand prompts" : "Collapse prompts"}
-        >
-          <i
-            className={`codicon ${
-              promptsCollapsed
-                ? "codicon-chevron-right"
-                : "codicon-chevron-down"
-            } text-[var(--vscode-foreground)] transition-transform`}
-          />
-        </button>
+        </span>
       </div>
 
-      {/* Prompt list - shown when not collapsed */}
-      {!promptsCollapsed && (
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {prompts.length === 0 ? (
-            /* Empty state */
-            <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-              <p className="text-xs italic text-[var(--vscode-descriptionForeground)]">
-                No prompts loaded
-              </p>
-            </div>
-          ) : (
-            /* Prompt items */
-            <div className="py-1">
-              {prompts.map((prompt, index) => {
-                const status = getPromptStatus(prompt, index);
-                const retryState = retryStates[index];
-                const details = getPromptDetails(prompt, index);
-                const latestOutput = getLatestOutput(index);
-                const isCurrent = isRunning && index === currentStep;
-                const isSelected = selectedPromptIndex === index;
+      {/* Prompt list */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {prompts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+            <p className="text-xs italic text-[var(--vscode-descriptionForeground)]">
+              No prompts loaded
+            </p>
+          </div>
+        ) : (
+          <div className="py-1">
+            {prompts.map((prompt, index) => {
+              const status = getPromptStatus(prompt, index);
+              const retryState = retryStates[index];
+              const details = getPromptDetails(prompt, index);
+              const latestOutput = getLatestOutput(index);
+              const isCurrent = isRunning && index === currentStep;
+              const isSelected = selectedPromptIndex === index;
 
-                return (
-                  <PromptItem
-                    key={`prompt-${index}-${prompt.id || ""}`}
-                    text={prompt.prompt}
-                    index={index}
-                    id={prompt.id}
-                    status={status}
-                    retryState={retryState}
-                    details={details}
-                    latestOutput={latestOutput}
-                    isCurrent={isCurrent}
-                    isSelected={isSelected}
-                    onClick={() => handlePromptClick(index)}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+              return (
+                <PromptItem
+                  key={`prompt-${index}-${prompt.id || ""}`}
+                  text={prompt.prompt}
+                  index={index}
+                  id={prompt.id}
+                  status={status}
+                  retryState={retryState}
+                  details={details}
+                  latestOutput={latestOutput}
+                  isCurrent={isCurrent}
+                  isSelected={isSelected}
+                  onClick={() => handlePromptClick(index)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
