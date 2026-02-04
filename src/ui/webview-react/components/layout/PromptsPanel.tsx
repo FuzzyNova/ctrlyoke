@@ -110,7 +110,7 @@ export const PromptsPanel: React.FC = () => {
         tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && togglePromptsCollapse()}
       >
-        <i className="codicon codicon-chevron-down text-[12px]" />
+        <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
         <i className="codicon codicon-list-unordered text-[14px] ml-1" />
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
           Prompts

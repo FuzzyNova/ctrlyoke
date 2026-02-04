@@ -52,7 +52,7 @@ export const EditorSection: React.FC = () => {
     >
       {/* Section Header */}
       <div className="section-header flex items-center px-2 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
-        {/* Collapse trigger (chevron + icon) */}
+        {/* Collapse trigger (chevron + icon + label) */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors flex-shrink-0"
           onClick={toggleEditorCollapse}
@@ -61,12 +61,15 @@ export const EditorSection: React.FC = () => {
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && toggleEditorCollapse()}
         >
-          <i className="codicon codicon-chevron-down text-[12px]" />
+          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-edit text-[14px]" />
+          <span className="text-[11px] font-semibold uppercase tracking-wide">
+            Editor
+          </span>
         </div>
 
         {/* Mode text */}
-        <span className="editor-mode-indicator text-sm font-medium text-[var(--vscode-foreground)] truncate ml-2">
+        <span className="editor-mode-indicator text-xs text-[var(--vscode-descriptionForeground)] truncate ml-2">
           {getModeText()}
         </span>
 

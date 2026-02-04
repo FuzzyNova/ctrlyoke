@@ -165,7 +165,7 @@ export const OutputSection: React.FC = () => {
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && toggleOutputCollapse()}
         >
-          <i className="codicon codicon-chevron-down text-[12px]" />
+          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-terminal text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide">
             Output

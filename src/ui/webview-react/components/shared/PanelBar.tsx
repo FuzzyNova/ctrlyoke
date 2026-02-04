@@ -26,7 +26,7 @@ export const PanelBar: React.FC<PanelBarProps> = ({
     // Thin vertical column: just chevron + icon, no title text
     return (
       <div
-        className="flex flex-col justify-center items-center w-full h-full gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+        className="flex flex-col justify-start items-center w-full h-full pt-1.5 gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
         onClick={onClick}
         role="button"
         aria-label={`Expand ${title}`}
@@ -42,7 +42,7 @@ export const PanelBar: React.FC<PanelBarProps> = ({
   // Thin horizontal strip: chevron + icon + title
   return (
     <div
-      className="flex flex-row items-center w-full h-full px-2 gap-1.5 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+      className="flex flex-row items-center w-full px-2 py-1.5 gap-1 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
       onClick={onClick}
       role="button"
       aria-label={`Expand ${title}`}

@@ -409,7 +409,7 @@ export const SettingsPanel: React.FC = () => {
         onKeyDown={(e) => e.key === "Enter" && toggleSettingsCollapse()}
       >
         <div className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors">
-          <i className="codicon codicon-chevron-down text-[12px]" />
+          <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-settings-gear text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
             Settings

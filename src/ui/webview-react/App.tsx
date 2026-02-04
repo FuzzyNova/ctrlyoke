@@ -86,8 +86,6 @@ function App() {
   useLayoutEffect(() => {
     if (settingsCollapsed) settingsRef.current?.collapse();
     if (promptsCollapsed) promptsRef.current?.collapse();
-    if (outputCollapsed) outputRef.current?.collapse();
-    if (editorCollapsed) editorRef.current?.collapse();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -102,15 +100,15 @@ function App() {
     else promptsRef.current?.expand();
   }, [promptsCollapsed]);
 
-  useEffect(() => {
+  // Output/Editor sync uses useLayoutEffect: the vertical Group conditionally unmounts
+  // when both are collapsed and remounts when one expands. useLayoutEffect fires before
+  // paint so the still-collapsed panel collapses before the user sees the default split.
+  useLayoutEffect(() => {
     if (outputCollapsed) outputRef.current?.collapse();
     else outputRef.current?.expand();
-  }, [outputCollapsed]);
-
-  useEffect(() => {
     if (editorCollapsed) editorRef.current?.collapse();
     else editorRef.current?.expand();
-  }, [editorCollapsed]);
+  }, [outputCollapsed, editorCollapsed]);
 
   return (
     <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
@@ -140,43 +138,54 @@ function App() {
 
         <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
 
-        {/* Center content — vertical split: Output (top) / Editor (bottom) */}
+        {/* Center content — Output (top) / Editor (bottom), both independently collapsible.
+            react-resizable-panels requires sizes to sum to 100%, so it cannot handle both
+            panels collapsed simultaneously. When both are collapsed we render a plain flex
+            stack (two header bars + background). Otherwise we use the resizable Group so
+            the user can drag the separator between Output and Editor. */}
         <Panel id="center-content">
-          <Group
-            orientation="vertical"
-            className="h-full"
-            id="flightpath-vertical-layout"
-          >
-            <Panel
-              panelRef={outputRef}
-              defaultSize="60"
-              collapsible
-              collapsedSize="5"
-              minSize="20"
-              id="output-panel"
-              onResize={() => {
-                setOutputCollapsed(outputRef.current?.isCollapsed() ?? false);
-              }}
+          {outputCollapsed && editorCollapsed ? (
+            <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
+              <div className="flex-none"><OutputSection /></div>
+              <div className="flex-none"><EditorSection /></div>
+            </div>
+          ) : (
+            <Group
+              orientation="vertical"
+              className="h-full"
+              id="flightpath-vertical-layout"
             >
-              <OutputSection />
-            </Panel>
+              <Panel
+                panelRef={outputRef}
+                defaultSize="60"
+                collapsible
+                collapsedSize="5"
+                minSize="15"
+                id="output-panel"
+                onResize={() => {
+                  setOutputCollapsed(outputRef.current?.isCollapsed() ?? false);
+                }}
+              >
+                <OutputSection />
+              </Panel>
 
-            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+              <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
-            <Panel
-              panelRef={editorRef}
-              defaultSize="40"
-              collapsible
-              collapsedSize="5"
-              minSize="20"
-              id="editor-panel"
-              onResize={() => {
-                setEditorCollapsed(editorRef.current?.isCollapsed() ?? false);
-              }}
-            >
-              <EditorSection />
-            </Panel>
-          </Group>
+              <Panel
+                panelRef={editorRef}
+                defaultSize="40"
+                collapsible
+                collapsedSize="5"
+                minSize="15"
+                id="editor-panel"
+                onResize={() => {
+                  setEditorCollapsed(editorRef.current?.isCollapsed() ?? false);
+                }}
+              >
+                <EditorSection />
+              </Panel>
+            </Group>
+          )}
         </Panel>
 
         <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
