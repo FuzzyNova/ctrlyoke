@@ -48,8 +48,8 @@ function App() {
   // constant while the Group is already mounted prevents the library from
   // re-initialising and overriding imperative collapse()/expand() calls.
   const wasBothCollapsed = useRef(outputCollapsed && editorCollapsed);
-  const mountDefaultOutput = useRef(outputCollapsed ? "5" : editorCollapsed ? "95" : "60");
-  const mountDefaultEditor = useRef(editorCollapsed ? "5" : outputCollapsed ? "95" : "40");
+  const mountDefaultOutput = useRef(outputCollapsed ? "30px" : editorCollapsed ? "95" : "60");
+  const mountDefaultEditor = useRef(editorCollapsed ? "30px" : outputCollapsed ? "95" : "40");
 
   // Zustand stores
   const workflowStore = useWorkflowStore();
@@ -149,8 +149,8 @@ function App() {
   {
     const bothCollapsed = outputCollapsed && editorCollapsed;
     if (wasBothCollapsed.current && !bothCollapsed) {
-      mountDefaultOutput.current = outputCollapsed ? "5" : editorCollapsed ? "95" : "60";
-      mountDefaultEditor.current = editorCollapsed ? "5" : outputCollapsed ? "95" : "40";
+      mountDefaultOutput.current = outputCollapsed ? "30px" : editorCollapsed ? "95" : "60";
+      mountDefaultEditor.current = editorCollapsed ? "30px" : outputCollapsed ? "95" : "40";
     }
     wasBothCollapsed.current = bothCollapsed;
   }
@@ -170,7 +170,7 @@ function App() {
           panelRef={promptsRef}
           defaultSize="20"
           collapsible
-          collapsedSize="3"
+          collapsedSize="32px"
           minSize="10"
           maxSize="40"
           id="prompts-panel"
@@ -206,7 +206,7 @@ function App() {
                 panelRef={outputRef}
                 defaultSize={mountDefaultOutput.current}
                 collapsible
-                collapsedSize="5"
+                collapsedSize="30px"
                 minSize="15"
                 id="output-panel"
                 onResize={() => {
@@ -223,7 +223,7 @@ function App() {
                 panelRef={editorRef}
                 defaultSize={mountDefaultEditor.current}
                 collapsible
-                collapsedSize="5"
+                collapsedSize="30px"
                 minSize="15"
                 id="editor-panel"
                 onResize={() => {
@@ -244,7 +244,7 @@ function App() {
           panelRef={settingsRef}
           defaultSize="20"
           collapsible
-          collapsedSize="3"
+          collapsedSize="32px"
           minSize="15"
           maxSize="40"
           id="settings-panel"

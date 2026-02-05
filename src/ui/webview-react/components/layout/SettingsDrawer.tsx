@@ -401,7 +401,7 @@ export const SettingsPanel: React.FC = () => {
     <div className="flex flex-col h-full bg-[var(--vscode-sideBar-background)]">
       {/* Section Header - clickable to collapse */}
       <div
-        className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--vscode-panel-border)] cursor-pointer select-none"
+        className="flex items-center justify-between h-[30px] px-2 border-b border-[var(--vscode-panel-border)] cursor-pointer select-none"
         onClick={toggleSettingsCollapse}
         role="button"
         aria-label="Collapse settings"

@@ -155,7 +155,7 @@ export const OutputSection: React.FC = () => {
   return (
     <section id="output-section" className="output-section flex flex-col h-full">
       {/* Section Header */}
-      <div className="section-header output-controls flex items-center px-2 py-1.5 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
+      <div className="section-header output-controls flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
         {/* Left: clickable collapse area */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"

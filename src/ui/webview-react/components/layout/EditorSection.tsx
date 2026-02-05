@@ -51,7 +51,7 @@ export const EditorSection: React.FC = () => {
       className="editor-section flex flex-col h-full bg-[var(--vscode-editor-background)]"
     >
       {/* Section Header */}
-      <div className="section-header flex items-center px-2 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+      <div className="section-header flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
         {/* Collapse trigger (chevron + icon + label) */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors flex-shrink-0"
