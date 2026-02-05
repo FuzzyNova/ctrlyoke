@@ -39,7 +39,9 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:code.visualstudio.com)",
       "WebFetch(domain:react-resizable-panels.vercel.app)",
-      "Bash(npx vite build:*)"
+      "Bash(npx vite build:*)",
+      "WebFetch(domain:mcpmarket.com)",
+      "WebFetch(domain:blog.skinnyandbald.com)"
     ],
     "deny": [],
     "ask": []
