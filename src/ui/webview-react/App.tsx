@@ -43,6 +43,14 @@ function App() {
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
 
+  // Stable mount defaults — only recomputed on the both-collapsed → one-open
+  // transition (i.e. when the vertical Group remounts).  Keeping defaultSize
+  // constant while the Group is already mounted prevents the library from
+  // re-initialising and overriding imperative collapse()/expand() calls.
+  const wasBothCollapsed = useRef(outputCollapsed && editorCollapsed);
+  const mountDefaultOutput = useRef(outputCollapsed ? "5" : editorCollapsed ? "95" : "60");
+  const mountDefaultEditor = useRef(editorCollapsed ? "5" : outputCollapsed ? "95" : "40");
+
   // Zustand stores
   const workflowStore = useWorkflowStore();
   const settingsStore = useSettingsStore();
@@ -107,53 +115,45 @@ function App() {
 
   // Sync store → panels imperatively.  Runs before paint so there is no visible
   // flash of the default 60/40 split before the persisted collapsed state is
-  // applied.  Also opens the onResize gate (initializedRef) so that the default-
-  // size onResize events that fire when the Group mounts don't overwrite the
-  // persisted collapsed state.
+  // applied.  Does NOT open the onResize gate — that is done in the useEffect
+  // below, which runs after all child effects (including the Panel mount
+  // onResize events) have fired.
   useLayoutEffect(() => {
-    console.log(
-      `[useLayoutEffect] outputCollapsed=${outputCollapsed}  editorCollapsed=${editorCollapsed}  ` +
-      `outputRef=${!!outputRef.current}  editorRef=${!!editorRef.current}`
-    );
-
     if (outputRef.current) {
-      const sizeBefore = outputRef.current.getSize().asPercentage.toFixed(1);
-      const action = outputCollapsed ? "collapse" : "expand";
-      console.log(`[useLayoutEffect] output: calling ${action}()  sizeBefore=${sizeBefore}%`);
       if (outputCollapsed) outputRef.current.collapse();
       else outputRef.current.expand();
-      console.log(`[useLayoutEffect] output: after ${action}()  sizeAfter=${outputRef.current.getSize().asPercentage.toFixed(1)}%  isCollapsed=${outputRef.current.isCollapsed()}`);
     }
 
     if (editorRef.current) {
-      const sizeBefore = editorRef.current.getSize().asPercentage.toFixed(1);
-      const action = editorCollapsed ? "collapse" : "expand";
-      console.log(`[useLayoutEffect] editor: calling ${action}()  sizeBefore=${sizeBefore}%`);
       if (editorCollapsed) editorRef.current.collapse();
       else editorRef.current.expand();
-      console.log(`[useLayoutEffect] editor: after ${action}()  sizeAfter=${editorRef.current.getSize().asPercentage.toFixed(1)}%  isCollapsed=${editorRef.current.isCollapsed()}`);
     }
-
-    initializedRef.current = true;
   }, [outputCollapsed, editorCollapsed]);
 
-  // When both panels are collapsed the vertical Group unmounts (conditional
-  // branch).  Reset the gate so the next mount's default-size onResize events
-  // are suppressed until useLayoutEffect re-syncs.
+  // Gate management: closed when both panels are collapsed (the Group
+  // unmounts; next mount needs re-sync before onResize is trusted).  Opened
+  // in useEffect (not useLayoutEffect) so that the Panel mount onResize
+  // events — which fire in child useEffects — are still gated when they run.
   useEffect(() => {
     if (outputCollapsed && editorCollapsed) {
       initializedRef.current = false;
+    } else {
+      initializedRef.current = true;
     }
   }, [outputCollapsed, editorCollapsed]);
 
-  // Debug: log panel state (fires after every store change)
-  useEffect(() => {
-    console.log(
-      `[Panels] outputCollapsed=${outputCollapsed}  editorCollapsed=${editorCollapsed}  ` +
-      `output=${outputRef.current?.getSize()?.asPercentage.toFixed(1) ?? "–"}%  ` +
-      `editor=${editorRef.current?.getSize()?.asPercentage.toFixed(1) ?? "–"}%`
-    );
-  }, [editorCollapsed, outputCollapsed]);
+  // Update mount defaults only when the Group is about to remount
+  // (both-collapsed → one-open).  While the Group stays alive defaultSize
+  // must remain constant so the library does not re-initialise and clobber
+  // imperative collapse()/expand() calls.
+  {
+    const bothCollapsed = outputCollapsed && editorCollapsed;
+    if (wasBothCollapsed.current && !bothCollapsed) {
+      mountDefaultOutput.current = outputCollapsed ? "5" : editorCollapsed ? "95" : "60";
+      mountDefaultEditor.current = editorCollapsed ? "5" : outputCollapsed ? "95" : "40";
+    }
+    wasBothCollapsed.current = bothCollapsed;
+  }
 
   return (
     <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
@@ -204,47 +204,31 @@ function App() {
             >
               <Panel
                 panelRef={outputRef}
-                defaultSize="60"
+                defaultSize={mountDefaultOutput.current}
                 collapsible
                 collapsedSize="5"
                 minSize="15"
                 id="output-panel"
                 onResize={() => {
                   if (!initializedRef.current) return;
-                  const collapsed = outputRef.current?.isCollapsed() ?? false;
-                  console.log(
-                    `[onResize:output] size=${outputRef.current?.getSize()?.asPercentage.toFixed(1)}%  isCollapsed=${collapsed}`
-                  );
-                  setOutputCollapsed(collapsed);
+                  setOutputCollapsed(outputRef.current?.isCollapsed() ?? false);
                 }}
               >
                 <OutputSection />
               </Panel>
 
-              <Separator
-                className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors"
-                onPointerDown={() => {
-                  console.log(
-                    `[drag:start] output-editor separator  output=${outputRef.current?.getSize()?.asPercentage.toFixed(1)}%  ` +
-                    `editor=${editorRef.current?.getSize()?.asPercentage.toFixed(1)}%`
-                  );
-                }}
-              />
+              <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
               <Panel
                 panelRef={editorRef}
-                defaultSize="40"
+                defaultSize={mountDefaultEditor.current}
                 collapsible
                 collapsedSize="5"
                 minSize="15"
                 id="editor-panel"
                 onResize={() => {
                   if (!initializedRef.current) return;
-                  const collapsed = editorRef.current?.isCollapsed() ?? false;
-                  console.log(
-                    `[onResize:editor] size=${editorRef.current?.getSize()?.asPercentage.toFixed(1)}%  isCollapsed=${collapsed}`
-                  );
-                  setEditorCollapsed(collapsed);
+                  setEditorCollapsed(editorRef.current?.isCollapsed() ?? false);
                 }}
               >
                 <EditorSection />
