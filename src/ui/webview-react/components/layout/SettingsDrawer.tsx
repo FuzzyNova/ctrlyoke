@@ -694,9 +694,11 @@ export const SettingsPanel: React.FC = () => {
                       name="execution-mode"
                       value="interactive"
                       checked={globalSettings.executionMode === "interactive"}
-                      onChange={(e) =>
-                        handleExecutionModeChange(e.target.value)
-                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          handleExecutionModeChange(e.target.value);
+                        }
+                      }}
                       className="accent-[var(--vscode-focusBorder)]"
                     />
                     Interactive
@@ -707,9 +709,11 @@ export const SettingsPanel: React.FC = () => {
                       name="execution-mode"
                       value="headless"
                       checked={globalSettings.executionMode === "headless"}
-                      onChange={(e) =>
-                        handleExecutionModeChange(e.target.value)
-                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          handleExecutionModeChange(e.target.value);
+                        }
+                      }}
                       className="accent-[var(--vscode-focusBorder)]"
                     />
                     Headless

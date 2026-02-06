@@ -498,7 +498,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
           break;
 
         case MESSAGE_TYPES.CHANGE_EXECUTION_MODE:
-          this.handleExecutionModeChange(message.mode);
+          this.handleExecutionModeChange(message.executionMode);
           break;
 
         case MESSAGE_TYPES.CHANGE_RESUME_SESSION:
