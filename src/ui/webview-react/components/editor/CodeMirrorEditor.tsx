@@ -1,5 +1,11 @@
 import React, { useEffect, useRef, useCallback } from "react";
-import { EditorView, placeholder, keymap } from "@codemirror/view";
+import {
+  EditorView,
+  placeholder,
+  keymap,
+  ViewPlugin,
+  Decoration,
+} from "@codemirror/view";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -9,6 +15,7 @@ import {
 import { history, historyKeymap } from "@codemirror/commands";
 import { searchKeymap } from "@codemirror/search";
 import { linter } from "@codemirror/lint";
+import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
 
@@ -73,8 +80,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   // Initialize Typo.js spell checker
   useEffect(() => {
     const initTypoChecker = async () => {
-      console.log("[CodeMirror] Loading Typo.js dictionaries...");
-
       try {
         const [affData, dicData] = await Promise.all([
           fetch(affUri).then((r) => r.text()),
@@ -85,7 +90,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           typoCheckerRef.current = new window.Typo("en_US", affData, dicData, {
             platform: "any",
           });
-          console.log("[CodeMirror] Typo.js dictionaries loaded");
         }
       } catch (error) {
         console.error(
@@ -101,14 +105,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   // Handle completion response from extension
   const handleCompletionResponse = useCallback((items: any[], from: number) => {
-    console.log(
-      `[CodeMirror] handleCompletionResponse called: ${items.length} items, from=${from}`
-    );
-
     if (!pendingCompletionResolveRef.current) {
-      console.log(
-        "[CodeMirror] No pending completion resolve, ignoring response"
-      );
       return;
     }
 
@@ -159,16 +156,20 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
 
       return {
-        label: item.insertText || item.label,
+        label: item.label,
         type,
         detail: item.detail,
         boost,
-        apply: trigger + (item.insertText || item.label),
+        // Don't prepend trigger - it stays in the document at position 'from'
+        // We only replace from 'from + 1' onward
+        apply: item.insertText || item.label,
       };
     });
 
+    // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
+    // matches against "src" instead of "@src" (labels don't include trigger)
     pendingCompletionResolveRef.current({
-      from,
+      from: from + 1, // Skip the @ or # trigger character
       options: completions,
     });
 
@@ -202,10 +203,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
       const trigger = before.text[0]; // @ or #
       const from = before.from;
-
-      console.log(
-        `[CodeMirror] Requesting completions: trigger="${trigger}", prefix="${before.text}"`
-      );
 
       // Request completions from extension host
       return new Promise<CompletionResult | null>((resolve) => {
@@ -245,7 +242,33 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           closeOnBlur: true,
           optionClass: (completion) =>
             `cm-completion-${completion.type || "text"}`,
+          // Add icon elements for file/folder types
+          addToOptions: [
+            {
+              render: (completion) => {
+                // Only render icons for file/folder types
+                // Return null for other types to avoid empty space
+                if (completion.type === "file") {
+                  const icon = document.createElement("span");
+                  icon.className = "cm-completionIcon";
+                  icon.textContent = "📄";
+                  return icon;
+                } else if (completion.type === "folder") {
+                  const icon = document.createElement("span");
+                  icon.className = "cm-completionIcon";
+                  icon.textContent = "📁";
+                  return icon;
+                }
+
+                // Return null for all other types (let CodeMirror handle them)
+                return null;
+              },
+              position: 20, // Position before label
+            },
+          ],
         }),
+        createLinkDecorationExtension(),
+        createClickHandlerExtension(vscode),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const newValue = update.state.doc.toString();
@@ -368,6 +391,15 @@ function createThemeExtension() {
       },
       ".cm-completion-variable .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
+      },
+      // Link styling for clickable @file and #file references
+      ".cm-link": {
+        color: "var(--vscode-textLink-foreground)",
+        textDecoration: "underline",
+        cursor: "pointer",
+      },
+      ".cm-link:hover": {
+        color: "var(--vscode-textLink-activeForeground)",
       },
     },
     { dark: document.body.classList.contains("vscode-dark") }
@@ -526,4 +558,214 @@ function isInExcludedRange(
     }
   }
   return false;
+}
+
+// Decorate links (@file, @dir/, #file:, #sym:)
+function createLinkDecorationExtension() {
+  const linkPlugin = ViewPlugin.fromClass(
+    class {
+      decorations;
+
+      constructor(view: EditorView) {
+        this.decorations = this.buildDecorations(view);
+      }
+
+      update(update: any) {
+        if (update.docChanged || update.viewportChanged) {
+          this.decorations = this.buildDecorations(update.view);
+        }
+      }
+
+      buildDecorations(view: EditorView) {
+        const builder = new RangeSetBuilder();
+
+        // Regex patterns matching PromptLinkProvider
+        const patterns = {
+          // @file.ext (no trailing slash, has extension)
+          // Negative lookahead (?!\/) ensures we don't match if followed by /
+          // This prevents @.flightpath/ from being treated as a file
+          fullFile: /@([^\s@#]+\.[a-zA-Z0-9]+)(?!\/)/g,
+
+          // @dir/ (trailing slash)
+          directory: /@([^\s@#]+\/)/g,
+
+          // #file:path:10-20 (line range)
+          lineRange: /#file:([^\s:]+):(\d+)-(\d+)/g,
+
+          // #sym:path:symbol:42 (symbol reference)
+          symbol: /#sym:([^\s:]+):([^:]+):(\d+)/g,
+        };
+
+        for (const { from, to } of view.visibleRanges) {
+          const text = view.state.doc.sliceString(from, to);
+
+          // Collect all matches with their positions
+          const fileMatches: any[] = [];
+          const directoryMatches: any[] = [];
+          const lineRangeMatches: any[] = [];
+          const symbolMatches: any[] = [];
+
+          // 1. Full file references (@file.ext)
+          let match;
+          const fullFileRegex = new RegExp(patterns.fullFile.source, "g");
+          while ((match = fullFileRegex.exec(text)) !== null) {
+            fileMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "file",
+              path: match[1],
+            });
+          }
+
+          // 2. Directory references (@dir/)
+          const directoryRegex = new RegExp(patterns.directory.source, "g");
+          while ((match = directoryRegex.exec(text)) !== null) {
+            directoryMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "directory",
+              path: match[1],
+            });
+          }
+
+          // 3. Line range references (#file:path:10-20)
+          const lineRangeRegex = new RegExp(patterns.lineRange.source, "g");
+          while ((match = lineRangeRegex.exec(text)) !== null) {
+            lineRangeMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "lineRange",
+              path: match[1],
+              lineStart: match[2],
+              lineEnd: match[3],
+            });
+          }
+
+          // 4. Symbol references (#sym:path:symbol:42)
+          const symbolRegex = new RegExp(patterns.symbol.source, "g");
+          while ((match = symbolRegex.exec(text)) !== null) {
+            symbolMatches.push({
+              from: from + match.index,
+              to: from + match.index + match[0].length,
+              type: "symbol",
+              path: match[1],
+              symbolName: match[2],
+              line: match[3],
+            });
+          }
+
+          // Filter out directory matches that are contained within file matches
+          // This prevents @path/ from being a separate link when @path/to/file.ts exists
+          const filteredDirectoryMatches = directoryMatches.filter(
+            (dirMatch) => {
+              return !fileMatches.some(
+                (fileMatch) =>
+                  dirMatch.from >= fileMatch.from &&
+                  dirMatch.to <= fileMatch.to
+              );
+            }
+          );
+
+          // Combine all matches (with filtered directories)
+          const matches = [
+            ...fileMatches,
+            ...filteredDirectoryMatches,
+            ...lineRangeMatches,
+            ...symbolMatches,
+          ];
+
+          // Sort matches by position and add decorations
+          matches.sort((a, b) => a.from - b.from);
+
+          for (const linkMatch of matches) {
+            const attrs: Record<string, string> = {
+              "data-type": linkMatch.type,
+              "data-path": linkMatch.path,
+            };
+
+            if (linkMatch.lineStart) {
+              attrs["data-line-start"] = linkMatch.lineStart;
+            }
+            if (linkMatch.lineEnd) {
+              attrs["data-line-end"] = linkMatch.lineEnd;
+            }
+            if (linkMatch.line) {
+              attrs["data-line"] = linkMatch.line;
+            }
+            if (linkMatch.symbolName) {
+              attrs["data-symbol-name"] = linkMatch.symbolName;
+            }
+
+            builder.add(
+              linkMatch.from,
+              linkMatch.to,
+              Decoration.mark({
+                class: "cm-link",
+                attributes: attrs,
+              })
+            );
+          }
+        }
+
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+
+  return linkPlugin;
+}
+
+// Handle Ctrl+Click on links
+function createClickHandlerExtension(vscode: any) {
+  return EditorView.domEventHandlers({
+    click: (event, view) => {
+      if (!(event.ctrlKey || event.metaKey)) return false;
+
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      if (pos === null) return false;
+
+      // Check if we clicked on a link decoration
+      const target = event.target as HTMLElement;
+      if (target.classList.contains("cm-link")) {
+        const type = target.getAttribute("data-type");
+        const path = target.getAttribute("data-path");
+
+        // Handle different link types
+        if (type === "file" || type === "directory") {
+          // Simple file/directory open (no line numbers)
+          vscode.postMessage({
+            type: MESSAGE_TYPES.OPEN_FILE,
+            path: path,
+          });
+        } else if (type === "lineRange") {
+          // #file:path:10-20 (line range)
+          const lineStart = target.getAttribute("data-line-start");
+          const lineEnd = target.getAttribute("data-line-end");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.OPEN_FILE,
+            path: path,
+            lineStart: lineStart ? parseInt(lineStart) : undefined,
+            lineEnd: lineEnd ? parseInt(lineEnd) : undefined,
+          });
+        } else if (type === "symbol") {
+          // #sym:path:symbol:42 (single line)
+          const line = target.getAttribute("data-line");
+          vscode.postMessage({
+            type: MESSAGE_TYPES.OPEN_FILE,
+            path: path,
+            lineStart: line ? parseInt(line) : undefined,
+            lineEnd: line ? parseInt(line) : undefined,
+          });
+        }
+
+        event.preventDefault();
+        return true;
+      }
+
+      return false;
+    },
+  });
 }

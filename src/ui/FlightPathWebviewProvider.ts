@@ -429,7 +429,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
         // Dashboard Messages - CodeMirror Editor
         // ============================================================================
         case MESSAGE_TYPES.REQUEST_COMPLETIONS:
-          this.handleCompletionRequest(
+          await this.handleCompletionRequest(
             message.trigger,
             message.prefix,
             message.position
@@ -1075,57 +1075,123 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   private async handleCompletionRequest(
     trigger: string,
     prefix: string,
-    position: { line: number; character: number }
+    position: number
   ): Promise<void> {
-    try {
-      let completions: Array<{ label: string; detail?: string }> = [];
+    Log.info(
+      `[Dashboard] handleCompletionRequest: trigger="${trigger}", prefix="${prefix}", position=${position}`
+    );
 
-      if (trigger === "@") {
-        completions = await getFileCompletions(prefix);
-      } else if (trigger === "#") {
-        completions = await getHashCompletions(prefix);
-      }
+    try {
+      // Get completion items based on trigger (@file or #file)
+      const items = await this.getCompletionItems(trigger, prefix);
+
+      Log.info(
+        `[Dashboard] Sending ${items.length} completion items for trigger="${trigger}"`
+      );
 
       this.postMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-        completions,
-        trigger,
+        items: items.map((item) => ({
+          label: item.label,
+          kind: item.kind,
+          insertText: item.insertText,
+          detail: item.detail,
+          documentation: item.documentation,
+          sortText: item.sortText,
+        })),
+        from: position,
       });
     } catch (error) {
       Log.error("Failed to get completions:", error);
       this.postMessage({
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
-        completions: [],
-        trigger,
+        items: [],
+        from: position,
       });
     }
   }
 
+  /**
+   * Get completion items based on trigger (@file or #file)
+   * Uses shared CompletionHelpers for code reuse with PromptCompletionProvider
+   */
+  private async getCompletionItems(
+    trigger: string,
+    prefix: string
+  ): Promise<any[]> {
+    // Remove trigger character from prefix to get filter text
+    const filterText = prefix.substring(1); // Remove @ or #
+
+    Log.info(
+      `[Dashboard] getCompletionItems: trigger="${trigger}", filterText="${filterText}"`
+    );
+
+    if (trigger === "@") {
+      // Get file and directory completions
+      Log.info("[Dashboard] Calling getFileCompletions...");
+      const completions = await getFileCompletions(filterText);
+      Log.info(`[Dashboard] getFileCompletions returned ${completions.length} items`);
+      return completions;
+    } else if (trigger === "#") {
+      // Get selection and symbol completions
+      Log.info("[Dashboard] Calling getHashCompletions...");
+      const completions = await getHashCompletions(filterText);
+      Log.info(`[Dashboard] getHashCompletions returned ${completions.length} items`);
+      return completions;
+    }
+
+    Log.warn(`[Dashboard] Unknown trigger: "${trigger}"`);
+    return [];
+  }
+
   private async handleOpenFile(
-    path: string,
+    relativePath: string,
     lineStart?: number,
     lineEnd?: number
   ): Promise<void> {
     try {
-      const uri = vscode.Uri.file(path);
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc);
-
-      if (lineStart !== undefined) {
-        const start = new vscode.Position(lineStart - 1, 0);
-        const end = new vscode.Position(
-          lineEnd !== undefined ? lineEnd - 1 : lineStart - 1,
-          0
-        );
-        editor.selection = new vscode.Selection(start, end);
-        editor.revealRange(
-          new vscode.Range(start, end),
-          vscode.TextEditorRevealType.InCenter
-        );
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        Log.warn("No workspace folder open");
+        return;
       }
+
+      const normalizedPath = relativePath.replace(/\\/g, "/");
+      const isDirectory = normalizedPath.endsWith("/");
+      const trimmedPath = isDirectory
+        ? normalizedPath.replace(/\/+$/, "")
+        : normalizedPath;
+
+      const segments = trimmedPath.split("/").filter(Boolean);
+      const targetUri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+
+      if (isDirectory) {
+        // Match PromptLinkProvider behavior (reveal directory)
+        // Prefer revealInExplorer, fall back to revealFileInOS
+        try {
+          await vscode.commands.executeCommand("revealInExplorer", targetUri);
+        } catch {
+          await vscode.commands.executeCommand("revealFileInOS", targetUri);
+        }
+        return;
+      }
+
+      const options: vscode.TextDocumentShowOptions = {
+        preview: false,
+      };
+
+      if (lineStart) {
+        const start = new vscode.Position(lineStart - 1, 0);
+        const end = lineEnd
+          ? new vscode.Position(lineEnd - 1, Number.MAX_SAFE_INTEGER)
+          : start;
+        options.selection = new vscode.Range(start, end);
+      }
+
+      await vscode.window.showTextDocument(targetUri, options);
     } catch (error) {
-      Log.error("Failed to open file:", error);
-      vscode.window.showErrorMessage(`Failed to open file: ${path}`);
+      Log.error("Error opening file:", error);
+      vscode.window.showErrorMessage(`Failed to open: ${relativePath}`);
     }
   }
 
