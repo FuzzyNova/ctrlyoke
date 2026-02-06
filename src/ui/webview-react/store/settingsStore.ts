@@ -47,9 +47,10 @@ export interface WorkflowProperties {
   model?: string;
   agent?: string;
   resumeSession?: boolean;
+  sessionId?: string | number; // UUID string or prompt number reference
   allowDynamicExtension?: boolean;
   endCondition?: {
-    script: string;
+    script?: string; // Made optional - fields can be set incrementally
     returns?: string;
     timeout?: number;
     maxRetries?: number;

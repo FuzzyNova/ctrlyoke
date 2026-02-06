@@ -196,6 +196,37 @@ export const SettingsPanel: React.FC = () => {
   // Session ID input state
   const [sessionIdInput, setSessionIdInput] = useState("");
 
+  // Respect gitignore checkbox state
+  const [respectGitignore, setRespectGitignore] = useState(true);
+
+  // Sync sessionIdInput with store changes
+  useEffect(() => {
+    const sessionId = workflowProperties.sessionId;
+    setSessionIdInput(sessionId !== undefined ? String(sessionId) : "");
+  }, [workflowProperties.sessionId]);
+
+  // Request initial respect gitignore setting
+  useEffect(() => {
+    vscode.postMessage({
+      type: MESSAGE_TYPES.GET_CONFIG,
+      key: "respectGitignoreForCompletions",
+    });
+
+    // Listen for CONFIG_VALUE response
+    const handleConfigValue = (event: MessageEvent) => {
+      const message = event.data;
+      if (
+        message.type === MESSAGE_TYPES.CONFIG_VALUE &&
+        message.key === "respectGitignoreForCompletions"
+      ) {
+        setRespectGitignore(message.value ?? true);
+      }
+    };
+
+    window.addEventListener("message", handleConfigValue);
+    return () => window.removeEventListener("message", handleConfigValue);
+  }, [vscode]);
+
   // Update end condition state when workflow properties change
   useEffect(() => {
     setEndConditionEnabled(
@@ -231,17 +262,48 @@ export const SettingsPanel: React.FC = () => {
 
   const handleProviderChange = useCallback(
     (provider: string) => {
+      // Optimistic update (like vanilla implementation)
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("provider", provider);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "provider",
         value: provider,
       });
+
+      // Update model dropdown options for new provider (like old implementation)
+      // Get models for the new provider
+      const newProviderModels = getModelsForProvider(provider as any);
+
+      // Check if current model is valid for new provider
+      const currentModel = effectiveModel;
+      const isModelValidForProvider = newProviderModels.some(m => m.value === currentModel);
+
+      // If current model not valid for new provider, select default or first available
+      if (!isModelValidForProvider && newProviderModels.length > 0) {
+        const defaultModel = newProviderModels[0].value;
+
+        // Update model optimistically
+        settingsStore.updateWorkflowProperty("model", defaultModel);
+
+        // Send model update to extension
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+          property: "model",
+          value: defaultModel,
+        });
+      }
     },
-    [vscode]
+    [vscode, effectiveModel, getModelsForProvider]
   );
 
   const handleModelChange = useCallback(
     (model: string) => {
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("model", model);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "model",
@@ -253,6 +315,10 @@ export const SettingsPanel: React.FC = () => {
 
   const handleAgentChange = useCallback(
     (agent: string) => {
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("agent", agent || undefined);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "agent",
@@ -274,6 +340,10 @@ export const SettingsPanel: React.FC = () => {
 
   const handleResumeSessionChange = useCallback(
     (checked: boolean) => {
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("resumeSession", checked);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "resumeSession",
@@ -282,6 +352,7 @@ export const SettingsPanel: React.FC = () => {
       // Clear session ID when resume is disabled
       if (!checked) {
         setSessionIdInput("");
+        settingsStore.updateWorkflowProperty("sessionId", undefined);
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "sessionId",
@@ -299,6 +370,11 @@ export const SettingsPanel: React.FC = () => {
       const parsedValue = /^\d+$/.test(value.trim())
         ? parseInt(value.trim(), 10)
         : value.trim() || undefined;
+
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("sessionId", parsedValue);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "sessionId",
@@ -310,6 +386,13 @@ export const SettingsPanel: React.FC = () => {
 
   const handleDynamicExtensionChange = useCallback(
     (value: string) => {
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty(
+        "allowDynamicExtension",
+        value === "true"
+      );
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "allowDynamicExtension",
@@ -322,7 +405,11 @@ export const SettingsPanel: React.FC = () => {
   const handleEndConditionToggle = useCallback(
     (enabled: boolean) => {
       setEndConditionEnabled(enabled);
+
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
       if (!enabled) {
+        settingsStore.updateWorkflowProperty("endCondition", undefined);
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
@@ -330,16 +417,18 @@ export const SettingsPanel: React.FC = () => {
         });
       } else {
         // Initialize with defaults
+        const defaultEndCondition = {
+          script: "",
+          returns: "true",
+          timeout: 30000,
+          maxRetries: 0,
+          retryPrompt: "",
+        };
+        settingsStore.updateWorkflowProperty("endCondition", defaultEndCondition);
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
-          value: {
-            script: "",
-            returns: "true",
-            timeout: 30000,
-            maxRetries: 0,
-            retryPrompt: "",
-          },
+          value: defaultEndCondition,
         });
       }
     },
@@ -353,6 +442,11 @@ export const SettingsPanel: React.FC = () => {
         ...currentEndCondition,
         [field]: value,
       };
+
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("endCondition", updatedEndCondition);
+
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "endCondition",
@@ -372,6 +466,18 @@ export const SettingsPanel: React.FC = () => {
       });
     },
     [vscode, effectiveProvider]
+  );
+
+  const handleRespectGitignoreChange = useCallback(
+    (checked: boolean) => {
+      setRespectGitignore(checked);
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_CONFIG,
+        key: "respectGitignoreForCompletions",
+        value: checked,
+      });
+    },
+    [vscode]
   );
 
   const handleOpenSettings = useCallback(() => {
@@ -701,6 +807,31 @@ export const SettingsPanel: React.FC = () => {
                   <option value="false">No</option>
                 </select>
               </FormField>
+
+              {/* Respect Gitignore (Quick Access) */}
+              <div className="mt-4 pt-4 border-t border-[var(--vscode-panel-border)]">
+                <div className="flex items-start gap-2 px-2 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)] border-l-2 border-[var(--vscode-textBlockQuote-border)] mb-3">
+                  <i className="codicon codicon-info mt-0.5" />
+                  <span>
+                    Quick access setting. Updates global VS Code configuration.
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={respectGitignore}
+                    onChange={(e) =>
+                      handleRespectGitignoreChange(e.target.checked)
+                    }
+                    className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+                  />
+                  <span>Respect .gitignore for completions</span>
+                </label>
+                <span className="text-[11px] text-[var(--vscode-descriptionForeground)] leading-tight block mt-1 ml-6">
+                  When enabled, hides gitignored files from @ and # completions.
+                  Disable to reference build outputs, logs, or dependencies.
+                </span>
+              </div>
             </div>
           )}
         </div>

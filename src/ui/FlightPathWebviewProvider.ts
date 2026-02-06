@@ -103,6 +103,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     model?: string;
     agent?: string;
     resumeSession?: boolean;
+    sessionId?: string | number;
     allowDynamicExtension?: boolean;
     endCondition?: any;
   } = {};
@@ -942,6 +943,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
         model: workingFile.model,
         agent: workingFile.agent,
         resumeSession: workingFile.resumeSession,
+        sessionId: workingFile.sessionId,
         allowDynamicExtension: workingFile.allowDynamicExtension,
         endCondition: workingFile.endCondition,
       };
@@ -1417,14 +1419,36 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     property: string,
     value: any
   ): Promise<void> {
-    if (!this.flightPathManager) {
-      // Store in pending properties if workflow not loaded yet
-      (this.pendingWorkflowProperties as any)[property] = value;
+    // Store in pending properties if NO WORKING FILE exists yet
+    // Check for actual working file existence instead of just FlightPathManager
+    const hasWorkingFile = this.flightPathManager?.getQueueState()?.workingFilePath;
+
+    if (!hasWorkingFile) {
+      // Store in pending properties until working file exists
+      if (value === undefined) {
+        delete (this.pendingWorkflowProperties as any)[property];
+      } else {
+        (this.pendingWorkflowProperties as any)[property] = value;
+      }
+
+      // Send back confirmation with pending properties
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE,
+        workflowProperties: this.pendingWorkflowProperties,
+      });
       return;
     }
 
-    await this.flightPathManager.updateWorkflowPropertyInQueue(property, value);
-    this.sendWorkflowPropertiesToSettings();
+    // Working file exists: Update it directly
+    // Use updateWorkingFileProperties() which persists to disk
+    if (this.flightPathManager) {
+      await this.flightPathManager.updateWorkingFileProperties(
+        { [property]: value },
+        { allowDeletes: value === undefined }
+      );
+
+      this.sendWorkflowPropertiesToSettings();
+    }
   }
 
   private async handleSetAsDefault(
@@ -1489,14 +1513,11 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       return;
     }
 
-    for (const [property, value] of Object.entries(
-      this.pendingWorkflowProperties
-    )) {
-      await this.flightPathManager.updateWorkflowPropertyInQueue(
-        property,
-        value
-      );
-    }
+    // Use updateWorkingFileProperties() which persists to disk
+    await this.flightPathManager.updateWorkingFileProperties(
+      this.pendingWorkflowProperties,
+      { ensureProviderAndModel: true }
+    );
 
     this.pendingWorkflowProperties = {};
     this.sendWorkflowPropertiesToSettings();

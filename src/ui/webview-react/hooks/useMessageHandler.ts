@@ -419,8 +419,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.MODEL_OPTIONS_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
-    if (message.data?.modelOptions) {
-      settingsStore.setModelOptions(message.data.modelOptions);
+    const data = message.data || message;
+    if (data.modelOptions) {
+      settingsStore.setModelOptions(data.modelOptions);
     }
   };
 
@@ -429,8 +430,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROVIDER_STATUS_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
-    if (message.data?.providerStatus) {
-      settingsStore.setAllProviderStatuses(message.data.providerStatus);
+    const data = message.data || message;
+    if (data.providerStatus) {
+      settingsStore.setAllProviderStatuses(data.providerStatus);
     }
   };
 
@@ -439,8 +441,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.AGENTS_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
-    if (message.data?.availableAgents) {
-      settingsStore.setAvailableAgents(message.data.availableAgents);
+    const data = message.data || message;
+    if (data.availableAgents) {
+      settingsStore.setAvailableAgents(data.availableAgents);
     }
   };
 
@@ -449,7 +452,17 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_PROPERTIES_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
-    settingsStore.setWorkflowProperties(message.workflowProperties || {});
+
+    // Handle both message.data and direct message structure (like vanilla implementation)
+    const data = message.data || message;
+    if (data.workflowProperties) {
+      // Merge with existing properties (don't replace completely)
+      const currentProperties = settingsStore.workflowProperties;
+      settingsStore.setWorkflowProperties({
+        ...currentProperties,
+        ...data.workflowProperties,
+      });
+    }
   };
 
   // --------------------------------------------------------------------------
