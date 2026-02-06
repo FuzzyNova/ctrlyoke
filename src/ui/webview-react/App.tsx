@@ -4,6 +4,7 @@ import {
   Group,
   Separator,
   PanelImperativeHandle,
+  GroupImperativeHandle,
 } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -27,11 +28,20 @@ function App() {
   const promptsRef = useRef<PanelImperativeHandle>(null);
   const outputRef = useRef<PanelImperativeHandle>(null);
   const editorRef = useRef<PanelImperativeHandle>(null);
+  // Vertical group ref for setLayout() API
+  const verticalGroupRef = useRef<GroupImperativeHandle>(null);
   // Gates onResize until useLayoutEffect has applied the persisted
   // collapsed/expanded state.  Reset to false whenever both panels are collapsed
   // (the vertical Group unmounts); the next mount re-gates until the first
   // useLayoutEffect re-syncs.
   const initializedRef = useRef(false);
+  // Track last expanded sizes (restored when re-expanding, captured during drag)
+  const lastOutputSize = useRef(60);
+  const lastEditorSize = useRef(40);
+  // Flag: true when Group just remounted from both-collapsed, false after forced resize
+  const needsForcedResize = useRef(false);
+  // Flag: true during forced resize operation to prevent onResize from saving wrong values
+  const isForcingResize = useRef(false);
 
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
@@ -48,8 +58,20 @@ function App() {
   // constant while the Group is already mounted prevents the library from
   // re-initialising and overriding imperative collapse()/expand() calls.
   const wasBothCollapsed = useRef(outputCollapsed && editorCollapsed);
-  const mountDefaultOutput = useRef(outputCollapsed ? "30px" : editorCollapsed ? "95" : "60");
-  const mountDefaultEditor = useRef(editorCollapsed ? "30px" : outputCollapsed ? "95" : "40");
+  const mountDefaultOutput = useRef(
+    outputCollapsed
+      ? "30px"
+      : editorCollapsed
+        ? "95"
+        : String(lastOutputSize.current)
+  );
+  const mountDefaultEditor = useRef(
+    editorCollapsed
+      ? "30px"
+      : outputCollapsed
+        ? "95"
+        : String(lastEditorSize.current)
+  );
 
   // Zustand stores
   const workflowStore = useWorkflowStore();
@@ -119,14 +141,114 @@ function App() {
   // below, which runs after all child effects (including the Panel mount
   // onResize events) have fired.
   useLayoutEffect(() => {
-    if (outputRef.current) {
-      if (outputCollapsed) outputRef.current.collapse();
-      else outputRef.current.expand();
-    }
+    const shouldForceResize = !outputCollapsed && !editorCollapsed && needsForcedResize.current;
 
-    if (editorRef.current) {
-      if (editorCollapsed) editorRef.current.collapse();
-      else editorRef.current.expand();
+    console.log('[LAYOUT] Syncing collapse state', {
+      outputCollapsed,
+      editorCollapsed,
+      outputRefExists: !!outputRef.current,
+      editorRefExists: !!editorRef.current,
+      needsForcedResize: needsForcedResize.current,
+      shouldForceResize,
+    });
+
+    if (shouldForceResize) {
+      // Force resize: expand BOTH panels first, then use setLayout() to adjust sizes
+      console.log('[LAYOUT] Forcing resize - Step 1: Expand both panels', {
+        lastOutputSize: lastOutputSize.current,
+        lastEditorSize: lastEditorSize.current,
+      });
+      isForcingResize.current = true;
+
+      // Step 1: Expand both panels
+      if (outputRef.current) {
+        console.log('[LAYOUT] Expanding output');
+        outputRef.current.expand();
+      }
+      if (editorRef.current) {
+        console.log('[LAYOUT] Expanding editor');
+        editorRef.current.expand();
+      }
+
+      // Step 2: Wait for expand to complete (multiple frames as per library docs)
+      // then call setLayout() to adjust to saved sizes
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            console.log('[LAYOUT] Step 2: Calling setLayout() with saved sizes');
+            console.log('[LAYOUT] verticalGroupRef.current exists?', !!verticalGroupRef.current);
+
+            if (verticalGroupRef.current) {
+              // Get current layout first to see the structure
+              const currentLayout = verticalGroupRef.current.getLayout();
+              console.log('[LAYOUT] Current layout from getLayout():', currentLayout);
+
+              // Round to integers and ensure they sum to 100
+              const outputSize = Math.round(lastOutputSize.current);
+              const editorSize = 100 - outputSize;
+
+              console.log('[LAYOUT] Values to set:', {
+                lastOutputSize: lastOutputSize.current,
+                lastEditorSize: lastEditorSize.current,
+                outputSize,
+                editorSize,
+                outputSizeType: typeof outputSize,
+                editorSizeType: typeof editorSize,
+                isOutputNaN: isNaN(outputSize),
+                isEditorNaN: isNaN(editorSize),
+              });
+
+              // Validate values before calling setLayout
+              if (!isNaN(outputSize) && !isNaN(editorSize) && outputSize > 0 && editorSize > 0) {
+                try {
+                  // setLayout expects an object with panel IDs as keys, not an array
+                  const layout = {
+                    "output-panel": outputSize,
+                    "editor-panel": editorSize,
+                  };
+                  console.log('[LAYOUT] Calling setLayout with:', layout);
+                  verticalGroupRef.current.setLayout(layout, "percentages");
+                  console.log('[LAYOUT] ✅ setLayout() succeeded');
+                } catch (error) {
+                  console.error('[LAYOUT] ❌ setLayout() failed:', error);
+                }
+              } else {
+                console.error('[LAYOUT] ❌ Invalid values, cannot call setLayout');
+              }
+            } else {
+              console.error('[LAYOUT] ❌ verticalGroupRef.current is null!');
+            }
+            // Clear flag after setLayout completes
+            setTimeout(() => {
+              isForcingResize.current = false;
+              console.log('[LAYOUT] Forced resize complete, flag cleared');
+            }, 50);
+          });
+        });
+      });
+
+      needsForcedResize.current = false;
+    } else {
+      // Normal collapse/expand
+      if (outputRef.current) {
+        if (outputCollapsed) {
+          console.log('[LAYOUT] Collapsing output');
+          outputRef.current.collapse();
+        } else {
+          console.log('[LAYOUT] Expanding output');
+          outputRef.current.expand();
+        }
+      }
+
+      if (editorRef.current) {
+        if (editorCollapsed) {
+          console.log('[LAYOUT] Collapsing editor');
+          editorRef.current.collapse();
+        } else {
+          console.log('[LAYOUT] Expanding editor');
+          editorRef.current.expand();
+        }
+      }
     }
   }, [outputCollapsed, editorCollapsed]);
 
@@ -136,8 +258,15 @@ function App() {
   // events — which fire in child useEffects — are still gated when they run.
   useEffect(() => {
     if (outputCollapsed && editorCollapsed) {
+      console.log('[GATE] Closing gate - both panels collapsed');
       initializedRef.current = false;
+      // Clear forced resize flag when both collapse
+      if (needsForcedResize.current) {
+        console.log('[GATE] Clearing needsForcedResize (both collapsed)');
+        needsForcedResize.current = false;
+      }
     } else {
+      console.log('[GATE] Opening gate - at least one panel open');
       initializedRef.current = true;
     }
   }, [outputCollapsed, editorCollapsed]);
@@ -149,8 +278,29 @@ function App() {
   {
     const bothCollapsed = outputCollapsed && editorCollapsed;
     if (wasBothCollapsed.current && !bothCollapsed) {
-      mountDefaultOutput.current = outputCollapsed ? "30px" : editorCollapsed ? "95" : "60";
-      mountDefaultEditor.current = editorCollapsed ? "30px" : outputCollapsed ? "95" : "40";
+      console.log('[TRANSITION] Both-collapsed → one-open transition detected', {
+        outputCollapsed,
+        editorCollapsed,
+        lastOutputSize: lastOutputSize.current,
+        lastEditorSize: lastEditorSize.current,
+      });
+      mountDefaultOutput.current = outputCollapsed
+        ? "30px"
+        : editorCollapsed
+          ? "95"
+          : String(lastOutputSize.current);
+      mountDefaultEditor.current = editorCollapsed
+        ? "30px"
+        : outputCollapsed
+          ? "95"
+          : String(lastEditorSize.current);
+      console.log('[TRANSITION] Mount defaults set to:', {
+        mountDefaultOutput: mountDefaultOutput.current,
+        mountDefaultEditor: mountDefaultEditor.current,
+      });
+      // Group is remounting - next both-open transition needs forced resize
+      needsForcedResize.current = true;
+      console.log('[TRANSITION] Set needsForcedResize=true');
     }
     wasBothCollapsed.current = bothCollapsed;
   }
@@ -191,17 +341,41 @@ function App() {
             When at least one panel is open the Group is active and the user can
             drag the separator freely. */}
         <Panel id="center-content">
-          {outputCollapsed && editorCollapsed ? (
+          {(() => {
+            const bothCollapsed = outputCollapsed && editorCollapsed;
+            console.log('[RENDER] Center content branch:', {
+              bothCollapsed,
+              outputCollapsed,
+              editorCollapsed,
+              mountDefaultOutput: mountDefaultOutput.current,
+              mountDefaultEditor: mountDefaultEditor.current,
+            });
+            return bothCollapsed;
+          })() ? (
             <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
-              <div className="flex-none"><OutputSection /></div>
-              <div className="flex-none"><EditorSection /></div>
+              <div className="flex-none">
+                <OutputSection />
+              </div>
+              <div className="flex-none">
+                <EditorSection />
+              </div>
             </div>
           ) : (
             <Group
+              groupRef={verticalGroupRef}
               orientation="vertical"
               className="h-full"
               id="flightpath-vertical-layout"
             >
+              {(() => {
+                console.log('[GROUP MOUNT] Rendering vertical Group with defaults:', {
+                  outputDefault: mountDefaultOutput.current,
+                  editorDefault: mountDefaultEditor.current,
+                  outputCollapsed,
+                  editorCollapsed,
+                });
+                return null;
+              })()}
               <Panel
                 panelRef={outputRef}
                 defaultSize={mountDefaultOutput.current}
@@ -210,8 +384,31 @@ function App() {
                 minSize="15"
                 id="output-panel"
                 onResize={() => {
-                  if (!initializedRef.current) return;
-                  setOutputCollapsed(outputRef.current?.isCollapsed() ?? false);
+                  if (!initializedRef.current) {
+                    console.log('[RESIZE OUTPUT] Skipped - gate not open');
+                    return;
+                  }
+                  const outputCollapsed =
+                    outputRef.current?.isCollapsed() ?? false;
+                  const editorCollapsed =
+                    editorRef.current?.isCollapsed() ?? false;
+                  const currentSize = outputRef.current?.getSize().asPercentage;
+
+                  console.log('[RESIZE OUTPUT]', {
+                    outputCollapsed,
+                    editorCollapsed,
+                    currentSize,
+                    bothOpen: !outputCollapsed && !editorCollapsed,
+                    isForcingResize: isForcingResize.current,
+                  });
+
+                  if (!outputCollapsed && !editorCollapsed && !isForcingResize.current) {
+                    lastOutputSize.current = currentSize ?? lastOutputSize.current;
+                    console.log('[RESIZE OUTPUT] Saved lastOutputSize:', lastOutputSize.current);
+                  } else if (isForcingResize.current) {
+                    console.log('[RESIZE OUTPUT] Skipped save - forcing resize');
+                  }
+                  setOutputCollapsed(outputCollapsed);
                 }}
               >
                 <OutputSection />
@@ -227,8 +424,31 @@ function App() {
                 minSize="15"
                 id="editor-panel"
                 onResize={() => {
-                  if (!initializedRef.current) return;
-                  setEditorCollapsed(editorRef.current?.isCollapsed() ?? false);
+                  if (!initializedRef.current) {
+                    console.log('[RESIZE EDITOR] Skipped - gate not open');
+                    return;
+                  }
+                  const editorCollapsed =
+                    editorRef.current?.isCollapsed() ?? false;
+                  const outputCollapsed =
+                    outputRef.current?.isCollapsed() ?? false;
+                  const currentSize = editorRef.current?.getSize().asPercentage;
+
+                  console.log('[RESIZE EDITOR]', {
+                    outputCollapsed,
+                    editorCollapsed,
+                    currentSize,
+                    bothOpen: !editorCollapsed && !outputCollapsed,
+                    isForcingResize: isForcingResize.current,
+                  });
+
+                  if (!editorCollapsed && !outputCollapsed && !isForcingResize.current) {
+                    lastEditorSize.current = currentSize ?? lastEditorSize.current;
+                    console.log('[RESIZE EDITOR] Saved lastEditorSize:', lastEditorSize.current);
+                  } else if (isForcingResize.current) {
+                    console.log('[RESIZE EDITOR] Skipped save - forcing resize');
+                  }
+                  setEditorCollapsed(editorCollapsed);
                 }}
               >
                 <EditorSection />
