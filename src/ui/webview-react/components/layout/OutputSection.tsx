@@ -153,7 +153,10 @@ export const OutputSection: React.FC = () => {
   }
 
   return (
-    <section id="output-section" className="output-section flex flex-col h-full">
+    <section
+      id="output-section"
+      className="output-section flex flex-col h-full"
+    >
       {/* Section Header */}
       <div className="section-header output-controls flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
         {/* Left: clickable collapse area */}
@@ -188,7 +191,7 @@ export const OutputSection: React.FC = () => {
           </label>
 
           <button
-            className="icon-btn"
+            className="icon-btn py-0.5 px-2"
             id="export-btn"
             title="Export output to markdown"
             onClick={handleExport}
@@ -200,7 +203,11 @@ export const OutputSection: React.FC = () => {
       </div>
 
       {/* Output Content */}
-      <div ref={outputRef} id="output-content" className="output-content flex-1 overflow-y-auto">
+      <div
+        ref={outputRef}
+        id="output-content"
+        className="output-content flex-1 overflow-y-auto"
+      >
         {!hasOutput ? (
           <p className="empty-state">
             Output will appear here during execution

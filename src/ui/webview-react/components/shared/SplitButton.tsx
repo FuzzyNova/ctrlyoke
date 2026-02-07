@@ -259,7 +259,9 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
                     : "text-[var(--vscode-dropdown-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
                 } ${focusedIndex === index ? "bg-[var(--vscode-list-focusBackground)]" : ""}`}
               >
-                {option.icon && <span className="flex-shrink-0">{option.icon}</span>}
+                {option.icon && (
+                  <span className="flex-shrink-0">{option.icon}</span>
+                )}
                 <span className="flex-1">{option.label}</span>
                 {option.shortcut && (
                   <kbd className="text-xs text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-keybindingLabel-background,rgba(128,128,128,0.17))] px-1.5 py-0.5 rounded font-mono">

@@ -73,16 +73,31 @@ export const Header: React.FC = () => {
   const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
   const isError = executionState === EXECUTION_STATES.ERROR;
   const isStopped = executionState === EXECUTION_STATES.STOPPED;
+  const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
+  const hasFile = fileName !== null;
 
   // Button enable states
+  // Enable Run button if: has file AND (not running OR is completed OR is paused OR is stopped)
+  // Disable during cancellation - must wait for process to fully stop
+  // When paused/stopped/completed, Run button acts as "Restart from beginning"
   const canRun =
-    fileName !== null && (isIdle || isCompleted || isError || isStopped);
-  const canPause = isRunning;
-  const canResume = isPaused;
-  const canStop = isRunning || isPaused;
+    hasFile &&
+    !isCancelling &&
+    !(isRunning && !isCompleted && !isPaused && !isStopped);
 
-  // Run button shows "Re-run" if completed/error
-  const isRerun = isCompleted || isError;
+  // Pause button becomes resume button when paused or stopped
+  // Disable during cancellation
+  // PAUSED: Resumes to next prompt (current one completed)
+  // STOPPED: Resumes to restart current prompt (cancelled)
+  const canPause = isRunning && !isCancelling;
+  const canResume = isPaused || isStopped;
+
+  // Stop button enabled when running, paused, or cancelling (allow re-pressing Stop to see status)
+  // Disable when stopped (already stopped)
+  const canStop = isRunning || isPaused || isCancelling;
+
+  // Run button shows restart icon when paused, stopped, or completed
+  const isRerun = isCompleted || isPaused || isStopped;
 
   // Handlers
   const handleRun = useCallback(() => {
@@ -90,15 +105,13 @@ export const Header: React.FC = () => {
     vscode.postMessage({ type: MESSAGE_TYPES.RUN });
   }, [vscode, canRun]);
 
-  const handlePause = useCallback(() => {
-    if (!canPause) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
-  }, [vscode, canPause]);
-
-  const handleResume = useCallback(() => {
-    if (!canResume) return;
-    vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
-  }, [vscode, canResume]);
+  const handlePauseResume = useCallback(() => {
+    if (isPaused || isStopped) {
+      vscode.postMessage({ type: MESSAGE_TYPES.RESUME });
+    } else if (canPause) {
+      vscode.postMessage({ type: MESSAGE_TYPES.PAUSE });
+    }
+  }, [vscode, isPaused, isStopped, canPause]);
 
   const handleStop = useCallback(() => {
     if (!canStop) return;
@@ -106,7 +119,7 @@ export const Header: React.FC = () => {
   }, [vscode, canStop]);
 
   return (
-    <header className="header flex items-center justify-between gap-4 px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
+    <header className="header flex items-center justify-between gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
       {/* Left Section: Workflow Controls */}
       <div className="header-left flex items-center gap-2 flex-shrink-0">
         <WorkflowControls />
@@ -119,9 +132,11 @@ export const Header: React.FC = () => {
 
       {/* Right Section: Control Buttons */}
       <div className="header-right flex items-center gap-1 flex-shrink-0">
-        {/* Run/Re-run Button */}
+        {/* Run/Restart Button (icon-only) */}
         <button
-          className={`control-button flex items-center justify-center gap-1 px-3 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+            isRerun ? "btn-rerun text-base font-bold" : ""
+          } ${
             canRun
               ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]"
               : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
@@ -129,40 +144,45 @@ export const Header: React.FC = () => {
           onClick={handleRun}
           disabled={!canRun}
           title={
-            !fileName
+            !hasFile
               ? "Load a workflow to run"
               : isRerun
-                ? "Re-run workflow from beginning"
-                : "Run workflow"
+                ? "Restart from beginning"
+                : "Run"
           }
-          aria-label={isRerun ? "Re-run workflow" : "Run workflow"}
+          aria-label={isRerun ? "Restart from beginning" : "Run"}
         >
           <i
-            className={`codicon ${isRerun ? "codicon-refresh" : "codicon-debug-start"}`}
+            className={`codicon ${isRerun ? "codicon-debug-restart" : "codicon-debug-start"}`}
           />
-          <span className="button-text">{isRerun ? "Re-run" : "Run"}</span>
         </button>
 
         {/* Pause/Resume Button */}
         <button
-          className={`control-button flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
             canPause || canResume
               ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
               : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
           }`}
-          onClick={isPaused ? handleResume : handlePause}
+          onClick={handlePauseResume}
           disabled={!canPause && !canResume}
-          title={isPaused ? "Resume execution" : "Pause execution"}
-          aria-label={isPaused ? "Resume" : "Pause"}
+          title={
+            isPaused
+              ? "Resume"
+              : isStopped
+                ? "Resume (restart current prompt)"
+                : "Pause"
+          }
+          aria-label={isPaused || isStopped ? "Resume" : "Pause"}
         >
           <i
-            className={`codicon ${isPaused ? "codicon-debug-continue" : "codicon-debug-pause"}`}
+            className={`codicon ${isPaused || isStopped ? "codicon-debug-continue" : "codicon-debug-pause"}`}
           />
         </button>
 
         {/* Stop Button */}
         <button
-          className={`control-button flex items-center justify-center px-2 py-1 h-[26px] text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
             canStop
               ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
               : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
@@ -174,7 +194,6 @@ export const Header: React.FC = () => {
         >
           <i className="codicon codicon-debug-stop" />
         </button>
-
       </div>
     </header>
   );

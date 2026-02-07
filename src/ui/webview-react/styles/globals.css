@@ -282,6 +282,18 @@
     font-size: 12px;
   }
 
+  /* Re-run button variant (larger, more prominent) */
+  .btn-rerun {
+    background-color: var(--btn-bg);
+    color: var(--btn-fg);
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+  .btn-rerun:hover:not(:disabled) {
+    background-color: var(--btn-hover-bg);
+  }
+
   /* Icon-only button */
   .btn-icon {
     @apply p-1 rounded-sm transition-colors flex items-center justify-center;

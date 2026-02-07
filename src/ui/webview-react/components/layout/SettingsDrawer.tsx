@@ -115,7 +115,7 @@ const SectionHeader: React.FC<{
 }> = ({ title, isOpen, onToggle, icon }) => (
   <button
     onClick={onToggle}
-    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase text-[var(--vscode-foreground)] bg-[var(--vscode-sideBarSectionHeader-background)] hover:bg-[var(--vscode-list-hoverBackground)] transition-colors rounded-t"
+    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase text-[var(--vscode-foreground)] bg-[var(--vscode-sideBarSectionHeader-background)] hover:bg-[var(--vscode-list-hoverBackground)] transition-colors border-t border-x-0 border-[var(--vscode-panel-border)]"
   >
     <span className="flex items-center gap-2">
       {icon && <i className={`codicon codicon-${icon}`} />}
@@ -278,7 +278,9 @@ export const SettingsPanel: React.FC = () => {
 
       // Check if current model is valid for new provider
       const currentModel = effectiveModel;
-      const isModelValidForProvider = newProviderModels.some(m => m.value === currentModel);
+      const isModelValidForProvider = newProviderModels.some(
+        (m) => m.value === currentModel
+      );
 
       // If current model not valid for new provider, select default or first available
       if (!isModelValidForProvider && newProviderModels.length > 0) {
@@ -424,7 +426,10 @@ export const SettingsPanel: React.FC = () => {
           maxRetries: 0,
           retryPrompt: "",
         };
-        settingsStore.updateWorkflowProperty("endCondition", defaultEndCondition);
+        settingsStore.updateWorkflowProperty(
+          "endCondition",
+          defaultEndCondition
+        );
         vscode.postMessage({
           type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
           property: "endCondition",
@@ -995,7 +1000,6 @@ export const SettingsPanel: React.FC = () => {
           )}
         </div>
       </div>
-
     </div>
   );
 };
