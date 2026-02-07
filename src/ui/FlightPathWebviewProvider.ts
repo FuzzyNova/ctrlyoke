@@ -1353,7 +1353,15 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
 
   private async handleLoadWorkflow(message: any): Promise<void> {
     const { filePath } = message;
-    vscode.commands.executeCommand("flightpath.selectPromptFile", filePath);
+
+    try {
+      await this.flightPathManager?.loadWorkingFile(filePath);
+    } catch (error) {
+      Log.error("Failed to load workflow:", error);
+      vscode.window.showErrorMessage(
+        `Failed to load workflow: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private async handleClearWorkflowHistory(): Promise<void> {

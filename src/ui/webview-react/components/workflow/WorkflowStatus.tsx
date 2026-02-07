@@ -3,6 +3,7 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { RecentWorkflows } from "./RecentWorkflows";
+import { getExecutionStateBadgeClass } from "../../utils/status";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -206,27 +207,19 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             className="workflow-button-main flex-1 min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1.5 rounded-l rounded-r-none border-r-0 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
             title="Click to edit workflow name"
           >
-            <div className="flex items-center gap-2 overflow-hidden">
+            <div className="flex items-center justify-between gap-2 overflow-hidden">
               {/* Workflow Name */}
-              <span className="font-semibold text-sm truncate">
+              <span className="font-semibold text-sm truncate flex-1">
                 {displayName}
               </span>
 
               {/* Execution State */}
               {executionState && executionState !== EXECUTION_STATES.IDLE && (
-                <>
-                  <span className="text-[var(--vscode-descriptionForeground)]">
-                    •
-                  </span>
-                  <span
-                    className={`execution-state-${executionState.toLowerCase()} flex items-center gap-1 text-xs`}
-                  >
-                    <i
-                      className={`codicon codicon-${getStateIcon(executionState)}`}
-                    />
-                    <span className="capitalize">{executionState}</span>
-                  </span>
-                </>
+                <span
+                  className={`text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(executionState)}`}
+                >
+                  {executionState}
+                </span>
               )}
             </div>
           </button>

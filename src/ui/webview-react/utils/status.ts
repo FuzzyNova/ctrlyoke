@@ -198,3 +198,37 @@ export function canStopExecution(state: ExecutionState): boolean {
     state === EXECUTION_STATES.RUNNING || state === EXECUTION_STATES.PAUSED
   );
 }
+
+/**
+ * Execution state badge classes (background + text color)
+ * Used for status badges in workflow status and recent workflows
+ */
+export const EXECUTION_STATE_BADGE_CLASSES: Record<ExecutionState, string> = {
+  [EXECUTION_STATES.IDLE]: "bg-status-idle text-white",
+  [EXECUTION_STATES.RUNNING]: "bg-status-running text-white",
+  [EXECUTION_STATES.PAUSED]: "bg-status-paused text-white",
+  [EXECUTION_STATES.STOPPED]: "bg-status-stopped text-white",
+  [EXECUTION_STATES.CANCELLING]: "bg-status-cancelling text-white",
+  [EXECUTION_STATES.COMPLETED]: "bg-status-completed text-white",
+  [EXECUTION_STATES.ERROR]: "bg-status-error text-white",
+};
+
+/**
+ * Get badge classes for execution state
+ * Returns background and text color classes for status badges
+ *
+ * @param state - Execution state (case-insensitive)
+ * @returns Tailwind classes for badge styling
+ *
+ * @example
+ * <span className={`px-1.5 py-0.5 rounded ${getExecutionStateBadgeClass("running")}`}>
+ *   Running
+ * </span>
+ */
+export function getExecutionStateBadgeClass(state: string): string {
+  const normalizedState = state.toLowerCase() as ExecutionState;
+  return (
+    EXECUTION_STATE_BADGE_CLASSES[normalizedState] ||
+    EXECUTION_STATE_BADGE_CLASSES[EXECUTION_STATES.IDLE]
+  );
+}

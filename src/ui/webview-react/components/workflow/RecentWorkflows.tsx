@@ -1,4 +1,5 @@
 import React from "react";
+import { getExecutionStateBadgeClass } from "../../utils/status";
 
 interface RecentWorkflow {
   workflowName: string;
@@ -56,22 +57,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
     return "Just now";
   };
 
-  // Get state class for styling
-  const getStateClass = (state: string): string => {
-    const stateClasses: Record<string, string> = {
-      idle: "bg-[var(--vscode-inputValidation-infoBackground)] text-[var(--vscode-inputValidation-infoForeground)]",
-      running:
-        "bg-[var(--vscode-inputValidation-warningBackground)] text-[var(--vscode-inputValidation-warningForeground)]",
-      paused:
-        "bg-[var(--vscode-editorWarning-background,#5c5c00)] text-[var(--vscode-editorWarning-foreground,#cca700)]",
-      completed:
-        "bg-[var(--vscode-inputValidation-infoBackground)] text-[var(--vscode-inputValidation-infoForeground)]",
-      error:
-        "bg-[var(--vscode-inputValidation-errorBackground)] text-[var(--vscode-inputValidation-errorForeground)]",
-    };
-    return stateClasses[state.toLowerCase()] || stateClasses.idle;
-  };
-
   return (
     <div className={`recent-workflows ${className}`}>
       {/* Header */}
@@ -111,7 +96,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
 
                 {/* Execution State Badge */}
                 <span
-                  className={`workflow-menu-item-state text-[11px] px-1.5 py-0.5 rounded uppercase font-semibold flex-shrink-0 ${getStateClass(workflow.executionState)}`}
+                  className={`workflow-menu-item-state text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(workflow.executionState)}`}
                 >
                   {workflow.executionState}
                 </span>

@@ -33,6 +33,15 @@ module.exports = {
         "vscode-input-border": "var(--vscode-input-border)",
         "vscode-list-hover": "var(--vscode-list-hoverBackground)",
         "vscode-list-active": "var(--vscode-list-activeSelectionBackground)",
+
+        // Execution status colors (semantic, theme-independent)
+        "status-idle": "#2196F3", // Blue - waiting/queued
+        "status-running": "#48924b", // Light green - active
+        "status-completed": "#265428", // Dark green - success
+        "status-stopped": "#ff8000", // Orange - user stopped
+        "status-paused": "#cccf33", // Amber - paused
+        "status-error": "#F44336", // Red - error/failed
+        "status-cancelling": "#FF9800", // Orange - cancelling
       },
     },
   },
