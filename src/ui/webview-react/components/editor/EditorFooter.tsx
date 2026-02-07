@@ -51,17 +51,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 
   return (
     <div className="editor-footer flex items-center justify-between px-3 py-2 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
-      {/* Left side: Metadata and properties toggle */}
-      <div className="editor-footer-left flex items-center gap-3">
-        {/* Token count */}
-        <span className="editor-metadata text-xs text-[var(--vscode-descriptionForeground)]">
-          <i className="codicon codicon-symbol-misc mr-1" />
-          <span className="editor-token-count">
-            {tokenCount.toLocaleString()} token{tokenCount !== 1 ? "s" : ""}
-          </span>
-        </span>
-
-        {/* Properties toggle button */}
+      {/* Left side: Properties toggle */}
+      <div className="editor-footer-left flex items-center">
         <button
           className={`btn-properties px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
             propertiesOpen
@@ -77,6 +68,16 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
           />
         </button>
+      </div>
+
+      {/* Center: Token count */}
+      <div className="editor-footer-center flex items-center justify-center flex-1">
+        <span className="editor-metadata text-xs text-[var(--vscode-descriptionForeground)]">
+          <i className="codicon codicon-symbol-misc mr-1" />
+          <span className="editor-token-count">
+            {tokenCount.toLocaleString()} token{tokenCount !== 1 ? "s" : ""}
+          </span>
+        </span>
       </div>
 
       {/* Right side: Action buttons */}

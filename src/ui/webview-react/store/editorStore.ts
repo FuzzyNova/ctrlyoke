@@ -39,7 +39,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   resumeSession: "default",
   sessionId: "",
   allowDynamicExtension: "default",
-  endCondition: null,
+  endCondition: undefined, // undefined = inherit from workflow
 };
 
 export const END_CONDITION_DEFAULTS: EndConditionConfig = {
@@ -400,7 +400,7 @@ export const useEditorStore = create<
 
   clearEndCondition: () =>
     set((state) => ({
-      properties: { ...state.properties, endCondition: null },
+      properties: { ...state.properties, endCondition: undefined },
       isDirty: true,
     })),
 

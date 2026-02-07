@@ -181,12 +181,28 @@ export const PromptEditor: React.FC = () => {
         result.allowDynamicExtension = null;
       }
 
-      // End Condition
-      if (properties.endCondition) {
-        result.endCondition = properties.endCondition;
+      // End Condition - Three-state logic:
+      // - undefined (not included) = inherit from workflow
+      // - null (explicitly set) = disable end condition (override workflow)
+      // - object (with values) = specific end condition (override workflow)
+      if (properties.endCondition !== undefined) {
+        // Checkbox is checked (endCondition is not undefined)
+        // Check if required fields are filled
+        const script = properties.endCondition?.script?.trim() || "";
+        const returns = properties.endCondition?.returns?.trim() || "";
+
+        // If checked but required fields empty, send null to explicitly disable
+        if (!script || !returns) {
+          result.endCondition = null;
+        } else {
+          // Build end condition with filled fields
+          result.endCondition = properties.endCondition;
+        }
       } else if (includeNullsForDefaults) {
+        // When updating, send null to clear overrides
         result.endCondition = null;
       }
+      // else: undefined, omit from result (inherit from workflow)
 
       return result;
     },
@@ -334,10 +350,10 @@ export const PromptEditor: React.FC = () => {
   return (
     <div
       ref={editorContainerRef}
-      className="prompt-editor flex flex-col flex-1 relative overflow-hidden"
+      className="prompt-editor flex flex-col flex-1 overflow-hidden"
     >
-      {/* CodeMirror Editor */}
-      <div className="flex-1 overflow-hidden">
+      {/* CodeMirror Editor + Properties Drawer container */}
+      <div className="prompt-editor-wrapper flex flex-col flex-1 overflow-hidden relative">
         <CodeMirrorEditor
           value={promptText}
           onChange={handleTextChange}
@@ -345,9 +361,15 @@ export const PromptEditor: React.FC = () => {
           affUri={affUri}
           dicUri={dicUri}
         />
+
+        {/* Properties Drawer (slides up from bottom, overlays only editor) */}
+        <PropertiesDrawer
+          isOpen={propertiesDrawerOpen}
+          onClose={closePropertiesDrawer}
+        />
       </div>
 
-      {/* Editor Footer with actions */}
+      {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
         isRunning={isRunning}
@@ -363,12 +385,6 @@ export const PromptEditor: React.FC = () => {
         onCancel={cancelEdit}
         onToggleProperties={togglePropertiesDrawer}
         propertiesOpen={propertiesDrawerOpen}
-      />
-
-      {/* Properties Drawer (slides up from bottom) */}
-      <PropertiesDrawer
-        isOpen={propertiesDrawerOpen}
-        onClose={closePropertiesDrawer}
       />
 
       {/* Delete Confirmation Modal */}
