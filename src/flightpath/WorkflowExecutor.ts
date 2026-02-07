@@ -184,6 +184,7 @@ export class WorkflowExecutor {
           isStreaming: true,
           cliCommand: undefined,
           workingDirectory: context.workspaceFolderPath,
+          timestampMs: Date.now(),
         });
 
         // Listen for prompt ready event (fires when full prompt and command are built)
@@ -198,6 +199,7 @@ export class WorkflowExecutor {
               ? data.cliCommand
               : undefined,
             workingDirectory: context.workspaceFolderPath,
+            timestampMs: Date.now(),
           });
         });
 
@@ -601,6 +603,7 @@ export class WorkflowExecutor {
           isStreaming: false,
           cliCommand,
           workingDirectory: context.workspaceFolderPath,
+          timestampMs: Date.now(),
         });
       }
 
@@ -774,13 +777,9 @@ export class WorkflowExecutor {
       state: STEP_STATUS.RUNNING,
     });
 
-    // Send status message: Starting prompt
-    const promptPreview = prompt.prompt.split("\n")[0].substring(0, 60);
-    const ellipsis = prompt.prompt.length > 60 ? "..." : "";
-    context.dashboardProvider.updateStatusMessage(
-      currentIndex,
-      `Starting Prompt ${currentIndex + 1}: ${promptPreview}${ellipsis}`
-    );
+    // NOTE: Removed redundant "Starting Prompt N:" status message
+    // The CLI output header now shows "[Prompt N] Initial Attempt" with timestamp,
+    // which provides the same information in a more consistent format.
   }
 
   /**
@@ -882,6 +881,7 @@ export class WorkflowExecutor {
       isStreaming: false,
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
+      timestampMs: Date.now(),
     });
   }
 

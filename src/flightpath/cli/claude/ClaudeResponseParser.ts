@@ -258,6 +258,9 @@ export class ClaudeResponseParser
             // Note: signature field is available but not included (cryptographic, not user-facing)
           },
         });
+        Log.info(
+          `🔍 [ClaudeParser] Extracted THINKING event: ${contentBlock.thinking.substring(0, 50)}...`
+        );
       }
 
       // Handle text blocks
@@ -267,6 +270,9 @@ export class ClaudeResponseParser
           timestamp: Date.now(),
           data: { text: contentBlock.text },
         });
+        Log.info(
+          `🔍 [ClaudeParser] Extracted TEXT event: ${contentBlock.text.substring(0, 100)}...`
+        );
       }
 
       // Handle tool_use blocks - map to semantic event types
@@ -661,9 +667,19 @@ export class ClaudeResponseParser
         }
       }
 
-      // ✅ REMOVED: assistant message processing (causes duplicates during streaming)
-      // Assistant messages are accumulated state - only process in final parse() method
-      // Stream events provide real-time deltas - process those instead
+      // Process assistant messages during streaming (when NOT using --include-partial-messages)
+      // When using stream-json without --include-partial-messages, Claude CLI only sends
+      // complete assistant messages (no stream_event deltas), so we must process them here.
+      // Note: If --include-partial-messages is used, this will create duplicates because
+      // stream_event deltas are already processed above. Future enhancement: detect format.
+      if (json.type === "assistant" && json.message?.content) {
+        const beforeCount = events.length;
+        this.processAssistantContent(json.message.content, events);
+        const afterCount = events.length;
+        Log.info(
+          `🔍 [ClaudeParser] Processed assistant message during streaming: extracted ${afterCount - beforeCount} events (total: ${afterCount})`
+        );
+      }
 
       // Handle user messages (tool results)
       if (json.type === "user" && json.message?.content) {

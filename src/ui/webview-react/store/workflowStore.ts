@@ -50,6 +50,7 @@ export interface CliOutput {
   isStreaming: boolean;
   cliCommand?: string;
   workingDirectory?: string;
+  timestampMs?: number;
 }
 
 /**
@@ -108,6 +109,7 @@ interface WorkflowActions {
   clearCliOutputs: (stepIndex: number) => void;
   appendStreamingChunk: (stepIndex: number, chunk: string) => void;
   clearStreamingChunk: (stepIndex: number) => void;
+  appendStreamingEvents: (stepIndex: number, events: any[]) => void;
 
   // Retry management
   setRetryState: (
@@ -221,17 +223,64 @@ export const useWorkflowStore = create<
   // ============================================================================
 
   addCliOutput: (stepIndex, output) =>
-    set((state) => ({
-      cliOutputs: {
-        ...state.cliOutputs,
-        [stepIndex]: [...(state.cliOutputs[stepIndex] || []), output],
-      },
-      // Clear streaming chunk when final output arrives
-      streamingChunks: {
-        ...state.streamingChunks,
-        [stepIndex]: "",
-      },
-    })),
+    set((state) => {
+      const outputs = state.cliOutputs[stepIndex] || [];
+      let newOutputs: CliOutput[];
+
+      // Check if last output is streaming (should be replaced, not appended)
+      if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
+        const streamingEntry = outputs[outputs.length - 1];
+
+        // Decide whether to preserve streamed text or replace with structured output
+        if (streamingEntry.response && streamingEntry.response.length > 0) {
+          // If final output has structured data, REPLACE streamed text
+          if (
+            output.structured &&
+            (output.structured as any).events &&
+            (output.structured as any).events.length > 0
+          ) {
+            console.log(
+              `📊 WorkflowStore: Replacing streamed text (${streamingEntry.response.length} chars) with structured output (${(output.structured as any).events.length} events)`
+            );
+            newOutputs = [...outputs.slice(0, -1), output];
+          } else {
+            // No structured output - preserve the streamed response
+            console.log(
+              `📊 WorkflowStore: Preserving streamed response (${streamingEntry.response.length} chars), no structured data available`
+            );
+            newOutputs = [
+              ...outputs.slice(0, -1),
+              {
+                ...output,
+                response: streamingEntry.response, // Keep streamed content!
+              },
+            ];
+          }
+        } else {
+          // No streamed content, use final output as-is
+          console.log(
+            "📊 WorkflowStore: No streamed content, replacing with final output"
+          );
+          newOutputs = [...outputs.slice(0, -1), output];
+        }
+      } else {
+        // No streaming entry - append as new output (initial or retry)
+        console.log("📊 WorkflowStore: Appending new output (initial or retry)");
+        newOutputs = [...outputs, output];
+      }
+
+      return {
+        cliOutputs: {
+          ...state.cliOutputs,
+          [stepIndex]: newOutputs,
+        },
+        // Clear streaming chunk when final output arrives
+        streamingChunks: {
+          ...state.streamingChunks,
+          [stepIndex]: "",
+        },
+      };
+    }),
 
   clearCliOutputs: (stepIndex) =>
     set((state) => {
@@ -254,6 +303,57 @@ export const useWorkflowStore = create<
         [stepIndex]: "",
       },
     })),
+
+  appendStreamingEvents: (stepIndex, events) =>
+    set((state) => {
+      const outputs = state.cliOutputs[stepIndex] || [];
+      let newOutputs: CliOutput[];
+
+      // Ensure there's a streaming buffer with structured events array
+      if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
+        console.log(
+          "📊 WorkflowStore: Creating new structured streaming buffer"
+        );
+        newOutputs = [
+          ...outputs,
+          {
+            prompt: "",
+            response: "",
+            structured: { events: [...events] },
+            elapsed: 0,
+            isStreaming: true,
+            timestampMs: Date.now(),
+          },
+        ];
+      } else {
+        // Append events to existing streaming buffer
+        const streamingBuffer = outputs[outputs.length - 1];
+        const existingStructured = streamingBuffer.structured as any;
+        const existingEvents = existingStructured?.events || [];
+
+        console.log(
+          `📊 WorkflowStore: Appending ${events.length} events to streaming buffer (total will be ${existingEvents.length + events.length})`
+        );
+
+        newOutputs = [
+          ...outputs.slice(0, -1),
+          {
+            ...streamingBuffer,
+            structured: {
+              ...existingStructured,
+              events: [...existingEvents, ...events],
+            },
+          },
+        ];
+      }
+
+      return {
+        cliOutputs: {
+          ...state.cliOutputs,
+          [stepIndex]: newOutputs,
+        },
+      };
+    }),
 
   // ============================================================================
   // RETRY MANAGEMENT

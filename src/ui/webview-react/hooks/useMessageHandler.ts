@@ -294,50 +294,9 @@ function createMessageHandlers(): MessageHandlerMap {
       `🔍 Dashboard: Received CLI_STREAMING_EVENTS, stepIndex=${message.stepIndex}, event count=${events.length}`
     );
 
-    // Process structured events and add them as CLI output
-    // Events contain tool calls, text blocks, and other structured data
-    for (const event of events) {
-      if (event.type === "assistant" && event.message?.content) {
-        // Handle assistant response with content blocks
-        for (const block of event.message.content) {
-          if (block.type === "text" && block.text) {
-            // Append text content to streaming output
-            workflowStore.appendStreamingChunk(message.stepIndex, block.text);
-          } else if (block.type === "tool_use") {
-            // Store tool call as structured output
-            workflowStore.addCliOutput(message.stepIndex, {
-              prompt: "",
-              response: "",
-              structured: {
-                type: "tool_call",
-                toolName: block.name,
-                toolInput: block.input,
-                toolId: block.id,
-              },
-              elapsed: 0,
-              isStreaming: true,
-            });
-          }
-        }
-      } else if (event.type === "content_block_delta" && event.delta?.text) {
-        // Handle streaming text delta
-        workflowStore.appendStreamingChunk(message.stepIndex, event.delta.text);
-      } else if (event.type === "tool_result") {
-        // Store tool result
-        workflowStore.addCliOutput(message.stepIndex, {
-          prompt: "",
-          response: "",
-          structured: {
-            type: "tool_result",
-            toolId: event.tool_use_id,
-            result: event.content,
-            isError: event.is_error || false,
-          },
-          elapsed: 0,
-          isStreaming: true,
-        });
-      }
-    }
+    // Append events to streaming buffer (creates buffer if needed)
+    // Events are accumulated and displayed in real-time as formatted structured output
+    workflowStore.appendStreamingEvents(message.stepIndex, events);
   };
 
   // --------------------------------------------------------------------------

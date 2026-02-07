@@ -53,6 +53,7 @@ export const OutputSection: React.FC = () => {
     totalSteps,
     cliOutputs,
     statusMessages,
+    streamingChunks,
   } = useWorkflowStore();
   const {
     outputCollapsed,
@@ -108,7 +109,7 @@ export const OutputSection: React.FC = () => {
     if (autoscrollEnabled && outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [allMessages, autoscrollEnabled]);
+  }, [allMessages, streamingChunks, autoscrollEnabled]);
 
   // Export handler
   const handleExport = useCallback(() => {
@@ -227,12 +228,14 @@ export const OutputSection: React.FC = () => {
               );
             } else {
               const cliData = item.data as CliOutputItem;
+              const streamingChunk = streamingChunks[item.stepIndex] || "";
               return (
                 <CliOutput
                   key={`cli-${index}`}
                   output={cliData}
                   stepIndex={item.stepIndex}
                   attemptIndex={item.attemptIndex || 0}
+                  streamingChunk={streamingChunk}
                 />
               );
             }

@@ -60,6 +60,8 @@ export interface CliOutputData {
   cliCommand?: string;
   /** The working directory where the command was executed (for terminal-style display) */
   workingDirectory?: string;
+  /** Timestamp when the output was created (milliseconds since epoch) */
+  timestampMs?: number;
 }
 
 /**

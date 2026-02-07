@@ -1,5 +1,5 @@
 import React from "react";
-import { escapeHtml } from "@utils/outputUtils";
+import { escapeHtml, formatTime } from "@utils/outputUtils";
 import { BashOutput } from "./BashOutput";
 import {
   FileEditOutput,
@@ -254,6 +254,7 @@ interface CliOutputProps {
   output: CliOutputItem;
   stepIndex: number;
   attemptIndex: number;
+  streamingChunk?: string;
   className?: string;
 }
 
@@ -274,6 +275,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
   output,
   stepIndex,
   attemptIndex,
+  streamingChunk = "",
   className = "",
 }) => {
   const attemptLabel =
@@ -284,17 +286,50 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     <span className="streaming-indicator">⬤ Streaming...</span>
   ) : null;
 
-  // Render response: prefer structured events, fallback to plain response
+  // Render response: show both streaming text and structured events when available
   const renderResponse = () => {
-    // If structured events exist, render them
-    if (output.structured?.events && output.structured.events.length > 0) {
+    const hasStructuredEvents =
+      output.structured?.events && output.structured.events.length > 0;
+    const hasStreamingText =
+      output.isStreaming && streamingChunk && streamingChunk.length > 0;
+    const hasFinalResponse = !output.isStreaming && output.response;
+
+    // Case 1: Streaming with BOTH text chunks and structured events
+    // Show text first (initial response), then structured events (tool calls/results)
+    if (hasStructuredEvents && hasStreamingText) {
+      return (
+        <>
+          <div className="output-response streaming">
+            {escapeHtml(streamingChunk)}
+          </div>
+          <StructuredOutput events={output.structured.events as CliEvent[]} />
+        </>
+      );
+    }
+
+    // Case 2: Streaming with ONLY structured events (no text yet)
+    if (hasStructuredEvents) {
       return (
         <StructuredOutput events={output.structured.events as CliEvent[]} />
       );
     }
 
-    // Fallback to plain response text
-    if (output.response) {
+    // Case 3: Streaming with ONLY text chunks (no structured events)
+    if (hasStreamingText) {
+      return (
+        <div className="output-response streaming">
+          {escapeHtml(streamingChunk)}
+        </div>
+      );
+    }
+
+    // Case 4: Streaming but no content yet - show nothing (indicator shows we're streaming)
+    if (output.isStreaming) {
+      return null;
+    }
+
+    // Case 5: Final output with plain response text (no structured data)
+    if (hasFinalResponse) {
       return (
         <div className="output-response">{escapeHtml(output.response)}</div>
       );
@@ -323,10 +358,14 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     return <div className="output-stats">{parts.join(" | ")}</div>;
   };
 
+  // Format timestamp for header
+  const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
+
   return (
     <div className={`cli-output-item ${className}`}>
       {/* Header */}
       <div className="output-header">
+        {timestamp && <span className="output-timestamp">[{timestamp}] </span>}
         [Prompt {stepIndex + 1}] {attemptLabel}
         {streamingIndicator}
       </div>
