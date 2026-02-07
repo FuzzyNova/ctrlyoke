@@ -269,14 +269,15 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {isDropdownOpen && !isEditing && (
         <div
           ref={dropdownRef}
-          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] max-h-[min(400px,70vh)] bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] rounded shadow-lg z-[9999] overflow-hidden flex flex-col"
+          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] rounded shadow-lg z-[9999] overflow-hidden flex flex-col"
           style={{
             top: containerRef.current
               ? containerRef.current.getBoundingClientRect().bottom + 4
               : "auto",
-            left: containerRef.current
-              ? containerRef.current.getBoundingClientRect().left
-              : "auto",
+            left: "50%",
+            transform: "translateX(-50%)",
+            maxHeight: "min(400px, 70vh)",
+            height: "min(400px, 70vh)",
           }}
         >
           <RecentWorkflows

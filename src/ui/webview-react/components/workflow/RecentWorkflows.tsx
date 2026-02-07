@@ -58,9 +58,9 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   };
 
   return (
-    <div className={`recent-workflows ${className}`}>
+    <div className={`recent-workflows flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-[var(--vscode-descriptionForeground)] uppercase tracking-wider border-b border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)]">
+      <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-[var(--vscode-descriptionForeground)] uppercase tracking-wider border-b border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)] flex-shrink-0">
         Recent Workflows
       </div>
 
@@ -115,7 +115,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
 
       {/* Footer - Clear History */}
       {workflows.length > 0 && (
-        <div className="workflow-menu-footer p-1 border-t border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)]">
+        <div className="workflow-menu-footer p-1 border-t border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)] flex-shrink-0">
           <button
             type="button"
             onClick={onClearHistory}
