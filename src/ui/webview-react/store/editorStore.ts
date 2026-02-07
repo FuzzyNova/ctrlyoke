@@ -175,31 +175,19 @@ export const useEditorStore = create<
   selectPrompt: (index, promptData = null) => {
     if (index === null) {
       // Switching to new prompt mode
-      const { savedNewPromptState } = get();
-      if (savedNewPromptState) {
-        // Restore saved new prompt state
-        set({
-          selectedPromptIndex: null,
-          originalPromptData: null,
-          promptText: savedNewPromptState.promptText,
-          promptName: savedNewPromptState.promptName,
-          properties: savedNewPromptState.properties,
-          savedNewPromptState: null,
-          isDirty: savedNewPromptState.promptText.length > 0,
-        });
-      } else {
-        set({
-          selectedPromptIndex: null,
-          originalPromptData: null,
-          isDirty: false,
-        });
-      }
+      get().enterNewPromptMode();
     } else {
       // Switching to edit mode
-      set({
-        selectedPromptIndex: index,
-        originalPromptData: promptData,
-      });
+      if (promptData) {
+        // Call enterEditMode to properly load prompt data into editor
+        get().enterEditMode(index, promptData);
+      } else {
+        // Fallback if promptData not provided (shouldn't happen)
+        set({
+          selectedPromptIndex: index,
+          originalPromptData: promptData,
+        });
+      }
     }
   },
 

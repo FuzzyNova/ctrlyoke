@@ -471,6 +471,31 @@ function createMessageHandlers(): MessageHandlerMap {
     );
   };
 
+  // --------------------------------------------------------------------------
+  // QUEUE_SIZE_LIMIT_REACHED - Queue hit size limit
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED] = (message) => {
+    const workflowStore = useWorkflowStore.getState();
+    workflowStore.addStatusMessage(
+      -1,
+      `Queue size limit reached: ${message.currentSize}/${message.maxSize}`
+    );
+  };
+
+  // --------------------------------------------------------------------------
+  // EXECUTION_TIME_LIMIT_REACHED - Execution hit time limit
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.EXECUTION_TIME_LIMIT_REACHED] = (message) => {
+    const workflowStore = useWorkflowStore.getState();
+
+    workflowStore.addStatusMessage(
+      -1,
+      `Execution time limit reached: ${message.elapsedSeconds}/${message.maxSeconds}s (${message.completedCount}/${message.totalCount} prompts)`
+    );
+
+    workflowStore.setExecutionState(EXECUTION_STATES.STOPPED);
+  };
+
   return handlers;
 }
 
@@ -481,10 +506,13 @@ function createMessageHandlers(): MessageHandlerMap {
 /**
  * Hook to set up message handling for the FlightPath dashboard
  *
+ * All message handlers are centralized in createMessageHandlers() function.
+ * This hook sets up the message listener and provides a sendMessage helper.
+ *
  * Usage:
  * ```tsx
  * function App() {
- *   const { sendMessage } = useMessageHandler();
+ *   useMessageHandler();
  *
  *   const handleRun = () => sendMessage(MESSAGE_TYPES.RUN);
  *
