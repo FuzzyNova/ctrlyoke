@@ -47,6 +47,7 @@ export const PromptEditor: React.FC = () => {
     isDirty,
     markClean,
     saveToVsCodeState,
+    restoreFromVsCodeState,
     hasActiveQueue,
   } = useEditorStore();
 
@@ -61,6 +62,7 @@ export const PromptEditor: React.FC = () => {
   const vscode = getVsCodeApi();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -71,6 +73,18 @@ export const PromptEditor: React.FC = () => {
   // Dictionary URIs from document attributes
   const affUri = document.body.getAttribute("data-aff-uri") || "./en_US.aff";
   const dicUri = document.body.getAttribute("data-dic-uri") || "./en_US.dic";
+
+  // Restore editor state from VS Code persistent storage on mount
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      // Only restore if in new prompt mode (not editing an existing prompt)
+      if (selectedPromptIndex === null) {
+        restoreFromVsCodeState(vscode);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   // Check if there are pending prompts in the queue
   const hasPendingPrompts = useCallback(() => {

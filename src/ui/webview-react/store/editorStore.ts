@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
+import { getVsCodeApi } from "../hooks/useVsCodeApi";
 
 /**
  * End condition configuration
@@ -194,6 +195,7 @@ export const useEditorStore = create<
   enterNewPromptMode: () => {
     const { savedNewPromptState } = get();
     if (savedNewPromptState) {
+      // Restore saved new prompt state (from switching to edit mode)
       set({
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -204,15 +206,30 @@ export const useEditorStore = create<
         isDirty: savedNewPromptState.promptText.length > 0,
       });
     } else {
-      set({
-        selectedPromptIndex: null,
-        originalPromptData: null,
-        promptText: "",
-        promptName: "",
-        properties: { ...PROPERTY_DEFAULTS },
-        isDirty: false,
-        validationErrors: {},
-      });
+      // Try to restore from VS Code persistent state
+      // Use the global vscode API instance
+      const vscode = getVsCodeApi();
+      const restored = get().restoreFromVsCodeState(vscode);
+
+      if (!restored) {
+        // No persisted state, reset to defaults
+        set({
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          promptText: "",
+          promptName: "",
+          properties: { ...PROPERTY_DEFAULTS },
+          isDirty: false,
+          validationErrors: {},
+        });
+      } else {
+        // State was restored, just clear edit mode flags
+        set({
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          savedNewPromptState: null,
+        });
+      }
     }
   },
 
@@ -264,10 +281,11 @@ export const useEditorStore = create<
   },
 
   cancelEdit: () => {
-    const { originalPromptData, savedNewPromptState } = get();
+    const state = get();
+    const { savedNewPromptState } = state;
 
     if (savedNewPromptState) {
-      // Restore saved new prompt state
+      // Restore saved new prompt state (what was typed before switching to edit mode)
       set({
         selectedPromptIndex: null,
         originalPromptData: null,
@@ -278,49 +296,32 @@ export const useEditorStore = create<
         isDirty: savedNewPromptState.promptText.length > 0,
         validationErrors: {},
       });
-    } else if (originalPromptData) {
-      // Revert to original prompt data
-      const properties: PropertyValues = {
-        provider: originalPromptData.provider ?? "default",
-        model: originalPromptData.model ?? "default",
-        agent: originalPromptData.agent ?? "",
-        resumeSession:
-          originalPromptData.resumeSession === undefined
-            ? "default"
-            : originalPromptData.resumeSession
-              ? "yes"
-              : "no",
-        sessionId:
-          originalPromptData.sessionId !== undefined
-            ? String(originalPromptData.sessionId)
-            : "",
-        allowDynamicExtension:
-          originalPromptData.allowDynamicExtension === undefined
-            ? "default"
-            : originalPromptData.allowDynamicExtension
-              ? "yes"
-              : "no",
-        endCondition: originalPromptData.endCondition ?? null,
-      };
-
-      set({
-        promptText: originalPromptData.prompt,
-        promptName: originalPromptData.id ?? "",
-        properties,
-        isDirty: false,
-        validationErrors: {},
-      });
     } else {
-      // Just reset to new prompt mode
-      set({
-        selectedPromptIndex: null,
-        originalPromptData: null,
-        promptText: "",
-        promptName: "",
-        properties: { ...PROPERTY_DEFAULTS },
-        isDirty: false,
-        validationErrors: {},
-      });
+      // Try to restore from VS Code persistent state
+      // Use the global vscode API instance
+      const vscode = getVsCodeApi();
+      const restored = get().restoreFromVsCodeState(vscode);
+
+      if (!restored) {
+        // No persisted state, reset to defaults
+        set({
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          promptText: "",
+          promptName: "",
+          properties: { ...PROPERTY_DEFAULTS },
+          isDirty: false,
+          validationErrors: {},
+        });
+      } else {
+        // State was restored, just clear edit mode flags and validation errors
+        set({
+          selectedPromptIndex: null,
+          originalPromptData: null,
+          savedNewPromptState: null,
+          validationErrors: {},
+        });
+      }
     }
   },
 

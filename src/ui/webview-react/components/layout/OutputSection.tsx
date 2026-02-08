@@ -1,27 +1,12 @@
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
+import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar } from "../shared";
 import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
 import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
 import { MESSAGE_TYPES } from "../../types/messages";
-
-// VS Code API type
-declare const acquireVsCodeApi: () => {
-  postMessage: (message: unknown) => void;
-  getState: () => unknown;
-  setState: (state: unknown) => void;
-};
-
-// Get vscode API (singleton pattern)
-let vscodeApi: ReturnType<typeof acquireVsCodeApi> | null = null;
-const getVsCodeApi = () => {
-  if (!vscodeApi && typeof acquireVsCodeApi !== "undefined") {
-    vscodeApi = acquireVsCodeApi();
-  }
-  return vscodeApi;
-};
 
 /**
  * Combined message type for chronological sorting
