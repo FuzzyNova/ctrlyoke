@@ -8,6 +8,7 @@ import {
 } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { useIsMobile } from "@hooks/useMediaQuery";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
 import {
@@ -20,6 +21,7 @@ import {
 
 function App() {
   const vscode = useVsCodeApi();
+  const isMobile = useIsMobile();
 
   // Panel imperative refs for programmatic collapse/expand
   const settingsRef = useRef<PanelImperativeHandle>(null);
@@ -194,6 +196,167 @@ function App() {
     }
     wasBothCollapsed.current = bothCollapsed;
   }
+
+  // ============================================================================
+  // MOBILE LAYOUT — vertical stacking of all 4 panels
+  // ============================================================================
+
+  // Mobile-specific refs (separate Group with different panel IDs)
+  const mobilePromptsRef = useRef<PanelImperativeHandle>(null);
+  const mobileOutputRef = useRef<PanelImperativeHandle>(null);
+  const mobileEditorRef = useRef<PanelImperativeHandle>(null);
+  const mobileSettingsRef = useRef<PanelImperativeHandle>(null);
+  const mobileGroupRef = useRef<GroupImperativeHandle>(null);
+  // Gates onResize until first useLayoutEffect has synced persisted state
+  const mobileInitializedRef = useRef(false);
+
+  // Store → mobile panel sync (before paint to avoid flash)
+  useLayoutEffect(() => {
+    if (!isMobile) return;
+    if (promptsCollapsed) mobilePromptsRef.current?.collapse();
+    else mobilePromptsRef.current?.expand();
+    if (outputCollapsed) mobileOutputRef.current?.collapse();
+    else mobileOutputRef.current?.expand();
+    if (editorCollapsed) mobileEditorRef.current?.collapse();
+    else mobileEditorRef.current?.expand();
+    if (settingsCollapsed) mobileSettingsRef.current?.collapse();
+    else mobileSettingsRef.current?.expand();
+  }, [
+    isMobile,
+    promptsCollapsed,
+    outputCollapsed,
+    editorCollapsed,
+    settingsCollapsed,
+  ]);
+
+  // Mobile gate management: close when all collapsed, open after sync
+  useEffect(() => {
+    if (!isMobile) return;
+    const allCollapsed =
+      promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+    mobileInitializedRef.current = !allCollapsed;
+  }, [
+    isMobile,
+    promptsCollapsed,
+    outputCollapsed,
+    editorCollapsed,
+    settingsCollapsed,
+  ]);
+
+  const allMobileCollapsed =
+    promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+
+  if (isMobile) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+        <Header />
+
+        {allMobileCollapsed ? (
+          /* All collapsed: stack 4 horizontal PanelBars vertically */
+          <div className="flex flex-col flex-1 bg-[var(--vscode-editor-background)]">
+            <div className="flex-none">
+              <PromptsPanel panelBarOrientation="horizontal" />
+            </div>
+            <div className="flex-none">
+              <OutputSection />
+            </div>
+            <div className="flex-none">
+              <EditorSection />
+            </div>
+            <div className="flex-none">
+              <SettingsPanel panelBarOrientation="horizontal" />
+            </div>
+          </div>
+        ) : (
+          /* At least one panel open: vertical resizable Group */
+          <Group
+            groupRef={mobileGroupRef}
+            orientation="vertical"
+            className="flex-1"
+            id="flightpath-mobile-layout"
+          >
+            <Panel
+              panelRef={mobilePromptsRef}
+              defaultSize="25"
+              collapsible
+              collapsedSize="30px"
+              minSize="10"
+              id="mobile-prompts-panel"
+              onResize={() => {
+                if (!mobileInitializedRef.current) return;
+                setPromptsCollapsed(
+                  mobilePromptsRef.current?.isCollapsed() ?? false
+                );
+              }}
+            >
+              <PromptsPanel panelBarOrientation="horizontal" />
+            </Panel>
+
+            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+
+            <Panel
+              panelRef={mobileOutputRef}
+              defaultSize="25"
+              collapsible
+              collapsedSize="30px"
+              minSize="10"
+              id="mobile-output-panel"
+              onResize={() => {
+                if (!mobileInitializedRef.current) return;
+                setOutputCollapsed(
+                  mobileOutputRef.current?.isCollapsed() ?? false
+                );
+              }}
+            >
+              <OutputSection />
+            </Panel>
+
+            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+
+            <Panel
+              panelRef={mobileEditorRef}
+              defaultSize="25"
+              collapsible
+              collapsedSize="30px"
+              minSize="10"
+              id="mobile-editor-panel"
+              onResize={() => {
+                if (!mobileInitializedRef.current) return;
+                setEditorCollapsed(
+                  mobileEditorRef.current?.isCollapsed() ?? false
+                );
+              }}
+            >
+              <EditorSection />
+            </Panel>
+
+            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+
+            <Panel
+              panelRef={mobileSettingsRef}
+              defaultSize="25"
+              collapsible
+              collapsedSize="30px"
+              minSize="10"
+              id="mobile-settings-panel"
+              onResize={() => {
+                if (!mobileInitializedRef.current) return;
+                setSettingsCollapsed(
+                  mobileSettingsRef.current?.isCollapsed() ?? false
+                );
+              }}
+            >
+              <SettingsPanel panelBarOrientation="horizontal" />
+            </Panel>
+          </Group>
+        )}
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // DESKTOP LAYOUT — horizontal three-column layout (unchanged)
+  // ============================================================================
 
   return (
     <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">

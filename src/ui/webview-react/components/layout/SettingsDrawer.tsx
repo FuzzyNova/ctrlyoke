@@ -165,7 +165,9 @@ const FormField: React.FC<{
  * - End condition configuration
  * - Quick access to VS Code settings
  */
-export const SettingsPanel: React.FC = () => {
+export const SettingsPanel: React.FC<{
+  panelBarOrientation?: "horizontal" | "vertical";
+}> = ({ panelBarOrientation = "vertical" }) => {
   const vscode = useVsCodeApi();
   const { settingsCollapsed, toggleSettingsCollapse } = useUiStore();
   const {
@@ -498,7 +500,7 @@ export const SettingsPanel: React.FC = () => {
   if (settingsCollapsed) {
     return (
       <PanelBar
-        orientation="vertical"
+        orientation={panelBarOrientation}
         icon="settings-gear"
         title="Settings"
         onClick={toggleSettingsCollapse}

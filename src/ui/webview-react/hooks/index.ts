@@ -8,3 +8,4 @@ export {
   sendMessage,
   type UseMessageHandlerReturn,
 } from "./useMessageHandler";
+export { useMediaQuery, useIsMobile } from "./useMediaQuery";

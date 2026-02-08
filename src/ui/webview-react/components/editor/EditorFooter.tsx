@@ -134,7 +134,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               disabled={!hasContent || isRunning}
               title={runButtonTooltip}
             >
-              <i className="codicon codicon-play" />
+              <i className="codicon codicon-send" />
               <span className="btn-text">{runButtonText}</span>
             </button>
           </>

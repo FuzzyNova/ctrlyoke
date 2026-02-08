@@ -21,7 +21,9 @@ import {
  * - Empty state when no prompts loaded
  * - Retry and end condition result display
  */
-export const PromptsPanel: React.FC = () => {
+export const PromptsPanel: React.FC<{
+  panelBarOrientation?: "horizontal" | "vertical";
+}> = ({ panelBarOrientation = "vertical" }) => {
   const { prompts, currentStep, executionState, retryStates, cliOutputs } =
     useWorkflowStore();
   const { promptsCollapsed, togglePromptsCollapse } = useUiStore();
@@ -91,7 +93,7 @@ export const PromptsPanel: React.FC = () => {
   if (promptsCollapsed) {
     return (
       <PanelBar
-        orientation="vertical"
+        orientation={panelBarOrientation}
         icon="list-unordered"
         title="Prompts"
         onClick={togglePromptsCollapse}
