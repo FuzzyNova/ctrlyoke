@@ -1,7 +1,6 @@
 const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
-const sass = require("sass");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -141,115 +140,6 @@ const copySchemasPlugin = {
 };
 
 /**
- * Plugin to copy webview files to output directory
- * @type {import('esbuild').Plugin}
- */
-const copyWebviewPlugin = {
-  name: "copy-webview",
-
-  setup(build) {
-    build.onEnd(() => {
-      const srcWebview = path.join(__dirname, "src", "ui", "webview");
-      const outWebview = path.join(__dirname, "out", "ui", "webview");
-
-      // Create output webview directory if it doesn't exist
-      if (!fs.existsSync(outWebview)) {
-        fs.mkdirSync(outWebview, { recursive: true });
-      }
-
-      // Copy all webview files and directories
-      if (fs.existsSync(srcWebview)) {
-        const entries = fs.readdirSync(srcWebview, { withFileTypes: true });
-
-        // Validate: Check for .css files that have .scss equivalents (likely a mistake)
-        const cssFiles = entries.filter(
-          (e) => e.isFile() && e.name.endsWith(".css")
-        );
-        cssFiles.forEach((cssFile) => {
-          const scssName = cssFile.name.replace(/\.css$/, ".scss");
-          const scssPath = path.join(srcWebview, scssName);
-          if (fs.existsSync(scssPath)) {
-            console.error(
-              `❌ ERROR: Found both ${cssFile.name} and ${scssName} in src/ui/webview/`
-            );
-            console.error(
-              `   Delete ${cssFile.name} - SCSS files should be the only source.`
-            );
-            throw new Error(
-              `Conflicting CSS/SCSS files: ${cssFile.name} and ${scssName}`
-            );
-          }
-        });
-
-        entries.forEach((entry) => {
-          // Skip bundle source files - they're bundled separately
-          if (entry.name === "gpt-tokenizer-bundle.js" || entry.name === "diff-bundle.js") {
-            return;
-          }
-
-          const srcPath = path.join(srcWebview, entry.name);
-          const outPath = path.join(outWebview, entry.name);
-
-          if (entry.isDirectory()) {
-            copyDirRecursive(srcPath, outPath);
-            console.log(
-              `[copy] ${entry.name}/ -> out/ui/webview/${entry.name}/`
-            );
-          } else if (entry.name.endsWith(".scss")) {
-            // Compile SCSS to CSS
-            try {
-              const result = sass.compile(srcPath, {
-                loadPaths: [srcWebview], // Allow @use and @import to resolve from webview directory
-              });
-              const cssPath = outPath.replace(/\.scss$/, ".css");
-              fs.writeFileSync(cssPath, result.css);
-              console.log(
-                `[scss] ${entry.name} -> out/ui/webview/${entry.name.replace(/\.scss$/, ".css")}`
-              );
-            } catch (err) {
-              console.error(
-                `[scss] Error compiling ${entry.name}:`,
-                err.message
-              );
-            }
-          } else {
-            fs.copyFileSync(srcPath, outPath);
-            console.log(`[copy] ${entry.name} -> out/ui/webview/${entry.name}`);
-          }
-        });
-      }
-
-      // Copy codicon files from node_modules to webview directory
-      const codiconsSource = path.join(
-        __dirname,
-        "node_modules",
-        "@vscode",
-        "codicons",
-        "dist"
-      );
-      const codiconsOut = path.join(outWebview, "codicons");
-
-      if (fs.existsSync(codiconsSource)) {
-        if (!fs.existsSync(codiconsOut)) {
-          fs.mkdirSync(codiconsOut, { recursive: true });
-        }
-
-        // Copy only the files we need (CSS and font)
-        const codiconFiles = ["codicon.css", "codicon.ttf"];
-        codiconFiles.forEach((file) => {
-          const srcFile = path.join(codiconsSource, file);
-          const outFile = path.join(codiconsOut, file);
-          if (fs.existsSync(srcFile)) {
-            fs.copyFileSync(srcFile, outFile);
-            console.log(`[copy] ${file} -> out/ui/webview/codicons/${file}`);
-          }
-        });
-      }
-    });
-  },
-};
-
-/**
  * Plugin to copy script files to output directory
  * @type {import('esbuild').Plugin}
  */
@@ -280,83 +170,7 @@ const copyScriptsPlugin = {
   },
 };
 
-/**
- * Bundle CodeMirror for webview use
- */
-async function buildCodeMirror() {
-  const outDir = path.join(__dirname, "out", "ui", "webview", "lib");
-
-  // Ensure lib directory exists
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
-  }
-
-  await esbuild.build({
-    entryPoints: ["src/ui/webview/codemirror-bundle-source.js"],
-    bundle: true,
-    format: "esm",
-    outfile: "out/ui/webview/lib/codemirror.bundle.js",
-    platform: "browser",
-    external: [], // Bundle everything
-    minify: production,
-    sourcemap: !production,
-    target: ["es2020"],
-    logLevel: "info",
-  });
-
-  console.log("✓ CodeMirror bundle created");
-}
-
-/**
- * Bundle gpt-tokenizer for webview use (exposes window.gptTokenizer)
- */
-async function buildGptTokenizer() {
-  await esbuild.build({
-    entryPoints: ["src/ui/webview/gpt-tokenizer-bundle.js"],
-    bundle: true,
-    format: "iife", // Immediately Invoked Function Expression for browser
-    outfile: "out/ui/webview/gpt-tokenizer.js",
-    platform: "browser",
-    external: [], // Bundle gpt-tokenizer
-    minify: production,
-    sourcemap: !production,
-    target: ["es2020"],
-    logLevel: "info",
-  });
-
-  console.log("✓ GPT Tokenizer bundle created");
-}
-
-/**
- * Bundle diff library for webview use (exposes window.Diff)
- */
-async function buildDiff() {
-  await esbuild.build({
-    entryPoints: ["src/ui/webview/diff-bundle.js"],
-    bundle: true,
-    format: "iife", // Immediately Invoked Function Expression for browser
-    outfile: "out/ui/webview/diff.js",
-    platform: "browser",
-    external: [], // Bundle diff library
-    minify: production,
-    sourcemap: !production,
-    target: ["es2020"],
-    logLevel: "info",
-  });
-
-  console.log("✓ Diff bundle created");
-}
-
 async function main() {
-  // Build CodeMirror bundle first
-  await buildCodeMirror();
-
-  // Build gpt-tokenizer bundle
-  await buildGptTokenizer();
-
-  // Build diff bundle
-  await buildDiff();
-
   // Build main extension
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
@@ -375,21 +189,8 @@ async function main() {
       esbuildProblemMatcherPlugin,
       copyTemplatesPlugin,
       copySchemasPlugin,
-      copyWebviewPlugin,
       copyScriptsPlugin,
     ],
-  });
-
-  // Build constants for webview (separate bundle to avoid VS Code API dependency)
-  const constantsCtx = await esbuild.context({
-    entryPoints: ["src/types/DashboardConstants.ts"],
-    bundle: true,
-    format: "iife", // Immediately Invoked Function Expression for browser
-    globalName: "FlightPathConstants",
-    minify: production,
-    sourcemap: !production,
-    outfile: "out/ui/webview/DashboardConstants.js",
-    logLevel: "silent",
   });
 
   // Build MCP server (separate executable for CLI tools)
@@ -408,14 +209,11 @@ async function main() {
 
   if (watch) {
     await ctx.watch();
-    await constantsCtx.watch();
     await mcpCtx.watch();
   } else {
     await ctx.rebuild();
-    await constantsCtx.rebuild();
     await mcpCtx.rebuild();
     await ctx.dispose();
-    await constantsCtx.dispose();
     await mcpCtx.dispose();
   }
 }

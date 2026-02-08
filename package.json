@@ -992,7 +992,7 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "dev:webview": "npm run generate-custom-icons && vite --config src/ui/webview-react/vite.config.ts",
-    "vscode:prepublish": "npm run check-types && node scripts/strip-dev-commands.mjs && node esbuild.js --production",
+    "vscode:prepublish": "npm run build:prod",
     "build:prod": "npm run build:extension && npm run build:webview",
     "build:extension": "npm run check-types && node scripts/strip-dev-commands.mjs && node esbuild.js --production",
     "build:webview": "npm run generate-custom-icons && vite build --config src/ui/webview-react/vite.config.ts --mode production",
