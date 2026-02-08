@@ -19,6 +19,20 @@ import {
   SettingsPanel,
 } from "./components/layout";
 
+/** Default panel sizes (percentage) — single source of truth for initial layout */
+const DEFAULT_DESKTOP_SIZES = {
+  prompts: 20,
+  output: 60,
+  editor: 40,
+  settings: 20,
+};
+const DEFAULT_MOBILE_SIZES = {
+  prompts: 10,
+  output: 50,
+  editor: 30,
+  settings: 10,
+};
+
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
@@ -35,13 +49,21 @@ function App() {
   // (the vertical Group unmounts); the next mount re-gates until the first
   // useLayoutEffect re-syncs.
   const initializedRef = useRef(false);
-  // Track last expanded sizes (restored when re-expanding, captured during drag)
-  const lastOutputSize = useRef(60);
-  const lastEditorSize = useRef(40);
+  // Track last expanded sizes per layout — restored when re-expanding, captured
+  // during drag.  Grouped by layout to keep the 8 values organized.
+  const lastDesktopSizes = useRef({ ...DEFAULT_DESKTOP_SIZES });
+  const lastMobileSizes = useRef({ ...DEFAULT_MOBILE_SIZES });
   // Flag: true when Group just remounted from both-collapsed, false after forced resize
   const needsForcedResize = useRef(false);
   // Flag: true during forced resize operation to prevent onResize from saving wrong values
   const isForcingResize = useRef(false);
+  // Desktop mount defaults — used when desktop Group remounts (e.g. mobile → desktop).
+  // Updated from saved sizes to restore the user's layout after mobile detour.
+  const desktopMountDefaults = useRef({
+    prompts: String(DEFAULT_DESKTOP_SIZES.prompts),
+    settings: String(DEFAULT_DESKTOP_SIZES.settings),
+  });
+  const wasMobileRef = useRef(isMobile);
 
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
@@ -63,14 +85,14 @@ function App() {
       ? "30px"
       : editorCollapsed
         ? "95"
-        : String(lastOutputSize.current)
+        : String(lastDesktopSizes.current.output)
   );
   const mountDefaultEditor = useRef(
     editorCollapsed
       ? "30px"
       : outputCollapsed
         ? "95"
-        : String(lastEditorSize.current)
+        : String(lastDesktopSizes.current.editor)
   );
 
   // Message handlers with full implementations
@@ -81,12 +103,18 @@ function App() {
     vscode.postMessage({ type: MESSAGE_TYPES.READY });
   }, []);
 
-  // Initial collapse sync — runs before first paint to avoid flash
+  // Sync prompts/settings collapse state before paint.
+  // Runs on initial desktop mount and when returning from mobile layout
+  // (desktop panels remount fresh, ongoing useEffects won't re-run unless
+  // their specific collapse state changed during mobile).
   useLayoutEffect(() => {
+    if (isMobile) return;
     if (settingsCollapsed) settingsRef.current?.collapse();
+    else settingsRef.current?.expand();
     if (promptsCollapsed) promptsRef.current?.collapse();
+    else promptsRef.current?.expand();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMobile]);
 
   // Ongoing store → panel sync
   useEffect(() => {
@@ -114,7 +142,7 @@ function App() {
 
       if (verticalGroupRef.current) {
         // Round to integers and ensure they sum to 100
-        const outputSize = Math.round(lastOutputSize.current);
+        const outputSize = Math.round(lastDesktopSizes.current.output);
         const editorSize = 100 - outputSize;
 
         // setLayout expects an object with panel IDs as keys
@@ -156,7 +184,7 @@ function App() {
         }
       }
     }
-  }, [outputCollapsed, editorCollapsed]);
+  }, [outputCollapsed, editorCollapsed, isMobile]);
 
   // Gate management: closed when both panels are collapsed (the Group
   // unmounts; next mount needs re-sync before onResize is trusted).  Opened
@@ -172,7 +200,37 @@ function App() {
     } else {
       initializedRef.current = true;
     }
-  }, [outputCollapsed, editorCollapsed]);
+  }, [outputCollapsed, editorCollapsed, isMobile]);
+
+  // Update ALL desktop mount defaults when returning from mobile layout.
+  // The desktop Groups remount fresh, so defaultSize must reflect saved sizes.
+  {
+    if (wasMobileRef.current && !isMobile) {
+      // Horizontal group panels
+      desktopMountDefaults.current.prompts = String(lastDesktopSizes.current.prompts);
+      desktopMountDefaults.current.settings = String(lastDesktopSizes.current.settings);
+
+      // Center vertical group panels
+      mountDefaultOutput.current = outputCollapsed
+        ? "30px"
+        : editorCollapsed
+          ? "95"
+          : String(lastDesktopSizes.current.output);
+      mountDefaultEditor.current = editorCollapsed
+        ? "30px"
+        : outputCollapsed
+          ? "95"
+          : String(lastDesktopSizes.current.editor);
+
+      // Trigger forced resize for center group (if both open)
+      if (!outputCollapsed && !editorCollapsed) {
+        needsForcedResize.current = true;
+      }
+      // Close gate so mount-time onResize events are ignored
+      initializedRef.current = false;
+    }
+    wasMobileRef.current = isMobile;
+  }
 
   // Update mount defaults only when the Group is about to remount
   // (both-collapsed → one-open).  While the Group stays alive defaultSize
@@ -185,12 +243,12 @@ function App() {
         ? "30px"
         : editorCollapsed
           ? "95"
-          : String(lastOutputSize.current);
+          : String(lastDesktopSizes.current.output);
       mountDefaultEditor.current = editorCollapsed
         ? "30px"
         : outputCollapsed
           ? "95"
-          : String(lastEditorSize.current);
+          : String(lastDesktopSizes.current.editor);
       // Group is remounting - next both-open transition needs forced resize
       needsForcedResize.current = true;
     }
@@ -209,6 +267,18 @@ function App() {
   const mobileGroupRef = useRef<GroupImperativeHandle>(null);
   // Gates onResize until first useLayoutEffect has synced persisted state
   const mobileInitializedRef = useRef(false);
+  // Mobile mount defaults — recomputed only on the all-collapsed → some-open
+  // transition (Group remount).  Open panels share space proportionally based
+  // on their last saved sizes; collapsed panels get a fixed 30px bar.
+  const mobileWasAllCollapsed = useRef(
+    promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed
+  );
+  const mobileMountDefaults = useRef({
+    prompts: String(DEFAULT_MOBILE_SIZES.prompts),
+    output: String(DEFAULT_MOBILE_SIZES.output),
+    editor: String(DEFAULT_MOBILE_SIZES.editor),
+    settings: String(DEFAULT_MOBILE_SIZES.settings),
+  });
 
   // Store → mobile panel sync (before paint to avoid flash)
   useLayoutEffect(() => {
@@ -233,7 +303,10 @@ function App() {
   useEffect(() => {
     if (!isMobile) return;
     const allCollapsed =
-      promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+      promptsCollapsed &&
+      outputCollapsed &&
+      editorCollapsed &&
+      settingsCollapsed;
     mobileInitializedRef.current = !allCollapsed;
   }, [
     isMobile,
@@ -245,6 +318,30 @@ function App() {
 
   const allMobileCollapsed =
     promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed;
+
+  // Update mobile mount defaults when transitioning from all-collapsed → some-open.
+  // Open panels redistribute proportionally; collapsed panels stay at 30px.
+  {
+    if (mobileWasAllCollapsed.current && !allMobileCollapsed) {
+      const collapsed = {
+        prompts: promptsCollapsed,
+        output: outputCollapsed,
+        editor: editorCollapsed,
+        settings: settingsCollapsed,
+      };
+      const keys = ["prompts", "output", "editor", "settings"] as const;
+      const openKeys = keys.filter((k) => !collapsed[k]);
+      const totalOpen =
+        openKeys.reduce((s, k) => s + lastMobileSizes.current[k], 0) || 1;
+
+      for (const k of keys) {
+        mobileMountDefaults.current[k] = collapsed[k]
+          ? "30px"
+          : String(Math.round((lastMobileSizes.current[k] / totalOpen) * 100));
+      }
+    }
+    mobileWasAllCollapsed.current = allMobileCollapsed;
+  }
 
   if (isMobile) {
     return (
@@ -277,16 +374,20 @@ function App() {
           >
             <Panel
               panelRef={mobilePromptsRef}
-              defaultSize="25"
+              defaultSize={mobileMountDefaults.current.prompts}
               collapsible
               collapsedSize="30px"
               minSize="10"
               id="mobile-prompts-panel"
               onResize={() => {
                 if (!mobileInitializedRef.current) return;
-                setPromptsCollapsed(
-                  mobilePromptsRef.current?.isCollapsed() ?? false
-                );
+                const isCollapsed =
+                  mobilePromptsRef.current?.isCollapsed() ?? false;
+                if (!isCollapsed) {
+                  const size = mobilePromptsRef.current?.getSize().asPercentage;
+                  if (size != null) lastMobileSizes.current.prompts = size;
+                }
+                setPromptsCollapsed(isCollapsed);
               }}
             >
               <PromptsPanel panelBarOrientation="horizontal" />
@@ -296,16 +397,20 @@ function App() {
 
             <Panel
               panelRef={mobileOutputRef}
-              defaultSize="25"
+              defaultSize={mobileMountDefaults.current.output}
               collapsible
               collapsedSize="30px"
               minSize="10"
               id="mobile-output-panel"
               onResize={() => {
                 if (!mobileInitializedRef.current) return;
-                setOutputCollapsed(
-                  mobileOutputRef.current?.isCollapsed() ?? false
-                );
+                const isCollapsed =
+                  mobileOutputRef.current?.isCollapsed() ?? false;
+                if (!isCollapsed) {
+                  const size = mobileOutputRef.current?.getSize().asPercentage;
+                  if (size != null) lastMobileSizes.current.output = size;
+                }
+                setOutputCollapsed(isCollapsed);
               }}
             >
               <OutputSection />
@@ -315,16 +420,20 @@ function App() {
 
             <Panel
               panelRef={mobileEditorRef}
-              defaultSize="25"
+              defaultSize={mobileMountDefaults.current.editor}
               collapsible
               collapsedSize="30px"
               minSize="10"
               id="mobile-editor-panel"
               onResize={() => {
                 if (!mobileInitializedRef.current) return;
-                setEditorCollapsed(
-                  mobileEditorRef.current?.isCollapsed() ?? false
-                );
+                const isCollapsed =
+                  mobileEditorRef.current?.isCollapsed() ?? false;
+                if (!isCollapsed) {
+                  const size = mobileEditorRef.current?.getSize().asPercentage;
+                  if (size != null) lastMobileSizes.current.editor = size;
+                }
+                setEditorCollapsed(isCollapsed);
               }}
             >
               <EditorSection />
@@ -334,16 +443,21 @@ function App() {
 
             <Panel
               panelRef={mobileSettingsRef}
-              defaultSize="25"
+              defaultSize={mobileMountDefaults.current.settings}
               collapsible
               collapsedSize="30px"
               minSize="10"
               id="mobile-settings-panel"
               onResize={() => {
                 if (!mobileInitializedRef.current) return;
-                setSettingsCollapsed(
-                  mobileSettingsRef.current?.isCollapsed() ?? false
-                );
+                const isCollapsed =
+                  mobileSettingsRef.current?.isCollapsed() ?? false;
+                if (!isCollapsed) {
+                  const size =
+                    mobileSettingsRef.current?.getSize().asPercentage;
+                  if (size != null) lastMobileSizes.current.settings = size;
+                }
+                setSettingsCollapsed(isCollapsed);
               }}
             >
               <SettingsPanel panelBarOrientation="horizontal" />
@@ -371,14 +485,19 @@ function App() {
         {/* Prompts Panel (Left - collapsible) */}
         <Panel
           panelRef={promptsRef}
-          defaultSize="20"
+          defaultSize={desktopMountDefaults.current.prompts}
           collapsible
           collapsedSize="32px"
           minSize="10"
           maxSize="40"
           id="prompts-panel"
           onResize={() => {
-            setPromptsCollapsed(promptsRef.current?.isCollapsed() ?? false);
+            const isCollapsed = promptsRef.current?.isCollapsed() ?? false;
+            if (!isCollapsed) {
+              const size = promptsRef.current?.getSize().asPercentage;
+              if (size != null) lastDesktopSizes.current.prompts = size;
+            }
+            setPromptsCollapsed(isCollapsed);
           }}
         >
           <PromptsPanel />
@@ -435,8 +554,8 @@ function App() {
                     !editorCollapsed &&
                     !isForcingResize.current
                   ) {
-                    lastOutputSize.current =
-                      currentSize ?? lastOutputSize.current;
+                    lastDesktopSizes.current.output =
+                      currentSize ?? lastDesktopSizes.current.output;
                   }
                   setOutputCollapsed(outputCollapsed);
                 }}
@@ -468,8 +587,8 @@ function App() {
                     !outputCollapsed &&
                     !isForcingResize.current
                   ) {
-                    lastEditorSize.current =
-                      currentSize ?? lastEditorSize.current;
+                    lastDesktopSizes.current.editor =
+                      currentSize ?? lastDesktopSizes.current.editor;
                   } else if (isForcingResize.current) {
                   }
                   setEditorCollapsed(editorCollapsed);
@@ -486,14 +605,19 @@ function App() {
         {/* Settings Panel (Right - collapsible) */}
         <Panel
           panelRef={settingsRef}
-          defaultSize="20"
+          defaultSize={desktopMountDefaults.current.settings}
           collapsible
           collapsedSize="32px"
           minSize="15"
           maxSize="40"
           id="settings-panel"
           onResize={() => {
-            setSettingsCollapsed(settingsRef.current?.isCollapsed() ?? false);
+            const isCollapsed = settingsRef.current?.isCollapsed() ?? false;
+            if (!isCollapsed) {
+              const size = settingsRef.current?.getSize().asPercentage;
+              if (size != null) lastDesktopSizes.current.settings = size;
+            }
+            setSettingsCollapsed(isCollapsed);
           }}
         >
           <SettingsPanel />
