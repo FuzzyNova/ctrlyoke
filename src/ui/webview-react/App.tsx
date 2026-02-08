@@ -203,8 +203,12 @@ function App() {
   {
     if (wasMobileRef.current && !isMobile) {
       // Horizontal group panels
-      desktopMountDefaults.current.prompts = String(lastDesktopSizes.current.prompts);
-      desktopMountDefaults.current.settings = String(lastDesktopSizes.current.settings);
+      desktopMountDefaults.current.prompts = String(
+        lastDesktopSizes.current.prompts
+      );
+      desktopMountDefaults.current.settings = String(
+        lastDesktopSizes.current.settings
+      );
 
       // Center vertical group panels
       mountDefaultOutput.current = outputCollapsed
@@ -389,7 +393,7 @@ function App() {
               <PromptsPanel panelBarOrientation="horizontal" />
             </Panel>
 
-            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
             <Panel
               panelRef={mobileOutputRef}
@@ -412,7 +416,7 @@ function App() {
               <OutputSection />
             </Panel>
 
-            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
             <Panel
               panelRef={mobileEditorRef}
@@ -435,7 +439,7 @@ function App() {
               <EditorSection />
             </Panel>
 
-            <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
             <Panel
               panelRef={mobileSettingsRef}
@@ -499,7 +503,7 @@ function App() {
           <PromptsPanel />
         </Panel>
 
-        <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
+        <Separator className="w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
 
         {/* Center content — Output (top) / Editor (bottom), both independently
             collapsible.  When both are collapsed the vertical Group unmounts and
@@ -559,7 +563,7 @@ function App() {
                 <OutputSection />
               </Panel>
 
-              <Separator className="h-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+              <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
 
               <Panel
                 panelRef={editorRef}
@@ -596,7 +600,7 @@ function App() {
           )}
         </Panel>
 
-        <Separator className="w-1 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
+        <Separator className="w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
 
         {/* Settings Panel (Right - collapsible) */}
         <Panel
