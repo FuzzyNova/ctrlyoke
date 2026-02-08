@@ -7,6 +7,7 @@ import {
   generateDiffLines,
   type DiffLine,
 } from "@utils/outputUtils";
+import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE } from "./outputStyles";
 import type {
   CliEvent,
   OperationStatus,
@@ -20,6 +21,27 @@ import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
 // Diff Visualization Component
 // ============================================================================
 
+const DIFF_LINE_STYLES = {
+  added: {
+    bg: "bg-diff-added-bg",
+    contentColor: "text-diff-added-fg",
+    lineNumColor: "text-diff-added-fg opacity-80",
+    prefix: "+ ",
+  },
+  removed: {
+    bg: "bg-diff-removed-bg",
+    contentColor: "text-diff-removed-fg",
+    lineNumColor: "text-diff-removed-fg opacity-80",
+    prefix: "- ",
+  },
+  context: {
+    bg: "bg-transparent",
+    contentColor: "text-diff-context-fg",
+    lineNumColor: "",
+    prefix: "  ",
+  },
+} as const;
+
 interface DiffViewProps {
   lines: DiffLine[];
   className?: string;
@@ -32,18 +54,36 @@ const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
   if (lines.length === 0) return null;
 
   return (
-    <div className={`tool-call-diff ${className}`}>
-      {lines.map((line, index) => (
-        <div key={index} className={`diff-line ${line.type}`}>
-          <span className="line-num old">
-            {line.type !== "added" ? line.oldLineNum : ""}
-          </span>
-          <span className="line-num new">
-            {line.type !== "removed" ? line.newLineNum : ""}
-          </span>
-          <span className="line-content">{escapeHtml(line.content)}</span>
-        </div>
-      ))}
+    <div
+      className={`my-2 ml-6 font-mono text-[11px] rounded-[3px] overflow-x-auto overflow-y-hidden border border-vscode-border bg-vscode-bg ${className}`}
+    >
+      {lines.map((line, index) => {
+        const styles = DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
+
+        return (
+          <div
+            key={index}
+            className={`flex items-baseline whitespace-pre font-inherit leading-[1.4] py-px ${styles.bg}`}
+          >
+            <span
+              className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num ${styles.lineNumColor}`}
+            >
+              {line.type !== "added" ? line.oldLineNum : ""}
+            </span>
+            <span
+              className={`inline-block w-10 text-right px-1.5 select-none text-[10px] opacity-60 shrink-0 text-diff-line-num border-r border-diff-line-num mr-2 ${styles.lineNumColor}`}
+            >
+              {line.type !== "removed" ? line.newLineNum : ""}
+            </span>
+            <span
+              className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre ${styles.contentColor}`}
+            >
+              <span className="font-bold">{styles.prefix}</span>
+              {escapeHtml(line.content)}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -113,11 +153,11 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
   const diffLines = getDiffLines();
 
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="tool-error-inline"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
         )}
       </div>
 
@@ -157,11 +197,11 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   };
 
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="tool-error-inline"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
         )}
       </div>
     </div>
@@ -196,11 +236,11 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   };
 
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="tool-error-inline"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
         )}
       </div>
     </div>
@@ -221,8 +261,8 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   className = "",
 }) => {
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>● Delete file: {path}</span>
       </div>
     </div>
@@ -245,8 +285,8 @@ export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   className = "",
 }) => {
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>
           ● MCP: {server}.{tool}
         </span>
@@ -269,8 +309,8 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   className = "",
 }) => {
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
         <span>● Web search: "{escapeHtml(query)}"</span>
       </div>
     </div>
@@ -309,10 +349,16 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   };
 
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">{toolLine}</div>
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>{toolLine}</div>
       {result && (
-        <div className={`tool-result-line ${result.success ? "" : "error"}`}>
+        <div
+          className={
+            result.success
+              ? TOOL_RESULT_LINE
+              : "text-vscode-error-fg pl-4 ml-2 text-[11px] whitespace-pre-wrap break-words"
+          }
+        >
           {formatResult(result)}
         </div>
       )}

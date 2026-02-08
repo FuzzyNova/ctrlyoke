@@ -141,10 +141,10 @@ export const OutputSection: React.FC = () => {
   return (
     <section
       id="output-section"
-      className="output-section flex flex-col h-full"
+      className="min-h-0 flex-1 bg-[var(--bg-primary)] border-t border-[var(--border-color)] flex flex-col h-full"
     >
       {/* Section Header */}
-      <div className="section-header output-controls flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
+      <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
         {/* Left: clickable collapse area */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
@@ -162,9 +162,9 @@ export const OutputSection: React.FC = () => {
         </div>
 
         {/* Right: controls */}
-        <div className="output-controls-right ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           <label
-            className="autoscroll-label"
+            className="flex items-center gap-1 text-[11px] text-[var(--fg-secondary)] cursor-pointer select-none"
             title="Auto-scroll to latest output"
           >
             <input
@@ -192,10 +192,10 @@ export const OutputSection: React.FC = () => {
       <div
         ref={outputRef}
         id="output-content"
-        className="output-content flex-1 overflow-y-auto"
+        className="font-mono text-[11px] min-h-0 p-0 flex-1 overflow-y-auto"
       >
         {!hasOutput ? (
-          <p className="empty-state">
+          <p className="text-center text-[var(--fg-secondary)] italic p-[var(--spacing-lg)]">
             Output will appear here during execution
           </p>
         ) : (

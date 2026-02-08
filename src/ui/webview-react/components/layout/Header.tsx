@@ -18,37 +18,37 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
   [EXECUTION_STATES.IDLE]: {
     icon: "circle-outline",
     text: "Idle",
-    className: "execution-state-idle",
+    className: "bg-exec-idle-bg text-exec-idle-fg",
   },
   [EXECUTION_STATES.RUNNING]: {
     icon: "play",
     text: "Running",
-    className: "execution-state-running",
+    className: "bg-exec-running-bg text-[var(--btn-fg)] animate-pulse-custom",
   },
   [EXECUTION_STATES.PAUSED]: {
     icon: "debug-pause",
     text: "Paused",
-    className: "execution-state-paused",
+    className: "bg-[var(--status-warning)] text-[var(--btn-fg)]",
   },
   [EXECUTION_STATES.STOPPED]: {
     icon: "circle-slash",
     text: "Stopped",
-    className: "execution-state-stopped",
+    className: "bg-exec-stopped-bg text-[var(--btn-fg)]",
   },
   [EXECUTION_STATES.CANCELLING]: {
     icon: "close",
     text: "Cancelling",
-    className: "execution-state-cancelling",
+    className: "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
   },
   [EXECUTION_STATES.COMPLETED]: {
     icon: "check",
     text: "Completed",
-    className: "execution-state-completed",
+    className: "bg-[var(--status-success)] text-[var(--btn-fg)]",
   },
   [EXECUTION_STATES.ERROR]: {
     icon: "error",
     text: "Error",
-    className: "execution-state-error",
+    className: "bg-[var(--status-error)] text-[var(--btn-fg)]",
   },
 };
 
@@ -135,7 +135,7 @@ export const Header: React.FC = () => {
         {/* Run/Restart Button (icon-only) */}
         <button
           className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
-            isRerun ? "btn-rerun text-base font-bold" : ""
+            isRerun ? "text-base font-bold" : ""
           } ${
             canRun
               ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]"

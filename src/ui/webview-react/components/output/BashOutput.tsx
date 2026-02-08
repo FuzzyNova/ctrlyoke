@@ -1,7 +1,14 @@
 import React, { useState, useId } from "react";
 import { escapeHtml } from "@utils/outputUtils";
+import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
 import type { OperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+  success: "text-bash-status-success",
+  error: "text-bash-status-error",
+  running: "text-bash-status-running",
+};
 
 interface BashOutputProps {
   command: string;
@@ -59,12 +66,12 @@ export const BashOutput: React.FC<BashOutputProps> = ({
       : content;
     const hiddenLines = lines.length - maxLines;
 
-    const cssClass = type === "error" ? "tool-error-line" : "tool-result-line";
+    const cssClass = type === "error" ? TOOL_ERROR_LINE : TOOL_RESULT_LINE;
 
     return (
       <div className={cssClass}>
-        <span className="bash-prefix">{"  ⎿  "}</span>
-        <div className="bash-content-container" id={`${containerId}-${type}`}>
+        <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
+        <div className="inline whitespace-pre-wrap break-words" id={`${containerId}-${type}`}>
           <span className={isExpanded ? "hidden" : ""}>
             {escapeHtml(truncatedContent)}
           </span>
@@ -74,7 +81,7 @@ export const BashOutput: React.FC<BashOutputProps> = ({
           {isTruncated && (
             <a
               href="#"
-              className="bash-expand-link"
+              className="text-bash-expand-link no-underline text-[0.9em] ml-1 cursor-pointer hover:underline"
               onClick={(e) => {
                 e.preventDefault();
                 setExpanded(!isExpanded);
@@ -93,12 +100,17 @@ export const BashOutput: React.FC<BashOutputProps> = ({
   // Determine status badge
   const renderStatusBadge = () => {
     if (isRunning) {
-      return <span className="status-badge running">running</span>;
+      return (
+        <span className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES.running}`}>
+          running
+        </span>
+      );
     }
     if (isCompleted && exitCode !== undefined) {
       const success = exitCode === 0;
+      const variant = success ? "success" : "error";
       return (
-        <span className={`status-badge ${success ? "success" : "error"}`}>
+        <span className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES[variant]}`}>
           (exit: {exitCode})
         </span>
       );
@@ -107,10 +119,10 @@ export const BashOutput: React.FC<BashOutputProps> = ({
   };
 
   return (
-    <div className={`output-tool-call-terminal ${className}`}>
-      <div className="tool-call-line">
-        <span className="bash-bullet">● </span>
-        <span className="bash-command">{escapeHtml(command)}</span>
+    <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
+      <div className={TOOL_CALL_LINE}>
+        <span className="text-vscode-fg">● </span>
+        <span className="text-vscode-fg">{escapeHtml(command)}</span>
         {renderStatusBadge()}
       </div>
 

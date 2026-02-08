@@ -10,6 +10,7 @@ import {
   WebSearchOutput,
   GenericToolCallOutput,
 } from "./ToolCallOutput";
+import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import type {
   CliOutputItem,
   CliEvent,
@@ -38,7 +39,9 @@ interface TextOutputProps {
 
 const TextOutput: React.FC<TextOutputProps> = ({ text, className = "" }) => {
   return (
-    <div className={`output-text-terminal ${className}`}>
+    <div
+      className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
+    >
       {escapeHtml(text)}
     </div>
   );
@@ -61,7 +64,9 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
 }) => {
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
-    <div className={`output-text-terminal ${className}`}>
+    <div
+      className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
+    >
       ● {displayLabel}: {escapeHtml(text)}
     </div>
   );
@@ -93,7 +98,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
   return (
     <div
-      className={`tool-result-line ${result.success ? "" : "error"} ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px] whitespace-pre-wrap break-words"} ${className}`}
     >
       {content}
     </div>
@@ -119,7 +124,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
   if (!events || events.length === 0) return null;
 
   return (
-    <div className={`structured-output ${className}`}>
+    <div className={`mt-[var(--spacing-sm)] ${className}`}>
       {events.map((event, index) => {
         const key = `event-${index}`;
 
@@ -283,7 +288,9 @@ export const CliOutput: React.FC<CliOutputProps> = ({
 
   // Check if streaming
   const streamingIndicator = output.isStreaming ? (
-    <span className="streaming-indicator">⬤ Streaming...</span>
+    <span className="text-output-streaming font-normal animate-pulse-streaming">
+      ⬤ Streaming...
+    </span>
   ) : null;
 
   // Render response: show both streaming text and structured events when available
@@ -299,7 +306,9 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasStructuredEvents && hasStreamingText) {
       return (
         <>
-          <div className="output-response streaming">
+          <div
+            className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}
+          >
             {escapeHtml(streamingChunk)}
           </div>
           <StructuredOutput events={output.structured.events as CliEvent[]} />
@@ -317,7 +326,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 3: Streaming with ONLY text chunks (no structured events)
     if (hasStreamingText) {
       return (
-        <div className="output-response streaming">
+        <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
           {escapeHtml(streamingChunk)}
         </div>
       );
@@ -331,7 +340,9 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 5: Final output with plain response text (no structured data)
     if (hasFinalResponse) {
       return (
-        <div className="output-response">{escapeHtml(output.response)}</div>
+        <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
+          {escapeHtml(output.response)}
+        </div>
       );
     }
 
@@ -355,16 +366,22 @@ export const CliOutput: React.FC<CliOutputProps> = ({
       parts.push(`${output.elapsed}s`);
     }
 
-    return <div className="output-stats">{parts.join(" | ")}</div>;
+    return (
+      <div className="text-[10px] text-[var(--fg-secondary)] mt-[var(--spacing-xs)]">
+        {parts.join(" | ")}
+      </div>
+    );
   };
 
   // Format timestamp for header
   const timestamp = output.timestampMs ? formatTime(output.timestampMs) : "";
 
   return (
-    <div className={`cli-output-item ${className}`}>
+    <div
+      className={`bg-[var(--bg-primary)] py-[var(--spacing-sm)] px-[var(--spacing-md)] border-b border-[var(--border-color)] ${className}`}
+    >
       {/* Header */}
-      <div className="output-header">
+      <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[11px] flex items-center gap-[var(--spacing-sm)]">
         {timestamp && <span className="output-timestamp">[{timestamp}] </span>}
         [Prompt {stepIndex + 1}] {attemptLabel}
         {streamingIndicator}
@@ -372,12 +389,18 @@ export const CliOutput: React.FC<CliOutputProps> = ({
 
       {/* Prompt text */}
       {output.prompt && (
-        <div className="output-prompt">{escapeHtml(output.prompt)}</div>
+        <div
+          className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
+        >
+          {escapeHtml(output.prompt)}
+        </div>
       )}
 
       {/* CLI command */}
       {output.cliCommand && (
-        <div className="output-cli-command">
+        <div
+          className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
+        >
           {output.workingDirectory || "workspace"}
           {">"} {escapeHtml(output.cliCommand)}
         </div>

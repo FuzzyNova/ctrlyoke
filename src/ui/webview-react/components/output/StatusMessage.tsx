@@ -11,6 +11,21 @@ interface StatusMessageProps {
   className?: string;
 }
 
+const SEVERITY_STYLES = {
+  info: {
+    container: "bg-severity-info-bg border-l-severity-info",
+    text: "text-severity-info",
+  },
+  warning: {
+    container: "bg-severity-warning-bg border-l-severity-warning",
+    text: "text-severity-warning",
+  },
+  error: {
+    container: "bg-severity-error-bg border-l-severity-error",
+    text: "text-severity-error",
+  },
+} as const;
+
 /**
  * StatusMessage Component
  *
@@ -28,22 +43,18 @@ export const StatusMessage: React.FC<StatusMessageProps> = ({
   const displayTime =
     timestamp || (timestampMs ? formatTime(timestampMs) : null);
 
-  // Severity-based styling classes
-  const getSeverityClass = (): string => {
-    switch (severity) {
-      case "error":
-        return "status-error";
-      case "warning":
-        return "status-warning";
-      default:
-        return "status-info";
-    }
-  };
+  const styles = SEVERITY_STYLES[severity];
 
   return (
-    <div className={`status-message ${getSeverityClass()} ${className}`}>
-      {displayTime && <span className="status-time">[{displayTime}]</span>}
-      <span className="status-text">{message}</span>
+    <div
+      className={`py-[var(--spacing-xs)] px-[var(--spacing-md)] my-[var(--spacing-xs)] border-l-[3px] rounded-sm text-[11px] text-[var(--fg-primary)] flex items-center gap-[var(--spacing-sm)] ${styles.container} ${className}`}
+    >
+      {displayTime && (
+        <span className="text-[var(--fg-secondary)] text-[10px] shrink-0">
+          [{displayTime}]
+        </span>
+      )}
+      <span className={`font-medium ${styles.text}`}>{message}</span>
     </div>
   );
 };
