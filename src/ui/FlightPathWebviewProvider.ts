@@ -14,7 +14,7 @@ import {
   DEFAULT_MODELS,
   QUEUE_POSITION,
 } from "../types/DashboardConstants";
-import { CliEvent } from "../types/CliOutputTypes";
+import { CliEvent, CliOutputData } from "../types/WebviewMessageTypes";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
@@ -40,31 +40,8 @@ import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 
 const execAsync = promisify(exec);
 
-/**
- * Output data for CLI execution, sent to dashboard for display.
- */
-export interface CliOutputData {
-  /** The prompt text that was sent */
-  prompt: string;
-  /** Plain text response for backward compatibility */
-  response: string;
-  /** Structured output with tool calls, thinking blocks, and metadata (CLI only) */
-  structured?: DashboardOutput;
-  /** Execution time in seconds */
-  elapsed: number;
-  /** Token usage statistics */
-  tokens?: { prompt: number; completion: number };
-  /** Whether the response is still streaming */
-  isStreaming: boolean;
-  /** The CLI command executed (for debugging) */
-  cliCommand?: string;
-  /** The working directory where the command was executed (for terminal-style display) */
-  workingDirectory?: string;
-  /** Timestamp when the output was created (milliseconds since epoch) */
-  timestampMs?: number;
-  /** Explicit attempt index: 0 = initial attempt, 1+ = retry */
-  attemptIndex: number;
-}
+// Re-export CliOutputData for external use
+export type { CliOutputData } from "../types/WebviewMessageTypes";
 
 /**
  * Harness availability status

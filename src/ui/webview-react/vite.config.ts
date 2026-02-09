@@ -69,6 +69,8 @@ export default defineConfig({
       "@store": path.resolve(__dirname, "store"),
       "@utils": path.resolve(__dirname, "utils"),
       "@types": path.resolve(__dirname, "types"),
+      // Allow importing from extension-side src/types for shared type definitions
+      "@root/types": path.resolve(__dirname, "../../types"),
     },
   },
 

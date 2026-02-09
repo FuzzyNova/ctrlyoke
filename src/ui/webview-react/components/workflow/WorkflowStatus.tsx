@@ -154,20 +154,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setIsDropdownOpen(false);
   }, [vscode]);
 
-  // Get execution state icon
-  const getStateIcon = (state: string) => {
-    const iconMap: Record<string, string> = {
-      idle: "circle-outline",
-      running: "play",
-      paused: "debug-pause",
-      stopped: "circle-slash",
-      cancelling: "close",
-      completed: "check",
-      error: "error",
-    };
-    return iconMap[state] || "circle-outline";
-  };
-
   // No workflow loaded - show empty state
   if (!fileName) {
     return (

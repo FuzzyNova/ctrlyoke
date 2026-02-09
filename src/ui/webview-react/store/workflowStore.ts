@@ -4,72 +4,11 @@ import {
   STEP_STATUS,
   type ExecutionState,
   type StepStatus,
+  type PromptItem,
+  type CliOutput,
+  type RetryState,
+  type StatusMessage,
 } from "../types/messages";
-
-/**
- * Prompt item shape (matches FlightPathTypes.PromptItem)
- */
-export interface PromptItem {
-  id?: string;
-  prompt: string;
-  harness?: string;
-  model?: string;
-  agent?: string;
-  resumeSession?: boolean;
-  sessionId?: string | number;
-  allowDynamicExtension?: boolean;
-  endCondition?: {
-    script: string;
-    returns?: string;
-    timeout?: number;
-    maxRetries?: number;
-    retryPrompt?: string;
-  } | null;
-  _runtime?: {
-    harness?: string;
-    model?: string;
-    sessionId?: string;
-    startedAt?: number;
-    completedAt?: number;
-    retryCount?: number;
-    isRetry?: boolean;
-  };
-  // Status for UI display
-  status?: StepStatus;
-}
-
-/**
- * CLI output for a step (may have multiple for retries)
- */
-export interface CliOutput {
-  prompt: string;
-  response: string;
-  structured?: unknown;
-  elapsed: number;
-  tokens?: { prompt: number; completion: number };
-  isStreaming: boolean;
-  cliCommand?: string;
-  workingDirectory?: string;
-  timestampMs?: number;
-  attemptIndex?: number;
-}
-
-/**
- * Retry state for a step
- */
-export interface RetryState {
-  currentRetry: number;
-  maxRetries: number;
-}
-
-/**
- * Status message for a step
- */
-export interface StatusMessage {
-  message: string;
-  severity: "info" | "warning" | "error";
-  timestamp: number;
-}
 
 /**
  * Workflow state - Core workflow execution data
@@ -368,7 +307,7 @@ export const useWorkflowStore = create<
           {
             prompt: "",
             response: "",
-            structured: { events: [...events] },
+            structured: { events: [...events], metadata: {} },
             elapsed: 0,
             isStreaming: true,
             timestampMs: Date.now(),
@@ -388,6 +327,7 @@ export const useWorkflowStore = create<
             structured: {
               ...existingStructured,
               events: [...existingEvents, ...events],
+              metadata: existingStructured?.metadata || {},
             },
           },
           ...outputs.slice(streamingIdx + 1),
@@ -585,3 +525,11 @@ export const useWorkflowStore = create<
     return prompts.filter((p) => p.status === STEP_STATUS.COMPLETED).length;
   },
 }));
+
+// Re-export types for convenience (imported from consolidated sources)
+export type {
+  PromptItem,
+  CliOutput,
+  RetryState,
+  StatusMessage,
+} from "../types/messages";

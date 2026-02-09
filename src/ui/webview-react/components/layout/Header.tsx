@@ -67,11 +67,9 @@ export const Header: React.FC = () => {
   const { fileName, executionState } = useWorkflowStore();
 
   // Derived state
-  const isIdle = executionState === EXECUTION_STATES.IDLE;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
   const isCompleted = executionState === EXECUTION_STATES.COMPLETED;
-  const isError = executionState === EXECUTION_STATES.ERROR;
   const isStopped = executionState === EXECUTION_STATES.STOPPED;
   const isCancelling = executionState === EXECUTION_STATES.CANCELLING;
   const hasFile = fileName !== null;

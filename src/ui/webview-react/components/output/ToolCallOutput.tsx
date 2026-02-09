@@ -10,7 +10,7 @@ import {
 import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE } from "./outputStyles";
 import type {
   CliEvent,
-  OperationStatus,
+  FileOperationStatus,
   FileEditEventData,
   ToolCallEventData,
   ToolResult,
@@ -94,7 +94,7 @@ const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
 
 interface FileEditOutputProps {
   path: string;
-  status?: OperationStatus;
+  status?: FileOperationStatus;
   oldContent?: string;
   newContent?: string;
   structuredPatch?: Array<{
@@ -172,7 +172,7 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
 
 interface FileWriteOutputProps {
   path: string;
-  status?: OperationStatus;
+  status?: FileOperationStatus;
   content?: string;
   error?: string;
   className?: string;
@@ -214,7 +214,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
 
 interface FileReadOutputProps {
   path: string;
-  status?: OperationStatus;
+  status?: FileOperationStatus;
   error?: string;
   className?: string;
 }
@@ -406,7 +406,7 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     case CLI_EVENT_TYPES.FILE_WRITE: {
       const writeData = data as {
         path: string;
-        status?: OperationStatus;
+        status?: FileOperationStatus;
         content?: string;
         error?: string;
       };
@@ -424,7 +424,7 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     case CLI_EVENT_TYPES.FILE_READ: {
       const readData = data as {
         path: string;
-        status?: OperationStatus;
+        status?: FileOperationStatus;
         error?: string;
       };
       return (

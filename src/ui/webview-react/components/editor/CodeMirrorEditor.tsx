@@ -109,8 +109,6 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       return;
     }
 
-    const trigger = pendingCompletionTriggerRef.current || "";
-
     const completions = items.map((item, index) => {
       // Calculate boost from sortText
       let boost: number;

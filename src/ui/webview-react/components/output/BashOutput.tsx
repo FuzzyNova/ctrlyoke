@@ -1,7 +1,7 @@
 import React, { useState, useId } from "react";
 import { escapeHtml } from "@utils/outputUtils";
 import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
-import type { OperationStatus } from "../../types/cliEvents";
+import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
 const STATUS_BADGE_STYLES: Record<string, string> = {
@@ -15,7 +15,7 @@ interface BashOutputProps {
   output?: string;
   error?: string;
   exitCode?: number;
-  status?: OperationStatus;
+  status?: FileOperationStatus;
   maxLines?: number;
   className?: string;
 }

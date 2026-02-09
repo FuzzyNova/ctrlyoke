@@ -180,6 +180,14 @@ export const HARNESS_INFO = {
 } as const;
 
 // ============================================================================
+// EXECUTION MODES - Execution environment for CLI commands
+// ============================================================================
+export const EXECUTION_MODES = {
+  INTERACTIVE: "interactive",
+  HEADLESS: "headless",
+} as const;
+
+// ============================================================================
 // DEFAULT MODELS - Default model per harness
 // ============================================================================
 export const DEFAULT_MODELS = {
