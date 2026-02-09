@@ -52,7 +52,7 @@ export const EditorSection: React.FC = () => {
     >
       {/* Section Header */}
       <div className="flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
-        {/* Collapse trigger (chevron + icon + label) */}
+        {/* Left: Collapse trigger (chevron + icon + label) */}
         <div
           className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors flex-shrink-0"
           onClick={toggleEditorCollapse}
@@ -68,26 +68,26 @@ export const EditorSection: React.FC = () => {
           </span>
         </div>
 
-        {/* Mode text */}
-        <span className="editor-mode-indicator text-xs text-[var(--vscode-descriptionForeground)] truncate ml-2">
+        {/* Center: Mode text */}
+        <span className="editor-mode-indicator flex-1 text-center text-xs text-[var(--vscode-descriptionForeground)] truncate">
           {getModeText()}
         </span>
 
-        {/* Prompt name input (only in new prompt mode) */}
+        {/* Right: Prompt name input (only in new prompt mode) */}
         {!isEditMode && (
           <input
             type="text"
-            className="prompt-name-input flex-1 max-w-xs ml-2 px-2 py-0.5 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] flex-shrink-0"
             placeholder="Prompt name (optional)"
             value={promptName}
             onChange={(e) => setPromptName(e.target.value)}
           />
         )}
 
-        {/* New Prompt button (only in edit mode) */}
+        {/* Right: New Prompt button (only in edit mode) */}
         {isEditMode && (
           <button
-            className="btn-new-prompt ml-2 px-2 py-1 text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] border border-[var(--vscode-button-border,transparent)] rounded hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors flex items-center gap-1"
+            className="btn-new-prompt px-2 py-1 text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] border border-[var(--vscode-button-border,transparent)] rounded hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors flex items-center gap-1 flex-shrink-0"
             onClick={cancelEdit}
             disabled={isRunning}
             title="Cancel editing and return to new prompt mode"

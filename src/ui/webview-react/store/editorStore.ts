@@ -236,9 +236,10 @@ export const useEditorStore = create<
   enterEditMode: (index, promptData) => {
     const state = get();
 
-    // Save current new prompt state if we have content
+    // Save current new prompt state if we're in new prompt mode
+    // Empty text is a valid state that should be restored on cancel
     const savedNewPromptState: SavedNewPromptState | null =
-      state.selectedPromptIndex === null && state.promptText.trim()
+      state.selectedPromptIndex === null
         ? {
             promptText: state.promptText,
             promptName: state.promptName,

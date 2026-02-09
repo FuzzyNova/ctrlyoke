@@ -44,7 +44,6 @@ export const PromptEditor: React.FC = () => {
     properties,
     resetEditor,
     cancelEdit,
-    isDirty,
     markClean,
     saveToVsCodeState,
     restoreFromVsCodeState,
@@ -98,35 +97,41 @@ export const PromptEditor: React.FC = () => {
     return false;
   }, [prompts, currentStep]);
 
-  // Debounced save to VS Code state
-  const debouncedSave = useCallback(() => {
+  // Debounced save to VS Code state on every content change
+  // Mirrors old editor-manager.js: saveEditorState() called on every onChange, input, change event
+  useEffect(() => {
+    if (selectedPromptIndex !== null) return;
+
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      // Only save in new prompt mode
-      if (selectedPromptIndex === null) {
-        saveToVsCodeState(vscode);
-      }
+      saveToVsCodeState(vscode);
     }, 500);
-  }, [selectedPromptIndex, saveToVsCodeState, vscode]);
 
-  // Save state on text change
-  useEffect(() => {
-    if (isDirty && selectedPromptIndex === null) {
-      debouncedSave();
-    }
-  }, [isDirty, selectedPromptIndex, debouncedSave]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, []);
+  }, [promptText, promptName, properties, selectedPromptIndex, saveToVsCodeState, vscode]);
+
+  // Flush pending save on close/unload so state survives VS Code restart
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (selectedPromptIndex === null) {
+        saveToVsCodeState(vscode);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [selectedPromptIndex, saveToVsCodeState, vscode]);
 
   // Close drawer on ESC key
   useEffect(() => {
