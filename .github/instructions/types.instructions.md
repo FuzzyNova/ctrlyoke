@@ -14,9 +14,9 @@ Core data structures and constants for FlightPath extension. TypeScript strict m
 
 **Core types:** `PromptFile`, `PromptItem` (id, prompt, provider?, model?, agent?, newChatSession?, allowDynamicExtension?, endCondition?), `EndCondition`, `QueueState` (completedIds, timing, extensions, workingFilePath), `PromptResult`, `WorkingFile`, `WorkingFileRuntime`, `DynamicQueueConfig`
 
-**Provider enum:** "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
+**Harness enum:** "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli"
 
-**Key patterns:** Provider/model/agent per-prompt overrides optional, `allowDynamicExtension` for queue extension, WorkingFile extends PromptFile with runtime metadata
+**Key patterns:** Harness/model/agent per-prompt overrides optional, `allowDynamicExtension` for queue extension, WorkingFile extends PromptFile with runtime metadata
 **File: CopilotTypes.ts**
 
 Integration-specific types: `CopilotChatRequest/Response`, `CopilotIntegration` interface, `CopilotCliOptions` (tool permissions, logging, MCP), `CopilotCliResult`, `CopilotCliStatistics`
@@ -26,9 +26,9 @@ Integration-specific types: `CopilotChatRequest/Response`, `CopilotIntegration` 
 
 ALL shared constants for extension ↔ webview. **NO HARDCODED STRINGS.**
 
-**Key objects:** `MESSAGE_TYPES` (50+ extension/webview messages), `EXECUTION_STATES` (QueueState.status), `STEP_STATUS` (PromptResult.status), `ACTION_TYPES`, `PROVIDER_IDS`, `PROVIDER_INFO`, `DEFAULT_MODELS`, `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `PROVIDER_STATUS_STRINGS`, `UI_STRINGS`, `QUEUE_POSITION`, `PROMPT_PROPERTIES`, `END_CONDITION_PROPERTIES`
+**Key objects:** `MESSAGE_TYPES` (50+ extension/webview messages), `EXECUTION_STATES` (QueueState.status), `STEP_STATUS` (PromptResult.status), `ACTION_TYPES`, `HARNESS_IDS`, `HARNESS_INFO`, `DEFAULT_MODELS`, `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS`, `HARNESS_STATUS_STRINGS`, `UI_STRINGS`, `QUEUE_POSITION`, `PROMPT_PROPERTIES`, `END_CONDITION_PROPERTIES`
 
-**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `ProviderId`, etc. (derived from const objects)
+**Type helpers:** `MessageType`, `ExecutionState`, `StepStatus`, `HarnessId`, etc. (derived from const objects)
 **Import constants from DashboardConstants (NEVER hardcode strings):**
 
 ```typescript
@@ -59,7 +59,7 @@ function getStepResult(status: StepStatus) { ... }
 **Optional chaining and provider overrides:**
 
 ```typescript
-const provider = prompt.provider || ConfigurationUtils.getProvider();
+const provider = prompt.provider || ConfigurationUtils.getHarness();
 const model = prompt.model || ConfigurationUtils.getModel();
 const agent = prompt.agent; // CLI mode only
 ```
@@ -92,7 +92,7 @@ private isChatIntegration(integration: CopilotIntegration): integration is Copil
 **UI:**
 
 - `../ui/FlightPathDashboardProvider.ts` - Uses MESSAGE_TYPES for webview communication
-- `../ui/FlightPathSettingsProvider.ts` - Uses PROVIDER_IDS, DEFAULT_MODELS
+- `../ui/FlightPathSettingsProvider.ts` - Uses HARNESS_IDS, DEFAULT_MODELS
 - `../ui/webview/dashboard.js` - JavaScript code imports constants via inline script
 
 **Documentation:**

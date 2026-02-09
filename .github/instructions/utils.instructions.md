@@ -23,7 +23,7 @@ Shared utilities: file system, logging, validation, CLI process management, cont
 
 **ModelConstants:** Single source of truth for model lists (COPILOT_MODELS, COPILOT_CLI_MODELS, CLAUDE_CLI_MODELS, CODEX_CLI_MODELS), display names, CLI support flags. Run `npm run sync-models` to sync with package.json AND prompt-schema.json.
 
-**ConfigurationUtils:** Type-safe config access (`get<T>()`), enum validation (Provider, ExecutionMode), default values.
+**ConfigurationUtils:** Type-safe config access (`get<T>()`), enum validation (Harness, ExecutionMode), default values.
 
 **PromptIdentity:** SHA-256 content hashing, whitespace normalization, duplicate detection, instruction injection logic.
 

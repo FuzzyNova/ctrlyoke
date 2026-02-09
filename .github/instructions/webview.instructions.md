@@ -3,7 +3,7 @@ applyTo: "src/ui/webview/**"
 ---
 
 <purpose>
-WebView UI for dashboard (workflow visualization/execution, CodeMirror editor, CLI output streaming) and settings (provider/model/agent configuration).
+WebView UI for dashboard (workflow visualization/execution, CodeMirror editor, CLI output streaming) and settings (harness/model/agent configuration).
 </purpose>
 
 <architecture>
@@ -49,7 +49,7 @@ Dashboard UI is now modularized into 8 files for maintainability:
 
 7. **editor-manager.js** (1032 lines) - Prompt editor
    - CodeMirror integration with autocomplete
-   - Properties drawer: provider, model, agent, end conditions
+   - Properties drawer: harness, model, agent, end conditions
    - CRUD: Create, update, delete prompts
    - Token counting, completions
    - Section collapse: toggleEditorSection, restoreEditorCollapseState
@@ -110,7 +110,7 @@ Previously a 3,017-line monolith, now split into focused modules:
 
 - **editor-manager.js** - Prompt editing
   - CodeMirror editor with autocomplete
-  - Properties drawer (provider, model, agent, end conditions)
+  - Properties drawer (harness, model, agent, end conditions)
   - CRUD operations with queue position logic (END/NEXT/BEFORE_CURRENT)
   - Token counting, spell check integration
 
@@ -136,7 +136,7 @@ CSP headers, `localResourceRoots` restricted to `out/ui/webview/`, custom icons 
 - FlightPathDashboardProvider.ts, FlightPathSettingsProvider.ts - Providers
 - DashboardConstants.ts - MESSAGE_TYPES, EXECUTION_STATES, etc.
 - CompletionHelpers.ts - Autocomplete logic
-- ModelRegistry.ts - Available models per provider
+- ModelRegistry.ts - Available models per harness
 </relatedFiles>
 
 <flightPathDashboardProvider>
@@ -147,7 +147,7 @@ CSP headers, `localResourceRoots` restricted to `out/ui/webview/`, custom icons 
 - State updates via public methods called by FlightPathManager
 - Initial state hydration on webview ready
 - Template management for workflow creation
-- Completion provider integration for CodeMirror autocomplete
+- Completion harness integration for CodeMirror autocomplete
 
 **Key public methods (called by FlightPathManager):**
 
@@ -202,7 +202,7 @@ updateSessionRestored(state); // Session restoration (CLI resume)
 ```javascript
 state = {
   fileName: string | null,
-  prompts: Array<{index, text, status, details, provider, model, agent, newChatSession, allowDynamicExtension, endCondition}>,
+  prompts: Array<{index, text, status, details, harness, model, agent, newChatSession, allowDynamicExtension, endCondition}>,
   executionState: 'idle' | 'running' | 'paused' | 'stopped' | 'cancelling' | 'completed' | 'error',
   currentStep: number,
   totalSteps: number,
@@ -236,8 +236,8 @@ Dashboard.js imports all shared constants from compiled `DashboardConstants.js` 
 - `EXECUTION_STATES` - Queue execution states
 - `STEP_STATUS` - Prompt execution status values
 - `ACTION_TYPES` - Prompt editor action types (RUN, QUEUE, RUN_NEXT, etc.)
-- `PROVIDER_IDS` - Provider identifiers
-- `DEFAULT_MODELS` - Default model per provider
+- `HARNESS_IDS` - Provider identifiers
+- `DEFAULT_MODELS` - Default model per harness
 - `CLAUDE_CLI_MODELS`, `CODEX_CLI_MODELS` - Static model lists
 - `PROMPT_PROPERTIES`, `END_CONDITION_PROPERTIES` - Property definitions
 
@@ -248,7 +248,7 @@ Dashboard.js imports all shared constants from compiled `DashboardConstants.js` 
 
 **Message handlers:**
 
-- `init` → Hydrate initial state with model options, templates, and provider status
+- `init` → Hydrate initial state with model options, templates, and harness status
 - `fileSelected` → Update file, prompts, reset execution state and retry states
 - `sessionRestored` → Restore full state including prompts, outputs, and execution state (CLI session resume)
 - `executionStarted` → Show progress bar, update state
@@ -260,8 +260,8 @@ Dashboard.js imports all shared constants from compiled `DashboardConstants.js` 
 - `cliStreamingChunk` → Append chunk to response, render if current step with autoscroll
 - `statusMessage` → Add status message (info/warning/error) to step
 - `executionCompleted` → Update state, enable re-run button
-- `modelOptionsUpdate` → Update available models per provider from ModelRegistry
-- `providerStatusUpdate` → Update provider availability (CLI checking, available, not available)
+- `modelOptionsUpdate` → Update available models per harness from ModelRegistry
+- `harnessStatusUpdate` → Update harness availability (CLI checking, available, not available)
 - `templatesLoaded` → Populate template dropdown in modal (built-in, custom, actions)
 - `defaultTemplateSet` → Confirm default template updated
 - `workflowCreated` → Close modal and optionally run new workflow
@@ -284,9 +284,9 @@ Dashboard.js imports all shared constants from compiled `DashboardConstants.js` 
 - `updateEditorControls()` → Show/hide editor action buttons (Run, Queue, Update, Cancel, Delete)
 - `renderPromptCounter()` → Show current/total prompt count
 - `updateTokenCount()` → Calculate and display GPT token count for editor content
-- `populatePropertyControls()` → Load prompt properties into drawer (provider, model, agent, etc.)
+- `populatePropertyControls()` → Load prompt properties into drawer (harness, model, agent, etc.)
 - `populateTemplateDropdown()` → Render template options grouped by type (built-in, custom, actions)
-- `renderProviderStatus()` → Update provider availability indicators in settings
+- `renderProviderStatus()` → Update harness availability indicators in settings
 
 **Status icons (codicons):**
 
@@ -332,7 +332,7 @@ Dashboard.js imports all shared constants from compiled `DashboardConstants.js` 
   - Cancel: Exits edit mode and reverts to new prompt mode
 - **Properties drawer:**
   - Slide-in panel from right
-  - Provider, Model, Agent selectors
+  - Harness, Model, Agent selectors
   - New Chat Session, Allow Dynamic Extension toggles
   - End Condition fields (script, returns, timeout, retries, retry prompt)
 
@@ -488,7 +488,7 @@ class CodeMirrorPromptEditor {
 
 <integrationWithFlightPathManager>
 **Dashboard lifecycle:**
-1. FlightPathManager registers dashboard provider in `extension.ts`
+1. FlightPathManager registers dashboard harness in `extension.ts`
 2. User opens FlightPath sidebar view (or it auto-opens)
 3. WebView sends `ready` message → Provider sends initial state with models and templates
 4. User selects file OR creates new workflow from template → Manager calls `updateFileSelected()`
@@ -571,7 +571,7 @@ User clicks New Workflow
 1. **Extension sends property values** via DashboardProvider.updateFileSelected() or updateExecutionStarted()
 2. **WebView receives message** in message-router.js with MESSAGE_TYPES.fileSelected
 3. **state-manager.js stores** properties in state.prompts[].property
-4. **editor-manager.js renders** properties in HTML controls (#prop-provider, #prop-model, etc.)
+4. **editor-manager.js renders** properties in HTML controls (#prop-harness, #prop-model, etc.)
 5. **User modifies property** (select dropdown or input field)
 6. **editor-manager.js detects change** via event listener
 7. **message-router.js sends MESSAGE_TYPES.updatePrompt** back to extension with new property values
@@ -628,27 +628,27 @@ Provides a user-friendly UI for configuring FlightPath execution settings withou
 
 ```javascript
 state = {
-  provider: 'copilot-cli' | 'copilot-chat' | 'claude-cli' | 'codex-cli',
-  model: string, // Model ID for current provider
+  harness: 'copilot-cli' | 'copilot-chat' | 'claude-cli' | 'codex-cli',
+  model: string, // Model ID for current harness
   agent: string | 'default',
   executionMode: 'interactive' | 'headless',
   newChatSessionPerPrompt: boolean,
   dynamicQueueEnabled: boolean
 }
 
-providerStatus = {
-  [providerId]: { available: boolean, status: 'checking' | 'available' | 'not_available' }
+harnessStatus = {
+  [harnessId]: { available: boolean, status: 'checking' | 'available' | 'not_available' }
 }
 
 modelOptions = {
-  [providerId]: Array<{ value: string, label: string }>
+  [harnessId]: Array<{ value: string, label: string }>
 }
 ```
 
 **Components:**
 
-- **Provider dropdown** - Select AI provider (Copilot CLI, Copilot Chat, Claude CLI, Codex CLI)
-- **Model dropdown** - Select model for current provider (dynamically populated)
+- **Harness dropdown** - Select AI harness (Copilot CLI, Copilot Chat, Claude CLI, Codex CLI)
+- **Model dropdown** - Select model for current harness (dynamically populated)
 - **Agent dropdown** - Select custom agent or "default"
 - **Execution mode dropdown** - Interactive (visible terminal) or Headless (background)
 - **New Chat Session checkbox** - Start new chat session for each prompt (Chat mode only)
@@ -658,31 +658,31 @@ modelOptions = {
 
 Extension → Settings:
 
-- `init` → Send initial state with model options and provider status
+- `init` → Send initial state with model options and harness status
 - `modelOptionsUpdate` → Update available models from ModelRegistry
-- `providerStatusUpdate` → Update provider availability
+- `harnessStatusUpdate` → Update harness availability
 
 Settings → Extension:
 
-- `changeProvider` → Update flightpath.provider setting
-- `changeModel` → Update provider-specific model setting
+- `changeHarness` → Update flightpath.harness setting
+- `changeModel` → Update harness-specific model setting
 - `changeAgent` → Update custom agent setting
 - `changeExecutionMode` → Update cliExecutionMode setting
 - `changeDynamicQueue` → Update enableDynamicQueue setting
 - `changeNewChatSession` → Update newChatSessionPerPrompt setting
 
-**Provider status indicators:**
+**Harness status indicators:**
 
-- Shows real-time availability of each CLI provider
-- "checking..." → Querying provider availability
-- Green checkmark → Provider available
-- Red X → Provider not installed/available
+- Shows real-time availability of each CLI harness
+- "checking..." → Querying harness availability
+- Green checkmark → Harness available
+- Red X → Harness not installed/available
 
 **Dynamic UI behavior:**
 
-- Execution mode selector only visible for CLI providers
-- New Chat Session option only visible for Copilot Chat provider
-- Model dropdown repopulated when provider changes
+- Execution mode selector only visible for CLI harnesss
+- New Chat Session option only visible for Copilot Chat harness
+- Model dropdown repopulated when harness changes
 - Settings persist to VS Code workspace configuration
 
 **Integration:**

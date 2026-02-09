@@ -110,14 +110,6 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     endCondition?: any;
   } = {};
 
-  // Setting keys for each harness's model
-  private static readonly MODEL_SETTING_MAP: Record<string, string> = {
-    [HARNESS_IDS.COPILOT_CLI]: "copilotCliModel",
-    [HARNESS_IDS.COPILOT_CHAT]: "copilotChatModel",
-    [HARNESS_IDS.CLAUDE_CLI]: "claudeCliModel",
-    [HARNESS_IDS.CODEX_CLI]: "codexCliModel",
-  };
-
   // Validation constants
   private static readonly VALID_HARNESSES = [
     HARNESS_IDS.COPILOT_CLI,
@@ -130,6 +122,18 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     "interactive",
     "headless",
   ] as const;
+
+  /**
+   * Get the webview-react directory URI
+   */
+  private get webviewReactUri(): vscode.Uri {
+    return vscode.Uri.joinPath(
+      this.context.extensionUri,
+      "out",
+      "ui",
+      "webview-react"
+    );
+  }
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.templateManager = new TemplateManager(context);
@@ -160,75 +164,35 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     context: vscode.WebviewViewResolveContext,
     token: vscode.CancellationToken
   ): void | Thenable<void> {
-    console.log("FlightPath: resolveWebviewView called");
     this.view = webviewView;
 
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          "out",
-          "ui",
-          "webview-react"
-        ),
+        this.webviewReactUri,
         vscode.Uri.joinPath(this.context.extensionUri, "images"),
       ],
     };
 
     const html = this._getHtmlForWebview(webviewView.webview);
-    console.log("FlightPath: Generated HTML length:", html.length);
-    console.log("FlightPath: HTML preview:", html.substring(0, 500));
-
-    // Write full HTML to debug file for inspection
-    const fs = require("fs");
-    const path = require("path");
-    const debugPath = path.join(
-      this.context.extensionPath,
-      "out",
-      "debug-webview.html"
-    );
-    try {
-      fs.writeFileSync(debugPath, html, "utf8");
-      console.log("FlightPath: Full HTML written to:", debugPath);
-    } catch (err) {
-      console.error("FlightPath: Failed to write debug HTML:", err);
-    }
-
     webviewView.webview.html = html;
 
     // Handle messages from webview
     webviewView.webview.onDidReceiveMessage((message) => {
-      console.log("FlightPath: Received message from webview:", message.type);
       this.handleWebviewMessage(message);
     });
-
-    console.log("FlightPath: Webview initialized, waiting for READY message");
   }
 
   /**
    * Load built React app HTML and inject webview URIs
    */
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    const htmlPath = vscode.Uri.joinPath(
-      this.context.extensionUri,
-      "out",
-      "ui",
-      "webview-react",
-      "index.html"
-    );
+    const htmlPath = vscode.Uri.joinPath(this.webviewReactUri, "index.html");
 
     let html = fsSync.readFileSync(htmlPath.fsPath, "utf-8");
 
     // Get base URI for webview resources
-    const webviewRootUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react"
-      )
-    );
+    const webviewRootUri = webview.asWebviewUri(this.webviewReactUri);
 
     // Replace all relative paths with webview URIs
     // Vite outputs: /assets/index-[hash].js, /assets/index-[hash].css, etc.
@@ -236,54 +200,19 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
     // Replace placeholder URIs with actual webview resource URIs
     const typoJsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react",
-        "typo.js"
-      )
+      vscode.Uri.joinPath(this.webviewReactUri, "typo.js")
     );
     const codiconsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react",
-        "codicons",
-        "codicon.css"
-      )
+      vscode.Uri.joinPath(this.webviewReactUri, "codicons", "codicon.css")
     );
     const customIconsUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react",
-        "custom-icons.css"
-      )
+      vscode.Uri.joinPath(this.webviewReactUri, "custom-icons.css")
     );
     const affUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react",
-        "dictionaries",
-        "en_US",
-        "en_US.aff"
-      )
+      vscode.Uri.joinPath(this.webviewReactUri, "dictionaries", "en_US", "en_US.aff")
     );
     const dicUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "out",
-        "ui",
-        "webview-react",
-        "dictionaries",
-        "en_US",
-        "en_US.dic"
-      )
+      vscode.Uri.joinPath(this.webviewReactUri, "dictionaries", "en_US", "en_US.dic")
     );
     html = html.replace(/\{\{typoUri\}\}/g, typoJsUri.toString());
     html = html.replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString());
@@ -300,24 +229,13 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     // This must run before the React module script loads
     const vscodeApiScript = `<script>
 window.vscodeApi = acquireVsCodeApi();
-console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
 </script>`;
 
     // Inject AFTER typo.js script tag but BEFORE the module scripts
-    const beforeReplace = html;
     html = html.replace(
       /<script type="module"/,
       `${vscodeApiScript}\n    <script type="module"`
     );
-
-    if (html === beforeReplace) {
-      console.log(
-        "FlightPath: WARNING - Failed to inject VS Code API script (no module script found)"
-      );
-    } else {
-      console.log("FlightPath: Injected VS Code API capture script");
-      console.log("FlightPath: Injected script content:", vscodeApiScript);
-    }
 
     // Replace CSP meta tag with correct policy for VS Code webview
     // - script-src: Allow VS Code webview scripts (for acquireVsCodeApi)
@@ -1240,9 +1158,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
 
   private async handleSetDefaultTemplate(templateId: string): Promise<void> {
     try {
-      await vscode.workspace
-        .getConfiguration("flightpath")
-        .update("defaultWorkflowTemplate", templateId, true);
+      await ConfigurationUtils.setDefaultWorkflowTemplate(templateId);
 
       this.postMessage({
         type: MESSAGE_TYPES.DEFAULT_TEMPLATE_SET,
@@ -1429,30 +1345,18 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       return;
     }
 
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update("harness", harness, true);
-
+    await ConfigurationUtils.setIntegrationMode(harness as Harness);
     this.sendInitialState();
   }
 
   private async handleModelChange(model: string): Promise<void> {
     const harness = ConfigurationUtils.getIntegrationMode();
-    const settingKey =
-      FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] || "copilotCliModel";
-
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update(settingKey, model, true);
-
+    await ConfigurationUtils.setModelForHarness(harness, model);
     this.sendInitialState();
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update("customAgent", agent, true);
-
+    await ConfigurationUtils.setCustomAgent(agent);
     this.sendInitialState();
   }
 
@@ -1464,26 +1368,17 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       return;
     }
 
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update("cliExecutionMode", mode, true);
-
+    await ConfigurationUtils.setCliExecutionMode(mode);
     this.sendInitialState();
   }
 
   private async handleResumeSessionChange(enabled: boolean): Promise<void> {
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update("resumeExistingSession", enabled, true);
-
+    await ConfigurationUtils.setResumeExistingSession(enabled);
     this.sendInitialState();
   }
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update("enableDynamicQueue", enabled, true);
-
+    await ConfigurationUtils.setEnableDynamicQueue(enabled);
     this.sendInitialState();
   }
 
@@ -1536,24 +1431,17 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     value: any,
     harness?: string
   ): Promise<void> {
-    let settingKey = property;
-
-    // Map property to setting key
     if (property === "model" && harness) {
-      settingKey =
-        FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] ||
-        "copilotCliModel";
+      await ConfigurationUtils.setModelForHarness(harness as Harness, value);
+    } else {
+      await ConfigurationUtils.updateSetting(property, value);
     }
-
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update(settingKey, value, true);
 
     this.sendInitialState();
   }
 
   private async handleGetConfig(key: string): Promise<void> {
-    const value = vscode.workspace.getConfiguration("flightpath").get(key);
+    const value = ConfigurationUtils.getConfigValue(key);
 
     this.postMessage({
       type: MESSAGE_TYPES.CONFIG_VALUE,
@@ -1563,10 +1451,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   }
 
   private async handleUpdateConfig(key: string, value: any): Promise<void> {
-    await vscode.workspace
-      .getConfiguration("flightpath")
-      .update(key, value, true);
-
+    await ConfigurationUtils.updateSetting(key, value);
     this.sendInitialState();
   }
 
@@ -1575,12 +1460,9 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   // ============================================================================
 
   private getModelForHarness(harness: string): string {
-    const settingKey =
-      FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] || "copilotCliModel";
-    const model = vscode.workspace
-      .getConfiguration("flightpath")
-      .get<string>(settingKey);
-    return model || (DEFAULT_MODELS as any)[harness] || "claude-sonnet-4.5";
+    return ConfigurationUtils.getModelForHarness(harness as Harness) ||
+      (DEFAULT_MODELS as any)[harness] ||
+      "claude-sonnet-4.5";
   }
 
   async applyPendingWorkflowProperties(): Promise<void> {

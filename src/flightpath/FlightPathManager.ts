@@ -158,23 +158,20 @@ export class FlightPathManager {
   /**
    * Get the default harness integration based on user settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
+   * Note: Does NOT log - logging happens during initialization only
    */
   private getDefaultIntegration(): CopilotIntegration {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     switch (integrationMode) {
       case Harness.CopilotChat:
-        Log.info("🔄 Using Copilot Chat integration");
         return this.chatIntegration;
       case Harness.ClaudeCli:
-        Log.info("🔄 Using Claude Code CLI integration");
         return this.claudeCliIntegration;
       case Harness.CodexCli:
-        Log.info("🔄 Using Codex CLI integration");
         return this.codexCliIntegration;
       case Harness.CopilotCli:
       default:
-        Log.info("🔄 Using Copilot CLI integration");
         return this.copilotCliIntegration;
     }
   }
@@ -219,6 +216,16 @@ export class FlightPathManager {
   async initialize(): Promise<void> {
     try {
       Log.info("Initializing manager...");
+
+      // Log the default integration mode once at startup
+      const integrationMode = ConfigurationUtils.getIntegrationMode();
+      const modeLabel = {
+        [Harness.CopilotChat]: "Copilot Chat",
+        [Harness.ClaudeCli]: "Claude Code CLI",
+        [Harness.CodexCli]: "Codex CLI",
+        [Harness.CopilotCli]: "Copilot CLI",
+      }[integrationMode] || "Copilot CLI";
+      Log.info(`🔄 Default integration: ${modeLabel}`);
 
       // Initialize all integrations (check CLI availability)
       await Promise.all([

@@ -247,7 +247,7 @@ Executes validation scripts with timeout and process isolation. Template system 
   - Auto-resume: `newChatSession: false` → Continue from previous prompt
 - **Runtime metadata**: `_runtime` tracks actual provider, model, and session ID used
 - **Working file persistence**: Session IDs survive VS Code restarts (stored in `.flightpath/.working/`)
-- **Provider-aware validation**: Prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
+- **Harness-aware validation**: Prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
 - **Session resolution algorithm**:
   1. Check `prompt.sessionId` (highest priority)
   2. Check `prompt.newChatSession`
@@ -460,7 +460,7 @@ The first defined value wins (highest priority takes precedence).
 
 **Working File:**
 
-- Provider and model **always saved** to working file (required for execution)
+- Harness and model **always saved** to working file (required for execution)
 - Other properties saved when explicitly set by user
 - Working file is single source of truth for both runtime state AND workflow configuration
 - See [docs/WORKFLOW_PROPERTIES.md](../docs/WORKFLOW_PROPERTIES.md) for complete guide

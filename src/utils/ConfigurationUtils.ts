@@ -43,6 +43,25 @@ function getConfig(): vscode.WorkspaceConfiguration {
 }
 
 /**
+ * Get the settings key for a harness model
+ * Internal helper for ConfigurationUtils
+ */
+function getModelSettingKeyForHarness(harness: Harness): string {
+  switch (harness) {
+    case Harness.CopilotCli:
+      return "copilotCliModel";
+    case Harness.CopilotChat:
+      return "copilotChatModel";
+    case Harness.ClaudeCli:
+      return "claudeCliModel";
+    case Harness.CodexCli:
+      return "codexCliModel";
+    default:
+      return "copilotCliModel";
+  }
+}
+
+/**
  * Configuration utility functions for FlightPath settings.
  * Centralizes all VS Code settings access for consistency and testability.
  */
@@ -452,5 +471,59 @@ export const ConfigurationUtils = {
     target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
   ): Promise<void> {
     await getConfig().update(key, value, target);
+  },
+
+  // ============================================================
+  // SETTINGS UPDATE METHODS
+  // ============================================================
+
+  /**
+   * Set the default harness integration mode
+   */
+  async setIntegrationMode(harness: Harness): Promise<void> {
+    await this.updateSetting("harness", harness);
+  },
+
+  /**
+   * Set the model for a specific harness
+   */
+  async setModelForHarness(harness: Harness, model: string): Promise<void> {
+    const settingKey = getModelSettingKeyForHarness(harness);
+    await this.updateSetting(settingKey, model);
+  },
+
+  /**
+   * Set the custom agent
+   */
+  async setCustomAgent(agent: string): Promise<void> {
+    await this.updateSetting("customAgent", agent);
+  },
+
+  /**
+   * Set CLI execution mode
+   */
+  async setCliExecutionMode(mode: string): Promise<void> {
+    await this.updateSetting("cliExecutionMode", mode);
+  },
+
+  /**
+   * Set whether to resume existing session
+   */
+  async setResumeExistingSession(enabled: boolean): Promise<void> {
+    await this.updateSetting("resumeExistingSession", enabled);
+  },
+
+  /**
+   * Set whether dynamic queue is enabled
+   */
+  async setEnableDynamicQueue(enabled: boolean): Promise<void> {
+    await this.updateSetting("enableDynamicQueue", enabled);
+  },
+
+  /**
+   * Set the default workflow template
+   */
+  async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
+    await this.updateSetting("defaultWorkflowTemplate", templateId);
   },
 };

@@ -12,7 +12,7 @@ CLI integrations for GitHub Copilot, Claude Code, and Codex. Deterministic compl
 FlightPath uses **composition over inheritance** for CLI integrations. This makes adding new CLI providers (Gemini, OpenCode, etc.) simple and safe:
 
 - **Single generic integration class** (`CliIntegration`) works with ALL providers
-- **Provider-specific logic** encapsulated in provider directories (copilot/, claude/, codex/)
+- **Harness-specific logic** encapsulated in provider directories (copilot/, claude/, codex/)
 - **Zero core class modifications** needed when adding new providers
 - **Interface-driven design** (TypeScript guides implementation)
 - **Testable components** (no mocking needed, pure logic)
@@ -49,7 +49,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 - Main provider contract - defines what a CLI provider must implement
 - Includes: config (metadata), responseParser, notificationMonitor, toolPermissionMapper
 - Methods: buildHeadlessArgs(), buildInteractiveTuiCommand(), formatFileReference(), getMcpConfigArgs(), checkAvailability()
-- Compose 4 sub-interfaces: IResponseParser, INotificationMonitor, IToolPermissionMapper, ProviderConfig
+- Compose 4 sub-interfaces: IResponseParser, INotificationMonitor, IToolPermissionMapper, HarnessConfig
   </coreComponents>
 
 <providerStructure>
