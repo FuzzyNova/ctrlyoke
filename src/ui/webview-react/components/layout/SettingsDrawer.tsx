@@ -156,6 +156,85 @@ const FormField: React.FC<{
 );
 
 /**
+ * Custom styled harness dropdown with status indicators
+ */
+const HarnessDropdown: React.FC<{
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  harnessStatus: Record<string, { status: "checking" | "available" | "not_available"; available?: boolean }>;
+}> = ({ id, value, onChange, harnessStatus }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSelect = (harnessId: string) => {
+    onChange(harnessId);
+    setIsOpen(false);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen]);
+
+  return (
+    <div className="relative inline-block w-full" ref={dropdownRef}>
+      <button
+        id={id}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] text-left flex items-center justify-between h-7"
+      >
+        <span>{HARNESS_INFO[value as HarnessId]?.name || value}</span>
+        <div className="flex items-center gap-1">
+          <StatusIndicator
+            status={harnessStatus[value as HarnessId]?.status || "checking"}
+          />
+          <i className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`} />
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-0 bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] z-50 shadow-lg">
+          {Object.entries(HARNESS_IDS).map(([, harness], index) => {
+            const status = harnessStatus[harness as HarnessId];
+            const isAvailable = status?.available !== false;
+            const isChecking = status?.status === "checking";
+            const isSelected = value === harness;
+
+            return (
+              <button
+                key={harness}
+                onClick={() => handleSelect(harness)}
+                disabled={!isAvailable && !isChecking}
+                className={`w-full px-2 py-1.5 text-xs text-left flex items-center justify-between focus:outline-none border-none ${
+                  isSelected ? "bg-[var(--vscode-dropdown-selectedBackground)]" : "hover:bg-[var(--vscode-list-hoverBackground)]"
+                } ${
+                  !isAvailable && !isChecking ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                }`}
+              >
+                <span>{HARNESS_INFO[harness as HarnessId]?.name || harness}</span>
+                <StatusIndicator
+                  status={harnessStatus[harness as HarnessId]?.status || "checking"}
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
  * SettingsPanel Component
  *
  * Collapsible panel for configuring:
@@ -566,43 +645,12 @@ export const SettingsPanel: React.FC<{
                   />
                 }
               >
-                <select
+                <HarnessDropdown
                   id="settings-harness"
                   value={effectiveHarness}
-                  onChange={(e) => handleHarnessChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                >
-                  {Object.entries(HARNESS_IDS).map(([, id]) => {
-                    const status = harnessStatus[id as HarnessId];
-                    const isAvailable = status?.available !== false;
-                    const isChecking = status?.status === "checking";
-
-                    let label = HARNESS_INFO[id as HarnessId]?.name || id;
-                    if (isChecking) {
-                      label += " (Checking...)";
-                    } else if (!isAvailable) {
-                      label += " (Not Available)";
-                    }
-
-                    return (
-                      <option
-                        key={id}
-                        value={id}
-                        disabled={!isAvailable && !isChecking}
-                      >
-                        {label}
-                      </option>
-                    );
-                  })}
-                </select>
-                {/* Status indicator */}
-                <div className="mt-1">
-                  <StatusIndicator
-                    status={
-                      harnessStatus[effectiveHarness]?.status || "checking"
-                    }
-                  />
-                </div>
+                  onChange={handleHarnessChange}
+                  harnessStatus={harnessStatus}
+                />
               </FormField>
 
               {/* Model */}
