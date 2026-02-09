@@ -42,7 +42,8 @@
       "Bash(npx vite build:*)",
       "WebFetch(domain:mcpmarket.com)",
       "WebFetch(domain:blog.skinnyandbald.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:github.blog)"
     ],
     "deny": [],
     "ask": []

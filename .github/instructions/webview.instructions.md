@@ -1,8 +1,38 @@
 ---
-applyTo: "src/ui/webview/**"
+applyTo: "archive/webview/**"
 ---
 
-<purpose>
+# ⚠️ ARCHIVED DOCUMENTATION
+
+This instruction file documents the **old JavaScript-based webview** that has been archived to `archive/webview/`.
+
+**For current webview documentation, see:**
+
+- [webview-react.instructions.md](webview-react.instructions.md) - React webview UI (current implementation)
+- [ui.instructions.md](ui.instructions.md) - UI provider layer
+
+## Why Archived?
+
+The old webview implementation (plain JavaScript with vanilla DOM manipulation) has been replaced with a modern React-based implementation:
+
+**Old (Archived):**
+
+- Plain JavaScript (dashboard.js, settings.js, etc.)
+- Vanilla DOM manipulation
+- Manual state management
+- 3,000+ line monolithic files
+
+**New (Current):**
+
+- React 19 + TypeScript
+- Modern component architecture
+- Zustand state management
+- Modular design with focused components
+
+## Migration Status
+
+All webview functionality has been migrated to the React implementation in `src/ui/webview-react/`. This archived code is kept for historical reference only.
+
 WebView UI for dashboard (workflow visualization/execution, CodeMirror editor, CLI output streaming) and settings (harness/model/agent configuration).
 </purpose>
 

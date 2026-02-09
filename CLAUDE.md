@@ -26,7 +26,7 @@ When editing or analyzing files, read the corresponding instruction file:
 | `src/test/**`                          | `.github/instructions/test.instructions.md`            | Testing patterns and conventions                                        |
 | `src/completions/**`                   | `.github/instructions/completions.instructions.md`     | IntelliSense providers                                                  |
 | `src/utils/**`                         | `.github/instructions/utils.instructions.md`           | Utility functions and helpers                                           |
-| `src/ui/webview/**`                    | `.github/instructions/webview.instructions.md`         | Dashboard/Settings HTML/CSS/JS                                          |
+| `src/ui/webview-react/**`              | `.github/instructions/webview-react.instructions.md`   | React dashboard (components, stores, hooks)                             |
 
 ### How to Use
 

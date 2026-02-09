@@ -11,6 +11,9 @@ Automate GitHub Copilot Chat through structured YAML/JSON-based prompt workflows
 - VS Code Extension API (Language Model Tool API, Chat integration)
 - YAML parsing (js-yaml) and JSON Schema validation (AJV)
 - Mocha (testing)
+- React 19 + Vite (webview UI)
+- Zustand (state management)
+- Tailwind CSS + CodeMirror 6
 </technicalStack>
 
 <architecturePrinciples>
@@ -29,10 +32,10 @@ Automate GitHub Copilot Chat through structured YAML/JSON-based prompt workflows
 <solidPrinciples>
 SOLID principles with strict separation of concerns:
 
-- FlightPathManager: Orchestration and command handling, factory pattern for 4 providers
+- FlightPathManager: Orchestration and command handling, factory pattern for 4 harnesses
 - PromptQueue: Sequential execution and state machine (idle → running → paused/completed/error)
 - CopilotIntegration (abstract base): Defines integration contract
-  - CliIntegration (generic CLI class): Works with ANY CLI provider via composition
+  - CliIntegration (generic CLI class): Works with ANY CLI harness via composition
     - CopilotCliProvider: Copilot CLI logic (implements ICliProvider)
     - ClaudeCliProvider: Claude Code CLI logic (implements ICliProvider)
     - CodexCliProvider: Codex CLI logic (implements ICliProvider)
@@ -127,19 +130,31 @@ src/
 │   └── check_condition.bat       # Windows batch script template
 ├── types/                        # Type definitions
 ├── ui/                           # User interface
-│   ├── FlightPathDashboardProvider.ts  # Dashboard webview provider
-│   ├── FlightPathSettingsProvider.ts   # Settings webview provider
+│   ├── FlightPathWebviewProvider.ts  # React webview provider
+│   ├── StatusBarManager.ts      # Status bar integration
 │   ├── icons/                    # Custom SVG icons (source only, NOT copied to output)
 │   │   ├── append.svg            # Icon source files
 │   │   └── README.md             # Icon system documentation
-│   └── webview/                  # Webview assets (copied to output)
-│       ├── dashboard.html        # Dashboard template
-│       ├── dashboard.scss        # Dashboard styles (compiled to CSS)
-│       ├── dashboard.js          # Dashboard logic
-│       ├── custom-icons.css      # Generated from icons/ (auto-created)
-│       ├── settings.html         # Settings template
-│       ├── settings.scss         # Settings styles (compiled to CSS)
-│       └── settings.js           # Settings logic
+│   └── webview-react/            # React webview application (compiled separately)
+│       ├── App.tsx               # Main layout with resizable panels
+│       ├── main.tsx              # React entry point
+│       ├── index.html            # Vite HTML template
+│       ├── components/           # React components
+│       │   ├── layout/           # Main layout sections (Header, PromptsPanel, OutputSection, EditorSection, SettingsDrawer)
+│       │   ├── editor/           # CodeMirror 6 editor components
+│       │   ├── prompts/          # Prompt list components
+│       │   ├── output/           # Output rendering components
+│       │   ├── workflow/         # Workflow management (modals, buttons)
+│       │   └── shared/           # Reusable UI components
+│       ├── hooks/                # React hooks (useVsCodeApi, useMessageHandler, useMediaQuery)
+│       ├── store/                # Zustand state management
+│       │   ├── workflowStore.ts  # Core workflow data
+│       │   ├── uiStore.ts        # Layout and UI state
+│       │   ├── editorStore.ts    # Prompt editor state
+│       │   └── settingsStore.ts  # Harness/model configuration
+│       ├── types/                # TypeScript types
+│       ├── utils/                # Utility functions
+│       └── styles/               # Tailwind CSS and styling
 ├── utils/
 │   ├── BuildConfig.ts            # Build-time constants (IS_DEV_MODE, BUILD_DATE)
 │   ├── ModelConstants.ts         # Model definitions (single source of truth)
@@ -167,6 +182,7 @@ scripts/
 
 - Templates copied from `src/templates/` to `out/templates/` during build
 - Schemas copied from `schemas/` to `out/schemas/` during build
+- React webview compiled separately via Vite to `out/webview-react/assets/` (npm run build:webview)
 - YAML schema auto-generated from JSON schema via `npm run generate-schema`
 - Single source of truth: `/schemas/prompt-schema.json` used for both VS Code IntelliSense and runtime validation
 - **Dev code stripped**: In production builds, `IS_DEV_MODE=false` enables dead code elimination
@@ -191,12 +207,12 @@ Abstract base with four concrete implementations:
   - **Copilot CLI** (default): GitHub Copilot CLI with log file monitoring
   - **Claude CLI**: Anthropic's Claude Code CLI with JSON streaming and log file monitoring
   - **Codex CLI**: OpenAI's Codex CLI with JSONL events and notify hook
-  - **Architecture**: Single generic `CliIntegration` class works with all providers via `ICliProvider` interface
-  - **Provider isolation**: Each provider in separate directory (copilot/, claude/, codex/) with 5 required files
-  - **Zero core changes**: Adding new providers requires NO modifications to CliIntegration or shared utilities
+  - **Architecture**: Single generic `CliIntegration` class works with all harnesses via `ICliProvider` interface
+  - **Harness isolation**: Each harness in separate directory (copilot/, claude/, codex/) with 5 required files
+  - **Zero core changes**: Adding new harnesses requires NO modifications to CliIntegration or shared utilities
   - **Shared features**: Adaptive prompt passing (simple ≤300 chars direct, complex via temp files), two execution modes (interactive terminal or headless background), session continuity, token parsing
   - **Shared utilities**: CliProcessManager (process/terminal), CliMcpConfigGenerator (MCP config), BaseLogParser (log file monitoring)
-  - **See**: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide to adding new providers
+  - **See**: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide to adding new harnesses
 - **Chat** (fallback): UI automation with log-based completion detection
   - **Components**: CopilotChatIntegration (orchestration), ChatLogMonitor (log polling), NativeAttachmentHandler (file attachments)
   - **Completion detection**: Two-tier log discovery (derived from context.logUri + fallback search)
@@ -245,9 +261,9 @@ Executes validation scripts with timeout and process isolation. Template system 
   - Numeric references: `sessionId: 1` → Reuse session from prompt 1
   - Exact session IDs: `sessionId: "550e8400-e29b-41d4-a716-446655440000"` → Resume specific session
   - Auto-resume: `newChatSession: false` → Continue from previous prompt
-- **Runtime metadata**: `_runtime` tracks actual provider, model, and session ID used
+- **Runtime metadata**: `_runtime` tracks actual harness, model, and session ID used
 - **Working file persistence**: Session IDs survive VS Code restarts (stored in `.flightpath/.working/`)
-- **Harness-aware validation**: Prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
+- **Harness-aware validation**: Prevents cross-harness session references (Copilot ↔ Claude ↔ Codex)
 - **Session resolution algorithm**:
   1. Check `prompt.sessionId` (highest priority)
   2. Check `prompt.newChatSession`
@@ -423,8 +439,8 @@ VS Code global settings (fallback)
 
 **Available Workflow Properties:**
 
-- `provider` - AI provider for execution (`copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`)
-- `model` - AI model to use (provider-specific)
+- `harness` - AI harness for execution (`copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli`)
+- `model` - AI model to use (harness-specific)
 - `agent` - Custom agent file (`.agent.md`)
 - `newChatSession` - Start new session per prompt (boolean)
 - `allowDynamicExtension` - Allow dynamic queue extension (boolean)
@@ -434,7 +450,7 @@ VS Code global settings (fallback)
 
 ```yaml
 # Workflow-level defaults
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 endCondition:
   script: npm test
@@ -528,7 +544,7 @@ See `.github/instructions/test.instructions.md` for complete test documentation.
 
 ## Implementation Status
 
-**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar, WebView dashboard with HTML template, Settings panel with provider/model selection
+**Completed**: CLI/Chat integrations, file attachment, response detection, schema validation, command registration, status bar, React webview dashboard with modern UI, settings panel with harness/model selection
 
 **Planned**: Comprehensive end-to-end workflow tests, enhanced error recovery, multi-turn CLI sessions
 
@@ -541,7 +557,7 @@ See `.github/instructions/test.instructions.md` for complete test documentation.
   - **json**: JSON format (best for programmatic generation and CI/CD)
   - **Usage**: Controls default file extension in createPromptFile command
 - flightpath.autoAttachFiles (boolean, default: true) - Automatically process #file: references and attach file content
-- flightpath.provider (enum: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli", default: "copilot-cli")
+- flightpath.harness (enum: "copilot-cli" | "copilot-chat" | "claude-cli" | "codex-cli", default: "copilot-cli")
   - **copilot-cli**: GitHub Copilot CLI (default, best reliability)
   - **copilot-chat**: Copilot Chat window (UI automation, fallback)
   - **claude-cli**: Claude Code CLI (Anthropic's Claude with stream-json output)
@@ -789,18 +805,17 @@ All in `package.json`:
 1. **FlightPathTypes.ts** - Add to `PromptItem` interface: `newProperty?: string | boolean | object`
 2. **prompt-schema.json** - Add to schema.properties: `"newProperty": { "type": "...", "description": "..." }`
 3. **Run `npm run sync-models`** - Auto-updates package.json enum if model-related
-4. **DashboardProvider.ts** - Ensure property included in HTML template generation
+4. **FlightPathWebviewProvider.ts** - Ensure property included in message handling
 5. **PromptQueue.ts** - Verify property persisted through queue operations
 6. **CopilotIntegration classes** - Update if property affects execution behavior
 
-### Dashboard Side (WebView)
+### Dashboard Side (React Webview)
 
-See **`webview.instructions.md` - propertyFlow section** for comprehensive checklist of:
+See **`webview-react.instructions.md`** for comprehensive React webview architecture including:
 
-- dashboard.html controls
-- editor-manager.js rendering/updates
-- state-manager.js state schema
-- message-router.js message handling
+- Component structure and store updates
+- Message handler routing
+- Property persistence (editorStore and localStorage)
 - Integration with extension via MESSAGE_TYPES
 
 ### Single Source of Truth
