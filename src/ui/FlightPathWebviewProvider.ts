@@ -160,6 +160,14 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((message) => {
       this.handleWebviewMessage(message);
     });
+
+    Log.info("resolveWebviewView() complete — view is now set");
+
+    // Best-effort early INIT: VS Code buffers postMessage until the
+    // webview iframe loads, but React's message listener may not be
+    // attached yet. The READY handler sends INIT again as a
+    // guaranteed fallback once React confirms it is listening.
+    this.sendInitialState();
   }
 
   /**
@@ -251,8 +259,12 @@ window.vscodeApi = acquireVsCodeApi();
         // Lifecycle Messages
         // ============================================================================
         case MESSAGE_TYPES.READY:
+          Log.info("Received READY from React — sending INIT");
+          // Guaranteed delivery: React's message listener is now attached.
+          // The early INIT from resolveWebviewView() may have been lost
+          // if it arrived before React mounted.
           this.sendInitialState();
-          // Notify FlightPathManager that dashboard is ready (triggers deferred auto-load)
+          // Trigger auto-load of recent session now that React is mounted.
           if (this.flightPathManager) {
             await this.flightPathManager.setDashboardReady();
           }
@@ -673,8 +685,14 @@ window.vscodeApi = acquireVsCodeApi();
 
   private sendInitialState(): void {
     if (!this.view) {
+      Log.info("sendInitialState() skipped — view not set");
       return;
     }
+
+    const harnessStatuses = Object.entries(this.harnessStatus)
+      .map(([id, s]) => `${id}=${s.status}`)
+      .join(", ");
+    Log.info(`sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`);
 
     // Get current workflow state from FlightPathManager
     const workflowState = this.getCurrentState();
@@ -1485,10 +1503,12 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   private async checkHarnessAvailability(): Promise<void> {
-    await this.checkCliAvailability(HARNESS_IDS.COPILOT_CLI, "copilot");
-    await this.checkCliAvailability(HARNESS_IDS.CLAUDE_CLI, "claude");
-    await this.checkCliAvailability(HARNESS_IDS.CODEX_CLI, "codex");
-    await this.checkCopilotChatAvailability();
+    await Promise.all([
+      this.checkCliAvailability(HARNESS_IDS.COPILOT_CLI, "copilot"),
+      this.checkCliAvailability(HARNESS_IDS.CLAUDE_CLI, "claude"),
+      this.checkCliAvailability(HARNESS_IDS.CODEX_CLI, "codex"),
+      this.checkCopilotChatAvailability(),
+    ]);
 
     this.sendHarnessStatusUpdate();
   }
@@ -1513,6 +1533,8 @@ window.vscodeApi = acquireVsCodeApi();
         message: "Not installed or not in PATH",
       };
     }
+    // Send incremental update so UI reflects each check as it completes
+    this.sendHarnessStatusUpdate();
   }
 
   private async checkCopilotChatAvailability(): Promise<void> {
@@ -1530,6 +1552,7 @@ window.vscodeApi = acquireVsCodeApi();
           status: "unavailable",
           message: "GitHub Copilot extension not installed",
         };
+        this.sendHarnessStatusUpdate();
         return;
       }
 
@@ -1559,6 +1582,8 @@ window.vscodeApi = acquireVsCodeApi();
         message: "Error checking Copilot Chat availability",
       };
     }
+    // Send incremental update so UI reflects each check as it completes
+    this.sendHarnessStatusUpdate();
   }
 
   private async discoverAgents(): Promise<void> {

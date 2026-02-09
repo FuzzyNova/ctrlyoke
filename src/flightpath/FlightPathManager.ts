@@ -58,6 +58,7 @@ export class FlightPathManager {
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
   private dashboardReady: boolean = false; // Track dashboard initialization state
+  private managerInitialized: boolean = false; // Track manager initialization state
   private startPending: boolean = false; // Prevent duplicate workflow starts (race condition guard)
   private lastKnownPromptCount: number = 0; // Track prompt count to detect MCP merges
 
@@ -243,11 +244,16 @@ export class FlightPathManager {
         );
       }
 
-      // Note: Auto-load recent session is deferred until dashboard is ready
-      // (see setDashboardReady() method)
-
+      this.managerInitialized = true;
       Log.info("Manager initialization complete");
+
+      // If dashboard sent READY before init finished, trigger auto-load now
+      if (this.dashboardReady) {
+        Log.info("Dashboard was ready before init — triggering deferred auto-load");
+        await this.triggerAutoLoad();
+      }
     } catch (error) {
+      this.managerInitialized = true; // Mark initialized even on failure to unblock dashboard
       Log.error("Failed to initialize manager:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Initialization failed: ${error}`
@@ -997,7 +1003,20 @@ export class FlightPathManager {
     Log.info("✅ Dashboard is ready");
     this.dashboardReady = true;
 
-    // Check if auto-load is enabled and trigger it now that dashboard is ready
+    // Only trigger auto-load if manager initialization is complete.
+    // If init hasn't finished yet, initialize() will call triggerAutoLoad()
+    // after it completes (see the dashboardReady check at the end of initialize()).
+    if (this.managerInitialized) {
+      await this.triggerAutoLoad();
+    } else {
+      Log.info("Manager not yet initialized — deferring auto-load until init completes");
+    }
+  }
+
+  /**
+   * Trigger auto-load of recent session (requires both dashboard ready AND manager initialized)
+   */
+  private async triggerAutoLoad(): Promise<void> {
     if (
       ConfigurationUtils.shouldAutoLoadRecentSession() &&
       this.currentWorkspaceFolder

@@ -116,11 +116,11 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(queueStatusTool, queueAppendTool);
-    console.log(
+    Log.info(
       "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue)"
     );
   } catch (error) {
-    console.warn(
+    Log.warn(
       "FlightPath: Failed to register Language Model Tools (VS Code API may not be available):",
       error
     );
@@ -129,9 +129,9 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  console.log("FlightPath: Extension activating...");
+  Log.info("FlightPath: Extension activating...");
   if (IS_DEV_MODE) {
-    console.log(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
+    Log.info(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
   }
 
   try {
@@ -140,7 +140,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
-      console.warn("FlightPath: Model registry initialization failed:", err);
+      Log.warn("FlightPath: Model registry initialization failed:", err);
     });
 
     // Clean up orphaned temp prompt files (from previous sessions)
@@ -150,7 +150,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const tempMgr = new TempFileManager(workspaceRoot);
       tempMgr.cleanupOrphanedFiles().then((count) => {
         if (count > 0) {
-          console.log(
+          Log.info(
             `FlightPath: Cleaned up ${count} orphaned temp prompt file(s)`
           );
         }
@@ -166,7 +166,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-    console.log("FlightPath: React webview provider registered");
+    Log.info("FlightPath: React webview provider registered");
 
     // Initialize FlightPath manager with React webview provider
     flightPathManager = new FlightPathManager(context, webviewProvider);
@@ -174,7 +174,17 @@ export async function activate(context: vscode.ExtensionContext) {
     // Set manager reference in webview provider (for getting current state)
     webviewProvider.setFlightPathManager(flightPathManager);
 
-    await flightPathManager.initialize();
+    // Fire-and-forget: don't block activate() on initialization.
+    // This lets VS Code call resolveWebviewView() immediately so the
+    // dashboard renders in <1s instead of waiting ~8s for CLI checks.
+    // FlightPathManager.setDashboardReady() handles the race: if READY
+    // arrives before init completes, auto-load is deferred until init finishes.
+    flightPathManager.initialize().catch((err) => {
+      Log.error("Manager initialization failed:", err);
+      vscode.window.showErrorMessage(
+        `FlightPath: Initialization failed: ${err}`
+      );
+    });
 
     // Register completion provider for prompt files (JSON, YAML, and Markdown)
     // Two triggers: @ for full file references, # for snippets (line ranges, selections)
@@ -203,7 +213,7 @@ export async function activate(context: vscode.ExtensionContext) {
         "#" // Trigger on # character for snippets
       )
     );
-    console.log(
+    Log.info(
       "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @ and # triggers"
     );
 
@@ -215,13 +225,11 @@ export async function activate(context: vscode.ExtensionContext) {
         promptLinkProvider
       )
     );
-    console.log("FlightPath: Registered link provider for prompt files");
+    Log.info("FlightPath: Registered link provider for prompt files");
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
-    console.log(
-      "FlightPath: Initialized completion helpers with config watcher"
-    );
+    Log.info("FlightPath: Initialized completion helpers with config watcher");
 
     // Register Language Model Tools (for VS Code Chat integration)
     registerLanguageModelTools(context);
@@ -229,9 +237,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register commands
     registerCommands(context);
 
-    console.log("FlightPath: Extension activated successfully!");
+    Log.info("FlightPath: Extension activated successfully!");
   } catch (error) {
-    console.error("FlightPath: Failed to activate extension:", error);
+    Log.error("FlightPath: Failed to activate extension:", error);
     vscode.window.showErrorMessage(`FlightPath: Activation failed: ${error}`);
   }
 }
@@ -653,15 +661,15 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     registerDevCommands(context);
   }
 
-  console.log("FlightPath: Commands registered successfully");
+  Log.info("FlightPath: Commands registered successfully");
 }
 
 export function deactivate() {
-  console.log("FlightPath: Extension deactivating...");
+  Log.info("FlightPath: Extension deactivating...");
 
   if (flightPathManager) {
     flightPathManager.dispose();
   }
 
-  console.log("FlightPath: Extension deactivated");
+  Log.info("FlightPath: Extension deactivated");
 }
