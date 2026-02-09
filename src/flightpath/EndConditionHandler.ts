@@ -11,7 +11,7 @@ import {
 } from "./EndConditionEvaluator";
 import { PromptQueue } from "./PromptQueue";
 import { CopilotIntegration } from "./base/CopilotIntegration";
-import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
+import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 
 /**
  * Context needed to handle retry prompts
@@ -60,7 +60,7 @@ export class EndConditionHandler {
   constructor(
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly promptQueue: PromptQueue,
-    private readonly dashboardProvider?: FlightPathDashboardProvider
+    private readonly dashboardProvider?: FlightPathWebviewProvider
   ) {}
 
   /**

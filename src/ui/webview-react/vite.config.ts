@@ -11,12 +11,12 @@ export default defineConfig({
       targets: [
         // Copy dictionaries for Typo.js spell checking
         {
-          src: "../webview/dictionaries/**/*",
+          src: "static/dictionaries/**/*",
           dest: "dictionaries",
         },
         // Copy typo.js for spell checking
         {
-          src: "../webview/typo.js",
+          src: "static/typo.js",
           dest: ".",
         },
         // Copy codicon CSS from @vscode/codicons package
@@ -31,7 +31,7 @@ export default defineConfig({
         },
         // Copy generated custom-icons.css (produced by generate-custom-icons script)
         {
-          src: "../webview/custom-icons.css",
+          src: "static/custom-icons.css",
           dest: ".",
         },
       ],

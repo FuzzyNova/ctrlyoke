@@ -8,7 +8,7 @@ import {
   PromptItem,
   EXECUTION_STATES,
 } from "../../types/FlightPathTypes";
-import { FlightPathDashboardProvider } from "../../ui/FlightPathDashboardProvider";
+import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
 
 /**
  * PromptFileLoader
@@ -25,7 +25,7 @@ export class PromptFileLoader {
   constructor(
     private promptFileParser: PromptFileParser,
     private promptQueue: PromptQueue,
-    private dashboardProvider?: FlightPathDashboardProvider
+    private dashboardProvider?: FlightPathWebviewProvider
   ) {}
 
   /**

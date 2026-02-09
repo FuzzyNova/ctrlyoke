@@ -26,7 +26,8 @@ const OUTPUT_FILE = path.join(
   "..",
   "src",
   "ui",
-  "webview",
+  "webview-react",
+  "static",
   "custom-icons.css"
 );
 

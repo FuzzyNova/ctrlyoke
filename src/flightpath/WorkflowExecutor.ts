@@ -17,7 +17,7 @@ import {
   SendRetryPromptCallback,
 } from "./EndConditionHandler";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
-import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
+import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
 import { PropertyResolver } from "../utils/PropertyResolver";
 import {
@@ -35,7 +35,7 @@ export interface WorkflowContext {
   /** Path to the currently loaded prompt file */
   currentPromptFilePath: string | undefined;
   /** Dashboard provider for UI updates */
-  dashboardProvider?: FlightPathDashboardProvider;
+  dashboardProvider?: FlightPathWebviewProvider;
   /** Whether to show CLI commands in output */
   shouldShowCliCommand: boolean;
   /** Whether to show CLI output in output panel */

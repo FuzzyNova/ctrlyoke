@@ -1583,7 +1583,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     return model || (DEFAULT_MODELS as any)[harness] || "claude-sonnet-4.5";
   }
 
-  private async applyPendingWorkflowProperties(): Promise<void> {
+  async applyPendingWorkflowProperties(): Promise<void> {
     if (Object.keys(this.pendingWorkflowProperties).length === 0) {
       return;
     }

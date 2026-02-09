@@ -3,8 +3,6 @@ import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
-import { FlightPathDashboardProvider } from "./ui/FlightPathDashboardProvider";
-import { FlightPathSettingsProvider } from "./ui/FlightPathSettingsProvider";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
 import { QUEUE_POSITION } from "./types/DashboardConstants";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
@@ -13,9 +11,7 @@ import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log, LogLevel } from "./utils/Log";
 
 let flightPathManager: FlightPathManager;
-let dashboardProvider: FlightPathDashboardProvider;
-let settingsProvider: FlightPathSettingsProvider;
-let webviewProvider: FlightPathWebviewProvider; // React UI provider
+let webviewProvider: FlightPathWebviewProvider;
 
 /**
  * Register Language Model Tools for VS Code Chat integration
@@ -177,11 +173,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Set manager reference in webview provider (for getting current state)
     webviewProvider.setFlightPathManager(flightPathManager);
-
-    // TODO: Remove old dashboard/settings providers after React migration complete
-    // Keeping for reference during Phase 4 development
-    // dashboardProvider = new FlightPathDashboardProvider(context);
-    // settingsProvider = new FlightPathSettingsProvider(context);
 
     await flightPathManager.initialize();
 

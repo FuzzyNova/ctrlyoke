@@ -25,7 +25,7 @@ import {
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
-import { FlightPathDashboardProvider } from "../ui/FlightPathDashboardProvider";
+import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
@@ -54,7 +54,7 @@ export class FlightPathManager {
   private context: vscode.ExtensionContext;
   private statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
-  private dashboardProvider?: FlightPathDashboardProvider;
+  private dashboardProvider?: FlightPathWebviewProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
   private activeIntegration?: CopilotIntegration; // Track currently executing integration
   private dashboardReady: boolean = false; // Track dashboard initialization state
@@ -70,7 +70,7 @@ export class FlightPathManager {
 
   constructor(
     context: vscode.ExtensionContext,
-    dashboardProvider?: FlightPathDashboardProvider | any // TODO: Create common interface for React/vanilla providers
+    dashboardProvider?: FlightPathWebviewProvider
   ) {
     this.context = context;
     this.dashboardProvider = dashboardProvider;

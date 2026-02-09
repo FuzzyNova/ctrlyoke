@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptQueue } from "../PromptQueue";
 import { EXECUTION_STATES } from "../../types/FlightPathTypes";
-import { FlightPathDashboardProvider } from "../../ui/FlightPathDashboardProvider";
+import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
 import { Log } from "../../utils/Log";
 
 /**
@@ -21,7 +21,7 @@ export class PromptFileWatcher {
 
   constructor(
     private promptQueue: PromptQueue,
-    private dashboardProvider?: FlightPathDashboardProvider
+    private dashboardProvider?: FlightPathWebviewProvider
   ) {}
 
   /**
