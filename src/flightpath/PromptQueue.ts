@@ -107,6 +107,27 @@ export class PromptQueue {
   }
 
   /**
+   * Extract workflow name from file path
+   * Strips FlightPath-specific extensions (.flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md)
+   *
+   * @param filePath - Full file path
+   * @returns Workflow name without extensions
+   *
+   * @example
+   * PromptQueue.extractWorkflowName("/path/to/my-workflow.flightpath.yaml") // "my-workflow"
+   * PromptQueue.extractWorkflowName("C:\\Users\\dev\\feature.flightpath.json") // "feature"
+   * PromptQueue.extractWorkflowName("/path/prompt.prompt.md") // "prompt"
+   */
+  static extractWorkflowName(filePath: string): string {
+    const fileName = path.basename(filePath);
+    // Remove FlightPath extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
+    return fileName.replace(
+      /\.(flightpath\.(json|yaml|yml)|prompt\.md)$/,
+      ""
+    );
+  }
+
+  /**
    * Clear the queue completely (reset to empty state)
    * Used when user clicks "New Workflow" button
    */
@@ -1158,7 +1179,7 @@ export class PromptQueue {
       // Use existing workflow name from state if set, otherwise derive from file path
       workflowName:
         this.state.workflowName ||
-        path.basename(originalFilePath, path.extname(originalFilePath)),
+        PromptQueue.extractWorkflowName(originalFilePath),
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
       prompts: prompts,

@@ -219,12 +219,13 @@ export class FlightPathManager {
 
       // Log the default integration mode once at startup
       const integrationMode = ConfigurationUtils.getIntegrationMode();
-      const modeLabel = {
-        [Harness.CopilotChat]: "Copilot Chat",
-        [Harness.ClaudeCli]: "Claude Code CLI",
-        [Harness.CodexCli]: "Codex CLI",
-        [Harness.CopilotCli]: "Copilot CLI",
-      }[integrationMode] || "Copilot CLI";
+      const modeLabel =
+        {
+          [Harness.CopilotChat]: "Copilot Chat",
+          [Harness.ClaudeCli]: "Claude Code CLI",
+          [Harness.CodexCli]: "Codex CLI",
+          [Harness.CopilotCli]: "Copilot CLI",
+        }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
       // Initialize all integrations (check CLI availability)
@@ -261,6 +262,9 @@ export class FlightPathManager {
    * @param filePath Path to the prompt file
    */
   async loadPromptFile(filePath: string): Promise<void> {
+    // Clear queue to reset cached workflow name - ensures fresh name from filename
+    this.promptQueue.clearQueue();
+
     // Delegate to PromptFileLoader
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
@@ -577,8 +581,8 @@ export class FlightPathManager {
       if (currentSize === 0) {
         Log.info("Empty workflow, creating new workflow in IDLE state");
 
-        // Use custom workflow name if it exists, otherwise use filename
-        const displayName = queueState.workflowName || path.basename(filePath);
+        // Use custom workflow name if it exists, otherwise extract from filename
+        const displayName = queueState.workflowName || PromptQueue.extractWorkflowName(filePath);
         const workflowType = queueState.workflowName
           ? `workflow "${queueState.workflowName}"`
           : "new workflow";
