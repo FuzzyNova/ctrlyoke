@@ -5,7 +5,7 @@ import * as fsSync from "fs"; // For synchronous file operations
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
-  PROVIDER_IDS,
+  HARNESS_IDS,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   StatusMessageSeverity,
@@ -31,7 +31,7 @@ import {
 } from "../utils/ModelConstants";
 import { FlightPathManager } from "../flightpath/FlightPathManager";
 import { FlightPathSettingsProvider } from "./FlightPathSettingsProvider";
-import { Provider } from "../types/FlightPathTypes";
+import { Harness } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 
 /**
@@ -342,10 +342,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public updateCliStreamingEvents(
-    stepIndex: number,
-    events: CliEvent[]
-  ): void {
+  public updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void {
     console.log(
       `🔍 DashboardProvider.updateCliStreamingEvents: stepIndex=${stepIndex}, event count=${events.length}`
     );
@@ -756,10 +753,10 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
     );
 
     return {
-      [PROVIDER_IDS.COPILOT_CLI]: copilotCliOptions,
-      [PROVIDER_IDS.COPILOT_CHAT]: copilotChatOptions,
-      [PROVIDER_IDS.CLAUDE_CLI]: claudeCliOptions,
-      [PROVIDER_IDS.CODEX_CLI]: codexCliOptions,
+      [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
+      [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
+      [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
+      [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
     };
   }
 
@@ -1346,7 +1343,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
       const result = await this.flightPathManager.updateWorkingFileProperties(
         updates,
-        { ensureProviderAndModel: true, allowDeletes: true }
+        { ensureHarnessAndModel: true, allowDeletes: true }
       );
 
       if (!result) {
@@ -1419,7 +1416,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
       const result = await this.flightPathManager.updateWorkingFileProperties(
         updates,
-        { onlyIfUndefined: true, ensureProviderAndModel: true }
+        { onlyIfUndefined: true, ensureHarnessAndModel: true }
       );
 
       if (!result) {
@@ -1479,7 +1476,7 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
 
       // Extract workflow-level properties
       const workflowProperties = {
-        provider: workingFile.provider,
+        harness: workingFile.harness,
         model: workingFile.model,
         agent: workingFile.agent,
         resumeSession: workingFile.resumeSession,
@@ -1521,7 +1518,9 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   /**
    * Set settings provider reference (called from extension.ts)
    */
-  public setSettingsProvider(provider: FlightPathSettingsProvider): void {
-    this.settingsProvider = provider;
+  public setSettingsProvider(
+    settingsProvider: FlightPathSettingsProvider
+  ): void {
+    this.settingsProvider = settingsProvider;
   }
 }

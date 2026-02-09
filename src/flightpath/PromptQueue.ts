@@ -9,7 +9,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   WorkingFile,
-  Provider,
+  Harness,
 } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
@@ -1457,15 +1457,15 @@ export class PromptQueue {
         }
 
         if (options.ensureProviderAndModel) {
-          if (!workingFile.provider) {
-            workingFile.provider = ConfigurationUtils.getIntegrationMode();
+          if (!workingFile.harness) {
+            workingFile.harness = ConfigurationUtils.getIntegrationMode();
             modified = true;
             appliedKeys.push("provider");
           }
 
           if (!workingFile.model) {
-            workingFile.model = this.getDefaultModelForProvider(
-              workingFile.provider
+            workingFile.model = this.getDefaultModelForHarness(
+              workingFile.harness
             );
             modified = true;
             appliedKeys.push("model");
@@ -1493,15 +1493,15 @@ export class PromptQueue {
     return result;
   }
 
-  private getDefaultModelForProvider(provider: Provider): string {
-    switch (provider) {
-      case Provider.CopilotCli:
+  private getDefaultModelForHarness(harness: Harness): string {
+    switch (harness) {
+      case Harness.CopilotCli:
         return ConfigurationUtils.getCliModel();
-      case Provider.CopilotChat:
+      case Harness.CopilotChat:
         return ConfigurationUtils.getCopilotChatModel();
-      case Provider.ClaudeCli:
+      case Harness.ClaudeCli:
         return ConfigurationUtils.getClaudeCliModel();
-      case Provider.CodexCli:
+      case Harness.CodexCli:
         return ConfigurationUtils.getCodexCliModel();
       default:
         return ConfigurationUtils.getCliModel();

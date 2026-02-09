@@ -579,7 +579,7 @@ function createLinkDecorationExtension() {
       buildDecorations(view: EditorView) {
         const builder = new RangeSetBuilder();
 
-        // Regex patterns matching PromptLinkProvider
+        // Regex patterns matching PromptLinkHarness
         const patterns = {
           // @file.ext (no trailing slash, has extension)
           // Negative lookahead (?!\/) ensures we don't match if followed by /
@@ -660,8 +660,7 @@ function createLinkDecorationExtension() {
             (dirMatch) => {
               return !fileMatches.some(
                 (fileMatch) =>
-                  dirMatch.from >= fileMatch.from &&
-                  dirMatch.to <= fileMatch.to
+                  dirMatch.from >= fileMatch.from && dirMatch.to <= fileMatch.to
               );
             }
           );

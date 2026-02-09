@@ -1,4 +1,4 @@
-import { PromptFile, PromptItem, Provider } from "../types/FlightPathTypes";
+import { PromptFile, PromptItem, Harness } from "../types/FlightPathTypes";
 import { PropertyResolver } from "./PropertyResolver";
 import { Log } from "./Log";
 
@@ -47,26 +47,26 @@ export interface SessionValidationResult {
  */
 export class SessionResolver {
   /**
-   * Check if two providers are compatible for session sharing.
+   * Check if two harnesses are compatible for session sharing.
    *
-   * **Strict provider matching:**
+   * **Strict harness matching:**
    * - Both defined and equal → Compatible
    * - One undefined, one defined → **NOT compatible**
    * - Both defined but different → **NOT compatible**
    *
-   * This prevents cross-provider session references (Copilot ↔ Claude ↔ Codex).
+   * This prevents cross-harness session references (Copilot ↔ Claude ↔ Codex).
    *
-   * @param provider1 First provider (may be undefined)
-   * @param provider2 Second provider (may be undefined)
-   * @returns true if providers are compatible for session sharing
+   * @param harness1 First harness (may be undefined)
+   * @param harness2 Second harness (may be undefined)
+   * @returns true if harnesses are compatible for session sharing
    */
-  private static areProvidersCompatible(
-    provider1: Provider | undefined,
-    provider2: Provider | undefined
+  private static areHarnessesCompatible(
+    harness1: Harness | undefined,
+    harness2: Harness | undefined
   ): boolean {
     // Strict equality check: Both must be defined and match
-    // This prevents cross-provider session references (Copilot ↔ Claude ↔ Codex)
-    return !!(provider1 && provider2 && provider1 === provider2);
+    // This prevents cross-harness session references (Copilot ↔ Claude ↔ Codex)
+    return !!(harness1 && harness2 && harness1 === harness2);
   }
   /**
    * Resolve session ID for a prompt.
@@ -108,7 +108,7 @@ export class SessionResolver {
           resolvedSessionId,
           promptIndex,
           allPrompts,
-          resolved?.provider
+          resolved?.harness
         );
       }
 
@@ -121,7 +121,7 @@ export class SessionResolver {
       prompt,
       promptIndex,
       allPrompts,
-      resolved?.provider
+      resolved?.harness
     );
   }
 
@@ -131,13 +131,13 @@ export class SessionResolver {
    * Validates that:
    * - Reference is within bounds (1 to current prompt index)
    * - Referenced prompt has completed and has a session ID
-   * - Providers are compatible (same provider or undefined)
+   * - Harnesses are compatible (same harness or undefined)
    *
    * @param prompt Current prompt being resolved
    * @param refNumber Numeric reference (1-based prompt number)
    * @param promptIndex Current prompt's index (0-based)
    * @param allPrompts All prompts in queue
-   * @param resolvedProvider Resolved provider for current prompt
+   * @param resolvedHarness Resolved harness for current prompt
    * @returns Session ID from referenced prompt or undefined if invalid
    */
   private static resolveNumericReference(
@@ -145,7 +145,7 @@ export class SessionResolver {
     refNumber: number,
     promptIndex: number,
     allPrompts: PromptItem[],
-    resolvedProvider?: Provider
+    resolvedHarness?: Harness
   ): string | undefined {
     const refIndex = refNumber - 1; // 1-based to 0-based
 
@@ -182,19 +182,19 @@ export class SessionResolver {
       return undefined;
     }
 
-    // Validate provider compatibility using shared method
-    const refProvider = referencedPrompt._runtime?.provider;
-    const currentProvider = resolvedProvider ?? prompt.provider;
+    // Validate harness compatibility using shared method
+    const refHarness = referencedPrompt._runtime?.harness;
+    const currentHarness = resolvedHarness ?? prompt.harness;
 
-    if (!this.areProvidersCompatible(refProvider, currentProvider)) {
+    if (!this.areHarnessesCompatible(refHarness, currentHarness)) {
       Log.warn(
-        `⚠️ Cross-provider session reference detected!\n` +
-          `   Prompt ${refNumber} used ${refProvider}, but current prompt uses ${currentProvider}.\n` +
-          `   Sessions cannot be shared across different providers (Copilot ↔ Claude ↔ Codex).\n` +
-          `   Starting new ${currentProvider} session instead.\n` +
+        `⚠️ Cross-harness session reference detected!\n` +
+          `   Prompt ${refNumber} used ${refHarness}, but current prompt uses ${currentHarness}.\n` +
+          `   Sessions cannot be shared across different harnesses (Copilot ↔ Claude ↔ Codex).\n` +
+          `   Starting new ${currentHarness} session instead.\n` +
           `   To fix: Either:\n` +
-          `     1. Use same provider for all prompts that share a session, OR\n` +
-          `     2. Remove sessionId to auto-resume from last prompt with matching provider`
+          `     1. Use same harness for all prompts that share a session, OR\n` +
+          `     2. Remove sessionId to auto-resume from last prompt with matching harness`
       );
       return undefined;
     }
@@ -207,46 +207,46 @@ export class SessionResolver {
    * Auto-resume from previous prompt in same workflow.
    *
    * Searches backward through prompts to find the most recent completed prompt
-   * with the same provider (or any provider if current provider is undefined).
+   * with the same harness (or any harness if current harness is undefined).
    *
    * @param prompt Current prompt being resolved
    * @param promptIndex Current prompt's index (0-based)
    * @param allPrompts All prompts in queue
-   * @param resolvedProvider Resolved provider for current prompt
+   * @param resolvedHarness Resolved harness for current prompt
    * @returns Session ID from previous prompt or undefined if none found
    */
   private static autoResumeFromPrevious(
     prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    resolvedProvider?: Provider
+    resolvedHarness?: Harness
   ): string | undefined {
     if (promptIndex === 0) {
       return undefined; // First prompt, no previous
     }
 
-    // Find most recent completed prompt with same provider
+    // Find most recent completed prompt with same harness
     for (let i = promptIndex - 1; i >= 0; i--) {
       const prevPrompt = allPrompts[i];
-      const prevProvider = prevPrompt._runtime?.provider;
+      const prevHarness = prevPrompt._runtime?.harness;
       const prevSessionId = prevPrompt._runtime?.sessionId;
-      const currentProvider = resolvedProvider ?? prompt.provider;
+      const currentHarness = resolvedHarness ?? prompt.harness;
 
-      // Check provider compatibility using shared method
-      const providersMatch = this.areProvidersCompatible(
-        currentProvider,
-        prevProvider
+      // Check harness compatibility using shared method
+      const harnessesMatch = this.areHarnessesCompatible(
+        currentHarness,
+        prevHarness
       );
 
-      // Skip prompts with mismatched providers (log for debugging)
-      if (!providersMatch && prevSessionId) {
+      // Skip prompts with mismatched harnesses (log for debugging)
+      if (!harnessesMatch && prevSessionId) {
         Log.debug(
-          `⏭️ Skipping prompt ${i + 1} (provider mismatch: ${prevProvider} vs ${currentProvider})`
+          `⏭️ Skipping prompt ${i + 1} (harness mismatch: ${prevHarness} vs ${currentHarness})`
         );
         continue;
       }
 
-      if (providersMatch && prevSessionId) {
+      if (harnessesMatch && prevSessionId) {
         // Runtime sessionId should always be string (actual CLI session ID)
         if (typeof prevSessionId === "number") {
           Log.warn(

@@ -6,9 +6,10 @@ import {
 } from "./DashboardConstants";
 
 /**
- * Copilot integration mode
+ * Harness/Agent framework selection
+ * (The AI framework/tool used for execution, not the model provider)
  */
-export enum Provider {
+export enum Harness {
   CopilotCli = "copilot-cli", // Copilot CLI
   CopilotChat = "copilot-chat", // Copilot Chat
   ClaudeCli = "claude-cli", // Claude Code CLI
@@ -30,8 +31,8 @@ export type ClaudeCliStatus = "Initializing" | "Ready" | "Unavailable";
  * 3. VS Code global settings (lowest priority/fallback)
  */
 export interface ExecutionProperties {
-  /** AI provider for execution */
-  provider?: Provider;
+  /** Harness/framework for execution (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat) */
+  harness?: Harness;
 
   /** AI model to use */
   model?: string;

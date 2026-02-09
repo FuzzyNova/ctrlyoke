@@ -165,7 +165,7 @@ export class ClaudeResponseParser
         model,
         usage: tokenUsage,
         cliVersion,
-        provider: "claude-cli",
+        harness: "claude-cli",
       },
     };
   }

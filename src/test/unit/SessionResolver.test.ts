@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
-import { PromptFile, PromptItem, Provider } from "../../types/FlightPathTypes";
+import { PromptFile, PromptItem, Harness } from "../../types/FlightPathTypes";
 
 suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {
@@ -30,7 +30,7 @@ suite("SessionResolver Tests", () => {
       const completedPrompt: PromptItem = {
         prompt: "first prompt",
         _runtime: {
-          provider: Provider.CopilotCli,
+          harness: Harness.CopilotCli,
           model: "claude-sonnet-4.5",
           sessionId: "abc-123-from-prompt-1",
           startedAt: Date.now(),
@@ -77,7 +77,7 @@ suite("SessionResolver Tests", () => {
       const completedPrompt: PromptItem = {
         prompt: "first prompt",
         _runtime: {
-          provider: Provider.CopilotCli,
+          harness: Harness.CopilotCli,
           model: "claude-sonnet-4.5",
           sessionId: "abc-123",
           startedAt: Date.now(),
@@ -143,7 +143,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.CopilotCli,
+            harness: Harness.CopilotCli,
             model: "claude-sonnet-4.5",
             sessionId: "session-from-prompt-1",
             startedAt: Date.now(),
@@ -170,7 +170,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.CopilotCli,
+            harness: Harness.CopilotCli,
             model: "claude-sonnet-4.5",
             startedAt: Date.now(),
             completedAt: Date.now(),
@@ -191,9 +191,9 @@ suite("SessionResolver Tests", () => {
       const prompts: PromptItem[] = [
         {
           prompt: "first",
-          provider: Provider.ClaudeCli,
+          harness: Harness.ClaudeCli,
           _runtime: {
-            provider: Provider.ClaudeCli,
+            harness: Harness.ClaudeCli,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -202,7 +202,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          provider: Provider.CopilotCli,
+          harness: Harness.CopilotCli,
           sessionId: 1, // Cross-provider reference
         },
       ];
@@ -223,7 +223,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.CopilotCli,
+            harness: Harness.CopilotCli,
             model: "claude-sonnet-4.5",
             sessionId: "auto-resume-session",
             startedAt: Date.now(),
@@ -250,7 +250,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.ClaudeCli,
+            harness: Harness.ClaudeCli,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -260,7 +260,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "second",
           _runtime: {
-            provider: Provider.CopilotCli,
+            harness: Harness.CopilotCli,
             model: "claude-sonnet-4.5",
             sessionId: "copilot-session",
             startedAt: Date.now(),
@@ -269,7 +269,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "third",
-          provider: Provider.CopilotCli,
+          harness: Harness.CopilotCli,
           resumeSession: true,
         },
       ];
@@ -284,7 +284,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.ClaudeCli,
+            harness: Harness.ClaudeCli,
             model: "sonnet",
             sessionId: "claude-session",
             startedAt: Date.now(),
@@ -293,7 +293,7 @@ suite("SessionResolver Tests", () => {
         },
         {
           prompt: "second",
-          provider: Provider.CopilotCli,
+          harness: Harness.CopilotCli,
           resumeSession: true,
         },
       ];
@@ -477,7 +477,7 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "first",
           _runtime: {
-            provider: Provider.CopilotCli,
+            harness: Harness.CopilotCli,
             model: "claude-sonnet-4.5",
             sessionId: "session-1",
             startedAt: Date.now(),

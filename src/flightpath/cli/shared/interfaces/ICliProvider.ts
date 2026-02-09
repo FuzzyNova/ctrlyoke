@@ -4,10 +4,10 @@ import type { IToolPermissionMapper } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
 
 /**
- * Provider configuration (static metadata)
+ * Harness configuration (static metadata)
  */
-export interface ProviderConfig {
-  /** Provider name (e.g., "copilot", "claude", "codex") */
+export interface HarnessConfig {
+  /** Harness name (e.g., "copilot", "claude", "codex") */
   name: string;
 
   /** Display name for status messages */
@@ -32,15 +32,15 @@ export interface ProviderConfig {
 }
 
 /**
- * Main provider interface - each CLI provider must implement this
+ * Main CLI harness provider - each CLI harness must implement this
  *
- * This is the core contract for CLI integration. All provider-specific logic
+ * This is the core contract for CLI integration. All harness-specific logic
  * is encapsulated in implementations of this interface.
  *
  * @example
  * ```typescript
  * class CopilotCliProvider implements ICliProvider {
- *   readonly config: ProviderConfig = { ... };
+ *   readonly config: HarnessConfig = { ... };
  *   readonly responseParser = new CopilotResponseParser();
  *   readonly notificationMonitor = new CopilotNotificationMonitor();
  *   readonly toolPermissionMapper = new CopilotToolPermissionMapper();
@@ -53,8 +53,8 @@ export interface ProviderConfig {
  * ```
  */
 export interface ICliProvider {
-  /** Static provider configuration */
-  readonly config: ProviderConfig;
+  /** Static harness configuration */
+  readonly config: HarnessConfig;
 
   /** Response parser component */
   readonly responseParser: IResponseParser;
@@ -76,7 +76,7 @@ export interface ICliProvider {
    * - Tool permissions
    * - Session management
    * - Workspace directories
-   * - Provider-specific flags (e.g., -p, --output-format for Claude)
+   * - Harness-specific flags (e.g., -p, --output-format for Claude)
    * - Hooks/notifications for interactive mode
    *
    * @param prompt The prompt item with model/agent/session settings

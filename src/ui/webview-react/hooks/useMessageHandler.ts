@@ -21,7 +21,7 @@ import {
   STEP_STATUS,
   type ExecutionState,
   type StepStatus,
-  type ProviderId,
+  type HarnessId,
 } from "../types/messages";
 
 // ============================================================================
@@ -87,9 +87,9 @@ function createMessageHandlers(): MessageHandlerMap {
       settingsStore.setWorkflowProperties(data.workflowProperties);
     }
 
-    // Update provider status
-    if (data.providerStatus) {
-      settingsStore.setAllProviderStatuses(data.providerStatus);
+    // Update harness status
+    if (data.harnessStatus) {
+      settingsStore.setAllHarnessStatuses(data.harnessStatus);
     }
 
     // Update available agents
@@ -385,13 +385,13 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // PROVIDER_STATUS_UPDATE - Update provider availability
+  // HARNESS_STATUS_UPDATE - Update harness availability
   // --------------------------------------------------------------------------
-  handlers[MESSAGE_TYPES.PROVIDER_STATUS_UPDATE] = (message) => {
+  handlers[MESSAGE_TYPES.HARNESS_STATUS_UPDATE] = (message) => {
     const settingsStore = useSettingsStore.getState();
     const data = message.data || message;
-    if (data.providerStatus) {
-      settingsStore.setAllProviderStatuses(data.providerStatus);
+    if (data.harnessStatus) {
+      settingsStore.setAllHarnessStatuses(data.harnessStatus);
     }
   };
 
@@ -655,10 +655,10 @@ export function createWorkflow(
 }
 
 /**
- * Change the active provider
+ * Change the active harness
  */
-export function changeProvider(provider: ProviderId): void {
-  sendMessage(MESSAGE_TYPES.CHANGE_PROVIDER, { provider });
+export function changeHarness(harness: HarnessId): void {
+  sendMessage(MESSAGE_TYPES.CHANGE_HARNESS, { harness });
 }
 
 /**

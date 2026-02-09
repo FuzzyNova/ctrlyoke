@@ -7,7 +7,7 @@ import { STEP_STATUS, type StepStatus } from "../types/messages";
 /** Property keys for prompt objects - matches PROMPT_PROPERTIES from DashboardConstants */
 export const PROMPT_PROPERTIES = {
   PROMPT: "prompt",
-  PROVIDER: "provider",
+  HARNESS: "harness",
   MODEL: "model",
   AGENT: "agent",
   RESUME_SESSION: "resumeSession",
@@ -31,7 +31,7 @@ export interface EndCondition {
  * Runtime metadata populated during/after execution
  */
 export interface PromptRuntime {
-  provider?: string;
+  harness?: string;
   model?: string;
   sessionId?: string;
   startedAt?: number;
@@ -46,7 +46,7 @@ export interface PromptRuntime {
 export interface RawPrompt {
   id?: string;
   prompt: string;
-  provider?: string;
+  harness?: string;
   model?: string;
   agent?: string;
   resumeSession?: boolean;
@@ -81,8 +81,8 @@ export interface PromptItem {
   status: StepStatus;
   /** Execution details (output, errors, etc.) */
   details: PromptDetails;
-  /** Provider override */
-  provider?: string;
+  /** Harness override */
+  harness?: string;
   /** Model override */
   model?: string;
   /** Agent file path */
@@ -132,7 +132,7 @@ export function createPromptItem(
       text: prompt,
       status,
       details,
-      provider: undefined,
+      harness: undefined,
       model: undefined,
       agent: undefined,
       resumeSession: undefined,
@@ -148,7 +148,7 @@ export function createPromptItem(
     text: prompt.prompt,
     status,
     details,
-    provider: prompt.provider,
+    harness: prompt.harness,
     model: prompt.model,
     agent: prompt.agent,
     resumeSession: prompt.resumeSession,
@@ -172,7 +172,7 @@ export function promptItemToRaw(item: PromptItem): RawPrompt {
   };
 
   // Only include defined optional properties
-  if (item.provider !== undefined) raw.provider = item.provider;
+  if (item.harness !== undefined) raw.harness = item.harness;
   if (item.model !== undefined) raw.model = item.model;
   if (item.agent !== undefined) raw.agent = item.agent;
   if (item.resumeSession !== undefined) raw.resumeSession = item.resumeSession;

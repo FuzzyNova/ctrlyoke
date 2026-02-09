@@ -31,7 +31,7 @@ export const MESSAGE_TYPES = {
   WORKFLOW_NAME_UPDATED: "workflowNameUpdated",
   RECENT_WORKFLOWS: "recentWorkflows",
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate",
-  PROVIDER_STATUS_UPDATE: "providerStatusUpdate",
+  HARNESS_STATUS_UPDATE: "harnessStatusUpdate",
   AGENTS_UPDATE: "agentsUpdate",
   WORKFLOW_PROPERTIES_UPDATE: "workflowPropertiesUpdate",
   WORKFLOW_LOADED: "workflowLoaded",
@@ -56,7 +56,7 @@ export const MESSAGE_TYPES = {
   STOP: "stop",
   SHOW_OUTPUT: "showOutput",
   EXPORT_OUTPUT: "exportOutput",
-  CHANGE_PROVIDER: "changeProvider",
+  CHANGE_HARNESS: "changeHarness",
   CHANGE_MODEL: "changeModel",
   CHANGE_AGENT: "changeAgent",
   CHANGE_EXECUTION_MODE: "changeExecutionMode",
@@ -119,7 +119,7 @@ export const ACTION_TYPES = {
   RUN_BEFORE_CURRENT: "runBeforeCurrent",
 } as const;
 
-export const PROVIDER_IDS = {
+export const HARNESS_IDS = {
   COPILOT_CLI: "copilot-cli",
   COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
@@ -128,11 +128,13 @@ export const PROVIDER_IDS = {
 
 // Type helpers
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
-export type ExecutionState = (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
+export type ExecutionState =
+  (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
-export type StatusMessageSeverity = (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
+export type StatusMessageSeverity =
+  (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];
-export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];
+export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 
 // Message payload types
 export interface InitMessageData {
@@ -143,7 +145,7 @@ export interface InitMessageData {
   currentIndex: number;
   results: any[];
   globalSettings: {
-    provider: ProviderId;
+    harness: HarnessId;
     model: string;
     agent: string;
     executionMode: "interactive" | "headless";
@@ -151,8 +153,11 @@ export interface InitMessageData {
     allowDynamicExtension: boolean;
   };
   workflowProperties: Record<string, any>;
-  modelOptions: Record<ProviderId, Array<{ value: string; label: string }>>;
-  providerStatus: Record<string, { available: boolean; status: string; message?: string }>;
+  modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
+  harnessStatus: Record<
+    string,
+    { available: boolean; status: string; message?: string }
+  >;
   availableAgents: Array<{ name: string; path: string; description?: string }>;
 }
 
@@ -252,21 +257,28 @@ export interface PromptDeletedMessage {
 export interface ModelOptionsUpdateMessage {
   type: typeof MESSAGE_TYPES.MODEL_OPTIONS_UPDATE;
   data: {
-    modelOptions: Record<ProviderId, Array<{ value: string; label: string }>>;
+    modelOptions: Record<HarnessId, Array<{ value: string; label: string }>>;
   };
 }
 
-export interface ProviderStatusUpdateMessage {
-  type: typeof MESSAGE_TYPES.PROVIDER_STATUS_UPDATE;
+export interface HarnessStatusUpdateMessage {
+  type: typeof MESSAGE_TYPES.HARNESS_STATUS_UPDATE;
   data: {
-    providerStatus: Record<string, { available: boolean; status: string; message?: string }>;
+    harnessStatus: Record<
+      string,
+      { available: boolean; status: string; message?: string }
+    >;
   };
 }
 
 export interface AgentsUpdateMessage {
   type: typeof MESSAGE_TYPES.AGENTS_UPDATE;
   data: {
-    availableAgents: Array<{ name: string; path: string; description?: string }>;
+    availableAgents: Array<{
+      name: string;
+      path: string;
+      description?: string;
+    }>;
   };
 }
 
@@ -312,7 +324,7 @@ export type IncomingMessage =
   | PromptsExtendedMessage
   | PromptDeletedMessage
   | ModelOptionsUpdateMessage
-  | ProviderStatusUpdateMessage
+  | HarnessStatusUpdateMessage
   | AgentsUpdateMessage
   | WorkflowPropertiesUpdateMessage
   | { type: typeof MESSAGE_TYPES.WORKFLOW_LOADED }
@@ -323,4 +335,8 @@ export type IncomingMessage =
   | { type: typeof MESSAGE_TYPES.TEMPLATE_INFO; template: any }
   | { type: typeof MESSAGE_TYPES.DEFAULT_TEMPLATE_SET; templateId: string }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_CREATED; filePath: string }
-  | { type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE; completions: any[]; trigger: string };
+  | {
+      type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE;
+      completions: any[];
+      trigger: string;
+    };

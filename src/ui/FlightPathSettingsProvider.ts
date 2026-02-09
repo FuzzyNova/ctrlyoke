@@ -5,7 +5,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import {
   MESSAGE_TYPES,
-  PROVIDER_IDS,
+  HARNESS_IDS,
   DEFAULT_MODELS,
 } from "../types/DashboardConstants";
 import {
@@ -20,14 +20,14 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
-import { Provider } from "../types/FlightPathTypes";
+import { Harness } from "../types/FlightPathTypes";
 import { Log } from "../utils/Log";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 
 const execAsync = promisify(exec);
 
 /**
- * Provider availability status
+ * Harness availability status
  */
 interface ProviderStatus {
   available: boolean;
@@ -47,12 +47,12 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   // Discovered agents
   private availableAgents: AgentInfo[] = [];
 
-  // Provider availability status
+  // Harness availability status
   private providerStatus: Record<string, ProviderStatus> = {
-    [PROVIDER_IDS.COPILOT_CLI]: { available: false, status: "checking" },
-    [PROVIDER_IDS.COPILOT_CHAT]: { available: false, status: "checking" }, // Check for Copilot extension
-    [PROVIDER_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
-    [PROVIDER_IDS.CODEX_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.COPILOT_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: "checking" }, // Check for Copilot extension
+    [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.CODEX_CLI]: { available: false, status: "checking" },
   };
 
   // Webview path segments (same as dashboard)
@@ -60,18 +60,18 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
   // Setting keys for each provider's model
   private static readonly MODEL_SETTING_MAP: Record<string, string> = {
-    [PROVIDER_IDS.COPILOT_CLI]: "copilotCliModel",
-    [PROVIDER_IDS.COPILOT_CHAT]: "copilotChatModel",
-    [PROVIDER_IDS.CLAUDE_CLI]: "claudeCliModel",
-    [PROVIDER_IDS.CODEX_CLI]: "codexCliModel",
+    [HARNESS_IDS.COPILOT_CLI]: "copilotCliModel",
+    [HARNESS_IDS.COPILOT_CHAT]: "copilotChatModel",
+    [HARNESS_IDS.CLAUDE_CLI]: "claudeCliModel",
+    [HARNESS_IDS.CODEX_CLI]: "codexCliModel",
   };
 
   // Validation constants
-  private static readonly VALID_PROVIDERS = [
-    PROVIDER_IDS.COPILOT_CLI,
-    PROVIDER_IDS.COPILOT_CHAT,
-    PROVIDER_IDS.CLAUDE_CLI,
-    PROVIDER_IDS.CODEX_CLI,
+  private static readonly VALID_HARNESSES = [
+    HARNESS_IDS.COPILOT_CLI,
+    HARNESS_IDS.COPILOT_CHAT,
+    HARNESS_IDS.CLAUDE_CLI,
+    HARNESS_IDS.CODEX_CLI,
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [
@@ -183,11 +183,11 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       case MESSAGE_TYPES.READY:
         this.sendInitialState();
         break;
-      case MESSAGE_TYPES.CHANGE_PROVIDER:
-        this.handleProviderChange(message.provider);
+      case MESSAGE_TYPES.CHANGE_HARNESS:
+        this.handleHarnessChange(message.harness);
         break;
       case MESSAGE_TYPES.CHANGE_MODEL:
-        this.handleModelChange(message.model, message.provider);
+        this.handleModelChange(message.model, message.harness);
         break;
       case MESSAGE_TYPES.CHANGE_AGENT:
         this.handleAgentChange(message.agent);
@@ -211,7 +211,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         this.handleSetAsDefault(
           message.property,
           message.value,
-          message.provider
+          message.harness
         );
         break;
       case MESSAGE_TYPES.GET_CONFIG:
@@ -228,8 +228,8 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const provider = ConfigurationUtils.getIntegrationMode();
-    const model = this.getModelForProvider(provider);
+    const harness = ConfigurationUtils.getIntegrationMode();
+    const model = this.getModelForHarness(harness);
     const agent = ConfigurationUtils.getCustomAgent();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
@@ -239,7 +239,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
 
     // Global settings (from VS Code)
     const globalSettings = {
-      provider,
+      harness,
       model,
       agent,
       executionMode,
@@ -297,14 +297,14 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     }
 
     this.view.webview.postMessage({
-      type: MESSAGE_TYPES.PROVIDER_STATUS_UPDATE,
+      type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
       data: { providerStatus: this.providerStatus },
     });
   }
 
   /**
    * Helper function to check CLI command availability
-   * @param providerId The provider ID from PROVIDER_IDS
+   * @param providerId The provider ID from HARNESS_IDS
    * @param command The CLI command to check (e.g., "copilot", "claude", "codex")
    */
   private async checkCliAvailability(
@@ -337,9 +337,9 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
    */
   private async checkProviderAvailability(): Promise<void> {
     // Check CLI providers using helper function
-    await this.checkCliAvailability(PROVIDER_IDS.COPILOT_CLI, "copilot");
-    await this.checkCliAvailability(PROVIDER_IDS.CLAUDE_CLI, "claude");
-    await this.checkCliAvailability(PROVIDER_IDS.CODEX_CLI, "codex");
+    await this.checkCliAvailability(HARNESS_IDS.COPILOT_CLI, "copilot");
+    await this.checkCliAvailability(HARNESS_IDS.CLAUDE_CLI, "claude");
+    await this.checkCliAvailability(HARNESS_IDS.CODEX_CLI, "codex");
 
     // Check Copilot Chat extension availability
     await this.checkCopilotChatAvailability();
@@ -363,7 +363,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       const hasExtension = !!(copilotExtension || copilotChatExtension);
 
       if (!hasExtension) {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.providerStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "GitHub Copilot extension not installed",
@@ -380,14 +380,14 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
       );
 
       if (hasChatSubmit && hasChatPanel) {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.providerStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: true,
           status: "available",
           message: "GitHub Copilot Chat",
         };
         Log.info("Copilot Chat available");
       } else {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.providerStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "Copilot Chat commands not available",
@@ -395,7 +395,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
         Log.info("Copilot Chat not available - required commands missing");
       }
     } catch (error) {
-      this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+      this.providerStatus[HARNESS_IDS.COPILOT_CHAT] = {
         available: false,
         status: "unavailable",
         message: "Error checking Copilot Chat availability",
@@ -450,44 +450,44 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
     );
 
     return {
-      [PROVIDER_IDS.COPILOT_CLI]: copilotCliOptions,
-      [PROVIDER_IDS.COPILOT_CHAT]: copilotChatOptions,
-      [PROVIDER_IDS.CLAUDE_CLI]: claudeCliOptions,
-      [PROVIDER_IDS.CODEX_CLI]: codexCliOptions,
+      [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
+      [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
+      [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
+      [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
     };
   }
 
-  private getModelForProvider(provider: Provider): string {
-    return ConfigurationUtils.getModelForProvider(provider);
+  private getModelForHarness(harness: Harness): string {
+    return ConfigurationUtils.getModelForHarness(harness);
   }
 
-  private async handleProviderChange(provider: string): Promise<void> {
-    if (!FlightPathSettingsProvider.VALID_PROVIDERS.includes(provider as any)) {
-      Log.error(`Invalid provider: ${provider}`);
+  private async handleHarnessChange(harness: string): Promise<void> {
+    if (!FlightPathSettingsProvider.VALID_HARNESSES.includes(harness as any)) {
+      Log.error(`Invalid harness: ${harness}`);
       return;
     }
 
     await this.updateSettingWithLogging(
-      "provider",
-      provider,
-      `✅ Provider changed to: ${provider}`
+      "harness",
+      harness,
+      `✅ Harness changed to: ${harness}`
     );
   }
 
   private async handleModelChange(
     model: string,
-    provider: string
+    harness: string
   ): Promise<void> {
-    const settingKey = FlightPathSettingsProvider.MODEL_SETTING_MAP[provider];
+    const settingKey = FlightPathSettingsProvider.MODEL_SETTING_MAP[harness];
     if (!settingKey) {
-      Log.error(`Unknown provider for model change: ${provider}`);
+      Log.error(`Unknown harness for model change: ${harness}`);
       return;
     }
 
     await this.updateSettingWithLogging(
       settingKey,
       model,
-      `✅ Model changed to: ${model} (for ${provider})`
+      `✅ Model changed to: ${model} (for ${harness})`
     );
   }
 
@@ -684,7 +684,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   ): Promise<void> {
     // Map property names to VS Code setting keys
     const settingMap: Record<string, string> = {
-      provider: "provider",
+      harness: "provider",
       model: this.getModelSettingKey(
         provider || ConfigurationUtils.getIntegrationMode()
       ),
@@ -710,11 +710,11 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Get the appropriate model setting key for a given provider
+   * Get the appropriate model setting key for a given harness
    */
-  private getModelSettingKey(provider: string): string {
+  private getModelSettingKey(harness: string): string {
     return (
-      FlightPathSettingsProvider.MODEL_SETTING_MAP[provider] ||
+      FlightPathSettingsProvider.MODEL_SETTING_MAP[harness] ||
       "copilotCliModel"
     );
   }
@@ -774,7 +774,7 @@ export class FlightPathSettingsProvider implements vscode.WebviewViewProvider {
   /**
    * Set reference to dashboard provider for bidirectional communication
    */
-  public setDashboardProvider(provider: any): void {
-    this.dashboardProvider = provider;
+  public setDashboardProvider(dashboardProvider: any): void {
+    this.dashboardProvider = dashboardProvider;
   }
 }

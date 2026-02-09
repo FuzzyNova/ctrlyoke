@@ -3,10 +3,7 @@ import { promisify } from "util";
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
-import {
-  ICliProvider,
-  ProviderConfig,
-} from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -25,7 +22,7 @@ import { Log } from "../../../utils/Log";
 const execAsync = promisify(exec);
 
 /**
- * Copilot CLI Provider
+ * Copilot CLI Harness
  *
  * Implements all Copilot-specific logic using composition pattern:
  * - Log file monitoring and sessionEnd hook for completion detection
@@ -47,7 +44,7 @@ const execAsync = promisify(exec);
  * ```
  */
 export class CopilotCliProvider implements ICliProvider {
-  readonly config: ProviderConfig = {
+  readonly config: HarnessConfig = {
     name: "copilot",
     displayName: "GitHub Copilot CLI",
     installHint: "Install via: npm install -g @github/copilot",

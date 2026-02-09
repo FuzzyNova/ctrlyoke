@@ -7,7 +7,7 @@ import { promisify } from "util";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
-  PROVIDER_IDS,
+  HARNESS_IDS,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   StatusMessageSeverity,
@@ -34,7 +34,7 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { FlightPathManager } from "../flightpath/FlightPathManager";
-import { Provider } from "../types/FlightPathTypes";
+import { Harness } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 
@@ -65,9 +65,9 @@ export interface CliOutputData {
 }
 
 /**
- * Provider availability status
+ * Harness availability status
  */
-interface ProviderStatus {
+interface HarnessStatus {
   available: boolean;
   status: "checking" | "available" | "unavailable";
   message?: string;
@@ -91,17 +91,17 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   // Current workflow name (cached from queue)
   private currentWorkflowName: string | undefined;
 
-  // Provider availability status
-  private providerStatus: Record<string, ProviderStatus> = {
-    [PROVIDER_IDS.COPILOT_CLI]: { available: false, status: "checking" },
-    [PROVIDER_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
-    [PROVIDER_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
-    [PROVIDER_IDS.CODEX_CLI]: { available: false, status: "checking" },
+  // Harness availability status
+  private harnessStatus: Record<string, HarnessStatus> = {
+    [HARNESS_IDS.COPILOT_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
+    [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.CODEX_CLI]: { available: false, status: "checking" },
   };
 
   // Pending workflow properties (set before workflow is created)
   private pendingWorkflowProperties: {
-    provider?: string;
+    harness?: string;
     model?: string;
     agent?: string;
     resumeSession?: boolean;
@@ -110,20 +110,20 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     endCondition?: any;
   } = {};
 
-  // Setting keys for each provider's model
+  // Setting keys for each harness's model
   private static readonly MODEL_SETTING_MAP: Record<string, string> = {
-    [PROVIDER_IDS.COPILOT_CLI]: "copilotCliModel",
-    [PROVIDER_IDS.COPILOT_CHAT]: "copilotChatModel",
-    [PROVIDER_IDS.CLAUDE_CLI]: "claudeCliModel",
-    [PROVIDER_IDS.CODEX_CLI]: "codexCliModel",
+    [HARNESS_IDS.COPILOT_CLI]: "copilotCliModel",
+    [HARNESS_IDS.COPILOT_CHAT]: "copilotChatModel",
+    [HARNESS_IDS.CLAUDE_CLI]: "claudeCliModel",
+    [HARNESS_IDS.CODEX_CLI]: "codexCliModel",
   };
 
   // Validation constants
-  private static readonly VALID_PROVIDERS = [
-    PROVIDER_IDS.COPILOT_CLI,
-    PROVIDER_IDS.COPILOT_CHAT,
-    PROVIDER_IDS.CLAUDE_CLI,
-    PROVIDER_IDS.CODEX_CLI,
+  private static readonly VALID_HARNESSES = [
+    HARNESS_IDS.COPILOT_CLI,
+    HARNESS_IDS.COPILOT_CHAT,
+    HARNESS_IDS.CLAUDE_CLI,
+    HARNESS_IDS.CODEX_CLI,
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [
@@ -151,8 +151,8 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     // Discover available agents in background
     this.discoverAgents();
 
-    // Check provider availability in background
-    this.checkProviderAvailability();
+    // Check harness availability in background
+    this.checkHarnessAvailability();
   }
 
   public resolveWebviewView(
@@ -485,10 +485,10 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
           break;
 
         // ============================================================================
-        // Settings Messages - Provider & Model Selection
+        // Settings Messages - Harness & Model Selection
         // ============================================================================
-        case MESSAGE_TYPES.CHANGE_PROVIDER:
-          this.handleProviderChange(message.provider);
+        case MESSAGE_TYPES.CHANGE_HARNESS:
+          this.handleHarnessChange(message.harness);
           break;
 
         case MESSAGE_TYPES.CHANGE_MODEL:
@@ -526,7 +526,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
           this.handleSetAsDefault(
             message.property,
             message.value,
-            message.provider
+            message.harness
           );
           break;
 
@@ -783,8 +783,8 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     const workflowState = this.getCurrentState();
 
     // Get global settings
-    const provider = ConfigurationUtils.getIntegrationMode();
-    const model = this.getModelForProvider(provider);
+    const harness = ConfigurationUtils.getIntegrationMode();
+    const model = this.getModelForHarness(harness);
     const agent = ConfigurationUtils.getCustomAgent();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
@@ -793,7 +793,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       ConfigurationUtils.getDynamicQueueConfig().enabled;
 
     const globalSettings = {
-      provider,
+      harness,
       model,
       agent,
       executionMode,
@@ -811,7 +811,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
         globalSettings,
         workflowProperties: {},
         modelOptions,
-        providerStatus: this.providerStatus,
+        harnessStatus: this.harnessStatus,
         availableAgents: this.availableAgents,
       },
     });
@@ -849,7 +849,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   }
 
   /**
-   * Build model options for all providers
+   * Build model options for all harnesses
    */
   private buildModelOptions(): Record<
     string,
@@ -882,10 +882,10 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     );
 
     return {
-      [PROVIDER_IDS.COPILOT_CLI]: copilotCliOptions,
-      [PROVIDER_IDS.COPILOT_CHAT]: copilotChatOptions,
-      [PROVIDER_IDS.CLAUDE_CLI]: claudeCliOptions,
-      [PROVIDER_IDS.CODEX_CLI]: codexCliOptions,
+      [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
+      [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
+      [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
+      [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
     };
   }
 
@@ -901,14 +901,14 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     });
   }
 
-  private sendProviderStatusUpdate(): void {
+  private sendHarnessStatusUpdate(): void {
     if (!this.view) {
       return;
     }
 
     this.view.webview.postMessage({
-      type: MESSAGE_TYPES.PROVIDER_STATUS_UPDATE,
-      data: { providerStatus: this.providerStatus },
+      type: MESSAGE_TYPES.HARNESS_STATUS_UPDATE,
+      data: { harnessStatus: this.harnessStatus },
     });
   }
 
@@ -941,7 +941,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
 
       // Extract workflow-level properties
       const workflowProperties = {
-        provider: workingFile.provider,
+        harness: workingFile.harness,
         model: workingFile.model,
         agent: workingFile.agent,
         resumeSession: workingFile.resumeSession,
@@ -1132,13 +1132,17 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       // Get file and directory completions
       Log.info("[Dashboard] Calling getFileCompletions...");
       const completions = await getFileCompletions(filterText);
-      Log.info(`[Dashboard] getFileCompletions returned ${completions.length} items`);
+      Log.info(
+        `[Dashboard] getFileCompletions returned ${completions.length} items`
+      );
       return completions;
     } else if (trigger === "#") {
       // Get selection and symbol completions
       Log.info("[Dashboard] Calling getHashCompletions...");
       const completions = await getHashCompletions(filterText);
-      Log.info(`[Dashboard] getHashCompletions returned ${completions.length} items`);
+      Log.info(
+        `[Dashboard] getHashCompletions returned ${completions.length} items`
+      );
       return completions;
     }
 
@@ -1419,24 +1423,23 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   // Private Methods - Message Handlers (Settings)
   // ============================================================================
 
-  private async handleProviderChange(provider: string): Promise<void> {
-    if (!FlightPathWebviewProvider.VALID_PROVIDERS.includes(provider as any)) {
-      Log.error(`Invalid provider: ${provider}`);
+  private async handleHarnessChange(harness: string): Promise<void> {
+    if (!FlightPathWebviewProvider.VALID_HARNESSES.includes(harness as any)) {
+      Log.error(`Invalid harness: ${harness}`);
       return;
     }
 
     await vscode.workspace
       .getConfiguration("flightpath")
-      .update("provider", provider, true);
+      .update("harness", harness, true);
 
     this.sendInitialState();
   }
 
   private async handleModelChange(model: string): Promise<void> {
-    const provider = ConfigurationUtils.getIntegrationMode();
+    const harness = ConfigurationUtils.getIntegrationMode();
     const settingKey =
-      FlightPathWebviewProvider.MODEL_SETTING_MAP[provider] ||
-      "copilotCliModel";
+      FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] || "copilotCliModel";
 
     await vscode.workspace
       .getConfiguration("flightpath")
@@ -1497,7 +1500,8 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   ): Promise<void> {
     // Store in pending properties if NO WORKING FILE exists yet
     // Check for actual working file existence instead of just FlightPathManager
-    const hasWorkingFile = this.flightPathManager?.getQueueState()?.workingFilePath;
+    const hasWorkingFile =
+      this.flightPathManager?.getQueueState()?.workingFilePath;
 
     if (!hasWorkingFile) {
       // Store in pending properties until working file exists
@@ -1530,14 +1534,14 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   private async handleSetAsDefault(
     property: string,
     value: any,
-    provider?: string
+    harness?: string
   ): Promise<void> {
     let settingKey = property;
 
     // Map property to setting key
-    if (property === "model" && provider) {
+    if (property === "model" && harness) {
       settingKey =
-        FlightPathWebviewProvider.MODEL_SETTING_MAP[provider] ||
+        FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] ||
         "copilotCliModel";
     }
 
@@ -1570,14 +1574,13 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
   // Private Methods - Utilities
   // ============================================================================
 
-  private getModelForProvider(provider: string): string {
+  private getModelForHarness(harness: string): string {
     const settingKey =
-      FlightPathWebviewProvider.MODEL_SETTING_MAP[provider] ||
-      "copilotCliModel";
+      FlightPathWebviewProvider.MODEL_SETTING_MAP[harness] || "copilotCliModel";
     const model = vscode.workspace
       .getConfiguration("flightpath")
       .get<string>(settingKey);
-    return model || (DEFAULT_MODELS as any)[provider] || "claude-sonnet-4.5";
+    return model || (DEFAULT_MODELS as any)[harness] || "claude-sonnet-4.5";
   }
 
   private async applyPendingWorkflowProperties(): Promise<void> {
@@ -1592,37 +1595,37 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
     // Use updateWorkingFileProperties() which persists to disk
     await this.flightPathManager.updateWorkingFileProperties(
       this.pendingWorkflowProperties,
-      { ensureProviderAndModel: true }
+      { ensureHarnessAndModel: true }
     );
 
     this.pendingWorkflowProperties = {};
     this.sendWorkflowPropertiesToSettings();
   }
 
-  private async checkProviderAvailability(): Promise<void> {
-    await this.checkCliAvailability(PROVIDER_IDS.COPILOT_CLI, "copilot");
-    await this.checkCliAvailability(PROVIDER_IDS.CLAUDE_CLI, "claude");
-    await this.checkCliAvailability(PROVIDER_IDS.CODEX_CLI, "codex");
+  private async checkHarnessAvailability(): Promise<void> {
+    await this.checkCliAvailability(HARNESS_IDS.COPILOT_CLI, "copilot");
+    await this.checkCliAvailability(HARNESS_IDS.CLAUDE_CLI, "claude");
+    await this.checkCliAvailability(HARNESS_IDS.CODEX_CLI, "codex");
     await this.checkCopilotChatAvailability();
 
-    this.sendProviderStatusUpdate();
+    this.sendHarnessStatusUpdate();
   }
 
   private async checkCliAvailability(
-    providerId: string,
+    harnessId: string,
     command: string
   ): Promise<void> {
     try {
       const { stdout } = await execAsync(`${command} --version`, {
         timeout: 5000,
       });
-      this.providerStatus[providerId] = {
+      this.harnessStatus[harnessId] = {
         available: true,
         status: "available",
         message: stdout.trim(),
       };
     } catch {
-      this.providerStatus[providerId] = {
+      this.harnessStatus[harnessId] = {
         available: false,
         status: "unavailable",
         message: "Not installed or not in PATH",
@@ -1640,7 +1643,7 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       const hasExtension = !!(copilotExtension || copilotChatExtension);
 
       if (!hasExtension) {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "GitHub Copilot extension not installed",
@@ -1655,20 +1658,20 @@ console.log("FlightPath: VS Code API captured:", !!window.vscodeApi);
       );
 
       if (hasChatSubmit && hasChatPanel) {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: true,
           status: "available",
           message: "GitHub Copilot Chat",
         };
       } else {
-        this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
           status: "unavailable",
           message: "Copilot Chat commands not available",
         };
       }
     } catch (error) {
-      this.providerStatus[PROVIDER_IDS.COPILOT_CHAT] = {
+      this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
         available: false,
         status: "unavailable",
         message: "Error checking Copilot Chat availability",

@@ -329,7 +329,7 @@ export class PromptFileParser {
 
     // Only include properties that are explicitly set
     if (source.id !== undefined) promptItem.id = source.id;
-    if (source.provider !== undefined) promptItem.provider = source.provider;
+    if (source.harness !== undefined) promptItem.harness = source.harness;
     if (source.model !== undefined) promptItem.model = source.model;
     if (source.agent !== undefined) promptItem.agent = source.agent;
     if (source.resumeSession !== undefined)
@@ -366,7 +366,7 @@ export class PromptFileParser {
       };
 
       // Copy workflow-level properties (if present)
-      if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
+      if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
       if (parsed.model !== undefined) promptFile.model = parsed.model;
       if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
       if (parsed.resumeSession !== undefined)
@@ -397,7 +397,7 @@ export class PromptFileParser {
       };
 
       // Copy workflow-level properties (if present)
-      if (parsed.provider !== undefined) promptFile.provider = parsed.provider;
+      if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
       if (parsed.model !== undefined) promptFile.model = parsed.model;
       if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
       if (parsed.resumeSession !== undefined)

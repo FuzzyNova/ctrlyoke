@@ -143,7 +143,7 @@ export class CliToolPermissionMapper {
     return claudePattern;
   }
 
-  // Provider-specific argument builders moved to:
+  // Harness-specific argument builders moved to:
   // - CopilotToolPermissionMapper.buildCopilotArgs()
   // - ClaudeToolPermissionMapper.buildClaudeArgs()
   // - CodexToolPermissionMapper.buildCodexArgs()

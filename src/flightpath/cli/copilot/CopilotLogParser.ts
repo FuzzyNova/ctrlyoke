@@ -541,7 +541,7 @@ export class CopilotLogParser extends BaseLogParser {
       metadata: {
         sessionId,
         model,
-        provider: "copilot-cli",
+        harness: "copilot-cli",
         usage:
           inputTokens > 0 || outputTokens > 0
             ? {

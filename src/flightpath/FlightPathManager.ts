@@ -15,7 +15,7 @@ import {
   PromptFile,
   PromptItem,
   QueueState,
-  Provider,
+  Harness,
   EXECUTION_STATES,
   WorkingFile,
 } from "../types/FlightPathTypes";
@@ -156,23 +156,23 @@ export class FlightPathManager {
   }
 
   /**
-   * Get the default Copilot integration based on user settings
+   * Get the default harness integration based on user settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
   private getDefaultIntegration(): CopilotIntegration {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     switch (integrationMode) {
-      case Provider.CopilotChat:
+      case Harness.CopilotChat:
         Log.info("🔄 Using Copilot Chat integration");
         return this.chatIntegration;
-      case Provider.ClaudeCli:
+      case Harness.ClaudeCli:
         Log.info("🔄 Using Claude Code CLI integration");
         return this.claudeCliIntegration;
-      case Provider.CodexCli:
+      case Harness.CodexCli:
         Log.info("🔄 Using Codex CLI integration");
         return this.codexCliIntegration;
-      case Provider.CopilotCli:
+      case Harness.CopilotCli:
       default:
         Log.info("🔄 Using Copilot CLI integration");
         return this.copilotCliIntegration;
@@ -187,23 +187,23 @@ export class FlightPathManager {
   }
 
   /**
-   * Create integration instance based on mode override or user settings
-   * @param modeOverride Optional mode to override user settings
+   * Create integration instance based on harness override or user settings
+   * @param harnessOverride Optional harness to override user settings
    * @returns Integration instance (either override or default)
    */
   private createIntegrationForMode(
-    modeOverride?: Provider
+    harnessOverride?: Harness
   ): CopilotIntegration {
-    if (modeOverride) {
-      Log.info(`🔀 Using mode override: ${modeOverride}`);
-      switch (modeOverride) {
-        case Provider.CopilotChat:
+    if (harnessOverride) {
+      Log.info(`🔀 Using harness override: ${harnessOverride}`);
+      switch (harnessOverride) {
+        case Harness.CopilotChat:
           return this.chatIntegration;
-        case Provider.ClaudeCli:
+        case Harness.ClaudeCli:
           return this.claudeCliIntegration;
-        case Provider.CodexCli:
+        case Harness.CodexCli:
           return this.codexCliIntegration;
-        case Provider.CopilotCli:
+        case Harness.CopilotCli:
         default:
           return this.copilotCliIntegration;
       }
@@ -360,7 +360,7 @@ export class FlightPathManager {
    * @param modeOverride Optional integration mode (overrides user settings for this execution)
    */
   async executeLoadedPromptFile(
-    modeOverride?: Provider,
+    modeOverride?: Harness,
     continueFromCurrent: boolean = false
   ): Promise<void> {
     if (!this.currentPromptFile) {
@@ -533,7 +533,7 @@ export class FlightPathManager {
    */
   async executePromptFile(
     filePath: string,
-    modeOverride?: Provider
+    modeOverride?: Harness
   ): Promise<void> {
     // Auto-save if the file is open with unsaved changes
     await this.saveAndReloadIfDirty(filePath);
@@ -725,9 +725,9 @@ export class FlightPathManager {
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         getIntegrationForPrompt: (
           prompt: PromptItem,
-          providerOverride?: Provider
+          providerOverride?: Harness
         ) => {
-          const resolvedProvider = providerOverride || prompt.provider;
+          const resolvedProvider = providerOverride || prompt.harness;
           // If prompt or workflow has a provider override, use it; otherwise use the active integration
           if (resolvedProvider) {
             Log.info(
@@ -961,7 +961,7 @@ export class FlightPathManager {
     properties: Record<string, unknown>,
     options: {
       onlyIfUndefined?: boolean;
-      ensureProviderAndModel?: boolean;
+      ensureHarnessAndModel?: boolean;
       allowDeletes?: boolean;
     } = {}
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
@@ -1236,12 +1236,12 @@ export class FlightPathManager {
   private buildPromptItemProperties(properties: any): Partial<PromptItem> {
     const updates: Partial<PromptItem> = {};
 
-    // Handle provider: null clears, value sets, undefined skips
-    if (properties.provider !== undefined) {
-      updates.provider =
-        properties.provider === null
+    // Handle harness: null clears, value sets, undefined skips
+    if (properties.harness !== undefined) {
+      updates.harness =
+        properties.harness === null
           ? undefined
-          : (properties.provider as Provider);
+          : (properties.harness as Harness);
     }
 
     // Handle model: null clears, value sets, undefined skips

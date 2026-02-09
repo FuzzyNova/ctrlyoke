@@ -7,7 +7,7 @@ import { UniversalCliOutput } from "../../../types/CliOutputTypes";
  * Abstract base class for CLI provider log parsers
  *
  * Provides shared log file reading, watching, and session discovery logic.
- * Provider-specific parsers (Copilot, Claude, Codex) extend this class and
+ * Harness-specific parsers (Copilot, Claude, Codex) extend this class and
  * implement abstract methods for their unique log formats.
  *
  * @remarks
@@ -17,7 +17,7 @@ import { UniversalCliOutput } from "../../../types/CliOutputTypes";
  * - Session log discovery (finds log file for prompt execution)
  * - JSONL parsing (one JSON object per line)
  *
- * **Provider-Specific Responsibilities (abstract):**
+ * **Harness-Specific Responsibilities (abstract):**
  * - Response extraction from events
  * - Completion detection
  * - Session ID extraction
@@ -55,13 +55,13 @@ export abstract class BaseLogParser implements ILogParser {
   protected lastReadPosition = 0;
 
   // ========================================================================
-  // Abstract Methods (Provider-Specific Implementation Required)
+  // Abstract Methods (Harness-Specific Implementation Required)
   // ========================================================================
 
   /**
    * Extract complete response from parsed log events
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - Identify response content events (text, tool calls, etc.)
    * - Combine streaming events into complete response
    * - Extract metadata (model, session ID, timestamps, etc.)
@@ -75,7 +75,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Check if log event indicates completion
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - Detect completion event type (e.g., "turn.completed")
    * - Return true only for definitive completion signals
    *
@@ -87,7 +87,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Discover session log file for a prompt
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - If sessionId provided: Search for log file containing that session ID (fast path)
    * - Otherwise: Use findModifiedSessionLogs() to get candidate files and match by prompt text
    * - Get log directory path for provider
@@ -108,7 +108,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Extract session ID from log events
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - Search events for session/conversation ID
    * - Return ID in provider's expected format (UUID, thread_xxx, etc.)
    * - Return null if no session ID found
@@ -120,7 +120,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Extract text content from a single log event for streaming
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - Parse event format specific to this provider
    * - Extract displayable text content
    * - Return undefined if event has no displayable content
@@ -133,7 +133,7 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Format metadata into human-readable statistics string
    *
-   * Provider-specific implementation must:
+   * Harness-specific implementation must:
    * - Parse metadata fields specific to this provider
    * - Format into consistent display string
    * - Include session ID, model, token usage as available
@@ -336,7 +336,7 @@ export abstract class BaseLogParser implements ILogParser {
    * - Handles both flat files (old format) and directories (new format)
    *
    * **Use Case:**
-   * Provider parsers use this to get candidate files/directories, then resolve
+   * Harness parsers use this to get candidate files/directories, then resolve
    * to actual log file path and read/parse to find matching prompt text.
    *
    * @example

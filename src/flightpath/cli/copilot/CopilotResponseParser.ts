@@ -77,7 +77,7 @@ export class CopilotResponseParser
               totalTokens: tokenCounts.prompt + tokenCounts.completion,
             }
           : undefined,
-        provider: "copilot-cli",
+        harness: "copilot-cli",
       },
     };
   }

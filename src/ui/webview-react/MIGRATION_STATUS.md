@@ -21,7 +21,7 @@
 - ✅ **PromptsPanel** - Prompt list with status icons, retries, click handlers, drag-and-drop
 - ✅ **OutputSection** - CLI output rendering, tool calls, diffs, terminal-style output
 - ✅ **EditorSection** - CodeMirror 6 integration, prompt editing, properties drawer
-- ✅ **SettingsPanel** - Provider/model selection, workflow properties
+- ✅ **SettingsPanel** - Harness/model selection, workflow properties
 - ✅ **Modal** - Reusable modal component for confirmations and forms
 - ✅ **NewWorkflowModal** - Template selection and workflow creation
 

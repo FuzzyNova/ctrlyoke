@@ -134,8 +134,8 @@ export interface OutputMetadata {
   cliVersion?: string;
   /** Elapsed time in milliseconds */
   elapsed?: number;
-  /** Provider identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli') */
-  provider?: string;
+  /** Harness identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli') */
+  harness?: string;
 }
 
 /**

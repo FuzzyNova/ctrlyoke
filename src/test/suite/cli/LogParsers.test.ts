@@ -755,7 +755,7 @@ suite("CopilotLogParser", () => {
 
       assert.strictEqual(extractText(response), "");
       assert.strictEqual(extractToolCalls(response).length, 0);
-      assert.strictEqual(response.metadata.provider, "copilot-cli");
+      assert.strictEqual(response.metadata.harness, "copilot-cli");
     });
 
     test("should handle metadata from multiple events", () => {

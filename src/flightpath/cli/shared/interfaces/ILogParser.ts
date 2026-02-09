@@ -179,7 +179,7 @@ export interface ILogParser {
    * - Claude: Conversation ID in metadata fields
    * - Codex: Thread ID in "session_id" field
    *
-   * Provider-specific examples:
+   * Harness-specific examples:
    * - Copilot: `550e8400-e29b-41d4-a716-446655440000`
    * - Claude: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
    * - Codex: `thread_abc123xyz789`
@@ -206,7 +206,7 @@ export interface ILogParser {
    * @returns Text content to display, or undefined if event has no displayable content
    *
    * @remarks
-   * Provider-specific formats:
+   * Harness-specific formats:
    * - **Copilot**: `{ type: "assistant.message", data: { content: "..." } }`
    * - **Copilot Reasoning**: `{ type: "assistant.reasoning", data: { content: "..." } }`
    * - **Claude**: `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
@@ -231,7 +231,7 @@ export interface ILogParser {
    * @returns Formatted statistics string (e.g., "Model: gpt-4 | Tokens: 100 in / 50 out")
    *
    * @remarks
-   * Provider-specific metadata:
+   * Harness-specific metadata:
    * - **Copilot**: `{ sessionId, model }` from session.start event
    * - **Claude**: `{ sessionId, model, usage: { input_tokens, output_tokens } }`
    * - **Codex**: Similar to Claude with token usage

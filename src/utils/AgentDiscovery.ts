@@ -247,16 +247,16 @@ export class AgentDiscovery {
   }
 
   /**
-   * Filter agents by CLI compatibility
+   * Filter agents by harness compatibility
    * @param agents List of agents to filter
-   * @param provider Provider to filter for ("copilot-cli" or "claude-cli")
+   * @param harness Harness to filter for ("copilot-cli" or "claude-cli")
    */
-  static filterAgentsByProvider(
+  static filterAgentsByHarness(
     agents: AgentInfo[],
-    provider: "copilot-cli" | "claude-cli"
+    harness: "copilot-cli" | "claude-cli"
   ): AgentInfo[] {
     return agents.filter((agent) => {
-      if (provider === "copilot-cli") {
+      if (harness === "copilot-cli") {
         return agent.supportsCopilotCli;
       } else {
         return agent.supportsClaudeCli;

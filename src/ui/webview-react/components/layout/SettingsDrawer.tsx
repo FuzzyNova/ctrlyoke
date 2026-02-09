@@ -8,33 +8,32 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import {
   MESSAGE_TYPES,
-  PROVIDER_IDS,
-  type ProviderId,
+  HARNESS_IDS,
+  type HarnessId,
 } from "../../types/messages";
 import { PanelBar } from "../shared";
 
 /**
- * Provider display information
+ * Harness display information
  */
-const PROVIDER_INFO: Record<ProviderId, { name: string; description: string }> =
-  {
-    [PROVIDER_IDS.COPILOT_CLI]: {
-      name: "Copilot CLI",
-      description: "GitHub Copilot CLI (recommended)",
-    },
-    [PROVIDER_IDS.COPILOT_CHAT]: {
-      name: "Copilot Chat",
-      description: "VS Code Chat window (fallback)",
-    },
-    [PROVIDER_IDS.CLAUDE_CLI]: {
-      name: "Claude CLI",
-      description: "Anthropic Claude Code CLI",
-    },
-    [PROVIDER_IDS.CODEX_CLI]: {
-      name: "Codex CLI",
-      description: "OpenAI Codex CLI",
-    },
-  };
+const HARNESS_INFO: Record<HarnessId, { name: string; description: string }> = {
+  [HARNESS_IDS.COPILOT_CLI]: {
+    name: "Copilot CLI",
+    description: "GitHub Copilot CLI (recommended)",
+  },
+  [HARNESS_IDS.COPILOT_CHAT]: {
+    name: "Copilot Chat",
+    description: "VS Code Chat window (fallback)",
+  },
+  [HARNESS_IDS.CLAUDE_CLI]: {
+    name: "Claude CLI",
+    description: "Anthropic Claude Code CLI",
+  },
+  [HARNESS_IDS.CODEX_CLI]: {
+    name: "Codex CLI",
+    description: "OpenAI Codex CLI",
+  },
+};
 
 /**
  * Status indicator component
@@ -160,7 +159,7 @@ const FormField: React.FC<{
  * SettingsPanel Component
  *
  * Collapsible panel for configuring:
- * - Provider settings (provider, model, agent)
+ * - Harness settings (harness, model, agent)
  * - Workflow properties (execution mode, resume session, dynamic queue)
  * - End condition configuration
  * - Quick access to VS Code settings
@@ -172,11 +171,11 @@ export const SettingsPanel: React.FC<{
   const { settingsCollapsed, toggleSettingsCollapse } = useUiStore();
   const {
     availableAgents,
-    providerStatus,
+    harnessStatus: harnessStatus,
     globalSettings,
     workflowProperties,
-    getModelsForProvider,
-    getEffectiveProvider,
+    getModelsForHarness: getModelsForHarness,
+    getEffectiveHarness: getEffectiveHarness,
     getEffectiveModel,
     getEffectiveAgent,
     getEffectiveResumeSession,
@@ -185,7 +184,7 @@ export const SettingsPanel: React.FC<{
   useWorkflowStore(); // For re-renders when workflow changes
 
   // Section collapse states
-  const [providerSectionOpen, setProviderSectionOpen] = useState(true);
+  const [harnessSectionOpen, setHarnessSectionOpen] = useState(true);
   const [workflowSectionOpen, setWorkflowSectionOpen] = useState(true);
   const [endConditionSectionOpen, setEndConditionSectionOpen] = useState(false);
 
@@ -238,14 +237,14 @@ export const SettingsPanel: React.FC<{
   }, [workflowProperties.endCondition]);
 
   // Get current effective values
-  const effectiveProvider = getEffectiveProvider();
+  const effectiveHarness = getEffectiveHarness();
   const effectiveModel = getEffectiveModel();
   const effectiveAgent = getEffectiveAgent();
   const effectiveResumeSession = getEffectiveResumeSession();
   const effectiveAllowDynamicExtension = getEffectiveAllowDynamicExtension();
 
-  // Get models for current provider
-  const currentProviderModels = getModelsForProvider(effectiveProvider);
+  // Get models for current harness
+  const currentHarnessModels = getModelsForHarness(effectiveHarness);
 
   // Check if workflow value differs from global setting
   const isDifferentFromGlobal = useCallback(
@@ -262,31 +261,31 @@ export const SettingsPanel: React.FC<{
   // HANDLERS
   // ============================================================================
 
-  const handleProviderChange = useCallback(
-    (provider: string) => {
+  const handleHarnessChange = useCallback(
+    (harness: string) => {
       // Optimistic update (like vanilla implementation)
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("provider", provider);
+      settingsStore.updateWorkflowProperty("harness", harness);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
-        property: "provider",
-        value: provider,
+        property: "harness",
+        value: harness,
       });
 
-      // Update model dropdown options for new provider (like old implementation)
-      // Get models for the new provider
-      const newProviderModels = getModelsForProvider(provider as any);
+      // Update model dropdown options for new harness (like old implementation)
+      // Get models for the new harness
+      const newHarnessModels = getModelsForHarness(harness as any);
 
-      // Check if current model is valid for new provider
+      // Check if current model is valid for new harness
       const currentModel = effectiveModel;
-      const isModelValidForProvider = newProviderModels.some(
+      const isModelValidForHarness = newHarnessModels.some(
         (m) => m.value === currentModel
       );
 
-      // If current model not valid for new provider, select default or first available
-      if (!isModelValidForProvider && newProviderModels.length > 0) {
-        const defaultModel = newProviderModels[0].value;
+      // If current model not valid for new harness, select default or first available
+      if (!isModelValidForHarness && newHarnessModels.length > 0) {
+        const defaultModel = newHarnessModels[0].value;
 
         // Update model optimistically
         settingsStore.updateWorkflowProperty("model", defaultModel);
@@ -299,7 +298,7 @@ export const SettingsPanel: React.FC<{
         });
       }
     },
-    [vscode, effectiveModel, getModelsForProvider]
+    [vscode, effectiveModel, getModelsForHarness]
   );
 
   const handleModelChange = useCallback(
@@ -469,10 +468,10 @@ export const SettingsPanel: React.FC<{
         type: MESSAGE_TYPES.SET_AS_DEFAULT,
         property,
         value,
-        provider: property === "model" ? effectiveProvider : undefined,
+        harness: property === "model" ? effectiveHarness : undefined,
       });
     },
-    [vscode, effectiveProvider]
+    [vscode, effectiveHarness]
   );
 
   const handleRespectGitignoreChange = useCallback(
@@ -542,46 +541,43 @@ export const SettingsPanel: React.FC<{
 
       {/* Body - Scrollable */}
       <div className="flex-1 overflow-y-auto">
-        {/* Provider Settings Section */}
+        {/* Harness Settings Section */}
         <div className="border-b border-[var(--vscode-panel-border)]">
           <SectionHeader
-            title="Provider Settings"
+            title="Harness Settings"
             icon="server-environment"
-            isOpen={providerSectionOpen}
-            onToggle={() => setProviderSectionOpen(!providerSectionOpen)}
+            isOpen={harnessSectionOpen}
+            onToggle={() => setHarnessSectionOpen(!harnessSectionOpen)}
           />
-          {providerSectionOpen && (
+          {harnessSectionOpen && (
             <div className="px-4 py-3 space-y-4">
-              {/* Provider */}
+              {/* Harness */}
               <FormField
-                label="Provider"
-                htmlFor="settings-provider"
-                description="AI provider for execution"
+                label="Harness"
+                htmlFor="settings-harness"
+                description="AI harness for execution"
                 setAsDefaultButton={
                   <SetAsDefaultButton
-                    property="provider"
-                    show={isDifferentFromGlobal("provider")}
+                    property="harness"
+                    show={isDifferentFromGlobal("harness")}
                     onSetDefault={() =>
-                      handleSetAsDefault(
-                        "provider",
-                        workflowProperties.provider
-                      )
+                      handleSetAsDefault("harness", workflowProperties.harness)
                     }
                   />
                 }
               >
                 <select
-                  id="settings-provider"
-                  value={effectiveProvider}
-                  onChange={(e) => handleProviderChange(e.target.value)}
+                  id="settings-harness"
+                  value={effectiveHarness}
+                  onChange={(e) => handleHarnessChange(e.target.value)}
                   className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
                 >
-                  {Object.entries(PROVIDER_IDS).map(([, id]) => {
-                    const status = providerStatus[id as ProviderId];
+                  {Object.entries(HARNESS_IDS).map(([, id]) => {
+                    const status = harnessStatus[id as HarnessId];
                     const isAvailable = status?.available !== false;
                     const isChecking = status?.status === "checking";
 
-                    let label = PROVIDER_INFO[id as ProviderId]?.name || id;
+                    let label = HARNESS_INFO[id as HarnessId]?.name || id;
                     if (isChecking) {
                       label += " (Checking...)";
                     } else if (!isAvailable) {
@@ -603,7 +599,7 @@ export const SettingsPanel: React.FC<{
                 <div className="mt-1">
                   <StatusIndicator
                     status={
-                      providerStatus[effectiveProvider]?.status || "checking"
+                      harnessStatus[effectiveHarness]?.status || "checking"
                     }
                   />
                 </div>
@@ -630,12 +626,12 @@ export const SettingsPanel: React.FC<{
                   onChange={(e) => handleModelChange(e.target.value)}
                   className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
                 >
-                  {currentProviderModels.length === 0 ? (
+                  {currentHarnessModels.length === 0 ? (
                     <option value="" disabled>
                       Loading models...
                     </option>
                   ) : (
-                    currentProviderModels.map((model) => (
+                    currentHarnessModels.map((model) => (
                       <option key={model.value} value={model.value}>
                         {model.label}
                       </option>

@@ -1,7 +1,7 @@
 import {
   PromptFile,
   PromptItem,
-  Provider,
+  Harness,
   EndCondition,
 } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "./ConfigurationUtils";
@@ -11,8 +11,8 @@ import { ConfigurationUtils } from "./ConfigurationUtils";
  * All properties are required after resolution.
  */
 export interface ResolvedProperties {
-  /** AI provider for execution (always resolved) */
-  provider: Provider;
+  /** Harness/framework for execution (always resolved) */
+  harness: Harness;
 
   /** AI model to use (always resolved) */
   model: string;
@@ -46,7 +46,7 @@ export interface ResolvedProperties {
  * @example
  * ```typescript
  * const resolved = PropertyResolver.resolve(prompt, workflow);
- * // resolved.provider is guaranteed to be defined (from prompt, workflow, or settings)
+ * // resolved.harness is guaranteed to be defined (from prompt, workflow, or settings)
  * // resolved.model is guaranteed to be defined (provider-specific default)
  * // resolved.agent may be undefined (no fallback)
  * ```
@@ -65,11 +65,11 @@ export class PropertyResolver {
    * @returns Fully resolved properties with all required fields populated
    */
   static resolve(prompt: PromptItem, workflow: PromptFile): ResolvedProperties {
-    const provider = this.resolveProvider(prompt, workflow);
-    const model = this.resolveModel(prompt, workflow, provider);
+    const harness = this.resolveHarness(prompt, workflow);
+    const model = this.resolveModel(prompt, workflow, harness);
 
     return {
-      provider,
+      harness,
       model,
       agent: this.resolveAgent(prompt, workflow),
       resumeSession: this.resolveResumeSession(prompt, workflow),
@@ -83,29 +83,29 @@ export class PropertyResolver {
   }
 
   /**
-   * Resolve provider with three-tier precedence.
+   * Resolve harness with three-tier precedence.
    *
    * Precedence order:
-   * 1. Prompt-level override (prompt.provider)
-   * 2. Workflow-level default (workflow.provider)
-   * 3. VS Code setting (flightpath.provider)
+   * 1. Prompt-level override (prompt.harness)
+   * 2. Workflow-level default (workflow.harness)
+   * 3. VS Code setting (flightpath.harness)
    *
-   * @param prompt The prompt to resolve provider for
+   * @param prompt The prompt to resolve harness for
    * @param workflow The parent workflow file
-   * @returns Resolved provider (always defined, guaranteed fallback to settings)
+   * @returns Resolved harness (always defined, guaranteed fallback to settings)
    */
-  private static resolveProvider(
+  private static resolveHarness(
     prompt: PromptItem,
     workflow: PromptFile
-  ): Provider {
+  ): Harness {
     // 1. Prompt-level override (highest priority)
-    if (prompt.provider !== undefined) {
-      return prompt.provider;
+    if (prompt.harness !== undefined) {
+      return prompt.harness;
     }
 
     // 2. Workflow-level default
-    if (workflow.provider !== undefined) {
-      return workflow.provider;
+    if (workflow.harness !== undefined) {
+      return workflow.harness;
     }
 
     // 3. VS Code setting fallback (lowest priority)
@@ -118,17 +118,17 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.model)
    * 2. Workflow-level default (workflow.model)
-   * 3. VS Code setting (provider-specific: copilotCliModel, claudeCliModel, etc.)
+   * 3. VS Code setting (harness-specific: copilotCliModel, claudeCliModel, etc.)
    *
    * @param prompt The prompt to resolve model for
    * @param workflow The parent workflow file
-   * @param provider The resolved provider (needed for provider-specific model defaults)
-   * @returns Resolved model (always defined, guaranteed fallback to provider-specific setting)
+   * @param harness The resolved harness (needed for harness-specific model defaults)
+   * @returns Resolved model (always defined, guaranteed fallback to harness-specific setting)
    */
   private static resolveModel(
     prompt: PromptItem,
     workflow: PromptFile,
-    provider: Provider
+    harness: Harness
   ): string {
     // 1. Prompt-level override (highest priority)
     if (prompt.model !== undefined) {
@@ -140,8 +140,8 @@ export class PropertyResolver {
       return workflow.model;
     }
 
-    // 3. VS Code setting fallback (provider-specific)
-    return this.getModelForProvider(provider);
+    // 3. VS Code setting fallback (harness-specific)
+    return this.getModelForHarness(harness);
   }
 
   /**
@@ -313,13 +313,13 @@ export class PropertyResolver {
   }
 
   /**
-   * Get the default model for a specific provider.
-   * Maps to provider-specific VS Code settings.
+   * Get the default model for a specific harness.
+   * Maps to harness-specific VS Code settings.
    *
-   * @param provider The provider to get the default model for
-   * @returns Provider-specific default model
+   * @param harness The harness to get the default model for
+   * @returns Harness-specific default model
    */
-  private static getModelForProvider(provider: Provider): string {
-    return ConfigurationUtils.getModelForProvider(provider);
+  private static getModelForHarness(harness: Harness): string {
+    return ConfigurationUtils.getModelForHarness(harness);
   }
 }

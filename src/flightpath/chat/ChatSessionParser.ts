@@ -50,7 +50,11 @@ export interface ChatRequest {
  */
 export interface ChatResponseItem {
   // Item type (omitted for text responses)
-  kind?: "thinking" | "toolInvocationSerialized" | "prepareToolInvocation" | "mcpServersStarting";
+  kind?:
+    | "thinking"
+    | "toolInvocationSerialized"
+    | "prepareToolInvocation"
+    | "mcpServersStarting";
 
   // Text response or thinking content
   value?: string | string[];
@@ -81,7 +85,7 @@ export interface ChatResponseItem {
  *
  * Extracts structured output from Copilot Chat session JSON files.
  * Converts Chat session format to UniversalCliOutput for consistent
- * processing across CLI and Chat providers.
+ * processing across CLI and Chat harnesses.
  *
  * Session files are the single source of truth for Chat responses,
  * replacing the unreliable clipboard-based approach.
@@ -131,7 +135,7 @@ export class ChatSessionParser {
         metadata: {
           sessionId: this.extractSessionId(sessionFilePath),
           model: "unknown",
-          provider: "copilot-chat",
+          harness: "copilot-chat",
         },
       };
     }
@@ -173,10 +177,7 @@ export class ChatSessionParser {
         });
       } else if (item.kind === "prepareToolInvocation") {
         // Tool preparation - informational only, not included as event
-        Log.debug(
-          `Tool preparation: ${item.toolName}`,
-          "ChatSessionParser"
-        );
+        Log.debug(`Tool preparation: ${item.toolName}`, "ChatSessionParser");
       } else if (item.kind === "mcpServersStarting") {
         // MCP server startup - informational only
         Log.debug("MCP servers starting", "ChatSessionParser");
@@ -241,7 +242,7 @@ export class ChatSessionParser {
         sessionId,
         model: this.normalizeModelId(request.modelId),
         elapsed: request.result.timings.totalElapsed,
-        provider: "copilot-chat",
+        harness: "copilot-chat",
       },
     };
   }
@@ -288,7 +289,9 @@ export class ChatSessionParser {
    */
   isValidSessionFile(sessionFilePath: string): boolean {
     try {
-      return fs.existsSync(sessionFilePath) && fs.statSync(sessionFilePath).isFile();
+      return (
+        fs.existsSync(sessionFilePath) && fs.statSync(sessionFilePath).isFile()
+      );
     } catch {
       return false;
     }
@@ -348,7 +351,7 @@ export class ChatSessionParser {
       metadata: {
         sessionId,
         model: "unknown",
-        provider: "copilot-chat",
+        harness: "copilot-chat",
       },
     };
   }

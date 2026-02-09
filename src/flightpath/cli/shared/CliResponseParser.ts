@@ -206,7 +206,7 @@ export class CliResponseParser {
     return stats;
   }
 
-  // Provider-specific parsing methods moved to:
+  // Harness-specific parsing methods moved to:
   // - CopilotResponseParser.parseCopilotText()
   // - ClaudeResponseParser.parseClaudeStreamJson()
   // - CodexResponseParser.parseCodexJsonLines()

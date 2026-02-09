@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PromptItem, Provider } from "../../types/FlightPathTypes";
+import { PromptItem, Harness } from "../../types/FlightPathTypes";
 import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
 import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
@@ -683,14 +683,14 @@ export class CopilotChatIntegration extends CopilotIntegration {
         available: true,
         message:
           "✅ Direct automation available (PROVEN zero-interaction strategy)",
-        strategy: Provider.CopilotChat,
+        strategy: Harness.CopilotChat,
       };
     } else {
       return {
         available: false,
         message:
           "❌ Direct automation unavailable - required commands not found",
-        strategy: Provider.CopilotChat,
+        strategy: Harness.CopilotChat,
       };
     }
   }
@@ -701,7 +701,7 @@ export class CopilotChatIntegration extends CopilotIntegration {
   }
   /** Get integration mode identifier */
   getIntegrationMode(): string {
-    return Provider.CopilotChat;
+    return Harness.CopilotChat;
   }
   /** Get initialization status */
   getInitializationStatus(): CopilotStatus {

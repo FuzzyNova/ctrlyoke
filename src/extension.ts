@@ -228,7 +228,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
-    console.log("FlightPath: Initialized completion helpers with config watcher");
+    console.log(
+      "FlightPath: Initialized completion helpers with config watcher"
+    );
 
     // Register Language Model Tools (for VS Code Chat integration)
     registerLanguageModelTools(context);
@@ -434,7 +436,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
-  // Run with FlightPath command (context menu) - runs using current provider
+  // Run with FlightPath command (context menu) - runs using current harness
   const runFromContextCommand = vscode.commands.registerCommand(
     "flightpath.runFromContext",
     async (uri: vscode.Uri) => {
@@ -446,7 +448,7 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
       }
 
       try {
-        // executePromptFile without provider override uses the current settings provider
+        // executePromptFile without harness override uses the current settings provider
         await flightPathManager.executePromptFile(uri.fsPath);
       } catch (error) {
         vscode.window.showErrorMessage(

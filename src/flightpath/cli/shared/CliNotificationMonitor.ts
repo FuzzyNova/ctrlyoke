@@ -297,7 +297,7 @@ export class CliNotificationMonitor {
     );
   }
 
-  // Provider-specific hook config builders moved to:
+  // Harness-specific hook config builders moved to:
   // - CopilotNotificationMonitor.buildCopilotHookConfig()
   // - ClaudeNotificationMonitor.buildClaudeStopHookSettings()
   // - CodexNotificationMonitor.buildCodexNotifyConfig()

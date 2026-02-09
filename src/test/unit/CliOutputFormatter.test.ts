@@ -339,7 +339,7 @@ suite("CliOutputFormatter Tests", () => {
         usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
         cliVersion: "1.0.0",
         elapsed: 2500,
-        provider: "claude-cli",
+        harness: "claude-cli",
       };
       const output = createTestOutput([], metadata);
       const result = CliOutputFormatter.toDashboardFormat(output);
@@ -456,7 +456,7 @@ suite("CliOutputFormatter Tests", () => {
     test("ignores non-displayed metadata fields", () => {
       const result = CliOutputFormatter.formatStatistics({
         cliVersion: "1.0.0",
-        provider: "copilot-cli",
+        harness: "copilot-cli",
       });
       // cliVersion and provider are not displayed in statistics
       assert.strictEqual(result, "");

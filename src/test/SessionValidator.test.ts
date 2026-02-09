@@ -1,6 +1,6 @@
 import * as assert from "assert";
 import { SessionValidator } from "../utils/SessionValidator";
-import { Provider } from "../types/FlightPathTypes";
+import { Harness } from "../types/FlightPathTypes";
 
 suite("SessionValidator Tests", () => {
   suite("UUID Validation (Copilot and Claude CLI)", () => {
@@ -8,13 +8,13 @@ suite("SessionValidator Tests", () => {
       const validUuid = "550e8400-e29b-41d4-a716-446655440000";
 
       assert.strictEqual(
-        SessionValidator.validate(validUuid, Provider.CopilotCli),
+        SessionValidator.validate(validUuid, Harness.CopilotCli),
         true,
         "Valid UUID should pass for Copilot CLI"
       );
 
       assert.strictEqual(
-        SessionValidator.validate(validUuid, Provider.ClaudeCli),
+        SessionValidator.validate(validUuid, Harness.ClaudeCli),
         true,
         "Valid UUID should pass for Claude CLI"
       );
@@ -24,7 +24,7 @@ suite("SessionValidator Tests", () => {
       const uppercaseUuid = "550E8400-E29B-41D4-A716-446655440000";
 
       assert.strictEqual(
-        SessionValidator.validate(uppercaseUuid, Provider.CopilotCli),
+        SessionValidator.validate(uppercaseUuid, Harness.CopilotCli),
         true,
         "Uppercase UUID should pass"
       );
@@ -42,13 +42,13 @@ suite("SessionValidator Tests", () => {
 
       invalidFormats.forEach((invalid) => {
         assert.strictEqual(
-          SessionValidator.validate(invalid, Provider.CopilotCli),
+          SessionValidator.validate(invalid, Harness.CopilotCli),
           false,
           `Invalid UUID "${invalid}" should fail for Copilot CLI`
         );
 
         assert.strictEqual(
-          SessionValidator.validate(invalid, Provider.ClaudeCli),
+          SessionValidator.validate(invalid, Harness.ClaudeCli),
           false,
           `Invalid UUID "${invalid}" should fail for Claude CLI`
         );
@@ -67,7 +67,7 @@ suite("SessionValidator Tests", () => {
 
       validThreadIds.forEach((threadId) => {
         assert.strictEqual(
-          SessionValidator.validate(threadId, Provider.CodexCli),
+          SessionValidator.validate(threadId, Harness.CodexCli),
           true,
           `Thread ID "${threadId}" should pass for Codex CLI`
         );
@@ -76,13 +76,13 @@ suite("SessionValidator Tests", () => {
 
     test("Empty thread ID should fail", () => {
       assert.strictEqual(
-        SessionValidator.validate("", Provider.CodexCli),
+        SessionValidator.validate("", Harness.CodexCli),
         false,
         "Empty string should fail"
       );
 
       assert.strictEqual(
-        SessionValidator.validate("   ", Provider.CodexCli),
+        SessionValidator.validate("   ", Harness.CodexCli),
         false,
         "Whitespace-only string should fail"
       );
@@ -94,7 +94,7 @@ suite("SessionValidator Tests", () => {
       const sessionId = "any-session-id";
 
       assert.strictEqual(
-        SessionValidator.validate(sessionId, Provider.CopilotChat),
+        SessionValidator.validate(sessionId, Harness.CopilotChat),
         false,
         "Copilot Chat should not use session IDs"
       );

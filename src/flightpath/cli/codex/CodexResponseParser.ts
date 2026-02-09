@@ -212,7 +212,7 @@ export class CodexResponseParser
               // Note: cached_input_tokens available in usage object for cost calculation
             }
           : undefined,
-        provider: "codex-cli",
+        harness: "codex-cli",
       },
     };
   }

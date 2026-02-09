@@ -5,7 +5,7 @@
  * - workflowStore: Core workflow execution data (prompts, state, outputs)
  * - uiStore: UI layout and modal states (persisted to localStorage)
  * - editorStore: Prompt editor state (persisted to VS Code webview state)
- * - settingsStore: Provider/model configuration and global settings
+ * - settingsStore: Harness/model configuration and global settings
  */
 
 // Store hooks
@@ -40,7 +40,7 @@ export type {
 export type {
   ModelOption,
   AgentOption,
-  ProviderStatus,
+  HarnessStatus as HarnessStatus,
   GlobalSettings,
   WorkflowProperties,
 } from "./settingsStore";

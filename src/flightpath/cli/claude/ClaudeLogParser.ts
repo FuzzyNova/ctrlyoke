@@ -395,7 +395,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       metadata: {
         sessionId,
         model,
-        provider: "claude-cli",
+        harness: "claude-cli",
         elapsed: turnDurationMs,
         usage:
           totalInputTokens > 0 || totalOutputTokens > 0

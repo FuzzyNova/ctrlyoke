@@ -3,7 +3,7 @@ import {
   PromptItem,
   DynamicQueueConfig,
   EXECUTION_STATES,
-  Provider,
+  Harness,
 } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
@@ -45,7 +45,7 @@ export interface WorkflowContext {
   /** Integration resolver - gets the appropriate integration for a prompt */
   getIntegrationForPrompt: (
     prompt: PromptItem,
-    providerOverride?: Provider
+    providerOverride?: Harness
   ) => CopilotIntegration;
 }
 
@@ -147,7 +147,7 @@ export class WorkflowExecutor {
       // Resolve the integration for this prompt (supports per-prompt and workflow-level provider)
       const integration = context.getIntegrationForPrompt(
         prompt,
-        resolvedProperties.provider
+        resolvedProperties.harness
       );
 
       // Update dashboard step status to running
@@ -228,7 +228,7 @@ export class WorkflowExecutor {
       // Log resolved properties for debugging
       Log.info(
         `📋 Resolved properties for prompt ${i + 1}: ` +
-          `provider=${resolvedProperties.provider}, ` +
+          `provider=${resolvedProperties.harness}, ` +
           `model=${resolvedProperties.model}, ` +
           `agent=${resolvedProperties.agent || "(none)"}, ` +
           `resumeSession=${resolvedProperties.resumeSession}, ` +

@@ -12,7 +12,7 @@ import {
 export interface PromptItem {
   id?: string;
   prompt: string;
-  provider?: string;
+  harness?: string;
   model?: string;
   agent?: string;
   resumeSession?: boolean;
@@ -26,7 +26,7 @@ export interface PromptItem {
     retryPrompt?: string;
   } | null;
   _runtime?: {
-    provider?: string;
+    harness?: string;
     model?: string;
     sessionId?: string;
     startedAt?: number;
@@ -265,7 +265,9 @@ export const useWorkflowStore = create<
         }
       } else {
         // No streaming entry - append as new output (initial or retry)
-        console.log("📊 WorkflowStore: Appending new output (initial or retry)");
+        console.log(
+          "📊 WorkflowStore: Appending new output (initial or retry)"
+        );
         newOutputs = [...outputs, output];
       }
 

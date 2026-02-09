@@ -1,21 +1,21 @@
 import * as assert from "assert";
 import { PropertyResolver } from "../../utils/PropertyResolver";
-import { Provider, PromptFile, PromptItem } from "../../types/FlightPathTypes";
+import { Harness, PromptFile, PromptItem } from "../../types/FlightPathTypes";
 
 suite("PropertyResolver Tests", () => {
   suite("resolveProvider", () => {
     test("should use prompt-level provider when specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        provider: Provider.ClaudeCli,
+        harness: Harness.ClaudeCli,
       };
       const workflow: PromptFile = {
         prompts: [],
-        provider: Provider.CopilotCli, // Should be ignored
+        harness: Harness.CopilotCli, // Should be ignored
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.provider, Provider.ClaudeCli);
+      assert.strictEqual(resolved.harness, Harness.ClaudeCli);
     });
 
     test("should use workflow-level provider when prompt-level not specified", () => {
@@ -24,11 +24,11 @@ suite("PropertyResolver Tests", () => {
       };
       const workflow: PromptFile = {
         prompts: [],
-        provider: Provider.ClaudeCli,
+        harness: Harness.ClaudeCli,
       };
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
-      assert.strictEqual(resolved.provider, Provider.ClaudeCli);
+      assert.strictEqual(resolved.harness, Harness.ClaudeCli);
     });
 
     test("should fall back to VS Code setting when neither prompt nor workflow specify provider", () => {
@@ -41,7 +41,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
       // Should default to ConfigurationUtils.getIntegrationMode() result
-      assert.ok(resolved.provider); // Provider should be defined
+      assert.ok(resolved.harness); // Harness should be defined
     });
   });
 
@@ -76,7 +76,7 @@ suite("PropertyResolver Tests", () => {
     test("should fall back to provider-specific model when neither prompt nor workflow specify model", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        provider: Provider.CopilotCli,
+        harness: Harness.CopilotCli,
       };
       const workflow: PromptFile = {
         prompts: [],
@@ -368,7 +368,7 @@ suite("PropertyResolver Tests", () => {
     test("should correctly apply three-tier precedence for all properties", () => {
       const prompt: PromptItem = {
         prompt: "test",
-        provider: Provider.ClaudeCli, // Override
+        harness: Harness.ClaudeCli, // Override
         // model: not specified - should use workflow
         agent: "code-reviewer", // Override
         // resumeSession: not specified - should use workflow
@@ -378,7 +378,7 @@ suite("PropertyResolver Tests", () => {
 
       const workflow: PromptFile = {
         prompts: [],
-        // provider: not specified - prompt overrides anyway
+        // harness: not specified - prompt overrides anyway
         model: "opus", // Should be used
         // agent: not specified - prompt overrides anyway
         resumeSession: true, // Should be used
@@ -391,7 +391,7 @@ suite("PropertyResolver Tests", () => {
 
       const resolved = PropertyResolver.resolve(prompt, workflow);
 
-      assert.strictEqual(resolved.provider, Provider.ClaudeCli); // From prompt
+      assert.strictEqual(resolved.harness, Harness.ClaudeCli); // From prompt
       assert.strictEqual(resolved.model, "opus"); // From workflow
       assert.strictEqual(resolved.agent, "code-reviewer"); // From prompt
       assert.strictEqual(resolved.resumeSession, true); // From workflow

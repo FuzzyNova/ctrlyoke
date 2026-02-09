@@ -68,7 +68,7 @@ suite("ChatSessionParser Tests", () => {
       assert.strictEqual(output.events[0].type, CLI_EVENT_TYPES.TEXT);
       assert.deepStrictEqual(output.events[0].data, { text: "Hi there!" });
       assert.strictEqual(output.metadata.model, "claude-sonnet-4.5");
-      assert.strictEqual(output.metadata.provider, "copilot-chat");
+      assert.strictEqual(output.metadata.harness, "copilot-chat");
     });
 
     test("should extract thinking blocks", () => {
@@ -232,7 +232,7 @@ suite("ChatSessionParser Tests", () => {
       const output = parser.extractResponse(sessionFile);
 
       assert.strictEqual(output.events.length, 0);
-      assert.strictEqual(output.metadata.provider, "copilot-chat");
+      assert.strictEqual(output.metadata.harness, "copilot-chat");
     });
 
     test("should handle non-existent file", () => {

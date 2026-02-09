@@ -5,7 +5,7 @@ import { ChildProcess } from "child_process";
 import { CliResult } from "../../types/CopilotTypes";
 import {
   PromptItem,
-  Provider,
+  Harness,
   PromptFile,
   WorkflowContext,
 } from "../../types/FlightPathTypes";
@@ -68,12 +68,12 @@ interface PromptFileResult {
  *
  * This class replaces the inheritance-based BaseCliIntegration with a composition-based
  * approach. Instead of extending a base class and implementing abstract methods, it accepts
- * an ICliProvider instance that encapsulates all provider-specific behavior.
+ * an ICliProvider instance that encapsulates all harness-specific behavior.
  *
  * **Architecture Benefits:**
- * - Zero base class changes when adding new providers
- * - Provider isolation (all logic in provider's directory)
- * - Easy testing (test provider components independently)
+ * - Zero base class changes when adding new harnesses
+ * - Harness isolation (all logic in harness's directory)
+ * - Easy testing (test harness components independently)
  * - Clear separation of concerns (integration orchestration vs provider implementation)
  *
  * **Supports two execution modes:**
@@ -127,14 +127,14 @@ export class CliIntegration extends CopilotIntegration {
   private cachedMcpConfigPath?: string;
 
   /**
-   * Create a new CLI integration with the specified provider.
+   * Create a new CLI integration with the specified CLI provider.
    *
-   * @param provider The CLI provider instance (encapsulates all CLI-specific logic)
+   * @param cliProvider The CLI provider instance (encapsulates all CLI-specific logic)
    * @param context VS Code extension context
    */
-  constructor(provider: ICliProvider, context: vscode.ExtensionContext) {
+  constructor(cliProvider: ICliProvider, context: vscode.ExtensionContext) {
     super(context);
-    this.provider = provider;
+    this.provider = cliProvider;
     this.processManager = new CliProcessManager(
       this.getWorkspaceRoot() || "",
       (msg) => Log.debug(msg)
@@ -261,7 +261,7 @@ export class CliIntegration extends CopilotIntegration {
     );
 
     if (!args) {
-      return null; // Provider doesn't support MCP
+      return null; // Harness doesn't support MCP
     }
 
     // For providers that use config files (not inline args), generate the file
@@ -521,7 +521,7 @@ export class CliIntegration extends CopilotIntegration {
     try {
       // Check if provider has log parser capability
       if (!this.provider.logParser) {
-        Log.error("❌ Provider does not support log file monitoring");
+        Log.error("❌ Harness does not support log file monitoring");
         return { success: false };
       }
 
@@ -568,7 +568,7 @@ export class CliIntegration extends CopilotIntegration {
 
         Log.info(`✅ Found log file for resumed session: ${logPath}`);
       } else if (this.provider.notificationMonitor.waitForSessionStart) {
-        // Provider supports SessionStart hook (Claude only currently)
+        // Harness supports SessionStart hook (Claude only currently)
         Log.info("🔍 Waiting for SessionStart hook and log file creation...");
 
         const workspaceRoot = this.getWorkspaceRoot();
@@ -664,7 +664,7 @@ export class CliIntegration extends CopilotIntegration {
           }
         }
       } else {
-        // Provider doesn't support SessionStart hook - use old method (Copilot, Codex)
+        // Harness doesn't support SessionStart hook - use old method (Copilot, Codex)
         Log.info("🔍 Discovering session log file (no SessionStart hook)...");
 
         // Use the actual prompt sent (may be file reference)
@@ -933,7 +933,7 @@ export class CliIntegration extends CopilotIntegration {
         Log.warn(`⚠️ Failed initial log read: ${error}`);
       }
 
-      // If provider has notification monitor, also monitor for Stop/completion hook in parallel
+      // If harness has notification monitor, also monitor for Stop/completion hook in parallel
       if (this.provider.notificationMonitor) {
         const workspaceRoot = this.getWorkspaceRoot();
         if (workspaceRoot) {
@@ -947,7 +947,7 @@ export class CliIntegration extends CopilotIntegration {
           );
 
           // Determine monitoring mode:
-          // - If provider supports session IDs in notification filenames, use specific session monitoring
+          // - If harness supports session IDs in notification filenames, use specific session monitoring
           // - Otherwise (like Copilot), use wildcard mode (undefined sessionId)
           const monitoringSessionId = this.provider.notificationMonitor
             .supportsSessionIdInFilename
@@ -964,8 +964,8 @@ export class CliIntegration extends CopilotIntegration {
             );
           }
 
-          // Launch provider-specific notification monitoring in parallel
-          // (each provider knows its own file naming conventions)
+          // Launch harness-specific notification monitoring in parallel
+          // (each harness knows its own file naming conventions)
           void (async () => {
             try {
               const result =
@@ -1462,7 +1462,7 @@ export class CliIntegration extends CopilotIntegration {
    */
   protected async cancelImplementation(): Promise<void> {
     Log.info(
-      `⏹️ CLI Integration cancel called (provider: ${this.provider.config.displayName})`
+      `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
     );
 
     // Delegate to CliProcessManager for both terminal and process cancellation
@@ -1530,10 +1530,9 @@ export class CliIntegration extends CopilotIntegration {
 
       // Validate session ID format before passing to CLI (Phase 5)
       if (resolvedSessionId) {
-        const provider =
-          resolvedProperties?.provider ??
-          (this.getIntegrationMode() as Provider);
-        if (!SessionValidator.validate(resolvedSessionId, provider)) {
+        const harness =
+          resolvedProperties?.harness ?? (this.getIntegrationMode() as Harness);
+        if (!SessionValidator.validate(resolvedSessionId, harness)) {
           // Invalid format - start new session instead
           Log.info(`🔄 Starting new session due to invalid session ID format`);
           resolvedSessionId = undefined;
@@ -1685,11 +1684,11 @@ export class CliIntegration extends CopilotIntegration {
             if (
               this.provider.responseParser.isRecoverableSessionError?.(error)
             ) {
-              const currentProvider =
-                resolvedProperties?.provider ??
-                (this.getIntegrationMode() as Provider);
+              const currentHarness =
+                resolvedProperties?.harness ??
+                (this.getIntegrationMode() as Harness);
 
-              if (currentProvider === Provider.ClaudeCli) {
+              if (currentHarness === Harness.ClaudeCli) {
                 Log.warn(
                   `⚠️ Claude CLI rejected session ID "${resolvedSessionId}". ` +
                     `Retrying without resume flag.`
@@ -1788,23 +1787,22 @@ export class CliIntegration extends CopilotIntegration {
       if (success) {
         // IMPORTANT: Always create/update provider and model fields, even when resuming from working file
         // This ensures _runtime accurately reflects what was ACTUALLY used, not stale data from previous runs
-        const actualProvider =
-          resolvedProperties?.provider ??
-          (this.getIntegrationMode() as Provider);
+        const actualHarness =
+          resolvedProperties?.harness ?? (this.getIntegrationMode() as Harness);
         const actualModel = resolvedProperties?.model ?? "";
         const actualAgent = resolvedProperties?.agent;
 
         if (!prompt._runtime) {
           // First execution - create new _runtime
           prompt._runtime = {
-            provider: actualProvider,
+            harness: actualHarness,
             model: actualModel,
             agent: actualAgent,
             startedAt: Date.now(),
           };
         } else {
           // Resuming from working file - update provider/model to match what actually ran
-          prompt._runtime.provider = actualProvider;
+          prompt._runtime.harness = actualHarness;
           prompt._runtime.model = actualModel;
           prompt._runtime.agent = actualAgent;
           // Keep existing startedAt (from first attempt)
@@ -1838,6 +1836,6 @@ export class CliIntegration extends CopilotIntegration {
   // ============================================================
   // ERROR RECOVERY (PHASE 5)
   // ============================================================
-  // NOTE: Error recovery logic is now provider-specific.
+  // NOTE: Error recovery logic is now Harness-specific.
   // See IResponseParser.isRecoverableSessionError() for implementation.
 }

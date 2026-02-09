@@ -44,7 +44,7 @@ export const MESSAGE_TYPES = {
   STOP: "stop",
   SHOW_OUTPUT: "showOutput",
   EXPORT_OUTPUT: "exportOutput",
-  CHANGE_PROVIDER: "changeProvider",
+  CHANGE_HARNESS: "changeHarness",
 
   // Prompt Editor - Webview -> Extension
   EXECUTE_PROMPT: "executePrompt", // Send/Add with properties
@@ -69,7 +69,7 @@ export const MESSAGE_TYPES = {
   CHANGE_RESUME_SESSION: "changeResumeSession",
   OPEN_SETTINGS: "openSettings", // Open VS Code settings for FlightPath
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
-  PROVIDER_STATUS_UPDATE: "providerStatusUpdate", // Update provider availability
+  HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
@@ -157,9 +157,9 @@ export const OPERATION_STATUS = {
 } as const;
 
 // ============================================================================
-// PROVIDER IDS - Copilot integration modes
+// HARNESS IDS - Harness/framework modes for execution
 // ============================================================================
-export const PROVIDER_IDS = {
+export const HARNESS_IDS = {
   COPILOT_CLI: "copilot-cli",
   COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
@@ -167,26 +167,26 @@ export const PROVIDER_IDS = {
 } as const;
 
 // ============================================================================
-// PROVIDER INFO - Display names and labels per provider
+// HARNESS INFO - Display names and labels per harness
 // ============================================================================
-export const PROVIDER_INFO = {
-  [PROVIDER_IDS.COPILOT_CLI]: { name: "Copilot CLI", shortName: "Copilot CLI" },
-  [PROVIDER_IDS.COPILOT_CHAT]: {
+export const HARNESS_INFO = {
+  [HARNESS_IDS.COPILOT_CLI]: { name: "Copilot CLI", shortName: "Copilot CLI" },
+  [HARNESS_IDS.COPILOT_CHAT]: {
     name: "Copilot Chat",
     shortName: "Copilot Chat",
   },
-  [PROVIDER_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
-  [PROVIDER_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
+  [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
+  [HARNESS_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
 } as const;
 
 // ============================================================================
-// DEFAULT MODELS - Default model per provider
+// DEFAULT MODELS - Default model per harness
 // ============================================================================
 export const DEFAULT_MODELS = {
-  [PROVIDER_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
-  [PROVIDER_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
-  [PROVIDER_IDS.CLAUDE_CLI]: "sonnet",
-  [PROVIDER_IDS.CODEX_CLI]: "gpt-5.2-codex",
+  [HARNESS_IDS.COPILOT_CLI]: "claude-sonnet-4.5",
+  [HARNESS_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
+  [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
+  [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
 } as const;
 
 // ============================================================================
@@ -210,9 +210,9 @@ export const CODEX_CLI_MODELS = [
 ] as const;
 
 // ============================================================================
-// PROVIDER STATUS STRINGS - Status values for provider availability
+// HARNESS STATUS STRINGS - Status values for harness availability
 // ============================================================================
-export const PROVIDER_STATUS_STRINGS = {
+export const HARNESS_STATUS_STRINGS = {
   CHECKING: "checking",
   AVAILABLE: "available",
   NOT_AVAILABLE: "not_available",
@@ -245,8 +245,8 @@ export const PROMPT_PROPERTIES = {
   PROMPT: "prompt",
   ID: "id",
 
-  // Provider/Model properties
-  PROVIDER: "provider",
+  // Harness/Model properties
+  HARNESS: "harness",
   MODEL: "model",
   AGENT: "agent",
 
@@ -275,7 +275,7 @@ export const CLI_EVENT_TYPES = {
   TEXT: "text",
   THINKING: "thinking",
 
-  // Operation-specific tool events (normalized from provider formats)
+  // Operation-specific tool events (normalized from harness formats)
   BASH_COMMAND: "bashCommand",
   FILE_READ: "fileRead",
   FILE_WRITE: "fileWrite",
@@ -297,7 +297,7 @@ export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
-export type ProviderId = (typeof PROVIDER_IDS)[keyof typeof PROVIDER_IDS];
+export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 export type ActionType = (typeof ACTION_TYPES)[keyof typeof ACTION_TYPES];

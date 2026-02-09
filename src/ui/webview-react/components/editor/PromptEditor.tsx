@@ -146,11 +146,11 @@ export const PromptEditor: React.FC = () => {
     (includeNullsForDefaults = false) => {
       const result: Record<string, unknown> = {};
 
-      // Provider
-      if (properties.provider !== "default") {
-        result.provider = properties.provider;
+      // Harness
+      if (properties.harness !== "default") {
+        result.harness = properties.harness;
       } else if (includeNullsForDefaults) {
-        result.provider = null;
+        result.harness = null;
       }
 
       // Model

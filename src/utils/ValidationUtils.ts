@@ -3,7 +3,7 @@ import {
   PromptFile,
   PromptItem,
   EndCondition,
-  Provider,
+  Harness,
 } from "../types/FlightPathTypes";
 import { Log } from "./Log";
 
@@ -54,13 +54,13 @@ export class ValidationUtils {
         ],
         nullable: true,
       },
-      provider: {
+      harness: {
         type: "string",
         enum: [
-          Provider.CopilotCli,
-          Provider.CopilotChat,
-          Provider.ClaudeCli,
-          Provider.CodexCli,
+          Harness.CopilotCli,
+          Harness.CopilotChat,
+          Harness.ClaudeCli,
+          Harness.CodexCli,
         ],
         nullable: true,
       },
@@ -100,13 +100,13 @@ export class ValidationUtils {
           completedAt: { type: "number", nullable: true },
           retryCount: { type: "number", nullable: true },
           // Runtime can also inherit ExecutionProperties
-          provider: {
+          harness: {
             type: "string",
             enum: [
-              Provider.CopilotCli,
-              Provider.CopilotChat,
-              Provider.ClaudeCli,
-              Provider.CodexCli,
+              Harness.CopilotCli,
+              Harness.CopilotChat,
+              Harness.ClaudeCli,
+              Harness.CodexCli,
             ],
             nullable: true,
           },

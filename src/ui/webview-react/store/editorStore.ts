@@ -20,7 +20,7 @@ export interface EndConditionConfig {
  * Matches PROMPT_PROPERTIES from DashboardConstants
  */
 export interface PropertyValues {
-  provider: string; // "default" | provider ID
+  harness: string; // "default" | harness ID
   model: string; // "default" | model ID
   agent: string; // "" or path to agent file
   resumeSession: string; // "default" | "yes" | "no"
@@ -34,7 +34,7 @@ export interface PropertyValues {
  * Mirrors PROPERTY_DEFAULTS from state-manager.js
  */
 export const PROPERTY_DEFAULTS: PropertyValues = {
-  provider: "default",
+  harness: "default",
   model: "default",
   agent: "",
   resumeSession: "default",
@@ -248,7 +248,7 @@ export const useEditorStore = create<
 
     // Extract properties from prompt data
     const properties: PropertyValues = {
-      provider: promptData.provider ?? "default",
+      harness: promptData.harness ?? "default",
       model: promptData.model ?? "default",
       agent: promptData.agent ?? "",
       resumeSession:
@@ -525,9 +525,9 @@ export const useEditorStore = create<
       result.id = promptName.trim();
     }
 
-    // Add provider if not default
-    if (properties.provider !== "default") {
-      result.provider = properties.provider;
+    // Add harness if not default
+    if (properties.harness !== "default") {
+      result.harness = properties.harness;
     }
 
     // Add model if not default

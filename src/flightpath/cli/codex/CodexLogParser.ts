@@ -54,7 +54,7 @@ interface CodexSessionMetaPayload {
   cli_version: string;
   instructions: string;
   source: string;
-  model_provider: string;
+  model_harness: string;
   model?: string;
   git?: {
     commit_hash: string;
@@ -1134,7 +1134,7 @@ export class CodexLogParser extends BaseLogParser {
         sessionId,
         model,
         cliVersion,
-        provider: "codex-cli",
+        harness: "codex-cli",
         usage,
       },
     };

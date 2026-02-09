@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { PROVIDER_IDS, type ProviderId } from "../types/messages";
+import { HARNESS_IDS, type HarnessId } from "../types/messages";
 
 /**
  * Model option for dropdowns
@@ -19,9 +19,9 @@ export interface AgentOption {
 }
 
 /**
- * Provider status information
+ * Harness status information
  */
-export interface ProviderStatus {
+export interface HarnessStatus {
   available: boolean;
   status: "checking" | "available" | "not_available";
   message?: string;
@@ -31,7 +31,7 @@ export interface ProviderStatus {
  * Global settings (from VS Code settings, read-only in webview)
  */
 export interface GlobalSettings {
-  provider: ProviderId;
+  harness: HarnessId;
   model: string;
   agent: string;
   executionMode: "interactive" | "headless";
@@ -43,7 +43,7 @@ export interface GlobalSettings {
  * Workflow properties (from working file, can override global settings)
  */
 export interface WorkflowProperties {
-  provider?: string;
+  harness?: string;
   model?: string;
   agent?: string;
   resumeSession?: boolean;
@@ -59,17 +59,17 @@ export interface WorkflowProperties {
 }
 
 /**
- * Settings state - Provider/model configuration and global settings
+ * Settings state - Harness/model configuration and global settings
  */
 interface SettingsState {
-  // Model options per provider (populated from ModelRegistry)
-  modelOptions: Record<ProviderId, ModelOption[]>;
+  // Model options per harness (populated from ModelRegistry)
+  modelOptions: Record<HarnessId, ModelOption[]>;
 
   // Available agents (from workspace discovery)
   availableAgents: AgentOption[];
 
-  // Provider status (checking/available/unavailable)
-  providerStatus: Record<ProviderId, ProviderStatus>;
+  // Harness status (checking/available/unavailable)
+  harnessStatus: Record<HarnessId, HarnessStatus>;
 
   // Global settings (from VS Code)
   globalSettings: GlobalSettings;
@@ -87,15 +87,15 @@ interface SettingsState {
 interface SettingsActions {
   // Model options
   setModelOptions: (options: Record<string, ModelOption[]>) => void;
-  getModelsForProvider: (provider: ProviderId) => ModelOption[];
+  getModelsForHarness: (harness: HarnessId) => ModelOption[];
 
   // Agents
   setAvailableAgents: (agents: AgentOption[]) => void;
 
-  // Provider status
-  setProviderStatus: (provider: ProviderId, status: ProviderStatus) => void;
-  setAllProviderStatuses: (statuses: Record<string, ProviderStatus>) => void;
-  isProviderAvailable: (provider: ProviderId) => boolean;
+  // Harness status
+  setHarnessStatus: (harness: HarnessId, status: HarnessStatus) => void;
+  setAllHarnessStatuses: (statuses: Record<string, HarnessStatus>) => void;
+  isHarnessAvailable: (harness: HarnessId) => boolean;
 
   // Global settings
   setGlobalSettings: (settings: GlobalSettings) => void;
@@ -116,7 +116,7 @@ interface SettingsActions {
   setWorkflowLoaded: (loaded: boolean) => void;
 
   // Effective value resolution (workflow > global)
-  getEffectiveProvider: () => ProviderId;
+  getEffectiveHarness: () => HarnessId;
   getEffectiveModel: () => string;
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
@@ -147,7 +147,7 @@ const CODEX_CLI_MODELS: ModelOption[] = [
 ];
 
 const initialGlobalSettings: GlobalSettings = {
-  provider: PROVIDER_IDS.COPILOT_CLI as ProviderId,
+  harness: HARNESS_IDS.COPILOT_CLI as HarnessId,
   model: "claude-sonnet-4.5",
   agent: "",
   executionMode: "interactive",
@@ -155,22 +155,22 @@ const initialGlobalSettings: GlobalSettings = {
   allowDynamicExtension: false,
 };
 
-const initialProviderStatus: Record<ProviderId, ProviderStatus> = {
-  [PROVIDER_IDS.COPILOT_CLI]: { available: false, status: "checking" },
-  [PROVIDER_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
-  [PROVIDER_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
-  [PROVIDER_IDS.CODEX_CLI]: { available: false, status: "checking" },
+const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
+  [HARNESS_IDS.COPILOT_CLI]: { available: false, status: "checking" },
+  [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
+  [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
+  [HARNESS_IDS.CODEX_CLI]: { available: false, status: "checking" },
 };
 
 const initialState: SettingsState = {
   modelOptions: {
-    [PROVIDER_IDS.COPILOT_CLI]: [],
-    [PROVIDER_IDS.COPILOT_CHAT]: [],
-    [PROVIDER_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
-    [PROVIDER_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
+    [HARNESS_IDS.COPILOT_CLI]: [],
+    [HARNESS_IDS.COPILOT_CHAT]: [],
+    [HARNESS_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
+    [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
   },
   availableAgents: [],
-  providerStatus: initialProviderStatus,
+  harnessStatus: initialHarnessStatus,
   globalSettings: initialGlobalSettings,
   workflowProperties: {},
   workflowLoaded: false,
@@ -189,12 +189,12 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         modelOptions: {
           ...state.modelOptions,
           ...options,
-        } as Record<ProviderId, ModelOption[]>,
+        } as Record<HarnessId, ModelOption[]>,
       })),
 
-    getModelsForProvider: (provider) => {
+    getModelsForHarness: (harness) => {
       const { modelOptions } = get();
-      return modelOptions[provider] ?? [];
+      return modelOptions[harness] ?? [];
     },
 
     // ============================================================================
@@ -204,28 +204,28 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setAvailableAgents: (agents) => set({ availableAgents: agents }),
 
     // ============================================================================
-    // PROVIDER STATUS
+    // HARNESS STATUS
     // ============================================================================
 
-    setProviderStatus: (provider, status) =>
+    setHarnessStatus: (harness, status) =>
       set((state) => ({
-        providerStatus: {
-          ...state.providerStatus,
-          [provider]: status,
+        harnessStatus: {
+          ...state.harnessStatus,
+          [harness]: status,
         },
       })),
 
-    setAllProviderStatuses: (statuses) =>
+    setAllHarnessStatuses: (statuses) =>
       set((state) => ({
-        providerStatus: {
-          ...state.providerStatus,
+        harnessStatus: {
+          ...state.harnessStatus,
           ...statuses,
-        } as Record<ProviderId, ProviderStatus>,
+        } as Record<HarnessId, HarnessStatus>,
       })),
 
-    isProviderAvailable: (provider) => {
-      const { providerStatus } = get();
-      return providerStatus[provider]?.available ?? false;
+    isHarnessAvailable: (harness) => {
+      const { harnessStatus: harnessStatus } = get();
+      return harnessStatus[harness]?.available ?? false;
     },
 
     // ============================================================================
@@ -263,10 +263,10 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     // EFFECTIVE VALUE RESOLUTION (Workflow > Global)
     // ============================================================================
 
-    getEffectiveProvider: () => {
+    getEffectiveHarness: () => {
       const { workflowProperties, globalSettings } = get();
       return (
-        (workflowProperties.provider as ProviderId) ?? globalSettings.provider
+        (workflowProperties.harness as HarnessId) ?? globalSettings.harness
       );
     },
 
@@ -301,7 +301,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       set({
         workflowProperties: {},
         workflowLoaded: false,
-        // Keep model options, agents, and provider status (they're global)
+        // Keep model options, agents, and harness status (they're global)
       }),
   })
 );

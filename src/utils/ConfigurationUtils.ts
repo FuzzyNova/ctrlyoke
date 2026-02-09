@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { DynamicQueueConfig, Provider } from "../types/FlightPathTypes";
+import { DynamicQueueConfig, Harness } from "../types/FlightPathTypes";
 
 /**
  * Configuration namespace for FlightPath settings
@@ -76,26 +76,26 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the default Copilot integration mode from settings
+   * Get the default harness from settings
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    */
-  getIntegrationMode(): Provider {
-    const mode = getConfig().get<string>("provider", Provider.CopilotCli);
+  getIntegrationMode(): Harness {
+    const mode = getConfig().get<string>("harness", Harness.CopilotCli);
 
     switch (mode) {
       case "copilot-chat":
-      case Provider.CopilotChat:
-        return Provider.CopilotChat;
+      case Harness.CopilotChat:
+        return Harness.CopilotChat;
       case "claude-cli":
-      case Provider.ClaudeCli:
-        return Provider.ClaudeCli;
+      case Harness.ClaudeCli:
+        return Harness.ClaudeCli;
       case "codex-cli":
-      case Provider.CodexCli:
-        return Provider.CodexCli;
+      case Harness.CodexCli:
+        return Harness.CodexCli;
       case "copilot-cli":
-      case Provider.CopilotCli:
+      case Harness.CopilotCli:
       default:
-        return Provider.CopilotCli;
+        return Harness.CopilotCli;
     }
   },
 
@@ -180,18 +180,18 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get model for a specific provider
-   * Maps provider enum to the appropriate model setting
+   * Get model for a specific harness
+   * Maps harness enum to the appropriate model setting
    */
-  getModelForProvider(provider: Provider): string {
-    switch (provider) {
-      case Provider.CopilotCli:
+  getModelForHarness(harness: Harness): string {
+    switch (harness) {
+      case Harness.CopilotCli:
         return ConfigurationUtils.getCliModel();
-      case Provider.CopilotChat:
+      case Harness.CopilotChat:
         return ConfigurationUtils.getCopilotChatModel();
-      case Provider.ClaudeCli:
+      case Harness.ClaudeCli:
         return ConfigurationUtils.getClaudeCliModel();
-      case Provider.CodexCli:
+      case Harness.CodexCli:
         return ConfigurationUtils.getCodexCliModel();
       default:
         // Fallback to Copilot CLI model

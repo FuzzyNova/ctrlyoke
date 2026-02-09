@@ -36,11 +36,11 @@ definitions:
       Shared execution configuration properties used across workflow-level defaults, prompt-level
       overrides, and runtime metadata
     properties:
-      provider:
+      harness:
         type: string
         description: >-
-          AI provider to use for this prompt. Determines which CLI or chat integration to use.
-          Optional - defaults to flightpath.provider setting.
+          Agent Harness/framework to use for this prompt. Determines which CLI or chat integration
+          to use. Optional - defaults to flightpath.harness setting.
         enum:
           - copilot-cli
           - copilot-chat

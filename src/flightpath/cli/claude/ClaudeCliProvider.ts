@@ -2,10 +2,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import * as vscode from "vscode";
 import * as path from "path";
-import {
-  ICliProvider,
-  ProviderConfig,
-} from "../shared/interfaces/ICliProvider";
+import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
@@ -21,7 +18,7 @@ import { Log } from "../../../utils/Log";
 const execAsync = promisify(exec);
 
 /**
- * Claude CLI Provider
+ * Claude CLI Harness
  *
  * Implements all Claude-specific logic using composition pattern:
  * - Log file monitoring and Stop hook for completion detection
@@ -43,7 +40,7 @@ const execAsync = promisify(exec);
  * ```
  */
 export class ClaudeCliProvider implements ICliProvider {
-  readonly config: ProviderConfig = {
+  readonly config: HarnessConfig = {
     name: "claude",
     displayName: "Claude Code CLI",
     installHint: "Install via: npm install -g @anthropic-ai/claude-code",

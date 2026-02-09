@@ -456,7 +456,7 @@
     "configuration": {
       "title": "FlightPath",
       "properties": {
-        "flightpath.provider": {
+        "flightpath.harness": {
           "order": 1,
           "type": "string",
           "enum": [
@@ -472,8 +472,8 @@
             "Use Codex CLI (OpenAI's code-specialized CLI)"
           ],
           "default": "copilot-cli",
-          "description": "Choose which AI provider integration to use",
-          "markdownDescription": "Choose which AI provider integration to use.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
+          "description": "Choose which harness/framework to use for AI execution",
+          "markdownDescription": "Choose which harness (agent framework/CLI tool) to use for AI execution.\n\n- **Copilot CLI** (default): Best reliability with GitHub Copilot\n- **Claude CLI**: Uses Anthropic's Claude Code CLI\n- **Codex CLI**: Uses OpenAI's Codex code-specialized CLI\n- **Copilot Chat**: UI automation (less reliable than CLI modes)"
         },
         "flightpath.promptsDirectory": {
           "order": 10,

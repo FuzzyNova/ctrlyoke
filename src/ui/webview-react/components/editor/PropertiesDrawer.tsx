@@ -4,7 +4,7 @@ import {
   END_CONDITION_DEFAULTS,
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
-import { PROVIDER_IDS, type ProviderId } from "../../types/messages";
+import { HARNESS_IDS, type HarnessId } from "../../types/messages";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -15,8 +15,8 @@ interface PropertiesDrawerProps {
  * PropertiesDrawer - Slide-up panel for prompt properties
  *
  * Features:
- * - Provider dropdown (from settingsStore)
- * - Model dropdown (dynamic based on provider)
+ * - Harness dropdown (from settingsStore)
+ * - Model dropdown (dynamic based on harness)
  * - Agent dropdown
  * - Resume Session dropdown and Session ID input
  * - Allow Dynamic Extension dropdown
@@ -35,8 +35,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     updateEndConditionField,
     clearEndCondition,
   } = useEditorStore();
-  const { availableAgents, globalSettings, getModelsForProvider } =
-    useSettingsStore();
+  const {
+    availableAgents,
+    globalSettings,
+    getModelsForHarness: getModelsForHarness,
+  } = useSettingsStore();
 
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
@@ -48,17 +51,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     setEndConditionExpanded(!!properties.endCondition);
   }, [properties.endCondition]);
 
-  // Get models for current provider
-  const currentProvider =
-    properties.provider === "default"
-      ? globalSettings.provider
-      : (properties.provider as ProviderId);
-  const models = getModelsForProvider(currentProvider);
+  // Get models for current harness
+  const currentHarness =
+    properties.harness === "default"
+      ? globalSettings.harness
+      : (properties.harness as HarnessId);
+  const models = getModelsForHarness(currentHarness);
 
-  // Handle provider change - also reset model to default
-  const handleProviderChange = (newProvider: string) => {
-    setProperty("provider", newProvider);
-    // Reset model when provider changes
+  // Handle harness change - also reset model to default
+  const handleHarnessChange = (newHarness: string) => {
+    setProperty("harness", newHarness);
+    // Reset model when harness changes
     setProperty("model", "default");
   };
 
@@ -98,25 +101,25 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
         {/* Body */}
         <div className="drawer-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4">
           <div className="space-y-4">
-            {/* Provider */}
+            {/* Harness */}
             <div className="prop-group">
               <label
-                htmlFor="prop-provider"
+                htmlFor="prop-harness"
                 className="prop-label block text-xs font-medium text-[var(--vscode-foreground)] mb-1"
               >
-                Provider
+                Harness
               </label>
               <select
-                id="prop-provider"
-                value={properties.provider}
-                onChange={(e) => handleProviderChange(e.target.value)}
+                id="prop-harness"
+                value={properties.harness}
+                onChange={(e) => handleHarnessChange(e.target.value)}
                 className="prop-select w-full px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
               >
                 <option value="default">Default</option>
-                <option value={PROVIDER_IDS.COPILOT_CLI}>Copilot CLI</option>
-                <option value={PROVIDER_IDS.COPILOT_CHAT}>Copilot Chat</option>
-                <option value={PROVIDER_IDS.CLAUDE_CLI}>Claude CLI</option>
-                <option value={PROVIDER_IDS.CODEX_CLI}>Codex CLI</option>
+                <option value={HARNESS_IDS.COPILOT_CLI}>Copilot CLI</option>
+                <option value={HARNESS_IDS.COPILOT_CHAT}>Copilot Chat</option>
+                <option value={HARNESS_IDS.CLAUDE_CLI}>Claude CLI</option>
+                <option value={HARNESS_IDS.CODEX_CLI}>Codex CLI</option>
               </select>
             </div>
 
