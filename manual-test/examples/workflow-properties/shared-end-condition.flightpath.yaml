@@ -9,7 +9,7 @@
 # - Update docs → Skip validation (end condition disabled)
 
 # Workflow-level properties
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 
 # Workflow-wide end condition

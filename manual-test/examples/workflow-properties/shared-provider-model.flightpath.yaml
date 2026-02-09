@@ -1,18 +1,18 @@
-# Shared Provider/Model Example
+# Shared Harness/Model Example
 #
 # This workflow demonstrates reproducible configuration using workflow-level
-# provider, model, and agent settings. Ensures consistent behavior across
+# harness, model, and agent settings. Ensures consistent behavior across
 # all team members.
 #
 # Use Case: Standardized Code Review Process
 # - Security review with full-power model
 # - Performance review with fast model
 # - Style review with fast model
-# All use same provider and custom code-reviewer agent
+# All use same harness and custom code-reviewer agent
 
 # Workflow-level properties
 # These ensure the workflow behaves identically for all team members
-provider: claude-cli
+harness: claude-cli
 model: sonnet # Default: Powerful model for complex analysis
 agent: .github/agents/code-reviewer.agent.md
 resumeSession: false # Fresh context for each review phase

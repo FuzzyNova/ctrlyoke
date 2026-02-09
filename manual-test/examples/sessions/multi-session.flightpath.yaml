@@ -9,7 +9,7 @@
 # - Session 2: Implementation (fresh context for coding)
 # - Session 3: Verification (independent review)
 
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 
 prompts:

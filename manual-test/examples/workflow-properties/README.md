@@ -23,13 +23,13 @@ This directory contains example workflows demonstrating the workflow-level prope
 
 ---
 
-### 2. Shared Provider/Model (`shared-provider-model.flightpath.yaml`)
+### 2. Shared Harness/Model (`shared-harness-model.flightpath.yaml`)
 
 **Use Case:** Reproducible code review workflow with consistent AI configuration
 
 **Key Features:**
 
-- Standardized provider and model across team members
+- Standardized harness and model across team members
 - Custom agent provides specialized code review expertise
 - Different models for different review phases
 - Fresh chat session per review phase
@@ -115,11 +115,11 @@ prompts:
 
 ## Example Comparison
 
-| Example               | Provider    | Model             | End Condition | Agent    | Prompts |
-| --------------------- | ----------- | ----------------- | ------------- | -------- | ------- |
-| Shared End Condition  | copilot-cli | claude-sonnet-4.5 | Workflow-wide | None     | 3       |
-| Shared Provider/Model | claude-cli  | sonnet            | None          | reviewer | 3       |
-| Mixed Precedence      | copilot-cli | claude-sonnet-4.5 | None          | None     | 3       |
+| Example              | Harness     | Model             | End Condition | Agent    | Prompts |
+| -------------------- | ----------- | ----------------- | ------------- | -------- | ------- |
+| Shared End Condition | copilot-cli | claude-sonnet-4.5 | Workflow-wide | None     | 3       |
+| Shared Harness/Model | claude-cli  | sonnet            | None          | reviewer | 3       |
+| Mixed Precedence     | copilot-cli | claude-sonnet-4.5 | None          | None     | 3       |
 
 ---
 
@@ -129,7 +129,7 @@ prompts:
 
 ```yaml
 # Workflow-level properties (optional, but recommended for sharing)
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 agent: .github/agents/my-agent.agent.md
 newChatSession: true
@@ -163,7 +163,7 @@ prompts:
 
 ### Best Practices
 
-1. **Set provider and model for reproducibility**
+1. **Set harness and model for reproducibility**
    - Ensures workflow behaves consistently across users
    - Documents intended execution configuration
 
@@ -206,4 +206,4 @@ A: Check if prompt has `endCondition: null` (disables workflow validation).
 
 **Q: Model not available?**
 
-A: Verify model is supported by selected provider. See [Workflow Properties Guide](../docs/WORKFLOW_PROPERTIES.md#model) for model lists.
+A: Verify model is supported by selected harness. See [Workflow Properties Guide](../docs/WORKFLOW_PROPERTIES.md#model) for model lists.

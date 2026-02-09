@@ -9,7 +9,7 @@
 # - Each prompt has full context from all previous prompts
 # - Ideal for test-driven development, incremental feature building
 
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true # Workflow default: Continue sessions
 
@@ -26,7 +26,7 @@ prompts:
       - Test numeric session references (1, 2, 3)
       - Test exact session ID strings
       - Test auto-resume logic
-      - Test validation (invalid references, cross-provider, etc.)
+      - Test validation (invalid references, cross-harness, etc.)
       - Test workflow-level precedence
 
       Use Mocha test framework matching FlightPath conventions.
@@ -65,7 +65,7 @@ prompts:
       Add integration tests that verify PromptSessionResolver works with:
       - Real working file examples
       - PropertyResolver integration
-      - All three provider types (Copilot, Claude, Codex)
+      - All three harness types (Copilot, Claude, Codex)
 
       Create tests in src/test/suite/PromptSessionResolver.test.ts
     # Auto-resumes - full context of tests, implementation, and refactoring

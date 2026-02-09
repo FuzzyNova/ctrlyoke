@@ -1,8 +1,8 @@
 # Session Resume Test
 # Tests that sessions maintain context across prompts (resumeSession flag)
 
-provider: copilot-cli
-model: claude-haiku-4.5
+harness: copilot-cli
+model: gpt-5-mini
 
 prompts:
   - id: remember-info

@@ -2,7 +2,7 @@
 # This file demonstrates the three-tier precedence system
 
 # Workflow-level defaults (apply to all prompts unless overridden)
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true
 allowDynamicExtension: false
@@ -12,7 +12,7 @@ prompts:
     prompt: |
       Echo "Step 1: I should inherit all workflow properties"
       # Expected resolved properties:
-      # - provider: copilot-cli (workflow)
+      # - harness: copilot-cli (workflow)
       # - model: claude-sonnet-4.5 (workflow)
       # - resumeSession: true (workflow)
       # - allowDynamicExtension: false (workflow)
@@ -22,17 +22,17 @@ prompts:
       Echo "Step 2: I override the model but inherit other properties"
     model: claude-haiku-4.5 # Prompt-level override
     # Expected resolved properties:
-    # - provider: copilot-cli (workflow)
+    # - harness: copilot-cli (workflow)
     # - model: claude-haiku-4.5 (prompt override)
     # - resumeSession: true (workflow)
     # - allowDynamicExtension: false (workflow)
 
   - id: step3-override-session
     prompt: |
-      Echo "Step 3: I start a new session but inherit model and provider"
+      Echo "Step 3: I start a new session but inherit model and harness"
     resumeSession: false # Prompt-level override
     # Expected resolved properties:
-    # - provider: copilot-cli (workflow)
+    # - harness: copilot-cli (workflow)
     # - model: claude-sonnet-4.5 (workflow)
     # - resumeSession: false (prompt override)
     # - allowDynamicExtension: false (workflow)
@@ -44,7 +44,7 @@ prompts:
     resumeSession: false
     allowDynamicExtension: true
     # Expected resolved properties:
-    # - provider: copilot-cli (workflow)
+    # - harness: copilot-cli (workflow)
     # - model: gpt-5 (prompt override)
     # - resumeSession: false (prompt override)
     # - allowDynamicExtension: true (prompt override)

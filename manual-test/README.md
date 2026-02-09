@@ -22,17 +22,20 @@ This directory contains test files for manually testing the FlightPath extension
 Good manual tests share these characteristics:
 
 ### 1. Simple and Fast ⚡
+
 - **Simple prompts**: "Remember the number 42" instead of "Analyze the architectural patterns"
 - **Quick execution**: Tests should complete in seconds, not minutes
 - **Clear instructions**: Tell the LLM "we are testing" to encourage brief responses
 - **Free models work**: Haiku/gpt-5-mini should be able to complete the test
 
 ### 2. Clear Pass/Fail Indicators ✅
+
 - Use end condition scripts for automated validation
 - Simple verification: "Did the file get updated?" not "Is the architecture improved?"
 - Explicit success criteria in the prompt
 
 ### 3. Tests FlightPath, Not AI Capabilities 🎯
+
 - **Good**: "Set counter.txt to 5" (tests file operations and end conditions)
 - **Bad**: "Refactor this codebase" (tests AI, not FlightPath)
 - Focus on mechanical operations: read file, write number, respond with text
@@ -62,6 +65,7 @@ This directory contains both **tests** and **examples**:
 - **Examples** (`examples/` subdirectory): Educational workflows demonstrating advanced patterns
 
 When creating new files:
+
 - If it tests a specific FlightPath feature with clear pass/fail → Root directory
 - If it demonstrates best practices or complex workflows → `examples/` subdirectory
 
@@ -71,40 +75,40 @@ When creating new files:
 
 ### Basic Format Tests
 
-| File                                      | Tests                                          | Duration |
-| ----------------------------------------- | ---------------------------------------------- | -------- |
-| `simple-prompt-test.prompt.md`            | Markdown format, basic execution               | 5 sec    |
-| `yaml-format-test.flightpath.yaml`        | YAML parsing, multi-line strings               | 5 sec    |
-| `yaml-multi-step-test.flightpath.yaml`    | YAML multi-step with session continuity        | 10 sec   |
-| `.flightpath/simple.prompt.md`            | Simple prompt in .flightpath directory         | 5 sec    |
-| `.flightpath/multi-step.flightpath.json`  | Multi-step with model switching                | 15 sec   |
+| File                                     | Tests                                   | Duration |
+| ---------------------------------------- | --------------------------------------- | -------- |
+| `simple-prompt-test.prompt.md`           | Markdown format, basic execution        | 5 sec    |
+| `yaml-format-test.flightpath.yaml`       | YAML parsing, multi-line strings        | 5 sec    |
+| `yaml-multi-step-test.flightpath.yaml`   | YAML multi-step with session continuity | 10 sec   |
+| `.flightpath/simple.prompt.md`           | Simple prompt in .flightpath directory  | 5 sec    |
+| `.flightpath/multi-step.flightpath.json` | Multi-step with model switching         | 15 sec   |
 
 ### Session Management Tests
 
-| File                                  | Tests                                      | Duration |
-| ------------------------------------- | ------------------------------------------ | -------- |
+| File                                    | Tests                                        | Duration |
+| --------------------------------------- | -------------------------------------------- | -------- |
 | `new-chat-session-test.flightpath.json` | Session isolation with `newChatSession` flag | 10 sec   |
-| `session-resume-test.flightpath.yaml`   | Context preservation across prompts        | 10 sec   |
+| `session-resume-test.flightpath.yaml`   | Context preservation across prompts          | 10 sec   |
 
 ### Retry Mechanism Tests
 
-| File                                        | Tests                                   | Duration |
-| ------------------------------------------- | --------------------------------------- | -------- |
-| `retry-counter-test.flightpath.json`        | Basic retry with file validation        | 15 sec   |
-| `retry-multi-step-test.flightpath.json`     | Multi-step workflow with retries        | 30 sec   |
-| `retry-max-exhaustion-test.flightpath.json` | Max retries exhaustion behavior         | 15 sec   |
-| `retry-timeout-error-test.flightpath.json`  | Timeout doesn't trigger retry           | 10 sec   |
-| `script-error-test.flightpath.json`         | Script crash error handling             | 10 sec   |
+| File                                        | Tests                            | Duration |
+| ------------------------------------------- | -------------------------------- | -------- |
+| `retry-counter-test.flightpath.json`        | Basic retry with file validation | 15 sec   |
+| `retry-multi-step-test.flightpath.json`     | Multi-step workflow with retries | 30 sec   |
+| `retry-max-exhaustion-test.flightpath.json` | Max retries exhaustion behavior  | 15 sec   |
+| `retry-timeout-error-test.flightpath.json`  | Timeout doesn't trigger retry    | 10 sec   |
+| `script-error-test.flightpath.json`         | Script crash error handling      | 10 sec   |
 
 ### Advanced Features
 
-| File                                          | Tests                                  | Duration |
-| --------------------------------------------- | -------------------------------------- | -------- |
-| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence    | 15 sec   |
-| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI          | 10 sec   |
-| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools  | 20 sec   |
-| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)  | 10 sec   |
-| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation)| UI Test  |
+| File                                          | Tests                                   | Duration |
+| --------------------------------------------- | --------------------------------------- | -------- |
+| `workflow-properties-test.flightpath.yaml`    | Property inheritance and precedence     | 15 sec   |
+| `test-property-sync.flightpath.yaml`          | Property sync to dashboard UI           | 10 sec   |
+| `dynamic-queue-basic-example.flightpath.json` | Dynamic queue extension via MCP tools   | 20 sec   |
+| `attachment-test.prompt.md`                   | All attachment types (@, #file, #sym)   | 10 sec   |
+| `prompt-links-test.flightpath.json`           | Clickable links (Ctrl+Click navigation) | UI Test  |
 
 ---
 
@@ -129,6 +133,7 @@ When creating new files:
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - First prompt tells LLM "My favorite color is orange"
 - Second prompt asks "What is my favorite color?"
 - LLM should respond "orange" (proves session continuity)
@@ -140,6 +145,7 @@ When creating new files:
 **File:** `retry-counter-test.flightpath.json`
 
 **Setup:**
+
 ```powershell
 echo 0 > counter.txt
 ```
@@ -147,6 +153,7 @@ echo 0 > counter.txt
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - LLM increments counter in counter.txt
 - Script validates value equals 3
 - Retries until validation passes
@@ -159,6 +166,7 @@ echo 0 > counter.txt
 **File:** `retry-multi-step-test.flightpath.json`
 
 **Setup:**
+
 ```powershell
 echo 0 > multi-step-counter.txt
 ```
@@ -166,6 +174,7 @@ echo 0 > multi-step-counter.txt
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - Step 1: Set counter to 5
 - Step 2: Multiply by 2 (expects 10)
 - Step 3: Add 5 (expects 15)
@@ -180,6 +189,7 @@ echo 0 > multi-step-counter.txt
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - Uses `always_fails.py` script (always returns false)
 - 3 total attempts (initial + 2 retries)
 - Error message when max retries reached
@@ -194,6 +204,7 @@ echo 0 > multi-step-counter.txt
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - Tests three-tier precedence (prompt > workflow > settings)
 - First prompt inherits all workflow defaults
 - Second prompt overrides model only
@@ -206,10 +217,12 @@ echo 0 > multi-step-counter.txt
 **File:** `dynamic-queue-basic-example.flightpath.json`
 
 **Test:**
+
 1. Enable setting: `flightpath.enableDynamicQueue`
 2. Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - First prompt calls `flightpath_append_queue` tool to add 2 new prompts
 - Second prompt calls `flightpath_queue_status` to verify queue state
 - Dynamically added prompts execute automatically
@@ -223,6 +236,7 @@ echo 0 > multi-step-counter.txt
 **Test:** Right-click → "Run with FlightPath"
 
 **Expected:**
+
 - LLM receives 4 attachments:
   1. Full file (@manual-test/simple-prompt-test.prompt.md)
   2. Directory structure (@manual-test/sample-code/)
@@ -236,21 +250,22 @@ echo 0 > multi-step-counter.txt
 
 Located in `.flightpath/scripts/`:
 
-| Script                      | Purpose                      | Returns        |
-| --------------------------- | ---------------------------- | -------------- |
-| `always_true.py`            | Always succeeds (pass test)  | `true`         |
-| `always_false.py`           | Always fails (retry test)    | `false`        |
-| `always_fails.py`           | Exhaustion tests             | `false`        |
-| `throws_error.py`           | Script crash/error           | Exit code 1    |
-| `timeout_script.py`         | Timeout handling (sleeps 20s)| Timeout        |
-| `check_counter.py`          | Validates counter equals 3   | `true`/`false` |
-| `check_counter_value.py`    | Validates counter equals N   | `true`/`false` |
+| Script                   | Purpose                       | Returns        |
+| ------------------------ | ----------------------------- | -------------- |
+| `always_true.py`         | Always succeeds (pass test)   | `true`         |
+| `always_false.py`        | Always fails (retry test)     | `false`        |
+| `always_fails.py`        | Exhaustion tests              | `false`        |
+| `throws_error.py`        | Script crash/error            | Exit code 1    |
+| `timeout_script.py`      | Timeout handling (sleeps 20s) | Timeout        |
+| `check_counter.py`       | Validates counter equals 3    | `true`/`false` |
+| `check_counter_value.py` | Validates counter equals N    | `true`/`false` |
 
 ---
 
 ## Retry Configuration Examples
 
 ### Basic Retry
+
 ```json
 {
   "endCondition": {
@@ -263,6 +278,7 @@ Located in `.flightpath/scripts/`:
 ```
 
 ### Retry with Placeholders
+
 ```json
 {
   "endCondition": {
@@ -334,7 +350,7 @@ echo 0 > multi-step-counter.txt
 
 ---
 
-## Link Provider Testing
+## Link Harness Testing
 
 ### Test: Clickable Context References
 
@@ -355,6 +371,7 @@ echo 0 > multi-step-counter.txt
    - Ctrl+Click to navigate to symbol definition
 
 **Expected Behavior:**
+
 - All references show as clickable links when Ctrl is held
 - Clicking navigates to correct location
 - Invalid paths show error message (graceful degradation)
@@ -366,7 +383,7 @@ echo 0 > multi-step-counter.txt
 The `examples/` subdirectory contains **educational examples** demonstrating advanced FlightPath patterns. These are NOT tests - they are detailed workflows showing best practices.
 
 - **workflow-properties/** - Property inheritance patterns
-- **sessions/** - Session management strategies (multi-session, cross-provider, session reuse)
+- **sessions/** - Session management strategies (multi-session, cross-harness, session reuse)
 
 See `examples/README.md` for details.
 
@@ -384,11 +401,13 @@ See `examples/README.md` for details.
 ### Creating a New Test
 
 **Markdown format** (simplest):
+
 ```markdown
 What is 2 + 2?
 ```
 
 **YAML format** (multi-step):
+
 ```yaml
 prompts:
   - prompt: Step 1 instructions
@@ -397,6 +416,7 @@ prompts:
 ```
 
 **JSON format** (with end condition):
+
 ```json
 {
   "prompt": "Instructions here",
@@ -426,16 +446,19 @@ Test: `echo "test" | python .flightpath/scripts/validate.py`
 ## Troubleshooting
 
 ### CLI not working
+
 1. Check: `gh copilot --version` or `claude --version`
 2. Authenticate: `gh auth login` or `claude auth login`
 3. Restart Extension Development Host
 
 ### Chat not working
+
 1. Ensure GitHub Copilot extension installed
 2. Check Copilot status (bottom-right)
 3. Sign in to GitHub Copilot
 
 ### End conditions not executing
+
 1. Check script permissions (Linux/Mac: `chmod +x`)
 2. Verify Python/Node.js in PATH
 3. Check timeout setting

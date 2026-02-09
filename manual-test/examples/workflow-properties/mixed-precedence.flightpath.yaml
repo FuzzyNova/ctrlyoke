@@ -12,7 +12,7 @@
 
 # Workflow-level properties (tier 2)
 # These provide defaults for all prompts
-provider: copilot-cli
+harness: copilot-cli
 model: claude-sonnet-4.5
 resumeSession: true
 
@@ -32,7 +32,7 @@ prompts:
 
       Provide a structured analysis with specific recommendations.
     # Effective properties:
-    #   provider: copilot-cli (from workflow)
+    #   harness: copilot-cli (from workflow)
     #   model: claude-sonnet-4.5 (from workflow)
     #   resumeSession: true (from workflow)
 
@@ -49,7 +49,7 @@ prompts:
       Follow the project's coding standards and maintain backward compatibility.
     model: gpt-5 # Override: Use different model for implementation
     # Effective properties:
-    #   provider: copilot-cli (from workflow)
+    #   harness: copilot-cli (from workflow)
     #   model: gpt-5 (PROMPT OVERRIDE - highest priority)
     #   resumeSession: true (from workflow)
 
@@ -65,18 +65,18 @@ prompts:
       5. Validate documentation completeness
 
       Provide approval or detailed feedback for improvements.
-    provider: claude-cli # Override: Different provider
+    harness: claude-cli # Override: Different harness
     model: opus # Override: Most capable Claude model
     resumeSession: false # Override: Fresh session for review
     # Effective properties:
-    #   provider: claude-cli (PROMPT OVERRIDE)
+    #   harness: claude-cli (PROMPT OVERRIDE)
     #   model: opus (PROMPT OVERRIDE)
     #   resumeSession: false (PROMPT OVERRIDE)
     # All workflow defaults overridden at prompt level
 
 # Precedence Summary Table:
 #
-# | Prompt     | Provider      | Model            | Resume Session | Source          |
+# | Prompt     | Harness      | Model            | Resume Session | Source          |
 # |------------|---------------|------------------|----------------|-----------------|
 # | analyze    | copilot-cli   | claude-sonnet-4.5| true           | All workflow    |
 # | implement  | copilot-cli   | gpt-5            | true           | Mixed (model)   |

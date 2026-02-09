@@ -67,22 +67,22 @@ Select: manual-test/session-examples/session-reuse.flightpath.yaml
 
 ---
 
-### 3. cross-provider.flightpath.yaml
+### 3. cross-harness.flightpath.yaml
 
-**Purpose:** Demonstrates validation warnings with mixed providers
+**Purpose:** Demonstrates validation warnings with mixed harnesss
 
-**Pattern:** Shows incompatible session references and proper mixed-provider workflows
+**Pattern:** Shows incompatible session references and proper mixed-harness workflows
 
 **Key Concepts:**
 
-- Cross-provider session validation
-- Provider-specific session formats (UUID vs thread_xxx)
+- Cross-harness session validation
+- Harness-specific session formats (UUID vs thread_xxx)
 - Graceful degradation on incompatible references
-- Best practices for mixed providers
+- Best practices for mixed harnesss
 
 **Use When:**
 
-- Learning about provider compatibility
+- Learning about harness compatibility
 - Troubleshooting session-related issues
 - Understanding validation behavior
 
@@ -90,12 +90,12 @@ Select: manual-test/session-examples/session-reuse.flightpath.yaml
 
 ```
 Command Palette → FlightPath: Take Off
-Select: manual-test/session-examples/cross-provider.flightpath.yaml
+Select: manual-test/session-examples/cross-harness.flightpath.yaml
 ```
 
 **Expected Warnings:**
 
-- Cross-provider session references generate warnings
+- Cross-harness session references generate warnings
 - Invalid session formats trigger errors
 - FlightPath falls back gracefully (no fatal errors)
 
@@ -191,7 +191,7 @@ prompts:
 
 ---
 
-## Provider-Specific Session Formats
+## Harness-Specific Session Formats
 
 ### Copilot CLI
 
@@ -218,8 +218,8 @@ prompts:
 
 1. Working file exists: `.flightpath/.working/<workflow>.working.yaml`
 2. Previous prompt has `_runtime.sessionId`
-3. Providers match (Copilot → Copilot, not Copilot → Claude)
-4. Session ID format valid for provider
+3. Harnesss match (Copilot → Copilot, not Copilot → Claude)
+4. Session ID format valid for harness
 
 **Debug:**
 
@@ -228,13 +228,13 @@ View → Output → Select "FlightPath" channel
 Look for: "Session resolved: ..." messages
 ```
 
-### Cross-Provider Warnings
+### Cross-Harness Warnings
 
-**Expected:** FlightPath warns when session reference crosses providers
+**Expected:** FlightPath warns when session reference crosses harnesss
 
 **Behavior:** Gracefully falls back to new session (workflow continues)
 
-**Fix:** Use same provider for session chain, or use `newChatSession: true` when switching
+**Fix:** Use same harness for session chain, or use `newChatSession: true` when switching
 
 ---
 
@@ -286,7 +286,7 @@ Look for: "Session resolved: ..." messages
 
 - **[Session Management Guide](../../docs/SESSION_MANAGEMENT.md)** - Complete user guide
 - **[Workflow Properties Guide](../../docs/WORKFLOW_PROPERTIES.md)** - Workflow-level configuration
-- **[CLI Design](../../docs/COPILOT_CLI_DESIGN.md)** - Provider implementation details
+- **[CLI Design](../../docs/COPILOT_CLI_DESIGN.md)** - Harness implementation details
 
 ---
 

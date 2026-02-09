@@ -4,13 +4,13 @@ prompts:
       This is a test prompt to verify all properties sync correctly to the dashboard UI.
 
       When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
-      - Provider: copilot-cli
+      - Harness: copilot-cli
       - Model: claude-sonnet-4.5
       - Agent: test-agent
       - Resume Session: Yes
       - Allow Dynamic Extension: Yes
       - End Condition: Script, Returns, Timeout, Max Retries, Retry Prompt all filled in
-    provider: copilot-cli
+    harness: copilot-cli
     model: claude-sonnet-4.5
     agent: test-agent
     resumeSession: true
@@ -34,13 +34,13 @@ prompts:
       This is a test prompt with NO end condition properties.
 
       When loading this workflow and clicking on this prompt to edit it, the properties drawer should show:
-      - Provider: claude-cli
+      - Harness: claude-cli
       - Model: sonnet
       - Agent: (empty)
       - Resume Session: No
       - Allow Dynamic Extension: No
       - End Condition: All fields should be empty/default
-    provider: claude-cli
+    harness: claude-cli
     model: sonnet
     resumeSession: false
     allowDynamicExtension: false
