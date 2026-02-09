@@ -733,7 +733,11 @@ export class FlightPathManager {
             Log.info(
               `🔀 Prompt ${prompt.id || "unnamed"} using provider override: ${resolvedProvider}`
             );
-            return this.createIntegrationForMode(resolvedProvider);
+            const overrideIntegration =
+              this.createIntegrationForMode(resolvedProvider);
+            // CRITICAL: Update activeIntegration so stop() uses the correct integration
+            this.activeIntegration = overrideIntegration;
+            return overrideIntegration;
           }
           return activeIntegration;
         },
@@ -806,6 +810,10 @@ export class FlightPathManager {
     // Cancel the currently executing integration (respects mode override)
     // If no execution is active, use default integration
     const integration = this.activeIntegration || this.getDefaultIntegration();
+
+    Log.info(
+      `⏹️ FlightPathManager.stop() - Using ${integration === this.copilotCliIntegration ? "Copilot CLI" : integration === this.claudeCliIntegration ? "Claude CLI" : integration === this.codexCliIntegration ? "Codex CLI" : "Copilot Chat"} integration`
+    );
 
     // Stop the queue (sets state to CANCELLING)
     this.promptQueue.stop();

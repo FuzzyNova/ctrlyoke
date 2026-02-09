@@ -1213,10 +1213,9 @@ export class CliIntegration extends CopilotIntegration {
       onStdout: options.onStdout,
     });
 
-    // Emit response complete so dashboard knows process actually stopped
-    if (result.exitCode === 0) {
-      this.responseCompleteEmitter.fire("Process exited");
-    }
+    // Always emit response complete when process exits (success, error, or cancelled)
+    this.responseCompleteEmitter.fire("Process exited");
+    Log.info("✅ Process exited - execution complete");
 
     return result;
   }
@@ -1462,13 +1461,17 @@ export class CliIntegration extends CopilotIntegration {
    * Cancel the current CLI process
    */
   protected async cancelImplementation(): Promise<void> {
+    Log.info(
+      `⏹️ CLI Integration cancel called (provider: ${this.provider.config.displayName})`
+    );
+
     // Delegate to CliProcessManager for both terminal and process cancellation
     await this.processManager.cancel(this.currentExecution);
     this.currentExecution = undefined;
 
-    // Fire responseComplete so FlightPathManager can call confirmedStopped()
-    this.responseCompleteEmitter.fire("Execution cancelled");
-    Log.info("✅ Execution cancelled");
+    // Note: responseComplete will be fired by the process close handler
+    // Don't fire it here - the process may take seconds to actually exit
+    Log.info("⏹️ Cancellation signal sent - waiting for process to exit");
   }
 
   /**
@@ -1734,7 +1737,8 @@ export class CliIntegration extends CopilotIntegration {
                     this.lastParsedOutput = parsedOutput;
 
                     // Extract text from events
-                    const responseText = this.extractTextFromEvents(parsedOutput);
+                    const responseText =
+                      this.extractTextFromEvents(parsedOutput);
 
                     // Format statistics
                     const statistics = CliOutputFormatter.formatStatistics(
