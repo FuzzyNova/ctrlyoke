@@ -185,6 +185,7 @@ export class WorkflowExecutor {
           cliCommand: undefined,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
+          attemptIndex: 0,
         });
 
         // Listen for prompt ready event (fires when full prompt and command are built)
@@ -200,6 +201,7 @@ export class WorkflowExecutor {
               : undefined,
             workingDirectory: context.workspaceFolderPath,
             timestampMs: Date.now(),
+            attemptIndex: 0,
           });
         });
 
@@ -214,7 +216,7 @@ export class WorkflowExecutor {
         });
 
         // Subscribe to structured streaming events (Claude/Codex CLI)
-        const structuredStreamingDisposable = integration.onStreamingEvents(
+        structuredStreamingDisposable = integration.onStreamingEvents(
           (events) => {
             Log.info(
               `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
@@ -594,6 +596,7 @@ export class WorkflowExecutor {
           : undefined;
 
         // Use unexpanded prompt to avoid flooding output with large attachments
+        const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
         context.dashboardProvider.updateCliOutput(currentIndex, {
           prompt: retryPromptItem.prompt,
           response: retryResponseText,
@@ -604,6 +607,7 @@ export class WorkflowExecutor {
           cliCommand,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
+          attemptIndex: retryAttemptIndex,
         });
       }
 
@@ -882,6 +886,7 @@ export class WorkflowExecutor {
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
       timestampMs: Date.now(),
+      attemptIndex: 0,
     });
   }
 

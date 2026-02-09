@@ -70,17 +70,19 @@ export const OutputSection: React.FC = () => {
         });
       });
 
-      // Add CLI outputs
+      // Add CLI outputs - use explicit attemptIndex from data, not array position
       const stepOutputs = cliOutputs[stepIndex] || [];
-      stepOutputs.forEach((output, attemptIndex) => {
+      stepOutputs.forEach((output) => {
+        const cliOutput = output as CliOutputItem & { timestampMs?: number; attemptIndex?: number };
+        const explicitAttemptIndex = cliOutput.attemptIndex ?? 0;
         messages.push({
           type: "cli",
           stepIndex,
           timestamp:
-            (output as CliOutputItem & { timestampMs?: number }).timestampMs ||
-            stepIndex * 10000 + stepStatusMessages.length + attemptIndex,
+            cliOutput.timestampMs ||
+            stepIndex * 10000 + stepStatusMessages.length + explicitAttemptIndex,
           data: output as unknown as CliOutputItem,
-          attemptIndex,
+          attemptIndex: explicitAttemptIndex,
         });
       });
     }

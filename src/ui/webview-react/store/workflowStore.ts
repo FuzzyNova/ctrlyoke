@@ -51,6 +51,7 @@ export interface CliOutput {
   cliCommand?: string;
   workingDirectory?: string;
   timestampMs?: number;
+  attemptIndex?: number;
 }
 
 /**
@@ -225,50 +226,94 @@ export const useWorkflowStore = create<
   addCliOutput: (stepIndex, output) =>
     set((state) => {
       const outputs = state.cliOutputs[stepIndex] || [];
+      const attemptIndex = output.attemptIndex ?? 0;
       let newOutputs: CliOutput[];
 
-      // Check if last output is streaming (should be replaced, not appended)
-      if (outputs.length > 0 && outputs[outputs.length - 1].isStreaming) {
-        const streamingEntry = outputs[outputs.length - 1];
+      // Guard: If no retry state exists for this step, reject phantom retries.
+      // Only end conditions can trigger retries, so attemptIndex > 0 without
+      // retry state means something is wrong (e.g. undisposed event listener).
+      const retryState = state.retryStates[stepIndex];
+      if (attemptIndex === 0 && !retryState) {
+        // Initial attempt with no retry state: find and replace existing entry
+        // for attemptIndex 0 (handles streaming→final replacement and any
+        // accidental double-writes).
+        const existingIdx = outputs.findIndex(
+          (o) => (o.attemptIndex ?? 0) === 0
+        );
 
-        // Decide whether to preserve streamed text or replace with structured output
-        if (streamingEntry.response && streamingEntry.response.length > 0) {
-          // If final output has structured data, REPLACE streamed text
+        if (existingIdx >= 0) {
+          const existing = outputs[existingIdx];
+
+          // Preserve streamed response if final output lacks structured data
           if (
-            output.structured &&
-            (output.structured as any).events &&
-            (output.structured as any).events.length > 0
+            existing.isStreaming &&
+            existing.response &&
+            existing.response.length > 0 &&
+            !(
+              output.structured &&
+              (output.structured as any).events &&
+              (output.structured as any).events.length > 0
+            )
           ) {
-            console.log(
-              `📊 WorkflowStore: Replacing streamed text (${streamingEntry.response.length} chars) with structured output (${(output.structured as any).events.length} events)`
-            );
-            newOutputs = [...outputs.slice(0, -1), output];
-          } else {
-            // No structured output - preserve the streamed response
-            console.log(
-              `📊 WorkflowStore: Preserving streamed response (${streamingEntry.response.length} chars), no structured data available`
-            );
             newOutputs = [
-              ...outputs.slice(0, -1),
-              {
-                ...output,
-                response: streamingEntry.response, // Keep streamed content!
-              },
+              ...outputs.slice(0, existingIdx),
+              { ...output, response: existing.response },
+              ...outputs.slice(existingIdx + 1),
+            ];
+          } else {
+            newOutputs = [
+              ...outputs.slice(0, existingIdx),
+              output,
+              ...outputs.slice(existingIdx + 1),
             ];
           }
         } else {
-          // No streamed content, use final output as-is
-          console.log(
-            "📊 WorkflowStore: No streamed content, replacing with final output"
-          );
-          newOutputs = [...outputs.slice(0, -1), output];
+          // No existing entry for attempt 0 — first write
+          newOutputs = [...outputs, output];
         }
-      } else {
-        // No streaming entry - append as new output (initial or retry)
-        console.log(
-          "📊 WorkflowStore: Appending new output (initial or retry)"
+      } else if (attemptIndex > 0 && !retryState) {
+        // Bug: retry output without retry state — replace attempt 0 and warn
+        console.warn(
+          `⚠️ WorkflowStore: Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. Replacing initial output (likely a bug).`
         );
-        newOutputs = [...outputs, output];
+        newOutputs = [output];
+      } else {
+        // Retry with valid retry state: place at the correct index
+        // Find existing entry for this attemptIndex and replace, or append
+        const existingIdx = outputs.findIndex(
+          (o) => (o.attemptIndex ?? 0) === attemptIndex
+        );
+
+        if (existingIdx >= 0) {
+          const existing = outputs[existingIdx];
+
+          // Preserve streamed response if applicable
+          if (
+            existing.isStreaming &&
+            existing.response &&
+            existing.response.length > 0 &&
+            !(
+              output.structured &&
+              (output.structured as any).events &&
+              (output.structured as any).events.length > 0
+            )
+          ) {
+            newOutputs = [
+              ...outputs.slice(0, existingIdx),
+              { ...output, response: existing.response },
+              ...outputs.slice(existingIdx + 1),
+            ];
+          } else {
+            newOutputs = [
+              ...outputs.slice(0, existingIdx),
+              output,
+              ...outputs.slice(existingIdx + 1),
+            ];
+          }
+        } else {
+          // New retry attempt — append
+          newOutputs = [...outputs, output];
+        }
       }
 
       return {
@@ -311,11 +356,13 @@ export const useWorkflowStore = create<
       const outputs = state.cliOutputs[stepIndex] || [];
       let newOutputs: CliOutput[];
 
-      // Ensure there's a streaming buffer with structured events array
-      if (outputs.length === 0 || !outputs[outputs.length - 1].isStreaming) {
-        console.log(
-          "📊 WorkflowStore: Creating new structured streaming buffer"
-        );
+      // Find the streaming buffer for attemptIndex 0 (streaming is always initial attempt)
+      const streamingIdx = outputs.findIndex(
+        (o) => o.isStreaming && (o.attemptIndex ?? 0) === 0
+      );
+
+      if (streamingIdx < 0) {
+        // No streaming buffer yet — create one with explicit attemptIndex
         newOutputs = [
           ...outputs,
           {
@@ -325,20 +372,17 @@ export const useWorkflowStore = create<
             elapsed: 0,
             isStreaming: true,
             timestampMs: Date.now(),
+            attemptIndex: 0,
           },
         ];
       } else {
         // Append events to existing streaming buffer
-        const streamingBuffer = outputs[outputs.length - 1];
+        const streamingBuffer = outputs[streamingIdx];
         const existingStructured = streamingBuffer.structured as any;
         const existingEvents = existingStructured?.events || [];
 
-        console.log(
-          `📊 WorkflowStore: Appending ${events.length} events to streaming buffer (total will be ${existingEvents.length + events.length})`
-        );
-
         newOutputs = [
-          ...outputs.slice(0, -1),
+          ...outputs.slice(0, streamingIdx),
           {
             ...streamingBuffer,
             structured: {
@@ -346,6 +390,7 @@ export const useWorkflowStore = create<
               events: [...existingEvents, ...events],
             },
           },
+          ...outputs.slice(streamingIdx + 1),
         ];
       }
 

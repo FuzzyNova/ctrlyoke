@@ -62,6 +62,8 @@ export interface CliOutputData {
   workingDirectory?: string;
   /** Timestamp when the output was created (milliseconds since epoch) */
   timestampMs?: number;
+  /** Explicit attempt index: 0 = initial attempt, 1+ = retry */
+  attemptIndex: number;
 }
 
 /**
@@ -908,9 +910,30 @@ window.vscodeApi = acquireVsCodeApi();
     content: string,
     fileName?: string
   ): Promise<void> {
-    const defaultFileName = fileName || "flightpath-output.md";
+    // Build a readable export name from the workflow filename
+    // e.g. "my-workflow.flightpath.yaml" → "my-workflow.md"
+    let baseName = fileName || "flightpath-output";
+    baseName = baseName
+      .replace(/\.flightpath\.(ya?ml|json)$/i, "")
+      .replace(/\.prompt\.md$/i, "");
+    if (!baseName.endsWith(".md")) {
+      baseName += ".md";
+    }
+
+    // Default to .flightpath/output/ in the workspace
+    const workspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    let defaultUri: vscode.Uri;
+    if (workspaceRoot) {
+      const outputDir = path.join(workspaceRoot, ".flightpath", "output");
+      await fs.mkdir(outputDir, { recursive: true });
+      defaultUri = vscode.Uri.file(path.join(outputDir, baseName));
+    } else {
+      defaultUri = vscode.Uri.file(baseName);
+    }
+
     const uri = await vscode.window.showSaveDialog({
-      defaultUri: vscode.Uri.file(defaultFileName),
+      defaultUri,
       filters: {
         "Markdown Files": ["md"],
         "Text Files": ["txt"],

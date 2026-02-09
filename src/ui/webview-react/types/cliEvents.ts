@@ -204,6 +204,7 @@ export interface CliOutputItem {
   cliCommand?: string;
   workingDirectory?: string;
   timestampMs?: number;
+  attemptIndex?: number;
 }
 
 /**

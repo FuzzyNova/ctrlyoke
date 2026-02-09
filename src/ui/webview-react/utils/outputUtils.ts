@@ -3,7 +3,22 @@
  * Migrated from output-manager.js
  */
 import * as Diff from "diff";
-import type { DiffHunk } from "../types/cliEvents";
+import type {
+  DiffHunk,
+  CliEvent,
+  BashCommandEventData,
+  FileEditEventData,
+  FileWriteEventData,
+  FileReadEventData,
+  FileDeleteEventData,
+  McpToolCallEventData,
+  WebSearchEventData,
+  ToolCallEventData,
+  ToolResultEventData,
+  TextEventData,
+  ThinkingEventData,
+} from "../types/cliEvents";
+import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import { escapeHtml, truncate } from "./string";
 import { formatTime, getTimestamp } from "./time";
 
@@ -208,6 +223,279 @@ export function generateDiffLines(
 }
 
 /**
+ * Format tool call in terminal style for markdown export
+ */
+function formatToolCallForMarkdown(
+  toolName: string,
+  parameters?: Record<string, unknown>
+): string {
+  const params = extractKeyParameters(toolName, parameters);
+  return `● ${toolName}(${params})`;
+}
+
+/**
+ * Format tool result for markdown export
+ */
+function formatToolResultForMarkdown(result: {
+  success: boolean;
+  output?: string;
+  error?: string;
+}): string {
+  const prefix = "  ⎿  ";
+  if (!result.success && result.error) {
+    return prefix + truncate(result.error, 200);
+  }
+  if (result.output) {
+    return prefix + truncate(result.output, 100);
+  }
+  return prefix + (result.success ? "Success" : "Failed");
+}
+
+/**
+ * Format structured patch hunks as markdown diff lines
+ */
+function formatStructuredPatchForMarkdown(hunks: DiffHunk[]): string[] {
+  const diffLines: string[] = [];
+
+  hunks.forEach((hunk) => {
+    let oldLineNum = hunk.oldStart;
+    let newLineNum = hunk.newStart;
+
+    hunk.lines.forEach((line) => {
+      const prefix = line[0];
+      const content = line.slice(1);
+
+      if (prefix === "+") {
+        diffLines.push(`+${String(newLineNum).padStart(4)} | ${content}`);
+        newLineNum++;
+      } else if (prefix === "-") {
+        diffLines.push(`-${String(oldLineNum).padStart(4)} | ${content}`);
+        oldLineNum++;
+      } else {
+        diffLines.push(` ${String(oldLineNum).padStart(4)} | ${content}`);
+        oldLineNum++;
+        newLineNum++;
+      }
+    });
+  });
+
+  return diffLines;
+}
+
+/**
+ * Format diff for markdown export from old/new content
+ */
+function formatDiffForMarkdown(
+  oldContent: string,
+  newContent: string,
+  structuredPatch?: DiffHunk[]
+): string[] {
+  // Prefer structured patch with accurate line numbers
+  if (structuredPatch && structuredPatch.length > 0) {
+    return formatStructuredPatchForMarkdown(structuredPatch);
+  }
+
+  // Fallback: generate from content
+  const diffLines = generateDiffLines(oldContent, newContent);
+  return diffLines.map((line) => {
+    const num =
+      line.type === "added"
+        ? String(line.newLineNum ?? "").padStart(4)
+        : String(line.oldLineNum ?? "").padStart(4);
+    const prefix =
+      line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
+    return `${prefix}${num} | ${line.content}`;
+  });
+}
+
+/**
+ * Render structured CLI events to markdown lines (mirrors old output-manager.js generateMarkdownOutput)
+ */
+function renderStructuredEventsToMarkdown(
+  events: CliEvent[],
+  lines: string[]
+): void {
+  for (const event of events) {
+    switch (event.type) {
+      case CLI_EVENT_TYPES.TEXT: {
+        const data = event.data as TextEventData;
+        if (data.text) {
+          lines.push(data.text);
+          lines.push("");
+        }
+        break;
+      }
+
+      case CLI_EVENT_TYPES.BASH_COMMAND: {
+        const data = event.data as BashCommandEventData;
+        lines.push(`● ${data.command}`);
+
+        if (data.status !== OPERATION_STATUS.INITIATED) {
+          if (data.output) {
+            lines.push("");
+            lines.push("  ⎿  Output:");
+            lines.push("```");
+            lines.push(data.output.trim());
+            lines.push("```");
+          }
+
+          if (data.error) {
+            lines.push("");
+            lines.push("  ⎿  Error:");
+            lines.push("```");
+            lines.push(data.error.trim());
+            lines.push("```");
+          }
+
+          if (
+            data.status === OPERATION_STATUS.COMPLETED ||
+            data.status === OPERATION_STATUS.FAILED
+          ) {
+            const exitCode =
+              data.exitCode !== undefined ? data.exitCode : "?";
+            lines.push("");
+            lines.push(`  ⎿  (exit: ${exitCode})`);
+          }
+        }
+
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FILE_EDIT: {
+        const data = event.data as FileEditEventData;
+        if (data.path) {
+          if (data.status === OPERATION_STATUS.INITIATED) {
+            lines.push(`● Editing ${data.path}`);
+          } else if (data.status === OPERATION_STATUS.FAILED) {
+            lines.push(`● Edit failed: ${data.path}`);
+            if (data.error) {
+              lines.push(`  Error: ${data.error}`);
+            }
+          } else {
+            lines.push(`● Edited ${data.path}`);
+          }
+
+          // Render diff for completed edits
+          if (
+            data.status !== OPERATION_STATUS.INITIATED &&
+            (data.structuredPatch ||
+              (data.oldContent && data.newContent))
+          ) {
+            lines.push("");
+            lines.push("```diff");
+            const diffLines = formatDiffForMarkdown(
+              data.oldContent || "",
+              data.newContent || "",
+              data.structuredPatch
+            );
+            diffLines.forEach((line) => lines.push(line));
+            lines.push("```");
+          }
+          lines.push("");
+        }
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FILE_WRITE: {
+        const data = event.data as FileWriteEventData;
+        if (data.status === OPERATION_STATUS.INITIATED) {
+          lines.push(`● Writing ${data.path} (starting...)`);
+        } else if (data.status === OPERATION_STATUS.FAILED) {
+          lines.push(`● Write failed: ${data.path}`);
+          if (data.error) {
+            lines.push(`  Error: ${data.error}`);
+          }
+        } else {
+          lines.push(`● Wrote ${data.path}`);
+          if (data.content) {
+            lines.push(` (${data.content.length} bytes)`);
+          }
+        }
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FILE_READ: {
+        const data = event.data as FileReadEventData;
+        if (data.status === OPERATION_STATUS.INITIATED) {
+          lines.push(`● Reading ${data.path} (starting...)`);
+        } else if (data.status === OPERATION_STATUS.FAILED) {
+          lines.push(`● Read failed: ${data.path}`);
+          if (data.error) {
+            lines.push(`  Error: ${data.error}`);
+          }
+        } else {
+          lines.push(`● Read ${data.path}`);
+        }
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.FILE_DELETE: {
+        const data = event.data as FileDeleteEventData;
+        lines.push(`● Delete file: ${data.path}`);
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
+        const data = event.data as McpToolCallEventData;
+        lines.push(`● MCP: ${data.server}.${data.tool}`);
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.WEB_SEARCH: {
+        const data = event.data as WebSearchEventData;
+        lines.push(`● Web search: "${data.query}"`);
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.TOOL_CALL: {
+        const data = event.data as ToolCallEventData;
+        const toolLine = formatToolCallForMarkdown(
+          data.name,
+          data.parameters
+        );
+        lines.push(toolLine);
+
+        if (data.result) {
+          const resultLine = formatToolResultForMarkdown(data.result);
+          lines.push(resultLine);
+        }
+        lines.push("");
+        break;
+      }
+
+      case CLI_EVENT_TYPES.THINKING: {
+        const data = event.data as ThinkingEventData;
+        if (data.text) {
+          const label =
+            data.label && data.label !== "Thinking"
+              ? data.label
+              : "Thinking";
+          lines.push(`● ${label}: ${data.text}`);
+          lines.push("");
+        }
+        break;
+      }
+
+      case CLI_EVENT_TYPES.TOOL_RESULT: {
+        const data = event.data as ToolResultEventData;
+        if (data.result) {
+          const resultLine = formatToolResultForMarkdown(data.result);
+          lines.push(resultLine);
+          lines.push("");
+        }
+        break;
+      }
+    }
+  }
+}
+
+/**
  * Generate markdown export content from CLI outputs
  */
 export function generateMarkdownExport(
@@ -294,7 +582,18 @@ export function generateMarkdownExport(
         lines.push("");
       }
 
-      if (output.response) {
+      // Export events in chronological order (structured) or fall back to plain response
+      if (
+        output.structured?.events &&
+        output.structured.events.length > 0
+      ) {
+        lines.push("### Response");
+        lines.push("");
+        renderStructuredEventsToMarkdown(
+          output.structured.events as CliEvent[],
+          lines
+        );
+      } else if (output.response) {
         lines.push("### Response");
         lines.push("");
         lines.push("```");
