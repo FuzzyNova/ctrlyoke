@@ -47,7 +47,7 @@ export interface ResolvedProperties {
  * ```typescript
  * const resolved = PropertyResolver.resolve(prompt, workflow);
  * // resolved.harness is guaranteed to be defined (from prompt, workflow, or settings)
- * // resolved.model is guaranteed to be defined (provider-specific default)
+ * // resolved.model is guaranteed to be defined (harness-specific default)
  * // resolved.agent may be undefined (no fallback)
  * ```
  */

@@ -782,13 +782,13 @@ export class CliIntegration extends CopilotIntegration {
   }
 
   /**
-   * Monitor log file for completion using provider's log parser.
+   * Monitor log file for completion using harness's log parser.
    *
-   * For providers with notification monitors (Claude, Codex), monitors both:
+   * For harnesses with notification monitors (Claude, Codex), monitors both:
    * - Log file for streaming content
    * - Notification file for completion signal
    *
-   * For providers without notification monitors (Copilot), relies on log file completion detection.
+   * For harnesses without notification monitors (Copilot), relies on log file completion detection.
    *
    * @param logPath Absolute path to log file
    * @param sessionId Session ID (if already extracted)
@@ -874,13 +874,13 @@ export class CliIntegration extends CopilotIntegration {
       const processEvent = (event: any, source: string) => {
         events.push(event);
 
-        // Stream content to output window (delegates to provider's log parser)
+        // Stream content to output window (delegates to harness's log parser)
         const content = parser.extractContentFromEvent(event);
         if (content) {
           this.streamingChunkEmitter.fire(content);
         }
 
-        // Check completion via log file (fallback for providers without notification monitor)
+        // Check completion via log file (fallback for harnesses without notification monitor)
         if (!completed && parser.isComplete(event)) {
           void handleCompletion(source);
         }
@@ -1121,7 +1121,7 @@ export class CliIntegration extends CopilotIntegration {
       // Check if we should stream output in real-time
       const shouldStream = this.provider.config.shouldStreamHeadlessOutput;
 
-      // Create streaming state map for provider's response parser
+      // Create streaming state map for harness's response parser
       const streamState = new Map<string, any>();
 
       // Spawn and execute
@@ -1152,10 +1152,10 @@ export class CliIntegration extends CopilotIntegration {
                   if (processedChunk !== undefined) {
                     // Check if response parser returned structured events or plain text
                     if (Array.isArray(processedChunk)) {
-                      // Modern providers (Claude, Codex) return CliEvent[]
+                      // Modern harnesses (Claude, Codex) return CliEvent[]
                       this.streamingEventsEmitter.fire(processedChunk);
                     } else {
-                      // Legacy providers (Copilot) return string
+                      // Legacy harnesses (Copilot) return string
                       this.streamingChunkEmitter.fire(processedChunk);
                     }
                   }
@@ -1523,7 +1523,7 @@ export class CliIntegration extends CopilotIntegration {
         workflowContext?.workflowFile
       );
 
-      // Resolve execution properties (provider, model, agent)
+      // Resolve execution properties (harness, model, agent)
       const resolvedProperties = workflowContext?.workflowFile
         ? PropertyResolver.resolve(prompt, workflowContext.workflowFile)
         : workflowContext?.resolvedProperties;
@@ -1785,7 +1785,7 @@ export class CliIntegration extends CopilotIntegration {
 
       // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
       if (success) {
-        // IMPORTANT: Always create/update provider and model fields, even when resuming from working file
+        // IMPORTANT: Always create/update harness and model fields, even when resuming from working file
         // This ensures _runtime accurately reflects what was ACTUALLY used, not stale data from previous runs
         const actualHarness =
           resolvedProperties?.harness ?? (this.getIntegrationMode() as Harness);
@@ -1801,7 +1801,7 @@ export class CliIntegration extends CopilotIntegration {
             startedAt: Date.now(),
           };
         } else {
-          // Resuming from working file - update provider/model to match what actually ran
+          // Resuming from working file - update harness/model to match what actually ran
           prompt._runtime.harness = actualHarness;
           prompt._runtime.model = actualModel;
           prompt._runtime.agent = actualAgent;

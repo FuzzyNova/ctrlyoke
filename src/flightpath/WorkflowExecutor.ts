@@ -45,7 +45,7 @@ export interface WorkflowContext {
   /** Integration resolver - gets the appropriate integration for a prompt */
   getIntegrationForPrompt: (
     prompt: PromptItem,
-    providerOverride?: Harness
+    harnessOverride?: Harness
   ) => CopilotIntegration;
 }
 
@@ -144,7 +144,7 @@ export class WorkflowExecutor {
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
 
-      // Resolve the integration for this prompt (supports per-prompt and workflow-level provider)
+      // Resolve the integration for this prompt (supports per-prompt and workflow-level harness)
       const integration = context.getIntegrationForPrompt(
         prompt,
         resolvedProperties.harness
@@ -228,7 +228,7 @@ export class WorkflowExecutor {
       // Log resolved properties for debugging
       Log.info(
         `📋 Resolved properties for prompt ${i + 1}: ` +
-          `provider=${resolvedProperties.harness}, ` +
+          `harness=${resolvedProperties.harness}, ` +
           `model=${resolvedProperties.model}, ` +
           `agent=${resolvedProperties.agent || "(none)"}, ` +
           `resumeSession=${resolvedProperties.resumeSession}, ` +

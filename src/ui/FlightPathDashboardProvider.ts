@@ -704,8 +704,8 @@ export class FlightPathDashboardProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Build model options for all providers
-   * Returns a map of provider ID to array of {value, label} options
+   * Build model options for all harnesses
+   * Returns a map of harness ID to array of {value, label} options
    */
   private buildModelOptions(): Record<
     string,

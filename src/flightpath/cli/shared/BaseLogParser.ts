@@ -4,7 +4,7 @@ import { ILogParser } from "./interfaces/ILogParser";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 
 /**
- * Abstract base class for CLI provider log parsers
+ * Abstract base class for CLI harness log parsers
  *
  * Provides shared log file reading, watching, and session discovery logic.
  * Harness-specific parsers (Copilot, Claude, Codex) extend this class and
@@ -90,7 +90,7 @@ export abstract class BaseLogParser implements ILogParser {
    * Harness-specific implementation must:
    * - If sessionId provided: Search for log file containing that session ID (fast path)
    * - Otherwise: Use findModifiedSessionLogs() to get candidate files and match by prompt text
-   * - Get log directory path for provider
+   * - Get log directory path for harness
    * - Read and parse log entries from each candidate
    * - Return first matching file path
    *
@@ -110,7 +110,7 @@ export abstract class BaseLogParser implements ILogParser {
    *
    * Harness-specific implementation must:
    * - Search events for session/conversation ID
-   * - Return ID in provider's expected format (UUID, thread_xxx, etc.)
+   * - Return ID in harness's expected format (UUID, thread_xxx, etc.)
    * - Return null if no session ID found
    *
    * @param events - Array of parsed log events
@@ -121,7 +121,7 @@ export abstract class BaseLogParser implements ILogParser {
    * Extract text content from a single log event for streaming
    *
    * Harness-specific implementation must:
-   * - Parse event format specific to this provider
+   * - Parse event format specific to this harness
    * - Extract displayable text content
    * - Return undefined if event has no displayable content
    *
@@ -134,7 +134,7 @@ export abstract class BaseLogParser implements ILogParser {
    * Format metadata into human-readable statistics string
    *
    * Harness-specific implementation must:
-   * - Parse metadata fields specific to this provider
+   * - Parse metadata fields specific to this harness
    * - Format into consistent display string
    * - Include session ID, model, token usage as available
    *
@@ -143,7 +143,7 @@ export abstract class BaseLogParser implements ILogParser {
    */
   abstract formatStatistics(metadata: any): string;
   // ========================================================================
-  // Shared Implementation (Used by All Providers)
+  // Shared Implementation (Used by All Harnesses)
   // ========================================================================
 
   /**
@@ -290,7 +290,7 @@ export abstract class BaseLogParser implements ILogParser {
 
         // Filter entries by timestamp (only process new entries)
         for (const entry of newEntries) {
-          // Check if entry has timestamp field (provider-specific)
+          // Check if entry has timestamp field (harness-specific)
           const entryTime = this.extractTimestamp(entry);
           if (entryTime && entryTime < startTime) {
             continue; // Skip old entries
@@ -404,8 +404,8 @@ export abstract class BaseLogParser implements ILogParser {
   /**
    * Extract timestamp from log entry
    *
-   * Helper to get timestamp from provider-specific log entry.
-   * Override in provider parser if timestamp field differs.
+   * Helper to get timestamp from harness-specific log entry.
+   * Override in harness parser if timestamp field differs.
    *
    * @param entry - Parsed log entry
    * @returns Entry timestamp, or null if not found
@@ -416,7 +416,7 @@ export abstract class BaseLogParser implements ILogParser {
    * - time (Unix timestamp)
    * - created_at (ISO 8601 string)
    *
-   * Providers can override to handle their specific format.
+   * Harnesses can override to handle their specific format.
    */
   protected extractTimestamp(entry: any): Date | null {
     // Check common timestamp fields

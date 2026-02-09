@@ -36,7 +36,7 @@ export interface SplitConfig {
  * PromptFileSplitter - Intelligently splits large prompts into multiple files
  *
  * Splits on paragraph boundaries first, then lines, then sentences to preserve structure.
- * Conservative defaults work for both Copilot and Claude CLI providers.
+ * Conservative defaults work for both Copilot and Claude CLI harnesses.
  *
  * Claude CLI has a 2,000 line limit per request; other limits depend on underlying model context windows.
  */

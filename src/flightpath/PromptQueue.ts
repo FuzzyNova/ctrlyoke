@@ -200,7 +200,7 @@ export class PromptQueue {
 
       // Restore prompts and basic state
       // CRITICAL: Preserve _runtime metadata during load (Phase 4: Per-Prompt Session Management)
-      // Each prompt's _runtime contains: provider, model, agent, sessionId, startedAt, completedAt
+      // Each prompt's _runtime contains: harness, model, agent, sessionId, startedAt, completedAt
       this.state = {
         currentIndex: runtime?.currentIndex || 0,
         status: executionState,
@@ -1409,7 +1409,7 @@ export class PromptQueue {
     properties: Record<string, unknown>,
     options: {
       onlyIfUndefined?: boolean;
-      ensureProviderAndModel?: boolean;
+      ensureHarnessAndModel?: boolean;
       allowDeletes?: boolean;
     } = {}
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
@@ -1456,11 +1456,11 @@ export class PromptQueue {
           }
         }
 
-        if (options.ensureProviderAndModel) {
+        if (options.ensureHarnessAndModel) {
           if (!workingFile.harness) {
             workingFile.harness = ConfigurationUtils.getIntegrationMode();
             modified = true;
-            appliedKeys.push("provider");
+            appliedKeys.push("harness");
           }
 
           if (!workingFile.model) {

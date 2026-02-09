@@ -40,10 +40,10 @@ export interface McpConfigResult {
 }
 
 /**
- * Shared MCP server configuration utilities (provider-agnostic)
+ * Shared MCP server configuration utilities (harness-agnostic)
  *
  * Provides generic helpers for generating MCP configurations.
- * Each provider integration calls the appropriate methods directly.
+ * Each harness integration calls the appropriate methods directly.
  */
 export class CliMcpConfigGenerator {
   /**
@@ -90,7 +90,7 @@ export class CliMcpConfigGenerator {
   /**
    * Generate inline TOML configuration
    *
-   * Used by providers that support inline TOML config (e.g., Codex).
+   * Used by harnesses that support inline TOML config (e.g., Codex).
    * Format: mcp_servers.{serverName}={command='node',args=['path'],env={VAR='value'}}
    *
    * Note: Uses single quotes inside TOML to avoid PowerShell escaping issues

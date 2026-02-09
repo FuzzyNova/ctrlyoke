@@ -37,7 +37,7 @@ export interface CopilotCliOptions {
 }
 
 /**
- * Generic CLI result interface used by ALL CLI providers
+ * Generic CLI result interface used by ALL CLI harnesses
  * (Copilot, Claude, Codex, etc.)
  */
 export interface CliResult {

@@ -187,7 +187,7 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, undefined);
     });
 
-    test("should warn on cross-provider reference", () => {
+    test("should warn on cross-harness reference", () => {
       const prompts: PromptItem[] = [
         {
           prompt: "first",
@@ -203,11 +203,11 @@ suite("SessionResolver Tests", () => {
         {
           prompt: "second",
           harness: Harness.CopilotCli,
-          sessionId: 1, // Cross-provider reference
+          sessionId: 1, // Cross-harness reference
         },
       ];
 
-      // Should return undefined (cross-provider not allowed)
+      // Should return undefined (cross-harness not allowed)
       const sessionId = SessionResolver.resolve(prompts[1], 1, prompts);
       assert.strictEqual(sessionId, undefined);
     });
@@ -245,7 +245,7 @@ suite("SessionResolver Tests", () => {
       assert.strictEqual(sessionId, "auto-resume-session");
     });
 
-    test("should skip prompts with different providers when auto-resuming", () => {
+    test("should skip prompts with different harnesses when auto-resuming", () => {
       const prompts: PromptItem[] = [
         {
           prompt: "first",
@@ -274,12 +274,12 @@ suite("SessionResolver Tests", () => {
         },
       ];
 
-      // Should skip claude-session and use copilot-session (matching provider)
+      // Should skip claude-session and use copilot-session (matching harness)
       const sessionId = SessionResolver.resolve(prompts[2], 2, prompts);
       assert.strictEqual(sessionId, "copilot-session");
     });
 
-    test("should return undefined when no previous prompt with matching provider", () => {
+    test("should return undefined when no previous prompt with matching harness", () => {
       const prompts: PromptItem[] = [
         {
           prompt: "first",

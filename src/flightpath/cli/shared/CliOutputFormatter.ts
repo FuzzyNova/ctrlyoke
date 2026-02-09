@@ -1,6 +1,6 @@
 /**
  * Shared formatter for converting UniversalCliOutput to various output formats.
- * Provides consistent formatting across all CLI providers for display in
+ * Provides consistent formatting across all CLI harnesses for display in
  * the VS Code Output panel, dashboard webview, and other consumers.
  */
 

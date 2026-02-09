@@ -80,7 +80,7 @@ export class PromptFileLoader {
           if (workingFilePath) {
             // Copy workflow-level properties (if defined in loaded file)
             const propertiesToCopy = [
-              "provider",
+              "harness",
               "model",
               "agent",
               "resumeSession",

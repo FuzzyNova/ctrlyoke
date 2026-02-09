@@ -2,10 +2,10 @@ import * as fs from "fs";
 import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
- * Interface for CLI provider log parsers
+ * Interface for CLI harness log parsers
  *
- * Defines the contract for parsing provider-specific log files to extract
- * responses, session IDs, and track completion status. Each CLI provider
+ * Defines the contract for parsing harness-specific log files to extract
+ * responses, session IDs, and track completion status. Each CLI harness
  * (Copilot, Claude, Codex) implements this interface to handle its unique
  * log format (JSONL, stream-json, etc.).
  *
@@ -15,7 +15,7 @@ import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
  * 2. **Response Extraction** - Parse streaming responses from log entries
  *
  * Implementation responsibilities:
- * - Parse provider-specific log formats (JSONL, JSON streams, etc.)
+ * - Parse harness-specific log formats (JSONL, JSON streams, etc.)
  * - Extract session IDs from log entries
  * - Detect completion events
  * - Build complete responses from streaming events
@@ -25,10 +25,10 @@ export interface ILogParser {
    * Extract complete response from parsed log events
    *
    * Combines multiple streaming events into a single response object.
-   * Handles provider-specific event formats and assembles text, tool calls,
+   * Handles harness-specific event formats and assembles text, tool calls,
    * thinkingBlocks, and metadata into a unified UniversalCliOutput structure.
    *
-   * @param events - Array of parsed log events (provider-specific format)
+   * @param events - Array of parsed log events (harness-specific format)
    * @returns UniversalCliOutput - Standardized response object
    *
    * @example
@@ -46,7 +46,7 @@ export interface ILogParser {
   /**
    * Check if a log event indicates completion
    *
-   * Detects provider-specific completion signals (e.g., "turn.completed",
+   * Detects harness-specific completion signals (e.g., "turn.completed",
    * "session.ended", etc.) to determine when response streaming has finished.
    *
    * @param event - Single parsed log event
@@ -102,7 +102,7 @@ export interface ILogParser {
    * Parses JSONL format (one JSON object per line) and returns parsed entries.
    *
    * @param filePath - Absolute path to log file
-   * @returns Array of parsed log entries (provider-specific format)
+   * @returns Array of parsed log entries (harness-specific format)
    *
    * @remarks
    * - Tracks read position internally (lastReadPosition) to avoid re-reading
@@ -121,7 +121,7 @@ export interface ILogParser {
   /**
    * Discover session log file for a prompt
    *
-   * Searches provider's log directory for the session log file corresponding
+   * Searches harness's log directory for the session log file corresponding
    * to a specific prompt execution. Uses session ID (if available) or prompt
    * text and timestamp to identify the correct log file.
    *
@@ -168,7 +168,7 @@ export interface ILogParser {
   /**
    * Extract session ID from log events
    *
-   * Parses log events to find session/conversation ID. Different providers
+   * Parses log events to find session/conversation ID. Different harnesses
    * store session IDs in different event fields and formats.
    *
    * @param events - Array of parsed log events
@@ -199,10 +199,10 @@ export interface ILogParser {
   /**
    * Extract text content from a single log event for streaming
    *
-   * Parses provider-specific event format to extract displayable text content.
+   * Parses harness-specific event format to extract displayable text content.
    * Used during log file watching to stream content to output in real-time.
    *
-   * @param event - Single parsed log event (provider-specific format)
+   * @param event - Single parsed log event (harness-specific format)
    * @returns Text content to display, or undefined if event has no displayable content
    *
    * @remarks
@@ -224,7 +224,7 @@ export interface ILogParser {
   /**
    * Format metadata into human-readable statistics string
    *
-   * Converts provider-specific metadata (model, tokens, session info) into
+   * Converts harness-specific metadata (model, tokens, session info) into
    * a formatted display string for the output panel.
    *
    * @param metadata - Metadata object from extractResponse()

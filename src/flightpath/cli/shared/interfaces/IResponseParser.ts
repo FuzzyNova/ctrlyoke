@@ -7,7 +7,7 @@ import {
 /**
  * Response parsing interface
  *
- * Each CLI provider implements this to parse their specific output format
+ * Each CLI harness implements this to parse their specific output format
  * (e.g., plain text for Copilot, JSON for Claude, JSONL for Codex)
  */
 export interface IResponseParser {
@@ -28,8 +28,8 @@ export interface IResponseParser {
    * Process streaming chunk for real-time display
    *
    * **Return types:**
-   * - `string`: Plain text for legacy providers (Copilot CLI) - rendered as fallback text
-   * - `CliEvent[]`: Structured events for modern providers (Claude, Codex) - rendered with terminal styling
+   * - `string`: Plain text for legacy harnesses (Copilot CLI) - rendered as fallback text
+   * - `CliEvent[]`: Structured events for modern harnesses (Claude, Codex) - rendered with terminal styling
    * - `undefined`: Skip this chunk (incomplete data, waiting for more)
    *
    * @param chunk Raw stdout chunk
@@ -60,7 +60,7 @@ export interface IResponseParser {
   /**
    * Check if an error is a recoverable session error that should trigger retry without resume flag
    *
-   * Some providers (e.g., Claude CLI) reject invalid session IDs with specific error messages.
+   * Some harnesses (e.g., Claude CLI) reject invalid session IDs with specific error messages.
    * When detected, FlightPath can retry the same prompt without the --resume flag to start a new session.
    *
    * @param error The error to check (Error object or string)
@@ -147,8 +147,8 @@ export abstract class ResponseParserBase implements IResponseParser {
   /**
    * Default implementation: No recoverable session errors
    *
-   * Most providers don't have special error recovery logic.
-   * Override this method in provider-specific parsers to implement custom recovery.
+   * Most harnesses don't have special error recovery logic.
+   * Override this method in harness-specific parsers to implement custom recovery.
    *
    * @param error The error to check
    * @returns False by default (no recovery)

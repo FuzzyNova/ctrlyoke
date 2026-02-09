@@ -21,7 +21,7 @@ export interface SessionValidationResult {
  * 2. **Exact Session ID**: `sessionId: "550e8400-e29b-41d4..."` - Direct session ID
  * 3. **Auto-Resume**: No sessionId specified - Automatically resume previous prompt's session
  *
- * Resolution respects workflow-level properties and validates cross-provider compatibility.
+ * Resolution respects workflow-level properties and validates cross-harness compatibility.
  *
  * @example
  * ```typescript
@@ -75,7 +75,7 @@ export class SessionResolver {
    * 1. If resumeSession=false → undefined (new session)
    * 2. If sessionId is number → resolve from referenced prompt
    * 3. If sessionId is string → use directly
-   * 4. Otherwise → auto-resume from previous prompt (same provider)
+   * 4. Otherwise → auto-resume from previous prompt (same harness)
    *
    * @param prompt The prompt to resolve session for
    * @param promptIndex Current prompt's index in queue (0-based)

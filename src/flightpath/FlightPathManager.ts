@@ -725,16 +725,16 @@ export class FlightPathManager {
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         getIntegrationForPrompt: (
           prompt: PromptItem,
-          providerOverride?: Harness
+          harnessOverride?: Harness
         ) => {
-          const resolvedProvider = providerOverride || prompt.harness;
-          // If prompt or workflow has a provider override, use it; otherwise use the active integration
-          if (resolvedProvider) {
+          const resolvedHarness = harnessOverride || prompt.harness;
+          // If prompt or workflow has a harness override, use it; otherwise use the active integration
+          if (resolvedHarness) {
             Log.info(
-              `🔀 Prompt ${prompt.id || "unnamed"} using provider override: ${resolvedProvider}`
+              `🔀 Prompt ${prompt.id || "unnamed"} using harness override: ${resolvedHarness}`
             );
             const overrideIntegration =
-              this.createIntegrationForMode(resolvedProvider);
+              this.createIntegrationForMode(resolvedHarness);
             // CRITICAL: Update activeIntegration so stop() uses the correct integration
             this.activeIntegration = overrideIntegration;
             return overrideIntegration;
@@ -1389,7 +1389,7 @@ export class FlightPathManager {
   /**
    * Execute an ephemeral prompt from the dashboard editor
    * @param text - Prompt text
-   * @param properties - PromptItem properties (provider, model, etc.)
+   * @param properties - PromptItem properties (harness, model, etc.)
    * @param action - 'send' (append + run) or 'add' (append only)
    */
   /**

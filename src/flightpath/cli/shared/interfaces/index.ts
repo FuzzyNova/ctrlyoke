@@ -1,7 +1,7 @@
 /**
  * CLI Harness Interfaces
  *
- * This module exports all interface definitions for CLI provider implementations.
+ * This module exports all interface definitions for CLI harness implementations.
  * These interfaces define the contract that all CLI integrations must follow.
  */
 

@@ -20,7 +20,7 @@ export interface ToolPermissionConfig {
 /**
  * Tool permission mapper interface
  *
- * Each CLI provider implements this to convert FlightPath's unified permission
+ * Each CLI harness implements this to convert FlightPath's unified permission
  * configuration into their specific CLI arguments.
  *
  * Example conversions:

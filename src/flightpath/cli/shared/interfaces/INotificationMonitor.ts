@@ -43,12 +43,12 @@ export type HookConfig =
 /**
  * Notification monitoring interface
  *
- * Each CLI provider implements this to monitor for completion notifications
+ * Each CLI harness implements this to monitor for completion notifications
  * in their specific format (sessionEnd hooks, notify callbacks, etc.)
  */
 export interface INotificationMonitor {
   /**
-   * Whether this provider includes session IDs in notification filenames.
+   * Whether this harness includes session IDs in notification filenames.
    *
    * - `true`: Notification files include session ID (e.g., Claude: `stop-{threadId}.json`)
    * - `false`: Notification files use timestamps (e.g., Copilot: `sessionEnd-{timestamp}.json`)
@@ -122,7 +122,7 @@ export interface INotificationMonitor {
    * Cleanup notification files after completion
    *
    * Called after completion is detected to clean up any remaining notification files.
-   * Providers can override this to handle provider-specific cleanup
+   * Harnesses can override this to handle harness-specific cleanup
    * (e.g., Claude needs to cleanup both -start.json and -stop.json files)
    *
    * @param sessionId Session ID

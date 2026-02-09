@@ -80,11 +80,11 @@ export class SessionValidator {
    */
   private static validateUuid(
     sessionId: string,
-    providerName: string
+    harnessName: string
   ): boolean {
     if (!this.UUID_REGEX.test(sessionId)) {
       Log.warn(
-        `⚠️ Session ID "${sessionId}" is not a valid UUID for ${providerName}. ` +
+        `⚠️ Session ID "${sessionId}" is not a valid UUID for ${harnessName}. ` +
           `Starting new session instead. ` +
           `Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
       );
@@ -116,7 +116,7 @@ export class SessionValidator {
   /**
    * Check if a session ID looks like a UUID (for diagnostics)
    *
-   * Useful for debugging when providers receive unexpected formats.
+   * Useful for debugging when harnesses receive unexpected formats.
    *
    * @param sessionId Session ID to check
    * @returns True if appears to be UUID format

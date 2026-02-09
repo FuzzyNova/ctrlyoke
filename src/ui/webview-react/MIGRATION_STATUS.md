@@ -35,7 +35,7 @@
 - ✅ `cliOutput` / `cliStreamingChunk` / `cliStreamingEvents` - Output rendering
 - ✅ `workflowPropertiesUpdate` / `globalSettingsUpdate` - Settings sync
 - ✅ `recentWorkflows` / `openNewWorkflowModal` - Workflow management
-- ✅ `providerStatusUpdate` / `modelOptionsUpdate` - Dynamic model discovery
+- ✅ `harnessStatusUpdate` / `modelOptionsUpdate` - Dynamic model discovery
 
 ### CodeMirror Integration
 

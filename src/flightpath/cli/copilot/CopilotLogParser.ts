@@ -913,7 +913,7 @@ export class CopilotLogParser extends BaseLogParser {
   /**
    * Map Copilot tool name to semantic event type
    *
-   * Converts Copilot-specific tool names to provider-agnostic semantic events.
+   * Converts Copilot-specific tool names to harness-agnostic semantic events.
    *
    * **Tool Name Mapping:**
    * - Shell commands: `powershell`, `bash`, `shell` → BASH_COMMAND

@@ -689,7 +689,7 @@
           "type": "boolean",
           "default": false,
           "description": "[Debug] Log raw CLI output for debugging",
-          "markdownDescription": "**Debug Mode.** Log raw unparsed output from all CLI providers (Copilot, Claude, Codex) to the Output panel. Useful for debugging parser issues. **Warning:** Extremely verbose, only enable when troubleshooting."
+          "markdownDescription": "**Debug Mode.** Log raw unparsed output from all CLI harnesses (Copilot, Claude, Codex) to the Output panel. Useful for debugging parser issues. **Warning:** Extremely verbose, only enable when troubleshooting."
         },
         "flightpath.showCliCommand": {
           "order": 202,

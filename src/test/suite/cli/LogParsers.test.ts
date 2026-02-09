@@ -17,7 +17,7 @@ import {
 /**
  * Comprehensive unit tests for CLI log parser implementations
  *
- * Tests all three provider log parsers:
+ * Tests all three harness log parsers:
  * - ClaudeLogParser (JSONL format from ~/.claude/projects/)
  * - CopilotLogParser (Old flat file + new subdirectory formats)
  * - CodexLogParser (Nested payload structure in date-based directories)

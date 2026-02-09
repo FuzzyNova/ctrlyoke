@@ -13,7 +13,7 @@
  * Provides runtime access to the model list for:
  * - IntelliSense completions in prompt files
  * - Validation of model selection
- * - CLI/Chat provider model switching
+ * - CLI/Chat harness model switching
  *
  * Falls back to static model lists from ModelConstants when queries fail.
  */

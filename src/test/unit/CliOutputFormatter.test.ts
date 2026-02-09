@@ -458,7 +458,7 @@ suite("CliOutputFormatter Tests", () => {
         cliVersion: "1.0.0",
         harness: "copilot-cli",
       });
-      // cliVersion and provider are not displayed in statistics
+      // cliVersion and harness are not displayed in statistics
       assert.strictEqual(result, "");
     });
   });

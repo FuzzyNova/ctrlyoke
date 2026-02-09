@@ -3,8 +3,8 @@ import { PropertyResolver } from "../../utils/PropertyResolver";
 import { Harness, PromptFile, PromptItem } from "../../types/FlightPathTypes";
 
 suite("PropertyResolver Tests", () => {
-  suite("resolveProvider", () => {
-    test("should use prompt-level provider when specified", () => {
+  suite("resolveHarness", () => {
+    test("should use prompt-level harness when specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
         harness: Harness.ClaudeCli,
@@ -18,7 +18,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.harness, Harness.ClaudeCli);
     });
 
-    test("should use workflow-level provider when prompt-level not specified", () => {
+    test("should use workflow-level harness when prompt-level not specified", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -31,7 +31,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.harness, Harness.ClaudeCli);
     });
 
-    test("should fall back to VS Code setting when neither prompt nor workflow specify provider", () => {
+    test("should fall back to VS Code setting when neither prompt nor workflow specify harness", () => {
       const prompt: PromptItem = {
         prompt: "test",
       };
@@ -73,7 +73,7 @@ suite("PropertyResolver Tests", () => {
       assert.strictEqual(resolved.model, "claude-haiku-4.5");
     });
 
-    test("should fall back to provider-specific model when neither prompt nor workflow specify model", () => {
+    test("should fall back to harness-specific model when neither prompt nor workflow specify model", () => {
       const prompt: PromptItem = {
         prompt: "test",
         harness: Harness.CopilotCli,

@@ -1,6 +1,6 @@
 /**
- * Universal CLI output types for standardizing output across all CLI providers.
- * These types provide a provider-agnostic format that can be used by Copilot CLI,
+ * Universal CLI output types for standardizing output across all CLI harnesses.
+ * These types provide a harness-agnostic format that can be used by Copilot CLI,
  * Claude CLI, Codex CLI, and any future CLI integrations.
  */
 
@@ -61,7 +61,7 @@ export interface ToolResultData {
 }
 
 /**
- * Universal CLI output structure (provider-agnostic).
+ * Universal CLI output structure (harness-agnostic).
  * Used by all CLI parsers to standardize output format before display.
  */
 export interface UniversalCliOutput {
@@ -81,12 +81,12 @@ export interface UniversalCliOutput {
 
 /**
  * Represents a tool call made by the AI during response generation.
- * Normalized from provider-specific formats (e.g., 'input' vs 'arguments').
+ * Normalized from harness-specific formats (e.g., 'input' vs 'arguments').
  */
 export interface ToolCall {
   /** Tool name (e.g., 'read_file', 'write_file', 'bash') */
   name: string;
-  /** Tool parameters - normalized from 'input' or 'arguments' depending on provider */
+  /** Tool parameters - normalized from 'input' or 'arguments' depending on harness */
   parameters: Record<string, unknown>;
   /** Optional tool call ID for tracking */
   id?: string;
