@@ -577,7 +577,7 @@ function createLinkDecorationExtension() {
       }
 
       buildDecorations(view: EditorView) {
-        const builder = new RangeSetBuilder();
+        const builder = new RangeSetBuilder<Decoration>();
 
         // Regex patterns matching PromptLinkHarness
         const patterns = {

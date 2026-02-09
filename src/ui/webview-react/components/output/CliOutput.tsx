@@ -311,7 +311,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
           >
             {escapeHtml(streamingChunk)}
           </div>
-          <StructuredOutput events={output.structured.events as CliEvent[]} />
+          <StructuredOutput events={output.structured?.events as CliEvent[]} />
         </>
       );
     }
@@ -319,7 +319,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 2: Streaming with ONLY structured events (no text yet)
     if (hasStructuredEvents) {
       return (
-        <StructuredOutput events={output.structured.events as CliEvent[]} />
+        <StructuredOutput events={output.structured?.events as CliEvent[]} />
       );
     }
 
