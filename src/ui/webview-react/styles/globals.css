@@ -332,4 +332,24 @@ button .codicon {
     width: 6px;
     height: 6px;
   }
+
+  /* Background logo - uses CSS mask to apply foreground color to SVG */
+  .background-logo {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 0;
+    pointer-events: none;
+    width: min(80%, 500px);
+    height: min(80%, 500px);
+    opacity: 0.08;
+    background-color: var(--vscode-foreground);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center bottom;
+    mask-position: center bottom;
+  }
 }

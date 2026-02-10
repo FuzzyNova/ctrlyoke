@@ -196,19 +196,39 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this.webviewReactUri, "custom-icons.css")
     );
     const affUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.webviewReactUri, "dictionaries", "en_US", "en_US.aff")
+      vscode.Uri.joinPath(
+        this.webviewReactUri,
+        "dictionaries",
+        "en_US",
+        "en_US.aff"
+      )
     );
     const dicUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this.webviewReactUri, "dictionaries", "en_US", "en_US.dic")
+      vscode.Uri.joinPath(
+        this.webviewReactUri,
+        "dictionaries",
+        "en_US",
+        "en_US.dic"
+      )
     );
     html = html.replace(/\{\{typoUri\}\}/g, typoJsUri.toString());
     html = html.replace(/\{\{codiconsUri\}\}/g, codiconsUri.toString());
     html = html.replace(/\{\{customIconsUri\}\}/g, customIconsUri.toString());
 
+    // Inject logo URI for background display
+    const logoUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this.context.extensionUri,
+        "images",
+        "flightpath-icon.svg"
+      )
+    );
+    html = html.replace(/\{\{logoUri\}\}/g, logoUri.toString());
+
     // Inject dictionary URIs as data attributes on <body> for Typo.js spell checking
     html = html.replace(
       "<body>",
-      `<body data-aff-uri="${affUri}" data-dic-uri="${dicUri}">`
+      `<body data-aff-uri="${affUri}" data-dic-uri="${dicUri}" data-logo-uri="${logoUri}">`
     );
 
     // Inject VS Code API capture script BEFORE any other scripts
@@ -692,7 +712,9 @@ window.vscodeApi = acquireVsCodeApi();
     const harnessStatuses = Object.entries(this.harnessStatus)
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
-    Log.info(`sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`);
+    Log.info(
+      `sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
+    );
 
     // Get current workflow state from FlightPathManager
     const workflowState = this.getCurrentState();
@@ -916,8 +938,7 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     // Default to .flightpath/output/ in the workspace
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     let defaultUri: vscode.Uri;
     if (workspaceRoot) {
       const outputDir = path.join(workspaceRoot, ".flightpath", "output");
@@ -1478,9 +1499,11 @@ window.vscodeApi = acquireVsCodeApi();
   // ============================================================================
 
   private getModelForHarness(harness: string): string {
-    return ConfigurationUtils.getModelForHarness(harness as Harness) ||
+    return (
+      ConfigurationUtils.getModelForHarness(harness as Harness) ||
       (DEFAULT_MODELS as any)[harness] ||
-      "claude-sonnet-4.5";
+      "claude-sonnet-4.5"
+    );
   }
 
   async applyPendingWorkflowProperties(): Promise<void> {
