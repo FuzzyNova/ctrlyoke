@@ -6,8 +6,7 @@ const srcDir = __dirname;
 module.exports = {
   content: [
     path.join(srcDir, "index.html"),
-    path.join(srcDir, "main.tsx"),
-    path.join(srcDir, "App.tsx"),
+    path.join(srcDir, "*.{ts,tsx}"), // Scan root-level .ts/.tsx files (App.tsx, main.tsx, constants.ts, etc.)
     path.join(srcDir, "components/**/*.{ts,tsx}"),
     path.join(srcDir, "hooks/**/*.{ts,tsx}"),
     path.join(srcDir, "store/**/*.{ts,tsx}"),
@@ -64,8 +63,7 @@ module.exports = {
           "var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.2))",
         "diff-removed-fg": "var(--vscode-terminal-ansiRed, #f14c4c)",
         "diff-context-fg": "var(--vscode-editor-foreground, #cccccc)",
-        "diff-line-num":
-          "var(--vscode-editorLineNumber-foreground, #858585)",
+        "diff-line-num": "var(--vscode-editorLineNumber-foreground, #858585)",
 
         // ── Bash output colors ──
         "bash-expand-link": "#569cd6",
