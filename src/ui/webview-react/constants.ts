@@ -36,6 +36,11 @@ export const DEFAULT_MOBILE_SIZES = {
   settings: 10,
 };
 
+/** Panel key names derived from the size objects (single source of truth) */
+export const PANEL_KEYS = Object.keys(DEFAULT_MOBILE_SIZES) as ReadonlyArray<
+  keyof typeof DEFAULT_MOBILE_SIZES
+>;
+
 /** Separator styling constants for consistent appearance and interaction */
 /** Horizontal separator (vertical resize handle) - thin horizontal line */
 export const SEPARATOR_HORIZONTAL =

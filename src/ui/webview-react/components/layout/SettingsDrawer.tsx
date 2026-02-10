@@ -204,7 +204,7 @@ const HarnessDropdown: React.FC<{
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-0 bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] z-50 shadow-lg">
-          {Object.entries(HARNESS_IDS).map(([, harness], index) => {
+          {Object.entries(HARNESS_IDS).map(([, harness]) => {
             const status = harnessStatus[harness as HarnessId];
             const isAvailable = status?.available !== false;
             const isChecking = status?.status === "checking";

@@ -20,6 +20,7 @@ import {
   PANEL_MAX_SIZE_SIDEBAR,
   DEFAULT_DESKTOP_SIZES,
   DEFAULT_MOBILE_SIZES,
+  PANEL_KEYS,
   SEPARATOR_HORIZONTAL,
   SEPARATOR_VERTICAL,
 } from "./constants";
@@ -68,6 +69,16 @@ function App() {
     settings: String(DEFAULT_DESKTOP_SIZES.settings),
   });
   const wasMobileRef = useRef(isMobile);
+  // Gates mobile onResize until useLayoutEffect has synced persisted state
+  const mobileInitializedRef = useRef(false);
+  // Mobile mount defaults — recomputed on layout transition and on
+  // all-collapsed → some-open transition within mobile.
+  const mobileMountDefaults = useRef({
+    prompts: String(DEFAULT_MOBILE_SIZES.prompts),
+    output: String(DEFAULT_MOBILE_SIZES.output),
+    editor: String(DEFAULT_MOBILE_SIZES.editor),
+    settings: String(DEFAULT_MOBILE_SIZES.settings),
+  });
 
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
@@ -78,13 +89,6 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
-
-  // Desktop collapsed states — saved before mobile transition, restored after.
-  // Prevents mobile interactions from affecting desktop state
-  const desktopCollapsedStates = useRef({
-    prompts: promptsCollapsed,
-    settings: settingsCollapsed,
-  });
 
   // Stable mount defaults — only recomputed on the both-collapsed → one-open
   // transition (i.e. when the vertical Group remounts).  Keeping defaultSize
@@ -225,36 +229,53 @@ function App() {
     }
   }, [outputCollapsed, editorCollapsed, isMobile]);
 
-  // Save desktop collapsed states before switching to mobile, restore after switching back.
-  // This prevents mobile interactions from affecting desktop layout preferences.
+  // Manage layout transitions between desktop and mobile.
+  // Collapsed state is global (shared between layouts) — switching layouts
+  // preserves whatever panels are currently collapsed/expanded.
+  // Sizes are layout-specific (lastDesktopSizes / lastMobileSizes).
   {
     const isTransitioningToMobile = !wasMobileRef.current && isMobile;
     const isTransitioningToDesktop = wasMobileRef.current && !isMobile;
 
     if (isTransitioningToMobile) {
-      // Save desktop state before switching to mobile
-      desktopCollapsedStates.current.prompts = promptsCollapsed;
-      desktopCollapsedStates.current.settings = settingsCollapsed;
-      // Close gate so mount-time onResize events are ignored
+      // Recalculate mobile mount defaults based on current collapsed state
+      // so panels mount at the correct size before collapse() is called.
+      const collapsed = {
+        prompts: promptsCollapsed,
+        output: outputCollapsed,
+        editor: editorCollapsed,
+        settings: settingsCollapsed,
+      };
+      const keys = PANEL_KEYS;
+      const openKeys = keys.filter((k) => !collapsed[k]);
+
+      if (openKeys.length > 0) {
+        const totalOpen =
+          openKeys.reduce((s, k) => s + lastMobileSizes.current[k], 0) || 1;
+        for (const k of keys) {
+          mobileMountDefaults.current[k] = collapsed[k]
+            ? PANEL_COLLAPSED_SIZE_DEFAULT
+            : String(
+                Math.round((lastMobileSizes.current[k] / totalOpen) * 100)
+              );
+        }
+      }
+
+      // Close gates so mount-time onResize events are ignored
       horizontalInitializedRef.current = false;
+      mobileInitializedRef.current = false;
     }
 
     if (isTransitioningToDesktop) {
-      // Restore desktop collapsed states when returning from mobile
-      setPromptsCollapsed(desktopCollapsedStates.current.prompts);
-      setSettingsCollapsed(desktopCollapsedStates.current.settings);
-
       // Horizontal group panels — mount collapsed panels at their collapsed
       // pixel size so collapse() in useLayoutEffect only sets the flag
       // without needing to resize from a large percentage.
-      desktopMountDefaults.current.prompts =
-        desktopCollapsedStates.current.prompts
-          ? PANEL_COLLAPSED_SIZE_SIDEBAR
-          : String(lastDesktopSizes.current.prompts);
-      desktopMountDefaults.current.settings =
-        desktopCollapsedStates.current.settings
-          ? PANEL_COLLAPSED_SIZE_SIDEBAR
-          : String(lastDesktopSizes.current.settings);
+      desktopMountDefaults.current.prompts = promptsCollapsed
+        ? PANEL_COLLAPSED_SIZE_SIDEBAR
+        : String(lastDesktopSizes.current.prompts);
+      desktopMountDefaults.current.settings = settingsCollapsed
+        ? PANEL_COLLAPSED_SIZE_SIDEBAR
+        : String(lastDesktopSizes.current.settings);
 
       // Center vertical group panels
       mountDefaultOutput.current = outputCollapsed
@@ -312,20 +333,10 @@ function App() {
   const mobileEditorRef = useRef<PanelImperativeHandle>(null);
   const mobileSettingsRef = useRef<PanelImperativeHandle>(null);
   const mobileGroupRef = useRef<GroupImperativeHandle>(null);
-  // Gates onResize until first useLayoutEffect has synced persisted state
-  const mobileInitializedRef = useRef(false);
-  // Mobile mount defaults — recomputed only on the all-collapsed → some-open
-  // transition (Group remount).  Open panels share space proportionally based
-  // on their last saved sizes; collapsed panels get a fixed 30px bar.
+  // Tracks all-collapsed → some-open transition for mobile Group remount
   const mobileWasAllCollapsed = useRef(
     promptsCollapsed && outputCollapsed && editorCollapsed && settingsCollapsed
   );
-  const mobileMountDefaults = useRef({
-    prompts: String(DEFAULT_MOBILE_SIZES.prompts),
-    output: String(DEFAULT_MOBILE_SIZES.output),
-    editor: String(DEFAULT_MOBILE_SIZES.editor),
-    settings: String(DEFAULT_MOBILE_SIZES.settings),
-  });
 
   // Store → mobile panel sync (before paint to avoid flash)
   useLayoutEffect(() => {
@@ -376,7 +387,7 @@ function App() {
         editor: editorCollapsed,
         settings: settingsCollapsed,
       };
-      const keys = ["prompts", "output", "editor", "settings"] as const;
+      const keys = PANEL_KEYS;
       const openKeys = keys.filter((k) => !collapsed[k]);
       const totalOpen =
         openKeys.reduce((s, k) => s + lastMobileSizes.current[k], 0) || 1;
