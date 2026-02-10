@@ -29,6 +29,7 @@ import {
   OutputSection,
   EditorSection,
   SettingsPanel,
+  CenterContentArea,
 } from "./components/layout";
 
 function App() {
@@ -42,11 +43,16 @@ function App() {
   const editorRef = useRef<PanelImperativeHandle>(null);
   // Vertical group ref for setLayout() API
   const verticalGroupRef = useRef<GroupImperativeHandle>(null);
+  // Horizontal group ref for setLayout() API
+  const horizontalGroupRef = useRef<GroupImperativeHandle>(null);
   // Gates onResize until useLayoutEffect has applied the persisted
   // collapsed/expanded state.  Reset to false whenever both panels are collapsed
   // (the vertical Group unmounts); the next mount re-gates until the first
   // useLayoutEffect re-syncs.
   const initializedRef = useRef(false);
+  // Gate for horizontal group (prompts/settings) panels to prevent onResize from
+  // updating state during mount before collapse/expand imperatives are applied
+  const horizontalInitializedRef = useRef(false);
   // Track last expanded sizes per layout — restored when re-expanding, captured
   // during drag.  Grouped by layout to keep the 8 values organized.
   const lastDesktopSizes = useRef({ ...DEFAULT_DESKTOP_SIZES });
@@ -72,6 +78,13 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
+
+  // Desktop collapsed states — saved before mobile transition, restored after.
+  // Prevents mobile interactions from affecting desktop state
+  const desktopCollapsedStates = useRef({
+    prompts: promptsCollapsed,
+    settings: settingsCollapsed,
+  });
 
   // Stable mount defaults — only recomputed on the both-collapsed → one-open
   // transition (i.e. when the vertical Group remounts).  Keeping defaultSize
@@ -105,6 +118,9 @@ function App() {
   // Runs on initial desktop mount and when returning from mobile layout
   // (desktop panels remount fresh, ongoing useEffects won't re-run unless
   // their specific collapse state changed during mobile).
+  // NOTE: desktopMountDefaults are set to PANEL_COLLAPSED_SIZE_SIDEBAR for
+  // collapsed panels, so they mount at the correct visual size — collapse()
+  // just sets the library's internal flag without needing to resize.
   useLayoutEffect(() => {
     if (isMobile) return;
     if (settingsCollapsed) settingsRef.current?.collapse();
@@ -112,6 +128,15 @@ function App() {
     if (promptsCollapsed) promptsRef.current?.collapse();
     else promptsRef.current?.expand();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+
+  // Horizontal gate management: open after mount onResize events have settled.
+  // useEffect runs after child effects (including Panel mount onResize), so by
+  // the time this fires, all spurious mount events have been gated.
+  useEffect(() => {
+    if (!isMobile) {
+      horizontalInitializedRef.current = true;
+    }
   }, [isMobile]);
 
   // Ongoing store → panel sync
@@ -200,17 +225,36 @@ function App() {
     }
   }, [outputCollapsed, editorCollapsed, isMobile]);
 
-  // Update ALL desktop mount defaults when returning from mobile layout.
-  // The desktop Groups remount fresh, so defaultSize must reflect saved sizes.
+  // Save desktop collapsed states before switching to mobile, restore after switching back.
+  // This prevents mobile interactions from affecting desktop layout preferences.
   {
-    if (wasMobileRef.current && !isMobile) {
-      // Horizontal group panels
-      desktopMountDefaults.current.prompts = String(
-        lastDesktopSizes.current.prompts
-      );
-      desktopMountDefaults.current.settings = String(
-        lastDesktopSizes.current.settings
-      );
+    const isTransitioningToMobile = !wasMobileRef.current && isMobile;
+    const isTransitioningToDesktop = wasMobileRef.current && !isMobile;
+
+    if (isTransitioningToMobile) {
+      // Save desktop state before switching to mobile
+      desktopCollapsedStates.current.prompts = promptsCollapsed;
+      desktopCollapsedStates.current.settings = settingsCollapsed;
+      // Close gate so mount-time onResize events are ignored
+      horizontalInitializedRef.current = false;
+    }
+
+    if (isTransitioningToDesktop) {
+      // Restore desktop collapsed states when returning from mobile
+      setPromptsCollapsed(desktopCollapsedStates.current.prompts);
+      setSettingsCollapsed(desktopCollapsedStates.current.settings);
+
+      // Horizontal group panels — mount collapsed panels at their collapsed
+      // pixel size so collapse() in useLayoutEffect only sets the flag
+      // without needing to resize from a large percentage.
+      desktopMountDefaults.current.prompts =
+        desktopCollapsedStates.current.prompts
+          ? PANEL_COLLAPSED_SIZE_SIDEBAR
+          : String(lastDesktopSizes.current.prompts);
+      desktopMountDefaults.current.settings =
+        desktopCollapsedStates.current.settings
+          ? PANEL_COLLAPSED_SIZE_SIDEBAR
+          : String(lastDesktopSizes.current.settings);
 
       // Center vertical group panels
       mountDefaultOutput.current = outputCollapsed
@@ -228,8 +272,9 @@ function App() {
       if (!outputCollapsed && !editorCollapsed) {
         needsForcedResize.current = true;
       }
-      // Close gate so mount-time onResize events are ignored
+      // Close gates so mount-time onResize events are ignored
       initializedRef.current = false;
+      horizontalInitializedRef.current = false;
     }
     wasMobileRef.current = isMobile;
   }
@@ -352,18 +397,34 @@ function App() {
 
         {allMobileCollapsed ? (
           /* All collapsed: stack 4 horizontal PanelBars vertically */
-          <div className="flex flex-col flex-1 bg-[var(--vscode-editor-background)]">
-            <div className="flex-none">
-              <PromptsPanel panelBarOrientation="horizontal" />
-            </div>
-            <div className="flex-none">
-              <OutputSection />
-            </div>
-            <div className="flex-none">
-              <EditorSection />
-            </div>
-            <div className="flex-none">
-              <SettingsPanel panelBarOrientation="horizontal" />
+          <div className="flex flex-col flex-1 relative bg-[var(--vscode-editor-background)]">
+            {/* Background logo when all panels collapsed */}
+            {(() => {
+              const logoUrl = document.body.getAttribute("data-logo-uri") || "";
+              return (
+                <div
+                  className="background-logo"
+                  style={{
+                    WebkitMaskImage: logoUrl ? `url('${logoUrl}')` : "none",
+                    maskImage: logoUrl ? `url('${logoUrl}')` : "none",
+                  }}
+                  aria-hidden="true"
+                />
+              );
+            })()}
+            <div className="relative z-10 flex flex-col flex-1">
+              <div className="flex-none">
+                <PromptsPanel panelBarOrientation="horizontal" />
+              </div>
+              <div className="flex-none">
+                <OutputSection />
+              </div>
+              <div className="flex-none">
+                <EditorSection />
+              </div>
+              <div className="flex-none">
+                <SettingsPanel panelBarOrientation="horizontal" />
+              </div>
             </div>
           </div>
         ) : (
@@ -480,6 +541,7 @@ function App() {
 
       {/* Main layout: Prompts (left) | Output/Editor (center) | Settings (right) */}
       <Group
+        groupRef={horizontalGroupRef}
         orientation="horizontal"
         className="flex-1"
         id="flightpath-main-layout"
@@ -494,12 +556,15 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="prompts-panel"
           onResize={() => {
+            if (!horizontalInitializedRef.current) return;
             const isCollapsed = promptsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = promptsRef.current?.getSize().asPercentage;
               if (size != null) lastDesktopSizes.current.prompts = size;
             }
-            setPromptsCollapsed(isCollapsed);
+            if (isCollapsed !== promptsCollapsed) {
+              setPromptsCollapsed(isCollapsed);
+            }
           }}
         >
           <PromptsPanel />
@@ -519,14 +584,7 @@ function App() {
             const bothCollapsed = outputCollapsed && editorCollapsed;
             return bothCollapsed;
           })() ? (
-            <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
-              <div className="flex-none">
-                <OutputSection />
-              </div>
-              <div className="flex-none">
-                <EditorSection />
-              </div>
-            </div>
+            <CenterContentArea />
           ) : (
             <Group
               groupRef={verticalGroupRef}
@@ -614,12 +672,15 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="settings-panel"
           onResize={() => {
+            if (!horizontalInitializedRef.current) return;
             const isCollapsed = settingsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = settingsRef.current?.getSize().asPercentage;
               if (size != null) lastDesktopSizes.current.settings = size;
             }
-            setSettingsCollapsed(isCollapsed);
+            if (isCollapsed !== settingsCollapsed) {
+              setSettingsCollapsed(isCollapsed);
+            }
           }}
         >
           <SettingsPanel />
