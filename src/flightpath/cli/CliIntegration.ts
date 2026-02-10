@@ -1465,12 +1465,29 @@ export class CliIntegration extends CopilotIntegration {
       `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
     );
 
-    // Delegate to CliProcessManager for both terminal and process cancellation
+    // Check if we have an actively running process or execution
+    const hasActiveProcess = this.currentProcess || this.currentExecution;
+
+    if (!hasActiveProcess) {
+      // No active process: We're either:
+      // - Waiting for SessionStart hook
+      // - In between prompts
+      // - Never actually started a process
+      // In all these cases, we can fire responseComplete immediately
+      Log.info(
+        "⏹️ No active process/execution - firing responseComplete immediately"
+      );
+      this.responseCompleteEmitter.fire("Cancelled before process started");
+      this.currentExecution = undefined;
+      return;
+    }
+
+    // Active process exists: Cancel it and wait for process exit handler to fire responseComplete
+    Log.info("⏹️ Active process found - sending cancellation signal");
     await this.processManager.cancel(this.currentExecution);
     this.currentExecution = undefined;
 
-    // Note: responseComplete will be fired by the process close handler
-    // Don't fire it here - the process may take seconds to actually exit
+    // Note: responseComplete will be fired by the process close handler when it actually exits
     Log.info("⏹️ Cancellation signal sent - waiting for process to exit");
   }
 

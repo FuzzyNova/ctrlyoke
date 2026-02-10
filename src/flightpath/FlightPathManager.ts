@@ -249,7 +249,9 @@ export class FlightPathManager {
 
       // If dashboard sent READY before init finished, trigger auto-load now
       if (this.dashboardReady) {
-        Log.info("Dashboard was ready before init — triggering deferred auto-load");
+        Log.info(
+          "Dashboard was ready before init — triggering deferred auto-load"
+        );
         await this.triggerAutoLoad();
       }
     } catch (error) {
@@ -588,7 +590,8 @@ export class FlightPathManager {
         Log.info("Empty workflow, creating new workflow in IDLE state");
 
         // Use custom workflow name if it exists, otherwise extract from filename
-        const displayName = queueState.workflowName || PromptQueue.extractWorkflowName(filePath);
+        const displayName =
+          queueState.workflowName || PromptQueue.extractWorkflowName(filePath);
         const workflowType = queueState.workflowName
           ? `workflow "${queueState.workflowName}"`
           : "new workflow";
@@ -835,17 +838,47 @@ export class FlightPathManager {
     // Stop the queue (sets state to CANCELLING)
     this.promptQueue.stop();
 
+    // Track if confirmedStopped has been called (prevent double-calls)
+    let confirmedStoppedCalled = false;
+
     // Listen for process to actually exit (responseComplete event)
     const responseCompleteDisposable = integration.onResponseComplete(() => {
-      Log.info("🔔 Process confirmed exited - setting queue state to IDLE");
-      this.promptQueue.confirmedStopped().catch((err) => {
-        Log.error("Failed to update working file after stop:", err);
-      });
+      if (!confirmedStoppedCalled) {
+        confirmedStoppedCalled = true;
+        Log.info(
+          "🔔 Process confirmed exited - setting queue state to STOPPED"
+        );
+        this.promptQueue.confirmedStopped().catch((err) => {
+          Log.error("Failed to update working file after stop:", err);
+        });
+      }
       responseCompleteDisposable.dispose();
     });
 
     // Send cancel signal to integration
     await integration.cancel();
+
+    // Fallback timeout (10 seconds): If onResponseComplete doesn't fire,
+    // mark as confirmed stopped. This handles edge cases like:
+    // - Process hung and never exits
+    // - Cancellation didn't work as expected
+    // - Event system failed
+    const timeoutHandle = setTimeout(() => {
+      if (!confirmedStoppedCalled) {
+        confirmedStoppedCalled = true;
+        Log.warn(
+          "⏱️ Stop timeout: onResponseComplete never fired within 10s, forcing confirmedStopped()"
+        );
+        this.promptQueue.confirmedStopped().catch((err) => {
+          Log.error("Failed to update working file after stop:", err);
+        });
+      }
+    }, 10000);
+
+    // Clean up timeout if responseComplete fires
+    integration.onResponseComplete(() => {
+      clearTimeout(timeoutHandle);
+    });
 
     // Clear any pending response state in the executor
     this.workflowExecutor.clearPendingState();
@@ -1009,7 +1042,9 @@ export class FlightPathManager {
     if (this.managerInitialized) {
       await this.triggerAutoLoad();
     } else {
-      Log.info("Manager not yet initialized — deferring auto-load until init completes");
+      Log.info(
+        "Manager not yet initialized — deferring auto-load until init completes"
+      );
     }
   }
 
