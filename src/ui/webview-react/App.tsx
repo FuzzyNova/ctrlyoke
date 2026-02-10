@@ -20,6 +20,8 @@ import {
   PANEL_MAX_SIZE_SIDEBAR,
   DEFAULT_DESKTOP_SIZES,
   DEFAULT_MOBILE_SIZES,
+  SEPARATOR_HORIZONTAL,
+  SEPARATOR_VERTICAL,
 } from "./constants";
 import {
   Header,
@@ -393,7 +395,7 @@ function App() {
               <PromptsPanel panelBarOrientation="horizontal" />
             </Panel>
 
-            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className={SEPARATOR_HORIZONTAL} />
 
             <Panel
               panelRef={mobileOutputRef}
@@ -416,7 +418,7 @@ function App() {
               <OutputSection />
             </Panel>
 
-            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className={SEPARATOR_HORIZONTAL} />
 
             <Panel
               panelRef={mobileEditorRef}
@@ -439,7 +441,7 @@ function App() {
               <EditorSection />
             </Panel>
 
-            <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+            <Separator className={SEPARATOR_HORIZONTAL} />
 
             <Panel
               panelRef={mobileSettingsRef}
@@ -503,7 +505,7 @@ function App() {
           <PromptsPanel />
         </Panel>
 
-        <Separator className="w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
+        <Separator className={SEPARATOR_VERTICAL} />
 
         {/* Center content — Output (top) / Editor (bottom), both independently
             collapsible.  When both are collapsed the vertical Group unmounts and
@@ -563,7 +565,7 @@ function App() {
                 <OutputSection />
               </Panel>
 
-              <Separator className="h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors" />
+              <Separator className={SEPARATOR_HORIZONTAL} />
 
               <Panel
                 panelRef={editorRef}
@@ -600,7 +602,7 @@ function App() {
           )}
         </Panel>
 
-        <Separator className="w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors" />
+        <Separator className={SEPARATOR_VERTICAL} />
 
         {/* Settings Panel (Right - collapsible) */}
         <Panel

@@ -35,3 +35,12 @@ export const DEFAULT_MOBILE_SIZES = {
   editor: 30,
   settings: 10,
 };
+
+/** Separator styling constants for consistent appearance and interaction */
+/** Horizontal separator (vertical resize handle) - thin horizontal line */
+export const SEPARATOR_HORIZONTAL =
+  "h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors";
+
+/** Vertical separator (horizontal resize handle) - thin vertical line */
+export const SEPARATOR_VERTICAL =
+  "w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors";
