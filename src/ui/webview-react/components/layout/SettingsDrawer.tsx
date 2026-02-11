@@ -12,7 +12,7 @@ import {
   HARNESS_IDS,
   type HarnessId,
 } from "../../types/messages";
-import { PanelBar } from "../shared";
+import { PanelBar, IconToggleButton } from "../shared";
 
 /**
  * Harness display information
@@ -612,404 +612,341 @@ export const SettingsPanel: React.FC<{
 
       {/* Body - Scrollable */}
       <div className="flex-1 overflow-y-auto">
-        {/* Harness Settings Section */}
-        <div className="border-b border-[var(--vscode-panel-border)]">
-          <div className="px-4 py-3 space-y-4">
-              {/* Harness */}
-              <FormField
-                label="Harness"
-                htmlFor="settings-harness"
-                description="AI harness for execution"
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property="harness"
-                    show={isDifferentFromGlobal("harness")}
-                    onSetDefault={() =>
-                      handleSetAsDefault("harness", workflowProperties.harness)
-                    }
-                  />
+        <div className="px-4 py-3 space-y-4">
+          {/* Harness */}
+          <FormField
+            label="Harness"
+            htmlFor="settings-harness"
+            description="AI harness for execution"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="harness"
+                show={isDifferentFromGlobal("harness")}
+                onSetDefault={() =>
+                  handleSetAsDefault("harness", workflowProperties.harness)
                 }
-              >
-                <HarnessDropdown
-                  id="settings-harness"
-                  value={effectiveHarness}
-                  onChange={handleHarnessChange}
-                  harnessStatus={harnessStatus}
-                />
-              </FormField>
+              />
+            }
+          >
+            <HarnessDropdown
+              id="settings-harness"
+              value={effectiveHarness}
+              onChange={handleHarnessChange}
+              harnessStatus={harnessStatus}
+            />
+          </FormField>
 
-              {/* Model */}
-              <FormField
-                label="Model"
-                htmlFor="settings-model"
-                description="AI model for execution"
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property="model"
-                    show={isDifferentFromGlobal("model")}
-                    onSetDefault={() =>
-                      handleSetAsDefault("model", workflowProperties.model)
-                    }
-                  />
+          {/* Model */}
+          <FormField
+            label="Model"
+            htmlFor="settings-model"
+            description="AI model for execution"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="model"
+                show={isDifferentFromGlobal("model")}
+                onSetDefault={() =>
+                  handleSetAsDefault("model", workflowProperties.model)
                 }
-              >
-                <select
-                  id="settings-model"
-                  value={effectiveModel}
-                  onChange={(e) => handleModelChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                >
-                  {currentHarnessModels.length === 0 ? (
-                    <option value="" disabled>
-                      Loading models...
-                    </option>
-                  ) : (
-                    currentHarnessModels.map((model) => (
-                      <option key={model.value} value={model.value}>
-                        {model.label}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </FormField>
+              />
+            }
+          >
+            <select
+              id="settings-model"
+              value={effectiveModel}
+              onChange={(e) => handleModelChange(e.target.value)}
+              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+            >
+              {currentHarnessModels.length === 0 ? (
+                <option value="" disabled>
+                  Loading models...
+                </option>
+              ) : (
+                currentHarnessModels.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
+                  </option>
+                ))
+              )}
+            </select>
+          </FormField>
 
-              {/* Agent */}
-              <FormField
-                label="Agent"
-                htmlFor="settings-agent"
-                description="Custom agent file (.agent.md)"
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property="agent"
-                    show={isDifferentFromGlobal("agent")}
-                    onSetDefault={() =>
-                      handleSetAsDefault("agent", workflowProperties.agent)
-                    }
-                  />
+          {/* Agent */}
+          <FormField
+            label="Agent"
+            htmlFor="settings-agent"
+            description="Custom agent file (.agent.md)"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="agent"
+                show={isDifferentFromGlobal("agent")}
+                onSetDefault={() =>
+                  handleSetAsDefault("agent", workflowProperties.agent)
                 }
+              />
+            }
+          >
+            <select
+              id="settings-agent"
+              value={effectiveAgent || ""}
+              onChange={(e) => handleAgentChange(e.target.value)}
+              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+            >
+              <option value="">None (default behavior)</option>
+              {availableAgents.map((agent) => (
+                <option key={agent.path} value={agent.name || agent.path}>
+                  {agent.name || "Unknown Agent"}
+                  {agent.description ? ` - ${agent.description}` : ""}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          {/* Resume Session & Session ID */}
+          <div className="flex flex-col gap-2">
+            {/* Row 1: Checkbox + label + set as default */}
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="settings-resume-session"
+                checked={effectiveResumeSession}
+                onChange={(e) => handleResumeSessionChange(e.target.checked)}
+                className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+              />
+              <label
+                htmlFor="settings-resume-session"
+                className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+                title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
               >
-                <select
-                  id="settings-agent"
-                  value={effectiveAgent || ""}
-                  onChange={(e) => handleAgentChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                >
-                  <option value="">None (default behavior)</option>
-                  {availableAgents.map((agent) => (
-                    <option key={agent.path} value={agent.name || agent.path}>
-                      {agent.name || "Unknown Agent"}
-                      {agent.description ? ` - ${agent.description}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
-        </div>
-
-        {/* Workflow Properties Section */}
-        <div className="border-b border-[var(--vscode-panel-border)]">
-          <div className="px-4 py-3 space-y-4">
-              {/* Execution Mode */}
-              <FormField
-                label="Execution Mode"
-                htmlFor="settings-execution-mode"
-                description="Interactive shows terminal, headless runs in background"
-              >
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs">
-                    <input
-                      type="radio"
-                      name="execution-mode"
-                      value="interactive"
-                      checked={globalSettings.executionMode === "interactive"}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          handleExecutionModeChange(e.target.value);
-                        }
-                      }}
-                      className="accent-[var(--vscode-focusBorder)]"
-                    />
-                    Interactive
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs">
-                    <input
-                      type="radio"
-                      name="execution-mode"
-                      value="headless"
-                      checked={globalSettings.executionMode === "headless"}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          handleExecutionModeChange(e.target.value);
-                        }
-                      }}
-                      className="accent-[var(--vscode-focusBorder)]"
-                    />
-                    Headless
-                  </label>
-                </div>
-              </FormField>
-
-              {/* Resume Session & Session ID */}
-              <div className="flex flex-col gap-2">
-                {/* Row 1: Checkbox + label + set as default */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="settings-resume-session"
-                    checked={effectiveResumeSession}
-                    onChange={(e) =>
-                      handleResumeSessionChange(e.target.checked)
-                    }
-                    className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
-                  />
-                  <label
-                    htmlFor="settings-resume-session"
-                    className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
-                    title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
-                  >
-                    Resume Session
-                  </label>
-                  <SetAsDefaultButton
-                    property="resumeSession"
-                    show={isDifferentFromGlobal("resumeSession")}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        "resumeSession",
-                        workflowProperties.resumeSession
-                      )
-                    }
-                  />
-                </div>
-
-                {/* Row 2: Session ID input */}
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    id="settings-session-id"
-                    value={sessionIdInput}
-                    onChange={(e) => handleSessionIdChange(e.target.value)}
-                    disabled={!effectiveResumeSession}
-                    placeholder={
-                      effectiveResumeSession
-                        ? "Enter session ID or prompt number"
-                        : "Enable Resume Session first"
-                    }
-                    className="flex-1 px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
-                  />
-                  <SetAsDefaultButton
-                    property="sessionId"
-                    show={isDifferentFromGlobal("sessionId")}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        "sessionId",
-                        workflowProperties.sessionId
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Allow Dynamic Extension */}
-              <FormField
-                label="Allow Dynamic Extension"
-                htmlFor="settings-dynamic-ext"
-                description="Allow prompts to extend the workflow queue"
-                setAsDefaultButton={
-                  <SetAsDefaultButton
-                    property="allowDynamicExtension"
-                    show={isDifferentFromGlobal("allowDynamicExtension")}
-                    onSetDefault={() =>
-                      handleSetAsDefault(
-                        "allowDynamicExtension",
-                        workflowProperties.allowDynamicExtension
-                      )
-                    }
-                  />
-                }
-              >
-                <select
-                  id="settings-dynamic-ext"
-                  value={String(effectiveAllowDynamicExtension)}
-                  onChange={(e) => handleDynamicExtensionChange(e.target.value)}
-                  className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                >
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </FormField>
-
-              {/* Respect Gitignore (Quick Access) */}
-              <div className="mt-4 pt-4 border-t border-[var(--vscode-panel-border)]">
-                <div className="flex items-start gap-2 px-2 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)] border-l-2 border-[var(--vscode-textBlockQuote-border)] mb-3">
-                  <i className="codicon codicon-info mt-0.5" />
-                  <span>
-                    Quick access setting. Updates global VS Code configuration.
-                  </span>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer text-xs">
-                  <input
-                    type="checkbox"
-                    checked={respectGitignore}
-                    onChange={(e) =>
-                      handleRespectGitignoreChange(e.target.checked)
-                    }
-                    className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
-                  />
-                  <span>Respect .gitignore for completions</span>
-                </label>
-                <span className="text-[11px] text-[var(--vscode-descriptionForeground)] leading-tight block mt-1 ml-6">
-                  When enabled, hides gitignored files from @ and # completions.
-                  Disable to reference build outputs, logs, or dependencies.
-                </span>
-              </div>
-            </div>
-        </div>
-
-        {/* End Condition Section */}
-        <div className="border-b border-[var(--vscode-panel-border)]">
-          <div className="px-4 py-3 space-y-3">
-              {/* Enable checkbox */}
-              <label className="flex items-center gap-2 cursor-pointer text-xs">
-                <input
-                  type="checkbox"
-                  checked={endConditionEnabled}
-                  onChange={(e) => handleEndConditionToggle(e.target.checked)}
-                  className="w-4 h-4 accent-[var(--vscode-focusBorder)]"
-                />
-                <span>Apply end condition to all prompts</span>
+                Resume Session
               </label>
-
-              {/* End condition fields */}
-              <div
-                className={`space-y-3 transition-all duration-300 ${
-                  endConditionEnabled
-                    ? "max-h-[500px] opacity-100"
-                    : "max-h-0 opacity-0 overflow-hidden"
-                }`}
-              >
-                {/* Help text */}
-                <div className="flex items-start gap-2 px-2 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)] border-l-2 border-[var(--vscode-textBlockQuote-border)]">
-                  <i className="codicon codicon-info mt-0.5" />
-                  <span>
-                    Validation runs after each prompt completes. Individual
-                    prompts can override or disable this.
-                  </span>
-                </div>
-
-                {/* Script */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-script"
-                    className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Script:
-                  </label>
-                  <input
-                    type="text"
-                    id="settings-end-script"
-                    value={(endCondition as any).script || ""}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange("script", e.target.value)
-                    }
-                    placeholder="npm test"
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                  />
-                </div>
-
-                {/* Returns */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-returns"
-                    className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Returns:
-                  </label>
-                  <input
-                    type="text"
-                    id="settings-end-returns"
-                    value={(endCondition as any).returns || ""}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange("returns", e.target.value)
-                    }
-                    placeholder="true"
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                  />
-                </div>
-
-                {/* Timeout */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-timeout"
-                    className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Timeout (ms):
-                  </label>
-                  <input
-                    type="number"
-                    id="settings-end-timeout"
-                    value={(endCondition as any).timeout || 30000}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange(
-                        "timeout",
-                        parseInt(e.target.value) || 30000
-                      )
-                    }
-                    min={1000}
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                  />
-                </div>
-
-                {/* Max Retries */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-retries"
-                    className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Max Retries:
-                  </label>
-                  <input
-                    type="number"
-                    id="settings-end-retries"
-                    value={(endCondition as any).maxRetries ?? 0}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange(
-                        "maxRetries",
-                        parseInt(e.target.value) ?? 0
-                      )
-                    }
-                    min={-1}
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
-                  />
-                </div>
-
-                {/* Retry Prompt */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-end-retry-prompt"
-                    className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Retry Prompt:
-                  </label>
-                  <textarea
-                    id="settings-end-retry-prompt"
-                    value={(endCondition as any).retryPrompt || ""}
-                    onChange={(e) =>
-                      handleEndConditionFieldChange(
-                        "retryPrompt",
-                        e.target.value
-                      )
-                    }
-                    rows={3}
-                    placeholder={
-                      "Validation failed: {error}\n\nPlease fix the issues."
-                    }
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] resize-none"
-                  />
-                </div>
-              </div>
+              <SetAsDefaultButton
+                property="resumeSession"
+                show={isDifferentFromGlobal("resumeSession")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "resumeSession",
+                    workflowProperties.resumeSession
+                  )
+                }
+              />
             </div>
+
+            {/* Row 2: Session ID input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                id="settings-session-id"
+                value={sessionIdInput}
+                onChange={(e) => handleSessionIdChange(e.target.value)}
+                disabled={!effectiveResumeSession}
+                placeholder={
+                  effectiveResumeSession
+                    ? "Enter session ID or prompt number"
+                    : "Enable Resume Session first"
+                }
+                className="flex-1 px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+              />
+              <SetAsDefaultButton
+                property="sessionId"
+                show={isDifferentFromGlobal("sessionId")}
+                onSetDefault={() =>
+                  handleSetAsDefault("sessionId", workflowProperties.sessionId)
+                }
+              />
+            </div>
+          </div>
+
+          {/* Allow Dynamic Extension */}
+          <FormField
+            label="Allow Dynamic Extension"
+            htmlFor="settings-dynamic-ext"
+            description="Allow prompts to extend the workflow queue"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="allowDynamicExtension"
+                show={isDifferentFromGlobal("allowDynamicExtension")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "allowDynamicExtension",
+                    workflowProperties.allowDynamicExtension
+                  )
+                }
+              />
+            }
+          >
+            <select
+              id="settings-dynamic-ext"
+              value={String(effectiveAllowDynamicExtension)}
+              onChange={(e) => handleDynamicExtensionChange(e.target.value)}
+              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+            >
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </FormField>
+
+          {/* End Condition Section */}
+          {/* Enable checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={endConditionEnabled}
+              onChange={(e) => handleEndConditionToggle(e.target.checked)}
+              className="w-4 h-4 accent-[var(--vscode-focusBorder)]"
+            />
+            <span>Apply end condition to all prompts</span>
+          </label>
+
+          {/* End condition fields */}
+          <div
+            className={`space-y-3 transition-all duration-300 ${
+              endConditionEnabled
+                ? "max-h-[500px] opacity-100"
+                : "max-h-0 opacity-0 overflow-hidden"
+            }`}
+          >
+            {/* Help text */}
+            <div className="flex items-start gap-2 px-2 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)] border-l-2 border-[var(--vscode-textBlockQuote-border)]">
+              <i className="codicon codicon-info mt-0.5" />
+              <span>
+                Validation runs after each prompt completes. Individual prompts
+                can override or disable this.
+              </span>
+            </div>
+
+            {/* Script */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-end-script"
+                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+              >
+                Script:
+              </label>
+              <input
+                type="text"
+                id="settings-end-script"
+                value={(endCondition as any).script || ""}
+                onChange={(e) =>
+                  handleEndConditionFieldChange("script", e.target.value)
+                }
+                placeholder="npm test"
+                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              />
+            </div>
+
+            {/* Returns */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-end-returns"
+                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+              >
+                Returns:
+              </label>
+              <input
+                type="text"
+                id="settings-end-returns"
+                value={(endCondition as any).returns || ""}
+                onChange={(e) =>
+                  handleEndConditionFieldChange("returns", e.target.value)
+                }
+                placeholder="true"
+                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              />
+            </div>
+
+            {/* Timeout */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-end-timeout"
+                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+              >
+                Timeout (ms):
+              </label>
+              <input
+                type="number"
+                id="settings-end-timeout"
+                value={(endCondition as any).timeout || 30000}
+                onChange={(e) =>
+                  handleEndConditionFieldChange(
+                    "timeout",
+                    parseInt(e.target.value) || 30000
+                  )
+                }
+                min={1000}
+                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              />
+            </div>
+
+            {/* Max Retries */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-end-retries"
+                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+              >
+                Max Retries:
+              </label>
+              <input
+                type="number"
+                id="settings-end-retries"
+                value={(endCondition as any).maxRetries ?? 0}
+                onChange={(e) =>
+                  handleEndConditionFieldChange(
+                    "maxRetries",
+                    parseInt(e.target.value) ?? 0
+                  )
+                }
+                min={-1}
+                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              />
+            </div>
+
+            {/* Retry Prompt */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="settings-end-retry-prompt"
+                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+              >
+                Retry Prompt:
+              </label>
+              <textarea
+                id="settings-end-retry-prompt"
+                value={(endCondition as any).retryPrompt || ""}
+                onChange={(e) =>
+                  handleEndConditionFieldChange("retryPrompt", e.target.value)
+                }
+                rows={3}
+                placeholder={
+                  "Validation failed: {error}\n\nPlease fix the issues."
+                }
+                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] resize-none"
+              />
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* Always-visible footer with quick toggle buttons */}
+      <div className="flex items-center gap-1 px-2 h-[30px] border-t border-[var(--vscode-panel-border)] flex-shrink-0">
+        <IconToggleButton
+          active={globalSettings.executionMode === "interactive"}
+          onToggle={(active) =>
+            handleExecutionModeChange(active ? "interactive" : "headless")
+          }
+          activeIcon="debug-console"
+          inactiveIcon="terminal"
+          activeTooltip="Interactive mode: terminal visible"
+          inactiveTooltip="Headless mode: runs in background"
+        />
+        <IconToggleButton
+          active={respectGitignore}
+          onToggle={handleRespectGitignoreChange}
+          activeIcon="repo-selected"
+          inactiveIcon="repo"
+          activeTooltip="Respecting .gitignore for completions"
+          inactiveTooltip="All files included for completions (ignoring .gitignore)"
+        />
       </div>
     </div>
   );

@@ -7,3 +7,4 @@ export {
 } from "./SplitButton";
 export { Collapsible } from "./Collapsible";
 export { PanelBar } from "./PanelBar";
+export { IconToggleButton } from "./IconToggleButton";
