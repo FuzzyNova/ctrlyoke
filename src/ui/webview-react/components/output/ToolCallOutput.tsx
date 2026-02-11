@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  escapeHtml,
   truncate,
   extractKeyParameters,
   parseUnifiedDiff,
@@ -79,7 +78,7 @@ const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
               className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre ${styles.contentColor}`}
             >
               <span className="font-bold">{styles.prefix}</span>
-              {escapeHtml(line.content)}
+              {line.content}
             </span>
           </div>
         );
@@ -157,7 +156,7 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
       <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {error}</span>
         )}
       </div>
 
@@ -201,7 +200,7 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
       <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {error}</span>
         )}
       </div>
     </div>
@@ -240,7 +239,7 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
       <div className={TOOL_CALL_LINE}>
         <span>● {getActionText()}</span>
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {escapeHtml(error)}</span>
+          <span className="text-vscode-error-fg"> - {error}</span>
         )}
       </div>
     </div>
@@ -311,7 +310,7 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● Web search: "{escapeHtml(query)}"</span>
+        <span>● Web search: "{query}"</span>
       </div>
     </div>
   );

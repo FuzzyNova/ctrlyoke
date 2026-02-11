@@ -1,5 +1,5 @@
 import React from "react";
-import { escapeHtml, formatTime } from "@utils/outputUtils";
+import { formatTime } from "@utils/outputUtils";
 import { BashOutput } from "./BashOutput";
 import {
   FileEditOutput,
@@ -42,7 +42,7 @@ const TextOutput: React.FC<TextOutputProps> = ({ text, className = "" }) => {
     <div
       className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
     >
-      {escapeHtml(text)}
+      {text}
     </div>
   );
 };
@@ -67,7 +67,7 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
     <div
       className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
     >
-      ● {displayLabel}: {escapeHtml(text)}
+      ● {displayLabel}: {text}
     </div>
   );
 };
@@ -309,7 +309,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}
           >
-            {escapeHtml(streamingChunk)}
+            {streamingChunk}
           </div>
           <StructuredOutput events={output.structured?.events as CliEvent[]} />
         </>
@@ -327,7 +327,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasStreamingText) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          {escapeHtml(streamingChunk)}
+          {streamingChunk}
         </div>
       );
     }
@@ -341,7 +341,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasFinalResponse) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          {escapeHtml(output.response)}
+          {output.response}
         </div>
       );
     }
@@ -392,7 +392,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
         <div
           className={`${OUTPUT_BLOCK_BASE} border-l-output-prompt-border text-[var(--fg-primary)]`}
         >
-          {escapeHtml(output.prompt)}
+          {output.prompt}
         </div>
       )}
 
@@ -402,7 +402,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
           className={`${OUTPUT_BLOCK_BASE} border-l-output-command-border text-[var(--fg-primary)]`}
         >
           {output.workingDirectory || "workspace"}
-          {">"} {escapeHtml(output.cliCommand)}
+          {">"} {output.cliCommand}
         </div>
       )}
 

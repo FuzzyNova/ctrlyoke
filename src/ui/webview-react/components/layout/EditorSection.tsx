@@ -2,6 +2,7 @@ import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
 import { EXECUTION_STATES } from "../../types/messages";
@@ -25,6 +26,7 @@ export const EditorSection: React.FC = () => {
   const isEditMode = selectedPromptIndex !== null;
   const totalPrompts = prompts.length;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>();
 
   // Generate mode indicator text
   const getModeText = () => {
@@ -47,6 +49,7 @@ export const EditorSection: React.FC = () => {
 
   return (
     <section
+      ref={sectionRef}
       id="editor-section"
       className="editor-section flex flex-col h-full bg-[var(--vscode-editor-background)]"
     >
@@ -93,7 +96,7 @@ export const EditorSection: React.FC = () => {
             title="Cancel editing and return to new prompt mode"
           >
             <i className="codicon codicon-add" />
-            <span>New Prompt</span>
+            {!isNarrow && <span>New Prompt</span>}
           </button>
         )}
       </div>

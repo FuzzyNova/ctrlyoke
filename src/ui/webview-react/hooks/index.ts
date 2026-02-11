@@ -9,3 +9,4 @@ export {
   type UseMessageHandlerReturn,
 } from "./useMessageHandler";
 export { useMediaQuery, useIsMobile } from "./useMediaQuery";
+export { useElementNarrow } from "./useElementNarrow";

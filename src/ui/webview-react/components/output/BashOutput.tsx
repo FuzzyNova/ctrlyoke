@@ -1,5 +1,4 @@
 import React, { useState, useId } from "react";
-import { escapeHtml } from "@utils/outputUtils";
 import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
@@ -73,10 +72,10 @@ export const BashOutput: React.FC<BashOutputProps> = ({
         <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
         <div className="inline whitespace-pre-wrap break-words" id={`${containerId}-${type}`}>
           <span className={isExpanded ? "hidden" : ""}>
-            {escapeHtml(truncatedContent)}
+            {truncatedContent}
           </span>
           <span className={isExpanded ? "" : "hidden"}>
-            {escapeHtml(content)}
+            {content}
           </span>
           {isTruncated && (
             <a
@@ -122,7 +121,7 @@ export const BashOutput: React.FC<BashOutputProps> = ({
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
         <span className="text-vscode-fg">● </span>
-        <span className="text-vscode-fg">{escapeHtml(command)}</span>
+        <span className="text-vscode-fg">{command}</span>
         {renderStatusBadge()}
       </div>
 

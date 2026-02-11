@@ -1,5 +1,6 @@
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { countTokens } from "../../utils/tokenizer";
 
 interface EditorFooterProps {
@@ -48,9 +49,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 }) => {
   const { promptText } = useEditorStore();
   const tokenCount = countTokens(promptText);
+  const [footerRef, isNarrow] = useElementNarrow();
 
   return (
-    <div className="editor-footer flex items-center justify-between px-3 py-2 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+    <div ref={footerRef} className="editor-footer flex items-center justify-between px-3 py-2 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
       {/* Left side: Properties toggle */}
       <div className="editor-footer-left flex items-center">
         <button
@@ -63,10 +65,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           title="Toggle prompt properties"
         >
           <i className="codicon codicon-settings-gear" />
-          <span>Properties</span>
-          <i
-            className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
-          />
+          {!isNarrow && <span>Properties</span>}
+          {!isNarrow && (
+            <i
+              className={`codicon ${propertiesOpen ? "codicon-chevron-down" : "codicon-chevron-up"}`}
+            />
+          )}
         </button>
       </div>
 
@@ -92,7 +96,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               title="Cancel editing and return to new prompt mode"
             >
               <i className="codicon codicon-close" />
-              <span className="btn-text">Cancel</span>
+              {!isNarrow && <span className="btn-text">Cancel</span>}
             </button>
 
             <button
@@ -102,7 +106,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               title="Update prompt in queue"
             >
               <i className="codicon codicon-check" />
-              <span className="btn-text">Update</span>
+              {!isNarrow && <span className="btn-text">Update</span>}
             </button>
 
             <button
@@ -112,7 +116,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               title="Delete prompt from queue"
             >
               <i className="codicon codicon-trash" />
-              <span className="btn-text">Delete</span>
+              {!isNarrow && <span className="btn-text">Delete</span>}
             </button>
           </>
         ) : (
@@ -125,7 +129,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               title={queueButtonTooltip}
             >
               <i className="codicon codicon-add" />
-              <span className="btn-text">Queue</span>
+              {!isNarrow && <span className="btn-text">Queue</span>}
             </button>
 
             <button
@@ -135,7 +139,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               title={runButtonTooltip}
             >
               <i className="codicon codicon-send" />
-              <span className="btn-text">{runButtonText}</span>
+              {!isNarrow && <span className="btn-text">{runButtonText}</span>}
             </button>
           </>
         )}

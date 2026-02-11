@@ -6,6 +6,7 @@ import {
 import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
@@ -40,7 +41,8 @@ const HARNESS_INFO: Record<HarnessId, { name: string; description: string }> = {
  */
 const StatusIndicator: React.FC<{
   status: "checking" | "available" | "not_available";
-}> = ({ status }) => {
+  narrow?: boolean;
+}> = ({ status, narrow = false }) => {
   const statusConfig = {
     checking: {
       color: "bg-yellow-400",
@@ -64,9 +66,9 @@ const StatusIndicator: React.FC<{
   return (
     <span className="inline-flex items-center gap-1 text-[10px] text-[var(--vscode-descriptionForeground)]">
       <span
-        className={`w-2 h-2 rounded-full ${config.color} ${config.animate ? "animate-pulse" : ""}`}
+        className={`w-2 h-2 rounded-full flex-shrink-0 ${config.color} ${config.animate ? "animate-pulse" : ""}`}
       />
-      {config.text}
+      {!narrow && config.text}
     </span>
   );
 };
@@ -165,7 +167,7 @@ const HarnessDropdown: React.FC<{
   harnessStatus: Record<string, { status: "checking" | "available" | "not_available"; available?: boolean }>;
 }> = ({ id, value, onChange, harnessStatus }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
 
   const handleSelect = (harnessId: string) => {
     onChange(harnessId);
@@ -197,6 +199,7 @@ const HarnessDropdown: React.FC<{
         <div className="flex items-center gap-1">
           <StatusIndicator
             status={harnessStatus[value as HarnessId]?.status || "checking"}
+            narrow={isNarrow}
           />
           <i className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`} />
         </div>
@@ -224,6 +227,7 @@ const HarnessDropdown: React.FC<{
                 <span>{HARNESS_INFO[harness as HarnessId]?.name || harness}</span>
                 <StatusIndicator
                   status={harnessStatus[harness as HarnessId]?.status || "checking"}
+                  narrow={isNarrow}
                 />
               </button>
             );

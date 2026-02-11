@@ -85,7 +85,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       {/* Drawer Content */}
       <div className="drawer-content flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="drawer-header flex items-center justify-between px-4 py-1 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-dropBackground)] sticky top-0 z-10">
+        <div className="drawer-header flex items-center justify-between px-4 py-0 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-dropBackground)] sticky top-0 z-10">
           <h3 className="text-xs font-semibold text-[var(--vscode-foreground)] uppercase">
             Prompt Properties
           </h3>
