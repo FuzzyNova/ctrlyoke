@@ -145,18 +145,14 @@ const FormField: React.FC<{
     <div className="flex items-center justify-between min-h-[18px]">
       <label
         htmlFor={htmlFor}
-        className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]"
+        title={description}
+        className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-help"
       >
         {label}
       </label>
       {setAsDefaultButton}
     </div>
     {children}
-    {description && (
-      <span className="text-[11px] text-[var(--vscode-descriptionForeground)] leading-tight">
-        {description}
-      </span>
-    )}
   </div>
 );
 
