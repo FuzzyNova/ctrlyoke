@@ -269,16 +269,20 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
+            <a
               onClick={handleSetDefault}
-              disabled={
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && handleSetDefault()}
+              className={`text-sm font-medium text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer transition-colors ${
                 !selectedTemplateId || selectedTemplateId === "__create_new__"
-              }
-              size="sm"
+                  ? "opacity-50 cursor-not-allowed pointer-events-none"
+                  : ""
+              }`}
+              title="Set this as the default template"
             >
               Set as Default
-            </Button>
+            </a>
             {defaultConfirmation && (
               <span className="text-xs text-[var(--vscode-notificationsInfoIcon-foreground)] animate-pulse">
                 ✓ Default set

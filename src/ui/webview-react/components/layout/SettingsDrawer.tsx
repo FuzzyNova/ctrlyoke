@@ -74,7 +74,7 @@ const StatusIndicator: React.FC<{
 };
 
 /**
- * Set as Default button with animation
+ * Set as Default link with animation
  */
 const SetAsDefaultButton: React.FC<{
   property: string;
@@ -93,15 +93,18 @@ const SetAsDefaultButton: React.FC<{
   if (!show && state === "idle") return null;
 
   return (
-    <button
+    <a
       onClick={handleClick}
-      className={`text-[10px] font-semibold uppercase text-[var(--vscode-textLink-foreground)] hover:underline hover:bg-[var(--vscode-list-hoverBackground)] px-1 py-0.5 rounded transition-all ${
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && handleClick()}
+      className={`text-[10px] font-semibold uppercase text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer transition-colors ${
         state === "success" ? "text-green-500" : ""
       } ${state === "fading" ? "opacity-0" : ""}`}
-      title="Set this as the default for all workflows"
+      title="Set this as the default for new workflows"
     >
       {state === "success" ? "✓ Default" : "Set as Default"}
-    </button>
+    </a>
   );
 };
 
@@ -164,7 +167,10 @@ const HarnessDropdown: React.FC<{
   id: string;
   value: string;
   onChange: (value: string) => void;
-  harnessStatus: Record<string, { status: "checking" | "available" | "not_available"; available?: boolean }>;
+  harnessStatus: Record<
+    string,
+    { status: "checking" | "available" | "not_available"; available?: boolean }
+  >;
 }> = ({ id, value, onChange, harnessStatus }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [dropdownRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
@@ -177,14 +183,18 @@ const HarnessDropdown: React.FC<{
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
@@ -201,7 +211,9 @@ const HarnessDropdown: React.FC<{
             status={harnessStatus[value as HarnessId]?.status || "checking"}
             narrow={isNarrow}
           />
-          <i className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`} />
+          <i
+            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`}
+          />
         </div>
       </button>
 
@@ -219,14 +231,22 @@ const HarnessDropdown: React.FC<{
                 onClick={() => handleSelect(harness)}
                 disabled={!isAvailable && !isChecking}
                 className={`w-full px-2 py-1.5 text-xs text-left flex items-center justify-between focus:outline-none border-none ${
-                  isSelected ? "bg-[var(--vscode-dropdown-selectedBackground)]" : "hover:bg-[var(--vscode-list-hoverBackground)]"
+                  isSelected
+                    ? "bg-[var(--vscode-dropdown-selectedBackground)]"
+                    : "hover:bg-[var(--vscode-list-hoverBackground)]"
                 } ${
-                  !isAvailable && !isChecking ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  !isAvailable && !isChecking
+                    ? "opacity-50 cursor-not-allowed"
+                    : "cursor-pointer"
                 }`}
               >
-                <span>{HARNESS_INFO[harness as HarnessId]?.name || harness}</span>
+                <span>
+                  {HARNESS_INFO[harness as HarnessId]?.name || harness}
+                </span>
                 <StatusIndicator
-                  status={harnessStatus[harness as HarnessId]?.status || "checking"}
+                  status={
+                    harnessStatus[harness as HarnessId]?.status || "checking"
+                  }
                   narrow={isNarrow}
                 />
               </button>
@@ -776,17 +796,23 @@ export const SettingsPanel: React.FC<{
                 </div>
               </FormField>
 
-              {/* Resume Session */}
+              {/* Resume Session & Session ID - Two Column Layout */}
               <div className="grid grid-cols-[auto_1fr] gap-4">
-                {/* Resume Session Checkbox */}
+                {/* Column 1: Resume Session */}
                 <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between min-h-[18px]">
-                    <label
-                      htmlFor="settings-resume-session"
-                      className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]"
-                    >
-                      Resume Session
-                    </label>
+                  <label className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]">
+                    Resume Session
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="settings-resume-session"
+                      checked={effectiveResumeSession}
+                      onChange={(e) =>
+                        handleResumeSessionChange(e.target.checked)
+                      }
+                      className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+                    />
                     <SetAsDefaultButton
                       property="resumeSession"
                       show={isDifferentFromGlobal("resumeSession")}
@@ -798,18 +824,9 @@ export const SettingsPanel: React.FC<{
                       }
                     />
                   </div>
-                  <input
-                    type="checkbox"
-                    id="settings-resume-session"
-                    checked={effectiveResumeSession}
-                    onChange={(e) =>
-                      handleResumeSessionChange(e.target.checked)
-                    }
-                    className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
-                  />
                 </div>
 
-                {/* Session ID Input */}
+                {/* Column 2: Session ID */}
                 <div className="flex flex-col gap-1">
                   <label
                     htmlFor="settings-session-id"
