@@ -82,8 +82,13 @@ function createMessageHandlers(): MessageHandlerMap {
       settingsStore.setGlobalSettings(data.globalSettings);
     }
 
-    // Update workflow properties
-    if (data.workflowProperties) {
+    // Update workflow properties only if non-empty — sendInitialState() sends
+    // workflowProperties: {} as a placeholder, which would wipe out properties
+    // (resumeSession, endCondition, etc.) that were set by the user.
+    if (
+      data.workflowProperties &&
+      Object.keys(data.workflowProperties).length > 0
+    ) {
       settingsStore.setWorkflowProperties(data.workflowProperties);
     }
 
