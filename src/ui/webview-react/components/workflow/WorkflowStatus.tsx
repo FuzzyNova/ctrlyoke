@@ -185,12 +185,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         />
       ) : (
         /* Display Mode - Split Button Style */
-        <div className="workflow-split-button inline-flex rounded overflow-visible max-w-[500px] flex-1 min-w-0">
+        <div className="workflow-split-button inline-flex rounded overflow-visible max-w-full sm:max-w-[500px] w-full sm:w-auto flex-1 min-w-0">
           {/* Main Button - Workflow Name */}
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1.5 rounded-l rounded-r-none border-r-0 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none border-r-0 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -223,7 +223,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 ? "Cannot switch workflows while running"
                 : "Show recent workflows"
             }
-            className={`workflow-button-dropdown px-2 py-1.5 rounded-r rounded-l-none border-l border-[var(--vscode-button-border,rgba(255,255,255,0.1))] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] flex items-center justify-center gap-1 transition-colors ${
+            className={`workflow-button-dropdown px-2 py-1 rounded-r rounded-l-none border-l border-[var(--vscode-button-border,rgba(255,255,255,0.1))] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] flex items-center justify-center gap-1 transition-colors ${
               isRunning
                 ? "opacity-50 cursor-not-allowed"
                 : "hover:bg-[var(--vscode-button-secondaryHoverBackground)]"

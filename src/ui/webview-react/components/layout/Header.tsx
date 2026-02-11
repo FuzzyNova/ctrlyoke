@@ -55,7 +55,10 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
 /**
  * Header Component
  *
- * Layout: Left (WorkflowControls) | Center (WorkflowStatus) | Right (Control buttons + Settings)
+ * Layout:
+ *   Wide:   [WorkflowControls] | [WorkflowStatus (centered)] | [Run/Pause/Stop]
+ *   Narrow: [WorkflowControls (left)]  [Run/Pause/Stop (right)]
+ *           [         WorkflowStatus (full-width, centered)        ]
  *
  * Features:
  * - WorkflowControls: Split button for New/Load/Queue workflow actions
@@ -117,19 +120,19 @@ export const Header: React.FC = () => {
   }, [vscode, canStop]);
 
   return (
-    <header className="header flex items-center justify-between gap-4 px-3 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
+    <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
       {/* Left Section: Workflow Controls */}
-      <div className="header-left flex items-center gap-2 flex-shrink-0">
+      <div className="header-left flex items-center gap-2">
         <WorkflowControls />
       </div>
 
-      {/* Center Section: Workflow Status */}
-      <div className="header-center flex-1 flex items-center justify-center min-w-0">
-        <WorkflowStatus className="max-w-[500px]" />
+      {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
+      <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0">
+        <WorkflowStatus className="w-full sm:max-w-[500px]" />
       </div>
 
       {/* Right Section: Control Buttons */}
-      <div className="header-right flex items-center gap-1 flex-shrink-0">
+      <div className="header-right justify-self-end flex items-center gap-1">
         {/* Run/Restart Button (icon-only) */}
         <button
           className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
