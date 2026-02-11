@@ -109,29 +109,6 @@ const SetAsDefaultButton: React.FC<{
 };
 
 /**
- * Collapsible section header
- */
-const SectionHeader: React.FC<{
-  title: string;
-  isOpen: boolean;
-  onToggle: () => void;
-  icon?: string;
-}> = ({ title, isOpen, onToggle, icon }) => (
-  <button
-    onClick={onToggle}
-    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase text-[var(--vscode-foreground)] bg-[var(--vscode-sideBarSectionHeader-background)] hover:bg-[var(--vscode-list-hoverBackground)] transition-colors border-t border-x-0 border-[var(--vscode-panel-border)]"
-  >
-    <span className="flex items-center gap-2">
-      {icon && <i className={`codicon codicon-${icon}`} />}
-      {title}
-    </span>
-    <i
-      className={`codicon codicon-chevron-${isOpen ? "down" : "right"} text-[10px]`}
-    />
-  </button>
-);
-
-/**
  * Form field wrapper with label and description
  */
 const FormField: React.FC<{
@@ -281,11 +258,6 @@ export const SettingsPanel: React.FC<{
     getEffectiveAllowDynamicExtension,
   } = useSettingsStore();
   useWorkflowStore(); // For re-renders when workflow changes
-
-  // Section collapse states
-  const [harnessSectionOpen, setHarnessSectionOpen] = useState(true);
-  const [workflowSectionOpen, setWorkflowSectionOpen] = useState(true);
-  const [endConditionSectionOpen, setEndConditionSectionOpen] = useState(false);
 
   // End condition enabled state
   const [endConditionEnabled, setEndConditionEnabled] = useState(
@@ -642,14 +614,7 @@ export const SettingsPanel: React.FC<{
       <div className="flex-1 overflow-y-auto">
         {/* Harness Settings Section */}
         <div className="border-b border-[var(--vscode-panel-border)]">
-          <SectionHeader
-            title="Harness Settings"
-            icon="server-environment"
-            isOpen={harnessSectionOpen}
-            onToggle={() => setHarnessSectionOpen(!harnessSectionOpen)}
-          />
-          {harnessSectionOpen && (
-            <div className="px-4 py-3 space-y-4">
+          <div className="px-4 py-3 space-y-4">
               {/* Harness */}
               <FormField
                 label="Harness"
@@ -739,19 +704,11 @@ export const SettingsPanel: React.FC<{
                 </select>
               </FormField>
             </div>
-          )}
         </div>
 
         {/* Workflow Properties Section */}
         <div className="border-b border-[var(--vscode-panel-border)]">
-          <SectionHeader
-            title="Workflow Properties"
-            icon="symbol-property"
-            isOpen={workflowSectionOpen}
-            onToggle={() => setWorkflowSectionOpen(!workflowSectionOpen)}
-          />
-          {workflowSectionOpen && (
-            <div className="px-4 py-3 space-y-4">
+          <div className="px-4 py-3 space-y-4">
               {/* Execution Mode */}
               <FormField
                 label="Execution Mode"
@@ -792,44 +749,40 @@ export const SettingsPanel: React.FC<{
                 </div>
               </FormField>
 
-              {/* Resume Session & Session ID - Two Column Layout */}
-              <div className="grid grid-cols-[auto_1fr] gap-4">
-                {/* Column 1: Resume Session */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]">
+              {/* Resume Session & Session ID */}
+              <div className="flex flex-col gap-2">
+                {/* Row 1: Checkbox + label + set as default */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="settings-resume-session"
+                    checked={effectiveResumeSession}
+                    onChange={(e) =>
+                      handleResumeSessionChange(e.target.checked)
+                    }
+                    className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+                  />
+                  <label
+                    htmlFor="settings-resume-session"
+                    className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+                    title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
+                  >
                     Resume Session
                   </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="settings-resume-session"
-                      checked={effectiveResumeSession}
-                      onChange={(e) =>
-                        handleResumeSessionChange(e.target.checked)
-                      }
-                      className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
-                    />
-                    <SetAsDefaultButton
-                      property="resumeSession"
-                      show={isDifferentFromGlobal("resumeSession")}
-                      onSetDefault={() =>
-                        handleSetAsDefault(
-                          "resumeSession",
-                          workflowProperties.resumeSession
-                        )
-                      }
-                    />
-                  </div>
+                  <SetAsDefaultButton
+                    property="resumeSession"
+                    show={isDifferentFromGlobal("resumeSession")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "resumeSession",
+                        workflowProperties.resumeSession
+                      )
+                    }
+                  />
                 </div>
 
-                {/* Column 2: Session ID */}
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="settings-session-id"
-                    className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)]"
-                  >
-                    Session ID
-                  </label>
+                {/* Row 2: Session ID input */}
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     id="settings-session-id"
@@ -841,15 +794,21 @@ export const SettingsPanel: React.FC<{
                         ? "Enter session ID or prompt number"
                         : "Enable Resume Session first"
                     }
-                    className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                  />
+                  <SetAsDefaultButton
+                    property="sessionId"
+                    show={isDifferentFromGlobal("sessionId")}
+                    onSetDefault={() =>
+                      handleSetAsDefault(
+                        "sessionId",
+                        workflowProperties.sessionId
+                      )
+                    }
                   />
                 </div>
               </div>
-              <span className="text-[11px] text-[var(--vscode-descriptionForeground)] leading-tight block -mt-2">
-                Resume Session continues existing session; Session ID resumes
-                specific session or reuses another prompt's session (by number)
-              </span>
 
               {/* Allow Dynamic Extension */}
               <FormField
@@ -905,21 +864,11 @@ export const SettingsPanel: React.FC<{
                 </span>
               </div>
             </div>
-          )}
         </div>
 
         {/* End Condition Section */}
         <div className="border-b border-[var(--vscode-panel-border)]">
-          <SectionHeader
-            title="Workflow End Condition"
-            icon="checklist"
-            isOpen={endConditionSectionOpen}
-            onToggle={() =>
-              setEndConditionSectionOpen(!endConditionSectionOpen)
-            }
-          />
-          {endConditionSectionOpen && (
-            <div className="px-4 py-3 space-y-3">
+          <div className="px-4 py-3 space-y-3">
               {/* Enable checkbox */}
               <label className="flex items-center gap-2 cursor-pointer text-xs">
                 <input
@@ -1060,7 +1009,6 @@ export const SettingsPanel: React.FC<{
                 </div>
               </div>
             </div>
-          )}
         </div>
       </div>
     </div>

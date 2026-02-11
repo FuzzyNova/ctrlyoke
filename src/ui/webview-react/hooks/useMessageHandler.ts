@@ -441,12 +441,18 @@ function createMessageHandlers(): MessageHandlerMap {
     const settingsStore = useSettingsStore.getState();
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
+    const vscode = getVsCodeApi();
 
     settingsStore.setWorkflowLoaded(false);
     settingsStore.clearWorkflowProperties();
     workflowStore.resetWorkflow();
     editorStore.setHasActiveQueue(false);
-    editorStore.resetEditor();
+
+    // Save new prompt state before resetting so it survives workflow changes.
+    // cancelEdit() will restore savedNewPromptState (if editing) or fall back
+    // to VS Code persistent state, preserving whatever the user has typed.
+    editorStore.saveToVsCodeState(vscode);
+    editorStore.cancelEdit();
   };
 
   // --------------------------------------------------------------------------
