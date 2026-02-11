@@ -1570,6 +1570,9 @@ export class CliIntegration extends CopilotIntegration {
       // Log prompt
       this.logPrompt(finalPromptText);
 
+      // Capture execution start time for session log discovery
+      const executionStartTime = new Date();
+
       // Determine execution mode first
       const mode = this.getExecutionMode();
       const isInteractive = mode === CLI_EXECUTION_MODE.INTERACTIVE;
@@ -1607,7 +1610,11 @@ export class CliIntegration extends CopilotIntegration {
           !extractedSessionId &&
           this.provider.extractSessionIdFromLogs
         ) {
-          const logSessionId = await this.provider.extractSessionIdFromLogs();
+          const logSessionId =
+            await this.provider.extractSessionIdFromLogs(
+              finalPromptText,
+              executionStartTime
+            );
           if (logSessionId) {
             extractedSessionId = logSessionId;
             Log.debug(
@@ -1680,7 +1687,10 @@ export class CliIntegration extends CopilotIntegration {
                 } else if (this.provider.extractSessionIdFromLogs) {
                   // For CLIs that store session ID in log files (e.g., Copilot)
                   const logSessionId =
-                    await this.provider.extractSessionIdFromLogs();
+                    await this.provider.extractSessionIdFromLogs(
+                      finalPromptText,
+                      executionStartTime
+                    );
                   if (logSessionId) {
                     extractedSessionId = logSessionId;
                     Log.debug(`📝 Session ID from logs: ${extractedSessionId}`);

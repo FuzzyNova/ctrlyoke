@@ -1156,6 +1156,46 @@ export class CopilotLogParser extends BaseLogParser {
     return hunks.length > 0 ? hunks : undefined;
   }
 
+  /**
+   * Extract session ID from a known log file path.
+   *
+   * Reads only the first event (session.start) to extract the session ID.
+   * This is stateless - unlike readNewLines(), it always reads from the
+   * beginning of the file, so it's safe to call regardless of prior monitoring state.
+   *
+   * @param logPath Absolute path to a session log file (events.jsonl or .jsonl)
+   * @returns Session ID (UUID) if found, null otherwise
+   *
+   * @remarks
+   * Used by CopilotCliProvider.extractSessionIdFromLogs() after discoverSessionLog()
+   * has already identified the correct log file via prompt-text matching.
+   */
+  async extractSessionIdFromLogPath(logPath: string): Promise<string | null> {
+    try {
+      const events = await this.readFirstEvents(logPath, 1);
+      if (events.length === 0) {
+        Log.debug(
+          `[CopilotLogParser] No events found in ${path.basename(logPath)}`
+        );
+        return null;
+      }
+
+      const sessionId = this.extractSessionId(events);
+      if (sessionId) {
+        Log.debug(
+          `[CopilotLogParser] Extracted session ID from ${path.basename(logPath)}: ${sessionId}`
+        );
+      }
+      return sessionId;
+    } catch (error) {
+      Log.debug(
+        `[CopilotLogParser] Error reading session ID from ${logPath}:`,
+        error
+      );
+      return null;
+    }
+  }
+
   // ========================================================================
   // Private Helper Methods
   // ========================================================================

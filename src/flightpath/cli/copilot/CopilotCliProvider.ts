@@ -437,4 +437,49 @@ export class CopilotCliProvider implements ICliProvider {
       return undefined;
     }
   }
+
+  /**
+   * Extract session ID from session log files by matching prompt text.
+   *
+   * Uses prompt-text matching (via discoverSessionLog) to find the correct
+   * session log among potentially many concurrent sessions, then extracts
+   * the session ID from the session.start event.
+   *
+   * @param promptText The prompt text that was sent (matched against user.message events)
+   * @param startTime When execution started (filters to recently modified logs)
+   * @returns Session ID (UUID) if found, undefined otherwise
+   *
+   * @remarks
+   * **Why prompt matching instead of most-recent:**
+   * Multiple Copilot CLI sessions may run concurrently. Grabbing the most
+   * recently modified log would be a race condition. Instead, we match the
+   * actual prompt text in the log's user.message event to find the correct session.
+   *
+   * **Discovery algorithm (delegated to CopilotLogParser.discoverSessionLog):**
+   * 1. Find recently modified entries in `~/.copilot/session-state/`
+   * 2. Read first 10 events from each candidate
+   * 3. Match user.message content against first 100 chars of promptText
+   * 4. Return the matching session's log path
+   * 5. Extract session ID from session.start event
+   */
+  async extractSessionIdFromLogs(
+    promptText: string,
+    startTime: Date
+  ): Promise<string | undefined> {
+    const logPath = await this.logParser.discoverSessionLog(
+      promptText,
+      startTime
+    );
+    if (!logPath) {
+      Log.debug(
+        "[CopilotCliProvider] Could not discover session log for prompt"
+      );
+      return undefined;
+    }
+
+    // Extract session ID from first event (stateless read, safe after monitoring)
+    const sessionId =
+      await this.logParser.extractSessionIdFromLogPath(logPath);
+    return sessionId ?? undefined;
+  }
 }

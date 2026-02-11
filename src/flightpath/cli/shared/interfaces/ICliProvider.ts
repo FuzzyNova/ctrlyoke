@@ -158,7 +158,12 @@ export interface ICliProvider {
    * - parsed.sessionId is undefined (no session ID in output)
    * - This method is implemented by the provider
    *
+   * @param promptText The prompt text that was sent (used to match the correct session log)
+   * @param startTime When execution started (used to filter recently modified logs)
    * @returns Session ID if found in logs, undefined otherwise
    */
-  extractSessionIdFromLogs?(): Promise<string | undefined>;
+  extractSessionIdFromLogs?(
+    promptText: string,
+    startTime: Date
+  ): Promise<string | undefined>;
 }
