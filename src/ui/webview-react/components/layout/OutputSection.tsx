@@ -73,14 +73,19 @@ export const OutputSection: React.FC = () => {
       // Add CLI outputs - use explicit attemptIndex from data, not array position
       const stepOutputs = cliOutputs[stepIndex] || [];
       stepOutputs.forEach((output) => {
-        const cliOutput = output as CliOutputItem & { timestampMs?: number; attemptIndex?: number };
+        const cliOutput = output as CliOutputItem & {
+          timestampMs?: number;
+          attemptIndex?: number;
+        };
         const explicitAttemptIndex = cliOutput.attemptIndex ?? 0;
         messages.push({
           type: "cli",
           stepIndex,
           timestamp:
             cliOutput.timestampMs ||
-            stepIndex * 10000 + stepStatusMessages.length + explicitAttemptIndex,
+            stepIndex * 10000 +
+              stepStatusMessages.length +
+              explicitAttemptIndex,
           data: output as unknown as CliOutputItem,
           attemptIndex: explicitAttemptIndex,
         });
@@ -143,7 +148,7 @@ export const OutputSection: React.FC = () => {
   return (
     <section
       id="output-section"
-      className="min-h-0 flex-1 bg-[var(--bg-primary)] border-t border-[var(--border-color)] flex flex-col h-full"
+      className="min-h-0 flex-1 bg-[var(--bg-primary)] flex flex-col h-full"
     >
       {/* Section Header */}
       <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">

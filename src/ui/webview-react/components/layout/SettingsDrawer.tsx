@@ -702,62 +702,6 @@ export const SettingsPanel: React.FC<{
             </select>
           </FormField>
 
-          {/* Resume Session & Session ID */}
-          <div className="flex flex-col gap-2">
-            {/* Row 1: Checkbox + label + set as default */}
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="checkbox"
-                id="settings-resume-session"
-                checked={effectiveResumeSession}
-                onChange={(e) => handleResumeSessionChange(e.target.checked)}
-                className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
-              />
-              <label
-                htmlFor="settings-resume-session"
-                className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
-                title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
-              >
-                Resume Session
-              </label>
-              <SetAsDefaultButton
-                property="resumeSession"
-                show={isDifferentFromGlobal("resumeSession")}
-                onSetDefault={() =>
-                  handleSetAsDefault(
-                    "resumeSession",
-                    workflowProperties.resumeSession
-                  )
-                }
-              />
-            </div>
-
-            {/* Row 2: Session ID input */}
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                id="settings-session-id"
-                value={sessionIdInput}
-                onChange={(e) => handleSessionIdChange(e.target.value)}
-                disabled={!effectiveResumeSession}
-                placeholder={
-                  effectiveResumeSession
-                    ? "Enter session ID or prompt number"
-                    : "Enable Resume Session first"
-                }
-                className="flex-1 px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
-              />
-              <SetAsDefaultButton
-                property="sessionId"
-                show={isDifferentFromGlobal("sessionId")}
-                onSetDefault={() =>
-                  handleSetAsDefault("sessionId", workflowProperties.sessionId)
-                }
-              />
-            </div>
-          </div>
-
           {/* Allow Dynamic Extension */}
           <FormField
             label="Allow Dynamic Extension"
@@ -787,17 +731,85 @@ export const SettingsPanel: React.FC<{
             </select>
           </FormField>
 
+          {/* Resume Session & Session ID */}
+          <div className="flex flex-col gap-1">
+            {/* Row 1: Checkbox + label + set as default */}
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="settings-resume-session"
+                checked={effectiveResumeSession}
+                onChange={(e) => handleResumeSessionChange(e.target.checked)}
+                className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+              />
+              <label
+                htmlFor="settings-resume-session"
+                className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+                title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
+              >
+                Resume Session
+              </label>
+              <SetAsDefaultButton
+                property="resumeSession"
+                show={isDifferentFromGlobal("resumeSession")}
+                onSetDefault={() =>
+                  handleSetAsDefault(
+                    "resumeSession",
+                    workflowProperties.resumeSession
+                  )
+                }
+              />
+            </div>
+
+            {/* Row 2: Session ID input (animated, visible only when resume session is enabled) */}
+            <div
+              className={`transition-all duration-300 ${
+                effectiveResumeSession
+                  ? "max-h-[40px] opacity-100"
+                  : "max-h-0 opacity-0 overflow-hidden"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <input
+                  type="text"
+                  id="settings-session-id"
+                  value={sessionIdInput}
+                  onChange={(e) => handleSessionIdChange(e.target.value)}
+                  placeholder="Enter session ID or prompt number"
+                  className="min-w-0 w-full px-2 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] h-7"
+                  title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
+                />
+                <SetAsDefaultButton
+                  property="sessionId"
+                  show={isDifferentFromGlobal("sessionId")}
+                  onSetDefault={() =>
+                    handleSetAsDefault(
+                      "sessionId",
+                      workflowProperties.sessionId
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
           {/* End Condition Section */}
           {/* Enable checkbox */}
-          <label className="flex items-center gap-2 cursor-pointer text-xs">
+          <div className="flex items-center gap-2">
             <input
               type="checkbox"
+              id="settings-end-condition-enabled"
               checked={endConditionEnabled}
               onChange={(e) => handleEndConditionToggle(e.target.checked)}
-              className="w-4 h-4 accent-[var(--vscode-focusBorder)]"
+              className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
             />
-            <span>Apply end condition to all prompts</span>
-          </label>
+            <label
+              htmlFor="settings-end-condition-enabled"
+              className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+            >
+              Global End Condition
+            </label>
+          </div>
 
           {/* End condition fields */}
           <div
@@ -928,7 +940,7 @@ export const SettingsPanel: React.FC<{
       </div>
 
       {/* Always-visible footer with quick toggle buttons */}
-      <div className="flex items-center gap-1 px-2 h-[30px] border-t border-[var(--vscode-panel-border)] flex-shrink-0">
+      <div className="flex items-center gap-1 px-2 border-t border-[var(--vscode-panel-border)] flex-shrink-0 h-[35px]">
         <IconToggleButton
           active={globalSettings.executionMode === "interactive"}
           onToggle={(active) =>

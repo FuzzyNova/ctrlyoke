@@ -52,7 +52,10 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   const [footerRef, isNarrow] = useElementNarrow();
 
   return (
-    <div ref={footerRef} className="editor-footer flex items-center justify-between px-3 py-2 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+    <div
+      ref={footerRef}
+      className="editor-footer flex items-center justify-between px-3 py-1 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]"
+    >
       {/* Left side: Properties toggle */}
       <div className="editor-footer-left flex items-center">
         <button

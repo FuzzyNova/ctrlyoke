@@ -23,12 +23,14 @@ export const IconToggleButton: React.FC<{
   <button
     onClick={() => onToggle(!active)}
     title={active ? activeTooltip : inactiveTooltip}
-    className={`p-1 bg-transparent border-none cursor-pointer text-[16px] leading-none transition-colors ${
+    className={`px-1 bg-transparent border-none cursor-pointer leading-none transition-colors ${
       active
         ? "text-[var(--vscode-textLink-foreground)]"
         : "text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)]"
     }`}
   >
-    <i className={`codicon codicon-${active ? activeIcon : inactiveIcon}`} />
+    <i
+      className={`codicon codicon-lg codicon-${active ? activeIcon : inactiveIcon}`}
+    />
   </button>
 );
