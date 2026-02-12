@@ -14,6 +14,7 @@ export {
   STATUS_MESSAGE_SEVERITY,
   ACTION_TYPES,
   HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   type MessageType,
@@ -22,6 +23,7 @@ export {
   type StatusMessageSeverity,
   type ActionType,
   type HarnessId,
+  type HarnessStatusString,
 } from "@root/types/DashboardConstants";
 
 // Re-export all message and data types from WebviewMessageTypes

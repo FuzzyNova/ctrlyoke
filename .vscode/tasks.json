@@ -13,6 +13,16 @@
     },
     {
       "type": "npm",
+      "script": "compile:prod",
+      "group": "build",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "never"
+      },
+      "problemMatcher": ["$esbuild-watch"]
+    },
+    {
+      "type": "npm",
       "script": "watch",
       "group": "build",
       "presentation": {

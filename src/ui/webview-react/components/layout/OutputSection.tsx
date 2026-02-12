@@ -8,6 +8,8 @@ import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
 import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
 import { MESSAGE_TYPES } from "../../types/messages";
 
+const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
+
 /**
  * Combined message type for chronological sorting
  */
@@ -40,13 +42,10 @@ export const OutputSection: React.FC = () => {
     statusMessages,
     streamingChunks,
   } = useWorkflowStore();
-  const {
-    outputCollapsed,
-    toggleOutputCollapse,
-    autoscrollEnabled,
-    setAutoscroll,
-  } = useUiStore();
+  const { outputCollapsed, toggleOutputCollapse } = useUiStore();
   const outputRef = useRef<HTMLDivElement>(null);
+  const autoscrollEnabled = useRef(true);
+  const isProgrammaticScroll = useRef(false);
 
   // Build chronologically sorted list of all messages
   const allMessages = useMemo((): OutputMessage[] => {
@@ -96,12 +95,27 @@ export const OutputSection: React.FC = () => {
     return messages.sort((a, b) => a.timestamp - b.timestamp);
   }, [cliOutputs, statusMessages, totalSteps]);
 
+  // Smart scroll: detect user scrolling away from bottom
+  const handleScroll = useCallback(() => {
+    if (isProgrammaticScroll.current) return;
+    const el = outputRef.current;
+    if (!el) return;
+    const atBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_BOTTOM_THRESHOLD;
+    autoscrollEnabled.current = atBottom;
+  }, []);
+
   // Auto-scroll effect
   useEffect(() => {
-    if (autoscrollEnabled && outputRef.current) {
+    if (autoscrollEnabled.current && outputRef.current) {
+      isProgrammaticScroll.current = true;
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
+      // Reset flag after the scroll event fires
+      requestAnimationFrame(() => {
+        isProgrammaticScroll.current = false;
+      });
     }
-  }, [allMessages, streamingChunks, autoscrollEnabled]);
+  }, [allMessages, streamingChunks]);
 
   // Export handler
   const handleExport = useCallback(() => {
@@ -170,19 +184,6 @@ export const OutputSection: React.FC = () => {
 
         {/* Right: controls */}
         <div className="ml-auto flex items-center gap-2">
-          <label
-            className="flex items-center gap-1 text-[11px] text-[var(--fg-secondary)] cursor-pointer select-none"
-            title="Auto-scroll to latest output"
-          >
-            <input
-              type="checkbox"
-              id="autoscroll-checkbox"
-              checked={autoscrollEnabled}
-              onChange={(e) => setAutoscroll(e.target.checked)}
-            />
-            <span>Auto-scroll</span>
-          </label>
-
           <button
             className="icon-btn py-0.5 px-2"
             id="export-btn"
@@ -200,6 +201,7 @@ export const OutputSection: React.FC = () => {
         ref={outputRef}
         id="output-content"
         className="font-mono text-[11px] min-h-0 p-0 flex-1 overflow-y-auto"
+        onScroll={handleScroll}
       >
         {!hasOutput ? (
           <p className="text-center text-[var(--fg-secondary)] italic p-[var(--spacing-lg)]">

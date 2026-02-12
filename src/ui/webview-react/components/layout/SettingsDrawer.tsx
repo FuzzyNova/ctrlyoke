@@ -10,7 +10,9 @@ import { useElementNarrow } from "../../hooks/useElementNarrow";
 import {
   MESSAGE_TYPES,
   HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
   type HarnessId,
+  type HarnessStatusString,
 } from "../../types/messages";
 import { PanelBar, IconToggleButton } from "../shared";
 
@@ -40,21 +42,24 @@ const HARNESS_INFO: Record<HarnessId, { name: string; description: string }> = {
  * Status indicator component
  */
 const StatusIndicator: React.FC<{
-  status: "checking" | "available" | "not_available";
+  status: HarnessStatusString;
   narrow?: boolean;
 }> = ({ status, narrow = false }) => {
-  const statusConfig = {
-    checking: {
+  const statusConfig: Record<
+    HarnessStatusString,
+    { color: string; text: string; animate: boolean }
+  > = {
+    [HARNESS_STATUS_STRINGS.CHECKING]: {
       color: "bg-yellow-400",
       text: "Checking...",
       animate: true,
     },
-    available: {
+    [HARNESS_STATUS_STRINGS.AVAILABLE]: {
       color: "bg-green-500",
       text: "Available",
       animate: false,
     },
-    not_available: {
+    [HARNESS_STATUS_STRINGS.UNAVAILABLE]: {
       color: "bg-red-400",
       text: "Not Available",
       animate: false,
@@ -142,7 +147,7 @@ const HarnessDropdown: React.FC<{
   onChange: (value: string) => void;
   harnessStatus: Record<
     string,
-    { status: "checking" | "available" | "not_available"; available?: boolean }
+    { status: HarnessStatusString; available?: boolean }
   >;
 }> = ({ id, value, onChange, harnessStatus }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -267,6 +272,7 @@ export const SettingsPanel: React.FC<{
 
   // Session ID input state
   const [sessionIdInput, setSessionIdInput] = useState("");
+
 
   // Sync sessionIdInput with store changes
   useEffect(() => {
@@ -585,7 +591,7 @@ export const SettingsPanel: React.FC<{
             Settings
           </span>
         </div>
-        <button
+<button
           onClick={(e) => {
             e.stopPropagation();
             handleOpenSettings();

@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import { HARNESS_IDS, type HarnessId } from "../types/messages";
+import {
+  HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
+  type HarnessId,
+  type HarnessStatusString,
+} from "../types/messages";
 
 /**
  * Model option for dropdowns
@@ -23,7 +28,7 @@ export interface AgentOption {
  */
 export interface HarnessStatus {
   available: boolean;
-  status: "checking" | "available" | "not_available";
+  status: HarnessStatusString;
   message?: string;
 }
 
@@ -160,10 +165,10 @@ const initialGlobalSettings: GlobalSettings = {
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
-  [HARNESS_IDS.COPILOT_CLI]: { available: false, status: "checking" },
-  [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
-  [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
-  [HARNESS_IDS.CODEX_CLI]: { available: false, status: "checking" },
+  [HARNESS_IDS.COPILOT_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
+  [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
+  [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
+  [HARNESS_IDS.CODEX_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
 };
 
 const initialState: SettingsState = {

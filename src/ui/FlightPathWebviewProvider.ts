@@ -8,11 +8,13 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   HARNESS_IDS,
+  HARNESS_STATUS_STRINGS,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
   StatusMessageSeverity,
   DEFAULT_MODELS,
   QUEUE_POSITION,
+  type HarnessStatusString,
 } from "../types/DashboardConstants";
 import { CliEvent, CliOutputData } from "../types/WebviewMessageTypes";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
@@ -48,7 +50,7 @@ export type { CliOutputData } from "../types/WebviewMessageTypes";
  */
 interface HarnessStatus {
   available: boolean;
-  status: "checking" | "available" | "unavailable";
+  status: HarnessStatusString;
   message?: string;
 }
 
@@ -72,10 +74,22 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
   // Harness availability status
   private harnessStatus: Record<string, HarnessStatus> = {
-    [HARNESS_IDS.COPILOT_CLI]: { available: false, status: "checking" },
-    [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: "checking" },
-    [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: "checking" },
-    [HARNESS_IDS.CODEX_CLI]: { available: false, status: "checking" },
+    [HARNESS_IDS.COPILOT_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
+    [HARNESS_IDS.COPILOT_CHAT]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
+    [HARNESS_IDS.CLAUDE_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
+    [HARNESS_IDS.CODEX_CLI]: {
+      available: false,
+      status: HARNESS_STATUS_STRINGS.CHECKING,
+    },
   };
 
   // Pending workflow properties (set before workflow is created)
@@ -1396,18 +1410,15 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     await ConfigurationUtils.setIntegrationMode(harness as Harness);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleModelChange(model: string): Promise<void> {
     const harness = ConfigurationUtils.getIntegrationMode();
     await ConfigurationUtils.setModelForHarness(harness, model);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
     await ConfigurationUtils.setCustomAgent(agent);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleExecutionModeChange(mode: string): Promise<void> {
@@ -1419,17 +1430,14 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     await ConfigurationUtils.setCliExecutionMode(mode);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleResumeSessionChange(enabled: boolean): Promise<void> {
     await ConfigurationUtils.setResumeExistingSession(enabled);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
     await ConfigurationUtils.setEnableDynamicQueue(enabled);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private handleOpenSettings(): void {
@@ -1486,7 +1494,6 @@ window.vscodeApi = acquireVsCodeApi();
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleGetConfig(key: string): Promise<void> {
@@ -1501,7 +1508,6 @@ window.vscodeApi = acquireVsCodeApi();
 
   private async handleUpdateConfig(key: string, value: any): Promise<void> {
     await ConfigurationUtils.updateSetting(key, value);
-    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   // ============================================================================
@@ -1556,13 +1562,13 @@ window.vscodeApi = acquireVsCodeApi();
       });
       this.harnessStatus[harnessId] = {
         available: true,
-        status: "available",
+        status: HARNESS_STATUS_STRINGS.AVAILABLE,
         message: stdout.trim(),
       };
     } catch {
       this.harnessStatus[harnessId] = {
         available: false,
-        status: "unavailable",
+        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
         message: "Not installed or not in PATH",
       };
     }
@@ -1582,7 +1588,7 @@ window.vscodeApi = acquireVsCodeApi();
       if (!hasExtension) {
         this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
-          status: "unavailable",
+          status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
           message: "GitHub Copilot extension not installed",
         };
         this.sendHarnessStatusUpdate();
@@ -1598,20 +1604,20 @@ window.vscodeApi = acquireVsCodeApi();
       if (hasChatSubmit && hasChatPanel) {
         this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: true,
-          status: "available",
+          status: HARNESS_STATUS_STRINGS.AVAILABLE,
           message: "GitHub Copilot Chat",
         };
       } else {
         this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
           available: false,
-          status: "unavailable",
+          status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
           message: "Copilot Chat commands not available",
         };
       }
     } catch (error) {
       this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
         available: false,
-        status: "unavailable",
+        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
         message: "Error checking Copilot Chat availability",
       };
     }

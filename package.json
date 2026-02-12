@@ -983,12 +983,12 @@
     "precompile": "npm run generate-schema && npm run generate-icons && npm run generate-sidebar-icon",
     "compile": "npm run compile:extension && npm run compile:webview",
     "compile:extension": "npm run check-types && node esbuild.js",
-    "compile:webview": "npm run generate-custom-icons && vite build --config src/ui/webview-react/vite.config.ts",
+    "compile:webview": "npm run generate-custom-icons && vite build --config src/ui/webview-react/vite.config.ts --mode development",
     "compile-tests": "tsc -p .",
     "check-types": "tsc --noEmit",
     "watch": "npm-run-all -p watch:extension watch:webview",
     "watch:extension": "node esbuild.js --watch",
-    "watch:webview": "npm run generate-custom-icons && vite build --watch --config src/ui/webview-react/vite.config.ts",
+    "watch:webview": "npm run generate-custom-icons && vite build --watch --config src/ui/webview-react/vite.config.ts --mode development",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "dev:webview": "npm run generate-custom-icons && vite --config src/ui/webview-react/vite.config.ts",
@@ -1012,7 +1012,8 @@
     "sync-models": "node scripts/sync-models.mjs",
     "sync-models:check": "node scripts/sync-models.mjs --check",
     "sync-models:import": "node scripts/sync-models.mjs --import",
-    "chores": "node scripts/chores.mjs"
+    "chores": "node scripts/chores.mjs",
+    "compile:prod": "npm run compile:extension && npm run build:webview"
   },
   "devDependencies": {
     "@types/diff": "^7.0.2",

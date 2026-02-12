@@ -38,7 +38,6 @@ interface UiState {
   settingsCollapsed: boolean;
 
   // Output panel state
-  autoscrollEnabled: boolean;
   selectedOutputStep: number | null; // Which step's output to show (null = current)
 
   // New workflow modal state
@@ -86,7 +85,6 @@ interface UiActions {
   setSettingsCollapsed: (collapsed: boolean) => void;
 
   // Output panel
-  setAutoscroll: (enabled: boolean) => void;
   selectOutputStep: (stepIndex: number | null) => void;
 
   // New workflow modal
@@ -124,7 +122,6 @@ const initialState: UiState = {
   editorCollapsed: false,
   propertiesDrawerOpen: false,
   settingsCollapsed: true,
-  autoscrollEnabled: true,
   selectedOutputStep: null,
   newWorkflowModalOpen: false,
   templates: [],
@@ -144,7 +141,6 @@ const persistedFields = [
   "outputCollapsed",
   "editorCollapsed",
   "settingsCollapsed",
-  "autoscrollEnabled",
   "defaultTemplateId",
 ] as const;
 
@@ -195,8 +191,6 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
       // OUTPUT PANEL
       // ============================================================================
-
-      setAutoscroll: (enabled) => set({ autoscrollEnabled: enabled }),
 
       selectOutputStep: (stepIndex) => set({ selectedOutputStep: stepIndex }),
 

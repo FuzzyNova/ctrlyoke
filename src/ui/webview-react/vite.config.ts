@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import path from "path";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     // Copy static assets that React build needs
@@ -43,7 +43,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "../../../out/ui/webview-react"),
     emptyOutDir: true,
-    minify: "esbuild",
+    minify: mode === "production" ? "esbuild" : false,
     sourcemap: true,
     // Webview requirements: single bundle, predictable names (no hashes)
     cssCodeSplit: false,
@@ -78,4 +78,4 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
-});
+}));

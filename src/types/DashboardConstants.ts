@@ -223,7 +223,7 @@ export const CODEX_CLI_MODELS = [
 export const HARNESS_STATUS_STRINGS = {
   CHECKING: "checking",
   AVAILABLE: "available",
-  NOT_AVAILABLE: "not_available",
+  UNAVAILABLE: "unavailable",
 } as const;
 
 // ============================================================================
@@ -232,7 +232,7 @@ export const HARNESS_STATUS_STRINGS = {
 export const UI_STRINGS = {
   LOADING_MODELS: "Loading models...",
   CHECKING_STATUS: "checking...",
-  NOT_AVAILABLE: "not available",
+  UNAVAILABLE: "not available",
 } as const;
 
 // ============================================================================
@@ -315,3 +315,5 @@ export type FileOperationStatus =
   (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
 export type CliEventType =
   (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
+export type HarnessStatusString =
+  (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
