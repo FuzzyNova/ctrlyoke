@@ -282,6 +282,9 @@ export const SettingsPanel: React.FC<{
     );
   }, [workflowProperties.endCondition]);
 
+  // Narrow detection for footer toggle buttons
+  const [footerRef, isFooterNarrow] = useElementNarrow<HTMLDivElement>(200);
+
   // Get current effective values
   const effectiveHarness = getEffectiveHarness();
   const effectiveModel = getEffectiveModel();
@@ -906,7 +909,10 @@ export const SettingsPanel: React.FC<{
       </div>
 
       {/* Always-visible footer with quick toggle buttons */}
-      <div className="flex items-center gap-1 px-2 border-t border-[var(--vscode-panel-border)] flex-shrink-0 h-[35px]">
+      <div
+        ref={footerRef}
+        className="flex items-center justify-center gap-1 px-2 border-t border-[var(--vscode-panel-border)] flex-shrink-0 h-[35px]"
+      >
         <IconToggleButton
           active={globalSettings.executionMode === "interactive"}
           onToggle={(active) =>
@@ -916,6 +922,9 @@ export const SettingsPanel: React.FC<{
           inactiveIcon="terminal"
           activeTooltip="Interactive mode: terminal visible"
           inactiveTooltip="Headless mode: runs in background"
+          activeLabel="Interactive"
+          inactiveLabel="Headless"
+          narrow={isFooterNarrow}
         />
         <IconToggleButton
           active={globalSettings.respectGitignore}
@@ -924,6 +933,9 @@ export const SettingsPanel: React.FC<{
           inactiveIcon="repo"
           activeTooltip="Respecting .gitignore for completions"
           inactiveTooltip="All files included for completions (ignoring .gitignore)"
+          activeLabel="Excluding ignored files"
+          inactiveLabel="Including all files"
+          narrow={isFooterNarrow}
         />
       </div>
     </div>

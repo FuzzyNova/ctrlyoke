@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type RefObject } from "react";
+import { useState, useEffect, useCallback, useRef, type RefObject } from "react";
 
 /**
  * Default width threshold (in px) below which an element is considered "narrow".
@@ -22,11 +22,17 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
   threshold: number = DEFAULT_THRESHOLD
 ): [RefObject<T | null>, boolean] {
   const ref = useRef<T | null>(null);
+  const [element, setElement] = useState<T | null>(null);
   const [isNarrow, setIsNarrow] = useState(false);
 
+  // Callback ref so we re-run the observer effect whenever the element mounts/unmounts
+  const callbackRef = useCallback((node: T | null) => {
+    ref.current = node;
+    setElement(node);
+  }, []);
+
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    if (!element) return;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -34,9 +40,9 @@ export function useElementNarrow<T extends HTMLElement = HTMLDivElement>(
       }
     });
 
-    observer.observe(el);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, [threshold]);
+  }, [element, threshold]);
 
-  return [ref, isNarrow];
+  return [callbackRef as unknown as RefObject<T | null>, isNarrow];
 }
