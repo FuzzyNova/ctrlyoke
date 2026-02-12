@@ -490,7 +490,11 @@ export class ClaudeResponseParser
       }
 
       // File write result (Write tool)
-      if (toolUseResult.type === "write" || toolUseResult.content) {
+      // Must have a file path to avoid matching Grep results (which also have a `content` field)
+      if (
+        (toolUseResult.type === "write" || toolUseResult.content) &&
+        (toolUseResult.filePath || toolUseResult.path)
+      ) {
         events.push({
           type: CLI_EVENT_TYPES.FILE_WRITE,
           timestamp: Date.now(),

@@ -336,7 +336,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
             });
           }
           // File write result (Write tool)
-          else if (toolUseResult.type === "create" || toolUseResult.content) {
+          // Must have a file path to avoid matching Grep results (which also have a `content` field)
+          else if (
+            (toolUseResult.type === "create" || toolUseResult.content) &&
+            (toolUseResult.filePath || toolUseResult.path)
+          ) {
             outputEvents.push({
               type: CLI_EVENT_TYPES.FILE_WRITE,
               timestamp,

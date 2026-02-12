@@ -728,14 +728,25 @@ window.vscodeApi = acquireVsCodeApi();
       ConfigurationUtils.shouldResumeExistingSession();
     const dynamicQueueEnabled =
       ConfigurationUtils.getDynamicQueueConfig().enabled;
+    const respectGitignore =
+      ConfigurationUtils.shouldRespectGitignoreForCompletions();
+
+    const harnessDefaultModels = {
+      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(Harness.CopilotCli),
+      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(Harness.CopilotChat),
+      [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
+      [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
+    };
 
     const globalSettings = {
       harness,
       model,
+      harnessDefaultModels,
       agent,
       executionMode,
       resumeSession: resumeExistingSession,
       allowDynamicExtension: dynamicQueueEnabled,
+      respectGitignore,
     };
 
     // Build dynamic model options from ModelRegistry
@@ -1385,18 +1396,18 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     await ConfigurationUtils.setIntegrationMode(harness as Harness);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleModelChange(model: string): Promise<void> {
     const harness = ConfigurationUtils.getIntegrationMode();
     await ConfigurationUtils.setModelForHarness(harness, model);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
     await ConfigurationUtils.setCustomAgent(agent);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleExecutionModeChange(mode: string): Promise<void> {
@@ -1408,17 +1419,17 @@ window.vscodeApi = acquireVsCodeApi();
     }
 
     await ConfigurationUtils.setCliExecutionMode(mode);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleResumeSessionChange(enabled: boolean): Promise<void> {
     await ConfigurationUtils.setResumeExistingSession(enabled);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleDynamicQueueChange(enabled: boolean): Promise<void> {
     await ConfigurationUtils.setEnableDynamicQueue(enabled);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private handleOpenSettings(): void {
@@ -1475,8 +1486,7 @@ window.vscodeApi = acquireVsCodeApi();
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }
-
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   private async handleGetConfig(key: string): Promise<void> {
@@ -1491,7 +1501,7 @@ window.vscodeApi = acquireVsCodeApi();
 
   private async handleUpdateConfig(key: string, value: any): Promise<void> {
     await ConfigurationUtils.updateSetting(key, value);
-    this.sendInitialState();
+    // sendInitialState() is triggered by onDidChangeConfiguration listener
   }
 
   // ============================================================================

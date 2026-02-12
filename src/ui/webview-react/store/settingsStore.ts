@@ -33,10 +33,12 @@ export interface HarnessStatus {
 export interface GlobalSettings {
   harness: HarnessId;
   model: string;
+  harnessDefaultModels: Record<string, string>;
   agent: string;
   executionMode: "interactive" | "headless";
   resumeSession: boolean;
   allowDynamicExtension: boolean;
+  respectGitignore: boolean;
 }
 
 /**
@@ -149,10 +151,12 @@ const CODEX_CLI_MODELS: ModelOption[] = [
 const initialGlobalSettings: GlobalSettings = {
   harness: HARNESS_IDS.COPILOT_CLI as HarnessId,
   model: "claude-sonnet-4.5",
+  harnessDefaultModels: {},
   agent: "",
   executionMode: "interactive",
   resumeSession: false,
   allowDynamicExtension: false,
+  respectGitignore: true,
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {

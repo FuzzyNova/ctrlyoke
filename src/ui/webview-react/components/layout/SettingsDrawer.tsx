@@ -268,36 +268,11 @@ export const SettingsPanel: React.FC<{
   // Session ID input state
   const [sessionIdInput, setSessionIdInput] = useState("");
 
-  // Respect gitignore checkbox state
-  const [respectGitignore, setRespectGitignore] = useState(true);
-
   // Sync sessionIdInput with store changes
   useEffect(() => {
     const sessionId = workflowProperties.sessionId;
     setSessionIdInput(sessionId !== undefined ? String(sessionId) : "");
   }, [workflowProperties.sessionId]);
-
-  // Request initial respect gitignore setting
-  useEffect(() => {
-    vscode.postMessage({
-      type: MESSAGE_TYPES.GET_CONFIG,
-      key: "respectGitignoreForCompletions",
-    });
-
-    // Listen for CONFIG_VALUE response
-    const handleConfigValue = (event: MessageEvent) => {
-      const message = event.data;
-      if (
-        message.type === MESSAGE_TYPES.CONFIG_VALUE &&
-        message.key === "respectGitignoreForCompletions"
-      ) {
-        setRespectGitignore(message.value ?? true);
-      }
-    };
-
-    window.addEventListener("message", handleConfigValue);
-    return () => window.removeEventListener("message", handleConfigValue);
-  }, [vscode]);
 
   // Update end condition state when workflow properties change
   useEffect(() => {
@@ -321,11 +296,20 @@ export const SettingsPanel: React.FC<{
   const isDifferentFromGlobal = useCallback(
     (property: keyof WorkflowProperties) => {
       const workflowValue = workflowProperties[property];
+      if (workflowValue === undefined) return false;
+      if (property === "model") {
+        // Compare against the global default for the effective harness, not the
+        // global harness default — they differ when a non-default harness is selected
+        return (
+          workflowValue !==
+          globalSettings.harnessDefaultModels[effectiveHarness]
+        );
+      }
       const globalValue =
         globalSettings[property as keyof typeof globalSettings];
-      return workflowValue !== undefined && workflowValue !== globalValue;
+      return workflowValue !== globalValue;
     },
-    [workflowProperties, globalSettings]
+    [workflowProperties, globalSettings, effectiveHarness]
   );
 
   // ============================================================================
@@ -348,15 +332,16 @@ export const SettingsPanel: React.FC<{
       // Get models for the new harness
       const newHarnessModels = getModelsForHarness(harness as any);
 
-      // Check if current model is valid for new harness
-      const currentModel = effectiveModel;
-      const isModelValidForHarness = newHarnessModels.some(
-        (m) => m.value === currentModel
-      );
-
-      // If current model not valid for new harness, select default or first available
-      if (!isModelValidForHarness && newHarnessModels.length > 0) {
-        const defaultModel = newHarnessModels[0].value;
+      // Always update model to the global default for the new harness
+      if (newHarnessModels.length > 0) {
+        const globalDefaultForHarness =
+          settingsStore.globalSettings.harnessDefaultModels[harness];
+        const isGlobalDefaultValid = newHarnessModels.some(
+          (m) => m.value === globalDefaultForHarness
+        );
+        const defaultModel = isGlobalDefaultValid
+          ? globalDefaultForHarness
+          : newHarnessModels[0].value;
 
         // Update model optimistically
         settingsStore.updateWorkflowProperty("model", defaultModel);
@@ -369,7 +354,7 @@ export const SettingsPanel: React.FC<{
         });
       }
     },
-    [vscode, effectiveModel, getModelsForHarness]
+    [vscode, getModelsForHarness]
   );
 
   const handleModelChange = useCallback(
@@ -547,7 +532,6 @@ export const SettingsPanel: React.FC<{
 
   const handleRespectGitignoreChange = useCallback(
     (checked: boolean) => {
-      setRespectGitignore(checked);
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_CONFIG,
         key: "respectGitignoreForCompletions",
@@ -769,7 +753,7 @@ export const SettingsPanel: React.FC<{
                   : "max-h-0 opacity-0 overflow-hidden"
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 mt-1">
                 <input
                   type="text"
                   id="settings-session-id"
@@ -778,16 +762,6 @@ export const SettingsPanel: React.FC<{
                   placeholder="Enter session ID or prompt number"
                   className="min-w-0 w-full px-2 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] h-7"
                   title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
-                />
-                <SetAsDefaultButton
-                  property="sessionId"
-                  show={isDifferentFromGlobal("sessionId")}
-                  onSetDefault={() =>
-                    handleSetAsDefault(
-                      "sessionId",
-                      workflowProperties.sessionId
-                    )
-                  }
                 />
               </div>
             </div>
@@ -806,6 +780,7 @@ export const SettingsPanel: React.FC<{
             <label
               htmlFor="settings-end-condition-enabled"
               className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+              title="Validation runs after each prompt completes. Individual prompts can override or disable this."
             >
               Global End Condition
             </label>
@@ -819,15 +794,6 @@ export const SettingsPanel: React.FC<{
                 : "max-h-0 opacity-0 overflow-hidden"
             }`}
           >
-            {/* Help text */}
-            <div className="flex items-start gap-2 px-2 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-textBlockQuote-background)] border-l-2 border-[var(--vscode-textBlockQuote-border)]">
-              <i className="codicon codicon-info mt-0.5" />
-              <span>
-                Validation runs after each prompt completes. Individual prompts
-                can override or disable this.
-              </span>
-            </div>
-
             {/* Script */}
             <div className="flex flex-col gap-1">
               <label
@@ -952,7 +918,7 @@ export const SettingsPanel: React.FC<{
           inactiveTooltip="Headless mode: runs in background"
         />
         <IconToggleButton
-          active={respectGitignore}
+          active={globalSettings.respectGitignore}
           onToggle={handleRespectGitignoreChange}
           activeIcon="repo-selected"
           inactiveIcon="repo"
