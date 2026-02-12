@@ -10,6 +10,7 @@ import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../utils/Log";
 import { retryWithBackoff } from "../../utils/RetryUtils";
 import { CliOutputFormatter } from "../cli/shared/CliOutputFormatter";
+import { UniversalCliOutput } from "../../types/CliOutputTypes";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -34,6 +35,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
   // Track if last failure was due to user cancellation in chat UI
   private lastFailureWasUserCancellation: boolean = false;
+
+  // Last parsed structured output (populated after each completed response)
+  private lastParsedOutput?: UniversalCliOutput;
 
   constructor(context: vscode.ExtensionContext) {
     super(context);
@@ -464,15 +468,15 @@ export class CopilotChatIntegration extends CopilotIntegration {
         return "";
       }
 
+      // Store structured output for getLastParsedOutput() (used by WorkflowExecutor)
+      this.lastParsedOutput = output;
+
       // Format for output window (plain text)
       const formattedText = CliOutputFormatter.toPlainText(output);
 
       Log.info(
         `📋 Extracted response: ${formattedText.length} chars, ${output.events.length} events`
       );
-
-      // TODO: Send structured output to dashboard for tool calls, thinking blocks
-      // this.sendOutputToDashboard(output);
 
       return formattedText;
     } catch (error) {
@@ -674,6 +678,11 @@ export class CopilotChatIntegration extends CopilotIntegration {
       : await this.buildPromptText(prompt);
 
     return promptText.trim();
+  }
+
+  /** Get the last parsed structured output (tool calls, thinking blocks, metadata) */
+  override getLastParsedOutput(): UniversalCliOutput | undefined {
+    return this.lastParsedOutput;
   }
 
   /** Get integration status */

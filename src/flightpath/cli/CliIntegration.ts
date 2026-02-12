@@ -1113,6 +1113,9 @@ export class CliIntegration extends CopilotIntegration {
 
       this.lastCliCommand = displayCommand;
 
+      // Store the actual prompt sent for log discovery (may be a file reference)
+      this.actualPromptSent = promptArgument;
+
       this.promptReadyEmitter.fire({
         fullPrompt: promptText,
         cliCommand: displayCommand,
@@ -1605,14 +1608,17 @@ export class CliIntegration extends CopilotIntegration {
         // Fallback: Extract session ID from logs if not available from notification
         // Note: For Copilot CLI, this is currently the ONLY working method since hooks
         // don't provide session IDs yet. For Claude/Codex, this is a true fallback.
+        // Skip if we already have resolvedSessionId - log discovery is unnecessary
+        // (the session didn't change) and would search deep into a resumed session log.
         if (
           success &&
           !extractedSessionId &&
+          !resolvedSessionId &&
           this.provider.extractSessionIdFromLogs
         ) {
           const logSessionId =
             await this.provider.extractSessionIdFromLogs(
-              finalPromptText,
+              this.actualPromptSent || finalPromptText,
               executionStartTime
             );
           if (logSessionId) {
@@ -1684,11 +1690,16 @@ export class CliIntegration extends CopilotIntegration {
                 if (parsedOutput.metadata.sessionId) {
                   extractedSessionId = parsedOutput.metadata.sessionId;
                   Log.debug(`📝 Session ID from output: ${extractedSessionId}`);
-                } else if (this.provider.extractSessionIdFromLogs) {
+                } else if (
+                  !resolvedSessionId &&
+                  this.provider.extractSessionIdFromLogs
+                ) {
                   // For CLIs that store session ID in log files (e.g., Copilot)
+                  // Skip if resuming - the session ID hasn't changed and the new prompt
+                  // will be deep in the log (past the first 10 events searched).
                   const logSessionId =
                     await this.provider.extractSessionIdFromLogs(
-                      finalPromptText,
+                      this.actualPromptSent || finalPromptText,
                       executionStartTime
                     );
                   if (logSessionId) {
@@ -1808,6 +1819,15 @@ export class CliIntegration extends CopilotIntegration {
         };
 
         success = await executeWithRecovery(baseArgs, finalPromptText);
+      }
+
+      // If we resumed an existing session and log discovery didn't run (or couldn't find the log),
+      // fall back to the resolved session ID — the session hasn't changed.
+      if (!extractedSessionId && resolvedSessionId) {
+        extractedSessionId = resolvedSessionId;
+        Log.debug(
+          `📝 Reusing resolved session ID (no new ID extracted): ${extractedSessionId}`
+        );
       }
 
       // Store runtime metadata in prompt's _runtime (always on success, session ID optional)

@@ -673,13 +673,15 @@ export class CopilotLogParser extends BaseLogParser {
           return flatPath;
         }
 
-        // Session ID provided but file not found - this is unexpected for resumed sessions
+        // Session ID provided but file not found - fall back to prompt-text matching
+        // This handles: bad session ID from user, logs cleaned up, or format change
         Log.warn(
           `[CopilotLogParser] Session ${sessionId} not found in either format. Tried:\n` +
             `  - ${eventsPath}\n` +
-            `  - ${flatPath}`
+            `  - ${flatPath}\n` +
+            `  Falling back to prompt-text matching.`
         );
-        return null;
+        // Fall through to prompt-text matching below
       }
 
       // Prepare prompt matcher (first 100 chars, normalized)

@@ -1273,10 +1273,13 @@ export class CodexLogParser extends BaseLogParser {
           );
           return result;
         } else {
-          Log.debug(
-            `[CodexLogParser] No log file found for session ${sessionId} in ${basePath}`
+          // Session ID provided but file not found - fall back to prompt-text matching
+          // This handles: bad session ID from user, logs cleaned up, or format change
+          Log.warn(
+            `[CodexLogParser] No log file found for session ${sessionId} in ${basePath}. ` +
+              `Falling back to prompt-text matching.`
           );
-          return null;
+          // Fall through to prompt-text matching below
         }
       }
 

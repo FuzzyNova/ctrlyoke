@@ -465,6 +465,14 @@ export class PromptQueue {
     this.state.totalPausedDuration = 0;
     this.state.pausedTime = undefined;
 
+    // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
+    // Stale session IDs from a previous run would cause log discovery and session
+    // resumption to find the wrong session when re-running the same workflow.
+    this.state.prompts = this.state.prompts.map((prompt) => {
+      const { _runtime: _, ...rest } = prompt as any;
+      return rest as PromptItem;
+    });
+
     this.emitStateChange();
     Log.info("Queue restarted from beginning");
 
