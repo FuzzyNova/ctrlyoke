@@ -17,51 +17,113 @@
 - Dashboard UI to cycle through previous runs
 - User setting to control history retention (default: enabled, 10 runs max)
 
-## Key Architectural Decision: Reuse CliEvent Format
+---
 
-**Design Choice:** Output history stores events using the existing `CliEvent[]` format from `CliOutputTypes.ts` instead of creating custom history types.
+## Current Architecture Context (as of 2026)
 
-**Benefits:**
+Before describing the implementation, here is the current codebase reality that the old doc was unaware of:
 
-1. **Zero Duplication:** No need for separate history types (`PromptAttemptOutput`, custom rendering, etc.)
-2. **Reuse Existing Rendering:** `output-manager.js` already renders `CliEvent[]` perfectly via `renderStructuredOutput()`
-3. **Consistency:** Runtime display and history display use identical format and rendering logic
-4. **Future-Proof:** New CLI event types (tools, thinking, etc.) automatically work in history
-5. **Simplified Implementation:** Convert history → runtime format → render (single code path)
-6. **Type Safety:** Leverage existing well-tested types from `CliOutputTypes.ts`
+### React Webview + Zustand (not vanilla JS dashboard)
 
-**Implementation Pattern:**
+The UI is a React 19 app using Zustand stores. There is no `output-manager.js`, `state-manager.js`, or `message-router.js`. Instead:
+
+- **`src/ui/webview-react/store/workflowStore.ts`** — holds `cliOutputs: Record<number, CliOutput[]>`, `statusMessages`, `retryStates`, `streamingChunks`
+- **`src/ui/webview-react/components/output/`** — React components render `CliOutput[]` including `CliOutput.tsx`, `BashOutput.tsx`, `ToolCallOutput.tsx`
+- **`src/ui/webview-react/components/layout/OutputSection.tsx`** — main output panel component
+
+### CliOutput Type (not UniversalCliOutput directly)
+
+The webview uses `CliOutput` from `src/types/WebviewMessageTypes.ts`, which wraps `DashboardOutput`:
 
 ```typescript
-// History storage (PromptAttemptOutput):
-{
-  attemptIndex: 0,
-  prompt: "...",
-  cliCommand: "...",
-  workingDirectory: "/workspace",
-  events: CliEvent[],        // Same format as runtime!
-  metadata: OutputMetadata,  // Same format as runtime!
-  status: "success",
-  timestampMs: 123456789
+export interface CliOutput {
+  prompt: string;
+  response: string;
+  structured?: StructuredOutput;  // { events: CliEvent[], metadata: OutputMetadata }
+  elapsed: number;
+  tokens?: TokenStats;
+  isStreaming: boolean;
+  cliCommand?: string;
+  workingDirectory?: string;
+  timestampMs: number;
+  attemptIndex?: number;
 }
 
-// History rendering (output-manager.js):
-function renderHistoryOutputs(history) {
-  // Convert history format → runtime output format
-  const runtimeOutput = {
-    structured: {
-      events: attempt.events,      // Direct reuse!
-      metadata: attempt.metadata   // Direct reuse!
-    }
-  };
-
-  // REUSE existing rendering logic
-  html += renderStructuredOutput(runtimeOutput);
+export interface StructuredOutput {
+  events: CliEvent[];       // CliEvent[] from CliOutputTypes.ts
+  metadata: OutputMetadata; // OutputMetadata from CliOutputTypes.ts
 }
 ```
 
-**Alternative Considered:** Custom history types with separate rendering logic.
-**Rejected Because:** Creates duplication, maintenance burden, and inconsistency between runtime and history display.
+### Key Architecture: WorkflowExecutor owns the integration point
+
+`src/flightpath/WorkflowExecutor.ts` is the natural save point. After each prompt completes, it:
+
+1. Calls `integration.getLastParsedOutput()` → `UniversalCliOutput`
+2. Converts via `CliOutputFormatter.toDashboardFormat(parsedOutput)` → `DashboardOutput` (`{ events, metadata }`)
+3. Calls `context.dashboardProvider.updateCliOutput(currentIndex, { prompt, response, structured, elapsed, tokens })`
+
+**This is where we save to history — same data, same moment.**
+
+### FlightPathManager is thin orchestration
+
+`WorkflowContext` (passed to `WorkflowExecutor`) contains the `dashboardProvider`. `FlightPathManager` creates the `WorkflowContext` and calls `WorkflowExecutor.execute()`. Adding `historyFilePath` to `WorkflowContext` is the cleanest injection point.
+
+### WorkingFile Has No `outputHistory` Yet
+
+`src/types/FlightPathTypes.ts` WorkingFile interface does NOT have `outputHistory`. The working files live in `.flightpath/.queue/`.
+
+### PATH_CONSTANTS Exists (no HISTORY_DIR yet)
+
+`src/utils/ConfigurationUtils.ts` exports `PATH_CONSTANTS` with `.FLIGHTPATH_DIR`, `.QUEUE_DIR`, etc. We need to add `.HISTORY_DIR`.
+
+### MESSAGE_TYPES Has No History Types
+
+`src/types/DashboardConstants.ts` contains all message types. No output history messages exist yet.
+
+---
+
+## Key Architectural Decisions
+
+### Reuse CliOutput Format for Storage
+
+**Design Choice:** Output history stores events using the existing `CliOutput` format (which contains `StructuredOutput { events: CliEvent[], metadata: OutputMetadata }`) instead of creating custom history types.
+
+**Benefits:**
+1. **Zero new types for storage data** — `CliOutput` is already the exact runtime format
+2. **Prompt and CLI command included automatically** — `CliOutput.prompt` (unexpanded prompt text) and `CliOutput.cliCommand` are already in the type; saving `CliOutput[]` gives us the full live view fidelity for free
+3. **Future-Proof** — new CLI event types automatically work in history
+4. **Single source of truth** — history rendering reuses the same `CliOutput`/`StatusMessage` React components
+
+### History Renders as a Self-Contained Snapshot
+
+**Design Choice:** When viewing a historical run, the output panel renders the history's own step list (all N steps from that run), completely independent of how many prompts are currently in the workflow.
+
+**Why this matters:**
+- If a workflow had 10 prompts, ran once, then 9 prompts were deleted, the historical view still shows all 10 steps with their original prompts and outputs
+- The user sees `Prompt` → `CLI Command` → `Output` for each historical step, just like the live view — because `CliOutput.prompt` and `CliOutput.cliCommand` are already saved in the history
+- No confusion from missing/mismatched steps: history is fully self-contained
+
+**Implementation pattern:**
+
+```typescript
+// History file stores ordered steps for each run:
+{
+  promptOutputs: {
+    0: { cliOutputs: CliOutput[], statusMessages: StatusMessage[] },  // incl. .prompt, .cliCommand
+    1: { cliOutputs: CliOutput[], statusMessages: StatusMessage[] },
+    // ... all steps from that run
+  },
+  runStepCount: 10  // total steps in this run (for ordered rendering)
+}
+
+// History loading: populate dedicated historyOutputs (NOT cliOutputs)
+// historyOutputs is rendered instead of cliOutputs when isViewingHistory=true
+store.loadHistoryRun(history);
+
+// Rendering: REUSE existing CliOutput/StatusMessage React components
+// OutputSection switches between cliOutputs (live) and historyOutputs (history) mode
+```
 
 ---
 
@@ -82,21 +144,75 @@ function renderHistoryOutputs(history) {
 ```
 
 **Naming Convention:**
-- History directory: `<workflow-name-from-working-file>` (without timestamp)
-- History files: `run-<N>-<ISO-timestamp>.json`
+- History directory: `<workflow-id>` = working file basename without `.flightpath.json` extension
+- History files: `run-<N>-<ISO-timestamp-safe>.json`
 - N is sequential run number (1, 2, 3, ...)
-
-**Why This Structure:**
-- Groups all runs for same workflow together
-- Easy to discover all runs for a workflow
-- Sequential run IDs make navigation intuitive
-- Timestamps enable sorting and display
 
 ---
 
 ## Schema Definitions
 
-### 1. Working File Enhancement
+### 1. New Type File: `src/types/OutputHistoryTypes.ts`
+
+```typescript
+import { ExecutionState } from "./FlightPathTypes";
+import { CliOutput, StatusMessage } from "./WebviewMessageTypes";
+
+/**
+ * Complete output history for a single workflow run.
+ * Stored in .flightpath/.history/<workflow-id>/run-N-<timestamp>.json
+ *
+ * IMPORTANT: Uses CliOutput[] from WebviewMessageTypes.ts for per-step outputs.
+ * Each CliOutput already contains .prompt (unexpanded prompt text) and .cliCommand,
+ * so history rendering shows the same Prompt → CLI Command → Output view as live mode.
+ *
+ * History is rendered as a self-contained snapshot — all steps from this run are shown
+ * regardless of how many prompts are currently in the workflow.
+ */
+export interface WorkflowOutputHistory {
+  // Schema version for future migrations
+  schemaVersion: "1.0.0";
+
+  // Run metadata
+  workflowId: string;        // Working file basename (e.g., "workflow-2024-01-21T10-30-00")
+  runId: number;             // Sequential run number (1, 2, 3, ...)
+  startedAt: number;         // Run start timestamp (ms since epoch)
+  completedAt?: number;      // Run completion timestamp (undefined if incomplete)
+  executionState: ExecutionState; // Final state (completed, error, stopped, etc.)
+
+  // Total step count for this run (used to render all steps in order)
+  // May differ from current workflow prompt count if prompts were added/deleted
+  runStepCount: number;
+
+  // Per-step outputs (keyed by stepIndex, indices 0..runStepCount-1)
+  // Each CliOutput includes .prompt (unexpanded text) and .cliCommand for full fidelity
+  promptOutputs: {
+    [stepIndex: number]: StepOutput;
+  };
+}
+
+/**
+ * Output data for a single workflow step.
+ * Stores the exact data from workflowStore for that step.
+ *
+ * CliOutput already contains:
+ * - .prompt: the unexpanded prompt text shown in the output header
+ * - .cliCommand: the actual CLI command that was run
+ * - .response: the plain text response
+ * - .structured: structured events (tool calls, thinking blocks, etc.)
+ * - .tokens: token usage statistics
+ * - .elapsed: execution time
+ * - .timestampMs: when the output was created
+ */
+export interface StepOutput {
+  /** All CLI outputs for this step (initial attempt + any retries) */
+  cliOutputs: CliOutput[];
+  /** Status messages for this step (e.g., "Prompt 1 started at 2:20 PM") */
+  statusMessages: StatusMessage[];
+}
+```
+
+### 2. WorkingFile Enhancement
 
 **File:** `src/types/FlightPathTypes.ts`
 
@@ -109,119 +225,16 @@ export interface WorkingFile extends PromptFile {
   _runtime?: WorkingFileRuntime;
 
   /**
-   * NEW: Array of history file references (newest first)
-   * Relative filenames from .flightpath/.history/<workflow-id>/
+   * NEW: Array of history file basenames (newest first)
+   * Relative to .flightpath/.history/<workflow-id>/
    *
    * Example: ["run-3-2024-01-21T14-20-45.json", "run-2-...", "run-1-..."]
    *
    * - undefined = no history (legacy workflows, or history disabled)
    * - [] = history enabled but no completed runs yet
-   * - [paths] = available run history files
+   * - [filenames] = available run history files
    */
   outputHistory?: string[];
-}
-```
-
-### 2. History File Schema
-
-**File:** `src/types/OutputHistoryTypes.ts` (NEW)
-
-```typescript
-import { ExecutionState } from "./FlightPathTypes";
-import { StatusMessageSeverity } from "./DashboardConstants";
-import { CliEvent, OutputMetadata } from "./CliOutputTypes";
-
-/**
- * Complete output history for a single workflow run
- * Stored in .flightpath/.history/<workflow-id>/run-N-<timestamp>.json
- *
- * IMPORTANT: Uses existing CliEvent[] format from CliOutputTypes.ts
- * This allows reuse of output-manager.js rendering logic (renderStructuredOutput)
- */
-export interface WorkflowOutputHistory {
-  // Metadata
-  workflowId: string;        // Links back to working file (filename without extension)
-  runId: number;             // Sequential run number (1, 2, 3, ...)
-  startedAt: number;         // Run start timestamp (ms since epoch)
-  completedAt?: number;      // Run completion timestamp (undefined if incomplete)
-  executionState: ExecutionState; // Final state (completed, error, stopped, etc.)
-
-  // Per-prompt outputs (keyed by stepIndex from workflow)
-  promptOutputs: {
-    [stepIndex: number]: PromptOutputData;
-  };
-
-  // Status messages (keyed by stepIndex)
-  statusMessages: {
-    [stepIndex: number]: StatusMessage[];
-  };
-
-  // Schema version for future migrations
-  schemaVersion: string;     // "1.0.0"
-}
-
-/**
- * Output data for a single prompt (may have multiple attempts due to retries)
- *
- * Uses UniversalCliOutput format for consistency with runtime display.
- * Each attempt stores events in the same CliEvent[] format used by output-manager.js
- */
-export interface PromptOutputData {
-  // Prompt context
-  promptText: string;        // For validation/matching
-  promptId?: string;         // If prompt has ID
-  sessionId?: string;        // CLI session ID (for resume)
-  provider: string;          // Provider identifier (copilot-cli, claude-cli, codex-cli)
-  model: string;
-
-  // Array of attempts (initial + retries)
-  // Each attempt uses the same CliEvent[] format as runtime
-  attempts: PromptAttemptOutput[];
-}
-
-/**
- * Single attempt output (initial or retry)
- *
- * Stores CLI events in CliEvent[] format from CliOutputTypes.ts.
- * This matches the runtime format used by output-manager.js, enabling:
- * - Direct reuse of renderStructuredOutput() for history display
- * - Consistent event types (text, bashCommand, fileEdit, etc.)
- * - Full support for all CLI event types (tools, thinking, etc.)
- */
-export interface PromptAttemptOutput {
-  attemptIndex: number;      // 0 = initial, 1+ = retries
-
-  // CLI execution details
-  prompt?: string;           // Actual prompt sent (may differ from promptText due to automation instructions)
-  cliCommand?: string;       // Full CLI command executed (for debugging)
-  workingDirectory?: string; // Working directory for CLI execution
-
-  // Structured events (same format as runtime - CliEvent[] from CliOutputTypes.ts)
-  events: CliEvent[];        // Chronological events: text, tools, thinking, etc.
-
-  // Response metadata (from CliOutputTypes.OutputMetadata)
-  metadata: OutputMetadata;  // Tokens, elapsed time, session ID, model, provider
-
-  // Result
-  status: "success" | "failure" | "error" | "skipped";
-  error?: string;            // Error message if failed
-
-  // End condition
-  endConditionResult?: boolean;
-  scriptOutput?: string;     // End condition script output
-
-  // Timestamp
-  timestampMs: number;       // When this attempt started
-}
-
-/**
- * Status message (warnings, errors, info)
- */
-export interface StatusMessage {
-  message: string;
-  timestamp: string;         // Formatted time (e.g., "10:30:15")
-  timestampMs: number;       // Raw timestamp for sorting
-  severity: StatusMessageSeverity; // info, warning, error
 }
 ```
 
@@ -243,10 +256,9 @@ export const MESSAGE_TYPES = {
   // ... existing types ...
 
   // NEW: Output history messages
-  OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",      // Extension -> Webview: Send history data
-  OUTPUT_HISTORY_UPDATED: "outputHistoryUpdated",    // Extension -> Webview: New run started
-  LOAD_RUN_HISTORY: "loadRunHistory",                // Webview -> Extension: Request specific run
-  CLEAR_RUN_HISTORY: "clearRunHistory",              // Webview -> Extension: Delete run history
+  OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",  // Extension -> Webview: Load history for display
+  LOAD_RUN_HISTORY: "loadRunHistory",            // Webview -> Extension: Request specific run
+  CLEAR_RUN_HISTORY: "clearRunHistory",          // Webview -> Extension: Delete run history
 } as const;
 ```
 
@@ -260,843 +272,648 @@ export const MESSAGE_TYPES = {
 
 **Responsibility:** Manage workflow output history storage and retrieval
 
-**Public API:**
-
 ```typescript
+import * as fs from "fs";
+import * as path from "path";
+import * as vscode from "vscode";
+import { PATH_CONSTANTS, ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { WorkflowOutputHistory, StepOutput } from "../../types/OutputHistoryTypes";
+import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
+import { ExecutionState } from "../../types/FlightPathTypes";
+import { WorkingFile } from "../../types/FlightPathTypes";
+import { Log } from "../../utils/Log";
+
 export class OutputHistoryManager {
-  /**
-   * Initialize a new run for a workflow
-   *
-   * Creates:
-   * - .flightpath/.history/<workflow-id>/ directory (if needed)
-   * - run-N-<timestamp>.json file with initial structure
-   *
-   * Updates:
-   * - working file's outputHistory array (prepends new run)
-   *
-   * Returns:
-   * - Absolute path to history file
-   *
-   * @param workflowId - Workflow identifier (from working file name)
-   * @param workingFilePath - Path to working file (for updating outputHistory)
-   * @param totalSteps - Total number of prompts in workflow
-   * @returns Absolute path to new history file
-   */
-  async initializeRun(
-    workflowId: string,
-    workingFilePath: string,
-    totalSteps: number
-  ): Promise<string>;
+  private historyBaseDir: string;
+
+  constructor(private workspaceFolderPath: string) {
+    this.historyBaseDir = path.join(
+      workspaceFolderPath,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.HISTORY_DIR
+    );
+  }
+
+  /** Check if history is enabled via settings */
+  isHistoryEnabled(): boolean {
+    return ConfigurationUtils.getConfigValue<boolean>("saveOutputHistory", true) ?? true;
+  }
+
+  /** Extract workflow ID from working file path */
+  extractWorkflowId(workingFilePath: string): string {
+    // "workflow-2024-01-21T10-30-00.flightpath.json" → "workflow-2024-01-21T10-30-00"
+    const basename = path.basename(workingFilePath);
+    return basename.replace(/\.flightpath\.json$/, "").replace(/\.flightpath\.yaml$/, "");
+  }
+
+  /** Get absolute path to a history file */
+  getHistoryFilePath(workflowId: string, historyFileName: string): string {
+    return path.join(this.historyBaseDir, workflowId, historyFileName);
+  }
 
   /**
-   * Save prompt output to current run history file
-   *
-   * Called after each prompt completes (initial or retry).
-   * Appends to attempts array if retry, replaces if initial.
-   *
-   * Output data uses CliEvent[] format from CliOutputTypes.ts, enabling:
-   * - Direct reuse of output-manager.js rendering logic
-   * - Consistent format between runtime and history
-   * - Automatic support for all CLI event types
-   *
-   * @param historyFilePath - Path to current run history file
-   * @param stepIndex - Prompt index in workflow (0-based)
-   * @param outputData - Complete output data with CliEvent[] and OutputMetadata
+   * Initialize a new run for a workflow.
+   * Returns the absolute path to the history file, or "" if history is disabled.
    */
-  async savePromptOutput(
+  async initializeRun(workflowId: string, workingFilePath: string): Promise<string> {
+    if (!this.isHistoryEnabled()) {
+      return "";
+    }
+
+    const historyDir = path.join(this.historyBaseDir, workflowId);
+    await fs.promises.mkdir(historyDir, { recursive: true });
+
+    // Determine next run ID
+    const existingRuns = await this.getRunsForWorkflow(workflowId);
+    const nextRunId = existingRuns.length > 0
+      ? Math.max(...existingRuns.map(f => this.extractRunId(f))) + 1
+      : 1;
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileName = `run-${nextRunId}-${timestamp}.json`;
+    const filePath = path.join(historyDir, fileName);
+
+    const initial: WorkflowOutputHistory = {
+      schemaVersion: "1.0.0",
+      workflowId,
+      runId: nextRunId,
+      startedAt: Date.now(),
+      executionState: "running" as any,
+      promptOutputs: {},
+    };
+
+    await fs.promises.writeFile(filePath, JSON.stringify(initial, null, 2), "utf-8");
+
+    // Update working file's outputHistory array
+    await this.prependToOutputHistory(workingFilePath, fileName);
+
+    // Prune old runs
+    const maxRuns = ConfigurationUtils.getConfigValue<number>("maxHistoryRuns", 10) ?? 10;
+    await this.pruneOldRuns(workflowId, workingFilePath, maxRuns);
+
+    return filePath;
+  }
+
+  /**
+   * Save CLI outputs for a step (called after each prompt completes or retries).
+   * Replaces the entire step entry (handles both initial + retry case).
+   */
+  async saveStepOutput(
     historyFilePath: string,
     stepIndex: number,
-    outputData: PromptOutputData
-  ): Promise<void>;
+    cliOutputs: CliOutput[],
+    statusMessages: StatusMessage[]
+  ): Promise<void> {
+    if (!historyFilePath) return;
+
+    try {
+      const history = await this.readHistory(historyFilePath);
+      history.promptOutputs[stepIndex] = { cliOutputs, statusMessages };
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to save step output to history:", error);
+    }
+  }
 
   /**
-   * Save status message to current run history file
-   *
-   * @param historyFilePath - Path to current run history file
-   * @param stepIndex - Prompt index in workflow (0-based)
-   * @param statusMessage - Status message to save
-   */
-  async saveStatusMessage(
-    historyFilePath: string,
-    stepIndex: number,
-    statusMessage: StatusMessage
-  ): Promise<void>;
-
-  /**
-   * Finalize run (mark as completed/stopped/error)
-   *
-   * Updates completedAt timestamp and executionState.
-   *
-   * @param historyFilePath - Path to current run history file
-   * @param executionState - Final execution state
+   * Finalize run (mark as completed/stopped/error and record total step count).
+   * runStepCount is the total number of steps that were executed in this run —
+   * used by history rendering to show all steps regardless of current workflow size.
    */
   async finalizeRun(
     historyFilePath: string,
-    executionState: ExecutionState
-  ): Promise<void>;
+    executionState: ExecutionState,
+    runStepCount: number
+  ): Promise<void> {
+    if (!historyFilePath) return;
 
-  /**
-   * Load history file for display
-   *
-   * @param historyFilePath - Absolute path to history file
-   * @returns Parsed history data
-   * @throws Error if file not found or invalid
-   */
-  async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory>;
+    try {
+      const history = await this.readHistory(historyFilePath);
+      history.completedAt = Date.now();
+      history.executionState = executionState;
+      history.runStepCount = runStepCount;
+      await this.writeHistory(historyFilePath, history);
+    } catch (error) {
+      Log.warn("Failed to finalize history run:", error);
+    }
+  }
 
-  /**
-   * Get all runs for a workflow (sorted newest first)
-   *
-   * @param workflowId - Workflow identifier
-   * @returns Array of history filenames (relative to .history/<workflow-id>/)
-   */
-  async getRunsForWorkflow(workflowId: string): Promise<string[]>;
+  /** Load a history file for display */
+  async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory> {
+    const content = await fs.promises.readFile(historyFilePath, "utf-8");
+    const history = JSON.parse(content) as WorkflowOutputHistory;
 
-  /**
-   * Prune old runs based on maxHistoryRuns setting
-   *
-   * Deletes oldest runs beyond the limit.
-   * Updates working file's outputHistory array.
-   *
-   * @param workflowId - Workflow identifier
-   * @param workingFilePath - Path to working file
-   * @param maxRuns - Maximum runs to keep (from settings)
-   */
-  async pruneOldRuns(
-    workflowId: string,
-    workingFilePath: string,
-    maxRuns: number
-  ): Promise<void>;
+    if (!history.workflowId || !history.runId || !history.promptOutputs) {
+      throw new Error("Invalid history file: missing required fields");
+    }
 
-  /**
-   * Get absolute path to history file
-   *
-   * @param workflowId - Workflow identifier
-   * @param historyFileName - History filename (e.g., "run-3-2024-01-21T14-20-45.json")
-   * @returns Absolute path
-   */
-  getHistoryFilePath(workflowId: string, historyFileName: string): string;
+    return history;
+  }
 
-  /**
-   * Extract workflow ID from working file path
-   *
-   * Example: "workflow-2024-01-21T10-30-00.flightpath.json" -> "workflow-2024-01-21T10-30-00"
-   *
-   * @param workingFilePath - Path to working file
-   * @returns Workflow ID (filename without extension)
-   */
-  extractWorkflowId(workingFilePath: string): string;
+  /** Get all run filenames for a workflow (sorted newest first) */
+  async getRunsForWorkflow(workflowId: string): Promise<string[]> {
+    const historyDir = path.join(this.historyBaseDir, workflowId);
 
-  /**
-   * Check if history is enabled via settings
-   *
-   * @returns true if flightpath.saveOutputHistory is enabled
-   */
-  isHistoryEnabled(): boolean;
+    try {
+      const entries = await fs.promises.readdir(historyDir);
+      const runFiles = entries.filter(f => /^run-\d+-.*\.json$/.test(f));
+      return runFiles.sort((a, b) => this.extractRunId(b) - this.extractRunId(a));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Prune runs beyond maxRuns limit (oldest first) */
+  async pruneOldRuns(workflowId: string, workingFilePath: string, maxRuns: number): Promise<void> {
+    const runs = await this.getRunsForWorkflow(workflowId);
+    if (runs.length <= maxRuns) return;
+
+    const toDelete = runs.slice(maxRuns); // oldest runs (array is newest-first)
+    for (const fileName of toDelete) {
+      const filePath = this.getHistoryFilePath(workflowId, fileName);
+      try {
+        await fs.promises.unlink(filePath);
+      } catch (error) {
+        Log.warn(`Failed to delete old history file ${fileName}:`, error);
+      }
+    }
+
+    // Update working file
+    await this.removeFromOutputHistory(workingFilePath, toDelete);
+  }
+
+  // ---- Private helpers ----
+
+  private extractRunId(fileName: string): number {
+    const match = fileName.match(/^run-(\d+)-/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  private async readHistory(filePath: string): Promise<WorkflowOutputHistory> {
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    return JSON.parse(content) as WorkflowOutputHistory;
+  }
+
+  private async writeHistory(filePath: string, history: WorkflowOutputHistory): Promise<void> {
+    await fs.promises.writeFile(filePath, JSON.stringify(history, null, 2), "utf-8");
+  }
+
+  private async prependToOutputHistory(workingFilePath: string, fileName: string): Promise<void> {
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf-8");
+      const workingFile = JSON.parse(content) as WorkingFile;
+      workingFile.outputHistory = [fileName, ...(workingFile.outputHistory ?? [])];
+      await fs.promises.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2), "utf-8");
+    } catch (error) {
+      Log.warn("Failed to update working file outputHistory:", error);
+    }
+  }
+
+  private async removeFromOutputHistory(workingFilePath: string, fileNames: string[]): Promise<void> {
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf-8");
+      const workingFile = JSON.parse(content) as WorkingFile;
+      const toRemove = new Set(fileNames);
+      workingFile.outputHistory = (workingFile.outputHistory ?? []).filter(f => !toRemove.has(f));
+      await fs.promises.writeFile(workingFilePath, JSON.stringify(workingFile, null, 2), "utf-8");
+    } catch (error) {
+      Log.warn("Failed to prune working file outputHistory:", error);
+    }
+  }
 }
 ```
-
-**Implementation Details:**
-
-**Constructor:**
-```typescript
-constructor(private workspaceFolder: vscode.WorkspaceFolder) {
-  this.historyBaseDir = path.join(
-    workspaceFolder.uri.fsPath,
-    PATH_CONSTANTS.FLIGHTPATH_DIR,
-    PATH_CONSTANTS.HISTORY_DIR
-  );
-}
-```
-
-**initializeRun() Logic:**
-1. Check if history enabled (`flightpath.saveOutputHistory`)
-2. If disabled, return empty string (skip history)
-3. Extract workflowId from working file path
-4. Create `.history/<workflow-id>/` directory if needed
-5. Discover existing runs, determine next runId (max + 1, or 1 if none)
-6. Generate filename: `run-<runId>-<ISO-timestamp>.json`
-7. Create initial history file structure:
-   ```json
-   {
-     "workflowId": "workflow-2024-01-21T10-30-00",
-     "runId": 3,
-     "startedAt": 1737470445000,
-     "executionState": "running",
-     "promptOutputs": {},
-     "statusMessages": {},
-     "schemaVersion": "1.0.0"
-   }
-   ```
-8. Update working file: prepend filename to `outputHistory` array
-9. Call `pruneOldRuns()` to enforce maxHistoryRuns limit
-10. Return absolute path to history file
-
-**savePromptOutput() Logic:**
-1. Read history file (use fs.promises.readFile)
-2. Parse JSON
-3. If `promptOutputs[stepIndex]` doesn't exist, create:
-   ```typescript
-   history.promptOutputs[stepIndex] = {
-     promptText: outputData.promptText,
-     promptId: outputData.promptId,
-     sessionId: outputData.sessionId,
-     provider: outputData.provider,
-     model: outputData.model,
-     attempts: []
-   };
-   ```
-4. Append attempt to `attempts` array (or replace if attemptIndex exists)
-5. Write back to file (use fs.promises.writeFile with pretty JSON)
-6. Handle errors gracefully (log warning, don't crash workflow)
-
-**saveStatusMessage() Logic:**
-1. Similar to savePromptOutput
-2. Initialize `statusMessages[stepIndex]` array if needed
-3. Append new message
-4. Write back to file
-
-**finalizeRun() Logic:**
-1. Read history file
-2. Update `completedAt` = Date.now()
-3. Update `executionState`
-4. Write back to file
-
-**loadHistory() Logic:**
-1. Read file using fs.promises.readFile
-2. Parse JSON
-3. Validate schema (basic checks: workflowId, runId, promptOutputs exist)
-4. Return parsed object
-5. Throw descriptive error if invalid
-
-**getRunsForWorkflow() Logic:**
-1. Build path: `.history/<workflow-id>/`
-2. Check if directory exists (return [] if not)
-3. Read directory contents
-4. Filter to `run-*.json` files
-5. Sort by runId (extract from filename)
-6. Return array of filenames (newest first)
-
-**pruneOldRuns() Logic:**
-1. Get all runs via `getRunsForWorkflow()`
-2. If count <= maxRuns, return (nothing to prune)
-3. Identify runs to delete (oldest ones beyond limit)
-4. Delete files using fs.promises.unlink
-5. Read working file
-6. Update `outputHistory` array (remove deleted runs)
-7. Write working file back
-
-**Error Handling Strategy:**
-- File I/O errors: Log warning, continue (don't crash workflow)
-- Invalid JSON: Log error, skip that file
-- Missing directory: Auto-create on next write
-- Concurrent writes: Use file locking or atomic writes (future enhancement)
 
 ---
 
-### 2. Integration with FlightPathManager
+### 2. Integration with WorkflowExecutor
+
+**File:** `src/flightpath/WorkflowExecutor.ts`
+
+**Changes:**
+
+1. **Add `historyFilePath` to `WorkflowContext`:**
+
+```typescript
+export interface WorkflowContext {
+  // ... existing fields ...
+
+  /** Path to current run's history file (empty string if history disabled) */
+  historyFilePath: string;
+  /** OutputHistoryManager for saving step outputs */
+  outputHistoryManager?: OutputHistoryManager;
+}
+```
+
+2. **After saving final output to dashboard, also save to history:**
+
+```typescript
+// In the section that calls context.dashboardProvider.updateCliOutput(currentIndex, {...}):
+
+// Save to history (same data)
+if (context.historyFilePath && context.outputHistoryManager) {
+  const storeOutputs = [{ prompt, response: responseText, structured, elapsed, tokens, isStreaming: false, timestampMs: Date.now(), attemptIndex: 0 }];
+  const storeMessages = /* get from dashboardProvider if accessible */;
+  await context.outputHistoryManager.saveStepOutput(
+    context.historyFilePath,
+    currentIndex,
+    storeOutputs,
+    [] // Status messages saved separately
+  ).catch(err => Log.warn("Failed to save history:", err));
+}
+```
+
+**Design note:** The cleanest pattern is to save history at the same place where `dashboardProvider.updateCliOutput()` is called for the **final** (non-streaming) output. There are two call sites in `WorkflowExecutor`:
+- `sendFinalOutputToDashboard()` — initial prompt success path
+- The retry path after `endConditionHandler.handleRetry()`
+
+Both need to call `outputHistoryManager.saveStepOutput()` after updating the dashboard.
+
+Since status messages are emitted separately via `addStatusMessage()` on `dashboardProvider`, the cleanest approach is to save them incrementally via a separate `saveStatusMessage()` call, or to read the accumulated messages from the webview state (not accessible in extension). **Simpler approach:** batch save `statusMessages` at the same time as `cliOutputs` in the final save — read them from the `promptQueue` or pass them through context.
+
+---
+
+### 3. Integration with FlightPathManager
 
 **File:** `src/flightpath/FlightPathManager.ts`
 
 **Changes:**
 
-1. **Add OutputHistoryManager instance:**
-   ```typescript
-   private outputHistoryManager: OutputHistoryManager;
+1. **Add `OutputHistoryManager` instance:**
 
-   constructor(context: vscode.ExtensionContext) {
-     // ... existing code ...
-     this.outputHistoryManager = new OutputHistoryManager(workspaceFolder);
-   }
-   ```
+```typescript
+private outputHistoryManager: OutputHistoryManager;
 
-2. **Modify takeOff() - Initialize run:**
-   ```typescript
-   async takeOff(promptFile: string | PromptFile): Promise<void> {
-     // ... existing setup code ...
+constructor(...) {
+  // ... existing code ...
+  const workspacePath = workspaceFolder?.uri.fsPath ?? "";
+  this.outputHistoryManager = new OutputHistoryManager(workspacePath);
+}
+```
 
-     // Initialize output history for this run
-     const workflowId = this.outputHistoryManager.extractWorkflowId(
-       this.queue.getWorkingFilePath()
-     );
-     const historyFilePath = await this.outputHistoryManager.initializeRun(
-       workflowId,
-       this.queue.getWorkingFilePath(),
-       this.queue.getTotalSteps()
-     );
+2. **Initialize run in `takeOff()` and pass to `WorkflowContext`:**
 
-     // Store history path for later use
-     this.currentHistoryFilePath = historyFilePath;
+```typescript
+async takeOff(promptFile: string | PromptFile): Promise<void> {
+  // ... existing setup ...
 
-     // ... rest of takeOff logic ...
-   }
-   ```
+  const workingFilePath = this.promptQueue.getState().workingFilePath ?? "";
+  const workflowId = this.outputHistoryManager.extractWorkflowId(workingFilePath);
+  const historyFilePath = await this.outputHistoryManager.initializeRun(
+    workflowId,
+    workingFilePath
+  );
 
-3. **Modify executeNextPrompt() - Save output after completion:**
-   ```typescript
-   private async executeNextPrompt(): Promise<void> {
-     // ... existing execution code ...
+  // Pass to WorkflowContext
+  const context: WorkflowContext = {
+    // ... existing fields ...
+    historyFilePath,
+    outputHistoryManager: this.outputHistoryManager,
+  };
+}
+```
 
-     // After prompt completes successfully
-     if (this.currentHistoryFilePath && result.success) {
-       // Get the CLI output data (already in CliEvent[] format from dashboard)
-       const cliOutput = this.dashboardProvider.getCliOutput(stepIndex, attemptIndex);
+3. **Finalize run on workflow completion:**
 
-       // Collect output data using existing UniversalCliOutput format
-       const outputData: PromptOutputData = {
-         promptText: currentPrompt.prompt,
-         promptId: currentPrompt.id,
-         sessionId: currentPrompt._runtime?.sessionId,
-         provider: resolvedProps.provider,
-         model: resolvedProps.model,
-         attempts: [{
-           attemptIndex: retryCount || 0,
-           prompt: result.prompt,
-           cliCommand: result.cliCommand,
-           workingDirectory: result.workingDirectory,
-
-           // Store events in CliEvent[] format (same as runtime)
-           events: cliOutput?.structured?.events || [],
-
-           // Store metadata using OutputMetadata format
-           metadata: cliOutput?.structured?.metadata || {
-             sessionId: currentPrompt._runtime?.sessionId,
-             model: resolvedProps.model,
-             provider: resolvedProps.provider,
-             usage: result.tokens ? {
-               inputTokens: result.tokens.prompt,
-               outputTokens: result.tokens.completion,
-               totalTokens: result.tokens.prompt + result.tokens.completion
-             } : undefined,
-             elapsed: result.elapsed
-           },
-
-           status: STEP_STATUS.SUCCESS,
-           endConditionResult: result.endConditionPassed,
-           timestampMs: Date.now()
-         }]
-       };
-
-       await this.outputHistoryManager.savePromptOutput(
-         this.currentHistoryFilePath,
-         this.queue.getCurrentIndex(),
-         outputData
-       );
-     }
-
-     // ... rest of execution logic ...
-   }
-   ```
-
-4. **Modify onWorkflowComplete() - Finalize run:**
-   ```typescript
-   private async onWorkflowComplete(state: ExecutionState): Promise<void> {
-     // ... existing completion code ...
-
-     // Finalize history
-     if (this.currentHistoryFilePath) {
-       await this.outputHistoryManager.finalizeRun(
-         this.currentHistoryFilePath,
-         state
-       );
-       this.currentHistoryFilePath = undefined;
-     }
-
-     // ... rest of completion logic ...
-   }
-   ```
-
-5. **Handle retries - Append retry attempts:**
-   ```typescript
-   private async handleRetry(stepIndex: number, retryCount: number): Promise<void> {
-     // ... existing retry logic ...
-
-     // After retry completes, append to same prompt's attempts
-     if (this.currentHistoryFilePath && retryResult.success) {
-       const outputData = /* build from retry result */;
-       await this.outputHistoryManager.savePromptOutput(
-         this.currentHistoryFilePath,
-         stepIndex,
-         outputData
-       );
-     }
-   }
-   ```
-
-6. **Status messages - Save to history:**
-   ```typescript
-   private sendStatusMessage(stepIndex: number, message: string, severity: string): void {
-     // ... existing dashboard update ...
-
-     // Save to history
-     if (this.currentHistoryFilePath) {
-       this.outputHistoryManager.saveStatusMessage(
-         this.currentHistoryFilePath,
-         stepIndex,
-         {
-           message,
-           timestamp: formatTime(Date.now()),
-           timestampMs: Date.now(),
-           severity
-         }
-       );
-     }
-   }
-   ```
+```typescript
+// After workflow completes (wherever state transitions to completed/error/stopped):
+if (historyFilePath) {
+  // runStepCount = number of steps that were actually executed
+  // (promptQueue.getProgress().total gives the final count)
+  const runStepCount = this.promptQueue.getProgress().total;
+  await this.outputHistoryManager.finalizeRun(historyFilePath, finalExecutionState, runStepCount);
+}
+```
 
 ---
 
-### 3. Integration with DashboardProvider
+### 4. Integration with FlightPathWebviewProvider
 
-**File:** `src/ui/FlightPathDashboardProvider.ts`
+**File:** `src/ui/FlightPathWebviewProvider.ts`
 
 **Changes:**
 
-1. **Add OutputHistoryManager instance:**
-   ```typescript
-   private outputHistoryManager: OutputHistoryManager;
+1. **Add `OutputHistoryManager` instance** (shared with FlightPathManager or separate)
 
-   constructor(context: vscode.ExtensionContext) {
-     // ... existing code ...
-     this.outputHistoryManager = new OutputHistoryManager(/* workspace */);
-   }
-   ```
+2. **Load history on session restore:**
 
-2. **Modify updateState() - Load history on session restore:**
-   ```typescript
-   public async updateState(state: QueueState, file?: string): Promise<void> {
-     // ... existing state update ...
+```typescript
+// In the session restore / updateState path, after loading working file:
+if (workingFile.outputHistory?.length && ConfigurationUtils.getConfigValue("autoLoadMostRecentOutput", true)) {
+  const workflowId = this.outputHistoryManager.extractWorkflowId(workingFilePath);
+  const mostRecent = workingFile.outputHistory[0];
+  const historyPath = this.outputHistoryManager.getHistoryFilePath(workflowId, mostRecent);
 
-     // If loading session with outputHistory, load most recent run
-     if (workingFile.outputHistory && workingFile.outputHistory.length > 0) {
-       const workflowId = this.outputHistoryManager.extractWorkflowId(
-         state.workingFilePath || ""
-       );
-       const mostRecentRun = workingFile.outputHistory[0];
-       const historyPath = this.outputHistoryManager.getHistoryFilePath(
-         workflowId,
-         mostRecentRun
-       );
-
-       try {
-         const history = await this.outputHistoryManager.loadHistory(historyPath);
-
-         // Send to webview
-         this.postMessage({
-           type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-           history,
-           availableRuns: workingFile.outputHistory.length,
-           currentRunIndex: 0
-         });
-       } catch (error) {
-         Log.warn("Failed to load output history:", error);
-         // Continue without history
-       }
-     }
-   }
-   ```
-
-3. **Add message handler - Load specific run:**
-   ```typescript
-   private async handleWebviewMessage(message: any): Promise<void> {
-     // ... existing handlers ...
-
-     if (message.type === MESSAGE_TYPES.LOAD_RUN_HISTORY) {
-       await this.handleLoadRunHistory(message.runIndex);
-       return;
-     }
-
-     if (message.type === MESSAGE_TYPES.CLEAR_RUN_HISTORY) {
-       await this.handleClearRunHistory();
-       return;
-     }
-   }
-
-   private async handleLoadRunHistory(runIndex: number): Promise<void> {
-     const workingFile = /* get from queue */;
-     if (!workingFile.outputHistory || runIndex >= workingFile.outputHistory.length) {
-       return;
-     }
-
-     const workflowId = this.outputHistoryManager.extractWorkflowId(
-       workingFile.originalFile
-     );
-     const historyFileName = workingFile.outputHistory[runIndex];
-     const historyPath = this.outputHistoryManager.getHistoryFilePath(
-       workflowId,
-       historyFileName
-     );
-
-     try {
-       const history = await this.outputHistoryManager.loadHistory(historyPath);
-       this.postMessage({
-         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-         history,
-         availableRuns: workingFile.outputHistory.length,
-         currentRunIndex: runIndex
-       });
-     } catch (error) {
-       vscode.window.showErrorMessage(`Failed to load run history: ${error}`);
-     }
-   }
-
-   private async handleClearRunHistory(): Promise<void> {
-     const confirm = await vscode.window.showWarningMessage(
-       "Delete all output history for this workflow?",
-       { modal: true },
-       "Delete"
-     );
-
-     if (confirm !== "Delete") {
-       return;
-     }
-
-     const workingFile = /* get from queue */;
-     const workflowId = this.outputHistoryManager.extractWorkflowId(
-       workingFile.originalFile
-     );
-
-     // Delete all runs
-     const runs = await this.outputHistoryManager.getRunsForWorkflow(workflowId);
-     for (const run of runs) {
-       const historyPath = this.outputHistoryManager.getHistoryFilePath(workflowId, run);
-       await fs.promises.unlink(historyPath);
-     }
-
-     // Update working file
-     workingFile.outputHistory = [];
-     await this.saveWorkingFile(workingFile);
-
-     // Notify webview
-     this.postMessage({
-       type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-       history: null,
-       availableRuns: 0,
-       currentRunIndex: 0
-     });
-
-     vscode.window.showInformationMessage("Output history cleared");
-   }
-   ```
-
----
-
-### 4. Dashboard Webview Changes
-
-**File:** `src/ui/webview/dashboard.html`
-
-**Add run navigation UI to output section header:**
-
-```html
-<section id="outputSection" class="panel-section">
-  <div class="section-header">
-    <div class="header-left">
-      <h3>Output</h3>
-      <!-- NEW: Run navigation controls -->
-      <div class="run-navigation" id="runNavigation" style="display: none;">
-        <button id="prevRun" class="icon-btn" title="Previous run">
-          <span class="codicon codicon-chevron-left"></span>
-        </button>
-        <span id="runIndicator" class="run-indicator">Run 1 of 1</span>
-        <button id="nextRun" class="icon-btn" title="Next run">
-          <span class="codicon codicon-chevron-right"></span>
-        </button>
-        <span id="runTimestamp" class="run-timestamp"></span>
-      </div>
-    </div>
-
-    <div class="section-actions">
-      <label class="checkbox-label">
-        <input type="checkbox" id="autoscrollCheckbox" checked />
-        <span>Auto-scroll</span>
-      </label>
-      <button id="exportBtn" class="icon-btn" title="Export to markdown">
-        <span class="codicon codicon-export"></span>
-      </button>
-      <!-- NEW: Clear history button -->
-      <button id="clearHistoryBtn" class="icon-btn" title="Clear output history">
-        <span class="codicon codicon-trash"></span>
-      </button>
-      <button id="btnCollapseOutput" class="icon-btn" title="Collapse output section">
-        <span class="codicon codicon-chevron-down"></span>
-      </button>
-    </div>
-  </div>
-
-  <div class="section-content">
-    <div id="outputContent" class="output-content"></div>
-  </div>
-</section>
-```
-
-**File:** `src/ui/webview/dashboard.scss`
-
-**Add styles for run navigation:**
-
-```scss
-.run-navigation {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 16px;
-  padding-left: 16px;
-  border-left: 1px solid var(--vscode-panel-border);
-
-  .icon-btn {
-    padding: 2px 4px;
-
-    &:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-  }
-
-  .run-indicator {
-    font-size: 12px;
-    color: var(--vscode-descriptionForeground);
-    white-space: nowrap;
-  }
-
-  .run-timestamp {
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    font-style: italic;
+  try {
+    const history = await this.outputHistoryManager.loadHistory(historyPath);
+    this.postMessage({
+      type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+      history,
+      availableRuns: workingFile.outputHistory.length,
+      currentRunIndex: 0,
+    });
+  } catch (error) {
+    Log.warn("Failed to load output history:", error);
   }
 }
 ```
 
-**File:** `src/ui/webview/state-manager.js`
+3. **Handle `LOAD_RUN_HISTORY` message (navigate between runs):**
 
-**Add state fields for output history:**
+```typescript
+case MESSAGE_TYPES.LOAD_RUN_HISTORY: {
+  const { runIndex } = message;
+  // Load the requested run and send OUTPUT_HISTORY_LOADED
+  break;
+}
+```
 
-```javascript
-let state = {
+4. **Handle `CLEAR_RUN_HISTORY` message:**
+
+```typescript
+case MESSAGE_TYPES.CLEAR_RUN_HISTORY: {
+  // Confirm, delete files, update working file, notify webview
+  break;
+}
+```
+
+---
+
+### 5. React Webview Changes
+
+#### State store split: workflowStore vs uiStore
+
+**Decision**: Run history display state lives in **`uiStore`**, not `workflowStore`.
+
+- `workflowStore` holds live execution state (cliOutputs, statusMessages, prompts, etc.)
+- `uiStore` holds display preferences (which run is currently visible)
+
+**Rationale:**
+- "Which run am I looking at" is a view preference, not workflow execution state
+- When parallel workflows arrive, `uiStore` can hold `viewingRunIndex: Record<workflowId, number>` — per-workflow display preferences, with zero changes to the history architecture
+- Keeps `workflowStore` clean: it only holds the currently rendered run's data
+
+#### workflowStore.ts additions
+
+Add state fields and actions for history display:
+
+```typescript
+interface WorkflowState {
+  // ... existing fields (cliOutputs, statusMessages remain unchanged) ...
+
+  // NEW: Self-contained history snapshot for the currently-viewed historical run.
+  // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
+  // instead of cliOutputs. The live cliOutputs continue to be updated normally —
+  // history browsing has zero impact on live capture.
+  historyOutputs: {
+    stepCount: number;                              // Total steps in this run
+    steps: Record<number, StepOutput>;             // StepOutput from history file
+    runMetadata: Pick<WorkflowOutputHistory,        // Run info for the banner
+      "runId" | "startedAt" | "completedAt" | "executionState"
+    >;
+  } | null;
+}
+
+// NEW actions:
+/**
+ * Load a historical run into historyOutputs for display.
+ * Does NOT touch cliOutputs — live output continues uninterrupted.
+ * Called by message handler on OUTPUT_HISTORY_LOADED.
+ */
+loadHistoryRun: (history: WorkflowOutputHistory, availableRuns: number, runIndex: number) => void;
+
+/**
+ * Clear historyOutputs (called when user clicks "Back to Live" or starts a new run).
+ * OutputSection switches back to rendering from cliOutputs.
+ */
+clearHistoryOutputs: () => void;
+```
+
+`loadHistoryRun()` implementation:
+
+```typescript
+loadHistoryRun: (history, availableRuns, runIndex) =>
+  set(() => {
+    // Update uiStore for history view state
+    useUiStore.getState().setHistoryView(runIndex, availableRuns);
+
+    // Populate self-contained history snapshot
+    return {
+      historyOutputs: {
+        stepCount: history.runStepCount,
+        steps: history.promptOutputs,  // Record<number, StepOutput> — direct from file
+        runMetadata: {
+          runId: history.runId,
+          startedAt: history.startedAt,
+          completedAt: history.completedAt,
+          executionState: history.executionState,
+        },
+      },
+    };
+  }),
+
+clearHistoryOutputs: () =>
+  set(() => ({ historyOutputs: null })),
+```
+
+**Key property:** `cliOutputs` and `statusMessages` are NEVER touched by `loadHistoryRun()`. Live streaming handlers continue updating them normally. History browsing has zero side-effects on live execution state.
+
+#### uiStore.ts additions
+
+```typescript
+interface UiState {
   // ... existing fields ...
 
-  // NEW: Output history state
-  outputHistory: null,        // Currently loaded WorkflowOutputHistory object
-  availableRuns: 0,           // Total number of runs available
-  currentRunIndex: 0,         // Which run is displayed (0 = newest, 1 = second newest, etc.)
-};
+  // NEW: Run history display state
+  isViewingHistory: boolean;      // true when showing a historical run (not live)
+  viewingRunIndex: number;        // 0 = most recent, 1 = second most recent, etc.
+  availableRuns: number;          // Total runs saved for this workflow
+}
+
+// NEW actions:
+setHistoryView: (runIndex: number, availableRuns: number) => void;
+clearHistoryView: () => void;
 ```
 
-**File:** `src/ui/webview/output-manager.js`
+#### OutputSection.tsx changes
 
-**Add functions for history handling:**
+**Header layout:**
 
-```javascript
-/**
- * Load and display output history
- * @param {Object} history - WorkflowOutputHistory object
- * @param {number} availableRuns - Total runs available
- * @param {number} currentRunIndex - Index of this run (0 = newest)
- */
-function loadOutputHistory(history, availableRuns, currentRunIndex) {
-  stateManager.updateState({
-    outputHistory: history,
-    availableRuns,
-    currentRunIndex
-  });
-
-  // Show/hide run navigation
-  if (availableRuns > 1) {
-    elements.runNavigation.style.display = 'flex';
-    updateRunNavigation();
-  } else {
-    elements.runNavigation.style.display = 'none';
-  }
-
-  // Render outputs from history
-  renderHistoryOutputs(history);
-}
-
-/**
- * Update run navigation UI
- */
-function updateRunNavigation() {
-  const state = stateManager.getState();
-
-  // Update indicator
-  elements.runIndicator.textContent =
-    `Run ${state.currentRunIndex + 1} of ${state.availableRuns}`;
-
-  // Update buttons
-  elements.prevRun.disabled = state.currentRunIndex === 0;
-  elements.nextRun.disabled = state.currentRunIndex >= state.availableRuns - 1;
-
-  // Update timestamp
-  if (state.outputHistory) {
-    const timestamp = new Date(state.outputHistory.startedAt);
-    elements.runTimestamp.textContent = formatTimestamp(timestamp);
-  }
-}
-
-/**
- * Render outputs from history object
- *
- * SIMPLIFIED: Since history uses CliEvent[] format, we can reuse renderAllCliOutputs logic!
- * Just need to convert history format to the expected state format.
- */
-function renderHistoryOutputs(history) {
-  if (!history || !history.promptOutputs) {
-    elements.outputContent.innerHTML =
-      '<p class="empty-state">No output available</p>';
-    return;
-  }
-
-  // Build chronological message list (same logic as renderAllCliOutputs)
-  const allMessages = [];
-
-  // Iterate through promptOutputs
-  for (const [stepIndex, promptData] of Object.entries(history.promptOutputs)) {
-    const statusMessages = history.statusMessages?.[stepIndex] || [];
-
-    // Add status messages (same as runtime)
-    statusMessages.forEach((msg) => {
-      allMessages.push({
-        type: 'status',
-        stepIndex: parseInt(stepIndex),
-        timestamp: msg.timestampMs,
-        data: msg
-      });
-    });
-
-    // Add prompt attempts
-    promptData.attempts.forEach((attempt) => {
-      allMessages.push({
-        type: 'copilot-cli',
-        stepIndex: parseInt(stepIndex),
-        timestamp: attempt.timestampMs,
-        data: {
-          // Convert history format to runtime output format
-          prompt: attempt.prompt,
-          cliCommand: attempt.cliCommand,
-          workingDirectory: attempt.workingDirectory,
-          structured: {
-            events: attempt.events,  // CliEvent[] - already in correct format!
-            metadata: attempt.metadata  // OutputMetadata - already in correct format!
-          },
-          tokens: attempt.metadata.usage ? {
-            prompt: attempt.metadata.usage.inputTokens,
-            completion: attempt.metadata.usage.outputTokens
-          } : undefined,
-          elapsed: attempt.metadata.elapsed,
-          timestampMs: attempt.timestampMs,
-          isStreaming: false
-        },
-        attemptIndex: attempt.attemptIndex
-      });
-    });
-  }
-
-  // Sort by timestamp
-  allMessages.sort((a, b) => a.timestamp - b.timestamp);
-
-  // Render messages using EXISTING logic from renderAllCliOutputs
-  let html = '';
-  allMessages.forEach((item) => {
-    if (item.type === 'status') {
-      const statusMsg = item.data;
-      const severityClass = statusMsg.severity
-        ? `status-${statusMsg.severity}`
-        : 'status-info';
-      html += `<div class="status-message ${severityClass}">`;
-      html += `<span class="status-time">[${statusMsg.timestamp}]</span> `;
-      html += `<span class="status-text">${escapeHtml(statusMsg.message)}</span>`;
-      html += '</div>';
-    } else if (item.type === 'copilot-cli') {
-      const output = item.data;
-      const attemptIndex = item.attemptIndex;
-      const stepIndex = item.stepIndex;
-      const attemptLabel =
-        attemptIndex === 0 ? 'Initial Attempt' : `Retry ${attemptIndex}`;
-
-      html += '<div class="cli-output-item">';
-      html += `<div class="output-header">[Prompt ${stepIndex + 1}] ${attemptLabel}</div>`;
-
-      if (output.prompt) {
-        html += `<div class="output-prompt">${escapeHtml(output.prompt)}</div>`;
-      }
-
-      if (output.cliCommand) {
-        const workingDir = output.workingDirectory || 'workspace';
-        html += `<div class="output-cli-command">${escapeHtml(workingDir)}> ${escapeHtml(output.cliCommand)}</div>`;
-      }
-
-      // REUSE existing renderStructuredOutput function!
-      html += renderStructuredOutput(output);
-
-      if (output.tokens) {
-        const total = output.tokens.prompt + output.tokens.completion;
-        html += `<div class="output-stats">Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total</div>`;
-      }
-
-      if (output.elapsed !== undefined) {
-        html += `<div class="output-stats">${output.elapsed}s</div>`;
-      }
-
-      html += '</div>';
-    }
-  });
-
-  elements.outputContent.innerHTML = html;
-}
-
-/**
- * Navigate to previous run
- */
-function navigateToPreviousRun() {
-  const state = stateManager.getState();
-  if (state.currentRunIndex === 0) return;
-
-  const newIndex = state.currentRunIndex - 1;
-  vscode.postMessage({
-    type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-    runIndex: newIndex
-  });
-}
-
-/**
- * Navigate to next run
- */
-function navigateToNextRun() {
-  const state = stateManager.getState();
-  if (state.currentRunIndex >= state.availableRuns - 1) return;
-
-  const newIndex = state.currentRunIndex + 1;
-  vscode.postMessage({
-    type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
-    runIndex: newIndex
-  });
-}
-
-// Event listeners
-elements.prevRun.addEventListener('click', navigateToPreviousRun);
-elements.nextRun.addEventListener('click', navigateToNextRun);
-elements.clearHistoryBtn.addEventListener('click', () => {
-  if (confirm('Delete all output history for this workflow?')) {
-    vscode.postMessage({ type: MESSAGE_TYPES.CLEAR_RUN_HISTORY });
-  }
-});
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ▼ ⬜ Output          Run: [3 of 3 ▼]  [export]                 │
+├──────────────────────────────────────────────────────────────────┤
+│  [output content...]                                             │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-**File:** `src/ui/webview/message-router.js`
+- Left: collapse toggle + icon + title (unchanged)
+- Right: run selector (when history available) + export button
+- **Auto-scroll checkbox removed** — replaced by smart scroll behavior (see below)
 
-**Add handler for OUTPUT_HISTORY_LOADED:**
-
-```javascript
-messageHandlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
-  outputManager.loadOutputHistory(
-    message.history,
-    message.availableRuns,
-    message.currentRunIndex
-  );
-};
+```tsx
+{/* Right: controls */}
+<div className="ml-auto flex items-center gap-2">
+  {availableRuns > 0 && (
+    <RunSelector
+      availableRuns={availableRuns}
+      currentRunIndex={viewingRunIndex}
+      isViewingHistory={isViewingHistory}
+      isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
+      onSelectRun={(runIndex) => {
+        vscode.postMessage({ type: MESSAGE_TYPES.LOAD_RUN_HISTORY, runIndex });
+      }}
+      onBackToLive={() => {
+        useWorkflowStore.getState().restoreLiveView();
+        useUiStore.getState().clearHistoryView();
+      }}
+    />
+  )}
+  <button className="icon-btn py-0.5 px-2" title="Export output to markdown"
+    onClick={handleExport} disabled={!hasOutput}>
+    <i className="codicon codicon-export" />
+  </button>
+</div>
 ```
+
+**RunSelector component** (new shared component in `components/shared/`):
+
+```tsx
+// Renders as a dropdown button in the output header
+// Shows: "Run 3 of 3 ▼" (current/live) or "Run 2 of 3 ▼" (historical)
+
+interface RunSelectorProps {
+  availableRuns: number;
+  currentRunIndex: number;    // 0 = newest
+  isViewingHistory: boolean;
+  isLiveRunActive: boolean;   // Whether a workflow is currently executing
+  onSelectRun: (runIndex: number) => void;
+  onBackToLive: () => void;
+}
+```
+
+Dropdown options:
+```
+► Run 3  Jan 21, 2:20 PM  (live)          ← shown when isLiveRunActive, always at top
+  Run 3  Jan 21, 2:20 PM  ✓ completed    ← or shown after completion
+  Run 2  Jan 21, 11:45 AM ✓ completed
+  Run 1  Jan 21, 10:30 AM ✓ completed
+```
+
+> **Note on indexing:** `outputHistory[]` is stored newest-first. `runIndex: 0` = most recent. "Run N of M" label: `runNumber = availableRuns - runIndex`.
+
+**History view rendering:**
+
+When `isViewingHistory: true`, `OutputSection` renders from `historyOutputs` instead of `cliOutputs`. This shows all steps from the historical run in order, regardless of current workflow state.
+
+```tsx
+// In OutputSection.tsx — determine what to render:
+const { historyOutputs } = useWorkflowStore();
+const { isViewingHistory } = useUiStore();
+
+// In history mode: render all steps from the historical run
+// In live mode: render steps from the current workflow (existing behavior)
+const stepsToRender = isViewingHistory && historyOutputs
+  ? Array.from({ length: historyOutputs.stepCount }, (_, i) => ({
+      stepIndex: i,
+      cliOutputs: historyOutputs.steps[i]?.cliOutputs ?? [],
+      statusMessages: historyOutputs.steps[i]?.statusMessages ?? [],
+    }))
+  : currentPrompts.map((_, i) => ({
+      stepIndex: i,
+      cliOutputs: cliOutputs[i] ?? [],
+      statusMessages: statusMessages[i] ?? [],
+    }));
+```
+
+Each step renders identically — the same `CliOutput` component, `StatusMessage` component, etc. The `CliOutput` component already shows the `prompt` field as the prompt header and `cliCommand` as the command — this is already the live view behavior. No new rendering code needed.
+
+**History view banner** (shown in output body when `isViewingHistory: true`):
+
+```tsx
+{isViewingHistory && historyOutputs && (
+  <div className="history-banner">
+    <span>
+      Run {historyOutputs.runMetadata.runId} · {formatTimestamp(historyOutputs.runMetadata.startedAt)}
+      {historyOutputs.runMetadata.completedAt ? " ✓" : " (incomplete)"}
+    </span>
+    {isLiveRunActive && (
+      <button
+        onClick={() => {
+          useWorkflowStore.getState().clearHistoryOutputs();
+          useUiStore.getState().clearHistoryView();
+        }}
+        className="back-to-live"
+      >
+        Back to Live ●
+      </button>
+    )}
+  </div>
+)}
+```
+
+The "Back to Live" button is only shown when a workflow is actively running — otherwise the most recent run IS the live run, so no distinction is needed.
+
+#### Auto-scroll: smart scroll replaces checkbox
+
+**Decision:** Remove the auto-scroll checkbox entirely. Replace with behavior-based scroll:
+
+- **Auto-scroll active by default** — output scrolls to bottom as new content arrives
+- **User scrolls up → disable auto-scroll** — detected via scroll event: `scrollTop + clientHeight < scrollHeight - threshold` (threshold: ~50px to avoid hair-trigger)
+- **User scrolls to bottom → re-enable auto-scroll** — detected when scroll position reaches bottom within threshold
+
+```typescript
+// In uiStore: remove autoscrollEnabled field, remove setAutoscroll action
+// Smart scroll is managed entirely in OutputSection via a ref
+
+// In OutputSection.tsx:
+const isAtBottomRef = useRef(true); // Tracks whether auto-scroll is active
+
+const handleScroll = useCallback(() => {
+  if (!outputRef.current) return;
+  const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
+  isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 50;
+}, []);
+
+useEffect(() => {
+  if (isAtBottomRef.current && outputRef.current) {
+    outputRef.current.scrollTop = outputRef.current.scrollHeight;
+  }
+}, [allMessages, streamingChunks]);
+```
+
+**Phase 1 task addition:** Remove `autoscrollEnabled` and `setAutoscroll` from `uiStore`; implement smart scroll in `OutputSection`.
+
+#### message-handler additions
+
+In the existing message handler:
+
+```typescript
+case MESSAGE_TYPES.OUTPUT_HISTORY_LOADED: {
+  const { history, availableRuns, currentRunIndex } = message;
+  useWorkflowStore.getState().loadHistoryRun(history, availableRuns, currentRunIndex);
+  break;
+}
+```
+
+#### Live output capture during history browsing
+
+When a workflow is running and the user is viewing a historical run:
+
+1. `cliOutputs` in `workflowStore` = live data, always updated by streaming handlers (unchanged)
+2. `historyOutputs` in `workflowStore` = historical snapshot being displayed
+3. History file on disk = always written regardless of what is displayed
+4. `OutputSection` renders from `historyOutputs` when `isViewingHistory=true`, from `cliOutputs` when `false`
+
+When the user clicks "Back to Live":
+- `clearHistoryOutputs()` sets `historyOutputs: null`
+- `uiStore.clearHistoryView()` sets `isViewingHistory: false`
+- `OutputSection` immediately switches to rendering from `cliOutputs`, which already has the current live state
+
+**No data copying, no snapshots.** The live outputs were always in `cliOutputs` — we just switch which data source the UI renders from.
 
 ---
 
-## Settings Configuration
+### 6. Settings Configuration
 
 **File:** `package.json`
 
@@ -1107,40 +924,37 @@ Add to `contributes.configuration.properties`:
   "flightpath.saveOutputHistory": {
     "type": "boolean",
     "default": true,
-    "description": "Save CLI output history for each workflow run. History is stored in .flightpath/.history/ directory."
+    "description": "Save CLI output history for each workflow run. History is stored in .flightpath/.history/ and excluded from version control."
   },
   "flightpath.maxHistoryRuns": {
     "type": "number",
     "default": 10,
     "minimum": 1,
     "maximum": 100,
-    "description": "Maximum number of runs to keep per workflow. Older runs are automatically deleted. Set to 100 to keep all runs (not recommended for large workflows)."
+    "description": "Maximum number of runs to keep per workflow. Older runs are automatically deleted."
   },
   "flightpath.autoLoadMostRecentOutput": {
     "type": "boolean",
     "default": true,
-    "description": "Automatically load output from most recent run when opening a workflow."
+    "description": "Automatically display output from the most recent run when opening a workflow."
   }
 }
 ```
 
-**Usage in code:**
+Add helpers to `ConfigurationUtils`:
 
 ```typescript
-// Check if history enabled
-const historyEnabled = vscode.workspace
-  .getConfiguration("flightpath")
-  .get<boolean>("saveOutputHistory", true);
+isSaveOutputHistoryEnabled(): boolean {
+  return getConfig().get<boolean>("saveOutputHistory", true);
+},
 
-// Get max runs limit
-const maxRuns = vscode.workspace
-  .getConfiguration("flightpath")
-  .get<number>("maxHistoryRuns", 10);
+getMaxHistoryRuns(): number {
+  return getConfig().get<number>("maxHistoryRuns", 10);
+},
 
-// Auto-load setting
-const autoLoad = vscode.workspace
-  .getConfiguration("flightpath")
-  .get<boolean>("autoLoadMostRecentOutput", true);
+shouldAutoLoadMostRecentOutput(): boolean {
+  return getConfig().get<boolean>("autoLoadMostRecentOutput", true);
+},
 ```
 
 ---
@@ -1149,86 +963,84 @@ const autoLoad = vscode.workspace
 
 ### Scenario 1: First Run (No History)
 
-**Steps:**
-1. User opens workflow file
-2. User clicks Run
-3. FlightPathManager.takeOff() calls outputHistoryManager.initializeRun()
-4. OutputHistoryManager creates:
-   - `.flightpath/.history/<workflow-id>/` directory
-   - `run-1-<timestamp>.json` file with initial structure
-5. Working file updated: `outputHistory = ["run-1-<timestamp>.json"]`
-6. As prompts execute, outputs saved incrementally via savePromptOutput()
-7. Dashboard shows output in real-time (normal behavior)
-8. On completion, finalizeRun() updates completedAt and executionState
-9. Dashboard shows "Run 1 of 1" (no navigation needed)
+1. User opens workflow, clicks Run
+2. `FlightPathManager.takeOff()` → `outputHistoryManager.initializeRun()` creates:
+   - `.flightpath/.history/<workflow-id>/run-1-<timestamp>.json`
+3. Working file updated: `outputHistory = ["run-1-<timestamp>.json"]`
+4. After each prompt: `outputHistoryManager.saveStepOutput()` writes to history file
+5. Dashboard shows output in real-time (unchanged from current behavior)
+6. On completion: `finalizeRun()` updates `completedAt` and `executionState`
+7. No history navigation UI shown (only 1 run available)
 
 ### Scenario 2: Re-run Workflow
 
-**Steps:**
-1. User clicks Run again on same workflow
-2. outputHistoryManager.initializeRun() creates `run-2-<timestamp>.json`
-3. Working file updated: `outputHistory = ["run-2-...", "run-1-..."]` (newest first)
-4. Previous run (run-1) preserved in history
-5. Dashboard switches to showing run-2 output in real-time
-6. Run navigation appears: "Run 2 of 2"
-7. User can click "← Previous" to view run-1 output
-8. Clicking "Next →" returns to run-2
+1. User clicks Run again on the same workflow
+2. `initializeRun()` creates `run-2-<timestamp>.json`
+3. Working file: `outputHistory = ["run-2-...", "run-1-..."]` (newest first)
+4. Previous run (run-1) preserved — no new working file created, same `.queue/` entry
+5. Dashboard sends `OUTPUT_HISTORY_LOADED` with `currentRunIndex: 0` (live run)
+6. Run selector in Output panel header shows "Run 2 of 2 ▼" (with live indicator)
+7. After completion: dropdown shows both runs, user can select Run 1 to compare
 
-### Scenario 3: Load Old Workflow
+### Scenario 3: Load Old Workflow (VS Code Restart)
 
-**Steps:**
-1. User opens workflow from .queue/ directory (or auto-loaded on VS Code start)
-2. Working file has: `outputHistory = ["run-3-...", "run-2-...", "run-1-..."]`
-3. DashboardProvider checks autoLoadMostRecentOutput setting
-4. If true (default):
-   - Load run-3 history via outputHistoryManager.loadHistory()
-   - Send OUTPUT_HISTORY_LOADED message to webview
-   - Dashboard displays output from run-3
-   - Shows "Run 3 of 3 • Jan 21, 14:20"
-5. Output panel populated with prompts, responses, status messages
-6. User can navigate through runs 1, 2, 3
+1. User opens workflow with `outputHistory = ["run-3-...", "run-2-...", "run-1-..."]`
+2. `FlightPathWebviewProvider` checks `autoLoadMostRecentOutput` setting
+3. Loads run-3 history file, sends `OUTPUT_HISTORY_LOADED` message
+4. `workflowStore.loadHistoryRun()` populates `historyOutputs` (self-contained snapshot)
+5. `uiStore.setHistoryView(0, 3)` sets `isViewingHistory: true`
+6. `OutputSection` renders all steps from `historyOutputs` (run-3's step count)
+7. Each step shows: Status messages → Prompt → CLI Command → Output (same as live)
+8. Shows "Run 3 · Jan 21, 2:20 PM ✓" banner in output body
+9. Run selector in header shows "Run 3 of 3 ▼"
 
-### Scenario 4: Legacy Workflow (No outputHistory)
+### Scenario 4: Live Run While Viewing History
 
-**Steps:**
-1. User opens old workflow created before this feature
-2. Working file has no `outputHistory` field
-3. DashboardProvider skips history loading
-4. Dashboard shows empty output: "Output will appear here during execution"
-5. User clicks Run
-6. First run creates `outputHistory = ["run-1-..."]`
-7. Future runs will have history
+1. User is viewing run-1 history (run-2 is the most recent completed run)
+2. User clicks Run → run-3 begins
+3. `clearAllRuntimeState()` called (existing behavior) — clears live `cliOutputs`
+4. `uiStore.isViewingHistory` remains true (user is still viewing run-1)
+5. `workflowStore.liveCliOutputs` begins accumulating run-3 data
+6. History file `run-3-<timestamp>.json` is being written in background
+7. Run selector shows "Run 1 of 3 ▼" with a "● Back to Live" button in the output header
+8. User clicks "Back to Live" → `restoreLiveView()` swaps in `liveCliOutputs`, `isViewingHistory: false`
+9. Output shows current run-3 state
+10. After run-3 completes: dropdown shows "Run 3 of 3 ▼" with all 3 runs available
 
-### Scenario 5: History Disabled via Settings
+### Scenario 5: Prompts Changed Between Runs
 
-**Steps:**
+1. User ran workflow with 10 prompts → `historyOutputs.stepCount = 10`, `promptOutputs: { 0..9 }`
+2. User edits the workflow file: deletes 9 prompts, leaving 1
+3. User loads the historical run → `OutputSection` renders all 10 steps from `historyOutputs`
+4. Each of the 10 steps shows its original prompt text (from `CliOutput.prompt`) and full output
+5. The history banner ("Run 1 · Jan 21, 10:30 AM ✓") makes clear this is a historical snapshot
+6. Current workflow's prompt list is not shown at all in history mode — history is fully self-contained
+
+This is the correct behavior: the user can see exactly what the AI produced for each of the original 10 prompts, regardless of what the workflow looks like today.
+
+### Scenario 6: History Disabled
+
 1. User sets `flightpath.saveOutputHistory = false`
-2. User runs workflow
-3. outputHistoryManager.initializeRun() returns empty string (skip history)
-4. No history directory created
-5. Working file does not get `outputHistory` field
-6. Dashboard behaves like legacy mode (no history navigation)
+2. `initializeRun()` returns `""`
+3. No history directory created, no `outputHistory` in working file
+4. Dashboard behaves exactly as before (no history navigation)
 
-### Scenario 6: Corrupted History File
+---
 
-**Steps:**
-1. User loads workflow with `outputHistory = ["run-2-...", "run-1-..."]`
-2. run-2 file is corrupted (invalid JSON)
-3. outputHistoryManager.loadHistory() throws error
-4. DashboardProvider catches error, logs warning
-5. Shows message: "Failed to load output (history corrupted)"
-6. User can still navigate to run-1 (fallback)
-7. User can run workflow to create new run-3
+## Migration & Backward Compatibility
 
-### Scenario 7: Max History Limit Exceeded
+**No breaking changes.** The `outputHistory` field on `WorkingFile` is optional. Legacy workflows without it work identically to the current behavior. The first run after upgrade silently begins creating history.
 
-**Steps:**
-1. User has 10 runs (maxHistoryRuns = 10)
-2. User runs workflow again (creates run-11)
-3. outputHistoryManager.initializeRun() calls pruneOldRuns()
-4. Oldest run (run-1) is deleted
-5. Working file updated: `outputHistory = ["run-11", "run-10", ..., "run-2"]` (10 total)
-6. Dashboard shows "Run 11 of 10" (most recent 10)
+**.gitignore recommendation:** Add `.flightpath/.history/` to workspace `.gitignore`. History files are local artifacts similar to `.queue/` files — they are large, user-specific, and can be regenerated.
+
+---
+
+## Error Handling Strategy
+
+- **File I/O errors:** Log warning, continue (never crash the workflow)
+- **Corrupted history:** `loadHistory()` throws → `FlightPathWebviewProvider` catches, logs, shows empty state
+- **Missing `.history/` directory:** Auto-create in `initializeRun()` via `mkdir({ recursive: true })`
+- **Large outputs:** No size limit in Phase 1. Phase 3 adds configurable truncation.
 
 ---
 
@@ -1239,48 +1051,39 @@ const autoLoad = vscode.workspace
 **Goal:** Save and restore output for single runs
 
 **Tasks:**
-1. Create OutputHistoryTypes.ts with schema definitions
-2. Implement OutputHistoryManager class:
-   - initializeRun()
-   - savePromptOutput()
-   - saveStatusMessage()
-   - finalizeRun()
-   - loadHistory()
-   - getRunsForWorkflow()
-   - Helper methods (extractWorkflowId, getHistoryFilePath, isHistoryEnabled)
-3. Update FlightPathTypes.ts: Add outputHistory field to WorkingFile
-4. Add PATH_CONSTANTS.HISTORY_DIR to ConfigurationUtils
-5. Integrate with FlightPathManager:
-   - Call initializeRun() in takeOff()
-   - Call savePromptOutput() after prompt completion
-   - Call saveStatusMessage() for status messages
-   - Call finalizeRun() in onWorkflowComplete()
-   - Handle retries (append to attempts array)
-6. Integrate with DashboardProvider:
-   - Load history on session restore (updateState)
-   - Send OUTPUT_HISTORY_LOADED message to webview
-7. Update dashboard webview:
-   - Add state fields (outputHistory, availableRuns, currentRunIndex)
-   - Add loadOutputHistory() function in output-manager.js
-   - Add renderHistoryOutputs() function
-   - Add message handler for OUTPUT_HISTORY_LOADED
-8. Add settings to package.json:
-   - saveOutputHistory (default: true)
-   - autoLoadMostRecentOutput (default: true)
-9. Manual testing:
-   - First run creates history
-   - Re-run creates second history file
-   - Load old workflow shows previous output
-   - Disable history setting prevents creation
-
-**Estimated Effort:** 3-4 days
+1. Create `src/types/OutputHistoryTypes.ts` (new types file)
+2. Add `HISTORY_DIR` to `PATH_CONSTANTS` in `ConfigurationUtils.ts`
+3. Add `outputHistory` field to `WorkingFile` in `FlightPathTypes.ts`
+4. Add `OUTPUT_HISTORY_LOADED`, `LOAD_RUN_HISTORY`, `CLEAR_RUN_HISTORY` to `MESSAGE_TYPES`
+5. Implement `OutputHistoryManager` class
+6. Add `historyFilePath` / `outputHistoryManager` to `WorkflowContext`
+7. Integrate into `WorkflowExecutor`:
+   - Add `private stepStatusMessages: Map<number, StatusMessage[]>` accumulator
+   - Push to accumulator alongside every `dashboardProvider.addStatusMessage()` call
+   - Call `outputHistoryManager.saveStepOutput(historyFilePath, stepIndex, cliOutputs, statusMessages)` in both `sendFinalOutputToDashboard()` and the retry path
+8. Integrate into `FlightPathManager`: init run in `takeOff()`, finalize on completion; pass single `OutputHistoryManager` instance to `FlightPathWebviewProvider`
+9. Integrate into `FlightPathWebviewProvider`: load history on session restore, handle `LOAD_RUN_HISTORY` and `CLEAR_RUN_HISTORY`
+10. Update `workflowStore.ts`: add `historyOutputs` field; add `loadHistoryRun()` and `clearHistoryOutputs()` actions; **no changes** to `cliOutputs`/`statusMessages` or streaming handlers (live capture is unaffected)
+11. Update `uiStore.ts`: add `isViewingHistory`, `viewingRunIndex`, `availableRuns`; add `setHistoryView()` and `clearHistoryView()` actions; **remove** `autoscrollEnabled` and `setAutoscroll`
+12. Update `OutputSection.tsx`:
+    - Replace auto-scroll checkbox with smart scroll (scroll-up disables, scroll-to-bottom re-enables)
+    - Switch rendering source: `historyOutputs` (history mode) vs `cliOutputs` (live mode)
+    - History mode renders all `historyOutputs.stepCount` steps (independent of current prompt list)
+    - Add run selector dropdown in output header
+    - Add history banner with "Back to Live" button
+13. Create `RunSelector` component in `components/shared/`
+14. Update message handler: handle `OUTPUT_HISTORY_LOADED`
+15. Update `OutputHistoryManager.finalizeRun()` to also write `runStepCount` (total steps executed)
+16. Add settings to `package.json` + helpers to `ConfigurationUtils`
+17. Update `WorkspaceSessionManager` (or clear history handler): also delete `.history/<workflow-id>/` on clear
+18. Manual testing: first run, re-run, history browsing during live run, load old workflow (fewer prompts than original run), disabled setting
 
 **Success Criteria:**
-- ✅ History files created in .history/<workflow-id>/ directory
+- ✅ History files created in `.history/<workflow-id>/`
 - ✅ Outputs saved after each prompt
-- ✅ Working file updated with outputHistory array
-- ✅ Dashboard loads and displays most recent run
-- ✅ Settings control behavior (enabled/disabled)
+- ✅ Working file `outputHistory` updated
+- ✅ VS Code restart → dashboard loads and displays most recent run
+- ✅ Settings control behavior
 
 ---
 
@@ -1289,562 +1092,153 @@ const autoLoad = vscode.workspace
 **Goal:** Allow users to cycle through previous runs
 
 **Tasks:**
-1. Update dashboard.html:
-   - Add run navigation controls (prev/next buttons, indicator, timestamp)
-2. Update dashboard.scss:
-   - Style run navigation UI
-3. Update output-manager.js:
-   - Add updateRunNavigation() function
-   - Add navigateToPreviousRun() / navigateToNextRun()
-   - Add event listeners for prev/next buttons
-   - Show/hide navigation based on availableRuns
-4. Update message-router.js:
-   - Add LOAD_RUN_HISTORY message type
-5. Update DashboardProvider:
-   - Add handleLoadRunHistory() method
-   - Load requested run via outputHistoryManager
-   - Send OUTPUT_HISTORY_LOADED with new run
-6. Add keyboard shortcuts (optional):
-   - Alt+Left: Previous run
-   - Alt+Right: Next run
-7. Add "Clear History" button:
-   - Add clearHistoryBtn to dashboard.html
-   - Add handleClearRunHistory() in DashboardProvider
-   - Confirm dialog before deletion
-   - Delete all run files
-   - Update working file (clear outputHistory)
-8. Manual testing:
-   - Create 3+ runs
-   - Navigate between runs using prev/next
-   - Verify run indicator updates
-   - Verify timestamp displays correctly
-   - Test clear history command
-
-**Estimated Effort:** 2-3 days
+1. Add `isViewingHistory`, `availableRuns`, `currentRunIndex`, `outputHistory` to `workflowStore`
+2. Update `OutputSection.tsx`: add run navigation bar (prev/next buttons, run indicator, timestamp)
+3. Add `clearHistoryView()` action + "Back to Live" button
+4. Update `FlightPathWebviewProvider`: handle `LOAD_RUN_HISTORY` and `CLEAR_RUN_HISTORY`
+5. Add clear history confirmation dialog
+6. Manual testing: navigation, timestamps, clear history
 
 **Success Criteria:**
-- ✅ Run navigation UI appears when multiple runs exist
-- ✅ Prev/Next buttons correctly load historical runs
-- ✅ Run indicator shows current position (e.g., "Run 2 of 3")
-- ✅ Timestamp displays for loaded run
-- ✅ Clear history deletes all runs and updates UI
+- ✅ Run navigation UI appears when `availableRuns > 1`
+- ✅ Prev/Next buttons load historical runs
+- ✅ "Viewing Run N of M" indicator with timestamp
+- ✅ Clear history deletes files and resets UI
 
 ---
 
 ### Phase 3: Pruning & Polish
 
-**Goal:** Automatic cleanup and edge case handling
+**Goal:** Automatic cleanup and edge cases
 
 **Tasks:**
-1. Implement pruneOldRuns() in OutputHistoryManager
-2. Call pruneOldRuns() in initializeRun() after creating new run
-3. Add maxHistoryRuns setting to package.json (default: 10)
-4. Handle edge cases:
-   - Corrupted history files (graceful degradation)
-   - Missing history directory (auto-create)
-   - Concurrent runs (unlikely but possible)
-5. Add telemetry (optional):
-   - Track history file sizes
-   - Track number of runs per workflow
-6. Performance optimization:
-   - Debounce savePromptOutput writes (batch updates)
-   - Lazy load history only when needed
-7. Error handling improvements:
-   - Better error messages for users
-   - Fallback to empty state if history fails
-8. Documentation:
-   - Update README with history feature
-   - Add user guide screenshots
-   - Document .history/ directory structure
-9. Manual testing:
-   - Create 15 runs (exceeds default max of 10)
-   - Verify oldest runs deleted automatically
-   - Test with corrupted history file
-   - Test with missing .history directory
-
-**Estimated Effort:** 2-3 days
-
-**Success Criteria:**
-- ✅ Old runs automatically pruned based on maxHistoryRuns
-- ✅ Corrupted files handled gracefully (no crashes)
-- ✅ Performance acceptable with large workflows (100+ prompts)
-- ✅ Error messages clear and actionable
-- ✅ Documentation complete
+1. Implement `pruneOldRuns()` (called in `initializeRun()`)
+2. Add `maxHistoryRuns` setting
+3. Handle corrupted history files (graceful degradation)
+4. Add status message persistence (currently only `cliOutputs` saved)
+5. Performance: defer history writes to not block workflow execution
+6. Optionally add per-run size warning if history file exceeds threshold
 
 ---
 
 ### Phase 4: Advanced Features (Future)
 
-**Tasks (Post-MVP):**
-1. **Diff view between runs:**
-   - Side-by-side comparison of outputs
-   - Highlight changes in responses
-   - Useful for testing prompt improvements
-
-2. **Export specific runs:**
-   - Allow exporting run-2 separately
-   - Include metadata (model, tokens, timing)
-
-3. **Token usage comparison:**
-   - Chart showing token usage across runs
-   - Identify expensive prompts
-
-4. **Search across run history:**
-   - Full-text search in all outputs
-   - Find when specific text first appeared
-
-5. **Legacy log discovery (Phase 2 migration):**
-   - Implement discoverLegacyOutputs()
-   - Parse provider log files as fallback
-   - Migrate to history format
-
-6. **Compression for large outputs:**
-   - Gzip responses over 100KB
-   - Transparent decompression on load
-
-**Estimated Effort:** 5-7 days (spread across multiple releases)
+- Diff view between runs (side-by-side output comparison)
+- Token usage charts across runs
+- Export comparison report (markdown)
+- Search across run history
+- Compression for large outputs
 
 ---
 
-## Testing Strategy
+## Decisions & Resolved Questions
 
-### Unit Tests
+### 1. Status message persistence: WorkflowExecutor accumulates messages ✅
 
-**File:** `src/test/unit/OutputHistoryManager.test.ts`
+**Decision:** Option (a) — `WorkflowExecutor` maintains an internal `statusMessages` map per step and passes it to `OutputHistoryManager.saveStepOutput()`.
 
-**Test Cases:**
-1. initializeRun() creates directory and file
-2. initializeRun() determines correct runId (sequential)
-3. savePromptOutput() creates new entry
-4. savePromptOutput() appends retry attempts
-5. saveStatusMessage() stores messages
-6. finalizeRun() updates completedAt and state
-7. loadHistory() parses valid file
-8. loadHistory() throws error on invalid JSON
-9. getRunsForWorkflow() returns sorted list
-10. pruneOldRuns() deletes oldest runs
-11. extractWorkflowId() parses filename correctly
-12. isHistoryEnabled() respects setting
+**Implementation:** In `WorkflowExecutor`, alongside the existing `sendFinalOutputToDashboard()` path, track status messages in a `private stepStatusMessages: Map<number, StatusMessage[]>`. Whenever `dashboardProvider.addStatusMessage()` is called in `WorkflowExecutor`, also push to this map.
 
-### Integration Tests
-
-**File:** `src/test/integration/OutputHistory.integration.test.ts`
-
-**Test Cases:**
-1. Full workflow run creates history
-2. Re-run creates second history file
-3. Working file outputHistory updated correctly
-4. Dashboard loads history on session restore
-5. Navigation between runs works
-6. Clear history deletes files and updates UI
-7. Pruning happens automatically at limit
-8. Disabled setting prevents history creation
-
-### Manual Testing Checklist
-
-**First Run:**
-- [ ] .history/<workflow-id>/ directory created
-- [ ] run-1-<timestamp>.json file created
-- [ ] Outputs saved after each prompt
-- [ ] Status messages saved
-- [ ] completedAt set on finish
-- [ ] Working file has outputHistory array
-
-**Re-run:**
-- [ ] run-2-<timestamp>.json created
-- [ ] run-1 preserved
-- [ ] outputHistory array updated (newest first)
-- [ ] Dashboard shows "Run 2 of 2"
-
-**Navigation:**
-- [ ] Prev/Next buttons work
-- [ ] Run indicator updates
-- [ ] Timestamp displays
-- [ ] Content changes correctly
-
-**Edge Cases:**
-- [ ] Corrupted history shows error
-- [ ] Missing directory auto-creates
-- [ ] Disabled setting prevents history
-- [ ] Pruning deletes old runs
-- [ ] Legacy workflows work without history
+**Why this works for history restore:** When loading history, `loadHistoryRun()` populates both `workflowStore.cliOutputs` AND `workflowStore.statusMessages` from the saved data. The existing `StatusMessage` React component renders them identically — same component, same render path, whether from a live run or history. Zero new rendering code.
 
 ---
 
-## Migration & Backward Compatibility
+### 2. Single `OutputHistoryManager` instance ✅
 
-### Existing Working Files
-
-**Strategy:** Graceful enhancement with no breaking changes
-
-**Behavior:**
-- Working files without `outputHistory` field continue to work
-- First run after upgrade creates history structure
-- `outputHistory` field is optional (undefined = no history yet)
-- Dashboard handles both cases:
-  - With history: Load and display
-  - Without history: Show empty state
-
-**No Changes Required:**
-- All existing PromptFile and QueueState types work as-is
-- No schema version bump needed (additive change)
-- Users see no disruption
-
-### .gitignore Update
-
-**Recommendation:** Add `.history/` to .gitignore
-
-**File:** `.flightpath/.gitignore` (or workspace .gitignore)
-
-```
-# FlightPath output history (local artifacts, not for version control)
-.history/
-
-# Working files (contains runtime state, not for version control)
-.queue/
-```
-
-**Rationale:**
-- History files are local artifacts (like .queue/)
-- Large files (MBs for big workflows)
-- Not useful for collaboration (user-specific runs)
-- Can be regenerated by re-running workflows
+**Decision:** Single instance created in `FlightPathManager`, passed to `FlightPathWebviewProvider` via constructor/setter.
 
 ---
 
-## Error Handling & Edge Cases
+### 3. Immediate saves ✅
 
-### 1. File I/O Errors
-
-**Scenario:** Disk full, permission denied, etc.
-
-**Handling:**
-```typescript
-try {
-  await this.outputHistoryManager.savePromptOutput(...);
-} catch (error) {
-  Log.warn("Failed to save output history:", error);
-  // Continue workflow execution (don't block on history failure)
-}
-```
-
-**User Impact:** Output not saved, but workflow continues
-
-### 2. Corrupted History Files
-
-**Scenario:** Invalid JSON, missing fields, etc.
-
-**Handling:**
-```typescript
-async loadHistory(historyFilePath: string): Promise<WorkflowOutputHistory> {
-  try {
-    const content = await fs.promises.readFile(historyFilePath, "utf-8");
-    const history = JSON.parse(content);
-
-    // Basic validation
-    if (!history.workflowId || !history.runId) {
-      throw new Error("Invalid history file: missing required fields");
-    }
-
-    return history;
-  } catch (error) {
-    throw new Error(`Failed to load history: ${error.message}`);
-  }
-}
-```
-
-**Dashboard Behavior:**
-- Show error message: "Failed to load output (history corrupted)"
-- Attempt to load previous run as fallback
-- Allow user to continue (don't crash)
-
-### 3. Concurrent Workflow Runs
-
-**Scenario:** User runs same workflow in multiple VS Code windows
-
-**Current Limitation:** Not supported (last write wins)
-
-**Future Enhancement:** File locking or atomic writes
-
-**Mitigation:** Document limitation, detect concurrent access
-
-### 4. Missing .history Directory
-
-**Scenario:** User deleted .history/ manually
-
-**Handling:**
-```typescript
-async initializeRun(...): Promise<string> {
-  const historyDir = path.join(this.historyBaseDir, workflowId);
-
-  // Auto-create directory if missing
-  await fs.promises.mkdir(historyDir, { recursive: true });
-
-  // Continue normally
-}
-```
-
-**User Impact:** None (transparent recreation)
-
-### 5. Large Outputs (>10MB)
-
-**Scenario:** Prompt generates massive response
-
-**Current Behavior:** Save entire response
-
-**Future Enhancement:** Compression, truncation, or streaming
-
-**Mitigation:** Monitor file sizes, add warning if >10MB
-
-### 6. Workflow Renamed
-
-**Scenario:** User renames working file
-
-**Current Behavior:** New workflowId, loses link to old history
-
-**Future Enhancement:** Track by UUID instead of filename
-
-**Mitigation:** Document that renaming breaks history linkage
+**Decision:** Save after each step completion (immediate). Debounce deferred to Phase 3 if profiling shows bottleneck.
 
 ---
 
-## Performance Considerations
+### 4. UX for run history: Per-workflow run selector in Output panel header ✅
 
-### File I/O Frequency
+**Decision:** Each workflow maintains a run history. "Re-running" a workflow creates a new run entry in that workflow's history (does NOT create a new working file or clutter `.queue/`). Users navigate run history via a dropdown in the Output panel header.
 
-**Problem:** Writing history after every prompt could slow down workflows
+**Why not "each re-run = new workflow":**
+- Would clutter `.queue/` with duplicate working files for the same prompt file
+- Can't re-run while a workflow is running (current limitation)
+- The dropdown in recent workflows would show confusing duplicates
+- Harder to answer "what was the output last time I ran this?" — requires navigating to a different workflow
 
-**Solution:** Batch updates or debounce writes
-```typescript
-private pendingUpdates: Map<string, any> = new Map();
-private writeTimeout?: NodeJS.Timeout;
+**Run selector placement: Output panel header**
 
-async savePromptOutput(historyFilePath: string, ...): Promise<void> {
-  // Debounce writes
-  if (this.writeTimeout) {
-    clearTimeout(this.writeTimeout);
-  }
-
-  this.pendingUpdates.set(`${historyFilePath}:${stepIndex}`, outputData);
-
-  this.writeTimeout = setTimeout(async () => {
-    await this.flushPendingUpdates();
-  }, 1000); // Wait 1s before writing
-}
+```
+┌───────────────────────────────────────────────────────┐
+│  Output                         Run: [3 of 3 ▼]       │
+├───────────────────────────────────────────────────────┤
+│  [live streaming output...]                           │
+└───────────────────────────────────────────────────────┘
 ```
 
-### Large Workflows (100+ prompts)
-
-**Problem:** History files could be 10MB+ for workflows with 100 prompts
-
-**Solution 1:** Compression (gzip)
-```typescript
-import * as zlib from "zlib";
-
-async savePromptOutput(...): Promise<void> {
-  const content = JSON.stringify(history, null, 2);
-  const compressed = zlib.gzipSync(content);
-  await fs.promises.writeFile(historyFilePath + ".gz", compressed);
-}
+Dropdown:
+```
+► Run 3  Jan 21, 2:20 PM  (live)
+  Run 2  Jan 21, 11:45 AM ✓
+  Run 1  Jan 21, 10:30 AM ✓
 ```
 
-**Solution 2:** Truncate very long responses
-```typescript
-const MAX_RESPONSE_LENGTH = 100_000; // 100KB
+**Live capture during history browsing:** History is written to disk regardless of what the user is viewing. `workflowStore` maintains a `liveCliOutputs` snapshot that always holds the current run's data, so "Back to Live" instantly restores it.
 
-if (response.length > MAX_RESPONSE_LENGTH) {
-  response = response.substring(0, MAX_RESPONSE_LENGTH) +
-    "\n\n[Response truncated - exceeded 100KB limit]";
-}
-```
-
-**Recommendation:** Implement truncation in Phase 3, compression in Phase 4
-
-### Memory Usage
-
-**Problem:** Loading 10 runs × 10MB = 100MB in memory
-
-**Solution:** Lazy load only current run
-```typescript
-// Don't preload all runs, just metadata
-const availableRuns = await this.getRunsForWorkflow(workflowId);
-
-// Load on demand when user navigates
-this.postMessage({
-  type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
-  history: null, // Don't send until requested
-  availableRuns: availableRuns.length,
-  currentRunIndex: 0
-});
-```
+**Parallel workflows compatibility:** When parallel workflows arrive, each workflow tab has its own Output panel. The run selector naturally scopes to that tab's workflow — `uiStore` can hold `viewingRunIndex: Record<workflowId, number>` with no structural changes to this architecture.
 
 ---
 
-## Future Enhancements
+### 5. Auto-scroll: smart scroll replaces checkbox ✅
 
-### 1. Diff View Between Runs
+**Decision:** Remove `autoscrollEnabled` / `setAutoscroll` from `uiStore`. Replace the checkbox with behavior-based smart scroll in `OutputSection`:
+- Auto-scroll is active by default
+- User scrolling up disables it (detected when `scrollHeight - scrollTop - clientHeight > 50px`)
+- User scrolling to bottom re-enables it
 
-**UI Mockup:**
-```
-┌─────────────────────────────────────────┐
-│ Compare Runs                            │
-│ [Run 2] <──> [Run 3]                   │
-├─────────────────┬───────────────────────┤
-│ Run 2           │ Run 3                 │
-│ (Jan 21, 11:45) │ (Jan 21, 14:20)      │
-├─────────────────┼───────────────────────┤
-│ Prompt 1        │ Prompt 1              │
-│ Response:       │ Response:             │
-│ - Old line      │ + New line            │
-│   Same line     │   Same line           │
-└─────────────────┴───────────────────────┘
-```
-
-**Implementation:** Use diff library (e.g., diff-match-patch)
-
-### 2. Token Usage Charts
-
-**Visualization:** Line chart showing token usage per run
-- X-axis: Run number
-- Y-axis: Total tokens
-- Hover: Show prompt/completion breakdown
-
-**Library:** Chart.js or lightweight alternative
-
-### 3. Export Comparison Report
-
-**Format:** Markdown file with side-by-side comparison
-```markdown
-# Workflow Comparison: Run 2 vs Run 3
-
-## Summary
-- Run 2: 10 prompts, 5,432 tokens, 2m 15s
-- Run 3: 10 prompts, 4,821 tokens, 1m 58s
-- Improvement: -11% tokens, -12% time
-
-## Prompt 1
-### Run 2 Output
-...
-
-### Run 3 Output
-...
-
-### Diff
-[+ Added content]
-[- Removed content]
-```
-
-### 4. Search Across Runs
-
-**UI:** Search box in output panel
-- Full-text search across all runs
-- Filter by run, prompt index, or date range
-- Highlight matches in output
-
-**Implementation:** In-memory search (load all runs on demand)
+This is strictly better UX and removes a control from the already-busy header. The checkbox was a workaround for not having smart scroll. Smart scroll is managed entirely in `OutputSection` via a `useRef` — no store state needed.
 
 ---
 
-## Documentation Updates
+### 6. Full history snapshot rendered independently of current prompt list ✅
 
-### README.md
+**Decision:** History rendering is self-contained. When viewing a historical run, `OutputSection` renders all `runStepCount` steps from `historyOutputs`, not the current workflow's prompt list. If the original run had 10 prompts and the workflow now has 2, the history view still shows all 10 steps with their original `prompt` text, `cliCommand`, and output.
 
-Add section:
+**Why:** "Load the history for the prompts that still exist" would lose information and create confusing gaps. The full snapshot gives the user complete historical context.
 
-```markdown
-## Output History
+**Rendering fidelity:** Each historical step shows the same `Prompt → CLI Command → Output` layout as the live view, because `CliOutput.prompt` (unexpanded prompt text) and `CliOutput.cliCommand` are already part of the saved data — no extra storage needed.
 
-FlightPath automatically saves CLI output for each workflow run. This allows you to:
-- Review previous outputs after restarting VS Code
-- Compare outputs across multiple runs
-- Track improvements to your prompts over time
-
-**Settings:**
-- `flightpath.saveOutputHistory`: Enable/disable history (default: true)
-- `flightpath.maxHistoryRuns`: Max runs to keep per workflow (default: 10)
-
-**Storage:**
-- History is stored in `.flightpath/.history/<workflow-id>/`
-- Add `.history/` to your `.gitignore` (recommended)
-
-**Navigation:**
-- Use ← → buttons in the output panel to cycle through runs
-- View timestamps and run numbers
-- Clear history with the trash icon
-```
-
-### User Guide (docs/USER_GUIDE.md)
-
-Add section with screenshots:
-1. How history is saved automatically
-2. How to navigate between runs
-3. How to clear history
-4. Settings explanation
-
-### Developer Guide (docs/DEVELOPER_GUIDE.md)
-
-Add section:
-1. OutputHistoryManager API
-2. History file schema
-3. Integration points
-4. How to extend for new features
+**Live capture unaffected:** `cliOutputs` in `workflowStore` is never touched by history loading. The `historyOutputs` field is a completely separate display buffer. History browsing has zero impact on live execution.
 
 ---
 
-## Summary Checklist
+### 7. Orphaned history is acceptable; clear history removes `.history/` folder ✅
 
-**Phase 1: Core History Storage**
-- [ ] Create OutputHistoryTypes.ts
-- [ ] Implement OutputHistoryManager class
-- [ ] Update FlightPathTypes.ts (add outputHistory field)
-- [ ] Integrate with FlightPathManager
-- [ ] Integrate with DashboardProvider
-- [ ] Update dashboard webview (state, rendering)
-- [ ] Add settings to package.json
-- [ ] Manual testing (first run, re-run, load old)
+**Decision:** If a working file is deleted or renamed, its associated `.history/<workflow-id>/` directory becomes orphaned — acceptable for Phase 1. The existing "Clear Workflow History" action (which removes entries from the recent workflows list) will ALSO delete the corresponding `.flightpath/.history/<workflow-id>/` directory.
 
-**Phase 2: Run Navigation UI**
-- [ ] Add run navigation controls to dashboard.html
-- [ ] Style run navigation UI
-- [ ] Implement navigation logic in output-manager.js
-- [ ] Add message handlers for LOAD_RUN_HISTORY
-- [ ] Add "Clear History" button and handler
-- [ ] Manual testing (navigation, clear)
-
-**Phase 3: Pruning & Polish**
-- [ ] Implement pruneOldRuns() logic
-- [ ] Add maxHistoryRuns setting
-- [ ] Handle edge cases (corruption, missing dirs)
-- [ ] Performance optimization (debounce, lazy load)
-- [ ] Documentation (README, user guide)
-- [ ] Manual testing (pruning, edge cases)
-
-**Future Enhancements (Phase 4+)**
-- [ ] Diff view between runs
-- [ ] Token usage charts
-- [ ] Export comparison report
-- [ ] Search across runs
-- [ ] Compression for large outputs
+**Implementation note:** Update `WorkspaceSessionManager` (or wherever `clearWorkflowHistory` is handled) to also call `OutputHistoryManager.clearWorkflowHistory(workflowId)` which deletes the entire history directory.
 
 ---
 
-## Questions for Implementation
+## Parallel Workflows Compatibility
 
-1. **Debounce Interval:** Should we wait 1s, 5s, or immediately write history?
-   - Recommendation: 1s debounce (balance between data safety and I/O frequency)
+This architecture is designed to be a drop-in foundation for the parallel workflows plan (`docs/research/PARALLEL_WORKFLOWS_ARCHITECTURE.md`).
 
-2. **Compression:** Enable by default or only for large files?
-   - Recommendation: Add in Phase 4, optional via setting
+### How the designs align
 
-3. **Max Response Size:** Should we truncate responses over 100KB?
-   - Recommendation: Add in Phase 3, configurable setting
+| This design | Parallel workflows plan |
+|---|---|
+| One workflow, multiple run history | One `WorkflowInstance`, multiple run entries |
+| History keyed by `workflowId` (working file basename) | History keyed by `WorkflowInstance.id` |
+| `workflowStore.historyOutputs` — dedicated history buffer, never touches `cliOutputs` | Same pattern per workflow tab — `cliOutputs` = live, `historyOutputs` = selected run |
+| `uiStore.viewingRunIndex: number` (single workflow) | `uiStore.viewingRunIndex: Record<workflowId, number>` (multi-workflow) |
+| Run selector in Output panel header | Same — each workflow tab has its own Output panel with run selector |
 
-4. **Error Reporting:** Show error notifications or just log warnings?
-   - Recommendation: Log warnings (don't interrupt workflow), show notification on load failure
+### Migration path when parallel workflows land
 
-5. **Legacy Migration:** Should Phase 1 include log file discovery?
-   - Recommendation: No, defer to Phase 4 (keeps Phase 1 simple)
+1. `workflowStore` becomes per-workflow (one store instance per `WorkflowInstance`); each instance has its own `cliOutputs` (live) and `historyOutputs` (selected run display) — the pattern is identical
+2. `uiStore.viewingRunIndex` changes from `number` to `Record<workflowId, number>`
+3. `OutputHistoryManager` already uses `workflowId` as the key — no changes
+4. Run selector component is already self-contained — reuse across tabs
+5. `OUTPUT_HISTORY_LOADED` message gains a `workflowId` field to route to correct tab
 
----
-
-This plan provides a complete blueprint for implementing the output history architecture. Each phase is self-contained and builds on the previous one. The implementation can be done incrementally, with Phase 1 being the minimum viable product.
+**No architectural changes are needed to the history storage layer.** The `OutputHistoryManager`, `WorkflowOutputHistory` type, and `.history/` directory structure work identically for single and parallel workflows.

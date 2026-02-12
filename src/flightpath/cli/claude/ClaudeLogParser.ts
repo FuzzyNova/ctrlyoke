@@ -296,7 +296,11 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                     typeof block.content === "string"
                       ? block.content
                       : JSON.stringify(block.content),
-                  error: block.is_error ? block.content : undefined,
+                  error: block.is_error
+                    ? typeof block.content === "string"
+                      ? block.content
+                      : JSON.stringify(block.content)
+                    : undefined,
                 },
               } as ToolResultData,
             });

@@ -390,7 +390,13 @@ export class CopilotLogParser extends BaseLogParser {
       if (event.type === "tool.execution_complete" && event.data) {
         const pendingTool = pendingTools.get(event.data.toolCallId);
         const success = event.data.success;
-        const result = event.data.result?.content || "";
+        const rawContent = event.data.result?.content;
+        const result =
+          typeof rawContent === "string"
+            ? rawContent
+            : rawContent
+              ? JSON.stringify(rawContent)
+              : "";
 
         if (pendingTool) {
           const lowerName = pendingTool.toolName.toLowerCase();
@@ -512,6 +518,13 @@ export class CopilotLogParser extends BaseLogParser {
         }
 
         // Always emit TOOL_RESULT
+        const toolResultRaw = event.data.result?.content;
+        const toolResultStr =
+          typeof toolResultRaw === "string"
+            ? toolResultRaw
+            : toolResultRaw
+              ? JSON.stringify(toolResultRaw)
+              : undefined;
         outputEvents.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp,
@@ -519,10 +532,8 @@ export class CopilotLogParser extends BaseLogParser {
             toolCallId: event.data.toolCallId,
             result: {
               success: event.data.success,
-              output: event.data.result?.content,
-              error: event.data.success
-                ? undefined
-                : event.data.result?.content,
+              output: toolResultStr,
+              error: event.data.success ? undefined : toolResultStr,
             },
           } as ToolResultData,
         });
