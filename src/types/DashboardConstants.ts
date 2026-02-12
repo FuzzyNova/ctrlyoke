@@ -71,6 +71,7 @@ export const MESSAGE_TYPES = {
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
+  GLOBAL_SETTINGS_UPDATED: "globalSettingsUpdated", // Extension -> Webview: Config changed, update settings only (no workflow reset)
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
   CONFIG_VALUE: "configValue", // Extension -> Webview: Send config value

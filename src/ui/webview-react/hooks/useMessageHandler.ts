@@ -118,6 +118,19 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // GLOBAL_SETTINGS_UPDATED - Config changed; update settings only, no workflow reset
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED] = (message) => {
+    const settingsStore = useSettingsStore.getState();
+    if (message.globalSettings) {
+      settingsStore.setGlobalSettings(message.globalSettings);
+    }
+    if (message.modelOptions) {
+      settingsStore.setModelOptions(message.modelOptions);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // FILE_SELECTED - New workflow file loaded
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {

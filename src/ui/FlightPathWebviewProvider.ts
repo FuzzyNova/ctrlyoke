@@ -140,7 +140,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     this.configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
       (e) => {
         if (e.affectsConfiguration("flightpath")) {
-          this.sendInitialState();
+          this.sendGlobalSettingsUpdate();
         }
       }
     );
@@ -776,6 +776,49 @@ window.vscodeApi = acquireVsCodeApi();
         harnessStatus: this.harnessStatus,
         availableAgents: this.availableAgents,
       },
+    });
+  }
+
+  /**
+   * Send only global settings to the webview without workflow data.
+   * Used for configuration changes to avoid resetting the output panel.
+   */
+  private sendGlobalSettingsUpdate(): void {
+    if (!this.view) {
+      return;
+    }
+
+    const harness = ConfigurationUtils.getIntegrationMode();
+    const model = this.getModelForHarness(harness);
+    const agent = ConfigurationUtils.getCustomAgent();
+    const executionMode = ConfigurationUtils.getCliExecutionMode();
+    const resumeExistingSession =
+      ConfigurationUtils.shouldResumeExistingSession();
+    const dynamicQueueEnabled =
+      ConfigurationUtils.getDynamicQueueConfig().enabled;
+    const respectGitignore =
+      ConfigurationUtils.shouldRespectGitignoreForCompletions();
+
+    const harnessDefaultModels = {
+      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(Harness.CopilotCli),
+      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(Harness.CopilotChat),
+      [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
+      [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
+    };
+
+    this.postMessage({
+      type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
+      globalSettings: {
+        harness,
+        model,
+        harnessDefaultModels,
+        agent,
+        executionMode,
+        resumeSession: resumeExistingSession,
+        allowDynamicExtension: dynamicQueueEnabled,
+        respectGitignore,
+      },
+      modelOptions: this.buildModelOptions(),
     });
   }
 

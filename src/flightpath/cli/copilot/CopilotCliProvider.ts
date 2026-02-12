@@ -18,6 +18,7 @@ import {
   isCliModelSupported,
 } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
+import { retryWithBackoff } from "../../../utils/RetryUtils";
 
 const execAsync = promisify(exec);
 
@@ -416,12 +417,22 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns True if CLI executable found
    */
   async checkAvailability(): Promise<boolean> {
-    try {
-      await execAsync("copilot --version");
-      return true;
-    } catch {
-      return false;
-    }
+    const result = await retryWithBackoff(
+      async () => {
+        try {
+          await execAsync("copilot --version");
+          return true;
+        } catch (error) {
+          // Retry Windows file-lock errors; treat other errors as permanent
+          if (String(error).includes("being used by another process")) {
+            return null; // trigger retry
+          }
+          throw error;
+        }
+      },
+      { maxAttempts: 4, delays: [200, 500, 1000] }
+    );
+    return result === true;
   }
 
   /**
@@ -430,12 +441,21 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Version string if available, undefined if error
    */
   async getVersion(): Promise<string | undefined> {
-    try {
-      const { stdout } = await execAsync("copilot --version");
-      return stdout.trim();
-    } catch {
-      return undefined;
-    }
+    const result = await retryWithBackoff(
+      async () => {
+        try {
+          const { stdout } = await execAsync("copilot --version");
+          return stdout.trim() || null;
+        } catch (error) {
+          if (String(error).includes("being used by another process")) {
+            return null; // trigger retry
+          }
+          throw error;
+        }
+      },
+      { maxAttempts: 4, delays: [200, 500, 1000] }
+    );
+    return result;
   }
 
   /**

@@ -27,6 +27,7 @@ import {
   CLAUDE_CLI_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
+import { retryWithBackoff } from "./RetryUtils";
 
 const execAsync = promisify(exec);
 
@@ -114,9 +115,32 @@ async function queryCopilotCliModels(): Promise<void> {
       "Querying Copilot CLI for available models via 'copilot help config'..."
     );
 
-    const { stdout } = await execAsync("copilot help config", {
-      timeout: 5000,
-    });
+    const result = await retryWithBackoff(
+      async () => {
+        try {
+          return await execAsync("copilot help config", { timeout: 5000 });
+        } catch (error) {
+          // On Windows, copilot.ps1 can be temporarily locked by a concurrent process.
+          // Retry transient file-lock errors; let other errors fall through.
+          const msg = String(error);
+          if (msg.includes("being used by another process")) {
+            return null; // trigger retry
+          }
+          throw error; // permanent failure - stop retrying
+        }
+      },
+      { maxAttempts: 4, delays: [200, 500, 1000] }
+    );
+
+    if (!result) {
+      Log.info(
+        "Copilot CLI unavailable after retries (file lock), using fallback list"
+      );
+      cachedCopilotCliModelIds = [...FALLBACK_COPILOT_CLI_MODELS];
+      return;
+    }
+
+    const { stdout } = result;
 
     // Parse the `model` section to extract choices
     // Format: `model`: AI model...followed by lines like:   - "model-name"
