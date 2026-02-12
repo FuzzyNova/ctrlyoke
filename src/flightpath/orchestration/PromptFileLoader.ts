@@ -243,6 +243,12 @@ export class PromptFileLoader {
             restoredState.currentIndex,
             restoredState.workflowName || undefined
           );
+
+          // Load output history if available (auto-loads most recent run)
+          await this.dashboardProvider.loadOutputHistoryForWorkflow(
+            workingFilePath,
+            workingFile
+          );
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)

@@ -9,6 +9,11 @@ import {
   type RetryState,
   type StatusMessage,
 } from "../types/messages";
+import type {
+  WorkflowOutputHistory,
+  StepOutput,
+} from "@root/types/OutputHistoryTypes";
+import { useUiStore } from "./uiStore";
 
 /**
  * Workflow state - Core workflow execution data
@@ -29,6 +34,16 @@ interface WorkflowState {
 
   // Streaming state (for incremental output)
   streamingChunks: Record<number, string>;
+
+  // Self-contained history snapshot for the currently-viewed historical run.
+  // When isViewingHistory=true (in uiStore), OutputSection renders from historyOutputs
+  // instead of cliOutputs. The live cliOutputs continue to be updated normally —
+  // history browsing has zero impact on live capture.
+  historyOutputs: {
+    stepCount: number;
+    steps: Record<number, StepOutput>;
+    runMetadata: Pick<WorkflowOutputHistory, "runId" | "startedAt" | "completedAt" | "executionState">;
+  } | null;
 }
 
 /**
@@ -69,6 +84,10 @@ interface WorkflowActions {
 
   // Step status management
   setStepStatus: (stepIndex: number, status: StepStatus) => void;
+
+  // History management
+  loadHistoryRun: (history: WorkflowOutputHistory, availableRuns: number, runIndex: number) => void;
+  clearHistoryOutputs: () => void;
 
   // Bulk operations
   loadWorkflow: (data: {
@@ -124,6 +143,7 @@ const initialState: WorkflowState = {
   retryStates: {},
   statusMessages: {},
   streamingChunks: {},
+  historyOutputs: null,
 };
 
 export const useWorkflowStore = create<
@@ -424,6 +444,32 @@ export const useWorkflowStore = create<
       streamingChunks: {},
     });
   },
+
+  // ============================================================================
+  // HISTORY MANAGEMENT
+  // ============================================================================
+
+  loadHistoryRun: (history, availableRuns, runIndex) =>
+    set(() => {
+      // Update uiStore for history view state
+      useUiStore.getState().setHistoryView(runIndex, availableRuns);
+
+      // Populate self-contained history snapshot
+      return {
+        historyOutputs: {
+          stepCount: history.runStepCount,
+          steps: history.promptOutputs,
+          runMetadata: {
+            runId: history.runId,
+            startedAt: history.startedAt,
+            completedAt: history.completedAt,
+            executionState: history.executionState,
+          },
+        },
+      };
+    }),
+
+  clearHistoryOutputs: () => set(() => ({ historyOutputs: null })),
 
   resetWorkflow: () => set(initialState),
 

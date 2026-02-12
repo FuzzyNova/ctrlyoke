@@ -101,6 +101,11 @@ export const MESSAGE_TYPES = {
   REQUEST_COMPLETIONS: "requestCompletions", // Request autocomplete suggestions
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
+
+  // Output history messages
+  OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",  // Extension -> Webview: Load history for display
+  LOAD_RUN_HISTORY: "loadRunHistory",            // Webview -> Extension: Request specific run
+  CLEAR_RUN_HISTORY: "clearRunHistory",          // Webview -> Extension: Delete run history
 } as const;
 
 // ============================================================================

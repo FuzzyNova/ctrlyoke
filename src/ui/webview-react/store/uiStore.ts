@@ -40,6 +40,11 @@ interface UiState {
   // Output panel state
   selectedOutputStep: number | null; // Which step's output to show (null = current)
 
+  // Run history display state
+  isViewingHistory: boolean;   // true when showing a historical run (not live)
+  viewingRunIndex: number;     // 0 = most recent, 1 = second most recent, etc.
+  availableRuns: number;       // Total runs saved for this workflow
+
   // New workflow modal state
   newWorkflowModalOpen: boolean;
   templates: TemplateInfo[];
@@ -112,6 +117,10 @@ interface UiActions {
   ) => void;
   hideToast: () => void;
 
+  // Run history view
+  setHistoryView: (runIndex: number, availableRuns: number) => void;
+  clearHistoryView: () => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
@@ -133,6 +142,9 @@ const initialState: UiState = {
   isLoading: false,
   loadingMessage: null,
   toast: null,
+  isViewingHistory: false,
+  viewingRunIndex: 0,
+  availableRuns: 0,
 };
 
 // Fields to persist to localStorage
@@ -253,6 +265,16 @@ export const useUiStore = create<UiState & UiActions>()(
         }),
 
       hideToast: () => set({ toast: null }),
+
+      // ============================================================================
+      // RUN HISTORY VIEW
+      // ============================================================================
+
+      setHistoryView: (runIndex, availableRuns) =>
+        set({ isViewingHistory: true, viewingRunIndex: runIndex, availableRuns }),
+
+      clearHistoryView: () =>
+        set({ isViewingHistory: false, viewingRunIndex: 0 }),
 
       // ============================================================================
       // RESET

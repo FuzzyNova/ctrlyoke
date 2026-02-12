@@ -496,6 +496,22 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // OUTPUT_HISTORY_LOADED - Load a historical run for display
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
+    const { history, availableRuns, currentRunIndex } = message;
+    if (!history || availableRuns === 0) {
+      // History was cleared — reset to live view with no available runs
+      useWorkflowStore.getState().clearHistoryOutputs();
+      useUiStore.getState().clearHistoryView();
+      // Also clear availableRuns since all history was deleted
+      useUiStore.setState({ availableRuns: 0 });
+    } else {
+      useWorkflowStore.getState().loadHistoryRun(history, availableRuns, currentRunIndex);
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // QUEUE_SIZE_LIMIT_REACHED - Queue hit size limit
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.QUEUE_SIZE_LIMIT_REACHED] = (message) => {

@@ -24,6 +24,8 @@ import {
   CliOutputFormatter,
   DashboardOutput,
 } from "./cli/shared/CliOutputFormatter";
+import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
+import { StatusMessage } from "../types/WebviewMessageTypes";
 
 /**
  * Context provided by FlightPathManager for workflow execution.
@@ -47,6 +49,10 @@ export interface WorkflowContext {
     prompt: PromptItem,
     harnessOverride?: Harness
   ) => CopilotIntegration;
+  /** Path to current run's history file (empty string if history disabled) */
+  historyFilePath: string;
+  /** OutputHistoryManager for saving step outputs */
+  outputHistoryManager?: OutputHistoryManager;
 }
 
 /**
@@ -69,6 +75,9 @@ export class WorkflowExecutor {
   private pendingResponseText: string | null = null;
   private isWaitingForResponse: boolean = false;
 
+  // History tracking: accumulate status messages per step for history storage
+  private stepStatusMessages: Map<number, StatusMessage[]> = new Map();
+
   constructor(
     private readonly promptQueue: PromptQueue,
     private readonly promptFileParser: PromptFileParser,
@@ -89,6 +98,9 @@ export class WorkflowExecutor {
   ): Promise<void> {
     // Clear any pending response state from previous execution
     this.clearPendingState();
+
+    // Clear status message accumulator for this run
+    this.stepStatusMessages.clear();
 
     // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
@@ -290,8 +302,8 @@ export class WorkflowExecutor {
       // Calculate duration
       const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
 
-      // Update dashboard with CLI output (if integration provides it)
-      this.updateDashboardWithResponse(
+      // Update dashboard with CLI output (if integration provides it) and save to history
+      await this.updateDashboardWithResponse(
         context,
         integration,
         prompt,
@@ -367,6 +379,32 @@ export class WorkflowExecutor {
   }
 
   /**
+   * Send a status message to the dashboard and track it in stepStatusMessages.
+   * This dual-write ensures history captures the same messages shown live.
+   */
+  private trackStatusMessage(
+    context: WorkflowContext,
+    stepIndex: number,
+    message: string,
+    severity: string = STATUS_MESSAGE_SEVERITY.INFO
+  ): void {
+    context.dashboardProvider?.updateStatusMessage(
+      stepIndex,
+      message,
+      severity as any
+    );
+
+    // Track for history storage
+    const msgs = this.stepStatusMessages.get(stepIndex) ?? [];
+    msgs.push({
+      message,
+      severity: severity as any,
+      timestamp: Date.now(),
+    });
+    this.stepStatusMessages.set(stepIndex, msgs);
+  }
+
+  /**
    * Evaluate end condition for a prompt.
    * Delegates to EndConditionHandler for retry logic.
    *
@@ -386,12 +424,13 @@ export class WorkflowExecutor {
       Log.error(
         `End condition for prompt ${currentIndex + 1} is missing required 'script' property`
       );
+      this.trackStatusMessage(
+        context,
+        currentIndex,
+        `End condition failed: Missing script property`,
+        STATUS_MESSAGE_SEVERITY.ERROR
+      );
       if (context.dashboardProvider) {
-        context.dashboardProvider.updateStatusMessage(
-          currentIndex,
-          `End condition failed: Missing script property`,
-          STATUS_MESSAGE_SEVERITY.ERROR
-        );
         context.dashboardProvider.updateStepStatus(currentIndex, {
           state: STEP_STATUS.FAILED,
           message: "End condition missing required 'script' property",
@@ -402,15 +441,14 @@ export class WorkflowExecutor {
     }
 
     // Send status message: Evaluating end condition
-    if (context.dashboardProvider) {
-      const scriptName =
-        prompt.endCondition.script.split(/[\\/]/).pop() ||
-        prompt.endCondition.script;
-      context.dashboardProvider.updateStatusMessage(
-        currentIndex,
-        `Evaluating end condition: Running ${scriptName}`
-      );
-    }
+    const scriptName =
+      prompt.endCondition.script.split(/[\\/]/).pop() ||
+      prompt.endCondition.script;
+    this.trackStatusMessage(
+      context,
+      currentIndex,
+      `Evaluating end condition: Running ${scriptName}`
+    );
 
     // Evaluate the end condition
     const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
@@ -419,7 +457,7 @@ export class WorkflowExecutor {
     );
 
     // Send status message: End condition result
-    if (context.dashboardProvider) {
+    {
       const resultStatus = evaluationResult.success ? "Passed ✓" : "Failed ✗";
       const severity = evaluationResult.success
         ? STATUS_MESSAGE_SEVERITY.INFO
@@ -428,7 +466,8 @@ export class WorkflowExecutor {
       const output = evaluationResult.error
         ? evaluationResult.error
         : evaluationResult.stdout.trim();
-      context.dashboardProvider.updateStatusMessage(
+      this.trackStatusMessage(
+        context,
         currentIndex,
         `End condition ${resultStatus} - Output: ${output}`,
         severity
@@ -567,7 +606,7 @@ export class WorkflowExecutor {
       const retryDuration = ((Date.now() - retryStartTime) / 1000).toFixed(1);
 
       // Update dashboard with CLI output for retry (if integration supports it)
-      if (context.dashboardProvider) {
+      {
         // Get structured output if available (CLI integrations only)
         const parsedOutput = integration.getLastParsedOutput?.();
         let structured: DashboardOutput | undefined;
@@ -597,7 +636,7 @@ export class WorkflowExecutor {
 
         // Use unexpanded prompt to avoid flooding output with large attachments
         const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
-        context.dashboardProvider.updateCliOutput(currentIndex, {
+        const retryCliOutput = {
           prompt: retryPromptItem.prompt,
           response: retryResponseText,
           structured,
@@ -608,7 +647,27 @@ export class WorkflowExecutor {
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
           attemptIndex: retryAttemptIndex,
-        });
+        };
+
+        if (context.dashboardProvider) {
+          context.dashboardProvider.updateCliOutput(currentIndex, retryCliOutput);
+        }
+
+        // Save retry output to history
+        if (context.historyFilePath && context.outputHistoryManager) {
+          const statusMessages =
+            this.stepStatusMessages.get(currentIndex) ?? [];
+          await context.outputHistoryManager
+            .saveStepOutput(
+              context.historyFilePath,
+              currentIndex,
+              [retryCliOutput],
+              statusMessages
+            )
+            .catch((err) =>
+              Log.warn("Failed to save retry output to history:", err)
+            );
+        }
       }
 
       return retryResponseText;
@@ -834,19 +893,16 @@ export class WorkflowExecutor {
   /**
    * Update dashboard with response data from integration.
    * Includes CLI output, tokens, elapsed time, and streaming status.
+   * Also saves to history if enabled.
    */
-  private updateDashboardWithResponse(
+  private async updateDashboardWithResponse(
     context: WorkflowContext,
     integration: CopilotIntegration,
     prompt: PromptItem,
     responseText: string,
     duration: number,
     currentIndex: number
-  ): void {
-    if (!context.dashboardProvider) {
-      return;
-    }
-
+  ): Promise<void> {
     // Get structured output if available (CLI integrations only)
     const parsedOutput = integration.getLastParsedOutput?.();
     let structured: DashboardOutput | undefined;
@@ -875,8 +931,8 @@ export class WorkflowExecutor {
       ? integration.getLastCliCommand()
       : undefined;
 
-    // Use unexpanded prompt to avoid flooding output with large attachments
-    context.dashboardProvider.updateCliOutput(currentIndex, {
+    // Build the output object (shared between dashboard and history)
+    const cliOutputObj = {
       prompt: prompt.prompt,
       response: responseText,
       structured,
@@ -887,7 +943,25 @@ export class WorkflowExecutor {
       workingDirectory: context.workspaceFolderPath,
       timestampMs: Date.now(),
       attemptIndex: 0,
-    });
+    };
+
+    // Use unexpanded prompt to avoid flooding output with large attachments
+    if (context.dashboardProvider) {
+      context.dashboardProvider.updateCliOutput(currentIndex, cliOutputObj);
+    }
+
+    // Save to history (same data, same moment)
+    if (context.historyFilePath && context.outputHistoryManager) {
+      const statusMessages = this.stepStatusMessages.get(currentIndex) ?? [];
+      await context.outputHistoryManager
+        .saveStepOutput(
+          context.historyFilePath,
+          currentIndex,
+          [cliOutputObj],
+          statusMessages
+        )
+        .catch((err) => Log.warn("Failed to save step output to history:", err));
+    }
   }
 
   /**

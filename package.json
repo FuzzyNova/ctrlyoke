@@ -954,6 +954,19 @@
           "default": true,
           "description": "[Session Management] Automatically load the most recent workflow session on startup",
           "markdownDescription": "When enabled (default), FlightPath automatically loads the most recent workflow from `.flightpath/.queue/` when VS Code starts. This enables seamless resume after crashes or restarts. Disable if you prefer to manually select workflows."
+        },
+        "flightpath.saveOutputHistory": {
+          "order": 800,
+          "type": "boolean",
+          "default": true,
+          "description": "[Output History] Save CLI output history for each workflow run. History is stored in .flightpath/.history/ and excluded from version control."
+        },
+        "flightpath.maxHistoryRuns": {
+          "order": 801,
+          "type": "number",
+          "default": -1,
+          "minimum": -1,
+          "description": "[Output History] Maximum number of runs to keep per workflow. Older runs are automatically deleted. Use -1 or 0 to keep all runs (default)."
         }
       }
     },

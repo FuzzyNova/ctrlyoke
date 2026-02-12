@@ -39,6 +39,7 @@ import { FlightPathManager } from "../flightpath/FlightPathManager";
 import { Harness } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
+import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 
 const execAsync = promisify(exec);
 
@@ -62,6 +63,7 @@ interface HarnessStatus {
 export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private flightPathManager?: FlightPathManager;
+  private outputHistoryManager?: OutputHistoryManager;
   private templateManager: TemplateManager;
   private configChangeDisposable?: vscode.Disposable;
   private modelsLoadedDisposable?: vscode.Disposable;
@@ -386,6 +388,17 @@ window.vscodeApi = acquireVsCodeApi();
           break;
 
         // ============================================================================
+        // Output History Messages
+        // ============================================================================
+        case MESSAGE_TYPES.LOAD_RUN_HISTORY:
+          await this.handleLoadRunHistory(message.runIndex);
+          break;
+
+        case MESSAGE_TYPES.CLEAR_RUN_HISTORY:
+          await this.handleClearRunHistory();
+          break;
+
+        // ============================================================================
         // Dashboard Messages - New Workflow Modal
         // ============================================================================
         case MESSAGE_TYPES.NEW_WORKFLOW:
@@ -690,6 +703,57 @@ window.vscodeApi = acquireVsCodeApi();
    */
   public setFlightPathManager(manager: any): void {
     this.flightPathManager = manager;
+  }
+
+  /**
+   * Set OutputHistoryManager reference (called after construction)
+   */
+  public setOutputHistoryManager(manager: OutputHistoryManager): void {
+    this.outputHistoryManager = manager;
+  }
+
+  /**
+   * Load and send the most recent output history for a workflow to the webview.
+   * Called after session restore when autoLoadRecentSession is enabled.
+   *
+   * @param workingFilePath Absolute path to the working file
+   * @param workingFile The parsed working file content
+   */
+  public async loadOutputHistoryForWorkflow(
+    workingFilePath: string,
+    workingFile: { outputHistory?: string[] }
+  ): Promise<void> {
+    if (!this.outputHistoryManager) {
+      return;
+    }
+
+    if (
+      !workingFile.outputHistory?.length ||
+      !ConfigurationUtils.shouldAutoLoadRecentSession()
+    ) {
+      return;
+    }
+
+    try {
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const mostRecentFileName = workingFile.outputHistory[0];
+      const historyPath = this.outputHistoryManager.getHistoryFilePath(
+        workflowId,
+        mostRecentFileName
+      );
+
+      const history = await this.outputHistoryManager.loadHistory(historyPath);
+
+      this.postMessage({
+        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+        history,
+        availableRuns: workingFile.outputHistory.length,
+        currentRunIndex: 0,
+      });
+    } catch (error) {
+      Log.warn("Failed to load output history for workflow:", error);
+    }
   }
 
   /**
@@ -1411,6 +1475,7 @@ window.vscodeApi = acquireVsCodeApi();
       }
 
       const queueDir = path.join(workspaceRoot, ".flightpath", ".queue");
+      const historyDir = path.join(workspaceRoot, ".flightpath", ".history");
 
       try {
         const files = await fs.readdir(queueDir);
@@ -1420,6 +1485,13 @@ window.vscodeApi = acquireVsCodeApi();
 
         for (const file of workflowFiles) {
           await fs.unlink(path.join(queueDir, file));
+        }
+
+        // Also delete the entire .history directory (all workflow output history)
+        try {
+          await fs.rm(historyDir, { recursive: true, force: true });
+        } catch (historyError) {
+          Log.warn("Failed to delete history directory:", historyError);
         }
 
         vscode.window.showInformationMessage(
@@ -1439,6 +1511,126 @@ window.vscodeApi = acquireVsCodeApi();
       }
     } catch (error) {
       Log.error("Failed to clear workflow history:", error);
+    }
+  }
+
+  /**
+   * Handle LOAD_RUN_HISTORY: load a specific historical run and send to webview.
+   * runIndex 0 = most recent, 1 = second most recent, etc.
+   */
+  private async handleLoadRunHistory(runIndex: number): Promise<void> {
+    if (!this.outputHistoryManager) {
+      return;
+    }
+
+    try {
+      const workingFilePath =
+        this.flightPathManager?.getQueueState().workingFilePath ?? "";
+      if (!workingFilePath) {
+        return;
+      }
+
+      const workingFile =
+        await this.flightPathManager?.readWorkingFile(workingFilePath);
+      if (!workingFile?.outputHistory?.length) {
+        return;
+      }
+
+      const fileName = workingFile.outputHistory[runIndex];
+      if (!fileName) {
+        Log.warn(`No history file at run index ${runIndex}`);
+        return;
+      }
+
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const historyPath = this.outputHistoryManager.getHistoryFilePath(
+        workflowId,
+        fileName
+      );
+
+      const history = await this.outputHistoryManager.loadHistory(historyPath);
+
+      this.postMessage({
+        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+        history,
+        availableRuns: workingFile.outputHistory.length,
+        currentRunIndex: runIndex,
+      });
+    } catch (error) {
+      Log.error("Failed to load run history:", error);
+    }
+  }
+
+  /**
+   * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
+   * Clears outputHistory from the working file and notifies the webview.
+   */
+  private async handleClearRunHistory(): Promise<void> {
+    if (!this.outputHistoryManager) {
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      "Delete all output history for this workflow?",
+      { modal: true },
+      "Delete All"
+    );
+
+    if (confirm !== "Delete All") {
+      return;
+    }
+
+    try {
+      const workingFilePath =
+        this.flightPathManager?.getQueueState().workingFilePath ?? "";
+      if (!workingFilePath) {
+        return;
+      }
+
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      // Build path to workflow's history directory: .history/<workflow-id>/
+      const workflowHistoryDir = path.join(
+        this.outputHistoryManager.historyBaseDir,
+        workflowId
+      );
+
+      // Delete the history directory for this workflow
+      try {
+        await fs.rm(workflowHistoryDir, { recursive: true, force: true });
+      } catch (error) {
+        Log.warn("Failed to delete history directory:", error);
+      }
+
+      // Clear outputHistory from working file
+      try {
+        const content = await fs.readFile(workingFilePath, "utf-8");
+        const workingFile = JSON.parse(content);
+        workingFile.outputHistory = [];
+        await fs.writeFile(
+          workingFilePath,
+          JSON.stringify(workingFile, null, 2),
+          "utf-8"
+        );
+      } catch (error) {
+        Log.warn("Failed to clear working file outputHistory:", error);
+      }
+
+      // Notify webview that history was cleared
+      this.postMessage({
+        type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
+        history: null,
+        availableRuns: 0,
+        currentRunIndex: 0,
+      });
+
+      vscode.window.showInformationMessage("Output history cleared.");
+    } catch (error) {
+      Log.error("Failed to clear run history:", error);
+      vscode.window.showErrorMessage(
+        `Failed to clear run history: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

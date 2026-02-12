@@ -174,6 +174,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Set manager reference in webview provider (for getting current state)
     webviewProvider.setFlightPathManager(flightPathManager);
 
+    // Share OutputHistoryManager with webview provider (single instance)
+    webviewProvider.setOutputHistoryManager(flightPathManager.getOutputHistoryManager());
+
     // Fire-and-forget: don't block activate() on initialization.
     // This lets VS Code call resolveWebviewView() immediately so the
     // dashboard renders in <1s instead of waiting ~8s for CLI checks.

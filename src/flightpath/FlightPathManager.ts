@@ -40,6 +40,7 @@ import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
 import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
+import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 
 export class FlightPathManager {
   private promptFileParser: PromptFileParser;
@@ -68,6 +69,7 @@ export class FlightPathManager {
   private templateImporter: TemplateImporter;
   private workflowCommandHandler: WorkflowCommandHandler;
   private workspaceSessionManager: WorkspaceSessionManager;
+  private outputHistoryManager: OutputHistoryManager;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -126,6 +128,11 @@ export class FlightPathManager {
     this.workspaceSessionManager = new WorkspaceSessionManager(
       this.promptFileParser
     );
+
+    // Initialize OutputHistoryManager with workspace path
+    const workspaceFolderPath =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+    this.outputHistoryManager = new OutputHistoryManager(workspaceFolderPath);
 
     // Listen to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
@@ -729,6 +736,18 @@ export class FlightPathManager {
 
     this.startPending = true;
 
+    // Initialize history run (returns "" if history is disabled or no working file)
+    const workingFilePath = this.promptQueue.getState().workingFilePath ?? "";
+    const workflowId =
+      this.outputHistoryManager.extractWorkflowId(workingFilePath);
+    let historyFilePath = "";
+    if (workingFilePath) {
+      historyFilePath = await this.outputHistoryManager.initializeRun(
+        workflowId,
+        workingFilePath
+      );
+    }
+
     try {
       const activeIntegration = integration || this.getDefaultIntegration();
 
@@ -743,6 +762,8 @@ export class FlightPathManager {
         shouldShowCliCommand: this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
+        historyFilePath,
+        outputHistoryManager: this.outputHistoryManager,
         getIntegrationForPrompt: (
           prompt: PromptItem,
           harnessOverride?: Harness
@@ -769,6 +790,15 @@ export class FlightPathManager {
       // Clear active integration reference after execution
       this.activeIntegration = undefined;
     } finally {
+      // Finalize history run with final execution state and step count
+      if (historyFilePath) {
+        const finalState = this.promptQueue.getState();
+        const runStepCount = this.promptQueue.getProgress().total;
+        await this.outputHistoryManager
+          .finalizeRun(historyFilePath, finalState.status as any, runStepCount)
+          .catch((err) => Log.warn("Failed to finalize history run:", err));
+      }
+
       // Always clear the pending flag, even if execution throws
       this.startPending = false;
     }
@@ -994,6 +1024,13 @@ export class FlightPathManager {
    */
   async readWorkingFile(workingFilePath: string): Promise<any> {
     return this.promptQueue.readWorkingFile(workingFilePath);
+  }
+
+  /**
+   * Get the OutputHistoryManager instance (for sharing with FlightPathWebviewProvider)
+   */
+  getOutputHistoryManager(): OutputHistoryManager {
+    return this.outputHistoryManager;
   }
 
   /**

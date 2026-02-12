@@ -33,6 +33,9 @@ export const PATH_CONSTANTS = {
 
   /** Logs directory name (subdirectory of FLIGHTPATH_DIR) */
   LOGS_DIR: "logs",
+
+  /** History directory name (subdirectory of FLIGHTPATH_DIR) */
+  HISTORY_DIR: ".history",
 } as const;
 
 /**
@@ -526,4 +529,23 @@ export const ConfigurationUtils = {
   async setDefaultWorkflowTemplate(templateId: string): Promise<void> {
     await this.updateSetting("defaultWorkflowTemplate", templateId);
   },
+
+  // ============================================================
+  // OUTPUT HISTORY SETTINGS
+  // ============================================================
+
+  /**
+   * Check if output history saving is enabled
+   */
+  isSaveOutputHistoryEnabled(): boolean {
+    return getConfig().get<boolean>("saveOutputHistory", true)!;
+  },
+
+  /**
+   * Get the maximum number of history runs to retain per workflow
+   */
+  getMaxHistoryRuns(): number {
+    return getConfig().get<number>("maxHistoryRuns", -1)!;
+  },
+
 };

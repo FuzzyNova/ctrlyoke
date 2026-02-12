@@ -3,10 +3,10 @@ import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
-import { PanelBar } from "../shared";
+import { PanelBar, RunSelector } from "../shared";
 import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
 import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
 
@@ -41,20 +41,46 @@ export const OutputSection: React.FC = () => {
     cliOutputs,
     statusMessages,
     streamingChunks,
+    historyOutputs,
   } = useWorkflowStore();
-  const { outputCollapsed, toggleOutputCollapse } = useUiStore();
+  const {
+    outputCollapsed,
+    toggleOutputCollapse,
+    isViewingHistory,
+    viewingRunIndex,
+    availableRuns,
+  } = useUiStore();
   const outputRef = useRef<HTMLDivElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
+
+  // Determine which steps data source to use: history snapshot or live outputs
+  const stepsToRender = useMemo(() => {
+    if (isViewingHistory && historyOutputs) {
+      // History mode: render all steps from the historical run, independent of current workflow
+      return Array.from({ length: historyOutputs.stepCount }, (_, i) => ({
+        stepIndex: i,
+        cliOutputs: historyOutputs.steps[i]?.cliOutputs ?? [],
+        statusMessages: historyOutputs.steps[i]?.statusMessages ?? [],
+      }));
+    }
+    // Live mode: render steps from current workflow
+    return Array.from({ length: totalSteps }, (_, i) => ({
+      stepIndex: i,
+      cliOutputs: cliOutputs[i] ?? [],
+      statusMessages: statusMessages[i] ?? [],
+    }));
+  }, [isViewingHistory, historyOutputs, totalSteps, cliOutputs, statusMessages]);
 
   // Build chronologically sorted list of all messages
   const allMessages = useMemo((): OutputMessage[] => {
     const messages: OutputMessage[] = [];
 
-    // Iterate through all steps
-    for (let stepIndex = 0; stepIndex < totalSteps; stepIndex++) {
+    for (const step of stepsToRender) {
+      const { stepIndex } = step;
+
       // Add status messages
-      const stepStatusMessages = statusMessages[stepIndex] || [];
+      const stepStatusMessages = step.statusMessages || [];
       stepStatusMessages.forEach((statusMsg, index) => {
         messages.push({
           type: "status",
@@ -70,7 +96,7 @@ export const OutputSection: React.FC = () => {
       });
 
       // Add CLI outputs - use explicit attemptIndex from data, not array position
-      const stepOutputs = cliOutputs[stepIndex] || [];
+      const stepOutputs = step.cliOutputs || [];
       stepOutputs.forEach((output) => {
         const cliOutput = output as CliOutputItem & {
           timestampMs?: number;
@@ -93,7 +119,7 @@ export const OutputSection: React.FC = () => {
 
     // Sort by timestamp
     return messages.sort((a, b) => a.timestamp - b.timestamp);
-  }, [cliOutputs, statusMessages, totalSteps]);
+  }, [stepsToRender]);
 
   // Smart scroll: detect user scrolling away from bottom
   const handleScroll = useCallback(() => {
@@ -184,6 +210,27 @@ export const OutputSection: React.FC = () => {
 
         {/* Right: controls */}
         <div className="ml-auto flex items-center gap-2">
+          {availableRuns > 0 && (
+            <RunSelector
+              availableRuns={availableRuns}
+              currentRunIndex={viewingRunIndex}
+              isViewingHistory={isViewingHistory}
+              isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
+              onSelectRun={(runIndex) => {
+                const vscode = getVsCodeApi();
+                if (vscode) {
+                  vscode.postMessage({
+                    type: MESSAGE_TYPES.LOAD_RUN_HISTORY,
+                    runIndex,
+                  });
+                }
+              }}
+              onBackToLive={() => {
+                useWorkflowStore.getState().clearHistoryOutputs();
+                useUiStore.getState().clearHistoryView();
+              }}
+            />
+          )}
           <button
             className="icon-btn py-0.5 px-2"
             id="export-btn"
@@ -203,6 +250,30 @@ export const OutputSection: React.FC = () => {
         className="font-mono text-[11px] min-h-0 p-0 flex-1 overflow-y-auto"
         onScroll={handleScroll}
       >
+        {/* History banner: shown when viewing a historical run */}
+        {isViewingHistory && historyOutputs && (
+          <div className="px-3 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-editor-background)] border-b border-[var(--vscode-widget-border)] flex items-center justify-between flex-shrink-0">
+            <span>
+              Run {historyOutputs.runMetadata.runId}{" "}
+              &middot;{" "}
+              {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
+              {historyOutputs.runMetadata.completedAt ? " \u2713" : " (incomplete)"}
+            </span>
+            {executionState === EXECUTION_STATES.RUNNING && (
+              <button
+                type="button"
+                onClick={() => {
+                  useWorkflowStore.getState().clearHistoryOutputs();
+                  useUiStore.getState().clearHistoryView();
+                }}
+                className="text-[var(--vscode-textLink-foreground)] hover:underline focus:outline-none"
+              >
+                Back to Live{" "}
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--vscode-charts-green)] animate-pulse align-middle" />
+              </button>
+            )}
+          </div>
+        )}
         {!hasOutput ? (
           <p className="text-center text-[var(--fg-secondary)] italic p-[var(--spacing-lg)]">
             Output will appear here during execution
