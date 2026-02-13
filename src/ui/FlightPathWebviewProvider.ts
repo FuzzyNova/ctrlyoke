@@ -1043,7 +1043,7 @@ window.vscodeApi = acquireVsCodeApi();
   // Private Methods - Message Handlers (Dashboard)
   // ============================================================================
 
-  private handleClearWorkflow(): void {
+  public handleClearWorkflow(): void {
     if (!this.flightPathManager) {
       Log.error("FlightPathManager not initialized");
       return;

@@ -600,6 +600,14 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     }
   );
 
+  // Clear Workflow command (keyboard shortcut: Ctrl+Shift+N when FlightPath panel focused)
+  const clearWorkflowCommand = vscode.commands.registerCommand(
+    "flightpath.clearWorkflow",
+    () => {
+      webviewProvider.handleClearWorkflow();
+    }
+  );
+
   // Open File with Selection command (for clickable links in prompt files)
   const openFileWithSelectionCommand = vscode.commands.registerCommand(
     "flightpath.openFileWithSelection",
@@ -655,7 +663,8 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     runCommand,
     showOutputPanelCommand,
     createDraftPromptCommand,
-    openFileWithSelectionCommand
+    openFileWithSelectionCommand,
+    clearWorkflowCommand
   );
 
   // Register development commands (only in dev mode)

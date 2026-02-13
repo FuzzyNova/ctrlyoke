@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback } from "react";
 import { SplitButton, type SplitButtonOption } from "../shared/SplitButton";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
@@ -12,11 +12,17 @@ interface WorkflowControlsProps {
 /**
  * WorkflowControls - Split button for workflow actions
  *
- * Main button: Create new blank workflow (Ctrl+Shift+N)
+ * Main button: Create new blank workflow
  * Dropdown options:
- *   - From Template (Ctrl+Shift+T)
- *   - Load from File (Ctrl+Shift+L)
- *   - Queue File (Ctrl+Shift+Q) - only when queue exists
+ *   - From Template
+ *   - Load from File
+ *   - Queue File - only when queue exists
+ *
+ * Keyboard shortcuts are registered as VS Code keybindings (active when this panel is focused):
+ *   - Ctrl+Shift+N: New blank workflow
+ *   - Ctrl+Shift+T: From template
+ *   - Ctrl+Shift+L: Load from file
+ *   - Ctrl+Shift+Q: Queue file
  */
 export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   className = "",
@@ -52,44 +58,6 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
     if (!hasQueue || isExecuting) return;
     vscode.postMessage({ type: MESSAGE_TYPES.APPEND_FILE });
   }, [vscode, hasQueue, isExecuting]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only trigger if Ctrl+Shift is pressed (or Cmd+Shift on Mac)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-        switch (e.key.toUpperCase()) {
-          case "N":
-            e.preventDefault();
-            handleNewWorkflow();
-            break;
-          case "T":
-            e.preventDefault();
-            handleFromTemplate();
-            break;
-          case "L":
-            e.preventDefault();
-            handleLoadFile();
-            break;
-          case "Q":
-            e.preventDefault();
-            if (hasQueue) {
-              handleQueueFile();
-            }
-            break;
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [
-    handleNewWorkflow,
-    handleFromTemplate,
-    handleLoadFile,
-    handleQueueFile,
-    hasQueue,
-  ]);
 
   // Build dropdown options
   const dropdownOptions: SplitButtonOption[] = [
@@ -132,7 +100,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
         mainTitle={
           isExecuting
             ? "Cannot clear workflow while running (stop first)"
-            : "Clear current workflow and start blank (Ctrl+Shift+N)"
+            : "Clear current workflow and start blank"
         }
         dropdownTitle="More workflow actions"
         dropdownAriaLabel="Open workflow menu"

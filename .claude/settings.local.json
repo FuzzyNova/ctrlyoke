@@ -43,7 +43,8 @@
       "WebFetch(domain:mcpmarket.com)",
       "WebFetch(domain:blog.skinnyandbald.com)",
       "Bash(find:*)",
-      "WebFetch(domain:github.blog)"
+      "WebFetch(domain:github.blog)",
+      "WebFetch(domain:www.eliostruyf.com)"
     ],
     "deny": [],
     "ask": []

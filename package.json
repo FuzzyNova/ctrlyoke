@@ -228,6 +228,44 @@
         "title": "Export Discovered Models",
         "category": "FlightPath Test",
         "icon": "$(export)"
+      },
+      {
+        "command": "flightpath.clearWorkflow",
+        "title": "New Blank Workflow",
+        "category": "FlightPath",
+        "icon": "$(add)"
+      },
+      {
+        "command": "flightpath.appendFromDashboard",
+        "title": "Queue Prompt File",
+        "category": "FlightPath",
+        "icon": "$(insert)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "flightpath.clearWorkflow",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n",
+        "when": "focusedView == 'flightpath.dashboard'"
+      },
+      {
+        "command": "flightpath.newWorkflow",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "focusedView == 'flightpath.dashboard'"
+      },
+      {
+        "command": "flightpath.selectPromptFile",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "when": "focusedView == 'flightpath.dashboard'"
+      },
+      {
+        "command": "flightpath.appendFromDashboard",
+        "key": "ctrl+shift+q",
+        "mac": "cmd+shift+q",
+        "when": "focusedView == 'flightpath.dashboard'"
       }
     ],
     "menus": {
