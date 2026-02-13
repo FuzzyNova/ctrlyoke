@@ -4,6 +4,12 @@ import {
   UniversalCliOutput,
   CliEvent,
   CLI_EVENT_TYPES,
+  ToolCall,
+  FileWriteData,
+  FileEditData,
+  FileReadData,
+  BashCommandData,
+  FileDeleteData,
 } from "../../types/CliOutputTypes";
 import { Log } from "../../utils/Log";
 
@@ -54,7 +60,11 @@ export interface ChatResponseItem {
     | "thinking"
     | "toolInvocationSerialized"
     | "prepareToolInvocation"
-    | "mcpServersStarting";
+    | "mcpServersStarting"
+    | "inlineReference"
+    | "textEditGroup"
+    | "codeblockUri"
+    | "undoStop";
 
   // Text response or thinking content
   value?: string | string[];
@@ -74,6 +84,9 @@ export interface ChatResponseItem {
   pastTenseMessage?: { value: string };
   isComplete?: boolean;
 
+  // inlineReference: file/symbol chip embedded in text stream
+  inlineReference?: { fsPath?: string; path?: string; external?: string };
+
   // Other fields
   supportThemeIcons?: boolean;
   supportHtml?: boolean;
@@ -92,8 +105,113 @@ export interface ChatResponseItem {
  */
 export class ChatSessionParser {
   /**
+   * Parse a session file in either JSON (.json) or JSONL (.jsonl) format.
+   *
+   * JSONL format (VS Code switched ~Feb 2026) is a delta/patch log:
+   *   kind 0  — base snapshot: {"kind":0,"v":{...session without result/response...}}
+   *   kind 1  — set:    {"kind":1,"k":["requests",0,"result"],"v":{...}}
+   *   kind 2  — append: {"kind":2,"k":["requests",0,"response"],"v":[...items...],"i":N}
+   *
+   * All lines are replayed in order to reconstruct the full session state.
+   */
+  /**
+   * Parse a session file in either JSON (.json) or JSONL (.jsonl) format.
+   * Static so ChatSessionMonitor can reuse without duplicating JSONL logic.
+   */
+  static parseSessionFile(filePath: string): ChatSessionFile | null {
+    try {
+      const content = fs.readFileSync(filePath, "utf-8");
+      if (filePath.endsWith(".jsonl")) {
+        return ChatSessionParser.replayJsonl(content);
+      }
+      return JSON.parse(content) as ChatSessionFile;
+    } catch {
+      return null;
+    }
+  }
+
+  private static replayJsonl(content: string): ChatSessionFile | null {
+    const lines = content.split("\n").filter((l) => l.trim());
+    if (!lines.length) {
+      return null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const first = JSON.parse(lines[0]) as { kind: number; v: any };
+    if (first.kind !== 0 || !first.v) {
+      return null;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state: any = first.v;
+    if (!state.requests) {
+      state.requests = [];
+    }
+    for (const req of state.requests) {
+      if (!req.response) {
+        req.response = [];
+      }
+    }
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) {
+        continue;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const patch = JSON.parse(lines[i]) as { kind: number; k: (string | number)[]; v: any };
+      if (patch.kind === 1) {
+        ChatSessionParser.jsonlSetAtPath(state, patch.k, patch.v);
+      } else if (patch.kind === 2) {
+        ChatSessionParser.jsonlAppendAtPath(state, patch.k, patch.v);
+      }
+    }
+    return state as ChatSessionFile;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private static jsonlSetAtPath(obj: any, keyPath: (string | number)[], value: unknown): void {
+    if (!keyPath?.length) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let current: any = obj;
+    for (let i = 0; i < keyPath.length - 1; i++) {
+      const key = keyPath[i];
+      if (current[key] == null) {
+        current[key] = typeof keyPath[i + 1] === "number" ? [] : {};
+      }
+      current = current[key];
+    }
+    current[keyPath[keyPath.length - 1]] = value;
+  }
+
+  private static jsonlAppendAtPath(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    obj: any,
+    keyPath: (string | number)[],
+    items: unknown[]
+  ): void {
+    if (!keyPath?.length || !Array.isArray(items)) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let current: any = obj;
+    for (let i = 0; i < keyPath.length; i++) {
+      const key = keyPath[i];
+      if (i === keyPath.length - 1) {
+        if (!Array.isArray(current[key])) {
+          current[key] = [];
+        }
+        current[key].push(...items);
+      } else {
+        if (current[key] == null) {
+          current[key] = typeof keyPath[i + 1] === "number" ? [] : {};
+        }
+        current = current[key];
+      }
+    }
+  }
+
+  /**
    * Extract response from session file
-   * @param sessionFilePath Path to session JSON file
+   * @param sessionFilePath Path to session JSON file or JSONL file
    * @param requestIndex Index of request (-1 = last request)
    * @returns UniversalCliOutput with events and metadata
    */
@@ -102,13 +220,12 @@ export class ChatSessionParser {
     requestIndex: number = -1
   ): UniversalCliOutput {
     try {
-      // Read and parse session file
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session: ChatSessionFile = JSON.parse(content);
+      // Read and parse session file (supports .json and .jsonl)
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
 
-      if (!session.requests || session.requests.length === 0) {
+      if (!session || !session.requests || session.requests.length === 0) {
         Log.warn("Session file has no requests");
-        return this.createEmptyOutput(session.sessionId);
+        return this.createEmptyOutput(session?.sessionId ?? "unknown");
       }
 
       // Get target request
@@ -175,17 +292,34 @@ export class ChatSessionParser {
             id: item.toolCallId || "",
           },
         });
-      } else if (item.kind === "prepareToolInvocation") {
-        // Tool preparation - informational only, not included as event
-        Log.debug(`Tool preparation: ${item.toolName}`, "ChatSessionParser");
-      } else if (item.kind === "mcpServersStarting") {
-        // MCP server startup - informational only
-        Log.debug("MCP servers starting", "ChatSessionParser");
+      } else if (item.kind === "inlineReference") {
+        // File/symbol chip embedded inline in text — emit the filename as backtick text
+        const ref = item.inlineReference;
+        const fsPath = ref?.fsPath || ref?.path || "";
+        const fileName = fsPath.replace(/.*[/\\]/, ""); // basename
+        if (fileName) {
+          events.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: { text: `\`${fileName}\`` },
+          });
+        }
+      } else if (
+        item.kind === "prepareToolInvocation" ||
+        item.kind === "mcpServersStarting" ||
+        item.kind === "textEditGroup" ||
+        item.kind === "codeblockUri" ||
+        item.kind === "undoStop"
+      ) {
+        // VS Code UI structural items — informational only, not included as events
+        Log.debug(`Skipping structural item: ${item.kind}`, "ChatSessionParser");
       } else if (!item.kind && item.value) {
         // Text response (no "kind" field means it's a text response)
         const textContent =
           typeof item.value === "string" ? item.value : item.value.join("\n");
-        if (textContent.trim()) {
+        // Filter VS Code code-fence artifacts: text items that are only ``` markers
+        // These bracket the interactive diff view in the chat UI and are meaningless in FlightPath output
+        if (textContent.trim() && !/^[`\s]+$/.test(textContent.trim())) {
           events.push({
             type: CLI_EVENT_TYPES.TEXT,
             timestamp,
@@ -195,28 +329,35 @@ export class ChatSessionParser {
       }
     }
 
-    // Extract tool call arguments from metadata
+    // Extract tool call arguments from metadata.
+    // Matching strategy:
+    //   - By ID: response item toolCallId "call_abc" vs round id "call_abc__vscode-NNN" → use startsWith
+    //   - By name: response item toolId "copilot_createFile" vs round name "create_file" → use normalization map
     if (request.result.metadata?.toolCallRounds) {
       for (const round of request.result.metadata.toolCallRounds) {
         for (const toolCall of round.toolCalls) {
-          // Find corresponding tool call event and populate arguments
+          const canonicalName = toolCall.name;
           const toolEvent = events.find(
             (e) =>
               e.type === CLI_EVENT_TYPES.TOOL_CALL &&
               e.data &&
               "name" in e.data &&
-              (e.data.name === toolCall.name ||
-                ("id" in e.data && e.data.id === toolCall.id))
+              (ChatSessionParser.normalizeCopilotToolName(e.data.name as string) === canonicalName ||
+                ("id" in e.data &&
+                  !!e.data.id &&
+                  toolCall.id.startsWith(e.data.id as string)))
           );
 
           if (toolEvent && "parameters" in toolEvent.data) {
             try {
-              toolEvent.data.parameters = JSON.parse(
+              // Set canonical name so upgrade pass can match correctly
+              (toolEvent.data as ToolCall).name = canonicalName;
+              (toolEvent.data as ToolCall).parameters = JSON.parse(
                 toolCall.arguments || "{}"
               );
             } catch {
               Log.warn(
-                `Failed to parse tool arguments for ${toolCall.name}`,
+                `Failed to parse tool arguments for ${canonicalName}`,
                 "ChatSessionParser"
               );
             }
@@ -225,9 +366,12 @@ export class ChatSessionParser {
       }
     }
 
+    // Upgrade generic TOOL_CALL events to specific typed events (FILE_EDIT, FILE_WRITE, etc.)
+    const upgradedEvents = events.flatMap((e) => this.upgradeToolCallEvent(e));
+
     // Add error message as text event if present
     if (request.result.errorDetails) {
-      events.push({
+      upgradedEvents.push({
         type: CLI_EVENT_TYPES.TEXT,
         timestamp,
         data: {
@@ -237,7 +381,7 @@ export class ChatSessionParser {
     }
 
     return {
-      events,
+      events: upgradedEvents,
       metadata: {
         sessionId,
         model: this.normalizeModelId(request.modelId),
@@ -245,6 +389,132 @@ export class ChatSessionParser {
         harness: "copilot-chat",
       },
     };
+  }
+
+  /**
+   * Map Copilot Chat display tool IDs (e.g. "copilot_createFile") to canonical
+   * snake_case names used in toolCallRounds (e.g. "create_file").
+   * Falls back to the original name if no mapping found.
+   */
+  private static readonly COPILOT_TOOL_ID_MAP: Record<string, string> = {
+    copilot_createFile: "create_file",
+    copilot_replaceString: "replace_string_in_file",
+    copilot_multiReplaceString: "multi_replace_string_in_file",
+    copilot_readFile: "read_file",
+    copilot_deleteFile: "delete_file",
+    copilot_renameFile: "rename_file",
+    copilot_moveFile: "move_file",
+  };
+
+  private static normalizeCopilotToolName(name: string): string {
+    return ChatSessionParser.COPILOT_TOOL_ID_MAP[name] ?? name;
+  }
+
+  /**
+   * Upgrade a generic TOOL_CALL event to a specific typed event based on canonical tool name.
+   * Multi-file tools (multi_replace_string_in_file) expand into multiple FILE_EDIT events.
+   * Returns array of replacement events (usually length 1, may be 0 or >1).
+   */
+  private upgradeToolCallEvent(event: CliEvent): CliEvent[] {
+    if (event.type !== CLI_EVENT_TYPES.TOOL_CALL) {
+      return [event];
+    }
+    const tc = event.data as ToolCall;
+    const name = tc.name;
+    const params = tc.parameters;
+    const ts = event.timestamp;
+
+    if (name === "create_file") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp: ts,
+          data: {
+            path: (params.filePath as string) || "",
+            content: (params.content as string) || "",
+            status: "completed",
+          } satisfies FileWriteData,
+        },
+      ];
+    }
+
+    if (name === "replace_string_in_file") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp: ts,
+          data: {
+            path: (params.filePath as string) || "",
+            oldContent: params.oldString as string | undefined,
+            newContent: params.newString as string | undefined,
+            status: "completed",
+          } satisfies FileEditData,
+        },
+      ];
+    }
+
+    if (name === "multi_replace_string_in_file") {
+      const replacements = params.replacements as Array<{
+        filePath: string;
+        oldString?: string;
+        newString?: string;
+      }> | undefined;
+      if (!replacements?.length) {
+        return [event];
+      }
+      return replacements.map((r) => ({
+        type: CLI_EVENT_TYPES.FILE_EDIT,
+        timestamp: ts,
+        data: {
+          path: r.filePath || "",
+          oldContent: r.oldString,
+          newContent: r.newString,
+          status: "completed",
+        } satisfies FileEditData,
+      }));
+    }
+
+    if (name === "run_in_terminal") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp: ts,
+          data: {
+            command: (params.command as string) || "",
+            status: "completed",
+          } satisfies BashCommandData,
+        },
+      ];
+    }
+
+    if (name === "read_file") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp: ts,
+          data: {
+            path: (params.filePath as string) || "",
+            status: "completed",
+          } satisfies FileReadData,
+        },
+      ];
+    }
+
+    if (name === "delete_file") {
+      return [
+        {
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          timestamp: ts,
+          data: {
+            path: (params.filePath as string) || "",
+            success: true,
+          } satisfies FileDeleteData,
+        },
+      ];
+    }
+
+    // Unknown tool — keep as generic TOOL_CALL
+    return [event];
   }
 
   /**
@@ -277,11 +547,12 @@ export class ChatSessionParser {
 
   /**
    * Extract session ID from session file path
-   * @param sessionFilePath Path like ".../abc-123-def.json"
+   * @param sessionFilePath Path like ".../abc-123-def.json" or ".../abc-123-def.jsonl"
    * @returns Session ID (filename without extension)
    */
   extractSessionId(sessionFilePath: string): string {
-    return path.basename(sessionFilePath, ".json");
+    const base = path.basename(sessionFilePath);
+    return base.replace(/\.jsonl?$/, "");
   }
 
   /**
@@ -308,10 +579,9 @@ export class ChatSessionParser {
     requestIndex: number = -1
   ): boolean {
     try {
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session: ChatSessionFile = JSON.parse(content);
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
 
-      if (!session.requests || session.requests.length === 0) {
+      if (!session?.requests || session.requests.length === 0) {
         return false;
       }
 
@@ -334,9 +604,8 @@ export class ChatSessionParser {
    */
   getRequestCount(sessionFilePath: string): number {
     try {
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session: ChatSessionFile = JSON.parse(content);
-      return session.requests?.length || 0;
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
+      return session?.requests?.length ?? 0;
     } catch {
       return 0;
     }

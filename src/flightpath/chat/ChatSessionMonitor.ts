@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../utils/Log";
+import { ChatSessionParser } from "./ChatSessionParser";
 
 interface SessionFile {
   path: string;
@@ -25,9 +26,12 @@ interface SessionSnapshot {
  * More reliable than log file monitoring (100% vs 70% reliability).
  *
  * Session files location:
- * - Windows: %APPDATA%\Code\User\workspaceStorage\<hash>\chatSessions\*.json
- * - macOS: ~/Library/Application Support/Code/User/workspaceStorage/<hash>/chatSessions/*.json
- * - Linux: ~/.config/Code/User/workspaceStorage/<hash>/chatSessions/*.json
+ * - Windows: %APPDATA%\Code\User\workspaceStorage\<hash>\chatSessions\*.json|*.jsonl
+ * - macOS: ~/Library/Application Support/Code/User/workspaceStorage/<hash>/chatSessions/*.json|*.jsonl
+ * - Linux: ~/.config/Code/User/workspaceStorage/<hash>/chatSessions/*.json|*.jsonl
+ *
+ * Format note: VS Code switched from .json to .jsonl ~Feb 2026.
+ * JSONL: each line is {"kind":N,"v":{...session data...}} — same structure, wrapped in "v".
  *
  * Performance Optimization:
  * - Session cache persists across ALL workflows (entire VS Code session)
@@ -160,7 +164,7 @@ export class ChatSessionMonitor {
           const files = fs.readdirSync(chatSessionsDir);
 
           for (const file of files) {
-            if (!file.endsWith(".json")) {
+            if (!file.endsWith(".json") && !file.endsWith(".jsonl")) {
               continue;
             }
 
@@ -239,13 +243,12 @@ export class ChatSessionMonitor {
 
     for (const file of filesToSearch) {
       try {
-        const content = fs.readFileSync(file.path, "utf-8");
-        const session = JSON.parse(content);
+        const session = ChatSessionParser.parseSessionFile(file.path);
 
         const basename = path.basename(file.path);
         const cachedSnapshot = this.sessionCache.get(basename);
 
-        if (!session.requests || session.requests.length === 0) {
+        if (!session?.requests || session.requests.length === 0) {
           filesChecked++;
           continue;
         }
@@ -253,7 +256,7 @@ export class ChatSessionMonitor {
         // Check each request's message text
         for (let i = 0; i < session.requests.length; i++) {
           const request = session.requests[i];
-          const messageText = request.message?.text;
+          const messageText: string | undefined = request.message?.text;
 
           if (!messageText) {
             continue;
@@ -322,23 +325,18 @@ export class ChatSessionMonitor {
     const completedRequestIndices = new Set<number>();
 
     try {
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session = JSON.parse(content);
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
 
-      if (!session.requests || session.requests.length === 0) {
+      if (!session?.requests || session.requests.length === 0) {
         return { completedRequestIndices, requestCount: 0 };
       }
 
       // Check each request by index
       for (let i = 0; i < session.requests.length; i++) {
         const request = session.requests[i];
-
-        // Check if this request is complete
         const isComplete =
-          request.result !== null &&
-          request.result !== undefined &&
-          request.result.timings !== null &&
-          request.result.timings !== undefined &&
+          request.result != null &&
+          request.result.timings != null &&
           typeof request.result.timings.totalElapsed === "number" &&
           request.result.timings.totalElapsed > 0;
 
@@ -361,9 +359,8 @@ export class ChatSessionMonitor {
    */
   private getRequestCount(sessionFilePath: string): number {
     try {
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session = JSON.parse(content);
-      return session.requests?.length || 0;
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
+      return session?.requests?.length ?? 0;
     } catch (err) {
       return 0;
     }
@@ -380,18 +377,17 @@ export class ChatSessionMonitor {
     cancelled?: boolean;
   } {
     try {
-      const content = fs.readFileSync(sessionFilePath, "utf-8");
-      const session = JSON.parse(content);
+      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
 
-      if (!session.requests || session.requests.length === 0) {
+      if (!session?.requests || session.requests.length === 0) {
         return { complete: false };
       }
 
       const lastRequest = session.requests[session.requests.length - 1];
 
       if (debug) {
-        const hasResult = lastRequest.result !== null && lastRequest.result !== undefined;
-        const hasTimings = hasResult && lastRequest.result.timings !== null;
+        const hasResult = lastRequest.result != null;
+        const hasTimings = hasResult && lastRequest.result.timings != null;
         const totalElapsed = hasTimings ? lastRequest.result.timings.totalElapsed : "N/A";
         Log.info(
           `      🔍 Last request: result=${hasResult}, timings=${hasTimings}, totalElapsed=${totalElapsed}`
@@ -399,16 +395,15 @@ export class ChatSessionMonitor {
       }
 
       // Check for cancellation first
-      if (lastRequest.result?.errorDetails?.message?.includes("cancel")) {
+      if (typeof lastRequest.result?.errorDetails?.message === "string" &&
+          lastRequest.result.errorDetails.message.includes("cancel")) {
         return { complete: true, cancelled: true };
       }
 
       // Check for completion: result.timings.totalElapsed > 0
       const isComplete =
-        lastRequest.result !== null &&
-        lastRequest.result !== undefined &&
-        lastRequest.result.timings !== null &&
-        lastRequest.result.timings !== undefined &&
+        lastRequest.result != null &&
+        lastRequest.result.timings != null &&
         typeof lastRequest.result.timings.totalElapsed === "number" &&
         lastRequest.result.timings.totalElapsed > 0;
 
