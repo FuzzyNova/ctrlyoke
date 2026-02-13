@@ -67,9 +67,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
     const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
     const commandMap: Record<string, string> = {
-      chatPanel: "workbench.action.chat.newChatInSideBar",
+      chatPanel: "workbench.action.chat.newLocalChat",
       newTab: "workbench.action.chat.newChat",
-      newWindow: "workbench.action.chat.newChatInNewWindow",
+      newWindow: "workbench.action.chat.openInNewWindow",
     };
 
     const command = commandMap[chatLocation] || commandMap["chatPanel"];
