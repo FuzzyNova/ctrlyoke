@@ -408,7 +408,7 @@ export class FlightPathManager {
       prevQueueState.status === EXECUTION_STATES.COMPLETED
         ? prevQueueState.prompts.length
         : prevQueueState.status === EXECUTION_STATES.STOPPED
-          ? prevCurrentIndex   // STOPPED after append-to-completed: currentIndex = # of done steps
+          ? prevCurrentIndex // STOPPED after append-to-completed: currentIndex = # of done steps
           : 0;
 
     // Auto-save and reload if the file has unsaved changes
@@ -432,8 +432,8 @@ export class FlightPathManager {
 
     Log.info(
       `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
-      `prevQueueStatus=${prevQueueState.status}, prevCompletedCount=${prevCompletedCount}, ` +
-      `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}`
+        `prevQueueStatus=${prevQueueState.status}, prevCompletedCount=${prevCompletedCount}, ` +
+        `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}`
     );
 
     try {
@@ -571,7 +571,8 @@ export class FlightPathManager {
         // Fresh start: create a new history run
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
-        const historyInit = await this.outputHistoryManager.initializeRun(workflowId);
+        const historyInit =
+          await this.outputHistoryManager.initializeRun(workflowId);
         historyFilePath = historyInit.filePath;
         // Notify webview of the new run count BEFORE EXECUTION_STARTED resets view state.
         // This ensures the run selector shows the correct count immediately.
@@ -580,15 +581,36 @@ export class FlightPathManager {
             this.outputHistoryManager.getRunTimestamps(workflowId),
             this.outputHistoryManager.getRunStates(workflowId),
           ]);
-          this.dashboardProvider?.notifyRunHistoryUpdated(historyInit.runCount, runTimestamps, runStates);
+          this.dashboardProvider?.notifyRunHistoryUpdated(
+            historyInit.runCount,
+            runTimestamps,
+            runStates
+          );
         }
       } else if (isAppendContinuation && workingFilePath) {
         // Append-to-completed: reuse the existing latest history file
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
-        historyFilePath = await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+        historyFilePath =
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
         Log.info(
-          `FlightPath: Reusing existing history file for append continuation: ${historyFilePath}`
+          `🟢 [APPEND-DEBUG] Reusing existing history file for append continuation: ${historyFilePath}`
+        );
+        Log.info(
+          `🟢 [APPEND-DEBUG] workingFilePath: ${workingFilePath}, workflowId: ${workflowId}`
+        );
+      } else if (continueFromCurrent && workingFilePath) {
+        // Manual resume after appending (dashboard Resume button or MCP append+run)
+        // Reuse the existing latest history file to append new prompt outputs
+        const workflowId =
+          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        historyFilePath =
+          await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+        Log.info(
+          `🟢 [APPEND-DEBUG] Manual resume: Reusing existing history file: ${historyFilePath}`
+        );
+        Log.info(
+          `🟢 [APPEND-DEBUG] workingFilePath: ${workingFilePath}, workflowId: ${workflowId}`
         );
       }
 
@@ -603,8 +625,8 @@ export class FlightPathManager {
           this.dashboardProvider.updateExecutionStarted(
             fileName,
             totalPrompts,
-            true,          // isContinuation — do not wipe existing cliOutputs
-            currentIndex   // preserveStepCount — keep outputs for steps 0..currentIndex-1
+            true, // isContinuation — do not wipe existing cliOutputs
+            currentIndex // preserveStepCount — keep outputs for steps 0..currentIndex-1
           );
         } else if (isAppendContinuation) {
           // Append-to-completed detected: previous run finished and file now has more prompts.
@@ -632,6 +654,9 @@ export class FlightPathManager {
         const currentIndex = currentQueueState.currentIndex;
         integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
       }
+      Log.info(
+        `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
+      );
       await this.startWorkflowExecution(integration, historyFilePath);
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
@@ -840,6 +865,9 @@ export class FlightPathManager {
       this.activeIntegration = activeIntegration;
 
       // Build workflow context for the executor
+      Log.info(
+        `🟢 [APPEND-DEBUG] Creating WorkflowContext with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
+      );
       const context: WorkflowContext = {
         workspaceFolderPath: this.currentWorkspaceFolder?.uri.fsPath,
         currentPromptFilePath: this.currentPromptFile?.filePath,

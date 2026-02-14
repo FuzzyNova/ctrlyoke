@@ -650,7 +650,10 @@ export class WorkflowExecutor {
         };
 
         if (context.dashboardProvider) {
-          context.dashboardProvider.updateCliOutput(currentIndex, retryCliOutput);
+          context.dashboardProvider.updateCliOutput(
+            currentIndex,
+            retryCliOutput
+          );
         }
 
         // Save retry output to history
@@ -951,8 +954,14 @@ export class WorkflowExecutor {
     }
 
     // Save to history (same data, same moment)
+    Log.info(
+      `🟢 [APPEND-DEBUG] Step ${currentIndex}: About to save to history. historyFilePath="${context.historyFilePath}", hasManager=${!!context.outputHistoryManager}`
+    );
     if (context.historyFilePath && context.outputHistoryManager) {
       const statusMessages = this.stepStatusMessages.get(currentIndex) ?? [];
+      Log.info(
+        `🟢 [APPEND-DEBUG] Step ${currentIndex}: Calling saveStepOutput(path="${context.historyFilePath}", stepIndex=${currentIndex}, outputsCount=1, messagesCount=${statusMessages.length})`
+      );
       await context.outputHistoryManager
         .saveStepOutput(
           context.historyFilePath,
@@ -960,7 +969,16 @@ export class WorkflowExecutor {
           [cliOutputObj],
           statusMessages
         )
-        .catch((err) => Log.warn("Failed to save step output to history:", err));
+        .catch((err) =>
+          Log.warn("Failed to save step output to history:", err)
+        );
+      Log.info(
+        `🟢 [APPEND-DEBUG] Step ${currentIndex}: saveStepOutput completed successfully`
+      );
+    } else {
+      Log.warn(
+        `🔴 [APPEND-DEBUG] Step ${currentIndex}: NOT saving to history - historyFilePath empty or manager missing`
+      );
     }
   }
 

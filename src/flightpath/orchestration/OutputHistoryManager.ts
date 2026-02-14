@@ -114,9 +114,10 @@ export class OutputHistoryManager {
 
       // runCount = new total after pruning.
       // maxRuns <= 0 means "keep all" (no cap), so use actual count directly.
-      const runCount = maxRuns > 0
-        ? Math.min(existingRuns.length + 1, maxRuns)
-        : existingRuns.length + 1;
+      const runCount =
+        maxRuns > 0
+          ? Math.min(existingRuns.length + 1, maxRuns)
+          : existingRuns.length + 1;
 
       return { filePath, runCount };
     } catch (error) {
@@ -136,13 +137,25 @@ export class OutputHistoryManager {
     statusMessages: StatusMessage[]
   ): Promise<void> {
     if (!historyFilePath) {
+      Log.warn(
+        `🔴 [APPEND-DEBUG] saveStepOutput: historyFilePath is empty, skipping save for step ${stepIndex}`
+      );
       return;
     }
 
     try {
+      Log.info(
+        `🟢 [APPEND-DEBUG] saveStepOutput: Reading history file: ${historyFilePath}`
+      );
       const history = await this.readHistory(historyFilePath);
+      Log.info(
+        `🟢 [APPEND-DEBUG] saveStepOutput: Current history has ${Object.keys(history.promptOutputs).length} steps, adding/updating step ${stepIndex}`
+      );
       history.promptOutputs[stepIndex] = { cliOutputs, statusMessages };
       await this.writeHistory(historyFilePath, history);
+      Log.info(
+        `🟢 [APPEND-DEBUG] saveStepOutput: Successfully saved step ${stepIndex} to ${historyFilePath}`
+      );
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
     }
@@ -200,7 +213,9 @@ export class OutputHistoryManager {
       // Accept both new format (run-<timestamp>.json) and old format (run-N-<timestamp>.json)
       const runFiles = entries.filter((f) => /^run-.*\.json$/.test(f));
       // Sort newest first by extracting the ISO timestamp from the filename
-      return runFiles.sort((a, b) => this.extractRunTimestamp(b) - this.extractRunTimestamp(a));
+      return runFiles.sort(
+        (a, b) => this.extractRunTimestamp(b) - this.extractRunTimestamp(a)
+      );
     } catch {
       return [];
     }
@@ -214,16 +229,29 @@ export class OutputHistoryManager {
    */
   async getLatestHistoryFilePath(workflowId: string): Promise<string> {
     if (!this.isHistoryEnabled()) {
+      Log.warn(
+        `🔴 [APPEND-DEBUG] getLatestHistoryFilePath: History is disabled, returning empty path`
+      );
       return "";
     }
 
     const runs = await this.getRunsForWorkflow(workflowId);
+    Log.info(
+      `🟢 [APPEND-DEBUG] getLatestHistoryFilePath: Found ${runs.length} runs for workflowId="${workflowId}"`
+    );
     if (runs.length === 0) {
+      Log.warn(
+        `🔴 [APPEND-DEBUG] getLatestHistoryFilePath: No runs found, returning empty path`
+      );
       return "";
     }
 
     // runs[0] is the most recent (sorted newest first)
-    return this.getHistoryFilePath(workflowId, runs[0]);
+    const latestPath = this.getHistoryFilePath(workflowId, runs[0]);
+    Log.info(
+      `🟢 [APPEND-DEBUG] getLatestHistoryFilePath: Returning latest path: ${latestPath}`
+    );
+    return latestPath;
   }
 
   /**
@@ -312,8 +340,12 @@ export class OutputHistoryManager {
   private extractRunTimestamp(fileName: string): number {
     // Extract the ISO-ish segment: everything after the last "run-" prefix (and
     // optional leading "N-" in old format) up to ".json"
-    const match = fileName.match(/^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)\.json$/);
-    if (!match) { return 0; }
+    const match = fileName.match(
+      /^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)\.json$/
+    );
+    if (!match) {
+      return 0;
+    }
     // Restore ISO format: YYYY-MM-DDThh-mm-ss-mmmZ → YYYY-MM-DDThh:mm:ss.mmmZ
     const restored = match[1].replace(
       /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z?)$/,
@@ -323,9 +355,7 @@ export class OutputHistoryManager {
     return isNaN(ms) ? 0 : ms;
   }
 
-  private async readHistory(
-    filePath: string
-  ): Promise<WorkflowOutputHistory> {
+  private async readHistory(filePath: string): Promise<WorkflowOutputHistory> {
     const content = await fs.promises.readFile(filePath, "utf-8");
     return JSON.parse(content) as WorkflowOutputHistory;
   }
@@ -340,5 +370,4 @@ export class OutputHistoryManager {
       "utf-8"
     );
   }
-
 }
