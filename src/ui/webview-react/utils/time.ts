@@ -55,6 +55,50 @@ export function formatRelativeTime(timestampMs: number): string {
 }
 
 /**
+ * Format timestamp as verbose relative time ago
+ *
+ * Uses a verbose format matching the RecentWorkflows display style.
+ * Returns undefined for undefined input (no timestamp available).
+ *
+ * @param timestamp - Timestamp in milliseconds, or undefined
+ * @returns Verbose relative time string, or undefined
+ *
+ * @example
+ * formatRelativeTimeVerbose(Date.now() - 30000)    // "Just now"
+ * formatRelativeTimeVerbose(Date.now() - 90000)    // "1 minute ago"
+ * formatRelativeTimeVerbose(Date.now() - 7200000)  // "2 hours ago"
+ * formatRelativeTimeVerbose(Date.now() - 86400000) // "Yesterday"
+ * formatRelativeTimeVerbose(Date.now() - 172800000)// "2 days ago"
+ * formatRelativeTimeVerbose(undefined)             // undefined
+ */
+export function formatRelativeTimeVerbose(
+  timestamp: number | undefined
+): string | undefined {
+  if (timestamp === undefined) {
+    return undefined;
+  }
+
+  const now = Date.now();
+  const diff = now - timestamp;
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return days === 1 ? "Yesterday" : `${days} days ago`;
+  }
+  if (hours > 0) {
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
+  if (minutes > 0) {
+    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  }
+  return "Just now";
+}
+
+/**
  * Format duration in milliseconds to human-readable string
  * @param durationMs - Duration in milliseconds
  * @returns Formatted duration string (e.g., "1m 30s", "2h 15m")

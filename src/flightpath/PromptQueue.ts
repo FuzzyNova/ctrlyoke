@@ -483,6 +483,25 @@ export class PromptQueue {
   }
 
   /**
+   * Restore queue state after a dirty-file reload for an append continuation.
+   *
+   * When the prompt file was dirty in VS Code and `loadPrompts` was called (resetting
+   * currentIndex to 0), we need to advance the queue past the N steps that were already
+   * completed in the previous run, so the executor starts at step N.
+   *
+   * @param completedCount Number of steps from the previous run that were completed.
+   */
+  async restoreCompletedSteps(completedCount: number): Promise<void> {
+    const cap = Math.min(completedCount, this.state.prompts.length);
+    for (let i = 0; i < cap; i++) {
+      this.state.results[i].status = STEP_STATUS.COMPLETED;
+    }
+    this.state.currentIndex = cap;
+    this.emitStateChange();
+    Log.info(`Restored ${cap} completed step(s) for append continuation`);
+  }
+
+  /**
    * Clear queue and results
    */
   clear(): void {

@@ -207,23 +207,66 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.EXECUTION_STARTED] = (message) => {
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
+    const uiStore = useUiStore.getState();
 
-    // Switch to live view immediately — never show "Back to Live" at run start
-    workflowStore.clearHistoryOutputs();
-    useUiStore.getState().clearHistoryView();
+    const isContinuation = message.isContinuation === true;
+    const preserveStepCount = message.preserveStepCount ?? 0;
 
-    // Reset all prompts to pending state (for restart scenario)
-    const resetPrompts = workflowStore.prompts.map((prompt) => ({
-      ...prompt,
-      status: STEP_STATUS.PENDING as StepStatus,
-    }));
+    console.log(
+      `[EXECUTION_STARTED] isContinuation=${isContinuation}, preserveStepCount=${preserveStepCount}, ` +
+      `totalSteps=${message.totalSteps}, isViewingHistory=${uiStore.isViewingHistory}, ` +
+      `historyOutputs=${workflowStore.historyOutputs ? `{stepCount:${workflowStore.historyOutputs.stepCount}}` : "null"}, ` +
+      `liveOutputKeys=${Object.keys(workflowStore.cliOutputs).join(",") || "none"}`
+    );
 
-    workflowStore.setFileName(message.fileName);
-    workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
-    workflowStore.setTotalSteps(message.totalSteps);
-    workflowStore.setCurrentStep(0);
-    workflowStore.setPrompts(resetPrompts);
-    workflowStore.clearAllRuntimeState();
+    if (isContinuation && preserveStepCount > 0) {
+      // Append-continuation run: promote history snapshot into live cliOutputs BEFORE
+      // clearing history view, so the user still sees previous prompts' output.
+      console.log(`[EXECUTION_STARTED] Continuation — promoting ${preserveStepCount} history step(s) to live, then switching to live view`);
+      workflowStore.promoteHistoryToLive(preserveStepCount);
+
+      // Now safe to switch to live view (live data is populated)
+      workflowStore.clearHistoryOutputs();
+      uiStore.clearHistoryView();
+
+      workflowStore.setFileName(message.fileName);
+      workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
+      workflowStore.setTotalSteps(message.totalSteps);
+      workflowStore.setCurrentStep(preserveStepCount);
+
+      // Reset only the new (not-yet-run) prompts to pending; preserve completed status.
+      const updatedPrompts = workflowStore.prompts.map((prompt, i) => {
+        if (i < preserveStepCount) {
+          return prompt; // Keep completed status and output
+        }
+        return { ...prompt, status: STEP_STATUS.PENDING as StepStatus };
+      });
+      workflowStore.setPrompts(updatedPrompts);
+
+      // Clear runtime state only for the new steps (steps >= preserveStepCount)
+      workflowStore.clearRuntimeStateFromStep(preserveStepCount);
+
+      console.log(
+        `[EXECUTION_STARTED] After promote — liveOutputKeys=${Object.keys(useWorkflowStore.getState().cliOutputs).join(",") || "none"}`
+      );
+    } else {
+      // Fresh start: switch to live view and reset everything
+      console.log(`[EXECUTION_STARTED] Fresh start — clearing all runtime state`);
+      workflowStore.clearHistoryOutputs();
+      uiStore.clearHistoryView();
+
+      workflowStore.setFileName(message.fileName);
+      workflowStore.setExecutionState(EXECUTION_STATES.RUNNING);
+      workflowStore.setTotalSteps(message.totalSteps);
+      workflowStore.setCurrentStep(0);
+
+      const resetPrompts = workflowStore.prompts.map((prompt) => ({
+        ...prompt,
+        status: STEP_STATUS.PENDING as StepStatus,
+      }));
+      workflowStore.setPrompts(resetPrompts);
+      workflowStore.clearAllRuntimeState();
+    }
 
     // Mark editor as having active queue
     editorStore.setHasActiveQueue(true);
@@ -503,22 +546,39 @@ function createMessageHandlers(): MessageHandlerMap {
   // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RUN_HISTORY_UPDATED] = (message) => {
-    useUiStore.setState({ availableRuns: message.runCount });
+    console.log(`[MessageHandler] RUN_HISTORY_UPDATED: runCount=${message.runCount}, runTimestamps=`, message.runTimestamps);
+    const update: { availableRuns: number; runTimestamps?: (number | undefined)[]; runStates?: (string | undefined)[] } = {
+      availableRuns: message.runCount,
+    };
+    if (message.runTimestamps !== undefined) {
+      update.runTimestamps = message.runTimestamps;
+    }
+    if (message.runStates !== undefined) {
+      update.runStates = message.runStates;
+    }
+    useUiStore.setState(update);
   };
 
   // --------------------------------------------------------------------------
   // OUTPUT_HISTORY_LOADED - Load a historical run for display
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.OUTPUT_HISTORY_LOADED] = (message) => {
-    const { history, availableRuns, currentRunIndex } = message;
+    const { history, availableRuns, currentRunIndex, runTimestamps, runStates } = message;
     if (!history || availableRuns === 0) {
       // History was cleared — reset to live view with no available runs
       useWorkflowStore.getState().clearHistoryOutputs();
       useUiStore.getState().clearHistoryView();
       // Also clear availableRuns since all history was deleted
-      useUiStore.setState({ availableRuns: 0 });
+      useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
     } else {
+      console.log(`[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, runTimestamps=`, runTimestamps);
       useWorkflowStore.getState().loadHistoryRun(history, availableRuns, currentRunIndex);
+      if (runTimestamps !== undefined) {
+        useUiStore.getState().setRunTimestamps(runTimestamps);
+      }
+      if (runStates !== undefined) {
+        useUiStore.getState().setRunStates(runStates);
+      }
     }
   };
 

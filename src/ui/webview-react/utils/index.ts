@@ -8,6 +8,7 @@ export {
   getTimestamp,
   formatTime,
   formatRelativeTime,
+  formatRelativeTimeVerbose,
   formatDuration,
 } from "./time";
 

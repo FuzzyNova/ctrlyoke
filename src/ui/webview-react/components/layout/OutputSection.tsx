@@ -49,10 +49,30 @@ export const OutputSection: React.FC = () => {
     isViewingHistory,
     viewingRunIndex,
     availableRuns,
+    runTimestamps,
+    runStates,
   } = useUiStore();
   const outputRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const autoscrollEnabled = useRef(true);
   const isProgrammaticScroll = useRef(false);
+
+  // Keep --run-selector-max-h in sync with the output section height so the
+  // RunSelector dropdown never overflows the panel boundary.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const headerH = 30; // matches the h-[30px] header
+      const available = el.clientHeight - headerH - 8; // 8px breathing room
+      el.style.setProperty(
+        "--run-selector-max-h",
+        `${Math.max(80, available)}px`
+      );
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Determine which steps data source to use: history snapshot or live outputs
   const stepsToRender = useMemo(() => {
@@ -187,6 +207,7 @@ export const OutputSection: React.FC = () => {
 
   return (
     <section
+      ref={sectionRef}
       id="output-section"
       className="min-h-0 flex-1 bg-[var(--bg-primary)] flex flex-col h-full"
     >
@@ -216,6 +237,8 @@ export const OutputSection: React.FC = () => {
               currentRunIndex={viewingRunIndex}
               isViewingHistory={isViewingHistory}
               isLiveRunActive={executionState === EXECUTION_STATES.RUNNING}
+              runTimestamps={runTimestamps}
+              runStates={runStates}
               onSelectRun={(runIndex) => {
                 const vscode = getVsCodeApi();
                 if (vscode) {

@@ -89,6 +89,14 @@ interface WorkflowActions {
   loadHistoryRun: (history: WorkflowOutputHistory, availableRuns: number, runIndex: number) => void;
   clearHistoryOutputs: () => void;
 
+  // Partial runtime state clear (for append-continuation runs)
+  clearRuntimeStateFromStep: (startStep: number) => void;
+
+  // Promote history snapshot data into live cliOutputs/statusMessages for preserved steps.
+  // Called before switching from history→live view on a continuation run so the user
+  // still sees previous prompts' output in the live panel.
+  promoteHistoryToLive: (stepCount: number) => void;
+
   // Bulk operations
   loadWorkflow: (data: {
     fileName: string;
@@ -470,6 +478,71 @@ export const useWorkflowStore = create<
     }),
 
   clearHistoryOutputs: () => set(() => ({ historyOutputs: null })),
+
+  clearRuntimeStateFromStep: (startStep) =>
+    set((state) => {
+      const newCliOutputs = { ...state.cliOutputs };
+      const newRetryStates = { ...state.retryStates };
+      const newStatusMessages = { ...state.statusMessages };
+      const newStreamingChunks = { ...state.streamingChunks };
+
+      Object.keys(newCliOutputs).forEach((key) => {
+        if (Number(key) >= startStep) {
+          delete newCliOutputs[Number(key)];
+        }
+      });
+      Object.keys(newRetryStates).forEach((key) => {
+        if (Number(key) >= startStep) {
+          delete newRetryStates[Number(key)];
+        }
+      });
+      Object.keys(newStatusMessages).forEach((key) => {
+        if (Number(key) >= startStep) {
+          delete newStatusMessages[Number(key)];
+        }
+      });
+      Object.keys(newStreamingChunks).forEach((key) => {
+        if (Number(key) >= startStep) {
+          delete newStreamingChunks[Number(key)];
+        }
+      });
+
+      return {
+        cliOutputs: newCliOutputs,
+        retryStates: newRetryStates,
+        statusMessages: newStatusMessages,
+        streamingChunks: newStreamingChunks,
+      };
+    }),
+
+  promoteHistoryToLive: (stepCount) =>
+    set((state) => {
+      if (!state.historyOutputs) {
+        console.log(`[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`);
+        return {};
+      }
+
+      const newCliOutputs = { ...state.cliOutputs };
+      const newStatusMessages = { ...state.statusMessages };
+      let promoted = 0;
+
+      for (let i = 0; i < stepCount; i++) {
+        const stepData = state.historyOutputs.steps[i];
+        if (stepData) {
+          // Only populate if live data is missing for this step
+          if (!newCliOutputs[i] || newCliOutputs[i].length === 0) {
+            newCliOutputs[i] = stepData.cliOutputs;
+            promoted++;
+          }
+          if (!newStatusMessages[i] || newStatusMessages[i].length === 0) {
+            newStatusMessages[i] = stepData.statusMessages;
+          }
+        }
+      }
+
+      console.log(`[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`);
+      return { cliOutputs: newCliOutputs, statusMessages: newStatusMessages };
+    }),
 
   resetWorkflow: () => set(initialState),
 

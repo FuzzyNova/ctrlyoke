@@ -85,22 +85,18 @@ export class OutputHistoryManager {
       const historyDir = path.join(this.historyBaseDir, workflowId);
       await fs.promises.mkdir(historyDir, { recursive: true });
 
-      // Determine next run ID from what's on disk
       const existingRuns = await this.getRunsForWorkflow(workflowId);
-      const nextRunId =
-        existingRuns.length > 0
-          ? Math.max(...existingRuns.map((f) => this.extractRunId(f))) + 1
-          : 1;
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `run-${nextRunId}-${timestamp}.json`;
+      const startedAt = Date.now();
+      const timestamp = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
+      const fileName = `run-${timestamp}.json`;
       const filePath = path.join(historyDir, fileName);
 
       const initial: WorkflowOutputHistory = {
         schemaVersion: "1.0.0",
         workflowId,
-        runId: nextRunId,
-        startedAt: Date.now(),
+        runId: existingRuns.length + 1,
+        startedAt,
         executionState: "running" as ExecutionState,
         runStepCount: 0,
         promptOutputs: {},
@@ -201,11 +197,75 @@ export class OutputHistoryManager {
 
     try {
       const entries = await fs.promises.readdir(historyDir);
-      const runFiles = entries.filter((f) => /^run-\d+-.*\.json$/.test(f));
-      return runFiles.sort((a, b) => this.extractRunId(b) - this.extractRunId(a));
+      // Accept both new format (run-<timestamp>.json) and old format (run-N-<timestamp>.json)
+      const runFiles = entries.filter((f) => /^run-.*\.json$/.test(f));
+      // Sort newest first by extracting the ISO timestamp from the filename
+      return runFiles.sort((a, b) => this.extractRunTimestamp(b) - this.extractRunTimestamp(a));
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Get the most recent history file path for a workflow.
+   * Returns empty string if no history exists for this workflow.
+   * Used for append-to-completed scenarios where we want to continue
+   * writing to the existing run instead of creating a new one.
+   */
+  async getLatestHistoryFilePath(workflowId: string): Promise<string> {
+    if (!this.isHistoryEnabled()) {
+      return "";
+    }
+
+    const runs = await this.getRunsForWorkflow(workflowId);
+    if (runs.length === 0) {
+      return "";
+    }
+
+    // runs[0] is the most recent (sorted newest first)
+    return this.getHistoryFilePath(workflowId, runs[0]);
+  }
+
+  /**
+   * Get startedAt timestamps for all runs of a workflow, newest first.
+   * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
+   * Returns undefined for any run whose file cannot be read or lacks startedAt.
+   */
+  async getRunTimestamps(workflowId: string): Promise<(number | undefined)[]> {
+    const runs = await this.getRunsForWorkflow(workflowId);
+    const timestamps = await Promise.all(
+      runs.map(async (fileName) => {
+        try {
+          const filePath = this.getHistoryFilePath(workflowId, fileName);
+          const history = await this.readHistory(filePath);
+          return history.startedAt;
+        } catch {
+          return undefined;
+        }
+      })
+    );
+    return timestamps;
+  }
+
+  /**
+   * Get executionState for all runs of a workflow, newest first.
+   * Matches the order of getRunsForWorkflow() (index 0 = most recent run).
+   * Returns undefined for any run whose file cannot be read.
+   */
+  async getRunStates(workflowId: string): Promise<(string | undefined)[]> {
+    const runs = await this.getRunsForWorkflow(workflowId);
+    const states = await Promise.all(
+      runs.map(async (fileName) => {
+        try {
+          const filePath = this.getHistoryFilePath(workflowId, fileName);
+          const history = await this.readHistory(filePath);
+          return history.executionState as string;
+        } catch {
+          return undefined;
+        }
+      })
+    );
+    return states;
   }
 
   /**
@@ -239,10 +299,28 @@ export class OutputHistoryManager {
   // Private helpers
   // ============================================================================
 
-  /** Extract numeric run ID from filename like "run-3-2024-01-21T10-30-00.json" */
-  private extractRunId(fileName: string): number {
-    const match = fileName.match(/^run-(\d+)-/);
-    return match ? parseInt(match[1], 10) : 0;
+  /**
+   * Extract sortable ms timestamp from a run filename.
+   *
+   * New format: "run-2026-02-13T21-33-58-927Z.json"
+   * Old format: "run-3-2024-01-21T10-30-00-000Z.json"
+   *
+   * The ISO timestamp embedded in the filename has colons and dots replaced by
+   * hyphens (safe for filenames). We restore them before parsing.
+   * Falls back to 0 (sorts to oldest) if unparseable.
+   */
+  private extractRunTimestamp(fileName: string): number {
+    // Extract the ISO-ish segment: everything after the last "run-" prefix (and
+    // optional leading "N-" in old format) up to ".json"
+    const match = fileName.match(/^run-(?:\d+-)?(\d{4}-\d{2}-\d{2}T[\d-]+Z?)\.json$/);
+    if (!match) { return 0; }
+    // Restore ISO format: YYYY-MM-DDThh-mm-ss-mmmZ → YYYY-MM-DDThh:mm:ss.mmmZ
+    const restored = match[1].replace(
+      /^(\d{4}-\d{2}-\d{2}T)(\d{2})-(\d{2})-(\d{2})-(\d{3}Z?)$/,
+      "$1$2:$3:$4.$5"
+    );
+    const ms = new Date(restored).getTime();
+    return isNaN(ms) ? 0 : ms;
   }
 
   private async readHistory(

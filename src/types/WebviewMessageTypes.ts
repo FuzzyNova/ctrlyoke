@@ -303,6 +303,16 @@ export interface ExecutionStartedMessage {
   type: typeof MESSAGE_TYPES.EXECUTION_STARTED;
   fileName: string;
   totalSteps: number;
+  /**
+   * When true, this execution continues a previously completed run (prompts were appended).
+   * The webview should preserve existing output for steps 0..preserveStepCount-1.
+   */
+  isContinuation?: boolean;
+  /**
+   * Number of steps from the previous run whose output should be preserved.
+   * Only meaningful when isContinuation=true.
+   */
+  preserveStepCount?: number;
 }
 
 /**

@@ -44,6 +44,8 @@ interface UiState {
   isViewingHistory: boolean;   // true when showing a historical run (not live)
   viewingRunIndex: number;     // 0 = most recent, 1 = second most recent, etc.
   availableRuns: number;       // Total runs saved for this workflow
+  runTimestamps: (number | undefined)[];  // startedAt timestamps, index 0 = most recent
+  runStates: (string | undefined)[];      // executionState for each run, index 0 = most recent
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
@@ -118,7 +120,9 @@ interface UiActions {
   hideToast: () => void;
 
   // Run history view
-  setHistoryView: (runIndex: number, availableRuns: number) => void;
+  setHistoryView: (runIndex: number, availableRuns: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[]) => void;
+  setRunTimestamps: (timestamps: (number | undefined)[]) => void;
+  setRunStates: (states: (string | undefined)[]) => void;
   clearHistoryView: () => void;
 
   // Reset UI to defaults
@@ -145,6 +149,8 @@ const initialState: UiState = {
   isViewingHistory: false,
   viewingRunIndex: 0,
   availableRuns: 0,
+  runTimestamps: [],
+  runStates: [],
 };
 
 // Fields to persist to localStorage
@@ -270,8 +276,20 @@ export const useUiStore = create<UiState & UiActions>()(
       // RUN HISTORY VIEW
       // ============================================================================
 
-      setHistoryView: (runIndex, availableRuns) =>
-        set({ isViewingHistory: true, viewingRunIndex: runIndex, availableRuns }),
+      setHistoryView: (runIndex, availableRuns, runTimestamps, runStates) =>
+        set({
+          isViewingHistory: true,
+          viewingRunIndex: runIndex,
+          availableRuns,
+          ...(runTimestamps !== undefined ? { runTimestamps } : {}),
+          ...(runStates !== undefined ? { runStates } : {}),
+        }),
+
+      setRunTimestamps: (timestamps) =>
+        set({ runTimestamps: timestamps }),
+
+      setRunStates: (states) =>
+        set({ runStates: states }),
 
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),

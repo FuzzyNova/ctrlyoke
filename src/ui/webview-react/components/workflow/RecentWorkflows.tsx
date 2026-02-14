@@ -1,5 +1,6 @@
 import React from "react";
 import { getExecutionStateBadgeClass } from "../../utils/status";
+import { formatRelativeTimeVerbose } from "../../utils/time";
 
 interface RecentWorkflow {
   workflowName: string;
@@ -33,30 +34,6 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   onClearHistory,
   className = "",
 }) => {
-  // Format relative time
-  const formatRelativeTime = (timestamp: number | undefined): string => {
-    if (!timestamp) return "";
-
-    const now = Date.now();
-    const diff = now - timestamp;
-
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) {
-      return days === 1 ? "Yesterday" : `${days} days ago`;
-    }
-    if (hours > 0) {
-      return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-    }
-    if (minutes > 0) {
-      return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
-    }
-    return "Just now";
-  };
-
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
       {/* Header */}
@@ -73,7 +50,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
         ) : (
           workflows.map((workflow) => {
             const isCurrent = workflow.filePath === currentFilePath;
-            const timeAgo = formatRelativeTime(
+            const timeAgo = formatRelativeTimeVerbose(
               workflow.lastModifiedAt || workflow.startedAt
             );
 

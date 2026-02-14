@@ -554,18 +554,26 @@ window.vscodeApi = acquireVsCodeApi();
     this.sendWorkflowPropertiesToSettings();
   }
 
-  public updateExecutionStarted(fileName: string, totalSteps: number): void {
+  public updateExecutionStarted(
+    fileName: string,
+    totalSteps: number,
+    isContinuation?: boolean,
+    preserveStepCount?: number
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.EXECUTION_STARTED,
       fileName,
       totalSteps,
+      ...(isContinuation ? { isContinuation: true, preserveStepCount } : {}),
     });
   }
 
-  public notifyRunHistoryUpdated(runCount: number): void {
+  public notifyRunHistoryUpdated(runCount: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
       runCount,
+      runTimestamps,
+      runStates,
     });
   }
 
@@ -752,12 +760,19 @@ window.vscodeApi = acquireVsCodeApi();
       );
 
       const history = await this.outputHistoryManager.loadHistory(historyPath);
+      const [runTimestamps, runStates] = await Promise.all([
+        this.outputHistoryManager.getRunTimestamps(workflowId),
+        this.outputHistoryManager.getRunStates(workflowId),
+      ]);
+      Log.info(`[FlightPathWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`);
 
       this.postMessage({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
         availableRuns: runs.length,
         currentRunIndex: 0,
+        runTimestamps,
+        runStates,
       });
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);
@@ -1558,12 +1573,18 @@ window.vscodeApi = acquireVsCodeApi();
       );
 
       const history = await this.outputHistoryManager.loadHistory(historyPath);
+      const [runTimestamps, runStates] = await Promise.all([
+        this.outputHistoryManager.getRunTimestamps(workflowId),
+        this.outputHistoryManager.getRunStates(workflowId),
+      ]);
 
       this.postMessage({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
         availableRuns: runs.length,
         currentRunIndex: runIndex,
+        runTimestamps,
+        runStates,
       });
     } catch (error) {
       Log.error("Failed to load run history:", error);

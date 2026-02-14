@@ -398,6 +398,19 @@ export class FlightPathManager {
 
     const { filePath } = this.currentPromptFile;
 
+    // Capture previous run state BEFORE any reload/restart, so we can detect
+    // "append to completed" and preserve live output for previously run steps.
+    const prevQueueState = this.promptQueue.getState();
+    // For continueFromCurrent path: queue was COMPLETED and appendPrompts() set it to STOPPED.
+    // prevCurrentIndex is the index at which execution will resume (= number of completed steps).
+    const prevCurrentIndex = prevQueueState.currentIndex;
+    const prevCompletedCount =
+      prevQueueState.status === EXECUTION_STATES.COMPLETED
+        ? prevQueueState.prompts.length
+        : prevQueueState.status === EXECUTION_STATES.STOPPED
+          ? prevCurrentIndex   // STOPPED after append-to-completed: currentIndex = # of done steps
+          : 0;
+
     // Auto-save and reload if the file has unsaved changes
     await this.saveAndReloadIfDirty(filePath);
 
@@ -408,6 +421,20 @@ export class FlightPathManager {
 
     const { promptFile } = this.currentPromptFile;
     const fileName = path.basename(filePath);
+
+    // Detect append-to-completed early (before queue restart may erase the state).
+    // True when: previous run was fully completed AND the file now has more prompts.
+    const filePromptCount = promptFile.prompts?.length ?? 0;
+    const isAppendContinuation =
+      !continueFromCurrent &&
+      prevCompletedCount > 0 &&
+      filePromptCount > prevCompletedCount;
+
+    Log.info(
+      `[executeLoadedPromptFile] continueFromCurrent=${continueFromCurrent}, ` +
+      `prevQueueStatus=${prevQueueState.status}, prevCompletedCount=${prevCompletedCount}, ` +
+      `filePromptCount=${filePromptCount}, isAppendContinuation=${isAppendContinuation}`
+    );
 
     try {
       Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
@@ -500,9 +527,9 @@ export class FlightPathManager {
       }
 
       // Check if queue needs to be restarted (completed, paused, stopped, or error state)
-      // Skip restart if we're continuing from append operation
+      // Skip restart when continuing from append or when resuming an append-to-completed run.
       const queueState = this.promptQueue.getState();
-      if (!continueFromCurrent) {
+      if (!continueFromCurrent && !isAppendContinuation) {
         if (
           queueState.status === EXECUTION_STATES.COMPLETED ||
           queueState.status === EXECUTION_STATES.PAUSED ||
@@ -513,6 +540,15 @@ export class FlightPathManager {
             `FlightPath: Queue in ${queueState.status} state, restarting from beginning`
           );
           await this.promptQueue.restart();
+        }
+      } else if (isAppendContinuation) {
+        Log.info(
+          `FlightPath: Append continuation — skipping restart, continuing from step ${prevCompletedCount}`
+        );
+        // If the queue was reloaded (dirty file) to IDLE, we need to restore completed step state.
+        // Load the new prompts and mark the first N as completed so the executor starts at N.
+        if (queueState.status === EXECUTION_STATES.IDLE) {
+          await this.promptQueue.restoreCompletedSteps(prevCompletedCount);
         }
       } else {
         Log.info(
@@ -527,9 +563,12 @@ export class FlightPathManager {
 
       // Initialize history run BEFORE sending EXECUTION_STARTED so the run count
       // is already correct when the webview resets its UI state.
+      // Skip for continuation runs (continueFromCurrent=true OR append-to-completed)
+      // so they stay on the same run number in the RunSelector.
       const workingFilePath = currentQueueState.workingFilePath ?? "";
       let historyFilePath = "";
-      if (!continueFromCurrent && workingFilePath) {
+      if (!continueFromCurrent && !isAppendContinuation && workingFilePath) {
+        // Fresh start: create a new history run
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
         const historyInit = await this.outputHistoryManager.initializeRun(workflowId);
@@ -537,18 +576,54 @@ export class FlightPathManager {
         // Notify webview of the new run count BEFORE EXECUTION_STARTED resets view state.
         // This ensures the run selector shows the correct count immediately.
         if (historyInit.runCount > 0) {
-          this.dashboardProvider?.notifyRunHistoryUpdated(historyInit.runCount);
+          const [runTimestamps, runStates] = await Promise.all([
+            this.outputHistoryManager.getRunTimestamps(workflowId),
+            this.outputHistoryManager.getRunStates(workflowId),
+          ]);
+          this.dashboardProvider?.notifyRunHistoryUpdated(historyInit.runCount, runTimestamps, runStates);
         }
+      } else if (isAppendContinuation && workingFilePath) {
+        // Append-to-completed: reuse the existing latest history file
+        const workflowId =
+          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        historyFilePath = await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+        Log.info(
+          `FlightPath: Reusing existing history file for append continuation: ${historyFilePath}`
+        );
       }
 
       if (this.dashboardProvider && totalPrompts > 0) {
-        if (!continueFromCurrent) {
-          // Fresh start - send EXECUTION_STARTED message
-          this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
-        } else {
-          // Continuing from append - just update progress, don't reset state
+        if (continueFromCurrent) {
+          // Continuing from append (dashboard send or MCP) — switch to live view and
+          // preserve all previously-run steps' output.
           const currentIndex = currentQueueState.currentIndex;
-          this.dashboardProvider.updateProgress(currentIndex, totalPrompts);
+          Log.info(
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalPrompts}`
+          );
+          this.dashboardProvider.updateExecutionStarted(
+            fileName,
+            totalPrompts,
+            true,          // isContinuation — do not wipe existing cliOutputs
+            currentIndex   // preserveStepCount — keep outputs for steps 0..currentIndex-1
+          );
+        } else if (isAppendContinuation) {
+          // Append-to-completed detected: previous run finished and file now has more prompts.
+          // Send EXECUTION_STARTED but tell the webview to preserve the completed steps' output.
+          Log.info(
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalPrompts}`
+          );
+          this.dashboardProvider.updateExecutionStarted(
+            fileName,
+            totalPrompts,
+            true,
+            prevCompletedCount
+          );
+        } else {
+          // Fresh start - send EXECUTION_STARTED message (clears all previous output)
+          Log.info(
+            `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
+          );
+          this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
         }
       }
 
