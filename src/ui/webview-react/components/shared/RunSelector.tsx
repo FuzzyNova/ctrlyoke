@@ -60,14 +60,15 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   const handleSelectRun = useCallback(
     (runIndex: number) => {
       setIsOpen(false);
-      if (isLiveRunActive && runIndex === 0 && isViewingHistory) {
-        // Clicking the most recent run while live is active = back to live
+      if (isLiveRunActive && runIndex === 0) {
+        // Selecting the live run (index 0) while a workflow is active always
+        // returns to / stays in live view — never loads the in-progress history file
         onBackToLive();
       } else {
         onSelectRun(runIndex);
       }
     },
-    [isLiveRunActive, isViewingHistory, onSelectRun, onBackToLive]
+    [isLiveRunActive, onSelectRun, onBackToLive]
   );
 
   const handleKeyDown = useCallback(

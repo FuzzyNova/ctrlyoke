@@ -230,7 +230,7 @@ export class CliProcessManager {
   /**
    * Cancel current execution (process or terminal).
    * For terminal: Sends Ctrl+C twice, then disposes
-   * For process: SIGTERM with 3s timeout, then SIGKILL
+   * For process: SIGKILL immediately (user-initiated stop, no grace period needed)
    */
   async cancel(
     currentExecution?: vscode.TerminalShellExecution
@@ -261,11 +261,31 @@ export class CliProcessManager {
       }, TERMINAL_DISPOSE_DELAY_MS);
     }
 
-    // Handle headless process execution
+    // Handle headless process execution - kill immediately, no grace period
     if (this.currentProcess) {
-      this.logger?.("⏹️ Stopping headless CLI process...");
-      this.killGracefully(this.currentProcess);
+      this.logger?.("⏹️ Force-killing headless CLI process (user-initiated stop)...");
+      this.killImmediately(this.currentProcess);
     }
+  }
+
+  /**
+   * Kill a process immediately with SIGKILL (no grace period).
+   * Used for user-initiated stops where we want instant termination.
+   */
+  killImmediately(child: ChildProcess): void {
+    if (!child.pid) {
+      this.logger?.("⚠️ No PID available to kill");
+      return;
+    }
+
+    this.clearKillTimeout();
+
+    this.logger?.("📤 Sending SIGKILL to process tree (immediate termination)");
+    kill(child.pid, "SIGKILL", (err) => {
+      if (err) {
+        this.logger?.(`⚠️ SIGKILL failed: ${err.message}`);
+      }
+    });
   }
 
   /**

@@ -106,6 +106,7 @@ export const MESSAGE_TYPES = {
   OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",  // Extension -> Webview: Load history for display
   LOAD_RUN_HISTORY: "loadRunHistory",            // Webview -> Extension: Request specific run
   CLEAR_RUN_HISTORY: "clearRunHistory",          // Webview -> Extension: Delete run history
+  RUN_HISTORY_UPDATED: "runHistoryUpdated",      // Extension -> Webview: Available run count changed (new run started)
 } as const;
 
 // ============================================================================

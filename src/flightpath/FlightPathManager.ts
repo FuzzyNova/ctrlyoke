@@ -525,6 +525,22 @@ export class FlightPathManager {
       const currentQueueState = this.promptQueue.getState();
       const totalPrompts = currentQueueState.prompts.length;
 
+      // Initialize history run BEFORE sending EXECUTION_STARTED so the run count
+      // is already correct when the webview resets its UI state.
+      const workingFilePath = currentQueueState.workingFilePath ?? "";
+      let historyFilePath = "";
+      if (!continueFromCurrent && workingFilePath) {
+        const workflowId =
+          this.outputHistoryManager.extractWorkflowId(workingFilePath);
+        const historyInit = await this.outputHistoryManager.initializeRun(workflowId);
+        historyFilePath = historyInit.filePath;
+        // Notify webview of the new run count BEFORE EXECUTION_STARTED resets view state.
+        // This ensures the run selector shows the correct count immediately.
+        if (historyInit.runCount > 0) {
+          this.dashboardProvider?.notifyRunHistoryUpdated(historyInit.runCount);
+        }
+      }
+
       if (this.dashboardProvider && totalPrompts > 0) {
         if (!continueFromCurrent) {
           // Fresh start - send EXECUTION_STARTED message
@@ -541,7 +557,7 @@ export class FlightPathManager {
         const currentIndex = currentQueueState.currentIndex;
         integration.setWorkflowProgress(currentIndex + 1, totalPrompts);
       }
-      await this.startWorkflowExecution(integration);
+      await this.startWorkflowExecution(integration, historyFilePath);
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
 
@@ -723,8 +739,14 @@ export class FlightPathManager {
    *
    * @param integration Optional integration to use (defaults to instance integration)
    */
+  /**
+   * @param historyFilePath Pre-initialized history file path from takeOff() (or "" if
+   *   history is disabled / not a fresh start). Already notified the webview via
+   *   notifyRunHistoryUpdated before EXECUTION_STARTED was sent.
+   */
   private async startWorkflowExecution(
-    integration?: CopilotIntegration
+    integration?: CopilotIntegration,
+    historyFilePath = ""
   ): Promise<void> {
     // Race condition guard: Prevent duplicate starts (from both auto-start and explicit calls)
     if (this.startPending) {
@@ -735,18 +757,6 @@ export class FlightPathManager {
     }
 
     this.startPending = true;
-
-    // Initialize history run (returns "" if history is disabled or no working file)
-    const workingFilePath = this.promptQueue.getState().workingFilePath ?? "";
-    const workflowId =
-      this.outputHistoryManager.extractWorkflowId(workingFilePath);
-    let historyFilePath = "";
-    if (workingFilePath) {
-      historyFilePath = await this.outputHistoryManager.initializeRun(
-        workflowId,
-        workingFilePath
-      );
-    }
 
     try {
       const activeIntegration = integration || this.getDefaultIntegration();

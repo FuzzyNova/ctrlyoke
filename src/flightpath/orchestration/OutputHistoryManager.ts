@@ -10,7 +10,6 @@ import {
 } from "../../types/OutputHistoryTypes";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import { ExecutionState } from "../../types/DashboardConstants";
-import { WorkingFile } from "../../types/FlightPathTypes";
 import { Log } from "../../utils/Log";
 
 /**
@@ -22,8 +21,8 @@ import { Log } from "../../utils/Log";
  * status messages in separate JSON files under .flightpath/.history/<workflow-id>/.
  *
  * Key design decisions:
- * - History files are independent of working files (no bloat)
- * - Working files maintain a lightweight array of history file names
+ * - The .history/<workflow-id>/ directory is the single source of truth
+ * - Working files do NOT track outputHistory — disk is always authoritative
  * - Outputs stored using existing CliOutput format (zero new types for storage)
  * - History is a self-contained snapshot (renders independently of current prompts)
  */
@@ -62,28 +61,31 @@ export class OutputHistoryManager {
 
   /**
    * Initialize a new run for a workflow.
-   * Returns the absolute path to the history file, or "" if history is disabled.
+   * Returns { filePath, runCount } where filePath is the new history file path
+   * (or "" if history is disabled) and runCount is the total runs after initialization
+   * (capped at maxHistoryRuns after pruning).
+   *
+   * The .history/<workflow-id>/ directory is the single source of truth —
+   * nothing is written to the working file.
    *
    * Steps:
    * 1. Creates the .history/<workflow-id>/ directory
-   * 2. Determines the next sequential run ID
+   * 2. Determines the next sequential run ID from existing files on disk
    * 3. Creates the initial (incomplete) history file
-   * 4. Prepends the filename to working file's outputHistory array
-   * 5. Prunes old runs beyond maxHistoryRuns limit
+   * 4. Prunes old runs beyond maxHistoryRuns limit
    */
   async initializeRun(
-    workflowId: string,
-    workingFilePath: string
-  ): Promise<string> {
+    workflowId: string
+  ): Promise<{ filePath: string; runCount: number }> {
     if (!this.isHistoryEnabled()) {
-      return "";
+      return { filePath: "", runCount: 0 };
     }
 
     try {
       const historyDir = path.join(this.historyBaseDir, workflowId);
       await fs.promises.mkdir(historyDir, { recursive: true });
 
-      // Determine next run ID
+      // Determine next run ID from what's on disk
       const existingRuns = await this.getRunsForWorkflow(workflowId);
       const nextRunId =
         existingRuns.length > 0
@@ -110,17 +112,20 @@ export class OutputHistoryManager {
         "utf-8"
       );
 
-      // Update working file's outputHistory array
-      await this.prependToOutputHistory(workingFilePath, fileName);
-
-      // Prune old runs if needed
+      // Prune old runs if needed (disk-only operation)
       const maxRuns = ConfigurationUtils.getMaxHistoryRuns();
-      await this.pruneOldRuns(workflowId, workingFilePath, maxRuns);
+      await this.pruneOldRuns(workflowId, maxRuns);
 
-      return filePath;
+      // runCount = new total after pruning.
+      // maxRuns <= 0 means "keep all" (no cap), so use actual count directly.
+      const runCount = maxRuns > 0
+        ? Math.min(existingRuns.length + 1, maxRuns)
+        : existingRuns.length + 1;
+
+      return { filePath, runCount };
     } catch (error) {
       Log.warn("Failed to initialize history run:", error);
-      return "";
+      return { filePath: "", runCount: 0 };
     }
   }
 
@@ -205,13 +210,9 @@ export class OutputHistoryManager {
 
   /**
    * Prune runs beyond maxRuns limit (oldest first).
-   * Also removes pruned filenames from the working file's outputHistory.
+   * Disk-only: deletes the oldest history files, no working file changes.
    */
-  async pruneOldRuns(
-    workflowId: string,
-    workingFilePath: string,
-    maxRuns: number
-  ): Promise<void> {
+  async pruneOldRuns(workflowId: string, maxRuns: number): Promise<void> {
     // -1 or 0 means keep all runs
     if (maxRuns <= 0) {
       return;
@@ -232,9 +233,6 @@ export class OutputHistoryManager {
         Log.warn(`Failed to delete old history file ${fileName}:`, error);
       }
     }
-
-    // Update working file to remove pruned entries
-    await this.removeFromOutputHistory(workingFilePath, toDelete);
   }
 
   // ============================================================================
@@ -265,53 +263,4 @@ export class OutputHistoryManager {
     );
   }
 
-  /**
-   * Prepend a history filename to the working file's outputHistory array.
-   * Creates or replaces the array entry so the newest run is always at index 0.
-   */
-  private async prependToOutputHistory(
-    workingFilePath: string,
-    fileName: string
-  ): Promise<void> {
-    try {
-      const content = await fs.promises.readFile(workingFilePath, "utf-8");
-      const workingFile = JSON.parse(content) as WorkingFile;
-      workingFile.outputHistory = [
-        fileName,
-        ...(workingFile.outputHistory ?? []),
-      ];
-      await fs.promises.writeFile(
-        workingFilePath,
-        JSON.stringify(workingFile, null, 2),
-        "utf-8"
-      );
-    } catch (error) {
-      Log.warn("Failed to update working file outputHistory:", error);
-    }
-  }
-
-  /**
-   * Remove filenames from the working file's outputHistory array.
-   * Used after pruning old runs.
-   */
-  private async removeFromOutputHistory(
-    workingFilePath: string,
-    fileNames: string[]
-  ): Promise<void> {
-    try {
-      const content = await fs.promises.readFile(workingFilePath, "utf-8");
-      const workingFile = JSON.parse(content) as WorkingFile;
-      const toRemove = new Set(fileNames);
-      workingFile.outputHistory = (workingFile.outputHistory ?? []).filter(
-        (f) => !toRemove.has(f)
-      );
-      await fs.promises.writeFile(
-        workingFilePath,
-        JSON.stringify(workingFile, null, 2),
-        "utf-8"
-      );
-    } catch (error) {
-      Log.warn("Failed to prune working file outputHistory:", error);
-    }
-  }
 }

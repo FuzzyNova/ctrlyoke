@@ -492,6 +492,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
    * Uses RetryUtils defaults: 15 attempts over ~18 seconds for robust verification.
    */
   private async submitWithRetry(promptText: string): Promise<boolean> {
+    const normalizedPrompt = promptText.trim().substring(0, 60);
+    Log.info(`🔍 Verifying submission for prompt: "${normalizedPrompt}..."`);
+
     const result = await retryWithBackoff(
       async () => {
         // Check for cancellation
@@ -530,11 +533,9 @@ export class CopilotChatIntegration extends CopilotIntegration {
         // Use defaults: maxAttempts=60, delays=[100,200,500,1000,1500] (~84s total)
         // VS Code can take 45+ seconds to write session files, so we need long retry window
         onRetry: (attempt, maxAttempts) => {
-          if (attempt === 1) {
-            Log.info("🔍 Verifying submission...");
-          } else {
+          if (attempt % 5 === 0 || attempt <= 3) {
             Log.warn(
-              `⚠️ Submit verification failed, retrying (${attempt}/${maxAttempts})...`
+              `⚠️ Submit verification failed, retrying (${attempt}/${maxAttempts}) — prompt: "${normalizedPrompt}..."`
             );
           }
         },

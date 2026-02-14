@@ -208,6 +208,10 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
 
+    // Switch to live view immediately — never show "Back to Live" at run start
+    workflowStore.clearHistoryOutputs();
+    useUiStore.getState().clearHistoryView();
+
     // Reset all prompts to pending state (for restart scenario)
     const resetPrompts = workflowStore.prompts.map((prompt) => ({
       ...prompt,
@@ -493,6 +497,13 @@ function createMessageHandlers(): MessageHandlerMap {
     console.log(
       `[MessageHandler] Received COMPLETIONS_RESPONSE: ${message.items?.length} items, from=${message.from}`
     );
+  };
+
+  // --------------------------------------------------------------------------
+  // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.RUN_HISTORY_UPDATED] = (message) => {
+    useUiStore.setState({ availableRuns: message.runCount });
   };
 
   // --------------------------------------------------------------------------

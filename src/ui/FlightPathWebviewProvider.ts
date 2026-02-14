@@ -562,6 +562,13 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  public notifyRunHistoryUpdated(runCount: number): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
+      runCount,
+    });
+  }
+
   public updateProgress(current: number, total: number): void {
     this.postMessage({ type: MESSAGE_TYPES.PROGRESS_UPDATE, current, total });
   }
@@ -715,32 +722,33 @@ window.vscodeApi = acquireVsCodeApi();
   /**
    * Load and send the most recent output history for a workflow to the webview.
    * Called after session restore when autoLoadRecentSession is enabled.
+   * Reads available runs directly from disk — the .history/ directory is the
+   * single source of truth, not anything stored in the working file.
    *
    * @param workingFilePath Absolute path to the working file
-   * @param workingFile The parsed working file content
    */
   public async loadOutputHistoryForWorkflow(
-    workingFilePath: string,
-    workingFile: { outputHistory?: string[] }
+    workingFilePath: string
   ): Promise<void> {
     if (!this.outputHistoryManager) {
       return;
     }
 
-    if (
-      !workingFile.outputHistory?.length ||
-      !ConfigurationUtils.shouldAutoLoadRecentSession()
-    ) {
+    if (!ConfigurationUtils.shouldAutoLoadRecentSession()) {
       return;
     }
 
     try {
       const workflowId =
         this.outputHistoryManager.extractWorkflowId(workingFilePath);
-      const mostRecentFileName = workingFile.outputHistory[0];
+      const runs = await this.outputHistoryManager.getRunsForWorkflow(workflowId);
+      if (!runs.length) {
+        return;
+      }
+
       const historyPath = this.outputHistoryManager.getHistoryFilePath(
         workflowId,
-        mostRecentFileName
+        runs[0]
       );
 
       const history = await this.outputHistoryManager.loadHistory(historyPath);
@@ -748,7 +756,7 @@ window.vscodeApi = acquireVsCodeApi();
       this.postMessage({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
-        availableRuns: workingFile.outputHistory.length,
+        availableRuns: runs.length,
         currentRunIndex: 0,
       });
     } catch (error) {
@@ -1530,20 +1538,20 @@ window.vscodeApi = acquireVsCodeApi();
         return;
       }
 
-      const workingFile =
-        await this.flightPathManager?.readWorkingFile(workingFilePath);
-      if (!workingFile?.outputHistory?.length) {
+      // Read available runs directly from disk — single source of truth
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const runs = await this.outputHistoryManager.getRunsForWorkflow(workflowId);
+      if (!runs.length) {
         return;
       }
 
-      const fileName = workingFile.outputHistory[runIndex];
+      const fileName = runs[runIndex];
       if (!fileName) {
         Log.warn(`No history file at run index ${runIndex}`);
         return;
       }
 
-      const workflowId =
-        this.outputHistoryManager.extractWorkflowId(workingFilePath);
       const historyPath = this.outputHistoryManager.getHistoryFilePath(
         workflowId,
         fileName
@@ -1554,7 +1562,7 @@ window.vscodeApi = acquireVsCodeApi();
       this.postMessage({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
         history,
-        availableRuns: workingFile.outputHistory.length,
+        availableRuns: runs.length,
         currentRunIndex: runIndex,
       });
     } catch (error) {
@@ -1564,7 +1572,8 @@ window.vscodeApi = acquireVsCodeApi();
 
   /**
    * Handle CLEAR_RUN_HISTORY: delete all history files for the current workflow.
-   * Clears outputHistory from the working file and notifies the webview.
+   * Deletes the .history/<workflow-id>/ directory and notifies the webview.
+   * No working file changes needed — disk is the single source of truth.
    */
   private async handleClearRunHistory(): Promise<void> {
     if (!this.outputHistoryManager) {
@@ -1596,25 +1605,11 @@ window.vscodeApi = acquireVsCodeApi();
         workflowId
       );
 
-      // Delete the history directory for this workflow
+      // Delete the history directory for this workflow (disk is source of truth)
       try {
         await fs.rm(workflowHistoryDir, { recursive: true, force: true });
       } catch (error) {
         Log.warn("Failed to delete history directory:", error);
-      }
-
-      // Clear outputHistory from working file
-      try {
-        const content = await fs.readFile(workingFilePath, "utf-8");
-        const workingFile = JSON.parse(content);
-        workingFile.outputHistory = [];
-        await fs.writeFile(
-          workingFilePath,
-          JSON.stringify(workingFile, null, 2),
-          "utf-8"
-        );
-      } catch (error) {
-        Log.warn("Failed to clear working file outputHistory:", error);
       }
 
       // Notify webview that history was cleared

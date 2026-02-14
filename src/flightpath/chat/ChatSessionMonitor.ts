@@ -230,18 +230,18 @@ export class ChatSessionMonitor {
     // Recently updated files (including resumed old sessions) will be checked first
     allFiles.sort((a, b) => b.mtime - a.mtime);
 
-    const filesToSearch = allFiles;
-
     // Normalize prompt for comparison (trim and first 100 chars)
     const normalizedPrompt = promptText.trim().substring(0, 100);
 
-    // Performance note: We search ALL files to handle resumed sessions from any age
-    // BUT we return immediately on first match, so we rarely search all 100+ files
-    // Most common cases (recent activity) match within first 1-5 files
+    Log.debug(
+      `🔎 Searching ${allFiles.length} session files for prompt: "${normalizedPrompt.substring(0, 60)}..."`,
+      "ChatSessionMonitor"
+    );
 
     let filesChecked = 0;
+    let textMatchesSkippedDueToCompletion = 0;
 
-    for (const file of filesToSearch) {
+    for (const file of allFiles) {
       try {
         const session = ChatSessionParser.parseSessionFile(file.path);
 
@@ -264,25 +264,28 @@ export class ChatSessionMonitor {
 
           if (messageText.includes(normalizedPrompt)) {
             // CRITICAL: Check if THIS SPECIFIC REQUEST INDEX was complete BEFORE we sent
-            const basename = path.basename(file.path);
-            const cachedSnapshot = this.sessionCache.get(basename);
-
             // Three cases:
             // 1. File not in cache yet (NEW session) → use it
             // 2. Request index >= cached request count (NEW request) → use it
-            // 3. Request index < cached count AND was complete → skip it
+            // 3. Request index < cached count AND was complete → skip it (old completed request)
             const wasCompleteBeforeSend =
               cachedSnapshot &&
               i < cachedSnapshot.requestCount &&
               cachedSnapshot.completedRequestIndices.has(i);
 
             if (wasCompleteBeforeSend) {
+              Log.debug(
+                `   ⏭️ Skipping ${basename} req[${i}]: text matches but was already complete before send ` +
+                  `(cachedCount=${cachedSnapshot?.requestCount}, completedIndices=[${[...(cachedSnapshot?.completedRequestIndices ?? [])].join(",")}])`,
+                "ChatSessionMonitor"
+              );
+              textMatchesSkippedDueToCompletion++;
               continue; // Skip this old completed request, keep searching
             }
 
             // This request is either:
             // 1. NEW (index >= cached request count) - added after we sent
-            // 2. INCOMPLETE (existed before but not finished yet) - index < count but not in completed set
+            // 2. INCOMPLETE (existed before but not finished yet)
             // Both are valid matches!
 
             const ageSeconds = Math.round((Date.now() - file.mtime) / 1000);
@@ -291,13 +294,15 @@ export class ChatSessionMonitor {
                 ? `${ageSeconds}s ago`
                 : `${Math.round(ageSeconds / 60)}min ago`;
 
-            // Check if this is a NEW session (created after we sent) or EXISTING session
-            // basename already defined above when checking cache
             const isExisting = this.sessionsBeforeSend.has(basename);
             const sessionType = isExisting ? "EXISTING" : "NEW";
+            const cachedInfo = cachedSnapshot
+              ? `cachedCount=${cachedSnapshot.requestCount}, completedIndices=[${[...cachedSnapshot.completedRequestIndices].join(",")}]`
+              : "not-in-cache";
 
             Log.info(
-              `✅ Found ${sessionType} session file by prompt match: ${basename} (modified ${ageDisplay}, checked ${filesChecked + 1} files)`
+              `✅ Found ${sessionType} session file by prompt match: ${basename} req[${i}] ` +
+                `(modified ${ageDisplay}, checked ${filesChecked + 1} files, ${cachedInfo})`
             );
             return file.path;
           }
@@ -309,6 +314,12 @@ export class ChatSessionMonitor {
         filesChecked++;
         continue;
       }
+    }
+
+    if (textMatchesSkippedDueToCompletion > 0) {
+      Log.info(
+        `🔍 Prompt text found in ${textMatchesSkippedDueToCompletion} request(s) but all were already complete before send — still searching for new request`
+      );
     }
 
     return null;
@@ -500,15 +511,19 @@ export class ChatSessionMonitor {
   }
 
   /**
-   * Wait for completion by polling the session file
+   * Wait for completion by polling the session file.
+   *
+   * Uses **inactivity-based** timeout: the timer resets each time VS Code writes
+   * new data to the session file (mtime change). This allows responses that take
+   * hours to complete without being cut short by a fixed wall-clock limit.
    *
    * @param isCancellingFn Function that returns true if cancellation requested
-   * @param maxWaitMs Maximum time to wait (default: 2 minutes)
+   * @param maxInactivityMs Max ms with NO session file writes before timing out
    * @returns Completion result with success/failure/cancellation status
    */
   async waitForCompletion(
     isCancellingFn: () => boolean,
-    maxWaitMs: number = 120000
+    maxInactivityMs: number = 120000
   ): Promise<CompletionResult> {
     const POLL_INTERVAL = 500; // Check every 500ms
     const startTime = Date.now();
@@ -516,14 +531,27 @@ export class ChatSessionMonitor {
     let pollCount = 0;
     let foundSessionFile = !!this.sessionFilePath; // If we already have a session (resume), start tracking immediately
 
+    // Inactivity tracking: reset whenever VS Code writes to the session file (mtime change)
+    let lastActivityTime = startTime;
+    let lastKnownMtime: number | null = null;
+
     if (!foundSessionFile) {
       Log.info("⏳ Searching for session file by prompt text...");
     } else {
-      Log.info(`⏳ Monitoring session: ${path.basename(this.sessionFilePath!)}`);
+      Log.info(
+        `⏳ Monitoring session: ${path.basename(this.sessionFilePath!)} (inactivity timeout: ${Math.round(maxInactivityMs / 1000)}s)`
+      );
+      // Seed initial mtime so first write resets the inactivity clock
+      try {
+        lastKnownMtime = fs.statSync(this.sessionFilePath!).mtimeMs;
+      } catch {
+        // File may not exist yet; will be caught on first poll
+      }
     }
 
-    while (Date.now() - startTime < maxWaitMs) {
+    while (true) {
       pollCount++;
+      const now = Date.now();
 
       // Check for user cancellation
       if (isCancellingFn()) {
@@ -534,9 +562,26 @@ export class ChatSessionMonitor {
         };
       }
 
-      const now = Date.now();
+      // ── Inactivity timeout check ──────────────────────────────────────────
+      // Only enforce inactivity after we have a session file to track.
+      // Before that, the submitWithRetry loop already enforces its own limit.
+      if (foundSessionFile) {
+        const inactiveMs = now - lastActivityTime;
+        if (inactiveMs > maxInactivityMs) {
+          const totalElapsed = Math.round((now - startTime) / 1000);
+          const inactiveSec = Math.round(inactiveMs / 1000);
+          const finalRequestCount = this.getRequestCount(this.sessionFilePath!);
+          Log.warn(
+            `⏱️ Session monitoring timeout after ${inactiveSec}s of inactivity (${totalElapsed}s total, ${finalRequestCount} requests)`
+          );
+          return {
+            completed: false,
+            failureReason: `Session monitoring inactivity timeout after ${inactiveSec}s`,
+          };
+        }
+      }
 
-      // Search for our session file by prompt text every poll until found (aggressive search)
+      // ── Search for session file ───────────────────────────────────────────
       if (!foundSessionFile) {
         const matchedFile = this.findSessionFileByPromptText(this.promptText);
         if (matchedFile) {
@@ -553,6 +598,14 @@ export class ChatSessionMonitor {
           Log.info(
             `🎯 Found ${sessionType} session after ${elapsed}s: ${basename} (${requestCount} requests)`
           );
+
+          // Seed inactivity tracking from actual file mtime
+          try {
+            lastKnownMtime = fs.statSync(matchedFile).mtimeMs;
+          } catch {
+            // ignore
+          }
+          lastActivityTime = now; // Reset inactivity clock from moment of discovery
 
           // IMPORTANT: Check if the response is already complete when we find the file
           // This handles the case where Copilot finished before we found the session
@@ -586,28 +639,37 @@ export class ChatSessionMonitor {
         }
       }
 
-      // Now we have the correct session file, poll for completion
+      // ── Check session file mtime for activity ─────────────────────────────
+      // VS Code appends JSONL patches while streaming — mtime changes on each write
+      try {
+        const currentMtime = fs.statSync(this.sessionFilePath!).mtimeMs;
+        if (currentMtime !== lastKnownMtime) {
+          if (lastKnownMtime !== null) {
+            Log.debug(`📝 Session file updated — inactivity clock reset`);
+          }
+          lastKnownMtime = currentMtime;
+          lastActivityTime = now;
+        }
+      } catch {
+        // File may be temporarily locked; ignore and keep polling
+      }
 
-      // Check request count
+      // ── Completion check ──────────────────────────────────────────────────
       const currentRequestCount = this.getRequestCount(this.sessionFilePath!);
+      const inactiveSec = Math.round((now - lastActivityTime) / 1000);
+      const totalSec = Math.round((now - startTime) / 1000);
 
-      // Log progress every 5 seconds (only when polling for completion)
+      // Log progress every 5 seconds
       if (now - lastLogTime >= 5000) {
-        const elapsed = Math.round((now - startTime) / 1000);
         Log.info(
-          `⏳ Waiting for completion... ${elapsed}s (${currentRequestCount} requests)`
+          `⏳ Waiting for completion... ${totalSec}s total, ${inactiveSec}s inactive (${currentRequestCount} requests)`
         );
         lastLogTime = now;
       }
 
-      // Check if the last request is complete
-      // If we have any requests in the file, check if the last one is complete
-      // This handles both:
-      // 1. Count increased (new request added) - check if it's complete
-      // 2. Count stayed same (found existing request via submit verification) - check if it's NOW complete
       if (currentRequestCount > 0) {
         // Debug logging on first poll or every 10 seconds
-        const shouldDebug = pollCount === 1 || (now - startTime) % 10000 < POLL_INTERVAL;
+        const shouldDebug = pollCount === 1 || totalSec % 10 < 1;
 
         const { complete, cancelled } = this.isLastRequestComplete(
           this.sessionFilePath!,
@@ -632,34 +694,11 @@ export class ChatSessionMonitor {
           Log.info("✅ Response complete (session file)");
           return { completed: true };
         }
-        // If request exists but not complete, continue polling (logged above every 5s)
       }
 
       // Wait before next poll
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
     }
-
-    // Timeout - log final state
-    const elapsed = Math.round((Date.now() - startTime) / 1000);
-    if (!foundSessionFile) {
-      Log.warn(
-        `⏱️ Timeout: Never found session file containing our prompt (${elapsed}s)`
-      );
-      return {
-        completed: false,
-        failureReason: `Could not find session file with prompt text after ${elapsed}s`,
-      };
-    }
-
-    const finalRequestCount = this.getRequestCount(this.sessionFilePath!);
-    Log.warn(
-      `⏱️ Session monitoring timeout after ${elapsed}s (${finalRequestCount} requests)`
-    );
-
-    return {
-      completed: false,
-      failureReason: `Session monitoring timeout after ${elapsed}s`,
-    };
   }
 
   /**

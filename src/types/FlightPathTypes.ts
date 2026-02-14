@@ -83,18 +83,6 @@ export interface WorkingFile extends PromptFile {
   startedAt: number; // Timestamp when workflow started
   lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)
   _runtime?: WorkingFileRuntime; // Optional runtime state (can be omitted for manual runs)
-
-  /**
-   * NEW: Array of history file basenames (newest first)
-   * Relative to .flightpath/.history/<workflow-id>/
-   *
-   * Example: ["run-3-2024-01-21T14-20-45.json", "run-2-...", "run-1-..."]
-   *
-   * - undefined = no history (legacy workflows, or history disabled)
-   * - [] = history enabled but no completed runs yet
-   * - [filenames] = available run history files
-   */
-  outputHistory?: string[];
 }
 
 export interface PromptItem extends ExecutionProperties {

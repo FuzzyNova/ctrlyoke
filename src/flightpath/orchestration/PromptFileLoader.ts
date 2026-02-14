@@ -244,10 +244,9 @@ export class PromptFileLoader {
             restoredState.workflowName || undefined
           );
 
-          // Load output history if available (auto-loads most recent run)
+          // Load output history if available (auto-loads most recent run from disk)
           await this.dashboardProvider.loadOutputHistoryForWorkflow(
-            workingFilePath,
-            workingFile
+            workingFilePath
           );
         }
       } else {
