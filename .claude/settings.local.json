@@ -44,7 +44,15 @@
       "WebFetch(domain:blog.skinnyandbald.com)",
       "Bash(find:*)",
       "WebFetch(domain:github.blog)",
-      "WebFetch(domain:www.eliostruyf.com)"
+      "WebFetch(domain:www.eliostruyf.com)",
+      "WebFetch(domain:docs.github.com)",
+      "WebFetch(domain:openai.com)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:assets.ctfassets.net)",
+      "WebFetch(domain:aihackers.net)",
+      "WebFetch(domain:venturebeat.com)",
+      "WebFetch(domain:paddo.dev)"
     ],
     "deny": [],
     "ask": []

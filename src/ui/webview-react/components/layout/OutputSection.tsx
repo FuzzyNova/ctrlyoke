@@ -255,13 +255,13 @@ export const OutputSection: React.FC = () => {
             />
           )}
           <button
-            className="icon-btn py-0.5 px-2"
+            className="icon-btn py-0 px-2"
             id="export-btn"
             title="Export output to markdown"
             onClick={handleExport}
             disabled={!hasOutput}
           >
-            <i className="codicon codicon-export" />
+            <i className="codicon codicon-sm codicon-export" />
           </button>
         </div>
       </div>

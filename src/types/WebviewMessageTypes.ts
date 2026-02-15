@@ -511,4 +511,9 @@ export type IncomingMessage =
       type: typeof MESSAGE_TYPES.COMPLETIONS_RESPONSE;
       completions: any[];
       trigger: string;
+    }
+  | {
+      type: typeof MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE;
+      /** Map from reference key (e.g. "file:src/foo.ts") to token count */
+      counts: Record<string, number>;
     };

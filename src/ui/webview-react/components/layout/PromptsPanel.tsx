@@ -105,7 +105,7 @@ export const PromptsPanel: React.FC<{
     <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
       {/* Header - clickable to collapse */}
       <div
-        className="flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+        className="flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
         onClick={togglePromptsCollapse}
         role="button"
         aria-label="Collapse prompts"

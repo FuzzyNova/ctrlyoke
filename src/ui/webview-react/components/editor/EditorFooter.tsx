@@ -1,7 +1,7 @@
 import React from "react";
 import { useEditorStore } from "../../store/editorStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { countTokens } from "../../utils/tokenizer";
+import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 
 interface EditorFooterProps {
   isEditMode: boolean;
@@ -48,7 +48,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   propertiesOpen,
 }) => {
   const { promptText } = useEditorStore();
-  const tokenCount = countTokens(promptText);
+  const tokenCount = useAttachmentTokenCount(promptText);
   const [footerRef, isNarrow] = useElementNarrow();
 
   return (

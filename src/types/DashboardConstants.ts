@@ -102,6 +102,11 @@ export const MESSAGE_TYPES = {
   COMPLETIONS_RESPONSE: "completionsResponse", // Return autocomplete suggestions
   OPEN_FILE: "openFile", // Open file from #file: link
 
+  // Token counting - Webview -> Extension: Request token counts for attachment references
+  REQUEST_ATTACHMENT_TOKEN_COUNTS: "requestAttachmentTokenCounts",
+  // Extension -> Webview: Return token counts for requested references
+  ATTACHMENT_TOKEN_COUNTS_RESPONSE: "attachmentTokenCountsResponse",
+
   // Output history messages
   OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",  // Extension -> Webview: Load history for display
   LOAD_RUN_HISTORY: "loadRunHistory",            // Webview -> Extension: Request specific run

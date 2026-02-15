@@ -28,7 +28,8 @@
       "@store/*": ["./store/*"],
       "@utils/*": ["./utils/*"],
       "@types/*": ["./types/*"],
-      "@root/types/*": ["../../types/*"]
+      "@root/types/*": ["../../types/*"],
+      "@root/utils/*": ["../../utils/*"]
     }
   },
   "include": ["./**/*.ts", "./**/*.tsx"],

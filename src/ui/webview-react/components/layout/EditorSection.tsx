@@ -80,7 +80,7 @@ export const EditorSection: React.FC = () => {
         {!isEditMode && (
           <input
             type="text"
-            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] flex-shrink-0"
+            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border-0 rounded focus:outline-none flex-shrink-0"
             placeholder="Prompt name (optional)"
             value={promptName}
             onChange={(e) => setPromptName(e.target.value)}

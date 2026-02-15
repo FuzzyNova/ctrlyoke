@@ -45,7 +45,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   // Idle state: Just show count
   return (
     <span
-      className={`text-xs text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-badge-background)] px-2 py-0.5 rounded ${className}`}
+      className={`text-xs text-[var(--vscode-descriptionForeground)] ${className}`}
     >
       {totalSteps} {totalSteps === 1 ? "prompt" : "prompts"}
     </span>

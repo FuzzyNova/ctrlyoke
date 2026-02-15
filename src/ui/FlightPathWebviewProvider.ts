@@ -40,6 +40,8 @@ import { Harness } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
+import { ContextExpander } from "../utils/ContextExpander";
+import { encode } from "gpt-tokenizer";
 
 const execAsync = promisify(exec);
 
@@ -385,6 +387,10 @@ window.vscodeApi = acquireVsCodeApi();
 
         case MESSAGE_TYPES.OPEN_FILE:
           this.handleOpenFile(message.path, message.lineStart, message.lineEnd);
+          break;
+
+        case MESSAGE_TYPES.REQUEST_ATTACHMENT_TOKEN_COUNTS:
+          await this.handleAttachmentTokenCountRequest(message.references);
           break;
 
         // ============================================================================
@@ -1313,6 +1319,60 @@ window.vscodeApi = acquireVsCodeApi();
     }
   }
 
+  /**
+   * Handle request to count tokens for attachment references.
+   * Uses ContextExpander to expand each raw reference to its actual content,
+   * then counts tokens in the attachment XML only (excluding the reference text itself).
+   * Results are cached by the webview keyed on the raw reference string.
+   *
+   * @param references Array of raw reference strings as they appear in the prompt
+   *   (e.g. ["@src/foo.ts", "#file:src/bar.ts:10-20", "#sym:src/baz.ts:MyClass:42"])
+   */
+  private async handleAttachmentTokenCountRequest(
+    references: string[]
+  ): Promise<void> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot || !references || references.length === 0) {
+      this.postMessage({
+        type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
+        counts: {},
+      });
+      return;
+    }
+
+    const counts: Record<string, number> = {};
+
+    await Promise.all(
+      references.map(async (rawRef) => {
+        try {
+          // Each ContextExpander instance has its own deduplication state,
+          // so create a fresh one per reference to get correct per-ref token count.
+          const expander = new ContextExpander(workspaceRoot);
+          const expanded = await expander.expandContext(rawRef);
+
+          if (expanded === rawRef) {
+            // No attachment was generated (reference not found or not expandable)
+            counts[rawRef] = 0;
+            return;
+          }
+
+          // expanded = "<attachment ...>...</attachment>\n\n<rawRef>"
+          // Extract only the attachment content (everything before "\n\n<rawRef>")
+          const attachmentContent = expanded.slice(0, expanded.lastIndexOf(`\n\n${rawRef}`));
+          counts[rawRef] = encode(attachmentContent).length;
+        } catch (error) {
+          Log.warn(`Failed to count tokens for reference "${rawRef}":`, error);
+          counts[rawRef] = 0;
+        }
+      })
+    );
+
+    this.postMessage({
+      type: MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE,
+      counts,
+    });
+  }
+
   private async handleNewWorkflow(): Promise<void> {
     try {
       const templates = await this.templateManager.getAvailableTemplates();
@@ -1894,3 +1954,4 @@ window.vscodeApi = acquireVsCodeApi();
     }
   }
 }
+

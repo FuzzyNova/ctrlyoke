@@ -137,12 +137,19 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     const editorStore = useEditorStore.getState();
     const settingsStore = useSettingsStore.getState();
+    const uiStore = useUiStore.getState();
 
     workflowStore.loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
       prompts: message.prompts || [],
     });
+
+    // Reset run history — a newly loaded file has no known run count yet.
+    // The extension will send RUN_HISTORY_UPDATED if there are existing runs.
+    workflowStore.clearHistoryOutputs();
+    uiStore.clearHistoryView();
+    useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
     editorStore.setHasActiveQueue(true);
     settingsStore.setWorkflowLoaded(true);
