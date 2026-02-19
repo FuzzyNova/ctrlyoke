@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import {
   PromptItem,
+  PromptFile,
   DynamicQueueConfig,
   EXECUTION_STATES,
   Harness,
@@ -19,7 +20,7 @@ import {
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
-import { PropertyResolver } from "../utils/PropertyResolver";
+import { PropertyResolver, ResolvedProperties } from "../utils/PropertyResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -170,75 +171,6 @@ export class WorkflowExecutor {
 
       Log.info(`🚀 Executing prompt ${i + 1}/${liveProgress.total}`);
 
-      // Record start time for this prompt
-      const startTime = Date.now();
-
-      // Always wait for response completion before marking workflow as done.
-      // Previously, single-prompt workflows without endCondition would skip completion detection,
-      // causing the queue to be marked complete before Copilot finished responding.
-      const needsCompletionDetection = true;
-
-      // Set up response listener BEFORE sending prompt to avoid race condition
-      const responsePromise = this.waitForResponseComplete(prompt, integration);
-
-      // Set up streaming listener for real-time output (for integrations that support CLI output)
-      let streamingDisposable: vscode.Disposable | undefined;
-      let structuredStreamingDisposable: vscode.Disposable | undefined;
-      let promptReadyDisposable: vscode.Disposable | undefined;
-      if (context.dashboardProvider) {
-        // Initialize streaming output with basic prompt text
-        context.dashboardProvider.updateCliStreamingChunk(i, ""); // Initialize buffer
-        context.dashboardProvider.updateCliOutput(i, {
-          prompt: prompt.prompt,
-          response: "",
-          elapsed: 0,
-          tokens: undefined,
-          isStreaming: true,
-          cliCommand: undefined,
-          workingDirectory: context.workspaceFolderPath,
-          timestampMs: Date.now(),
-          attemptIndex: 0,
-        });
-
-        // Listen for prompt ready event (fires when full prompt and command are built)
-        promptReadyDisposable = integration.onPromptReady((data) => {
-          context.dashboardProvider?.updateCliOutput(i, {
-            prompt: prompt.prompt, // Use unexpanded prompt to avoid flooding output with large attachments
-            response: "",
-            elapsed: 0,
-            tokens: undefined,
-            isStreaming: true,
-            cliCommand: context.shouldShowCliCommand
-              ? data.cliCommand
-              : undefined,
-            workingDirectory: context.workspaceFolderPath,
-            timestampMs: Date.now(),
-            attemptIndex: 0,
-          });
-        });
-
-        streamingDisposable = integration.onStreamingChunk((chunk) => {
-          Log.info(
-            `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
-          );
-          // Log to Output channel - centralized logging for all streaming content
-          Log.append(chunk);
-          // Update dashboard (plain text streaming - Copilot CLI)
-          context.dashboardProvider?.updateCliStreamingChunk(i, chunk);
-        });
-
-        // Subscribe to structured streaming events (Claude/Codex CLI)
-        structuredStreamingDisposable = integration.onStreamingEvents(
-          (events) => {
-            Log.info(
-              `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
-            );
-            // Update dashboard with structured events
-            context.dashboardProvider?.updateCliStreamingEvents(i, events);
-          }
-        );
-      }
-
       // Log resolved properties for debugging
       Log.info(
         `📋 Resolved properties for prompt ${i + 1}: ` +
@@ -250,26 +182,32 @@ export class WorkflowExecutor {
           `endCondition=${resolvedProperties.endCondition ? "defined" : "none"}`
       );
 
-      // Send prompt to integration
-      const success = await integration.sendPrompt(
+      // Send prompt with full streaming lifecycle (listeners, response wait, cleanup)
+      const result = await this.executeWithStreaming(
         prompt,
-        needsCompletionDetection,
+        integration,
+        context,
+        i,
+        0, // attemptIndex: initial attempt
         {
           promptIndex: i,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
-          resolvedProperties, // Pass resolved properties to integration
-          workflowFile, // Pass workflow file for session resolution
-          promptQueue: this.promptQueue, // Pass queue for working file updates
+          resolvedProperties,
+          workflowFile,
+          promptQueue: this.promptQueue,
+        },
+        async () => {
+          // Post-send hook: runs after successful send, before awaiting the response
+          await this.promptQueue.markCurrentAsSent();
+          this.isWaitingForResponse = true;
+          Log.info(
+            `⏳ Waiting for Copilot to finish responding to prompt ${i + 1}...`
+          );
         }
       );
 
-      if (!success) {
-        // Clean up event listeners immediately on failure
-        streamingDisposable?.dispose();
-        structuredStreamingDisposable?.dispose();
-        promptReadyDisposable?.dispose();
-
+      if (!result) {
         const shouldContinue = await this.handlePromptSendFailure(
           integration,
           context,
@@ -278,29 +216,11 @@ export class WorkflowExecutor {
         if (!shouldContinue) {
           break;
         }
+        continue;
       }
 
-      // Mark as sent in queue
-      await this.promptQueue.markCurrentAsSent();
-
-      // Mark that we're waiting for a response
-      this.isWaitingForResponse = true;
-
-      // Wait for Copilot to finish responding before proceeding
-      Log.info(
-        `⏳ Waiting for Copilot to finish responding to prompt ${i + 1}...`
-      );
-      const responseText = await responsePromise;
       Log.info(`✅ Prompt ${i + 1} completed`);
-
-      // Clean up event listeners
-      // This prevents the next prompt's subscriptions from overlapping with this one
-      streamingDisposable?.dispose();
-      structuredStreamingDisposable?.dispose();
-      promptReadyDisposable?.dispose();
-
-      // Calculate duration
-      const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
+      const { responseText, duration } = result;
 
       // Update dashboard with CLI output (if integration provides it) and save to history
       await this.updateDashboardWithResponse(
@@ -552,6 +472,113 @@ export class WorkflowExecutor {
   }
 
   /**
+   * Send a prompt with full streaming lifecycle management.
+   *
+   * Handles dashboard streaming initialization, listener setup/teardown, and response
+   * completion waiting in a single place — used by both the main execution loop
+   * (attemptIndex = 0) and retry callbacks (attemptIndex = N).
+   *
+   * @param onPromptSent Optional async callback invoked after a successful send but before
+   *   awaiting the response. Use for queue bookkeeping that must happen in that window
+   *   (e.g. markCurrentAsSent, isWaitingForResponse).
+   * @returns { responseText, duration } on success, null if sendPrompt returns false.
+   */
+  private async executeWithStreaming(
+    promptItem: PromptItem,
+    integration: CopilotIntegration,
+    context: WorkflowContext,
+    stepIndex: number,
+    attemptIndex: number,
+    sendOptions: {
+      promptIndex: number;
+      allPrompts: PromptItem[];
+      filePath?: string;
+      resolvedProperties?: ResolvedProperties;
+      workflowFile?: PromptFile;
+      promptQueue?: PromptQueue;
+    },
+    onPromptSent?: () => Promise<void>
+  ): Promise<{ responseText: string; duration: number } | null> {
+    const startTime = Date.now();
+
+    // Initialize dashboard streaming state
+    if (context.dashboardProvider) {
+      context.dashboardProvider.updateCliStreamingChunk(stepIndex, "");
+      context.dashboardProvider.updateCliOutput(stepIndex, {
+        prompt: promptItem.prompt,
+        response: "",
+        elapsed: 0,
+        tokens: undefined,
+        isStreaming: true,
+        cliCommand: undefined,
+        workingDirectory: context.workspaceFolderPath,
+        timestampMs: Date.now(),
+        attemptIndex,
+      });
+    }
+
+    // Set up response listener BEFORE sending to avoid race condition
+    const responsePromise = this.waitForResponseComplete(promptItem, integration);
+
+    // Set up streaming listeners (no-op if no dashboard)
+    let streamingDisposable: vscode.Disposable | undefined;
+    let structuredStreamingDisposable: vscode.Disposable | undefined;
+    let promptReadyDisposable: vscode.Disposable | undefined;
+    if (context.dashboardProvider) {
+      promptReadyDisposable = integration.onPromptReady((data) => {
+        context.dashboardProvider?.updateCliOutput(stepIndex, {
+          prompt: promptItem.prompt,
+          response: "",
+          elapsed: 0,
+          tokens: undefined,
+          isStreaming: true,
+          cliCommand: context.shouldShowCliCommand ? data.cliCommand : undefined,
+          workingDirectory: context.workspaceFolderPath,
+          timestampMs: Date.now(),
+          attemptIndex,
+        });
+      });
+
+      streamingDisposable = integration.onStreamingChunk((chunk) => {
+        Log.info(
+          `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
+        );
+        Log.append(chunk);
+        context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
+      });
+
+      structuredStreamingDisposable = integration.onStreamingEvents((events) => {
+        Log.info(
+          `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
+        );
+        context.dashboardProvider?.updateCliStreamingEvents(stepIndex, events);
+      });
+    }
+
+    const disposeListeners = () => {
+      streamingDisposable?.dispose();
+      structuredStreamingDisposable?.dispose();
+      promptReadyDisposable?.dispose();
+    };
+
+    const success = await integration.sendPrompt(promptItem, true, sendOptions);
+    if (!success) {
+      disposeListeners();
+      return null;
+    }
+
+    if (onPromptSent) {
+      await onPromptSent();
+    }
+
+    const responseText = await responsePromise;
+    disposeListeners();
+
+    const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
+    return { responseText, duration };
+  }
+
+  /**
    * Create a callback for sending retry prompts.
    * Used by EndConditionHandler for retry orchestration.
    */
@@ -563,117 +590,49 @@ export class WorkflowExecutor {
       retryPromptItem: PromptItem,
       currentIndex: number
     ): Promise<string | null> => {
-      const retryStartTime = Date.now();
+      // incrementRetryCount was already called by EndConditionHandler before this callback is invoked
+      const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
 
-      // Always need completion detection for retries
-      const responsePromise = this.waitForResponseComplete(
-        retryPromptItem,
-        integration
-      );
-
-      // Send retry prompt with workflow context
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(
         retryPromptItem,
         workflowFile
       );
-      const resolvedRetryProperties = {
-        ...resolvedProperties,
-        resumeSession: true,
-      };
-      const success = await integration.sendPrompt(
+
+      Log.info("⏳ Waiting for retry response...");
+      const result = await this.executeWithStreaming(
         retryPromptItem,
-        true, // needsCompletionDetection
+        integration,
+        context,
+        currentIndex,
+        retryAttemptIndex,
         {
           promptIndex: currentIndex,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
-          resolvedProperties: resolvedRetryProperties,
-          workflowFile, // Pass workflow file for session resolution
-          promptQueue: this.promptQueue, // Pass queue for working file updates
+          resolvedProperties: { ...resolvedProperties, resumeSession: true },
+          workflowFile,
+          promptQueue: this.promptQueue,
         }
       );
 
-      if (!success) {
+      if (!result) {
         return null;
       }
 
-      Log.info("⏳ Waiting for retry response...");
-      const retryResponseText = await responsePromise;
       Log.info("✅ Retry response complete");
+      await this.updateDashboardWithResponse(
+        context,
+        integration,
+        retryPromptItem,
+        result.responseText,
+        result.duration,
+        currentIndex,
+        retryAttemptIndex
+      );
 
-      const retryDuration = ((Date.now() - retryStartTime) / 1000).toFixed(1);
-
-      // Update dashboard with CLI output for retry (if integration supports it)
-      {
-        // Get structured output if available (CLI integrations only)
-        const parsedOutput = integration.getLastParsedOutput?.();
-        let structured: DashboardOutput | undefined;
-        if (parsedOutput) {
-          structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
-        }
-
-        // Get token statistics (prefer structured output over legacy parsing)
-        let tokens: { prompt: number; completion: number } | undefined;
-        if (parsedOutput?.metadata.usage) {
-          // Modern path: Use structured metadata directly
-          tokens = {
-            prompt: parsedOutput.metadata.usage.inputTokens,
-            completion: parsedOutput.metadata.usage.outputTokens,
-          };
-        } else {
-          // Legacy fallback: Parse from statistics string (Chat integration)
-          const lastResult = integration.getLastResult();
-          if (lastResult?.statistics) {
-            tokens = integration.parseTokenCounts(lastResult.statistics);
-          }
-        }
-
-        const cliCommand = context.shouldShowCliCommand
-          ? integration.getLastCliCommand()
-          : undefined;
-
-        // Use unexpanded prompt to avoid flooding output with large attachments
-        const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
-        const retryCliOutput = {
-          prompt: retryPromptItem.prompt,
-          response: retryResponseText,
-          structured,
-          elapsed: parseFloat(retryDuration),
-          tokens,
-          isStreaming: false,
-          cliCommand,
-          workingDirectory: context.workspaceFolderPath,
-          timestampMs: Date.now(),
-          attemptIndex: retryAttemptIndex,
-        };
-
-        if (context.dashboardProvider) {
-          context.dashboardProvider.updateCliOutput(
-            currentIndex,
-            retryCliOutput
-          );
-        }
-
-        // Save retry output to history
-        if (context.historyFilePath && context.outputHistoryManager) {
-          const statusMessages =
-            this.stepStatusMessages.get(currentIndex) ?? [];
-          await context.outputHistoryManager
-            .saveStepOutput(
-              context.historyFilePath,
-              currentIndex,
-              [retryCliOutput],
-              statusMessages
-            )
-            .catch((err) =>
-              Log.warn("Failed to save retry output to history:", err)
-            );
-        }
-      }
-
-      return retryResponseText;
+      return result.responseText;
     };
   }
 
@@ -904,7 +863,8 @@ export class WorkflowExecutor {
     prompt: PromptItem,
     responseText: string,
     duration: number,
-    currentIndex: number
+    currentIndex: number,
+    attemptIndex: number = 0
   ): Promise<void> {
     // Get structured output if available (CLI integrations only)
     const parsedOutput = integration.getLastParsedOutput?.();
@@ -945,7 +905,7 @@ export class WorkflowExecutor {
       cliCommand,
       workingDirectory: context.workspaceFolderPath,
       timestampMs: Date.now(),
-      attemptIndex: 0,
+      attemptIndex,
     };
 
     // Use unexpanded prompt to avoid flooding output with large attachments
