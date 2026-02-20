@@ -1,6 +1,7 @@
 import React from "react";
 import { formatTime } from "@utils/outputUtils";
 import { BashOutput } from "./BashOutput";
+import { MarkdownText } from "./MarkdownText";
 import {
   FileEditOutput,
   FileWriteOutput,
@@ -39,10 +40,8 @@ interface TextOutputProps {
 
 const TextOutput: React.FC<TextOutputProps> = ({ text, className = "" }) => {
   return (
-    <div
-      className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
-    >
-      {text}
+    <div className={`my-2 ${className}`}>
+      <MarkdownText>{text}</MarkdownText>
     </div>
   );
 };
@@ -64,10 +63,13 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
 }) => {
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
-    <div
-      className={`my-2 text-vscode-fg whitespace-pre-wrap break-words text-xs ${className}`}
-    >
-      ● {displayLabel}: {text}
+    <div className={`my-2 ${className}`}>
+      <div className="text-xs text-[var(--vscode-descriptionForeground)] mb-1">
+        ● {displayLabel}
+      </div>
+      <div className="text-[var(--vscode-descriptionForeground)] pl-3 border-l border-[var(--vscode-panel-border)]">
+        <MarkdownText>{text}</MarkdownText>
+      </div>
     </div>
   );
 };
@@ -309,7 +311,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}
           >
-            {streamingChunk}
+            <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
           </div>
           <StructuredOutput events={output.structured?.events as CliEvent[]} />
         </>
@@ -327,7 +329,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasStreamingText) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          {streamingChunk}
+          <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
         </div>
       );
     }
@@ -341,7 +343,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasFinalResponse) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          {output.response}
+          <MarkdownText>{output.response as string}</MarkdownText>
         </div>
       );
     }

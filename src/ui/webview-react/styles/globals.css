@@ -12,6 +12,9 @@
    index.html with URLs injected by the VS Code extension at runtime.
    ============================================================================ */
 
+/* Streamdown: animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp) */
+@import "streamdown/styles.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -307,6 +310,114 @@ button .codicon {
 .custom-icon.icon-large {
   width: 20px;
   height: 20px;
+}
+
+/* ============================================================================
+   Streamdown Markdown Prose Styles
+   ============================================================================
+   Scoped to .markdown-text so these don't bleed into other UI elements.
+   Uses VS Code CSS variables for full theme compatibility.
+   ============================================================================ */
+.markdown-text {
+  color: var(--vscode-editor-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.markdown-text h1,
+.markdown-text h2,
+.markdown-text h3,
+.markdown-text h4,
+.markdown-text h5,
+.markdown-text h6 {
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  color: var(--vscode-foreground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding-bottom: 0.2em;
+}
+
+.markdown-text h1 { font-size: 1.4em; }
+.markdown-text h2 { font-size: 1.2em; }
+.markdown-text h3 { font-size: 1.1em; }
+.markdown-text h4,
+.markdown-text h5,
+.markdown-text h6 { font-size: 1em; }
+
+.markdown-text p {
+  margin: 0.5em 0;
+}
+
+.markdown-text ul,
+.markdown-text ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+
+.markdown-text li {
+  margin: 0.2em 0;
+}
+
+.markdown-text input[type="checkbox"] {
+  margin-right: 0.4em;
+  accent-color: var(--vscode-checkbox-selectBackground, #007acc);
+}
+
+.markdown-text blockquote {
+  border-left: 3px solid var(--vscode-textBlockQuote-border, #007acc);
+  background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
+  padding: 0.3em 0.8em;
+  margin: 0.5em 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+.markdown-text table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+  font-size: 0.9em;
+}
+
+.markdown-text th,
+.markdown-text td {
+  border: 1px solid var(--vscode-panel-border);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.markdown-text th {
+  background: var(--vscode-sideBar-background);
+  font-weight: 600;
+}
+
+.markdown-text tr:nth-child(even) td {
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.05));
+}
+
+.markdown-text hr {
+  border: none;
+  border-top: 1px solid var(--vscode-panel-border);
+  margin: 1em 0;
+}
+
+.markdown-text strong {
+  font-weight: 700;
+  color: var(--vscode-foreground);
+}
+
+.markdown-text em {
+  font-style: italic;
+}
+
+.markdown-text del {
+  text-decoration: line-through;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Streaming caret */
+[data-streamdown="caret"] {
+  background-color: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
 }
 
 /* ============================================================================
