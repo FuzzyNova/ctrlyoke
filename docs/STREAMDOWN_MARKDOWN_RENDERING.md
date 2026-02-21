@@ -1,4 +1,4 @@
-# Streamdown Markdown Rendering Plan
+# Streamdown Markdown Rendering Plan - completed
 
 ## Overview
 
@@ -26,31 +26,31 @@ Streamdown (`npm: streamdown`, v2.2.x) is a React component library from Vercel 
 
 The FlightPath output system renders events of these types (from `CLI_EVENT_TYPES`):
 
-| Event Type | Current Rendering | Proposed Change |
-|---|---|---|
-| `TEXT` | Plain `<pre>`/`<span>` text | **→ Use Streamdown** |
-| `THINKING` | Collapsible pre-formatted block | **→ Use Streamdown inside** |
-| `BASH_COMMAND` | Custom terminal-style component (`BashOutput`) | No change |
-| `FILE_READ` | Custom file op component (`ToolCallOutput`) | No change |
-| `FILE_WRITE` | Custom file op component | No change |
-| `FILE_EDIT` | Unified diff viewer with color coding | No change |
-| `FILE_DELETE` | Custom file op component | No change |
-| `MCP_TOOL_CALL` | Custom MCP component | No change |
-| `WEB_SEARCH` | Custom search results component | No change |
-| `TOOL_CALL` | Generic tool call component | No change |
-| `TOOL_RESULT` | Tool result component | No change |
+| Event Type      | Current Rendering                              | Proposed Change             |
+| --------------- | ---------------------------------------------- | --------------------------- |
+| `TEXT`          | Plain `<pre>`/`<span>` text                    | **→ Use Streamdown**        |
+| `THINKING`      | Collapsible pre-formatted block                | **→ Use Streamdown inside** |
+| `BASH_COMMAND`  | Custom terminal-style component (`BashOutput`) | No change                   |
+| `FILE_READ`     | Custom file op component (`ToolCallOutput`)    | No change                   |
+| `FILE_WRITE`    | Custom file op component                       | No change                   |
+| `FILE_EDIT`     | Unified diff viewer with color coding          | No change                   |
+| `FILE_DELETE`   | Custom file op component                       | No change                   |
+| `MCP_TOOL_CALL` | Custom MCP component                           | No change                   |
+| `WEB_SEARCH`    | Custom search results component                | No change                   |
+| `TOOL_CALL`     | Generic tool call component                    | No change                   |
+| `TOOL_RESULT`   | Tool result component                          | No change                   |
 
 **Plain-text streaming fallback** (`streamingChunks` in `workflowStore`) is also used when structured events haven't arrived yet — this should also be rendered with Streamdown.
 
 ### Key Files
 
-| File | Role |
-|---|---|
-| `src/ui/webview-react/components/output/CliOutput.tsx` | Main output container; renders all event types |
-| `src/ui/webview-react/components/output/ToolCallOutput.tsx` | Tool call event renderers (no changes) |
-| `src/ui/webview-react/components/output/BashOutput.tsx` | Bash command renderer (no changes) |
-| `src/ui/webview-react/components/layout/OutputSection.tsx` | Orchestrates all output; manages chronological sort |
-| `src/ui/webview-react/store/workflowStore.ts` | `streamingChunks`, `cliOutputs` state |
+| File                                                        | Role                                                |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `src/ui/webview-react/components/output/CliOutput.tsx`      | Main output container; renders all event types      |
+| `src/ui/webview-react/components/output/ToolCallOutput.tsx` | Tool call event renderers (no changes)              |
+| `src/ui/webview-react/components/output/BashOutput.tsx`     | Bash command renderer (no changes)                  |
+| `src/ui/webview-react/components/layout/OutputSection.tsx`  | Orchestrates all output; manages chronological sort |
+| `src/ui/webview-react/store/workflowStore.ts`               | `streamingChunks`, `cliOutputs` state               |
 
 ---
 
@@ -67,6 +67,7 @@ Additionally, Streamdown v2's Shiki integration loads language grammars from a *
 Use the **base Streamdown package without the `@streamdown/code` plugin**. Code blocks in AI responses will render as unstyled `<code>` elements by default. We can optionally provide a custom `components.code` override using `highlight.js` (no WASM, no CDN) for syntax coloring.
 
 **What works in VS Code webview (no issues):**
+
 - All GFM: headings, bold/italic, tables, task lists, blockquotes, lists, links
 - Inline code
 - Fenced code blocks (unstyled, via custom `code` component)
@@ -76,6 +77,7 @@ Use the **base Streamdown package without the `@streamdown/code` plugin**. Code 
 - Tailwind `className` prop
 
 **What does NOT work (skip for now):**
+
 - `@streamdown/code` plugin (Shiki, requires `wasm-unsafe-eval` + CDN)
 - `@streamdown/mermaid` plugin (Mermaid bundles server-side packages)
 
@@ -148,7 +150,12 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
   const components = useMemo(
     () => ({
       // Override <a> to open in external browser (webviews intercept clicks)
-      a: ({ href, children: linkChildren }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => (
+      a: ({
+        href,
+        children: linkChildren,
+      }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+        children?: React.ReactNode;
+      }) => (
         <a
           href={href}
           target="_blank"
@@ -159,7 +166,10 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         </a>
       ),
       // Inline code: use VS Code monospace style
-      code: ({ children: codeChildren, className: langClass }: React.HTMLAttributes<HTMLElement>) => (
+      code: ({
+        children: codeChildren,
+        className: langClass,
+      }: React.HTMLAttributes<HTMLElement>) => (
         <code
           className={`${langClass ?? ""} bg-[var(--vscode-textCodeBlock-background)] text-[var(--vscode-editor-foreground)] rounded px-1 py-0.5 font-mono text-[0.9em]`}
         >
@@ -220,10 +230,20 @@ Streamdown renders semantic HTML elements (`<h1>`–`<h6>`, `<ul>`, `<ol>`, `<ta
   padding-bottom: 0.2em;
 }
 
-.markdown-text h1 { font-size: 1.4em; }
-.markdown-text h2 { font-size: 1.2em; }
-.markdown-text h3 { font-size: 1.1em; }
-.markdown-text h4, .markdown-text h5, .markdown-text h6 { font-size: 1em; }
+.markdown-text h1 {
+  font-size: 1.4em;
+}
+.markdown-text h2 {
+  font-size: 1.2em;
+}
+.markdown-text h3 {
+  font-size: 1.1em;
+}
+.markdown-text h4,
+.markdown-text h5,
+.markdown-text h6 {
+  font-size: 1em;
+}
 
 .markdown-text p {
   margin: 0.5em 0;
@@ -247,7 +267,7 @@ Streamdown renders semantic HTML elements (`<h1>`–`<h6>`, `<ul>`, `<ol>`, `<ta
 
 .markdown-text blockquote {
   border-left: 3px solid var(--vscode-textBlockQuote-border, #007acc);
-  background: var(--vscode-textBlockQuote-background, rgba(127,127,127,0.1));
+  background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
   padding: 0.3em 0.8em;
   margin: 0.5em 0;
   color: var(--vscode-descriptionForeground);
@@ -273,7 +293,7 @@ Streamdown renders semantic HTML elements (`<h1>`–`<h6>`, `<ul>`, `<ol>`, `<ta
 }
 
 .markdown-text tr:nth-child(even) td {
-  background: var(--vscode-list-hoverBackground, rgba(127,127,127,0.05));
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.05));
 }
 
 .markdown-text hr {
@@ -298,7 +318,10 @@ Streamdown renders semantic HTML elements (`<h1>`–`<h6>`, `<ul>`, `<ol>`, `<ta
 
 /* Streaming caret color */
 [data-streamdown="caret"] {
-  background-color: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+  background-color: var(
+    --vscode-editorCursor-foreground,
+    var(--vscode-foreground)
+  );
 }
 ```
 
@@ -403,27 +426,27 @@ These components keep their current rendering unchanged — they represent struc
 
 ## File Change Summary
 
-| File | Change Type | Description |
-|---|---|---|
-| `src/ui/webview-react/package.json` | Dependency | Add `"streamdown": "^2.2.0"` |
-| `src/ui/webview-react/styles/globals.css` | Config + Styles | Add `@source` for Tailwind, import `streamdown/styles.css`, add `.markdown-text` prose styles |
-| `src/ui/webview-react/components/output/MarkdownText.tsx` | New file | Wrapped Streamdown component with VS Code theme customizations |
-| `src/ui/webview-react/components/output/CliOutput.tsx` | Edit | Use `MarkdownText` for TEXT event type and streaming chunk display |
-| `src/ui/webview-react/components/output/index.ts` | Edit | Export `MarkdownText` |
+| File                                                      | Change Type     | Description                                                                                   |
+| --------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| `src/ui/webview-react/package.json`                       | Dependency      | Add `"streamdown": "^2.2.0"`                                                                  |
+| `src/ui/webview-react/styles/globals.css`                 | Config + Styles | Add `@source` for Tailwind, import `streamdown/styles.css`, add `.markdown-text` prose styles |
+| `src/ui/webview-react/components/output/MarkdownText.tsx` | New file        | Wrapped Streamdown component with VS Code theme customizations                                |
+| `src/ui/webview-react/components/output/CliOutput.tsx`    | Edit            | Use `MarkdownText` for TEXT event type and streaming chunk display                            |
+| `src/ui/webview-react/components/output/index.ts`         | Edit            | Export `MarkdownText`                                                                         |
 
 ---
 
 ## Risks and Mitigations
 
-| Risk | Likelihood | Mitigation |
-|---|---|---|
-| Streamdown's Tailwind classes not scanned → unstyled output | Medium | Add `@source` directive; verify with a build |
-| `code` plugin CSP error if accidentally imported | High if imported | Do not import `@streamdown/code`; use custom `pre`/`code` components |
-| CDN fetch blocked (Shiki grammar loading) | High if code plugin used | Confirmed: not using code plugin |
-| Bundle size increase | Low-Medium | Base Streamdown (no plugins) is substantially smaller than v1; monitor with `npm run build:webview` |
-| AI response contains no/little markdown | Low risk | Streamdown renders plain text fine; no visual regression |
-| `animated` prop causing jank on large responses | Medium | Only set `animated={true}` while `isStreaming === true`; once final output arrives it stops |
-| Tailwind v4 `@source` syntax differs | Low | Verify during Step 2; fallback is adding to content array |
+| Risk                                                        | Likelihood               | Mitigation                                                                                          |
+| ----------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
+| Streamdown's Tailwind classes not scanned → unstyled output | Medium                   | Add `@source` directive; verify with a build                                                        |
+| `code` plugin CSP error if accidentally imported            | High if imported         | Do not import `@streamdown/code`; use custom `pre`/`code` components                                |
+| CDN fetch blocked (Shiki grammar loading)                   | High if code plugin used | Confirmed: not using code plugin                                                                    |
+| Bundle size increase                                        | Low-Medium               | Base Streamdown (no plugins) is substantially smaller than v1; monitor with `npm run build:webview` |
+| AI response contains no/little markdown                     | Low risk                 | Streamdown renders plain text fine; no visual regression                                            |
+| `animated` prop causing jank on large responses             | Medium                   | Only set `animated={true}` while `isStreaming === true`; once final output arrives it stops         |
+| Tailwind v4 `@source` syntax differs                        | Low                      | Verify during Step 2; fallback is adding to content array                                           |
 
 ---
 
