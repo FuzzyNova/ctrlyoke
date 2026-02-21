@@ -76,6 +76,7 @@ Pre-release - No backward compatibility constraints. Prioritize clean architectu
 ## Key Principles
 
 - **SOLID principles**: Separation of concerns, always look for opportunities to single source code and follow the DRY principal.
+- **DRY (SINGLE SOURCE)**: Never duplicate code that can be single sourced in a helper function or base class.
 - **TypeScript strict mode**: Comprehensive type safety
 - **Single source of truth**: No hardcoded string duplication across files
 - **Security first**: Workspace-scoped operations, process isolation for scripts
