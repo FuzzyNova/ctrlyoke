@@ -551,7 +551,7 @@ export function generateMarkdownExport(
         response?: string;
         cliCommand?: string;
         workingDirectory?: string;
-        tokens?: { prompt: number; completion: number };
+        tokens?: { prompt: number; completion: number; cached?: number; contextWindowUsed?: number; contextWindowSize?: number };
         elapsed?: number;
         structured?: { events: Array<{ type: string; data: unknown }> };
       };
@@ -605,10 +605,15 @@ export function generateMarkdownExport(
       // Stats section
       const stats: string[] = [];
       if (output.tokens) {
-        const total = output.tokens.prompt + output.tokens.completion;
-        stats.push(
-          `Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
-        );
+        const { prompt, completion, cached, contextWindowUsed, contextWindowSize } = output.tokens;
+        if (contextWindowUsed !== undefined && contextWindowSize) {
+          const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+          const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
+          stats.push(`Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`);
+        }
+        const total = prompt + completion;
+        const cachedSuffix = cached ? ` / ${cached} cached` : "";
+        stats.push(`Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`);
       }
       if (output.elapsed !== undefined) {
         stats.push(`${output.elapsed}s`);

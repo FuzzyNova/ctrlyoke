@@ -23,6 +23,7 @@ import {
   UnifiedDiffHunk,
 } from "../../../types/CliOutputTypes";
 import { OPERATION_STATUS } from "../../../types/DashboardConstants";
+import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 
 // ============================================================================
 // Codex Log Event Payload Types
@@ -328,6 +329,9 @@ export class CodexLogParser extends BaseLogParser {
     let totalOutputTokens = 0;
     let cachedInputTokens = 0;
     let reasoningOutputTokens = 0;
+    // Per-turn (last) usage — used for context window (not cumulative billing total)
+    let lastTurnContextWindowUsed: number | undefined;
+    let modelContextWindow: number | undefined;
 
     for (const event of events) {
       const timestamp = event.timestamp
@@ -365,12 +369,23 @@ export class CodexLogParser extends BaseLogParser {
 
       // event_msg:token_count - Token usage statistics
       if (event.type === "event_msg" && event.payload?.type === "token_count") {
-        if (event.payload.info?.total_token_usage) {
-          const usage = event.payload.info.total_token_usage;
-          totalInputTokens = usage.input_tokens || 0;
-          totalOutputTokens = usage.output_tokens || 0;
-          cachedInputTokens = usage.cached_input_tokens || 0;
-          reasoningOutputTokens = usage.reasoning_output_tokens || 0;
+        const info = event.payload.info;
+        if (info?.total_token_usage) {
+          // Cumulative billing totals (used for inputTokens/outputTokens)
+          const total = info.total_token_usage;
+          totalInputTokens = total.input_tokens || 0;
+          totalOutputTokens = total.output_tokens || 0;
+          cachedInputTokens = total.cached_input_tokens || 0;
+          reasoningOutputTokens = total.reasoning_output_tokens || 0;
+        }
+        if (info?.last_token_usage) {
+          // Per-turn usage — this is what actually occupies the context window
+          const last = info.last_token_usage;
+          lastTurnContextWindowUsed =
+            (last.input_tokens || 0) + (last.cached_input_tokens || 0);
+        }
+        if (info?.model_context_window) {
+          modelContextWindow = info.model_context_window;
         }
       }
 
@@ -1116,6 +1131,11 @@ export class CodexLogParser extends BaseLogParser {
       cliVersion = this.sessionMeta.cli_version;
     }
 
+    // Fallback: if model_context_window wasn't in the token_count event, use known size
+    if (modelContextWindow === undefined) {
+      modelContextWindow = CODEX_CLI_CONTEXT_WINDOW_SIZE;
+    }
+
     // Build token usage object if we have any token data
     let usage: TokenUsage | undefined;
     if (totalInputTokens > 0 || totalOutputTokens > 0) {
@@ -1125,6 +1145,8 @@ export class CodexLogParser extends BaseLogParser {
         totalTokens: totalInputTokens + totalOutputTokens,
         cachedInputTokens,
         reasoningOutputTokens,
+        contextWindowUsedTokens: lastTurnContextWindowUsed,
+        contextWindowSize: modelContextWindow,
       };
     }
 

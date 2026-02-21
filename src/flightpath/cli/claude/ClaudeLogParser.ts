@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
+import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import {
   retryWithBackoff,
   PermanentFailureError,
@@ -128,6 +129,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let totalOutputTokens = 0;
     let cacheCreationTokens = 0;
     let cacheReadTokens = 0;
+    let lastAssistantUsage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | undefined;
     let model: string | undefined;
     let turnDurationMs: number | undefined;
 
@@ -273,6 +275,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           totalOutputTokens += usage.output_tokens || 0;
           cacheCreationTokens += usage.cache_creation_input_tokens || 0;
           cacheReadTokens += usage.cache_read_input_tokens || 0;
+          // Track last assistant turn's usage — this represents the current
+          // context window state (not cumulative across turns like the totals above)
+          lastAssistantUsage = usage;
         }
 
         // Extract model info
@@ -398,6 +403,15 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
+    // Compute context window occupancy from last assistant turn only.
+    // Cumulative totals (totalInputTokens etc.) are billing totals across all turns,
+    // not the current context window state.
+    const contextWindowUsedTokens = lastAssistantUsage
+      ? (lastAssistantUsage.input_tokens || 0) +
+        (lastAssistantUsage.cache_creation_input_tokens || 0) +
+        (lastAssistantUsage.cache_read_input_tokens || 0)
+      : undefined;
+
     return {
       events: outputEvents,
       metadata: {
@@ -411,19 +425,12 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
                 totalTokens: totalInputTokens + totalOutputTokens,
-                // Extended cache token info stored in custom fields
-                // These will be displayed in formatStatistics()
+                cachedInputTokens: cacheReadTokens > 0 ? cacheReadTokens : undefined,
+                cacheCreatedTokens: cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
+                contextWindowUsedTokens,
+                contextWindowSize: getClaudeContextWindowSize(model ?? ""),
               }
             : undefined,
-        // Store cache tokens as additional metadata for cost calculation
-        ...(cacheCreationTokens > 0 || cacheReadTokens > 0
-          ? {
-              cacheTokens: {
-                created: cacheCreationTokens,
-                read: cacheReadTokens,
-              },
-            }
-          : {}),
       },
     };
   }

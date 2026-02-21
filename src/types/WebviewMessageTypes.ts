@@ -73,6 +73,14 @@ type ExecutionMode = typeof EXECUTION_MODES[keyof typeof EXECUTION_MODES];
 export interface TokenStats {
   prompt: number;
   completion: number;
+  /** Cache-read tokens (billed at reduced rate) */
+  cached?: number;
+  /** Cache-creation tokens — Claude only */
+  cacheCreated?: number;
+  /** Total input tokens occupying the context window (last API turn) */
+  contextWindowUsed?: number;
+  /** Model's total context window capacity in tokens */
+  contextWindowSize?: number;
 }
 
 /**

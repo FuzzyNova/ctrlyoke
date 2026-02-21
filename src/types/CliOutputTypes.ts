@@ -280,14 +280,24 @@ export interface WebSearchData {
  * Token usage statistics for the response.
  */
 export interface TokenUsage {
-  /** Number of input tokens consumed */
+  /** Number of input tokens consumed (non-cached portion) */
   inputTokens: number;
   /** Number of output tokens generated */
   outputTokens: number;
-  /** Total tokens (input + output) */
+  /** Billing total: inputTokens + outputTokens */
   totalTokens: number;
-  /** Number of cached input tokens (Codex only) */
+  /** Number of cache-read input tokens (billed at reduced rate) */
   cachedInputTokens?: number;
-  /** Number of reasoning output tokens (Codex only) */
+  /** Number of cache-creation input tokens — Claude only */
+  cacheCreatedTokens?: number;
+  /** Number of reasoning output tokens — Codex only */
   reasoningOutputTokens?: number;
+  /**
+   * Total input tokens in the context window for the last API turn.
+   * = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
+   * Use this (with contextWindowSize) to show how full the context window is.
+   */
+  contextWindowUsedTokens?: number;
+  /** Model's total context window capacity in tokens (e.g. 200000 or 128000). */
+  contextWindowSize?: number;
 }

@@ -180,6 +180,34 @@ export function isKnownCopilotModel(modelId: string): boolean {
 }
 
 /**
+ * Context window size (in tokens) for the Copilot CLI.
+ * All Copilot CLI models use a 128k token context window.
+ */
+export const COPILOT_CLI_CONTEXT_WINDOW_SIZE = 128_000;
+
+/**
+ * Context window size (in tokens) for the Codex CLI.
+ * Current Codex CLI models (gpt-5.x-codex series) use a 200k token context window.
+ */
+export const CODEX_CLI_CONTEXT_WINDOW_SIZE = 400_000;
+
+/**
+ * Get the context window size for a Claude CLI model.
+ *
+ * Standard models have a 200k token context window.
+ * The "sonnet[1m]" alias enables the 1M token extended context variant.
+ *
+ * @param modelId The model alias or full model ID (e.g. "sonnet", "claude-opus-4-6")
+ * @returns Context window size in tokens
+ */
+export function getClaudeContextWindowSize(modelId: string): number {
+  if (modelId.includes("[1m]") || modelId.includes("1m")) {
+    return 1_000_000;
+  }
+  return 200_000;
+}
+
+/**
  * Check if a model identifier is valid for Claude CLI
  *
  * @param modelId The model identifier to check

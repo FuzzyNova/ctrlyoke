@@ -11,6 +11,7 @@ import {
 } from "../../../types/CliOutputTypes";
 import { OPERATION_STATUS } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
+import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 
 /**
  * Extended usage statistics from Claude CLI.
@@ -68,6 +69,7 @@ export class ClaudeResponseParser
     const events: CliEvent[] = [];
     let sessionId: string | undefined;
     let usage: ExtendedUsage | undefined;
+    let lastAssistantUsage: ExtendedUsage | undefined;
     let model: string | undefined;
     let isError = false;
     let errorMessage: string | undefined;
@@ -101,9 +103,10 @@ export class ClaudeResponseParser
       if (json.type === "assistant" && json.message?.content) {
         this.processAssistantContent(json.message.content, events);
 
-        // Extract usage from assistant message if available
+        // Track each assistant turn's usage; last one = current context window state
         if (json.message.usage) {
-          usage = this.extractExtendedUsageStats(json.message.usage);
+          lastAssistantUsage = this.extractExtendedUsageStats(json.message.usage);
+          usage = lastAssistantUsage;
         }
       }
 
@@ -147,14 +150,28 @@ export class ClaudeResponseParser
       });
     }
 
-    // Build normalized token usage with extended cache info
+    // Build normalized token usage with context window tracking
     let tokenUsage: TokenUsage | undefined;
     if (usage) {
+      // Use the last assistant turn for context window size — it represents how many
+      // input tokens were sent in the final API call, i.e. the current context state.
+      // The result event holds cumulative totals across all turns (billing total),
+      // not the instantaneous context window occupancy.
+      const cwUsage = lastAssistantUsage ?? usage;
+      const contextWindowUsedTokens =
+        (cwUsage.input_tokens || 0) +
+        (cwUsage.cache_creation_input_tokens || 0) +
+        (cwUsage.cache_read_input_tokens || 0);
+
       tokenUsage = {
         inputTokens: usage.input_tokens,
         outputTokens: usage.output_tokens,
         totalTokens:
           usage.total_tokens || usage.input_tokens + usage.output_tokens,
+        cachedInputTokens: usage.cache_read_input_tokens,
+        cacheCreatedTokens: usage.cache_creation_input_tokens,
+        contextWindowUsedTokens,
+        contextWindowSize: getClaudeContextWindowSize(model ?? ""),
       };
     }
 

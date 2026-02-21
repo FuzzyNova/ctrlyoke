@@ -358,10 +358,19 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     const parts: string[] = [];
 
     if (output.tokens) {
-      const total = output.tokens.prompt + output.tokens.completion;
-      parts.push(
-        `Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
-      );
+      const { prompt, completion, cached, contextWindowUsed, contextWindowSize } = output.tokens;
+
+      // Context window usage (most useful: shows how full the window is)
+      if (contextWindowUsed !== undefined && contextWindowSize) {
+        const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+        const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
+        parts.push(`Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`);
+      }
+
+      // Billing tokens
+      const total = prompt + completion;
+      const cachedSuffix = cached ? ` / ${cached} cached` : "";
+      parts.push(`Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`);
     }
 
     if (!output.isStreaming && output.elapsed !== undefined) {

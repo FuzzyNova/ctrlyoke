@@ -2,6 +2,7 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
+import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import {
   UniversalCliOutput,
   CliEvent,
@@ -209,7 +210,11 @@ export class CodexResponseParser
               outputTokens: usage.output_tokens,
               totalTokens:
                 usage.total_tokens || usage.input_tokens + usage.output_tokens,
-              // Note: cached_input_tokens available in usage object for cost calculation
+              cachedInputTokens: usage.cached_input_tokens,
+              // For Codex, context window input = non-cached + cached portions
+              contextWindowUsedTokens:
+                usage.input_tokens + (usage.cached_input_tokens ?? 0),
+              contextWindowSize: CODEX_CLI_CONTEXT_WINDOW_SIZE,
             }
           : undefined,
         harness: "codex-cli",

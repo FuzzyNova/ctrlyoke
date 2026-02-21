@@ -874,12 +874,17 @@ export class WorkflowExecutor {
     }
 
     // Get token statistics (prefer structured output over legacy parsing)
-    let tokens: { prompt: number; completion: number } | undefined;
+    let tokens: { prompt: number; completion: number; cached?: number; cacheCreated?: number; contextWindowUsed?: number; contextWindowSize?: number } | undefined;
     if (parsedOutput?.metadata.usage) {
       // Modern path: Use structured metadata directly
+      const u = parsedOutput.metadata.usage;
       tokens = {
-        prompt: parsedOutput.metadata.usage.inputTokens,
-        completion: parsedOutput.metadata.usage.outputTokens,
+        prompt: u.inputTokens,
+        completion: u.outputTokens,
+        cached: u.cachedInputTokens,
+        cacheCreated: u.cacheCreatedTokens,
+        contextWindowUsed: u.contextWindowUsedTokens,
+        contextWindowSize: u.contextWindowSize,
       };
     } else {
       // Legacy fallback: Parse from statistics string (Chat integration)

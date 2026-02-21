@@ -4,6 +4,7 @@ import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -559,6 +560,9 @@ export class CopilotLogParser extends BaseLogParser {
                 inputTokens,
                 outputTokens,
                 totalTokens: inputTokens + outputTokens,
+                // For Copilot, "in" is the full context window input for this invocation
+                contextWindowUsedTokens: inputTokens,
+                contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
               }
             : undefined,
       },

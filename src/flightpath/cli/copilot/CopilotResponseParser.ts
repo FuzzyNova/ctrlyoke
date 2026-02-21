@@ -8,6 +8,7 @@ import {
   CliEvent,
   CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 
 /**
  * Copilot CLI Response Parser
@@ -15,13 +16,15 @@ import {
  * Parses Copilot CLI plain text output format:
  * - Response: Written to stdout
  * - Statistics: Written to stderr (format: "Total usage est: ...")
- * - Token counts: "Usage by model: 25.7k input, 223 output" (supports k suffix)
+ * - Token counts: supports two formats (supports k suffix on all values):
+ *   - New: "59.0k in, 207 out, 0 cached"
+ *   - Old: "25.7k input, 223 output, 6.1k cache read"
  *
- * Example stderr statistics (as of 2025-12):
+ * Example stderr statistics (as of 2026-02):
  * ```
- * Total usage est: 1 Premium request
+ * Total usage est: 0 Premium requests
  * Usage by model:
- *     capi-...-gpt-5-mini-... 25.7k input, 223 output, 6.1k cache read (Est. 1 Premium request)
+ *     capi-...-claude-sonnet-4.5-... 59.0k in, 207 out, 0 cached (Est. 0 Premium requests)
  * ```
  */
 export class CopilotResponseParser
@@ -75,6 +78,10 @@ export class CopilotResponseParser
               inputTokens: tokenCounts.prompt,
               outputTokens: tokenCounts.completion,
               totalTokens: tokenCounts.prompt + tokenCounts.completion,
+              cachedInputTokens: tokenCounts.cached,
+              // For Copilot, "in" is the full context window input for this invocation
+              contextWindowUsedTokens: tokenCounts.prompt,
+              contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
             }
           : undefined,
         harness: "copilot-cli",
@@ -85,20 +92,19 @@ export class CopilotResponseParser
   /**
    * Parse token counts from Copilot CLI statistics string
    *
-   * Format (as of 2025-12):
-   * "Usage by model:
-   *     capi-...-gpt-5-mini-... 25.7k input, 223 output, 6.1k cache read (Est. 1 Premium request)"
+   * Handles two formats (supports optional k suffix on all values):
+   * - New: "59.0k in, 207 out, 0 cached"
+   * - Old: "25.7k input, 223 output, 6.1k cache read"
    *
    * @param statistics Statistics string from stderr
    * @returns Token counts if found, undefined otherwise
    */
   parseTokenCounts(
     statistics: string
-  ): { prompt: number; completion: number } | undefined {
-    // Parse format: "25.7k input, 223 output"
-    // The regex captures number (with optional decimal) and checks for k suffix separately
+  ): { prompt: number; completion: number; cached?: number } | undefined {
+    // Match both "in/out" and "input/output" labels, with optional cached/cache read suffix
     const match = statistics.match(
-      /([\d.]+)(k)?\s+input,\s+([\d.]+)(k)?\s+output/i
+      /([\d.]+)(k)?\s+in(?:put)?,\s+([\d.]+)(k)?\s+out(?:put)?(?:,\s+([\d.]+)(k)?\s+(?:cached?|cache\s+read))?/i
     );
     if (!match) {
       return undefined;
@@ -116,6 +122,7 @@ export class CopilotResponseParser
     return {
       prompt: parseValue(match[1], match[2]),
       completion: parseValue(match[3], match[4]),
+      cached: match[5] !== undefined ? parseValue(match[5], match[6]) : undefined,
     };
   }
 }
