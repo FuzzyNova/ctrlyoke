@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
 import { QueueState, EXECUTION_STATES } from "../types/FlightPathTypes";
-import { CopilotStatus } from "../flightpath/base/CopilotIntegration";
+import { HarnessStatus } from "../flightpath/HarnessIntegration";
 
 /**
  * Detailed status from Copilot integration
  */
 export interface CopilotDetailedStatus {
-  initializationStatus: CopilotStatus;
+  initializationStatus: HarnessStatus;
   isReady: boolean;
   message: string;
   pollingAttempts?: number;
@@ -111,23 +111,23 @@ export class StatusBarManager {
     tooltip: string;
   } {
     switch (copilotStatus.initializationStatus) {
-      case CopilotStatus.Initializing:
+      case HarnessStatus.Initializing:
         return {
           text: "$(compass) FlightPath - Initializing...",
           tooltip: "FlightPath - Checking Copilot availability...",
         };
-      case CopilotStatus.Waiting:
+      case HarnessStatus.Waiting:
         return {
           text: `$(compass) FlightPath - Waiting for Copilot (${copilotStatus.pollingAttempts}/${copilotStatus.maxPollingAttempts})`,
           tooltip: "FlightPath - Waiting for GitHub Copilot to activate...",
         };
-      case CopilotStatus.Ready:
+      case HarnessStatus.Ready:
         return {
           text: "$(compass-active) FlightPath - Ready",
           tooltip:
             "FlightPath - Ready to execute workflows with Copilot automation",
         };
-      case CopilotStatus.Unavailable:
+      case HarnessStatus.Unavailable:
         return {
           text: "$(warning) FlightPath - Setup Required",
           tooltip:

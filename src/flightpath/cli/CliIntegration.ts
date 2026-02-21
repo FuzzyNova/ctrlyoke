@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { ChildProcess } from "child_process";
-import { CliResult } from "../../types/CopilotTypes";
+import { CliResult } from "../../types/CliOutputTypes";
 import {
   PromptItem,
   Harness,
@@ -13,7 +13,7 @@ import {
   UniversalCliOutput,
   CLI_EVENT_TYPES,
 } from "../../types/CliOutputTypes";
-import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
@@ -92,12 +92,12 @@ interface PromptFileResult {
  * await integration.sendPrompt(prompt);
  * ```
  */
-export class CliIntegration extends CopilotIntegration {
+export class CliIntegration extends HarnessIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
   private readonly provider: ICliProvider;
 
   /** Initialization status */
-  protected initializationStatus: CopilotStatus = CopilotStatus.Initializing;
+  protected initializationStatus: HarnessStatus = HarnessStatus.Initializing;
 
   /** Last CLI execution result */
   protected lastResult?: CliResult;
@@ -1363,8 +1363,8 @@ export class CliIntegration extends CopilotIntegration {
    * Initialize CLI by checking availability via provider.checkAvailability().
    */
   async initialize(): Promise<void> {
-    this.initializationStatus = CopilotStatus.Initializing;
-    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
+    this.initializationStatus = HarnessStatus.Initializing;
+    this.statusChangeEmitter.fire(HarnessStatus.Initializing);
 
     try {
       const available = await this.provider.checkAvailability();
@@ -1381,8 +1381,8 @@ export class CliIntegration extends CopilotIntegration {
           `✅ ${this.provider.config.displayName} available${versionInfo}`
         );
         this.isAvailable = true;
-        this.initializationStatus = CopilotStatus.Ready;
-        this.statusChangeEmitter.fire(CopilotStatus.Ready);
+        this.initializationStatus = HarnessStatus.Ready;
+        this.statusChangeEmitter.fire(HarnessStatus.Ready);
       } else {
         this.handleInitializationError("command_failed", "CLI not available");
       }
@@ -1399,8 +1399,8 @@ export class CliIntegration extends CopilotIntegration {
     error: unknown
   ): void {
     this.isAvailable = false;
-    this.initializationStatus = CopilotStatus.Unavailable;
-    this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
+    this.initializationStatus = HarnessStatus.Unavailable;
+    this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
 
     Log.error(`❌ ${this.provider.config.displayName} not available`, error);
   }
@@ -1426,10 +1426,10 @@ export class CliIntegration extends CopilotIntegration {
   }
 
   isReady(): boolean {
-    return this.initializationStatus === CopilotStatus.Ready;
+    return this.initializationStatus === HarnessStatus.Ready;
   }
 
-  getInitializationStatus(): CopilotStatus {
+  getInitializationStatus(): HarnessStatus {
     return this.initializationStatus;
   }
 
@@ -1617,11 +1617,10 @@ export class CliIntegration extends CopilotIntegration {
           !resolvedSessionId &&
           this.provider.extractSessionIdFromLogs
         ) {
-          const logSessionId =
-            await this.provider.extractSessionIdFromLogs(
-              this.actualPromptSent || finalPromptText,
-              executionStartTime
-            );
+          const logSessionId = await this.provider.extractSessionIdFromLogs(
+            this.actualPromptSent || finalPromptText,
+            executionStartTime
+          );
           if (logSessionId) {
             extractedSessionId = logSessionId;
             Log.debug(

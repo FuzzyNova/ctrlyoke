@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
-import { CopilotIntegration, CopilotStatus } from "./base/CopilotIntegration";
+import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CliIntegration } from "./cli/CliIntegration";
 import { CopilotCliProvider } from "./cli/copilot/CopilotCliProvider";
@@ -57,7 +57,7 @@ export class FlightPathManager {
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
   private dashboardProvider?: FlightPathWebviewProvider;
   private currentPromptFile?: { filePath: string; promptFile: PromptFile };
-  private activeIntegration?: CopilotIntegration; // Track currently executing integration
+  private activeIntegration?: HarnessIntegration; // Track currently executing integration
   private dashboardReady: boolean = false; // Track dashboard initialization state
   private managerInitialized: boolean = false; // Track manager initialization state
   private startPending: boolean = false; // Prevent duplicate workflow starts (race condition guard)
@@ -168,7 +168,7 @@ export class FlightPathManager {
    * Supports: cli (Copilot CLI), chat (Copilot Chat), claude-cli (Claude Code CLI), codex-cli (Codex CLI)
    * Note: Does NOT log - logging happens during initialization only
    */
-  private getDefaultIntegration(): CopilotIntegration {
+  private getDefaultIntegration(): HarnessIntegration {
     const integrationMode = ConfigurationUtils.getIntegrationMode();
 
     switch (integrationMode) {
@@ -198,7 +198,7 @@ export class FlightPathManager {
    */
   private createIntegrationForMode(
     harnessOverride?: Harness
-  ): CopilotIntegration {
+  ): HarnessIntegration {
     if (harnessOverride) {
       Log.info(`🔀 Using harness override: ${harnessOverride}`);
       switch (harnessOverride) {
@@ -465,7 +465,7 @@ export class FlightPathManager {
       const detailedStatus = integration.getDetailedStatus();
 
       // Block execution if still initializing
-      if (detailedStatus.initializationStatus === CopilotStatus.Initializing) {
+      if (detailedStatus.initializationStatus === HarnessStatus.Initializing) {
         const action = await vscode.window.showWarningMessage(
           `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
           "Retry",
@@ -484,7 +484,7 @@ export class FlightPathManager {
       }
 
       // Block execution if waiting for Copilot
-      if (detailedStatus.initializationStatus === CopilotStatus.Waiting) {
+      if (detailedStatus.initializationStatus === HarnessStatus.Waiting) {
         const action = await vscode.window.showWarningMessage(
           `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
           "Retry",
@@ -503,7 +503,7 @@ export class FlightPathManager {
       }
 
       // Block execution if unavailable
-      if (detailedStatus.initializationStatus === CopilotStatus.Unavailable) {
+      if (detailedStatus.initializationStatus === HarnessStatus.Unavailable) {
         const action = await vscode.window.showErrorMessage(
           `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
           "Retry Detection",
@@ -845,7 +845,7 @@ export class FlightPathManager {
    *   notifyRunHistoryUpdated before EXECUTION_STARTED was sent.
    */
   private async startWorkflowExecution(
-    integration?: CopilotIntegration,
+    integration?: HarnessIntegration,
     historyFilePath = ""
   ): Promise<void> {
     // Race condition guard: Prevent duplicate starts (from both auto-start and explicit calls)

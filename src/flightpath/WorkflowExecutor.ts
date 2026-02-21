@@ -12,7 +12,7 @@ import {
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
-import { CopilotIntegration } from "./base/CopilotIntegration";
+import { HarnessIntegration } from "./HarnessIntegration";
 import {
   EndConditionHandler,
   SendRetryPromptCallback,
@@ -20,7 +20,10 @@ import {
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { Log } from "../utils/Log";
-import { PropertyResolver, ResolvedProperties } from "../utils/PropertyResolver";
+import {
+  PropertyResolver,
+  ResolvedProperties,
+} from "../utils/PropertyResolver";
 import {
   CliOutputFormatter,
   DashboardOutput,
@@ -49,7 +52,7 @@ export interface WorkflowContext {
   getIntegrationForPrompt: (
     prompt: PromptItem,
     harnessOverride?: Harness
-  ) => CopilotIntegration;
+  ) => HarnessIntegration;
   /** Path to current run's history file (empty string if history disabled) */
   historyFilePath: string;
   /** OutputHistoryManager for saving step outputs */
@@ -94,7 +97,7 @@ export class WorkflowExecutor {
    * @param context Workflow context with dependencies and configuration
    */
   async execute(
-    defaultIntegration: CopilotIntegration,
+    defaultIntegration: HarnessIntegration,
     context: WorkflowContext
   ): Promise<void> {
     // Clear any pending response state from previous execution
@@ -332,7 +335,7 @@ export class WorkflowExecutor {
    */
   private async evaluateEndCondition(
     prompt: PromptItem,
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     context: WorkflowContext,
     currentIndex: number,
     duration: number
@@ -439,7 +442,7 @@ export class WorkflowExecutor {
    */
   private async waitForResponseComplete(
     prompt: PromptItem,
-    integration: CopilotIntegration
+    integration: HarnessIntegration
   ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       let responseHandled = false;
@@ -485,7 +488,7 @@ export class WorkflowExecutor {
    */
   private async executeWithStreaming(
     promptItem: PromptItem,
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     context: WorkflowContext,
     stepIndex: number,
     attemptIndex: number,
@@ -518,7 +521,10 @@ export class WorkflowExecutor {
     }
 
     // Set up response listener BEFORE sending to avoid race condition
-    const responsePromise = this.waitForResponseComplete(promptItem, integration);
+    const responsePromise = this.waitForResponseComplete(
+      promptItem,
+      integration
+    );
 
     // Set up streaming listeners (no-op if no dashboard)
     let streamingDisposable: vscode.Disposable | undefined;
@@ -532,7 +538,9 @@ export class WorkflowExecutor {
           elapsed: 0,
           tokens: undefined,
           isStreaming: true,
-          cliCommand: context.shouldShowCliCommand ? data.cliCommand : undefined,
+          cliCommand: context.shouldShowCliCommand
+            ? data.cliCommand
+            : undefined,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
           attemptIndex,
@@ -547,12 +555,17 @@ export class WorkflowExecutor {
         context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
       });
 
-      structuredStreamingDisposable = integration.onStreamingEvents((events) => {
-        Log.info(
-          `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
-        );
-        context.dashboardProvider?.updateCliStreamingEvents(stepIndex, events);
-      });
+      structuredStreamingDisposable = integration.onStreamingEvents(
+        (events) => {
+          Log.info(
+            `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
+          );
+          context.dashboardProvider?.updateCliStreamingEvents(
+            stepIndex,
+            events
+          );
+        }
+      );
     }
 
     const disposeListeners = () => {
@@ -583,7 +596,7 @@ export class WorkflowExecutor {
    * Used by EndConditionHandler for retry orchestration.
    */
   private createSendRetryPromptCallback(
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     context: WorkflowContext
   ): SendRetryPromptCallback {
     return async (
@@ -685,7 +698,7 @@ export class WorkflowExecutor {
    */
   private logWorkflowStart(
     context: WorkflowContext,
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     totalPrompts: number
   ): void {
     if (!context.showCliOutput) {
@@ -813,7 +826,7 @@ export class WorkflowExecutor {
    * Returns true if workflow should continue, false if it should stop.
    */
   private async handlePromptSendFailure(
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     context: WorkflowContext,
     currentIndex: number
   ): Promise<boolean> {
@@ -859,7 +872,7 @@ export class WorkflowExecutor {
    */
   private async updateDashboardWithResponse(
     context: WorkflowContext,
-    integration: CopilotIntegration,
+    integration: HarnessIntegration,
     prompt: PromptItem,
     responseText: string,
     duration: number,
@@ -874,7 +887,16 @@ export class WorkflowExecutor {
     }
 
     // Get token statistics (prefer structured output over legacy parsing)
-    let tokens: { prompt: number; completion: number; cached?: number; cacheCreated?: number; contextWindowUsed?: number; contextWindowSize?: number } | undefined;
+    let tokens:
+      | {
+          prompt: number;
+          completion: number;
+          cached?: number;
+          cacheCreated?: number;
+          contextWindowUsed?: number;
+          contextWindowSize?: number;
+        }
+      | undefined;
     if (parsedOutput?.metadata.usage) {
       // Modern path: Use structured metadata directly
       const u = parsedOutput.metadata.usage;

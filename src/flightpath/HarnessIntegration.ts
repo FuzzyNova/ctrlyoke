@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { PromptItem, PromptFile } from "../../types/FlightPathTypes";
-import { CliResult } from "../../types/CopilotTypes";
-import { UniversalCliOutput, CliEvent } from "../../types/CliOutputTypes";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { ContextExpander } from "../../utils/ContextExpander";
-import { Log } from "../../utils/Log";
-import { ResolvedProperties } from "../../utils/PropertyResolver";
-import type { PromptQueue } from "../PromptQueue";
+import { PromptItem, PromptFile } from "../types/FlightPathTypes";
+import { CliResult, UniversalCliOutput, CliEvent } from "../types/CliOutputTypes";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ContextExpander } from "../utils/ContextExpander";
+import { Log } from "../utils/Log";
+import { ResolvedProperties } from "../utils/PropertyResolver";
+import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
+import type { PromptQueue } from "./PromptQueue";
 
 /**
- * Copilot initialization status
+ * Harness initialization status
  */
-export enum CopilotStatus {
+export enum HarnessStatus {
   Initializing = "initializing",
   Waiting = "waiting",
   Ready = "ready",
@@ -20,12 +20,12 @@ export enum CopilotStatus {
 }
 
 /**
- * Base class for Copilot integrations
+ * Base class for Harness integrations
  *
  * Provides common functionality and defines the contract that all
- * Copilot integration strategies must implement.
+ * Harness integration strategies must implement.
  */
-export abstract class CopilotIntegration {
+export abstract class HarnessIntegration {
   protected context: vscode.ExtensionContext;
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
@@ -34,7 +34,7 @@ export abstract class CopilotIntegration {
   protected lastFailureReason: string | null = null;
 
   // Event emitters for status and response completion
-  protected statusChangeEmitter = new vscode.EventEmitter<CopilotStatus>();
+  protected statusChangeEmitter = new vscode.EventEmitter<HarnessStatus>();
   public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
   protected responseCompleteEmitter = new vscode.EventEmitter<string>();
@@ -67,13 +67,13 @@ export abstract class CopilotIntegration {
   }
 
   /**
-   * Initialize the Copilot integration
+   * Initialize the Harness integration
    * Must be implemented by subclasses
    */
   abstract initialize(): Promise<void>;
 
   /**
-   * Send a prompt to Copilot
+   * Send a prompt to the Harness integration
    * Must be implemented by subclasses
    * @param prompt The prompt item to send
    * @param needsCompletionDetection If true, set up completion detection mechanisms (default: true)
@@ -170,10 +170,6 @@ export abstract class CopilotIntegration {
     }
 
     // Check if this prompt should get extension instructions
-    const {
-      shouldInjectExtensionInstructions,
-    } = require("../../utils/PromptIdentity");
-
     const shouldInject = shouldInjectExtensionInstructions(
       prompt,
       promptIndex,
@@ -269,10 +265,10 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Get initialization status
    * Must be implemented by subclasses
    */
-  abstract getInitializationStatus(): CopilotStatus;
+  abstract getInitializationStatus(): HarnessStatus;
 
   /**
-   * Check if Copilot is ready for workflows
+   * Check if Harness is ready for workflows
    * Must be implemented by subclasses
    */
   abstract isReady(): boolean;
@@ -304,7 +300,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Default implementation returns basic information
    */
   getDetailedStatus(): {
-    initializationStatus: CopilotStatus;
+    initializationStatus: HarnessStatus;
     isReady: boolean;
     message: string;
     pollingAttempts?: number;
@@ -314,17 +310,17 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
     let message = "";
 
     switch (status) {
-      case CopilotStatus.Initializing:
-        message = "🔍 Initializing Copilot integration...";
+      case HarnessStatus.Initializing:
+        message = "🔍 Initializing Harness integration...";
         break;
-      case CopilotStatus.Waiting:
-        message = "⏳ Waiting for Copilot...";
+      case HarnessStatus.Waiting:
+        message = "⏳ Waiting for Harness...";
         break;
-      case CopilotStatus.Ready:
-        message = "✅ Copilot ready";
+      case HarnessStatus.Ready:
+        message = "✅ Harness ready";
         break;
-      case CopilotStatus.Unavailable:
-        message = "❌ Copilot unavailable";
+      case HarnessStatus.Unavailable:
+        message = "❌ Harness unavailable";
         break;
     }
 
@@ -398,7 +394,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   /**
    * Retry integration detection/initialization
    * CLI: Re-runs initialize()
-   * Chat: Restarts polling for Copilot availability
+   * Chat: Restarts polling for Harness availability
    */
   async retryDetection(): Promise<void> {
     await this.initialize();

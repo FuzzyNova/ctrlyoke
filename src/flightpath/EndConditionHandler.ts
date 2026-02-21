@@ -10,14 +10,14 @@ import {
   EvaluationResult,
 } from "./EndConditionEvaluator";
 import { PromptQueue } from "./PromptQueue";
-import { CopilotIntegration } from "./base/CopilotIntegration";
+import { HarnessIntegration } from "./HarnessIntegration";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 
 /**
  * Context needed to handle retry prompts
  */
 export interface RetryContext {
-  integration: CopilotIntegration;
+  integration: HarnessIntegration;
   totalPrompts: number;
   workspaceFolderPath: string | undefined;
   currentPromptFilePath: string | undefined;

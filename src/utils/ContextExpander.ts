@@ -18,7 +18,7 @@ import { Log } from "./Log";
  * - #sym:path:symbol:line (symbol context)
  *
  * This class consolidates all attachment building logic that was previously
- * scattered across CopilotIntegration and CLI classes. It produces fully-expanded
+ * scattered across HarnessIntegration and CLI classes. It produces fully-expanded
  * prompt text with all context references resolved to their actual content.
  *
  * DESIGN PRINCIPLES:
@@ -209,7 +209,7 @@ export class ContextExpander {
 
   /**
    * Build attachment XML for a file or file excerpt
-   * Moved from CopilotIntegration to consolidate all attachment logic
+   * Moved from HarnessIntegration to consolidate all attachment logic
    *
    * @param filePath Workspace-relative file path
    * @param startLine Optional start line (1-indexed)

@@ -16,8 +16,7 @@ When editing or analyzing files, read the corresponding instruction file:
 
 | File Pattern                           | Instruction File                                       | When to Read                                                            |
 | -------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md` | FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
-| `src/flightpath/base/**`               | `.github/instructions/flightpath-base.instructions.md` | CopilotIntegration abstract base class                                  |
+| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md` | HarnessIntegration, FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
 | `src/flightpath/chat/**`               | `.github/instructions/flightpath-chat.instructions.md` | CopilotChatIntegration (UI automation)                                  |
 | `src/flightpath/cli/**`                | `.github/instructions/flightpath-cli.instructions.md`  | CliIntegration, CLI providers (Copilot, Claude, Codex)                  |
 | `src/ui/**`                            | `.github/instructions/ui.instructions.md`              | Status bar, dashboard, settings webview providers                       |

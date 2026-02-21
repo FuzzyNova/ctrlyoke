@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem, Harness } from "../../types/FlightPathTypes";
-import { CopilotIntegration, CopilotStatus } from "../base/CopilotIntegration";
+import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { isModelAvailable } from "../../utils/ModelRegistry";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { ChatSessionMonitor } from "./ChatSessionMonitor";
@@ -20,9 +20,9 @@ import { UniversalCliOutput } from "../../types/CliOutputTypes";
  * - Session file monitoring (100% reliable) - Method 5 from CHAT_COMPLETION_DETECTION.md
  * - Monitors VS Code's internal chatSessions/*.json files for completion indicators
  */
-export class CopilotChatIntegration extends CopilotIntegration {
+export class CopilotChatIntegration extends HarnessIntegration {
   // Background polling state
-  private initializationStatus: CopilotStatus = CopilotStatus.Initializing;
+  private initializationStatus: HarnessStatus = HarnessStatus.Initializing;
   private pollingAttempts: number = 0;
   private readonly maxPollingAttempts: number = 6;
   private readonly pollingInterval: number = 5000;
@@ -230,8 +230,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
   /** Start background polling for Copilot availability */
   private async startBackgroundPolling(): Promise<void> {
     this.pollingAttempts = 0;
-    this.initializationStatus = CopilotStatus.Initializing;
-    this.statusChangeEmitter.fire(CopilotStatus.Initializing);
+    this.initializationStatus = HarnessStatus.Initializing;
+    this.statusChangeEmitter.fire(HarnessStatus.Initializing);
 
     // Clear any existing polling timer
     if (this.pollingTimer) {
@@ -255,8 +255,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
       // Initialize session monitor for completion detection
       await this.sessionMonitor.initialize();
 
-      this.initializationStatus = CopilotStatus.Ready;
-      this.statusChangeEmitter.fire(CopilotStatus.Ready);
+      this.initializationStatus = HarnessStatus.Ready;
+      this.statusChangeEmitter.fire(HarnessStatus.Ready);
 
       if (this.pollingTimer) {
         clearTimeout(this.pollingTimer);
@@ -267,8 +267,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
 
     if (this.pollingAttempts >= this.maxPollingAttempts) {
       Log.error("❌ Copilot unavailable (30s timeout)");
-      this.initializationStatus = CopilotStatus.Unavailable;
-      this.statusChangeEmitter.fire(CopilotStatus.Unavailable);
+      this.initializationStatus = HarnessStatus.Unavailable;
+      this.statusChangeEmitter.fire(HarnessStatus.Unavailable);
 
       if (this.pollingTimer) {
         clearTimeout(this.pollingTimer);
@@ -278,8 +278,8 @@ export class CopilotChatIntegration extends CopilotIntegration {
     }
 
     // Continue polling
-    this.initializationStatus = CopilotStatus.Waiting;
-    this.statusChangeEmitter.fire(CopilotStatus.Waiting);
+    this.initializationStatus = HarnessStatus.Waiting;
+    this.statusChangeEmitter.fire(HarnessStatus.Waiting);
 
     this.pollingTimer = setTimeout(() => {
       this.pollCopilotAvailability();
@@ -714,18 +714,18 @@ export class CopilotChatIntegration extends CopilotIntegration {
     return Harness.CopilotChat;
   }
   /** Get initialization status */
-  getInitializationStatus(): CopilotStatus {
+  getInitializationStatus(): HarnessStatus {
     return this.initializationStatus;
   }
 
   /** Check if Copilot is ready for workflows */
   isReady(): boolean {
-    return this.initializationStatus === CopilotStatus.Ready;
+    return this.initializationStatus === HarnessStatus.Ready;
   }
 
   /** Get detailed status with initialization state */
   getDetailedStatus(): {
-    initializationStatus: CopilotStatus;
+    initializationStatus: HarnessStatus;
     isReady: boolean;
     message: string;
     pollingAttempts: number;
@@ -734,16 +734,16 @@ export class CopilotChatIntegration extends CopilotIntegration {
     let message = "";
 
     switch (this.initializationStatus) {
-      case CopilotStatus.Initializing:
+      case HarnessStatus.Initializing:
         message = "🔍 Initializing Copilot integration...";
         break;
-      case CopilotStatus.Waiting:
+      case HarnessStatus.Waiting:
         message = `⏳ Waiting for Copilot... (attempt ${this.pollingAttempts}/${this.maxPollingAttempts})`;
         break;
-      case CopilotStatus.Ready:
+      case HarnessStatus.Ready:
         message = "✅ Copilot automation ready";
         break;
-      case CopilotStatus.Unavailable:
+      case HarnessStatus.Unavailable:
         message = "❌ Copilot automation unavailable - setup required";
         break;
     }

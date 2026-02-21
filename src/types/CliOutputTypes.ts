@@ -277,6 +277,21 @@ export interface WebSearchData {
 }
 
 /**
+ * Generic CLI result returned after prompt execution.
+ * Used by ALL CLI harnesses (Copilot, Claude, Codex, etc.)
+ */
+export interface CliResult {
+  success: boolean;
+  response: string;
+  statistics: string;
+  error?: string;
+  exitCode?: number;
+  sessionId?: string;
+  codeChanges?: string;
+  modelUsage?: string;
+}
+
+/**
  * Token usage statistics for the response.
  */
 export interface TokenUsage {

@@ -9,7 +9,7 @@
  *
  * This module provides unified parsing logic used by:
  * - NativeAttachmentHandler (Chat mode)
- * - CopilotIntegration base class (CLI modes)
+ * - HarnessIntegration base class (CLI modes)
  */
 
 export interface FileReference {
