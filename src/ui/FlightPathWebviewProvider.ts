@@ -2,8 +2,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as fsSync from "fs";
-import { exec } from "child_process";
-import { promisify } from "util";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -42,8 +40,6 @@ import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import { ContextExpander } from "../utils/ContextExpander";
 import { encode } from "gpt-tokenizer";
-
-const execAsync = promisify(exec);
 
 // Re-export CliOutputData for external use
 export type { CliOutputData } from "../types/WebviewMessageTypes";
@@ -152,8 +148,8 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     // Discover available agents in background
     this.discoverAgents();
 
-    // Check harness availability in background
-    this.checkHarnessAvailability();
+    // Harness availability is driven by FlightPathManager via notifyHarnessAvailability()
+    // (subscribes to onDidChangeStatus on all integrations — single source of truth).
   }
 
   public resolveWebviewView(
@@ -783,6 +779,22 @@ window.vscodeApi = acquireVsCodeApi();
     } catch (error) {
       Log.warn("Failed to load output history for workflow:", error);
     }
+  }
+
+  /**
+   * Update a single harness availability status and push the change to the UI.
+   * Called by FlightPathManager after initialization completes so that the
+   * authoritative retry-based check overrides the quick no-retry check that
+   * runs during construction.
+   */
+  public notifyHarnessAvailability(harnessId: string, available: boolean): void {
+    this.harnessStatus[harnessId] = {
+      available,
+      status: available
+        ? HARNESS_STATUS_STRINGS.AVAILABLE
+        : HARNESS_STATUS_STRINGS.UNAVAILABLE,
+    };
+    this.sendHarnessStatusUpdate();
   }
 
   /**
@@ -1850,90 +1862,6 @@ window.vscodeApi = acquireVsCodeApi();
 
     this.pendingWorkflowProperties = {};
     this.sendWorkflowPropertiesToSettings();
-  }
-
-  private async checkHarnessAvailability(): Promise<void> {
-    await Promise.all([
-      this.checkCliAvailability(HARNESS_IDS.COPILOT_CLI, "copilot"),
-      this.checkCliAvailability(HARNESS_IDS.CLAUDE_CLI, "claude"),
-      this.checkCliAvailability(HARNESS_IDS.CODEX_CLI, "codex"),
-      this.checkCopilotChatAvailability(),
-    ]);
-
-    this.sendHarnessStatusUpdate();
-  }
-
-  private async checkCliAvailability(
-    harnessId: string,
-    command: string
-  ): Promise<void> {
-    try {
-      const { stdout } = await execAsync(`${command} --version`, {
-        timeout: 5000,
-      });
-      this.harnessStatus[harnessId] = {
-        available: true,
-        status: HARNESS_STATUS_STRINGS.AVAILABLE,
-        message: stdout.trim(),
-      };
-    } catch {
-      this.harnessStatus[harnessId] = {
-        available: false,
-        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-        message: "Not installed or not in PATH",
-      };
-    }
-    // Send incremental update so UI reflects each check as it completes
-    this.sendHarnessStatusUpdate();
-  }
-
-  private async checkCopilotChatAvailability(): Promise<void> {
-    try {
-      const copilotExtension = vscode.extensions.getExtension("GitHub.copilot");
-      const copilotChatExtension = vscode.extensions.getExtension(
-        "GitHub.copilot-chat"
-      );
-
-      const hasExtension = !!(copilotExtension || copilotChatExtension);
-
-      if (!hasExtension) {
-        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
-          available: false,
-          status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-          message: "GitHub Copilot extension not installed",
-        };
-        this.sendHarnessStatusUpdate();
-        return;
-      }
-
-      const commands = await vscode.commands.getCommands();
-      const hasChatSubmit = commands.includes("workbench.action.chat.submit");
-      const hasChatPanel = commands.includes(
-        "workbench.panel.chat.view.copilot.focus"
-      );
-
-      if (hasChatSubmit && hasChatPanel) {
-        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
-          available: true,
-          status: HARNESS_STATUS_STRINGS.AVAILABLE,
-          message: "GitHub Copilot Chat",
-        };
-      } else {
-        this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
-          available: false,
-          status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-          message: "Copilot Chat commands not available",
-        };
-      }
-    } catch (error) {
-      this.harnessStatus[HARNESS_IDS.COPILOT_CHAT] = {
-        available: false,
-        status: HARNESS_STATUS_STRINGS.UNAVAILABLE,
-        message: "Error checking Copilot Chat availability",
-      };
-    }
-    // Send incremental update so UI reflects each check as it completes
-    this.sendHarnessStatusUpdate();
   }
 
   private async discoverAgents(): Promise<void> {

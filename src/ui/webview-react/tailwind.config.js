@@ -33,7 +33,7 @@ module.exports = {
         "btn-bg": "var(--vscode-button-background)",
         "btn-hover": "var(--vscode-button-hoverBackground)",
         "btn-fg": "var(--vscode-button-foreground)",
-        "btn-border": "var(--vscode-button-border, rgba(255,255,255,0.1))",
+        "btn-border": "var(--vscode-button-border, var(--vscode-widget-border))",
         "btn-secondary-bg": "var(--vscode-button-secondaryBackground)",
         "btn-secondary-hover": "var(--vscode-button-secondaryHoverBackground)",
         "btn-secondary-fg": "var(--vscode-button-secondaryForeground)",

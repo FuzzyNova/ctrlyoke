@@ -21,6 +21,7 @@ import {
 } from "../types/FlightPathTypes";
 import {
   ACTION_TYPES,
+  HARNESS_IDS,
   QUEUE_POSITION,
   type ActionType,
   type QueuePosition,
@@ -137,14 +138,39 @@ export class FlightPathManager {
     // Listen to queue state changes
     this.promptQueue.onDidChangeState(this.onQueueStateChanged.bind(this));
 
-    // Listen to Copilot status changes from the default integration
+    // Subscribe to ALL integrations' status changes.
+    // Default integration: log + update status bar (existing behaviour).
+    // All integrations: push terminal states to the webview so it is the
+    // single source of truth for harness availability (replaces the separate
+    // checkHarnessAvailability() that used to run inside the webview provider).
     const defaultIntegration = this.getDefaultIntegration();
-    context.subscriptions.push(
-      defaultIntegration.onDidChangeStatus((status) => {
-        Log.info(`🔄 Copilot status changed to: ${status}`);
-        this.updateStatusBar();
-      })
-    );
+    const allIntegrations: Array<[string, HarnessIntegration]> = [
+      [HARNESS_IDS.COPILOT_CLI, this.copilotCliIntegration],
+      [HARNESS_IDS.COPILOT_CHAT, this.chatIntegration],
+      [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
+      [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
+    ];
+    for (const [harnessId, integration] of allIntegrations) {
+      context.subscriptions.push(
+        integration.onDidChangeStatus((status) => {
+          if (integration === defaultIntegration) {
+            Log.info(`🔄 Copilot status changed to: ${status}`);
+            this.updateStatusBar();
+          }
+          // Only push terminal states — initial CHECKING state comes from
+          // the harnessStatus field initialiser in FlightPathWebviewProvider.
+          if (
+            status === HarnessStatus.Ready ||
+            status === HarnessStatus.Unavailable
+          ) {
+            this.dashboardProvider?.notifyHarnessAvailability(
+              harnessId,
+              status === HarnessStatus.Ready
+            );
+          }
+        })
+      );
+    }
 
     // Get current workspace folder
     this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];

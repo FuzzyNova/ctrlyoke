@@ -190,7 +190,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none border-r-0 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">

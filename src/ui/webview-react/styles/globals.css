@@ -3,13 +3,22 @@
    ============================================================================
    This file provides:
    1. Tailwind CSS imports
-   2. VS Code theme variable mappings
-   3. Base element styles
+   2. VS Code theme variable mappings (only for non-Tailwind contexts)
+   3. Base element styles (minimal resets only — Tailwind handles the rest)
    4. Icon font styles (codicons + custom icons loaded via index.html)
    5. Scrollbar utilities
 
    NOTE: Icon fonts (codicons, custom-icons.css) are loaded via <link> tags in
    index.html with URLs injected by the VS Code extension at runtime.
+
+   ARCHITECTURE NOTE:
+   Tailwind tokens in tailwind.config.js are the single source of truth for all
+   VS Code CSS variables used in JSX className strings. The :root block below
+   is only for variables consumed in non-Tailwind contexts:
+     - Arbitrary value classes in CliOutput, StatusMessage, etc. (var(--spacing-*))
+     - Inline style props (var(--btn-fg) in Header.tsx)
+     - globals.css base styles themselves (body, select, :focus-visible)
+   Do NOT add new variables here for things Tailwind tokens already cover.
    ============================================================================ */
 
 /* Streamdown: animation keyframes (sd-fadeIn, sd-blurIn, sd-slideUp) */
@@ -20,13 +29,10 @@
 @tailwind utilities;
 
 /* ============================================================================
-   CSS Custom Properties - VS Code Theme Integration
-   ============================================================================
-   Map VS Code theme variables to semantic custom properties for easier use.
-   Matches the variables defined in shared.scss for consistency.
+   CSS Custom Properties — Minimal Set for Non-Tailwind Contexts
    ============================================================================ */
 :root {
-  /* Spacing - compact for panel usage (matches shared.scss) */
+  /* Spacing — used via arbitrary values in CliOutput, outputStyles, StatusMessage */
   --spacing-xs: 4px;
   --spacing-sm: 6px;
   --spacing-md: 8px;
@@ -34,64 +40,30 @@
   --spacing-xl: 16px;
   --spacing-2xl: 24px;
 
-  /* Colors - Map to VS Code theme variables */
+  /* Semantic colors — used in CliOutput, StatusMessage, and base element styles below.
+     All other VS Code colors are referenced directly via Tailwind tokens. */
   --bg-primary: var(--vscode-editor-background);
-  --bg-secondary: var(
-    --vscode-sideBar-background,
-    var(--vscode-editor-background)
-  );
   --fg-primary: var(--vscode-editor-foreground);
   --fg-secondary: var(--vscode-descriptionForeground);
   --border-color: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
   --focus-border: var(--vscode-focusBorder);
 
-  /* Form controls */
-  --input-bg: var(--vscode-input-background);
-  --input-fg: var(--vscode-input-foreground);
-  --input-border: var(--vscode-input-border, var(--border-color));
-  --input-focus-border: var(--vscode-focusBorder);
-
-  /* Button colors */
-  --btn-bg: var(--vscode-button-background);
+  /* Button foreground — used in Header.tsx execution state badge text */
   --btn-fg: var(--vscode-button-foreground);
-  --btn-hover-bg: var(--vscode-button-hoverBackground);
-  --btn-secondary-bg: var(--vscode-button-secondaryBackground);
-  --btn-secondary-fg: var(--vscode-button-secondaryForeground);
-  --btn-secondary-hover-bg: var(--vscode-button-secondaryHoverBackground);
 
-  /* Status colors */
-  --status-success: var(--vscode-testing-iconPassed, #73bf69);
-  --status-error: var(--vscode-testing-iconFailed, #f16067);
-  --status-warning: var(--vscode-editorWarning-foreground, #fcaf3e);
-  --status-info: var(--vscode-editorInfo-foreground, #3794ff);
-  --status-pending: var(--vscode-descriptionForeground);
-  --status-running: var(--vscode-progressBar-background);
+  /* Execution state badge backgrounds — used in Header.tsx.
+     Chain through terminal ANSI colors as they are defined in virtually all themes. */
+  --status-success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen));
+  --status-error: var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed));
+  --status-warning: var(--vscode-editorWarning-foreground, var(--vscode-terminal-ansiYellow));
+  --status-info: var(--vscode-editorInfo-foreground, var(--vscode-terminal-ansiCyan));
 
-  /* List/Selection colors */
-  --list-hover-bg: var(--vscode-list-hoverBackground);
-  --list-hover-fg: var(--vscode-list-hoverForeground);
-  --list-active-bg: var(--vscode-list-activeSelectionBackground);
-  --list-active-fg: var(--vscode-list-activeSelectionForeground);
-  --list-focus-bg: var(--vscode-list-focusBackground);
-
-  /* Dropdown colors */
-  --dropdown-bg: var(--vscode-dropdown-background);
-  --dropdown-fg: var(--vscode-dropdown-foreground);
-  --dropdown-border: var(--vscode-dropdown-border);
-
-  /* Badge colors */
-  --badge-bg: var(--vscode-badge-background);
-  --badge-fg: var(--vscode-badge-foreground);
-
-  /* Widget shadow */
-  --widget-shadow: var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
-
-  /* Header button height normalization */
+  /* Layout */
   --header-button-height: 26px;
 }
 
 /* ============================================================================
-   Base Layer - Reset and Element Styles
+   Base Layer - Minimal Resets and Element Styles
    ============================================================================ */
 @layer base {
   /* Box sizing reset */
@@ -180,26 +152,12 @@
     background: transparent;
   }
 
-  /* Base button styles */
+  /* Base button styles — minimal reset only.
+     All visual styling (background, color, padding, border) must be applied
+     via explicit Tailwind classes on each button element. */
   button {
-    padding: 4px var(--spacing-md);
-    border: 1px solid var(--border-color);
-    border-radius: 2px;
-    background: var(--btn-secondary-bg);
-    color: var(--btn-secondary-fg);
     cursor: pointer;
-    font-size: 13px;
     font-family: inherit;
-    transition: background-color 0.15s ease;
-  }
-
-  button:hover:not(:disabled) {
-    background: var(--btn-secondary-hover-bg);
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   /* Base input styles */
@@ -210,14 +168,15 @@
     font-size: inherit;
   }
 
-  /* Base select styles */
+  /* Base select styles — select is a form control that needs explicit VS Code styling
+     since it renders as a native OS widget without it. */
   select {
     padding: var(--spacing-sm) var(--spacing-md);
     font-size: 13px;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
     border-radius: 2px;
-    background: var(--dropdown-bg);
-    color: var(--dropdown-fg);
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
     cursor: pointer;
     outline: none;
   }

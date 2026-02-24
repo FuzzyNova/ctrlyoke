@@ -54,7 +54,7 @@ These are all `--vscode-*` variables referenced in the FlightPath webview. Each 
 | `--vscode-button-background` | `btn-bg` | |
 | `--vscode-button-hoverBackground` | `btn-hover` | |
 | `--vscode-button-foreground` | `btn-fg` | |
-| `--vscode-button-border` | `btn-border` | Often undefined in themes; fallback `rgba(255,255,255,0.1)` ensures split-button dividers remain visible |
+| `--vscode-button-border` | `btn-border` | Only defined in high-contrast themes (null in Dark+/Light+); fallback is `--vscode-widget-border` which is explicitly set in both standard themes |
 | `--vscode-button-secondaryBackground` | `btn-secondary-bg` | |
 | `--vscode-button-secondaryHoverBackground` | `btn-secondary-hover` | |
 | `--vscode-button-secondaryForeground` | `btn-secondary-fg` | |
@@ -111,7 +111,7 @@ These appear in `CodeMirrorEditor.tsx` inside the `EditorView.theme({...})` call
 
 Most VS Code themes define the common variables listed above. Variables that are **frequently undefined** in minimal or third-party themes:
 
-- `--vscode-button-border` — many themes leave this unset (transparent)
+- `--vscode-button-border` — **always null in Dark+ and Light+**; only defined in high-contrast themes (via `contrastBorder`). The `btn-border` token falls back to `--vscode-widget-border` which is always present.
 - `--vscode-list-hoverForeground` — some themes rely on contrast with hover background instead
 - `--vscode-toolbar-hoverBackground` — not defined in all themes
 - `--vscode-widget-border` — may be undefined in flat themes
