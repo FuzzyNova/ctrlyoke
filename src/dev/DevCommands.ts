@@ -21,11 +21,13 @@
  * - flightpath.investigateChatLogs - Debug chat logs
  * - flightpath.showLanguageId - Debug language detection
  * - flightpath.exportDiscoveredModels - Export models to JSON for sync-models.mjs
+ * - flightpath.dumpCssVars - Dump all --vscode-* CSS variables to docs/reference/vscode-css-vars.json
  */
 
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
@@ -608,6 +610,107 @@ async function exportDiscoveredModels(): Promise<void> {
   }
 }
 
+/**
+ * Dump all --vscode-* CSS variables injected by VS Code into a webview.
+ *
+ * Opens a minimal WebviewPanel, reads every --vscode-* CSS custom property
+ * from getComputedStyle(document.documentElement), then writes the result to
+ * docs/reference/vscode-css-vars.json so we can inspect which variables are
+ * actually available (and what their values are) in the active theme.
+ *
+ * Usage: run "FlightPath: Dump CSS Variables" from the command palette (dev only).
+ */
+async function dumpVsCodeCssVariables(
+  context: vscode.ExtensionContext
+): Promise<void> {
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    vscode.window.showErrorMessage("No workspace folder open");
+    return;
+  }
+
+  const panel = vscode.window.createWebviewPanel(
+    "flightpath.cssVarDump",
+    "Dumping CSS Vars…",
+    { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+    { enableScripts: true, localResourceRoots: [] }
+  );
+
+  // Generate a nonce for the inline script
+  const nonce = crypto.randomBytes(16).toString("hex");
+
+  panel.webview.html = /* html */ `<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'nonce-${nonce}';">
+</head>
+<body>
+  <p>Reading CSS variables…</p>
+  <script nonce="${nonce}">
+    const vscode = acquireVsCodeApi();
+    const styles = getComputedStyle(document.documentElement);
+    const vars = {};
+    for (const prop of styles) {
+      if (prop.startsWith('--vscode-')) {
+        vars[prop] = styles.getPropertyValue(prop).trim();
+      }
+    }
+    vscode.postMessage({ type: 'cssVars', count: Object.keys(vars).length, vars });
+  </script>
+</body>
+</html>`;
+
+  // Wait for the webview to post back the variables
+  panel.webview.onDidReceiveMessage(
+    async (message) => {
+      if (message.type !== "cssVars") {
+        return;
+      }
+
+      panel.dispose();
+
+      const outputPath = path.join(
+        workspaceFolders[0].uri.fsPath,
+        "docs",
+        "reference",
+        "vscode-css-vars.json"
+      );
+
+      const output = {
+        generatedAt: new Date().toISOString(),
+        count: message.count,
+        vars: Object.fromEntries(
+          Object.entries(message.vars as Record<string, string>).sort(([a], [b]) =>
+            a.localeCompare(b)
+          )
+        ),
+      };
+
+      try {
+        fs.writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
+        Log.info(
+          `✅ Dumped ${message.count} CSS variables to ${outputPath}`
+        );
+
+        const action = await vscode.window.showInformationMessage(
+          `Dumped ${message.count} --vscode-* CSS variables to docs/reference/vscode-css-vars.json`,
+          "Open File"
+        );
+        if (action === "Open File") {
+          const doc = await vscode.workspace.openTextDocument(outputPath);
+          await vscode.window.showTextDocument(doc);
+        }
+      } catch (error) {
+        Log.error("❌ Failed to write CSS vars file:", error);
+        vscode.window.showErrorMessage(`Failed to write CSS vars: ${error}`);
+      }
+    },
+    undefined,
+    context.subscriptions
+  );
+}
+
 // ============================================================================
 // Command Registration
 // ============================================================================
@@ -729,6 +832,13 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
         await exportDiscoveredModels();
       }
     )
+  );
+
+  // Dump all --vscode-* CSS variables from active theme to a JSON file
+  context.subscriptions.push(
+    vscode.commands.registerCommand("flightpath.dumpCssVars", async () => {
+      await dumpVsCodeCssVariables(context);
+    })
   );
 
   Log.info("🔧 FlightPath: Development commands registered");

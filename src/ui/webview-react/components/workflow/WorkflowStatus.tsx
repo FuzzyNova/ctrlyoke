@@ -211,8 +211,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           </button>
 
           {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
-          <div className="bg-cmd-bg py-1 flex-shrink-0">
-            <div className="w-px h-full bg-btn-separator" />
+          <div className="bg-cmd-bg text-cmd-fg py-1 flex-shrink-0">
+            <div className="w-px h-full bg-current opacity-40" />
           </div>
 
           {/* Dropdown Trigger */}

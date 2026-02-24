@@ -173,10 +173,13 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     variant === "primary"
       ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
       : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
-  // Separator outer div background must match the button background so the
-  // padding area is invisible — mirrors VS Code's monaco-button-dropdown-separator
-  const separatorBgClass =
-    variant === "primary" ? "bg-btn-bg" : "bg-btn-secondary-bg";
+  // Separator outer div: background matches button so padding area is invisible,
+  // text color set so the inner div's bg-current inherits the right foreground.
+  // Mirrors VS Code's formula: transparent(buttonForeground, 0.4)
+  const separatorClass =
+    variant === "primary"
+      ? "bg-btn-bg text-btn-fg"
+      : "bg-btn-secondary-bg text-btn-secondary-fg";
   const disabledClass = "opacity-50 cursor-not-allowed";
 
   const defaultChevron = (
@@ -217,8 +220,8 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
           outer div fills with button background (padding creates the inset),
           inner 1px div is the visible hairline using --vscode-button-separator */}
-      <div className={`${separatorBgClass} py-1 flex-shrink-0`}>
-        <div className="w-px h-full bg-btn-separator" />
+      <div className={`${separatorClass} py-1 flex-shrink-0`}>
+        <div className="w-px h-full bg-current opacity-40" />
       </div>
 
       {/* Dropdown Trigger */}

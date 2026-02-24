@@ -230,6 +230,12 @@
         "icon": "$(export)"
       },
       {
+        "command": "flightpath.dumpCssVars",
+        "title": "Dump CSS Variables",
+        "category": "FlightPath Test",
+        "icon": "$(symbol-color)"
+      },
+      {
         "command": "flightpath.clearWorkflow",
         "title": "New Blank Workflow",
         "category": "FlightPath",

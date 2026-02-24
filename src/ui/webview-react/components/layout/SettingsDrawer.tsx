@@ -181,7 +181,7 @@ const HarnessDropdown: React.FC<{
       <button
         id={id}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
+        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
       >
         <span>{HARNESS_INFO[value as HarnessId]?.name || value}</span>
         <div className="flex items-center gap-1">
@@ -648,7 +648,7 @@ export const SettingsPanel: React.FC<{
               id="settings-model"
               value={effectiveModel}
               onChange={(e) => handleModelChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
             >
               {currentHarnessModels.length === 0 ? (
                 <option value="" disabled>
@@ -683,7 +683,7 @@ export const SettingsPanel: React.FC<{
               id="settings-agent"
               value={effectiveAgent || ""}
               onChange={(e) => handleAgentChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
             >
               <option value="">None (default behavior)</option>
               {availableAgents.map((agent) => (
@@ -717,7 +717,7 @@ export const SettingsPanel: React.FC<{
               id="settings-dynamic-ext"
               value={String(effectiveAllowDynamicExtension)}
               onChange={(e) => handleDynamicExtensionChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
+              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
             >
               <option value="true">Yes</option>
               <option value="false">No</option>

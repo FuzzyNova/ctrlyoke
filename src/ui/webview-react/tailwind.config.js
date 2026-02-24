@@ -22,7 +22,7 @@ module.exports = {
         // ── VS Code theme tokens (renamed from vscode-* for brevity) ──
         "editor-bg": "var(--vscode-editor-background)",
         "editor-fg": "var(--vscode-editor-foreground)",
-        "foreground": "var(--vscode-foreground)",
+        foreground: "var(--vscode-foreground)",
         "panel-border": "var(--vscode-panel-border)",
         "sidebar-bg": "var(--vscode-sideBar-background)",
         "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
@@ -35,7 +35,6 @@ module.exports = {
         "btn-fg": "var(--vscode-button-foreground)",
         // button.border is null in most themes — transparent matches VS Code's design intent
         "btn-border": "var(--vscode-button-border, transparent)",
-        "btn-separator": "var(--vscode-button-separator)",
         "btn-secondary-bg": "var(--vscode-button-secondaryBackground)",
         "btn-secondary-hover": "var(--vscode-button-secondaryHoverBackground)",
         "btn-secondary-fg": "var(--vscode-button-secondaryForeground)",
@@ -87,9 +86,12 @@ module.exports = {
         "cmd-inactive-fg": "var(--vscode-commandCenter-inactiveForeground)",
         // commandCenter.border defaults to contrastBorder (null in standard themes);
         // fall back to widget-border which is always defined in Dark+ and Light+
-        "cmd-border": "var(--vscode-commandCenter-border, var(--vscode-widget-border))",
-        "cmd-active-border": "var(--vscode-commandCenter-activeBorder, var(--vscode-focusBorder))",
-        "cmd-inactive-border": "var(--vscode-commandCenter-inactiveBorder, var(--vscode-widget-border))",
+        "cmd-border":
+          "var(--vscode-commandCenter-border, var(--vscode-widget-border))",
+        "cmd-active-border":
+          "var(--vscode-commandCenter-activeBorder, var(--vscode-focusBorder))",
+        "cmd-inactive-border":
+          "var(--vscode-commandCenter-inactiveBorder, var(--vscode-widget-border))",
 
         // Toolbar / keybinding
         "toolbar-hover-bg": "var(--vscode-toolbar-hoverBackground)",
@@ -101,13 +103,13 @@ module.exports = {
           "var(--vscode-notificationsInfoIcon-foreground)",
 
         // Execution status colors (semantic, theme-independent)
-        "status-idle": "#1064a8",
-        "status-running": "#48924b",
-        "status-completed": "#265428",
-        "status-stopped": "#750800",
-        "status-paused": "#a09000",
+        "status-idle": "#2d80c4",
+        "status-running": "#00c278",
+        "status-completed": "#26544e",
+        "status-stopped": "#7e2332",
+        "status-paused": "#bea307",
         "status-error": "#ff1100",
-        "status-cancelling": "#FF9800",
+        "status-cancelling": "#ff9900",
 
         // ── Severity colors (status messages) ──
         "severity-info": "rgb(156, 220, 254)",
