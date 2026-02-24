@@ -14,7 +14,7 @@ import {
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
-import { PanelBar, IconToggleButton } from "../shared";
+import { PanelBar, IconToggleButton, CustomSelect } from "../shared";
 
 /**
  * Harness display information
@@ -210,8 +210,8 @@ const HarnessDropdown: React.FC<{
                 disabled={!isAvailable && !isChecking}
                 className={`w-full px-2 py-1.5 text-xs text-left flex items-center justify-between focus:outline-none border-none ${
                   isSelected
-                    ? "bg-dropdown-selected-bg"
-                    : "hover:bg-list-hover-bg"
+                    ? "bg-dropdown-selected-bg text-list-active-fg"
+                    : "hover:bg-list-hover-bg hover:text-list-highlight-fg"
                 } ${
                   !isAvailable && !isChecking
                     ? "opacity-50 cursor-not-allowed"
@@ -644,24 +644,16 @@ export const SettingsPanel: React.FC<{
               />
             }
           >
-            <select
+            <CustomSelect
               id="settings-model"
               value={effectiveModel}
-              onChange={(e) => handleModelChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-            >
-              {currentHarnessModels.length === 0 ? (
-                <option value="" disabled>
-                  Loading models...
-                </option>
-              ) : (
-                currentHarnessModels.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))
-              )}
-            </select>
+              onChange={handleModelChange}
+              options={
+                currentHarnessModels.length === 0
+                  ? [{ value: "", label: "Loading models...", disabled: true }]
+                  : currentHarnessModels.map((m) => ({ value: m.value, label: m.label }))
+              }
+            />
           </FormField>
 
           {/* Agent */}
@@ -679,20 +671,18 @@ export const SettingsPanel: React.FC<{
               />
             }
           >
-            <select
+            <CustomSelect
               id="settings-agent"
               value={effectiveAgent || ""}
-              onChange={(e) => handleAgentChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-            >
-              <option value="">None (default behavior)</option>
-              {availableAgents.map((agent) => (
-                <option key={agent.path} value={agent.name || agent.path}>
-                  {agent.name || "Unknown Agent"}
-                  {agent.description ? ` - ${agent.description}` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={handleAgentChange}
+              options={[
+                { value: "", label: "None (default behavior)" },
+                ...availableAgents.map((agent) => ({
+                  value: agent.name || agent.path,
+                  label: `${agent.name || "Unknown Agent"}${agent.description ? ` - ${agent.description}` : ""}`,
+                })),
+              ]}
+            />
           </FormField>
 
           {/* Allow Dynamic Extension */}
@@ -713,15 +703,15 @@ export const SettingsPanel: React.FC<{
               />
             }
           >
-            <select
+            <CustomSelect
               id="settings-dynamic-ext"
               value={String(effectiveAllowDynamicExtension)}
-              onChange={(e) => handleDynamicExtensionChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
+              onChange={handleDynamicExtensionChange}
+              options={[
+                { value: "true", label: "Yes" },
+                { value: "false", label: "No" },
+              ]}
+            />
           </FormField>
 
           {/* Resume Session & Session ID */}

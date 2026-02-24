@@ -53,10 +53,22 @@
 
   /* Execution state badge backgrounds — used in Header.tsx.
      Chain through terminal ANSI colors as they are defined in virtually all themes. */
-  --status-success: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen));
-  --status-error: var(--vscode-testing-iconFailed, var(--vscode-terminal-ansiRed));
-  --status-warning: var(--vscode-editorWarning-foreground, var(--vscode-terminal-ansiYellow));
-  --status-info: var(--vscode-editorInfo-foreground, var(--vscode-terminal-ansiCyan));
+  --status-success: var(
+    --vscode-testing-iconPassed,
+    var(--vscode-terminal-ansiGreen)
+  );
+  --status-error: var(
+    --vscode-testing-iconFailed,
+    var(--vscode-terminal-ansiRed)
+  );
+  --status-warning: var(
+    --vscode-editorWarning-foreground,
+    var(--vscode-terminal-ansiYellow)
+  );
+  --status-info: var(
+    --vscode-editorInfo-foreground,
+    var(--vscode-terminal-ansiCyan)
+  );
 
   /* Layout */
   --header-button-height: 26px;
@@ -280,12 +292,20 @@ button .codicon {
   padding-bottom: 0.2em;
 }
 
-.markdown-text h1 { font-size: 1.4em; }
-.markdown-text h2 { font-size: 1.2em; }
-.markdown-text h3 { font-size: 1.1em; }
+.markdown-text h1 {
+  font-size: 1.4em;
+}
+.markdown-text h2 {
+  font-size: 1.2em;
+}
+.markdown-text h3 {
+  font-size: 1.1em;
+}
 .markdown-text h4,
 .markdown-text h5,
-.markdown-text h6 { font-size: 1em; }
+.markdown-text h6 {
+  font-size: 1em;
+}
 
 .markdown-text p {
   margin: 0.5em 0;
@@ -359,7 +379,10 @@ button .codicon {
 
 /* Streaming caret */
 [data-streamdown="caret"] {
-  background-color: var(--vscode-editorCursor-foreground, var(--vscode-foreground));
+  background-color: var(
+    --vscode-editorCursor-foreground,
+    var(--vscode-foreground)
+  );
 }
 
 /* ============================================================================

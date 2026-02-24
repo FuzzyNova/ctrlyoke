@@ -52,18 +52,25 @@ module.exports = {
 
         // Lists
         "list-hover-bg": "var(--vscode-list-hoverBackground)",
-        "list-hover-fg": "var(--vscode-list-hoverForeground)",
-        "list-active-bg": "var(--vscode-list-activeSelectionBackground)",
-        "list-active-fg": "var(--vscode-list-activeSelectionForeground)",
-        "list-inactive-bg": "var(--vscode-list-inactiveSelectionBackground)",
-        "list-focus-bg": "var(--vscode-list-focusBackground)",
+        // list-hoverForeground is omitted by themes that rely on contrast with hover bg
+        "list-hover-fg": "var(--vscode-list-hoverForeground, var(--vscode-foreground))",
+        // Highlight color for hovered/focused list item text — defined in all themes
+        "list-highlight-fg": "var(--vscode-list-highlightForeground)",
+        // HC themes don't define list selection backgrounds — fall back to hoverBackground
+        "list-active-bg": "var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))",
+        "list-active-fg": "var(--vscode-list-activeSelectionForeground, var(--vscode-dropdown-foreground))",
+        "list-inactive-bg": "var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground))",
+        "list-focus-bg": "var(--vscode-list-focusBackground, var(--vscode-list-hoverBackground))",
 
         // Dropdowns
         "dropdown-bg": "var(--vscode-dropdown-background)",
         "dropdown-fg": "var(--vscode-dropdown-foreground)",
         // dropdown.border is null in most themes — transparent matches VS Code's design intent
         "dropdown-border": "var(--vscode-dropdown-border, transparent)",
-        "dropdown-selected-bg": "var(--vscode-dropdown-selectedBackground)",
+        // VS Code has no dropdown-specific selection variable; uses list selection vars.
+        // --vscode-dropdown-selectedBackground does not exist.
+        // HC themes don't define list-activeSelectionBackground — fall back to hoverBackground.
+        "dropdown-selected-bg": "var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground))",
 
         // Text colors
         "description-fg": "var(--vscode-descriptionForeground)",

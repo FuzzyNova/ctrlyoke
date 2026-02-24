@@ -67,15 +67,16 @@ These are all `--vscode-*` variables referenced in the FlightPath webview. Each 
 | `--vscode-inputValidation-errorForeground`  | `input-error-fg`       |                                                                                                                                                   |
 | `--vscode-inputValidation-errorBorder`      | `input-error-border`   |                                                                                                                                                   |
 | `--vscode-list-hoverBackground`             | `list-hover-bg`        |                                                                                                                                                   |
-| `--vscode-list-hoverForeground`             | `list-hover-fg`        |                                                                                                                                                   |
-| `--vscode-list-activeSelectionBackground`   | `list-active-bg`       |                                                                                                                                                   |
-| `--vscode-list-activeSelectionForeground`   | `list-active-fg`       |                                                                                                                                                   |
-| `--vscode-list-inactiveSelectionBackground` | `list-inactive-bg`     |                                                                                                                                                   |
-| `--vscode-list-focusBackground`             | `list-focus-bg`        |                                                                                                                                                   |
+| `--vscode-list-hoverForeground`             | `list-hover-fg`        | Some themes omit this and rely on contrast with hover bg; fallback is `--vscode-foreground`                                                       |
+| `--vscode-list-highlightForeground`         | `list-highlight-fg`    | Text color for the hovered/highlighted list item; defined in all themes (Dark+: `#2aaaff`, HC: `#f38518`)                                         |
+| `--vscode-list-activeSelectionBackground`   | `list-active-bg`       | HC themes don't define this; fallback is `--vscode-list-hoverBackground`                                                                          |
+| `--vscode-list-activeSelectionForeground`   | `list-active-fg`       | HC themes don't define this; fallback is `--vscode-dropdown-foreground`                                                                           |
+| `--vscode-list-inactiveSelectionBackground` | `list-inactive-bg`     | HC themes don't define this; fallback is `--vscode-list-hoverBackground`                                                                          |
+| `--vscode-list-focusBackground`             | `list-focus-bg`        | HC themes don't define this; fallback is `--vscode-list-hoverBackground`                                                                          |
 | `--vscode-dropdown-background`              | `dropdown-bg`          |                                                                                                                                                   |
 | `--vscode-dropdown-foreground`              | `dropdown-fg`          |                                                                                                                                                   |
 | `--vscode-dropdown-border`                  | `dropdown-border`      |                                                                                                                                                   |
-| `--vscode-dropdown-listBackground`          | `dropdown-selected-bg` |                                                                                                                                                   |
+| `--vscode-list-activeSelectionBackground`   | `dropdown-selected-bg` | Shared with `list-active-bg`. Falls back to `--vscode-list-hoverBackground` — HC themes don't define list selection backgrounds                   |
 | `--vscode-descriptionForeground`            | `description-fg`       | Secondary/muted text                                                                                                                              |
 | `--vscode-errorForeground`                  | `error-fg`             |                                                                                                                                                   |
 | `--vscode-editorWarning-foreground`         | `warning-fg`           |                                                                                                                                                   |
@@ -121,7 +122,11 @@ These appear in `CodeMirrorEditor.tsx` inside the `EditorView.theme({...})` call
 Most VS Code themes define the common variables listed above. Variables that are **frequently undefined** in minimal or third-party themes:
 
 - `--vscode-button-border` — **always null in Dark+ and Light+**; only defined in high-contrast themes (via `contrastBorder`). The `btn-border` token falls back to `--vscode-widget-border` which is always present.
-- `--vscode-list-hoverForeground` — some themes rely on contrast with hover background instead
+- `--vscode-list-hoverForeground` — some themes rely on contrast with hover background instead (fallback: `--vscode-foreground`)
+- `--vscode-list-activeSelectionBackground` — **not defined in high-contrast themes** (HC uses border outlines for selection rather than fills); fallback: `--vscode-list-hoverBackground`
+- `--vscode-list-activeSelectionForeground` — not defined in high-contrast themes; fallback: `--vscode-dropdown-foreground`
+- `--vscode-list-inactiveSelectionBackground` — not defined in high-contrast themes; fallback: `--vscode-list-hoverBackground`
+- `--vscode-list-focusBackground` — not defined in high-contrast themes; fallback: `--vscode-list-hoverBackground`
 - `--vscode-toolbar-hoverBackground` — not defined in all themes
 - `--vscode-widget-border` — may be undefined in flat themes
 - `--vscode-dropdown-selectedBackground` — newer addition, not in all themes

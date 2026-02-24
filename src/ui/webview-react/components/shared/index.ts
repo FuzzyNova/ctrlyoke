@@ -1,4 +1,5 @@
 export { Button } from "./Button";
+export { CustomSelect, type SelectOption } from "./CustomSelect";
 export { Modal } from "./Modal";
 export {
   SplitButton,

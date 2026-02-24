@@ -5,6 +5,7 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
+import { CustomSelect } from "../shared";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -111,18 +112,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 >
                   Harness
                 </label>
-                <select
+                <CustomSelect
                   id="prop-harness"
                   value={properties.harness}
-                  onChange={(e) => handleHarnessChange(e.target.value)}
-                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-                >
-                  <option value="default">Default</option>
-                  <option value={HARNESS_IDS.COPILOT_CLI}>Copilot CLI</option>
-                  <option value={HARNESS_IDS.COPILOT_CHAT}>Copilot Chat</option>
-                  <option value={HARNESS_IDS.CLAUDE_CLI}>Claude CLI</option>
-                  <option value={HARNESS_IDS.CODEX_CLI}>Codex CLI</option>
-                </select>
+                  onChange={handleHarnessChange}
+                  options={[
+                    { value: "default", label: "Default" },
+                    { value: HARNESS_IDS.COPILOT_CLI, label: "Copilot CLI" },
+                    { value: HARNESS_IDS.COPILOT_CHAT, label: "Copilot Chat" },
+                    { value: HARNESS_IDS.CLAUDE_CLI, label: "Claude CLI" },
+                    { value: HARNESS_IDS.CODEX_CLI, label: "Codex CLI" },
+                  ]}
+                />
               </div>
 
               {/* Model */}
@@ -133,25 +134,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 >
                   Model
                 </label>
-                <select
+                <CustomSelect
                   id="prop-model"
                   value={properties.model}
-                  onChange={(e) => setProperty("model", e.target.value)}
-                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-                >
-                  <option value="default">Default</option>
-                  {models.length === 0 ? (
-                    <option value="" disabled>
-                      Loading models...
-                    </option>
-                  ) : (
-                    models.map((model) => (
-                      <option key={model.value} value={model.value}>
-                        {model.label}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  onChange={(v) => setProperty("model", v)}
+                  options={[
+                    { value: "default", label: "Default" },
+                    ...(models.length === 0
+                      ? [{ value: "", label: "Loading models...", disabled: true }]
+                      : models.map((m) => ({ value: m.value, label: m.label }))),
+                  ]}
+                />
               </div>
             </div>
 
@@ -165,19 +158,18 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 >
                   Agent
                 </label>
-                <select
+                <CustomSelect
                   id="prop-agent"
                   value={properties.agent}
-                  onChange={(e) => setProperty("agent", e.target.value)}
-                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-                >
-                  <option value="">None</option>
-                  {availableAgents.map((agent) => (
-                    <option key={agent.path} value={agent.path}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setProperty("agent", v)}
+                  options={[
+                    { value: "", label: "None" },
+                    ...availableAgents.map((agent) => ({
+                      value: agent.path,
+                      label: agent.name,
+                    })),
+                  ]}
+                />
               </div>
 
               {/* Allow Dynamic Extension */}
@@ -188,18 +180,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 >
                   Allow Dynamic Extension
                 </label>
-                <select
+                <CustomSelect
                   id="prop-allow-dynamic"
                   value={properties.allowDynamicExtension}
-                  onChange={(e) =>
-                    setProperty("allowDynamicExtension", e.target.value)
-                  }
-                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-                >
-                  <option value="default">Default</option>
-                  <option value="yes">Yes - Allow AI to extend workflow</option>
-                  <option value="no">No - Disable dynamic extension</option>
-                </select>
+                  onChange={(v) => setProperty("allowDynamicExtension", v)}
+                  options={[
+                    { value: "default", label: "Default" },
+                    { value: "yes", label: "Yes - Allow AI to extend workflow" },
+                    { value: "no", label: "No - Disable dynamic extension" },
+                  ]}
+                />
               </div>
             </div>
 
@@ -213,16 +203,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 >
                   Resume Session
                 </label>
-                <select
+                <CustomSelect
                   id="prop-resume-session"
                   value={properties.resumeSession}
-                  onChange={(e) => setProperty("resumeSession", e.target.value)}
-                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
-                >
-                  <option value="default">Default</option>
-                  <option value="yes">Yes - Resume previous session</option>
-                  <option value="no">No - Start new session</option>
-                </select>
+                  onChange={(v) => setProperty("resumeSession", v)}
+                  options={[
+                    { value: "default", label: "Default" },
+                    { value: "yes", label: "Yes - Resume previous session" },
+                    { value: "no", label: "No - Start new session" },
+                  ]}
+                />
               </div>
 
               {/* Session ID (enabled only when resume session is "yes") */}
