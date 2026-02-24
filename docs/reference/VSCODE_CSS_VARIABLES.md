@@ -85,6 +85,14 @@ These are all `--vscode-*` variables referenced in the FlightPath webview. Each 
 | `--vscode-badge-background` | `badge-bg` | |
 | `--vscode-badge-foreground` | `badge-fg` | |
 | `--vscode-toolbar-hoverBackground` | `toolbar-hover-bg` | |
+| `--vscode-commandCenter-background` | `cmd-bg` | |
+| `--vscode-commandCenter-foreground` | `cmd-fg` | |
+| `--vscode-commandCenter-activeBackground` | `cmd-active-bg` | |
+| `--vscode-commandCenter-activeForeground` | `cmd-active-fg` | |
+| `--vscode-commandCenter-inactiveForeground` | `cmd-inactive-fg` | |
+| `--vscode-commandCenter-border` | `cmd-border` | Defaults to `contrastBorder` (null in standard themes); fallback is `--vscode-widget-border` |
+| `--vscode-commandCenter-activeBorder` | `cmd-active-border` | Fallback is `--vscode-focusBorder` |
+| `--vscode-commandCenter-inactiveBorder` | `cmd-inactive-border` | Fallback is `--vscode-widget-border` |
 | `--vscode-keybindingLabel-background` | `keybinding-bg` | Fallback: `rgba(128,128,128,0.17)` |
 | `--vscode-notificationsInfoIcon-foreground` | `notification-info-fg` | |
 | `--vscode-charts-green` | `bash-status-success` | Also used for live-run indicators |

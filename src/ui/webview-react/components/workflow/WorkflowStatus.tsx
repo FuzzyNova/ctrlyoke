@@ -185,12 +185,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
         />
       ) : (
         /* Display Mode - Split Button Style */
-        <div className="workflow-split-button inline-flex rounded overflow-visible max-w-full sm:max-w-[500px] w-full sm:w-auto flex-1 min-w-0">
+        <div className={`workflow-split-button inline-flex border rounded overflow-hidden max-w-full sm:max-w-[500px] w-full sm:w-auto flex-1 min-w-0 transition-colors ${isDropdownOpen ? "border-cmd-active-border" : "border-cmd-border"}`}>
           {/* Main Button - Workflow Name */}
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 bg-cmd-bg text-cmd-fg hover:bg-cmd-active-bg hover:text-cmd-active-fg"
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -210,6 +210,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             </div>
           </button>
 
+          {/* Separator — mirrors VS Code's monaco-button-dropdown-separator */}
+          <div className="bg-cmd-bg py-1 flex-shrink-0">
+            <div className="w-px h-full bg-btn-separator" />
+          </div>
+
           {/* Dropdown Trigger */}
           <button
             type="button"
@@ -223,11 +228,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 ? "Cannot switch workflows while running"
                 : "Show recent workflows"
             }
-            className={`workflow-button-dropdown px-2 py-1 rounded-r rounded-l-none border-l border-btn-border bg-btn-secondary-bg text-btn-secondary-fg flex items-center justify-center gap-1 transition-colors ${
+            className={`workflow-button-dropdown px-2 py-1 bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors ${
               isRunning
                 ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-btn-secondary-hover"
-            } ${isDropdownOpen ? "bg-btn-secondary-hover" : ""}`}
+                : "hover:bg-cmd-active-bg hover:text-cmd-active-fg"
+            } ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
           >
             {recentWorkflows.length > 0 && (
               <span className="workflow-count-badge text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">

@@ -173,6 +173,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     variant === "primary"
       ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
       : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
+  // Separator outer div background must match the button background so the
+  // padding area is invisible — mirrors VS Code's monaco-button-dropdown-separator
+  const separatorBgClass =
+    variant === "primary" ? "bg-btn-bg" : "bg-btn-secondary-bg";
   const disabledClass = "opacity-50 cursor-not-allowed";
 
   const defaultChevron = (
@@ -194,7 +198,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative inline-flex rounded ${className}`}
+      className={`relative inline-flex rounded border border-btn-border ${className}`}
       onKeyDown={handleKeyDown}
     >
       {/* Main Button */}
@@ -210,6 +214,13 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         {mainLabel}
       </button>
 
+      {/* Separator — mirrors VS Code's monaco-button-dropdown-separator:
+          outer div fills with button background (padding creates the inset),
+          inner 1px div is the visible hairline using --vscode-button-separator */}
+      <div className={`${separatorBgClass} py-1 flex-shrink-0`}>
+        <div className="w-px h-full bg-btn-separator" />
+      </div>
+
       {/* Dropdown Trigger */}
       <button
         ref={triggerRef}
@@ -220,7 +231,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         aria-label={dropdownAriaLabel}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`${baseButtonClass} ${variantClass} px-2 py-1 rounded-r rounded-l-none border-l border-btn-border ${
+        className={`${baseButtonClass} ${variantClass} px-2 py-1 rounded-r rounded-l-none ${
           disabled || dropdownDisabled ? disabledClass : ""
         } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
       >

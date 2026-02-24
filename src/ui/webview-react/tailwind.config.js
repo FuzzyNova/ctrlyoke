@@ -33,7 +33,9 @@ module.exports = {
         "btn-bg": "var(--vscode-button-background)",
         "btn-hover": "var(--vscode-button-hoverBackground)",
         "btn-fg": "var(--vscode-button-foreground)",
-        "btn-border": "var(--vscode-button-border, var(--vscode-widget-border))",
+        // button.border is null in most themes — transparent matches VS Code's design intent
+        "btn-border": "var(--vscode-button-border, transparent)",
+        "btn-separator": "var(--vscode-button-separator)",
         "btn-secondary-bg": "var(--vscode-button-secondaryBackground)",
         "btn-secondary-hover": "var(--vscode-button-secondaryHoverBackground)",
         "btn-secondary-fg": "var(--vscode-button-secondaryForeground)",
@@ -41,7 +43,9 @@ module.exports = {
         // Inputs
         "input-bg": "var(--vscode-input-background)",
         "input-fg": "var(--vscode-input-foreground)",
-        "input-border": "var(--vscode-input-border)",
+        // input.border is null in most themes — transparent means "no border" when unset,
+        // matching VS Code's design intent. Themes that define it get the defined color.
+        "input-border": "var(--vscode-input-border, transparent)",
         "input-placeholder": "var(--vscode-input-placeholderForeground)",
         "input-error-bg": "var(--vscode-inputValidation-errorBackground)",
         "input-error-fg": "var(--vscode-inputValidation-errorForeground)",
@@ -58,7 +62,8 @@ module.exports = {
         // Dropdowns
         "dropdown-bg": "var(--vscode-dropdown-background)",
         "dropdown-fg": "var(--vscode-dropdown-foreground)",
-        "dropdown-border": "var(--vscode-dropdown-border)",
+        // dropdown.border is null in most themes — transparent matches VS Code's design intent
+        "dropdown-border": "var(--vscode-dropdown-border, transparent)",
         "dropdown-selected-bg": "var(--vscode-dropdown-selectedBackground)",
 
         // Text colors
@@ -73,6 +78,18 @@ module.exports = {
         // Badges
         "badge-bg": "var(--vscode-badge-background)",
         "badge-fg": "var(--vscode-badge-foreground)",
+
+        // Command Center (used for WorkflowStatus split button styling)
+        "cmd-bg": "var(--vscode-commandCenter-background)",
+        "cmd-fg": "var(--vscode-commandCenter-foreground)",
+        "cmd-active-bg": "var(--vscode-commandCenter-activeBackground)",
+        "cmd-active-fg": "var(--vscode-commandCenter-activeForeground)",
+        "cmd-inactive-fg": "var(--vscode-commandCenter-inactiveForeground)",
+        // commandCenter.border defaults to contrastBorder (null in standard themes);
+        // fall back to widget-border which is always defined in Dark+ and Light+
+        "cmd-border": "var(--vscode-commandCenter-border, var(--vscode-widget-border))",
+        "cmd-active-border": "var(--vscode-commandCenter-activeBorder, var(--vscode-focusBorder))",
+        "cmd-inactive-border": "var(--vscode-commandCenter-inactiveBorder, var(--vscode-widget-border))",
 
         // Toolbar / keybinding
         "toolbar-hover-bg": "var(--vscode-toolbar-hoverBackground)",

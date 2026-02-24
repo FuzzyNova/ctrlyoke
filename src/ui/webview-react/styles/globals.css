@@ -168,27 +168,10 @@
     font-size: inherit;
   }
 
-  /* Base select styles — select is a form control that needs explicit VS Code styling
-     since it renders as a native OS widget without it. */
+  /* Base select styles — minimal reset only, same as button.
+     All visual styling must be applied via explicit Tailwind classes. */
   select {
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: 13px;
-    border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-    border-radius: 2px;
-    background: var(--vscode-dropdown-background);
-    color: var(--vscode-dropdown-foreground);
     cursor: pointer;
-    outline: none;
-  }
-
-  select:hover {
-    border-color: var(--focus-border);
-  }
-
-  select:focus {
-    border-color: var(--focus-border);
-    outline: 1px solid var(--focus-border);
-    outline-offset: -1px;
   }
 
   /* Label styles */
