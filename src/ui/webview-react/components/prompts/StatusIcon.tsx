@@ -22,7 +22,7 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
       case STEP_STATUS.PENDING:
         return {
           icon: "codicon-circle-outline",
-          colorClass: "text-[var(--vscode-descriptionForeground)]",
+          colorClass: "text-description-fg",
         };
       case STEP_STATUS.SENT:
         return {
@@ -37,22 +37,22 @@ export const StatusIcon: React.FC<StatusIconProps> = ({
       case STEP_STATUS.COMPLETED:
         return {
           icon: "codicon-pass",
-          colorClass: "text-[var(--vscode-charts-green)]",
+          colorClass: "text-bash-status-success",
         };
       case STEP_STATUS.FAILED:
         return {
           icon: "codicon-error",
-          colorClass: "text-[var(--vscode-charts-red)]",
+          colorClass: "text-bash-status-error",
         };
       case STEP_STATUS.CANCELLED:
         return {
           icon: "codicon-circle-slash",
-          colorClass: "text-[var(--vscode-descriptionForeground)]",
+          colorClass: "text-description-fg",
         };
       default:
         return {
           icon: "codicon-circle-outline",
-          colorClass: "text-[var(--vscode-descriptionForeground)]",
+          colorClass: "text-description-fg",
         };
     }
   };

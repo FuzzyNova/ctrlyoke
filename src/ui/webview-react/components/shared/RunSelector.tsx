@@ -108,14 +108,14 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
         aria-expanded={isOpen}
         title="Select run to view"
         className="flex items-center gap-1 px-2 py-0.5 text-[11px] rounded
-          text-[var(--vscode-descriptionForeground)]
-          hover:text-[var(--vscode-foreground)]
-          hover:bg-[var(--vscode-list-hoverBackground)]
+          text-description-fg
+          hover:text-foreground
+          hover:bg-list-hover-bg
           transition-colors focus:outline-none focus-visible:ring-1
-          focus-visible:ring-[var(--vscode-focusBorder)]"
+          focus-visible:ring-focus-border"
       >
         {isLiveRunActive && !isViewingHistory && (
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--vscode-charts-green)] animate-pulse mr-0.5" />
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse mr-0.5" />
         )}
         <span>
           Run {currentRunNumber} of {availableRuns}
@@ -142,8 +142,8 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
           role="listbox"
           aria-label="Select run"
           className="absolute top-full right-0 mt-1 w-max
-            bg-[var(--vscode-dropdown-background)]
-            border border-[var(--vscode-dropdown-border)]
+            bg-dropdown-bg
+            border border-dropdown-border
             rounded shadow-lg z-50 overflow-y-auto overflow-x-hidden py-0.5"
           style={{ maxHeight: "var(--run-selector-max-h, 160px)", minWidth: "160px", maxWidth: "320px" }}
         >
@@ -180,14 +180,14 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
                   transition-colors
                   ${
                     isSelected
-                      ? "bg-[var(--vscode-list-activeSelectionBackground)] text-[var(--vscode-list-activeSelectionForeground)]"
-                      : "text-[var(--vscode-dropdown-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
+                      ? "bg-list-active-bg text-list-active-fg"
+                      : "text-dropdown-fg hover:bg-list-hover-bg cursor-pointer"
                   }`}
               >
                 {/* Run number with optional live dot inline */}
                 <span className="flex items-center gap-1 flex-shrink-0">
                   {isLiveRun && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--vscode-charts-green)] animate-pulse" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse" />
                   )}
                   <span className="font-mono">{runNumber}</span>
                 </span>
@@ -206,12 +206,12 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
 
                 {/* Relative time or "live" label */}
                 {isLiveRun ? (
-                  <span className="text-[var(--vscode-descriptionForeground)] text-[10px] flex-shrink-0">
+                  <span className="text-description-fg text-[10px] flex-shrink-0">
                     live
                   </span>
                 ) : (
                   timeAgo && (
-                    <span className="text-[var(--vscode-descriptionForeground)] text-[10px] flex-shrink-0">
+                    <span className="text-description-fg text-[10px] flex-shrink-0">
                       {timeAgo}
                     </span>
                   )

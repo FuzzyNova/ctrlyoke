@@ -403,12 +403,12 @@ function App() {
 
   if (isMobile) {
     return (
-      <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+      <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground">
         <Header />
 
         {allMobileCollapsed ? (
           /* All collapsed: stack 4 horizontal PanelBars vertically */
-          <div className="flex flex-col flex-1 relative bg-[var(--vscode-editor-background)]">
+          <div className="flex flex-col flex-1 relative bg-editor-bg">
             {/* Background logo when all panels collapsed */}
             {(() => {
               const logoUrl = document.body.getAttribute("data-logo-uri") || "";
@@ -547,7 +547,7 @@ function App() {
   // ============================================================================
 
   return (
-    <div className="h-screen w-full flex flex-col bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]">
+    <div className="h-screen w-full flex flex-col bg-editor-bg text-foreground">
       <Header />
 
       {/* Main layout: Prompts (left) | Output/Editor (center) | Settings (right) */}

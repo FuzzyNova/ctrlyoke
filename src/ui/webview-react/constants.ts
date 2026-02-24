@@ -44,8 +44,8 @@ export const PANEL_KEYS = Object.keys(DEFAULT_MOBILE_SIZES) as ReadonlyArray<
 /** Separator styling constants for consistent appearance and interaction */
 /** Horizontal separator (vertical resize handle) - thin horizontal line */
 export const SEPARATOR_HORIZONTAL =
-  "h-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-row-resize transition-colors";
+  "h-0.5 bg-panel-border hover:bg-focus-border active:bg-focus-border cursor-row-resize transition-colors";
 
 /** Vertical separator (horizontal resize handle) - thin vertical line */
 export const SEPARATOR_VERTICAL =
-  "w-0.5 bg-[var(--vscode-panel-border)] hover:bg-[var(--vscode-focusBorder)] active:bg-[var(--vscode-focusBorder)] cursor-col-resize transition-colors";
+  "w-0.5 bg-panel-border hover:bg-focus-border active:bg-focus-border cursor-col-resize transition-colors";

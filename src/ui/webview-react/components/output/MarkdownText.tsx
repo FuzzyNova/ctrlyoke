@@ -36,7 +36,7 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          className="text-[var(--vscode-textLink-foreground)] hover:underline"
+          className="text-link-fg hover:underline"
         >
           {linkChildren}
         </a>
@@ -47,14 +47,14 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
         className: langClass,
       }: React.HTMLAttributes<HTMLElement>) => (
         <code
-          className={`${langClass ?? ""} bg-[var(--vscode-textCodeBlock-background)] text-[var(--vscode-editor-foreground)] rounded px-1 py-0.5 font-mono text-[0.9em]`}
+          className={`${langClass ?? ""} bg-[var(--vscode-textCodeBlock-background)] text-editor-fg rounded px-1 py-0.5 font-mono text-[0.9em]`}
         >
           {codeChildren}
         </code>
       ),
       // Code block wrapper: terminal-like appearance matching existing style
       pre: ({ children: preChildren }: React.HTMLAttributes<HTMLElement>) => (
-        <pre className="bg-[var(--vscode-terminal-background,var(--vscode-editor-background))] border border-[var(--vscode-panel-border)] rounded p-3 overflow-x-auto my-2 font-mono text-[0.9em] whitespace-pre-wrap">
+        <pre className="bg-editor-bg border border-panel-border rounded p-3 overflow-x-auto my-2 font-mono text-[0.9em] whitespace-pre-wrap">
           {preChildren}
         </pre>
       ),

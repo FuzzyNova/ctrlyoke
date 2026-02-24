@@ -19,21 +19,69 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "vscode-bg": "var(--vscode-editor-background)",
-        "vscode-fg": "var(--vscode-editor-foreground)",
-        "vscode-border": "var(--vscode-panel-border, var(--border-color))",
-        "vscode-primary": "var(--vscode-button-background)",
-        "vscode-primary-hover": "var(--vscode-button-hoverBackground)",
-        "vscode-primary-fg": "var(--vscode-button-foreground)",
-        "vscode-secondary": "var(--vscode-button-secondaryBackground)",
-        "vscode-secondary-hover":
-          "var(--vscode-button-secondaryHoverBackground)",
-        "vscode-secondary-fg": "var(--vscode-button-secondaryForeground)",
-        "vscode-input-bg": "var(--vscode-input-background)",
-        "vscode-input-fg": "var(--vscode-input-foreground)",
-        "vscode-input-border": "var(--vscode-input-border)",
-        "vscode-list-hover": "var(--vscode-list-hoverBackground)",
-        "vscode-list-active": "var(--vscode-list-activeSelectionBackground)",
+        // ── VS Code theme tokens (renamed from vscode-* for brevity) ──
+        "editor-bg": "var(--vscode-editor-background)",
+        "editor-fg": "var(--vscode-editor-foreground)",
+        "foreground": "var(--vscode-foreground)",
+        "panel-border": "var(--vscode-panel-border)",
+        "sidebar-bg": "var(--vscode-sideBar-background)",
+        "sidebar-drop-bg": "var(--vscode-sideBar-dropBackground)",
+        "focus-border": "var(--vscode-focusBorder)",
+        "widget-border": "var(--vscode-widget-border)",
+
+        // Buttons
+        "btn-bg": "var(--vscode-button-background)",
+        "btn-hover": "var(--vscode-button-hoverBackground)",
+        "btn-fg": "var(--vscode-button-foreground)",
+        "btn-border": "var(--vscode-button-border, rgba(255,255,255,0.1))",
+        "btn-secondary-bg": "var(--vscode-button-secondaryBackground)",
+        "btn-secondary-hover": "var(--vscode-button-secondaryHoverBackground)",
+        "btn-secondary-fg": "var(--vscode-button-secondaryForeground)",
+
+        // Inputs
+        "input-bg": "var(--vscode-input-background)",
+        "input-fg": "var(--vscode-input-foreground)",
+        "input-border": "var(--vscode-input-border)",
+        "input-placeholder": "var(--vscode-input-placeholderForeground)",
+        "input-error-bg": "var(--vscode-inputValidation-errorBackground)",
+        "input-error-fg": "var(--vscode-inputValidation-errorForeground)",
+        "input-error-border": "var(--vscode-inputValidation-errorBorder)",
+
+        // Lists
+        "list-hover-bg": "var(--vscode-list-hoverBackground)",
+        "list-hover-fg": "var(--vscode-list-hoverForeground)",
+        "list-active-bg": "var(--vscode-list-activeSelectionBackground)",
+        "list-active-fg": "var(--vscode-list-activeSelectionForeground)",
+        "list-inactive-bg": "var(--vscode-list-inactiveSelectionBackground)",
+        "list-focus-bg": "var(--vscode-list-focusBackground)",
+
+        // Dropdowns
+        "dropdown-bg": "var(--vscode-dropdown-background)",
+        "dropdown-fg": "var(--vscode-dropdown-foreground)",
+        "dropdown-border": "var(--vscode-dropdown-border)",
+        "dropdown-selected-bg": "var(--vscode-dropdown-selectedBackground)",
+
+        // Text colors
+        "description-fg": "var(--vscode-descriptionForeground)",
+        "error-fg": "var(--vscode-errorForeground)",
+        "warning-fg": "var(--vscode-editorWarning-foreground)",
+        "info-fg": "var(--vscode-editorInfo-foreground)",
+        "link-fg": "var(--vscode-textLink-foreground)",
+        "link-active-fg": "var(--vscode-textLink-activeForeground)",
+        "disabled-fg": "var(--vscode-disabledForeground)",
+
+        // Badges
+        "badge-bg": "var(--vscode-badge-background)",
+        "badge-fg": "var(--vscode-badge-foreground)",
+
+        // Toolbar / keybinding
+        "toolbar-hover-bg": "var(--vscode-toolbar-hoverBackground)",
+        "keybinding-bg":
+          "var(--vscode-keybindingLabel-background, rgba(128,128,128,0.17))",
+
+        // Notifications
+        "notification-info-fg":
+          "var(--vscode-notificationsInfoIcon-foreground)",
 
         // Execution status colors (semantic, theme-independent)
         "status-idle": "#1064a8",
@@ -82,10 +130,6 @@ module.exports = {
           "var(--vscode-progressBar-background, rgba(14, 99, 156, 0.8))",
         "exec-stopped-bg":
           "var(--vscode-editorInfo-foreground, rgba(150, 150, 150, 0.8))",
-
-        // ── VS Code theme tokens ──
-        "vscode-description-fg": "var(--vscode-descriptionForeground)",
-        "vscode-error-fg": "var(--vscode-errorForeground)",
       },
 
       keyframes: {

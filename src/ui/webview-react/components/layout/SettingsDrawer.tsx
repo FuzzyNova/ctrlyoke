@@ -69,7 +69,7 @@ const StatusIndicator: React.FC<{
   const config = statusConfig[status];
 
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-[var(--vscode-descriptionForeground)]">
+    <span className="inline-flex items-center gap-1 text-[10px] text-description-fg">
       <span
         className={`w-2 h-2 rounded-full flex-shrink-0 ${config.color} ${config.animate ? "animate-pulse" : ""}`}
       />
@@ -103,7 +103,7 @@ const SetAsDefaultButton: React.FC<{
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
-      className={`text-[10px] font-semibold uppercase text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer transition-colors ${
+      className={`text-[10px] font-semibold uppercase text-link-fg hover:underline cursor-pointer transition-colors ${
         state === "success" ? "text-green-500" : ""
       } ${state === "fading" ? "opacity-0" : ""}`}
       title="Set this as the default for new workflows"
@@ -128,7 +128,7 @@ const FormField: React.FC<{
       <label
         htmlFor={htmlFor}
         title={description}
-        className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-help"
+        className="text-[11px] font-semibold uppercase text-description-fg cursor-help"
       >
         {label}
       </label>
@@ -181,7 +181,7 @@ const HarnessDropdown: React.FC<{
       <button
         id={id}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] text-left flex items-center justify-between h-7"
+        className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
       >
         <span>{HARNESS_INFO[value as HarnessId]?.name || value}</span>
         <div className="flex items-center gap-1">
@@ -196,7 +196,7 @@ const HarnessDropdown: React.FC<{
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-0 bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] z-50 shadow-lg">
+        <div className="absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg">
           {Object.entries(HARNESS_IDS).map(([, harness]) => {
             const status = harnessStatus[harness as HarnessId];
             const isAvailable = status?.available !== false;
@@ -210,8 +210,8 @@ const HarnessDropdown: React.FC<{
                 disabled={!isAvailable && !isChecking}
                 className={`w-full px-2 py-1.5 text-xs text-left flex items-center justify-between focus:outline-none border-none ${
                   isSelected
-                    ? "bg-[var(--vscode-dropdown-selectedBackground)]"
-                    : "hover:bg-[var(--vscode-list-hoverBackground)]"
+                    ? "bg-dropdown-selected-bg"
+                    : "hover:bg-list-hover-bg"
                 } ${
                   !isAvailable && !isChecking
                     ? "opacity-50 cursor-not-allowed"
@@ -574,17 +574,17 @@ export const SettingsPanel: React.FC<{
   const endCondition = workflowProperties.endCondition || {};
 
   return (
-    <div className="flex flex-col h-full bg-[var(--vscode-sideBar-background)]">
+    <div className="flex flex-col h-full bg-sidebar-bg">
       {/* Section Header - clickable to collapse */}
       <div
-        className="flex items-center justify-between h-[30px] px-2 border-b border-[var(--vscode-panel-border)] cursor-pointer select-none"
+        className="flex items-center justify-between h-[30px] px-2 border-b border-panel-border cursor-pointer select-none"
         onClick={toggleSettingsCollapse}
         role="button"
         aria-label="Collapse settings"
         tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && toggleSettingsCollapse()}
       >
-        <div className="flex items-center gap-1 text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors">
+        <div className="flex items-center gap-1 text-description-fg hover:text-foreground transition-colors">
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-settings-gear text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
@@ -596,7 +596,7 @@ export const SettingsPanel: React.FC<{
             e.stopPropagation();
             handleOpenSettings();
           }}
-          className="text-[11px] text-[var(--vscode-textLink-foreground)] hover:underline hover:bg-[var(--vscode-list-hoverBackground)] px-1 py-0.5 rounded"
+          className="text-[11px] text-link-fg hover:underline hover:bg-list-hover-bg px-1 py-0.5 rounded"
           title="Open VS Code settings"
         >
           More...
@@ -648,7 +648,7 @@ export const SettingsPanel: React.FC<{
               id="settings-model"
               value={effectiveModel}
               onChange={(e) => handleModelChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
             >
               {currentHarnessModels.length === 0 ? (
                 <option value="" disabled>
@@ -683,7 +683,7 @@ export const SettingsPanel: React.FC<{
               id="settings-agent"
               value={effectiveAgent || ""}
               onChange={(e) => handleAgentChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
             >
               <option value="">None (default behavior)</option>
               {availableAgents.map((agent) => (
@@ -717,7 +717,7 @@ export const SettingsPanel: React.FC<{
               id="settings-dynamic-ext"
               value={String(effectiveAllowDynamicExtension)}
               onChange={(e) => handleDynamicExtensionChange(e.target.value)}
-              className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+              className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
             >
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -733,11 +733,11 @@ export const SettingsPanel: React.FC<{
                 id="settings-resume-session"
                 checked={effectiveResumeSession}
                 onChange={(e) => handleResumeSessionChange(e.target.checked)}
-                className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+                className="w-4 h-4 accent-focus-border cursor-pointer"
               />
               <label
                 htmlFor="settings-resume-session"
-                className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
                 title="Resume Session continues existing session. Session ID below resumes a specific session or reuses another prompt's session (by number)."
               >
                 Resume Session
@@ -769,7 +769,7 @@ export const SettingsPanel: React.FC<{
                   value={sessionIdInput}
                   onChange={(e) => handleSessionIdChange(e.target.value)}
                   placeholder="Enter session ID or prompt number"
-                  className="min-w-0 w-full px-2 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] h-7"
+                  className="min-w-0 w-full px-2 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border h-7"
                   title="Enter session ID (UUID) or prompt number (e.g., 1, 2, 3)"
                 />
               </div>
@@ -784,11 +784,11 @@ export const SettingsPanel: React.FC<{
               id="settings-end-condition-enabled"
               checked={endConditionEnabled}
               onChange={(e) => handleEndConditionToggle(e.target.checked)}
-              className="w-4 h-4 accent-[var(--vscode-focusBorder)] cursor-pointer"
+              className="w-4 h-4 accent-focus-border cursor-pointer"
             />
             <label
               htmlFor="settings-end-condition-enabled"
-              className="text-[11px] font-semibold uppercase text-[var(--vscode-descriptionForeground)] cursor-pointer"
+              className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
               title="Validation runs after each prompt completes. Individual prompts can override or disable this."
             >
               Global End Condition
@@ -807,7 +807,7 @@ export const SettingsPanel: React.FC<{
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-script"
-                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+                className="text-[11px] font-semibold text-description-fg"
               >
                 Script:
               </label>
@@ -819,7 +819,7 @@ export const SettingsPanel: React.FC<{
                   handleEndConditionFieldChange("script", e.target.value)
                 }
                 placeholder="npm test"
-                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
               />
             </div>
 
@@ -827,7 +827,7 @@ export const SettingsPanel: React.FC<{
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-returns"
-                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+                className="text-[11px] font-semibold text-description-fg"
               >
                 Returns:
               </label>
@@ -839,7 +839,7 @@ export const SettingsPanel: React.FC<{
                   handleEndConditionFieldChange("returns", e.target.value)
                 }
                 placeholder="true"
-                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
               />
             </div>
 
@@ -847,7 +847,7 @@ export const SettingsPanel: React.FC<{
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-timeout"
-                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+                className="text-[11px] font-semibold text-description-fg"
               >
                 Timeout (ms):
               </label>
@@ -862,7 +862,7 @@ export const SettingsPanel: React.FC<{
                   )
                 }
                 min={1000}
-                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
               />
             </div>
 
@@ -870,7 +870,7 @@ export const SettingsPanel: React.FC<{
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-retries"
-                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+                className="text-[11px] font-semibold text-description-fg"
               >
                 Max Retries:
               </label>
@@ -885,7 +885,7 @@ export const SettingsPanel: React.FC<{
                   )
                 }
                 min={-1}
-                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
               />
             </div>
 
@@ -893,7 +893,7 @@ export const SettingsPanel: React.FC<{
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="settings-end-retry-prompt"
-                className="text-[11px] font-semibold text-[var(--vscode-descriptionForeground)]"
+                className="text-[11px] font-semibold text-description-fg"
               >
                 Retry Prompt:
               </label>
@@ -907,7 +907,7 @@ export const SettingsPanel: React.FC<{
                 placeholder={
                   "Validation failed: {error}\n\nPlease fix the issues."
                 }
-                className="w-full px-2 py-1 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] resize-none"
+                className="w-full px-2 py-1 text-xs bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border resize-none"
               />
             </div>
           </div>
@@ -917,7 +917,7 @@ export const SettingsPanel: React.FC<{
       {/* Always-visible footer with quick toggle buttons */}
       <div
         ref={footerRef}
-        className="flex items-center justify-center gap-1 px-2 border-t border-[var(--vscode-panel-border)] flex-shrink-0 h-[35px]"
+        className="flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 h-[35px]"
       >
         <IconToggleButton
           active={globalSettings.executionMode === "interactive"}

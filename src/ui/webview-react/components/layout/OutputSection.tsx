@@ -209,13 +209,13 @@ export const OutputSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="output-section"
-      className="min-h-0 flex-1 bg-[var(--bg-primary)] flex flex-col h-full"
+      className="min-h-0 flex-1 bg-editor-bg flex flex-col h-full"
     >
       {/* Section Header */}
-      <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-[var(--vscode-panel-border)] flex-shrink-0 bg-[var(--vscode-sideBar-background)]">
+      <div className="flex items-center justify-between gap-[var(--spacing-sm)] h-[30px] px-2 border-b border-panel-border flex-shrink-0 bg-sidebar-bg">
         {/* Left: clickable collapse area */}
         <div
-          className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
           onClick={toggleOutputCollapse}
           role="button"
           aria-label="Collapse output"
@@ -275,7 +275,7 @@ export const OutputSection: React.FC = () => {
       >
         {/* History banner: shown when viewing a historical run */}
         {isViewingHistory && historyOutputs && (
-          <div className="px-3 py-2 text-[11px] text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-editor-background)] border-b border-[var(--vscode-widget-border)] flex items-center justify-between flex-shrink-0">
+          <div className="px-3 py-2 text-[11px] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
             <span>
               Run {historyOutputs.runMetadata.runId}{" "}
               &middot;{" "}
@@ -289,16 +289,16 @@ export const OutputSection: React.FC = () => {
                   useWorkflowStore.getState().clearHistoryOutputs();
                   useUiStore.getState().clearHistoryView();
                 }}
-                className="text-[var(--vscode-textLink-foreground)] hover:underline focus:outline-none"
+                className="text-link-fg hover:underline focus:outline-none"
               >
                 Back to Live{" "}
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--vscode-charts-green)] animate-pulse align-middle" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-bash-status-success animate-pulse align-middle" />
               </button>
             )}
           </div>
         )}
         {!hasOutput ? (
-          <p className="text-center text-[var(--fg-secondary)] italic p-[var(--spacing-lg)]">
+          <p className="text-center text-description-fg italic p-[var(--spacing-lg)]">
             Output will appear here during execution
           </p>
         ) : (

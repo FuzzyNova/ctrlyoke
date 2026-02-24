@@ -158,7 +158,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   if (!fileName) {
     return (
       <div className={`workflow-status ${className}`}>
-        <span className="text-[var(--vscode-descriptionForeground)] italic text-sm">
+        <span className="text-description-fg italic text-sm">
           No workflow loaded
         </span>
       </div>
@@ -178,7 +178,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={saveEdit}
-          className="workflow-name-edit-input px-2 py-1 text-sm font-semibold min-w-[200px] max-w-[400px] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-focusBorder)] rounded outline-none"
+          className="workflow-name-edit-input px-2 py-1 text-sm font-semibold min-w-[200px] max-w-[400px] bg-input-bg text-input-fg border border-focus-border rounded outline-none"
           style={{
             boxShadow: "0 0 0 1px var(--vscode-focusBorder)",
           }}
@@ -190,7 +190,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <button
             type="button"
             onClick={startEditing}
-            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none border-r-0 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
+            className="workflow-button-main flex-1 min-w-0 sm:min-w-[250px] text-left overflow-hidden cursor-pointer transition-colors px-3 py-1 rounded-l rounded-r-none border-r-0 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
             title="Click to edit workflow name"
           >
             <div className="flex items-center justify-between gap-2 overflow-hidden">
@@ -223,14 +223,14 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 ? "Cannot switch workflows while running"
                 : "Show recent workflows"
             }
-            className={`workflow-button-dropdown px-2 py-1 rounded-r rounded-l-none border-l border-[var(--vscode-button-border,rgba(255,255,255,0.1))] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] flex items-center justify-center gap-1 transition-colors ${
+            className={`workflow-button-dropdown px-2 py-1 rounded-r rounded-l-none border-l border-btn-border bg-btn-secondary-bg text-btn-secondary-fg flex items-center justify-center gap-1 transition-colors ${
               isRunning
                 ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
-            } ${isDropdownOpen ? "bg-[var(--vscode-button-secondaryHoverBackground)]" : ""}`}
+                : "hover:bg-btn-secondary-hover"
+            } ${isDropdownOpen ? "bg-btn-secondary-hover" : ""}`}
           >
             {recentWorkflows.length > 0 && (
-              <span className="workflow-count-badge text-[10px] font-semibold bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
+              <span className="workflow-count-badge text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
                 {recentWorkflows.length}
               </span>
             )}
@@ -255,7 +255,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {isDropdownOpen && !isEditing && (
         <div
           ref={dropdownRef}
-          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] rounded shadow-lg z-[9999] overflow-hidden flex flex-col"
+          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999] overflow-hidden flex flex-col"
           style={{
             top: containerRef.current
               ? containerRef.current.getBoundingClientRect().bottom + 4

@@ -51,13 +51,13 @@ export const EditorSection: React.FC = () => {
     <section
       ref={sectionRef}
       id="editor-section"
-      className="editor-section flex flex-col h-full bg-[var(--vscode-editor-background)]"
+      className="editor-section flex flex-col h-full bg-editor-bg"
     >
       {/* Section Header */}
-      <div className="flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]">
+      <div className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg">
         {/* Left: Collapse trigger (chevron + icon + label) */}
         <div
-          className="flex items-center gap-1 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors flex-shrink-0"
+          className="flex items-center gap-1 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors flex-shrink-0"
           onClick={toggleEditorCollapse}
           role="button"
           aria-label="Collapse editor"
@@ -72,7 +72,7 @@ export const EditorSection: React.FC = () => {
         </div>
 
         {/* Center: Mode text */}
-        <span className="editor-mode-indicator flex-1 text-center text-xs text-[var(--vscode-descriptionForeground)] truncate">
+        <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate">
           {getModeText()}
         </span>
 
@@ -80,7 +80,7 @@ export const EditorSection: React.FC = () => {
         {!isEditMode && (
           <input
             type="text"
-            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border-0 rounded focus:outline-none flex-shrink-0"
+            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0"
             placeholder="Prompt name (optional)"
             value={promptName}
             onChange={(e) => setPromptName(e.target.value)}
@@ -90,7 +90,7 @@ export const EditorSection: React.FC = () => {
         {/* Right: New Prompt button (only in edit mode) */}
         {isEditMode && (
           <button
-            className="btn-new-prompt px-2 py-1 text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] border border-[var(--vscode-button-border,transparent)] rounded hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors flex items-center gap-1 flex-shrink-0"
+            className="btn-new-prompt px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover transition-colors flex items-center gap-1 flex-shrink-0"
             onClick={cancelEdit}
             disabled={isRunning}
             title="Cancel editing and return to new prompt mode"

@@ -37,14 +37,14 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   return (
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-[var(--vscode-descriptionForeground)] uppercase tracking-wider border-b border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)] flex-shrink-0">
+      <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0">
         Recent Workflows
       </div>
 
       {/* Scrollable Items */}
       <div className="workflow-menu-items overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
         {workflows.length === 0 ? (
-          <div className="workflow-menu-empty px-3 py-6 text-center text-[var(--vscode-descriptionForeground)] text-sm">
+          <div className="workflow-menu-empty px-3 py-6 text-center text-description-fg text-sm">
             No recent workflows
           </div>
         ) : (
@@ -62,8 +62,8 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                 title={workflow.filePath}
                 className={`workflow-menu-item w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors border-none bg-transparent cursor-pointer gap-2 ${
                   isCurrent
-                    ? "bg-[var(--vscode-list-activeSelectionBackground)] text-[var(--vscode-list-activeSelectionForeground)] font-semibold"
-                    : "text-[var(--vscode-dropdown-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] hover:text-[var(--vscode-list-hoverForeground)]"
+                    ? "bg-list-active-bg text-list-active-fg font-semibold"
+                    : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
                 }`}
               >
                 {/* Workflow Name */}
@@ -80,7 +80,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
 
                 {/* Time */}
                 {timeAgo && (
-                  <span className="workflow-menu-item-time text-[11px] text-[var(--vscode-descriptionForeground)] flex-shrink-0 ml-auto">
+                  <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0 ml-auto">
                     {timeAgo}
                   </span>
                 )}
@@ -92,11 +92,11 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
 
       {/* Footer - Clear History */}
       {workflows.length > 0 && (
-        <div className="workflow-menu-footer p-1 border-t border-[var(--vscode-dropdown-border)] bg-[var(--vscode-editor-background)] flex-shrink-0">
+        <div className="workflow-menu-footer p-1 border-t border-dropdown-border bg-editor-bg flex-shrink-0">
           <button
             type="button"
             onClick={onClearHistory}
-            className="workflow-menu-action w-full px-3 py-1.5 border-none bg-transparent text-[var(--vscode-textLink-foreground)] text-center cursor-pointer text-xs rounded transition-colors hover:bg-[var(--vscode-list-hoverBackground)]"
+            className="workflow-menu-action w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
           >
             Clear History
           </button>

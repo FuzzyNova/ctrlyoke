@@ -76,22 +76,22 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   const containerClasses = [
     "py-2 px-3",
     "cursor-pointer",
-    "border-b border-[var(--vscode-panel-border)]",
+    "border-b border-panel-border",
     "transition-colors",
   ];
 
   // Add hover and selection states
   if (isSelected) {
     containerClasses.push(
-      "bg-[var(--vscode-list-activeSelectionBackground)]",
-      "text-[var(--vscode-list-activeSelectionForeground)]"
+      "bg-list-active-bg",
+      "text-list-active-fg"
     );
   } else if (isCurrent) {
     containerClasses.push(
-      "bg-[var(--vscode-list-inactiveSelectionBackground)]"
+      "bg-list-inactive-bg"
     );
   } else {
-    containerClasses.push("hover:bg-[var(--vscode-list-hoverBackground)]");
+    containerClasses.push("hover:bg-list-hover-bg");
   }
 
   // Calculate duration from output if not in details
@@ -119,14 +119,14 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         <span className="flex-shrink-0 mt-0.5">
           <StatusIcon status={status} />
         </span>
-        <span className="flex-1 min-w-0 text-xs leading-relaxed text-[var(--vscode-foreground)]">
+        <span className="flex-1 min-w-0 text-xs leading-relaxed text-foreground">
           <span className="font-medium">{index + 1}.</span> {truncate(text, 60)}
         </span>
       </div>
 
       {/* Retry indicator */}
       {retryState && retryState.currentRetry > 0 && (
-        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--vscode-editorWarning-foreground)]">
+        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] font-semibold text-warning-fg">
           <i className="codicon codicon-refresh text-xs" />
           <span>
             Retry {retryState.currentRetry} of {retryState.maxRetries}
@@ -136,19 +136,19 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
       {/* Duration */}
       {durationSeconds !== undefined && status === "completed" && (
-        <div className="mt-1 pl-5 text-[11px] text-[var(--vscode-descriptionForeground)]">
+        <div className="mt-1 pl-5 text-[11px] text-description-fg">
           Duration: {durationSeconds.toFixed(1)}s
         </div>
       )}
 
       {/* End condition result */}
       {details?.endConditionResult && (
-        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] text-[var(--vscode-descriptionForeground)]">
+        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] text-description-fg">
           <span>End condition:</span>
           {details.endConditionResult.passed ? (
-            <i className="codicon codicon-pass text-[var(--vscode-charts-green)]" />
+            <i className="codicon codicon-pass text-bash-status-success" />
           ) : (
-            <i className="codicon codicon-error text-[var(--vscode-charts-red)]" />
+            <i className="codicon codicon-error text-bash-status-error" />
           )}
           {details.endConditionResult.message && (
             <span className="truncate">
@@ -160,7 +160,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
       {/* Status message */}
       {details?.message && (
-        <div className="mt-1 pl-5 text-[11px] italic text-[var(--vscode-descriptionForeground)]">
+        <div className="mt-1 pl-5 text-[11px] italic text-description-fg">
           {details.message}
         </div>
       )}

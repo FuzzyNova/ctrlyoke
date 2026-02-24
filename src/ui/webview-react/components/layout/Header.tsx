@@ -120,7 +120,7 @@ export const Header: React.FC = () => {
   }, [vscode, canStop]);
 
   return (
-    <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 overflow-visible">
+    <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
       {/* Left Section: Workflow Controls */}
       <div className="header-left flex items-center gap-2">
         <WorkflowControls />
@@ -135,12 +135,12 @@ export const Header: React.FC = () => {
       <div className="header-right justify-self-end flex items-center gap-1">
         {/* Run/Restart Button (icon-only) */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             isRerun ? "text-base font-bold" : ""
           } ${
             canRun
-              ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]"
-              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+              ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+              : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
           onClick={handleRun}
           disabled={!canRun}
@@ -160,10 +160,10 @@ export const Header: React.FC = () => {
 
         {/* Pause/Resume Button */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             canPause || canResume
-              ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
-              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+              ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
           onClick={handlePauseResume}
           disabled={!canPause && !canResume}
@@ -183,10 +183,10 @@ export const Header: React.FC = () => {
 
         {/* Stop Button */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-[var(--vscode-button-border,transparent)] transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             canStop
-              ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]"
-              : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-50 cursor-not-allowed"
+              ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
+              : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
           }`}
           onClick={handleStop}
           disabled={!canStop}

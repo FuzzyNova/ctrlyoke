@@ -388,39 +388,84 @@ function PromptEditor() {
 
 ## Tailwind CSS Usage
 
-All styling via Tailwind utility classes (no custom CSS except globals):
+All styling via Tailwind utility classes (no custom CSS except globals.css).
 
-**VS Code theme integration**:
+### Token Naming Convention
 
-```css
-/* Uses VS Code CSS variables */
---vscode-editor-background
---vscode-editor-foreground
---vscode-button-background
---vscode-input-border
+All VS Code CSS variables are mapped to semantic Tailwind color tokens in `tailwind.config.js`. **Never** use `[var(--vscode-*)]` arbitrary values in className strings — use the token name instead.
+
+```tsx
+// ✅ Correct — uses Tailwind token
+<div className="bg-editor-bg text-foreground border-panel-border" />
+
+// ❌ Wrong — inline vscode var
+<div className="bg-[var(--vscode-editor-background)] text-[var(--vscode-foreground)]" />
 ```
 
-**Custom utilities** (tailwind.config.js):
+**Exceptions** (use inline vars directly — cannot be Tailwind):
+- `style={{...}}` props (boxShadow, outline, etc.)
+- `EditorView.theme({...})` in CodeMirrorEditor.tsx (CodeMirror CSS-in-JS)
+- `globals.css` `:root` rules and base element styles
 
-```javascript
-extend: {
-  colors: {
-    'vscode-bg': 'var(--vscode-editor-background)',
-    'vscode-fg': 'var(--vscode-editor-foreground)',
-  },
-  spacing: {
-    'header': '48px',
-  }
-}
-```
+### Complete Token Table
 
-**Codicon integration**:
+| Token | VS Code Variable |
+|-------|-----------------|
+| `editor-bg` | `--vscode-editor-background` |
+| `editor-fg` | `--vscode-editor-foreground` |
+| `foreground` | `--vscode-foreground` |
+| `panel-border` | `--vscode-panel-border` |
+| `sidebar-bg` | `--vscode-sideBar-background` |
+| `sidebar-drop-bg` | `--vscode-sideBar-dropBackground` |
+| `focus-border` | `--vscode-focusBorder` |
+| `widget-border` | `--vscode-widget-border` |
+| `btn-bg` | `--vscode-button-background` |
+| `btn-hover` | `--vscode-button-hoverBackground` |
+| `btn-fg` | `--vscode-button-foreground` |
+| `btn-border` | `--vscode-button-border` (fallback: `rgba(255,255,255,0.1)` — ensures split-button dividers are always visible) |
+| `btn-secondary-bg` | `--vscode-button-secondaryBackground` |
+| `btn-secondary-hover` | `--vscode-button-secondaryHoverBackground` |
+| `btn-secondary-fg` | `--vscode-button-secondaryForeground` |
+| `input-bg` | `--vscode-input-background` |
+| `input-fg` | `--vscode-input-foreground` |
+| `input-border` | `--vscode-input-border` |
+| `input-placeholder` | `--vscode-input-placeholderForeground` |
+| `input-error-bg` | `--vscode-inputValidation-errorBackground` |
+| `input-error-fg` | `--vscode-inputValidation-errorForeground` |
+| `input-error-border` | `--vscode-inputValidation-errorBorder` |
+| `list-hover-bg` | `--vscode-list-hoverBackground` |
+| `list-hover-fg` | `--vscode-list-hoverForeground` |
+| `list-active-bg` | `--vscode-list-activeSelectionBackground` |
+| `list-active-fg` | `--vscode-list-activeSelectionForeground` |
+| `list-inactive-bg` | `--vscode-list-inactiveSelectionBackground` |
+| `list-focus-bg` | `--vscode-list-focusBackground` |
+| `dropdown-bg` | `--vscode-dropdown-background` |
+| `dropdown-fg` | `--vscode-dropdown-foreground` |
+| `dropdown-border` | `--vscode-dropdown-border` |
+| `dropdown-selected-bg` | `--vscode-dropdown-selectedBackground` |
+| `description-fg` | `--vscode-descriptionForeground` |
+| `error-fg` | `--vscode-errorForeground` |
+| `warning-fg` | `--vscode-editorWarning-foreground` |
+| `info-fg` | `--vscode-editorInfo-foreground` |
+| `link-fg` | `--vscode-textLink-foreground` |
+| `link-active-fg` | `--vscode-textLink-activeForeground` |
+| `disabled-fg` | `--vscode-disabledForeground` |
+| `badge-bg` | `--vscode-badge-background` |
+| `badge-fg` | `--vscode-badge-foreground` |
+| `toolbar-hover-bg` | `--vscode-toolbar-hoverBackground` |
+| `keybinding-bg` | `--vscode-keybindingLabel-background` |
+| `notification-info-fg` | `--vscode-notificationsInfoIcon-foreground` |
+| `bash-status-success` | `--vscode-charts-green` |
+| `bash-status-error` | `--vscode-charts-red` |
+| `bash-status-running` | `--vscode-charts-yellow` |
+
+### Codicon integration
 
 ```tsx
 <i className="codicon codicon-play" />
 ```
 
-**Custom icon system** (SVG sprites):
+### Custom icon system (SVG sprites)
 
 - Source: src/ui/icons/ (NOT copied to output)
 - Generated: custom-icons.css (build-time)

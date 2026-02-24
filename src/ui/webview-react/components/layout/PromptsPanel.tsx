@@ -102,10 +102,10 @@ export const PromptsPanel: React.FC<{
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--vscode-editor-background)]">
+    <div className="flex flex-col h-full bg-editor-bg">
       {/* Header - clickable to collapse */}
       <div
-        className="flex items-center h-[30px] px-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] flex-shrink-0 cursor-pointer select-none text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+        className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
         onClick={togglePromptsCollapse}
         role="button"
         aria-label="Collapse prompts"
@@ -126,7 +126,7 @@ export const PromptsPanel: React.FC<{
       <div className="flex-1 overflow-y-auto min-h-0">
         {prompts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-            <p className="text-xs italic text-[var(--vscode-descriptionForeground)]">
+            <p className="text-xs italic text-description-fg">
               No prompts loaded
             </p>
           </div>

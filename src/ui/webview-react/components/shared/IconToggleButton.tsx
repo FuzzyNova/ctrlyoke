@@ -34,8 +34,8 @@ export const IconToggleButton: React.FC<{
       title={active ? activeTooltip : inactiveTooltip}
       className={`flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors ${
         active
-          ? "text-[var(--vscode-textLink-foreground)]"
-          : "text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)]"
+          ? "text-link-fg"
+          : "text-description-fg hover:text-foreground"
       }`}
     >
       <i

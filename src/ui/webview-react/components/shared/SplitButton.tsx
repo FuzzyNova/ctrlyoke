@@ -171,8 +171,8 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     "inline-flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-1";
   const variantClass =
     variant === "primary"
-      ? "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)]"
-      : "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)]";
+      ? "bg-btn-bg text-btn-fg hover:bg-btn-hover"
+      : "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover";
   const disabledClass = "opacity-50 cursor-not-allowed";
 
   const defaultChevron = (
@@ -203,7 +203,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         onClick={mainAction}
         disabled={disabled || mainDisabled}
         title={mainTitle}
-        className={`${baseButtonClass} ${variantClass} px-3 py-1 text-sm font-medium rounded-l rounded-r-none border-r border-white/10 ${
+        className={`${baseButtonClass} ${variantClass} px-3 py-1 text-sm font-medium rounded-l rounded-r-none border-r border-btn-border ${
           disabled || mainDisabled ? disabledClass : ""
         }`}
       >
@@ -222,10 +222,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         aria-expanded={isOpen}
         className={`${baseButtonClass} ${variantClass} px-2 py-1 rounded-r rounded-l-none ${
           disabled || dropdownDisabled ? disabledClass : ""
-        } ${isOpen ? "bg-[var(--vscode-button-secondaryHoverBackground)]" : ""}`}
+        } ${isOpen ? "bg-btn-secondary-hover" : ""}`}
       >
         {badge && (
-          <span className="text-[10px] font-semibold bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
+          <span className="text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center mr-1">
             {badge}
           </span>
         )}
@@ -237,13 +237,13 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
         <div
           ref={dropdownRef}
           role="listbox"
-          className="absolute top-full left-0 mt-1 min-w-[200px] bg-[var(--vscode-dropdown-background)] border border-[var(--vscode-dropdown-border)] rounded shadow-lg z-50 overflow-hidden"
+          className="absolute top-full left-0 mt-1 min-w-[200px] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-50 overflow-hidden"
         >
           {options.map((option, index) =>
             option.divider ? (
               <div
                 key={`divider-${index}`}
-                className="border-t border-[var(--vscode-dropdown-border)] my-1"
+                className="border-t border-dropdown-border my-1"
               />
             ) : (
               <button
@@ -255,16 +255,16 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
                 disabled={option.disabled}
                 className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between gap-2 ${
                   option.disabled
-                    ? "opacity-50 cursor-not-allowed text-[var(--vscode-disabledForeground)]"
-                    : "text-[var(--vscode-dropdown-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] cursor-pointer"
-                } ${focusedIndex === index ? "bg-[var(--vscode-list-focusBackground)]" : ""}`}
+                    ? "opacity-50 cursor-not-allowed text-disabled-fg"
+                    : "text-dropdown-fg hover:bg-list-hover-bg cursor-pointer"
+                } ${focusedIndex === index ? "bg-list-focus-bg" : ""}`}
               >
                 {option.icon && (
                   <span className="flex-shrink-0">{option.icon}</span>
                 )}
                 <span className="flex-1">{option.label}</span>
                 {option.shortcut && (
-                  <kbd className="text-xs text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-keybindingLabel-background,rgba(128,128,128,0.17))] px-1.5 py-0.5 rounded font-mono">
+                  <kbd className="text-xs text-description-fg bg-keybinding-bg px-1.5 py-0.5 rounded font-mono">
                     {option.shortcut}
                   </kbd>
                 )}

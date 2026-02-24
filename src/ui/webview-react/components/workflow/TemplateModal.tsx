@@ -274,7 +274,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === "Enter" && handleSetDefault()}
-              className={`text-sm font-medium text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer transition-colors ${
+              className={`text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors ${
                 !selectedTemplateId || selectedTemplateId === "__create_new__"
                   ? "opacity-50 cursor-not-allowed pointer-events-none"
                   : ""
@@ -284,7 +284,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               Set as Default
             </a>
             {defaultConfirmation && (
-              <span className="text-xs text-[var(--vscode-notificationsInfoIcon-foreground)] animate-pulse">
+              <span className="text-xs text-notification-info-fg animate-pulse">
                 ✓ Default set
               </span>
             )}
@@ -316,7 +316,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         <div className="form-group">
           <label
             htmlFor="template-select"
-            className="block text-sm font-medium mb-1 text-[var(--vscode-foreground)]"
+            className="block text-sm font-medium mb-1 text-foreground"
           >
             Template
           </label>
@@ -324,7 +324,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             id="template-select"
             value={selectedTemplateId}
             onChange={(e) => handleTemplateChange(e.target.value)}
-            className="w-full px-2 py-1.5 rounded bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+            className="w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border"
           >
             {/* Built-in Templates */}
             {builtInTemplates.length > 0 && (
@@ -363,7 +363,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
         {/* Template Description */}
         {currentTemplate?.description && (
-          <p className="text-sm text-[var(--vscode-descriptionForeground)] italic">
+          <p className="text-sm text-description-fg italic">
             {currentTemplate.description}
           </p>
         )}
@@ -371,14 +371,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         {/* Template Variables */}
         {currentTemplate?.variables && currentTemplate.variables.length > 0 && (
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-[var(--vscode-foreground)]">
+            <h4 className="text-sm font-medium text-foreground">
               Variables
             </h4>
             {currentTemplate.variables.map((variable) => (
               <div key={variable} className="form-group">
                 <label
                   htmlFor={`var-${variable}`}
-                  className="block text-sm mb-1 text-[var(--vscode-foreground)]"
+                  className="block text-sm mb-1 text-foreground"
                 >
                   {variable}
                 </label>
@@ -390,7 +390,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     handleVariableChange(variable, e.target.value)
                   }
                   placeholder={`Enter ${variable}`}
-                  className="w-full px-2 py-1.5 rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border border-input-border focus:outline-none focus:border-focus-border"
                 />
               </div>
             ))}
@@ -401,7 +401,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         <div className="form-group">
           <label
             htmlFor="workflow-name"
-            className="block text-sm font-medium mb-1 text-[var(--vscode-foreground)]"
+            className="block text-sm font-medium mb-1 text-foreground"
           >
             Workflow Name
           </label>
@@ -412,14 +412,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             value={filename}
             onChange={(e) => handleFilenameChange(e.target.value)}
             placeholder="my-workflow"
-            className={`w-full px-2 py-1.5 rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border focus:outline-none ${
+            className={`w-full px-2 py-1.5 rounded bg-input-bg text-input-fg border focus:outline-none ${
               filenameError
-                ? "border-[var(--vscode-inputValidation-errorBorder)]"
-                : "border-[var(--vscode-input-border)] focus:border-[var(--vscode-focusBorder)]"
+                ? "border-input-error-border"
+                : "border-input-border focus:border-focus-border"
             }`}
           />
           {filenameError && (
-            <p className="mt-1 text-xs text-[var(--vscode-errorForeground)]">
+            <p className="mt-1 text-xs text-error-fg">
               {filenameError}
             </p>
           )}
@@ -427,10 +427,10 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
         {/* Path Preview */}
         <div className="form-group">
-          <label className="block text-sm mb-1 text-[var(--vscode-descriptionForeground)]">
+          <label className="block text-sm mb-1 text-description-fg">
             Save Location
           </label>
-          <p className="text-xs text-[var(--vscode-descriptionForeground)] font-mono bg-[var(--vscode-textBlockQuote-background)] px-2 py-1 rounded">
+          <p className="text-xs text-description-fg font-mono bg-editor-bg px-2 py-1 rounded">
             {pathPreview}
           </p>
         </div>

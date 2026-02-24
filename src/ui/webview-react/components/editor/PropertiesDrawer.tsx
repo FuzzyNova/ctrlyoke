@@ -78,19 +78,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 
   return (
     <div
-      className={`properties-drawer absolute bottom-0 left-0 right-0 bg-[var(--vscode-sideBar-background)] border-t-2 border-[var(--vscode-panel-border)] shadow-lg transition-transform duration-300 z-[100] max-h-full flex flex-col ${
+      className={`properties-drawer absolute bottom-0 left-0 right-0 bg-sidebar-bg border-t-2 border-panel-border shadow-lg transition-transform duration-300 z-[100] max-h-full flex flex-col ${
         isOpen ? "translate-y-0" : "translate-y-full"
       }`}
     >
       {/* Drawer Content */}
       <div className="drawer-content flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="drawer-header flex items-center justify-between px-4 py-0 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-dropBackground)] sticky top-0 z-10">
-          <h3 className="text-xs font-semibold text-[var(--vscode-foreground)] uppercase">
+        <div className="drawer-header flex items-center justify-between px-4 py-0 border-b border-panel-border bg-sidebar-drop-bg sticky top-0 z-10">
+          <h3 className="text-xs font-semibold text-foreground uppercase">
             Prompt Properties
           </h3>
           <button
-            className="btn-close-drawer w-7 h-7 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-[var(--vscode-toolbar-hoverBackground)] transition-all"
+            className="btn-close-drawer w-7 h-7 flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-toolbar-hover-bg transition-all"
             onClick={onClose}
             title="Close properties drawer"
           >
@@ -107,7 +107,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-harness"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Harness
                 </label>
@@ -115,7 +115,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-harness"
                   value={properties.harness}
                   onChange={(e) => handleHarnessChange(e.target.value)}
-                  className="px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
                 >
                   <option value="default">Default</option>
                   <option value={HARNESS_IDS.COPILOT_CLI}>Copilot CLI</option>
@@ -129,7 +129,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-model"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Model
                 </label>
@@ -137,7 +137,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-model"
                   value={properties.model}
                   onChange={(e) => setProperty("model", e.target.value)}
-                  className="px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
                 >
                   <option value="default">Default</option>
                   {models.length === 0 ? (
@@ -161,7 +161,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-agent"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Agent
                 </label>
@@ -169,7 +169,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-agent"
                   value={properties.agent}
                   onChange={(e) => setProperty("agent", e.target.value)}
-                  className="px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
                 >
                   <option value="">None</option>
                   {availableAgents.map((agent) => (
@@ -184,7 +184,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-allow-dynamic"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Allow Dynamic Extension
                 </label>
@@ -194,7 +194,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(e) =>
                     setProperty("allowDynamicExtension", e.target.value)
                   }
-                  className="px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
                 >
                   <option value="default">Default</option>
                   <option value="yes">Yes - Allow AI to extend workflow</option>
@@ -209,7 +209,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-resume-session"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Resume Session
                 </label>
@@ -217,7 +217,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-resume-session"
                   value={properties.resumeSession}
                   onChange={(e) => setProperty("resumeSession", e.target.value)}
-                  className="px-2 py-1 text-sm bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] border border-[var(--vscode-dropdown-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)]"
+                  className="px-2 py-1 text-sm bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border"
                 >
                   <option value="default">Default</option>
                   <option value="yes">Yes - Resume previous session</option>
@@ -229,7 +229,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-session-id"
-                  className="text-xs font-medium text-[var(--vscode-foreground)]"
+                  className="text-xs font-medium text-foreground"
                 >
                   Session ID
                 </label>
@@ -244,24 +244,24 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       ? "Enable Resume Session to input session ID"
                       : "Enter session ID or prompt number (e.g., 1, 2)"
                   }
-                  className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                  className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
                 />
               </div>
             </div>
 
             {/* End Condition Section (Full Width) */}
-            <div className="border-t border-[var(--vscode-panel-border)] pt-4 mt-4">
+            <div className="border-t border-panel-border pt-4 mt-4">
               <div className="flex items-center gap-2 mb-3">
                 <input
                   type="checkbox"
                   id="prop-end-enabled"
                   checked={!!properties.endCondition}
                   onChange={handleEndConditionToggle}
-                  className="w-4 h-4 rounded border border-[var(--vscode-input-border)]"
+                  className="w-4 h-4 rounded border border-input-border"
                 />
                 <label
                   htmlFor="prop-end-enabled"
-                  className="text-xs font-medium text-[var(--vscode-foreground)] cursor-pointer"
+                  className="text-xs font-medium text-foreground cursor-pointer"
                 >
                   Enable End Condition
                 </label>
@@ -275,14 +275,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     : "max-h-0 opacity-0"
                 }`}
               >
-                <div className="space-y-3 p-3 bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] rounded">
+                <div className="space-y-3 p-3 bg-editor-bg border border-panel-border rounded">
                   {/* Row 1: Script + Returns */}
                   <div className="grid grid-cols-2 gap-3">
                     {/* Script */}
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="prop-end-script"
-                        className="text-xs font-medium text-[var(--vscode-foreground)]"
+                        className="text-xs font-medium text-foreground"
                       >
                         Script
                       </label>
@@ -295,7 +295,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         }
                         disabled={!properties.endCondition}
                         placeholder="npm test"
-                        className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
                       />
                     </div>
 
@@ -303,7 +303,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="prop-end-returns"
-                        className="text-xs font-medium text-[var(--vscode-foreground)]"
+                        className="text-xs font-medium text-foreground"
                       >
                         Expected Return
                       </label>
@@ -316,7 +316,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         }
                         disabled={!properties.endCondition}
                         placeholder="true"
-                        className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -327,7 +327,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="prop-end-timeout"
-                        className="text-xs font-medium text-[var(--vscode-foreground)]"
+                        className="text-xs font-medium text-foreground"
                       >
                         Timeout (ms)
                       </label>
@@ -344,7 +344,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         disabled={!properties.endCondition}
                         min={1000}
                         max={300000}
-                        className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
                       />
                     </div>
 
@@ -352,7 +352,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     <div className="flex flex-col gap-1">
                       <label
                         htmlFor="prop-end-retries"
-                        className="text-xs font-medium text-[var(--vscode-foreground)]"
+                        className="text-xs font-medium text-foreground"
                       >
                         Max Retries
                       </label>
@@ -369,9 +369,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                         disabled={!properties.endCondition}
                         min={-1}
                         max={100}
-                        className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
                       />
-                      <span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                      <span className="text-[10px] text-description-fg">
                         Use -1 for unlimited retries
                       </span>
                     </div>
@@ -381,7 +381,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor="prop-end-retry-prompt"
-                      className="text-xs font-medium text-[var(--vscode-foreground)]"
+                      className="text-xs font-medium text-foreground"
                     >
                       Retry Prompt
                     </label>
@@ -394,9 +394,9 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       disabled={!properties.endCondition}
                       placeholder="Validation failed: {error}&#10;&#10;Please fix the issues."
                       rows={3}
-                      className="px-2 py-1 text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded focus:outline-none focus:border-[var(--vscode-focusBorder)] disabled:opacity-50 resize-y"
+                      className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50 resize-y"
                     />
-                    <span className="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                    <span className="text-[10px] text-description-fg">
                       Use {"{error}"} placeholder for validation error message
                     </span>
                   </div>

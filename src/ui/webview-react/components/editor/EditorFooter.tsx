@@ -54,15 +54,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   return (
     <div
       ref={footerRef}
-      className="editor-footer flex items-center justify-between px-3 py-1 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)]"
+      className="editor-footer flex items-center justify-between px-3 py-1 border-t border-panel-border bg-sidebar-bg"
     >
       {/* Left side: Properties toggle */}
       <div className="editor-footer-left flex items-center">
         <button
           className={`btn-properties px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
             propertiesOpen
-              ? "bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)]"
-              : "hover:bg-[var(--vscode-list-hoverBackground)] text-[var(--vscode-foreground)]"
+              ? "bg-btn-secondary-bg text-btn-secondary-fg"
+              : "hover:bg-list-hover-bg text-foreground"
           }`}
           onClick={onToggleProperties}
           title="Toggle prompt properties"
@@ -79,7 +79,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
 
       {/* Center: Token count */}
       <div className="editor-footer-center flex items-center justify-center flex-1">
-        <span className="editor-metadata text-xs text-[var(--vscode-descriptionForeground)]">
+        <span className="editor-metadata text-xs text-description-fg">
           <i className="codicon codicon-symbol-misc mr-1" />
           <span className="editor-token-count">
             {tokenCount.toLocaleString()} token{tokenCount !== 1 ? "s" : ""}
@@ -93,7 +93,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // Edit mode buttons
           <>
             <button
-              className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isRunning}
               title="Cancel editing and return to new prompt mode"
@@ -103,7 +103,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
               disabled={!hasContent || isRunning}
               title="Update prompt in queue"
@@ -113,7 +113,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-[var(--vscode-inputValidation-errorBackground,#5a1d1d)] text-[var(--vscode-inputValidation-errorForeground,#f48771)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={isRunning}
               title="Delete prompt from queue"
@@ -126,7 +126,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
           // New prompt mode buttons
           <>
             <button
-              className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={!hasContent || isRunning}
               title={queueButtonTooltip}
@@ -136,7 +136,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             </button>
 
             <button
-              className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
               disabled={!hasContent || isRunning}
               title={runButtonTooltip}
