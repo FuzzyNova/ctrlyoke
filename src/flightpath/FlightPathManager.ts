@@ -322,6 +322,9 @@ export class FlightPathManager {
       // Set up file watcher for working file
       this.setupPromptFileWatcher(workingFilePath);
     }
+
+    // Propagate workflow name to CLI integrations for terminal tab naming
+    this.propagateWorkflowNameToIntegrations();
   }
 
   /**
@@ -350,6 +353,9 @@ export class FlightPathManager {
 
     // Set up file watcher for the restored working file (only if validation succeeded)
     this.setupPromptFileWatcher(workingFilePath);
+
+    // Propagate restored workflow name to CLI integrations for terminal tab naming
+    this.propagateWorkflowNameToIntegrations();
   }
 
   /**
@@ -1095,6 +1101,9 @@ export class FlightPathManager {
     // Reset tracked prompt count
     this.lastKnownPromptCount = 0;
 
+    // Clear workflow name from all CLI integrations so terminals revert to base names
+    this.propagateWorkflowNameToIntegrations();
+
     Log.info("Workflow state cleared");
   }
 
@@ -1103,6 +1112,24 @@ export class FlightPathManager {
    */
   getQueueState(): QueueState {
     return this.promptQueue.getState();
+  }
+
+  /**
+   * Propagate the current workflow name to all CLI integrations for terminal tab naming.
+   * Falls back to the filename-derived name when no explicit name is set.
+   * Pass undefined to clear (e.g., after clearWorkflow()).
+   */
+  private propagateWorkflowNameToIntegrations(): void {
+    const state = this.promptQueue.getState();
+    const name =
+      state.workflowName ||
+      (this.currentPromptFile
+        ? PromptQueue.extractWorkflowName(this.currentPromptFile.filePath)
+        : undefined);
+
+    this.copilotCliIntegration.setWorkflowName(name);
+    this.claudeCliIntegration.setWorkflowName(name);
+    this.codexCliIntegration.setWorkflowName(name);
   }
 
   /**
@@ -1116,6 +1143,9 @@ export class FlightPathManager {
 
     await this.promptQueue.updateWorkflowName(workflowName);
     // State change event is automatically emitted by PromptQueue
+
+    // Propagate renamed workflow to CLI integrations for terminal tab update
+    this.propagateWorkflowNameToIntegrations();
   }
 
   /**

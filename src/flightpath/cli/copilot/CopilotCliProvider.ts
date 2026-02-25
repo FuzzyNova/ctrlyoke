@@ -48,6 +48,7 @@ export class CopilotCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "copilot",
     displayName: "GitHub Copilot CLI",
+    terminalName: "Copilot",
     installHint: "Install via: npm install -g @github/copilot",
     shouldStreamHeadlessOutput: true,
 

@@ -50,6 +50,7 @@ export class CodexCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "codex",
     displayName: "Codex CLI",
+    terminalName: "Codex",
     installHint: "Install via: npm install -g @openai/codex-cli",
     shouldStreamHeadlessOutput: true,
 

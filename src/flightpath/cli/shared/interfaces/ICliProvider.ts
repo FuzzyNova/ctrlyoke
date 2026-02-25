@@ -13,6 +13,9 @@ export interface HarnessConfig {
   /** Display name for status messages */
   displayName: string;
 
+  /** Short name for VS Code terminal tab (e.g., "Claude", "Copilot", "Codex") */
+  terminalName: string;
+
   /** Installation hint when CLI not found */
   installHint: string;
 

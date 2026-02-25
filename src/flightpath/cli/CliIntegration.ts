@@ -126,6 +126,9 @@ export class CliIntegration extends HarnessIntegration {
   // Cached MCP config file path (generated once per session, reused for all prompts)
   private cachedMcpConfigPath?: string;
 
+  /** Workflow display name used for VS Code terminal tab naming */
+  private workflowName?: string;
+
   /**
    * Create a new CLI integration with the specified CLI provider.
    *
@@ -167,13 +170,40 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Set the workflow name used for VS Code terminal tab labeling.
+   * Call this whenever a new workflow is loaded or renamed.
+   */
+  setWorkflowName(name: string | undefined): void {
+    this.workflowName = name;
+  }
+
+  /**
+   * Build the VS Code terminal tab name.
+   *
+   * Format: "FP: {Harness}" when no workflow is loaded,
+   *         "FP: {Harness} · {name}" when a workflow is active.
+   *
+   * Workflow name is capped at 25 characters; VS Code handles tab-level
+   * truncation naturally when many terminals are open.
+   */
+  private buildTerminalName(): string {
+    const base = `FP: ${this.provider.config.terminalName}`;
+    if (!this.workflowName) {
+      return base;
+    }
+    const cleaned = this.workflowName.trim();
+    const short = cleaned.length > 25 ? `${cleaned.slice(0, 24)}…` : cleaned;
+    return `${base} · ${short}`;
+  }
+
+  /**
    * Create a fresh VS Code terminal for interactive execution.
    * Always creates a new terminal, disposing any existing one first.
    */
   protected async createFreshTerminal(): Promise<vscode.Terminal> {
     this.disposeTerminalIfExists();
     return await this.processManager.createTerminal(
-      `FlightPath: ${this.provider.config.displayName}`,
+      this.buildTerminalName(),
       this.getWorkspaceRoot()
     );
   }

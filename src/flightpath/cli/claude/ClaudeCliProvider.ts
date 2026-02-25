@@ -43,6 +43,7 @@ export class ClaudeCliProvider implements ICliProvider {
   readonly config: HarnessConfig = {
     name: "claude",
     displayName: "Claude Code CLI",
+    terminalName: "Claude",
     installHint: "Install via: npm install -g @anthropic-ai/claude-code",
     shouldStreamHeadlessOutput: true,
 
