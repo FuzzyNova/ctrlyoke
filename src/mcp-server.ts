@@ -33,7 +33,7 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "./types/DashboardConstants";
-import { hashPromptContent, isPromptCompleted } from "./utils/PromptIdentity";
+import { hashPromptContent } from "./utils/PromptIdentity";
 import { withFileLock } from "./utils/FileLockUtils";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
@@ -265,23 +265,27 @@ class FlightPathMCPServer {
 
     const runtime = queueData._runtime || {
       currentIndex: 0,
-      completedPrompts: [],
       executionState: EXECUTION_STATES.IDLE,
     };
 
-    const prompts = (queueData.prompts || []).map((p, index) => ({
+    const allPrompts = queueData.prompts || [];
+    const prompts = allPrompts.map((p, index) => ({
       index,
       prompt: p.prompt,
-      status: this.getPromptStatus(index, runtime),
+      status: this.getPromptStatus(index, runtime, allPrompts),
       model: p.model,
     }));
+
+    const completedCount = allPrompts.filter(
+      (p) => p._runtime?.completedAt !== undefined
+    ).length;
 
     const response = {
       metadata: {
         workflowName: queueData.workflowName,
         currentIndex: runtime.currentIndex,
         totalPrompts: prompts.length,
-        completedPrompts: runtime.completedPrompts.length,
+        completedPrompts: completedCount,
         executionState: runtime.executionState,
         maxQueueSize: 100, // TODO: Read from config
         remainingSlots: 100 - prompts.length,
@@ -372,13 +376,15 @@ class FlightPathMCPServer {
 
       const runtime = queueData._runtime || {
         currentIndex: 0,
-        completedPrompts: [],
         executionState: EXECUTION_STATES.IDLE,
       };
+      const completedCount = (queueData.prompts || []).filter(
+        (p) => p._runtime?.completedAt !== undefined
+      ).length;
       log("Current runtime state:", {
         currentIndex: runtime.currentIndex,
         executionState: runtime.executionState,
-        completedCount: runtime.completedPrompts?.length || 0,
+        completedCount,
       });
 
       // Calculate insert index
@@ -388,12 +394,11 @@ class FlightPathMCPServer {
           : (queueData.prompts || []).length;
       log("Insert index calculated:", insertIndex);
 
-      // Deduplicate prompts using shared identity logic
+      // Validate prompts (check for already-completed only)
       log("Starting deduplication validation...");
       const validationResults = this.validatePrompts(
         prompts,
-        queueData.prompts || [],
-        new Set(runtime.completedPrompts || [])
+        queueData.prompts || []
       );
       log("Validation results:", validationResults);
 
@@ -481,7 +486,7 @@ class FlightPathMCPServer {
             prompt:
               r.prompt.prompt.substring(0, 100) +
               (r.prompt.prompt.length > 100 ? "..." : ""),
-            id: r.prompt.id,
+            name: r.prompt.name,
             reason: r.reason,
           })),
         }),
@@ -503,49 +508,29 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Validate prompts for deduplication before appending
-   * Uses shared PromptIdentity logic for consistency with extension
+   * Validate prompts before appending.
+   * Only check 1 remains: reject prompts that have already been completed.
+   * Completion is determined by per-prompt _runtime.completedAt (source of truth).
    */
   private validatePrompts(
     newPrompts: PromptItem[],
-    existingPrompts: PromptItem[],
-    completedIds: Set<string>
+    existingPrompts: PromptItem[]
   ): Array<{ prompt: PromptItem; accepted: boolean; reason?: string }> {
     const results: Array<{
       prompt: PromptItem;
       accepted: boolean;
       reason?: string;
     }> = [];
-    const seenHashes = new Set<string>();
-    const seenExplicitIds = new Set<string>();
 
-    // Build tracking sets from existing queue
-    for (const existingPrompt of existingPrompts) {
-      const hash = hashPromptContent(existingPrompt.prompt);
-      const hasExplicitId = existingPrompt.id && existingPrompt.id !== hash;
-
-      if (hasExplicitId) {
-        seenExplicitIds.add(existingPrompt.id!);
-      }
-      // Track hashes for non-explicit IDs only (same logic as isPromptCompleted)
-      if (!hasExplicitId) {
-        seenHashes.add(hash);
-      }
-    }
-
-    log("Deduplication context:", {
-      completedIds: Array.from(completedIds),
-      seenExplicitIds: Array.from(seenExplicitIds),
-      seenHashes: Array.from(seenHashes).map((h) => h.substring(0, 16)),
-    });
-
-    // Validate each new prompt
     for (const newPrompt of newPrompts) {
-      const hash = hashPromptContent(newPrompt.prompt);
-      const hasExplicitId = newPrompt.id && newPrompt.id !== hash;
+      // Check 1: Already completed (per-prompt _runtime.completedAt is authoritative)
+      const alreadyCompleted = existingPrompts.some(
+        (p) =>
+          p._runtime?.completedAt !== undefined &&
+          p.prompt === newPrompt.prompt
+      );
 
-      // Check 1: Already completed (uses shared isPromptCompleted logic)
-      if (isPromptCompleted(newPrompt, completedIds)) {
+      if (alreadyCompleted) {
         results.push({
           prompt: newPrompt,
           accepted: false,
@@ -554,50 +539,6 @@ class FlightPathMCPServer {
         continue;
       }
 
-      // Check 2: Duplicate explicit ID in existing queue
-      if (hasExplicitId && seenExplicitIds.has(newPrompt.id!)) {
-        results.push({
-          prompt: newPrompt,
-          accepted: false,
-          reason: `Duplicate ID: ${newPrompt.id}`,
-        });
-        continue;
-      }
-
-      // Check 3: Duplicate content (for prompts without explicit ID)
-      if (!hasExplicitId && seenHashes.has(hash)) {
-        results.push({
-          prompt: newPrompt,
-          accepted: false,
-          reason: "Duplicate content (no explicit ID)",
-        });
-        continue;
-      }
-
-      // Check 4: Duplicate within this append batch
-      if (hasExplicitId) {
-        if (seenExplicitIds.has(newPrompt.id!)) {
-          results.push({
-            prompt: newPrompt,
-            accepted: false,
-            reason: `Duplicate ID in append batch: ${newPrompt.id}`,
-          });
-          continue;
-        }
-        seenExplicitIds.add(newPrompt.id!);
-      } else {
-        if (seenHashes.has(hash)) {
-          results.push({
-            prompt: newPrompt,
-            accepted: false,
-            reason: "Duplicate content in append batch",
-          });
-          continue;
-        }
-        seenHashes.add(hash);
-      }
-
-      // Prompt is valid
       results.push({ prompt: newPrompt, accepted: true });
     }
 
@@ -645,10 +586,14 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Determine prompt status based on runtime state
+   * Determine prompt status based on per-prompt completedAt (source of truth)
    */
-  private getPromptStatus(index: number, runtime: WorkingFileRuntime): string {
-    if (runtime.completedPrompts.includes(String(index))) {
+  private getPromptStatus(
+    index: number,
+    runtime: WorkingFileRuntime,
+    prompts: PromptItem[]
+  ): string {
+    if (prompts[index]?._runtime?.completedAt !== undefined) {
       return "completed";
     }
     if (index === runtime.currentIndex) {

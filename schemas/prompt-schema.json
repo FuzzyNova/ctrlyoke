@@ -116,11 +116,10 @@
         },
         {
           "properties": {
-            "id": {
+            "name": {
               "type": "string",
-              "description": "Optional unique identifier for this prompt. Used for tracking completion across queue reloads. If omitted, a content hash is used automatically.",
-              "pattern": "^[a-zA-Z0-9-_]+$",
-              "maxLength": 50
+              "description": "Optional human-readable display label shown in the FlightPath dashboard. If omitted, the dashboard shows a truncated preview of the prompt text.",
+              "maxLength": 100
             },
             "prompt": {
               "type": "string",
@@ -197,13 +196,6 @@
           "type": "number",
           "description": "Index of currently executing prompt (0-based)"
         },
-        "completedPrompts": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Array of completed prompt IDs and hashes"
-        },
         "executionState": {
           "type": "string",
           "enum": [
@@ -219,7 +211,7 @@
           "description": "Current execution state"
         }
       },
-      "required": ["currentIndex", "completedPrompts", "executionState"],
+      "required": ["currentIndex", "executionState"],
       "additionalProperties": false
     }
   }

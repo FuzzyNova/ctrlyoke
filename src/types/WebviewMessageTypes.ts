@@ -211,7 +211,7 @@ export interface EndConditionConfig {
  * Matches FlightPathTypes.PromptItem
  */
 export interface PromptItem {
-  id?: string;
+  name?: string;
   prompt: string;
   harness?: string;
   model?: string;

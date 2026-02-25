@@ -21,8 +21,8 @@ interface PromptItemProps {
   index: number;
   /** Current status */
   status: StepStatus;
-  /** Optional prompt ID/name */
-  id?: string;
+  /** Optional human-readable display name */
+  name?: string;
   /** Retry state if retrying */
   retryState?: RetryState;
   /** Additional details (duration, end condition result) */
@@ -63,7 +63,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   text,
   index,
   status,
-  id: _id, // Used for key generation in parent
+  name,
   retryState,
   details,
   latestOutput,
@@ -71,7 +71,6 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   isSelected = false,
   onClick,
 }) => {
-  void _id; // Suppress unused variable warning
   // Build class names for the container
   const containerClasses = [
     "py-2 px-3",
@@ -120,7 +119,8 @@ export const PromptItem: React.FC<PromptItemProps> = ({
           <StatusIcon status={status} />
         </span>
         <span className="flex-1 min-w-0 text-xs leading-relaxed text-foreground">
-          <span className="font-medium">{index + 1}.</span> {truncate(text, 60)}
+          <span className="font-medium">{index + 1}.</span>{" "}
+          {name ? name : truncate(text, 60)}
         </span>
       </div>
 

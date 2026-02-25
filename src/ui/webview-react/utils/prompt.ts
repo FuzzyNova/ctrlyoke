@@ -44,7 +44,7 @@ export interface PromptRuntime {
  * Raw prompt data from workflow file
  */
 export interface RawPrompt {
-  id?: string;
+  name?: string;
   prompt: string;
   harness?: string;
   model?: string;

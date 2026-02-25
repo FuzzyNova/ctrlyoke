@@ -16,7 +16,7 @@ import {
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
-import { isPromptCompleted, hashPromptContent } from "../utils/PromptIdentity";
+import { hashPromptContent } from "../utils/PromptIdentity";
 import {
   ConfigurationUtils,
   PATH_CONSTANTS,
@@ -205,8 +205,41 @@ export class PromptQueue {
 
       const runtime = workingFile._runtime;
 
-      // Restore completed IDs set from saved array
-      const completedIds = new Set<string>(runtime?.completedPrompts || []);
+      // Build completedIds from per-prompt _runtime.completedAt (source of truth).
+      // Fall back to currentIndex boundary for old working files that lack per-prompt _runtime.
+      const hasPerPromptTracking = workingFile.prompts.some(
+        (p) => p._runtime?.completedAt !== undefined
+      );
+
+      const completedIds = new Set<string>();
+      if (hasPerPromptTracking) {
+        // New format: use per-prompt completedAt
+        workingFile.prompts.forEach((p, i) => {
+          if (p._runtime?.completedAt !== undefined) {
+            completedIds.add(String(i));
+          }
+        });
+      } else if (runtime?.currentIndex && runtime.currentIndex > 0) {
+        // Old format: treat prompts before currentIndex as completed
+        Log.info(
+          "Old working file format detected: using currentIndex for completion boundary"
+        );
+        for (let i = 0; i < runtime.currentIndex; i++) {
+          completedIds.add(String(i));
+          // Self-heal: write completedAt back so next save uses new format
+          if (workingFile.prompts[i]) {
+            workingFile.prompts[i]._runtime = {
+              ...workingFile.prompts[i]._runtime,
+              startedAt:
+                workingFile.prompts[i]._runtime?.startedAt ??
+                (workingFile.startedAt || Date.now()),
+              completedAt: workingFile.startedAt
+                ? workingFile.startedAt + 1
+                : Date.now(),
+            };
+          }
+        }
+      }
 
       // Determine execution state
       // When auto-loading on startup, NEVER restore as RUNNING (prevents unwanted auto-start)
@@ -247,8 +280,8 @@ export class PromptQueue {
       this.state.results = workingFile.prompts.map((prompt, index) => {
         let status: (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
 
-        // Check if this prompt was completed
-        if (isPromptCompleted(prompt, this.state.completedIds)) {
+        // Check if this prompt was completed (per-prompt completedAt is authoritative)
+        if (prompt._runtime?.completedAt !== undefined) {
           status = STEP_STATUS.COMPLETED;
         }
         // Check if this is the current prompt
@@ -571,8 +604,8 @@ export class PromptQueue {
     currentResult.status = STEP_STATUS.COMPLETED;
     currentResult.timestamp = new Date();
 
-    // Mark prompt as completed in the tracking set
-    this.markPromptCompleted(currentPrompt);
+    // Mark prompt as completed (sets completedAt on _runtime and updates in-memory index)
+    this.markPromptCompleted(this.state.currentIndex);
 
     // Reset retry count when successfully moving to next prompt
     this.resetRetryCount();
@@ -781,24 +814,21 @@ export class PromptQueue {
   }
 
   /**
-   * Mark a prompt as completed (add to completedIds set)
-   *
-   * Uses a concatenated tracking ID:
-   * - Prompts with explicit ID: "{id}:{hash}" (e.g., "review:abc123...")
-   * - Prompts without ID or auto-assigned hash ID: "{hash}" (e.g., "abc123...")
-   *
-   * This ensures:
-   * - ONE entry per completed prompt (no duplicates in completedPrompts array)
-   * - Deduplication works via hash portion for non-explicit IDs
-   * - Explicit IDs are preserved and respected (allows duplicate content with different IDs)
-   * - Auto-assigned hash IDs (id === hash) are treated as non-explicit
+   * Mark a prompt as completed.
+   * Sets completedAt on the prompt's own _runtime (source of truth) and
+   * updates the in-memory fast-lookup index keyed by prompt index.
    */
-  markPromptCompleted(prompt: PromptItem): void {
-    const hash = hashPromptContent(prompt.prompt);
-    // Treat auto-assigned hash IDs (id === hash) as non-explicit
-    const hasExplicitId = prompt.id && prompt.id !== hash;
-    const trackingId = hasExplicitId ? `${prompt.id}:${hash}` : hash;
-    this.state.completedIds.add(trackingId);
+  markPromptCompleted(index: number): void {
+    const prompt = this.state.prompts[index];
+    if (prompt) {
+      prompt._runtime = {
+        ...prompt._runtime,
+        startedAt: prompt._runtime?.startedAt ?? Date.now(),
+        completedAt: Date.now(),
+      };
+    }
+    // Update in-memory fast-lookup cache (key = prompt index as string)
+    this.state.completedIds.add(String(index));
   }
 
   /**
@@ -852,28 +882,22 @@ export class PromptQueue {
     const newPrompts: PromptItem[] = [];
     const currentPromptHashes = new Set<string>();
 
-    // Build set of hashes for prompts currently in queue
+    // Build set of content hashes for prompts currently in queue
     for (const existingPrompt of this.state.prompts) {
       const hash = hashPromptContent(existingPrompt.prompt);
       currentPromptHashes.add(hash);
-      if (existingPrompt.id) {
-        currentPromptHashes.add(existingPrompt.id);
-      }
     }
 
     // Find truly new prompts (not completed, not already in queue)
     for (const prompt of reloadedPrompts) {
-      // Skip if already completed
-      if (isPromptCompleted(prompt, this.state.completedIds)) {
+      // Skip if already completed (per-prompt _runtime.completedAt is authoritative)
+      if (prompt._runtime?.completedAt !== undefined) {
         continue;
       }
 
-      // Skip if already in current queue (check by ID and hash)
+      // Skip if already in current pending queue (by content hash)
       const hash = hashPromptContent(prompt.prompt);
-      if (
-        currentPromptHashes.has(hash) ||
-        (prompt.id && currentPromptHashes.has(prompt.id))
-      ) {
+      if (currentPromptHashes.has(hash)) {
         continue;
       }
 
@@ -962,23 +986,18 @@ export class PromptQueue {
         `mergePromptsFromDisk: Disk has ${diskPrompts.length} prompts, memory has ${this.state.prompts.length} prompts`
       );
 
-      // Build map of prompts we have in memory (by ID and hash)
+      // Build map of prompts we have in memory (by content hash)
       const memoryPromptMap = new Map<string, PromptItem>();
       for (const prompt of this.state.prompts) {
         const hash = hashPromptContent(prompt.prompt);
         memoryPromptMap.set(hash, prompt);
-        if (prompt.id) {
-          memoryPromptMap.set(prompt.id, prompt);
-        }
       }
 
       // Check if disk has prompts we don't have in memory
       const newPromptsFromDisk: PromptItem[] = [];
       for (const diskPrompt of diskPrompts) {
         const hash = hashPromptContent(diskPrompt.prompt);
-        const existsInMemory =
-          memoryPromptMap.has(hash) ||
-          (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
+        const existsInMemory = memoryPromptMap.has(hash);
 
         if (!existsInMemory) {
           newPromptsFromDisk.push(diskPrompt);
@@ -1212,7 +1231,6 @@ export class PromptQueue {
       prompts: prompts,
       _runtime: {
         currentIndex: 0,
-        completedPrompts: [],
         executionState: EXECUTION_STATES.IDLE,
       },
     };
@@ -1328,23 +1346,18 @@ export class PromptQueue {
           const diskPrompts = workingFile.prompts || [];
           const memoryPrompts = this.state.prompts;
 
-          // Build a map of prompts we have in memory (by ID and hash)
+          // Build a map of prompts we have in memory (by content hash)
           const memoryPromptMap = new Map<string, PromptItem>();
           for (const prompt of memoryPrompts) {
             const hash = hashPromptContent(prompt.prompt);
             memoryPromptMap.set(hash, prompt);
-            if (prompt.id) {
-              memoryPromptMap.set(prompt.id, prompt);
-            }
           }
 
           // Check if disk has prompts we don't have in memory
           const newPromptsFromDisk: PromptItem[] = [];
           for (const diskPrompt of diskPrompts) {
             const hash = hashPromptContent(diskPrompt.prompt);
-            const existsInMemory =
-              memoryPromptMap.has(hash) ||
-              (diskPrompt.id && memoryPromptMap.has(diskPrompt.id));
+            const existsInMemory = memoryPromptMap.has(hash);
 
             if (!existsInMemory) {
               // This prompt exists on disk but not in memory (MCP must have added it)
@@ -1367,7 +1380,6 @@ export class PromptQueue {
             const newResults: PromptResult[] = diskPrompts.map(
               (prompt, index) => {
                 const hash = hashPromptContent(prompt.prompt);
-                const promptId = prompt.id || hash;
 
                 // Find existing result for this prompt
                 const existingResultIndex = this.state.results.findIndex(
@@ -1399,19 +1411,8 @@ export class PromptQueue {
         } // End skipMerge check
 
         // Now write back the prompts array (merged or direct from memory)
-        // Update prompts without explicit IDs to include their generated hash IDs
         // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.prompts = this.state.prompts.map((prompt) => {
-          if (!prompt.id) {
-            return {
-              ...prompt,
-              id: hashPromptContent(prompt.prompt),
-              // _runtime is preserved via spread operator
-            };
-          }
-          // Return prompt with all properties including _runtime
-          return prompt;
-        });
+        workingFile.prompts = this.state.prompts.map((prompt) => ({ ...prompt }));
         // Count prompts with _runtime metadata (Phase 4: Session Management)
         const promptsWithRuntime = workingFile.prompts.filter(
           (p) => p._runtime
@@ -1430,9 +1431,9 @@ export class PromptQueue {
         workingFile.lastModifiedAt = Date.now();
 
         // Update workflow-level runtime state
+        // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
         workingFile._runtime = {
           currentIndex: this.state.currentIndex,
-          completedPrompts: Array.from(this.state.completedIds),
           executionState: this.state.status,
         };
 
@@ -1608,8 +1609,7 @@ export class PromptQueue {
     }
 
     // Don't allow deleting completed prompts
-    const promptId = this.state.prompts[index].id;
-    if (promptId && this.state.completedIds.has(promptId)) {
+    if (this.state.completedIds.has(String(index))) {
       throw new Error("Cannot delete a completed prompt");
     }
 

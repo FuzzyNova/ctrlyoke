@@ -76,8 +76,8 @@ export const EditorSection: React.FC = () => {
           {getModeText()}
         </span>
 
-        {/* Right: Prompt name input (only in new prompt mode) */}
-        {!isEditMode && (
+        {/* Right: Prompt name input (shown in both new and edit modes) */}
+        {!isRunning && (
           <input
             type="text"
             className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0"

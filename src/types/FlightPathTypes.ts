@@ -69,7 +69,6 @@ export interface PromptFile extends ExecutionProperties {
  */
 export interface WorkingFileRuntime {
   currentIndex: number;
-  completedPrompts: string[]; // IDs and hashes of completed prompts
   executionState: ExecutionState;
 }
 
@@ -86,7 +85,7 @@ export interface WorkingFile extends PromptFile {
 }
 
 export interface PromptItem extends ExecutionProperties {
-  id?: string; // Optional unique identifier for tracking across queue reloads
+  name?: string; // Optional human-readable display label
   prompt: string;
   sessionId?: string | number; // Session ID for resuming conversations (string for CLI, number for legacy chat)
   _runtime?: PromptRuntimeMetadata; // Per-prompt runtime metadata
@@ -133,7 +132,7 @@ export interface QueueState {
   prompts: PromptItem[];
   results: PromptResult[];
   stopped: boolean; // True if stop() was called, reset on new execution
-  completedIds: Set<string>; // Track completed prompt IDs and hashes
+  completedIds: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
   queueExtensions: number; // How many times queue was extended
   lastReloadTime?: number; // Timestamp of last reload

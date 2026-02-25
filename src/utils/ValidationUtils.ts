@@ -22,7 +22,7 @@ export class ValidationUtils {
   private static promptItemSchema: JSONSchemaType<PromptItem> = {
     type: "object",
     properties: {
-      id: {
+      name: {
         type: "string",
         nullable: true,
       },

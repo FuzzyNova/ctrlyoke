@@ -305,7 +305,7 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(queue.getState().status, EXECUTION_STATES.IDLE);
     });
 
-    test("should update working file to clear completedPrompts", async () => {
+    test("should update working file without completedPrompts after restart", async () => {
       // Create a temporary working file
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder) {
@@ -332,16 +332,16 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.restart();
       assert.strictEqual(queue.getState().completedIds.size, 0);
 
-      // Read working file to verify completedPrompts is empty
+      // Read working file to verify completedPrompts is not present (new format)
       const workingFile = await queue.readWorkingFile(workingFilePath);
       assert.ok(
         workingFile._runtime,
         "Working file should have _runtime section"
       );
       assert.strictEqual(
-        workingFile._runtime!.completedPrompts.length,
-        0,
-        "Working file should have empty completedPrompts array after restart"
+        (workingFile._runtime as any).completedPrompts,
+        undefined,
+        "Working file should not have completedPrompts array"
       );
 
       // Cleanup

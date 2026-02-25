@@ -917,7 +917,7 @@ export class FlightPathManager {
           // If prompt or workflow has a harness override, use it; otherwise use the active integration
           if (resolvedHarness) {
             Log.info(
-              `🔀 Prompt ${prompt.id || "unnamed"} using harness override: ${resolvedHarness}`
+              `🔀 Prompt ${prompt.name || "unnamed"} using harness override: ${resolvedHarness}`
             );
             const overrideIntegration =
               this.createIntegrationForMode(resolvedHarness);
@@ -1705,34 +1705,16 @@ export class FlightPathManager {
     promptName?: string,
     forceNewWorkflow: boolean = false
   ): Promise<void> {
-    // Generate timestamp components for both filename and ID
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
-    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, ""); // HHMMSS
-
     // Generate a meaningful workflow name from prompt name (if provided) or prompt text
     const generatedWorkflowName = this.generateWorkflowNameFromPrompt(
       text,
       promptName
     );
 
-    // Build PromptItem with ID that includes timestamp for uniqueness
-    // This prevents deduplication when users append multiple prompts with the same name
-    let promptId: string;
-    if (promptName && promptName.trim().length > 0) {
-      const sanitizedName = promptName
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      promptId = `${sanitizedName}-${dateStr}-${timeStr}`;
-    } else {
-      promptId = `ephemeral-${Date.now()}`;
-    }
-
     const promptItem: PromptItem = {
       prompt: text,
-      id: promptId,
+      // Store name as-is (human-readable, no sanitization needed for the field)
+      ...(promptName?.trim() ? { name: promptName.trim() } : {}),
       ...this.buildPromptItemProperties(properties),
     };
 

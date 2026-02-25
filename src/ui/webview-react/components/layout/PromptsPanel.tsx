@@ -142,10 +142,10 @@ export const PromptsPanel: React.FC<{
 
               return (
                 <PromptItem
-                  key={`prompt-${index}-${prompt.id || ""}`}
+                  key={`prompt-${index}-${prompt.name || ""}`}
                   text={prompt.prompt}
                   index={index}
-                  id={prompt.id}
+                  name={prompt.name}
                   status={status}
                   retryState={retryState}
                   details={details}

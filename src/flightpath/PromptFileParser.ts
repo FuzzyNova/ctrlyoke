@@ -328,7 +328,7 @@ export class PromptFileParser {
     const promptItem: PromptItem = { prompt: promptText };
 
     // Only include properties that are explicitly set
-    if (source.id !== undefined) promptItem.id = source.id;
+    if (source.name !== undefined) promptItem.name = source.name;
     if (source.harness !== undefined) promptItem.harness = source.harness;
     if (source.model !== undefined) promptItem.model = source.model;
     if (source.agent !== undefined) promptItem.agent = source.agent;

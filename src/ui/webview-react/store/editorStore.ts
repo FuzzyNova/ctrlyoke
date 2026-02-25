@@ -274,7 +274,7 @@ export const useEditorStore = create<
       originalPromptData: promptData,
       savedNewPromptState,
       promptText: promptData.prompt,
-      promptName: promptData.id ?? "",
+      promptName: promptData.name ?? "",
       properties,
       isDirty: false,
       validationErrors: {},
@@ -521,9 +521,9 @@ export const useEditorStore = create<
       prompt: promptText,
     };
 
-    // Add id/name if provided
+    // Add name if provided
     if (promptName.trim()) {
-      result.id = promptName.trim();
+      result.name = promptName.trim();
     }
 
     // Add harness if not default
