@@ -205,7 +205,8 @@ function App() {
   // Signal ready to extension
   useEffect(() => {
     vscode.postMessage({ type: MESSAGE_TYPES.READY });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // vscode is a stable singleton — never changes
 
   // Sync prompts/settings collapse state before paint.
   // Runs on initial desktop mount and when returning from mobile layout
@@ -580,6 +581,7 @@ function App() {
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     uiLayoutReady,
     isMobile,
@@ -587,6 +589,8 @@ function App() {
     outputCollapsed,
     editorCollapsed,
     settingsCollapsed,
+    // getMobilePanelSnapshot is intentionally omitted — it only reads refs and
+    // its logged state is already covered by the deps above
   ]);
 
   // Mobile gate management: close when all collapsed, open after sync

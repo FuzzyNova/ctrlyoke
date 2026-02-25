@@ -286,7 +286,11 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       view.destroy();
       viewRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placeholderText, customCompletions]);
+  // `value` is intentionally omitted — the setup effect initializes the editor
+  // once; value changes are handled by the separate effect below.
+  // `vscode` is a stable singleton — never changes.
 
   // Update editor content when value prop changes externally
   useEffect(() => {

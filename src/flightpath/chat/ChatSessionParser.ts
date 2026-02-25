@@ -135,12 +135,10 @@ export class ChatSessionParser {
     if (!lines.length) {
       return null;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const first = JSON.parse(lines[0]) as { kind: number; v: any };
     if (first.kind !== 0 || !first.v) {
       return null;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const state: any = first.v;
     if (!state.requests) {
       state.requests = [];
@@ -154,7 +152,6 @@ export class ChatSessionParser {
       if (!lines[i].trim()) {
         continue;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patch = JSON.parse(lines[i]) as {
         kind: number;
         k: (string | number)[];
@@ -169,7 +166,6 @@ export class ChatSessionParser {
     return state as ChatSessionFile;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private static jsonlSetAtPath(
     obj: any,
     keyPath: (string | number)[],
@@ -178,7 +174,6 @@ export class ChatSessionParser {
     if (!keyPath?.length) {
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let current: any = obj;
     for (let i = 0; i < keyPath.length - 1; i++) {
       const key = keyPath[i];
@@ -191,7 +186,6 @@ export class ChatSessionParser {
   }
 
   private static jsonlAppendAtPath(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     obj: any,
     keyPath: (string | number)[],
     items: unknown[]
@@ -199,7 +193,6 @@ export class ChatSessionParser {
     if (!keyPath?.length || !Array.isArray(items)) {
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let current: any = obj;
     for (let i = 0; i < keyPath.length; i++) {
       const key = keyPath[i];

@@ -174,7 +174,8 @@ const HarnessDropdown: React.FC<{
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]); // dropdownRef is a stable ref — intentionally omitted
 
   return (
     <div className="relative inline-block w-full" ref={dropdownRef}>
