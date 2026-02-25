@@ -21,15 +21,9 @@ import { MESSAGE_TYPES } from "../../types/messages";
  */
 export const SaveWorkflowDialog: React.FC = () => {
   const vscode = useVsCodeApi();
-  const {
-    saveWorkflowDialogOpen,
-    saveWorkflowDialogData,
-    closeSaveWorkflowDialog,
-  } = useUiStore((s) => ({
-    saveWorkflowDialogOpen: s.saveWorkflowDialogOpen,
-    saveWorkflowDialogData: s.saveWorkflowDialogData,
-    closeSaveWorkflowDialog: s.closeSaveWorkflowDialog,
-  }));
+  const saveWorkflowDialogOpen = useUiStore((s) => s.saveWorkflowDialogOpen);
+  const saveWorkflowDialogData = useUiStore((s) => s.saveWorkflowDialogData);
+  const closeSaveWorkflowDialog = useUiStore((s) => s.closeSaveWorkflowDialog);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
