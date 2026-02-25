@@ -1,4 +1,7 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
+import { IS_DEV_MODE } from "./BuildConfig";
 
 export enum LogLevel {
   DEBUG = 0,
@@ -10,6 +13,7 @@ export enum LogLevel {
 export class Log {
   private static outputChannel: vscode.OutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
+  private static logFilePath: string | undefined;
 
   static initialize(
     context: vscode.ExtensionContext,
@@ -18,6 +22,16 @@ export class Log {
     this.outputChannel = vscode.window.createOutputChannel("FlightPath");
     this.logLevel = logLevel;
     context.subscriptions.push(this.outputChannel);
+
+    if (IS_DEV_MODE) {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (workspaceRoot) {
+        const logDir = path.join(workspaceRoot, ".flightpath", "logs");
+        fs.mkdirSync(logDir, { recursive: true });
+        this.logFilePath = path.join(logDir, "debug.log");
+        fs.writeFileSync(this.logFilePath, ""); // truncate on each session start
+      }
+    }
 
     this.info("FlightPath logging initialized");
   }
@@ -84,6 +98,9 @@ export class Log {
     if (this.outputChannel) {
       this.outputChannel.appendLine(message);
     }
+    if (IS_DEV_MODE && this.logFilePath) {
+      fs.appendFileSync(this.logFilePath, message + "\n");
+    }
   }
 
   /**
@@ -93,6 +110,9 @@ export class Log {
   static append(message: string): void {
     if (this.outputChannel) {
       this.outputChannel.append(message);
+    }
+    if (IS_DEV_MODE && this.logFilePath) {
+      fs.appendFileSync(this.logFilePath, message);
     }
   }
 
@@ -113,5 +133,9 @@ export class Log {
 
     // Also log to console for development
     console.log(`FlightPath ${logEntry}`);
+
+    if (IS_DEV_MODE && this.logFilePath) {
+      fs.appendFileSync(this.logFilePath, logEntry + "\n");
+    }
   }
 }
