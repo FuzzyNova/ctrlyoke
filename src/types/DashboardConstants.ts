@@ -34,7 +34,6 @@ export const MESSAGE_TYPES = {
   // Webview -> Extension (Logging)
   LOG_MESSAGE: "logMessage", // Forward webview log entries to extension Log class (payload: { level: LogLevel, message: string })
 
-
   // Webview -> Extension
   READY: "ready",
   NEW_PROMPT: "newPrompt",
@@ -112,10 +111,10 @@ export const MESSAGE_TYPES = {
   ATTACHMENT_TOKEN_COUNTS_RESPONSE: "attachmentTokenCountsResponse",
 
   // Output history messages
-  OUTPUT_HISTORY_LOADED: "outputHistoryLoaded",  // Extension -> Webview: Load history for display
-  LOAD_RUN_HISTORY: "loadRunHistory",            // Webview -> Extension: Request specific run
-  CLEAR_RUN_HISTORY: "clearRunHistory",          // Webview -> Extension: Delete run history
-  RUN_HISTORY_UPDATED: "runHistoryUpdated",      // Extension -> Webview: Available run count changed (new run started)
+  OUTPUT_HISTORY_LOADED: "outputHistoryLoaded", // Extension -> Webview: Load history for display
+  LOAD_RUN_HISTORY: "loadRunHistory", // Webview -> Extension: Request specific run
+  CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete run history
+  RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
 } as const;
 
 // ============================================================================

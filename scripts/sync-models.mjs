@@ -206,7 +206,9 @@ function updateCodexDerivedConstants(checkOnly = false) {
 
   if (currentDefault !== expectedDefault) {
     needsUpdate = true;
-    console.log(`  CODEX_CLI_DEFAULT_MODEL: "${currentDefault}" → "${expectedDefault}"`);
+    console.log(
+      `  CODEX_CLI_DEFAULT_MODEL: "${currentDefault}" → "${expectedDefault}"`
+    );
 
     if (!checkOnly) {
       content = content.replace(

@@ -17,10 +17,10 @@ export interface WorkflowOutputHistory {
   schemaVersion: "1.0.0";
 
   // Run metadata
-  workflowId: string;        // Working file basename (e.g., "workflow-2024-01-21T10-30-00")
-  runId: number;             // Sequential run number (1, 2, 3, ...)
-  startedAt: number;         // Run start timestamp (ms since epoch)
-  completedAt?: number;      // Run completion timestamp (undefined if incomplete)
+  workflowId: string; // Working file basename (e.g., "workflow-2024-01-21T10-30-00")
+  runId: number; // Sequential run number (1, 2, 3, ...)
+  startedAt: number; // Run start timestamp (ms since epoch)
+  completedAt?: number; // Run completion timestamp (undefined if incomplete)
   executionState: ExecutionState; // Final state (completed, error, stopped, etc.)
 
   // Total step count for this run (used to render all steps in order)

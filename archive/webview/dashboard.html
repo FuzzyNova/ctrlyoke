@@ -365,14 +365,22 @@
                     <div class="property-row session-property-row">
                       <div class="session-column">
                         <label for="prop-resume-session">Resume Session</label>
-                        <select id="prop-resume-session" class="property-select">
+                        <select
+                          id="prop-resume-session"
+                          class="property-select"
+                        >
                           <option value="default" selected>Default</option>
                           <option value="yes">Yes</option>
                           <option value="no">No</option>
                         </select>
                       </div>
                       <div class="session-column">
-                        <label for="prop-session-id">Session ID <span class="label-hint">(enabled when Resume Session is Yes)</span></label>
+                        <label for="prop-session-id"
+                          >Session ID
+                          <span class="label-hint"
+                            >(enabled when Resume Session is Yes)</span
+                          ></label
+                        >
                         <input
                           type="text"
                           id="prop-session-id"
@@ -384,17 +392,22 @@
                       </div>
                     </div>
 
-
                     <div class="end-condition-section">
                       <label class="checkbox-label">
                         <input type="checkbox" id="prop-end-enabled" />
                         <span>Enable End Condition</span>
                       </label>
 
-                      <div id="prop-end-details" class="end-condition-details collapsed">
+                      <div
+                        id="prop-end-details"
+                        class="end-condition-details collapsed"
+                      >
                         <div class="end-condition-help">
                           <i class="codicon codicon-info"></i>
-                          <span>Check to override workflow end condition. Uncheck to inherit from workflow (if configured).</span>
+                          <span
+                            >Check to override workflow end condition. Uncheck
+                            to inherit from workflow (if configured).</span
+                          >
                         </div>
 
                         <div class="property-group">

@@ -97,18 +97,21 @@ Extracted execution loop. Runs sequentially through prompts with pause/resume su
 #### React Webview (`src/ui/webview-react/`)
 
 **Stores** (Zustand):
+
 - `workflowStore.ts` — single workflow: `fileName`, `workflowName`, `executionState`, `prompts`, `cliOutputs`, etc.
 - `uiStore.ts` — layout state, history view, modal state, `recentWorkflows`
 - `editorStore.ts` — prompt editor state
 - `settingsStore.ts` — harness/model configuration
 
 **Key UI Components** (relevant to this plan):
+
 - `Header.tsx` — `[WorkflowControls] | [WorkflowStatus (center)] | [Run/Pause/Stop]`
 - `WorkflowStatus.tsx` — Split-button: workflow name (editable) + dropdown trigger
 - `WorkflowControls.tsx` — Split-button: New/From Template/Load File/Queue File
 - `RecentWorkflows.tsx` — Dropdown list of recent (historical) workflows
 
 **Current Enforcement** (already in place):
+
 - `WorkflowStatus` dropdown: `disabled={isRunning}` — cannot switch while running
 - `WorkflowControls` buttons: `disabled={isExecuting}` — cannot load/create while running/paused
 
@@ -125,11 +128,13 @@ All messages between extension ↔ webview. No `workflowId` field exists yet; al
 **Decision**: Multiple workflows can be `RUNNING` simultaneously. There is **no single-runner constraint**.
 
 **Rationale**:
+
 - Each CLI harness runs in its own independent terminal/process — there is no technical conflict
 - Users should be able to, e.g., run a bug-fix workflow while a doc-generation workflow is already executing
 - The whole purpose of this architecture is parallel execution
 
 **Implications**:
+
 - Run/Pause/Stop buttons in the header apply to the **currently viewed** workflow, not "the" workflow
 - `WorkflowOrchestrator` tracks each instance's state independently
 - The `runningWorkflowId` field is replaced by checking `instance.status === RUNNING` per-instance
@@ -140,13 +145,13 @@ All messages between extension ↔ webview. No `workflowId` field exists yet; al
 
 The current codebase **explicitly blocks** these actions when any execution is in progress. These restrictions must be lifted to enable parallel workflows:
 
-| Component | Current Restriction | New Behavior |
-|---|---|---|
-| `WorkflowControls.tsx` | All buttons `disabled={isExecuting}` | Buttons always enabled (New, Load, Queue work while another runs) |
-| `WorkflowStatus.tsx` | Dropdown `if (isRunning) return` | Dropdown always openable |
-| `Header.tsx` | Run button checks `isRunning` globally | Run button only checks the **active** workflow's own state |
-| `EditorSection.tsx` | "New Prompt" button `disabled={isRunning}` | Always enabled |
-| `EditorFooter.tsx` | All editor buttons `disabled={isRunning}` | Per-prompt status check instead of global `isRunning` |
+| Component              | Current Restriction                        | New Behavior                                                      |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `WorkflowControls.tsx` | All buttons `disabled={isExecuting}`       | Buttons always enabled (New, Load, Queue work while another runs) |
+| `WorkflowStatus.tsx`   | Dropdown `if (isRunning) return`           | Dropdown always openable                                          |
+| `Header.tsx`           | Run button checks `isRunning` globally     | Run button only checks the **active** workflow's own state        |
+| `EditorSection.tsx`    | "New Prompt" button `disabled={isRunning}` | Always enabled                                                    |
+| `EditorFooter.tsx`     | All editor buttons `disabled={isRunning}`  | Per-prompt status check instead of global `isRunning`             |
 
 The key insight: controls apply to the **active/viewed** workflow. Whether other workflows are running is irrelevant.
 
@@ -155,12 +160,14 @@ The key insight: controls apply to the **active/viewed** workflow. Whether other
 **Decision**: Extend the existing `WorkflowStatus` split-button to show **all loaded workflows** (not just recent history files). The dropdown becomes a "loaded workflow switcher."
 
 **Rationale**:
+
 - Consistent with existing UX — no new UI paradigm
 - Fits the narrow panel width of a VS Code sidebar
 - Avoids horizontal tab overflow issues
 - The "recent workflows" concept already exists and works
 
 **Dropdown sections**:
+
 1. **Active Workflows** — currently loaded instances (with status badges)
 2. **Recent Workflows** — historical files not currently loaded (existing behavior)
 3. **Clear History** — existing footer action
@@ -170,6 +177,7 @@ The key insight: controls apply to the **active/viewed** workflow. Whether other
 **Decision**: Switching the **viewed** workflow is allowed at any time. Creating/loading/running additional workflows is always allowed.
 
 **Implementation**:
+
 - `WorkflowStatus` dropdown: always openable (remove `if (isRunning) return`)
 - `WorkflowControls` buttons: always enabled (remove `disabled={isExecuting}`)
 - When "New" is clicked while the active workflow is running: creates a new instance and switches the view to it; the original keeps running in background
@@ -179,6 +187,7 @@ The key insight: controls apply to the **active/viewed** workflow. Whether other
 ### 5. Working Files per Instance
 
 Each `WorkflowInstance` gets its own working file in `.flightpath/.queue/`:
+
 - Naming: `{workflowName}-{timestamp}.flightpath.json` (no conflicts, already unique by timestamp)
 - File watchers: per-instance (no cross-talk)
 - Cleanup: when workflow is dismissed from the loaded list
@@ -221,7 +230,7 @@ Replaces the singleton state in `FlightPathManager`. Manages the registry of loa
 ```typescript
 class WorkflowOrchestrator {
   private workflows: Map<string, WorkflowInstance> = new Map();
-  private activeWorkflowId: string | null = null;  // UI-visible workflow
+  private activeWorkflowId: string | null = null; // UI-visible workflow
   private dashboardProvider?: FlightPathWebviewProvider;
   private context: vscode.ExtensionContext;
   private integrationFactory: IntegrationFactory;
@@ -293,7 +302,7 @@ Encapsulates a single workflow's complete state and components. Extracted from `
 ```typescript
 class WorkflowInstance extends EventEmitter {
   // Identity
-  readonly id: string;           // UUID
+  readonly id: string; // UUID
   workflowName: string;
   filePath: string;
 
@@ -314,7 +323,7 @@ class WorkflowInstance extends EventEmitter {
   private isActive: boolean = false; // Whether this is the currently viewed workflow
 
   // Status
-  status: WorkflowStatus;  // derived from promptQueue.state.status
+  status: WorkflowStatus; // derived from promptQueue.state.status
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
@@ -391,10 +400,18 @@ class FlightPathManager {
     await this.workflowOrchestrator.executeWorkflow(undefined, modeOverride);
   }
 
-  pause(): void { this.workflowOrchestrator.pauseWorkflow(); }
-  async resume(): Promise<void> { await this.workflowOrchestrator.resumeWorkflow(); }
-  async stop(): Promise<void> { await this.workflowOrchestrator.stopWorkflow(); }
-  clear(): void { this.workflowOrchestrator.clearWorkflow(); }
+  pause(): void {
+    this.workflowOrchestrator.pauseWorkflow();
+  }
+  async resume(): Promise<void> {
+    await this.workflowOrchestrator.resumeWorkflow();
+  }
+  async stop(): Promise<void> {
+    await this.workflowOrchestrator.stopWorkflow();
+  }
+  clear(): void {
+    this.workflowOrchestrator.clearWorkflow();
+  }
 }
 ```
 
@@ -404,7 +421,10 @@ class FlightPathManager {
 class IntegrationFactory {
   // Creates HarnessIntegration instances on demand
   // Shared across all WorkflowInstances (each gets its own instance when executing)
-  createForHarness(harness: Harness, context: vscode.ExtensionContext): HarnessIntegration
+  createForHarness(
+    harness: Harness,
+    context: vscode.ExtensionContext
+  ): HarnessIntegration;
 }
 ```
 
@@ -413,6 +433,7 @@ class IntegrationFactory {
 ##### Backend: `FlightPathWebviewProvider.ts`
 
 **New message handling**:
+
 - All outgoing messages gain optional `workflowId` field
 - New messages: `WORKFLOWS_LIST`, `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `ACTIVE_WORKFLOW_CHANGED`
 - `SET_ACTIVE_WORKFLOW` from webview routes to `orchestrator.setActiveWorkflow(workflowId)`
@@ -446,11 +467,13 @@ async sendWorkflowStateSync(workflowId: string): Promise<void> {
 The `WorkflowStatus` split-button dropdown is extended to show two sections:
 
 **Section 1: Loaded Workflows** (new)
+
 - All currently loaded `WorkflowInstance` objects
 - Shows name, status badge, current step progress
 - Clicking switches the active workflow (always enabled)
 
 **Section 2: Recent Workflows** (existing behavior, renamed to "Load Another")
+
 - Historical file list for loading additional workflows
 - **Always enabled** — loading another workflow while one runs is a core parallel use case
 
@@ -530,10 +553,12 @@ The "New" button clicking while the active workflow is running creates a new ins
 ##### Frontend: Zustand Stores
 
 **`workflowStore.ts`** — minimal changes:
+
 - Store continues to represent the **single active/viewed workflow**
 - No need for `Map<workflowId, WorkflowState>` — switching workflows sends a full state sync, replacing store contents
 
 **`uiStore.ts`** — new fields:
+
 ```typescript
 // New multi-workflow UI state
 loadedWorkflows: WorkflowSummary[];  // All loaded workflow instances (for dropdown)
@@ -543,6 +568,7 @@ activeWorkflowId: string | null;     // Currently viewed
 Note: No `anyWorkflowRunning` gate — parallel running is the goal. Each `WorkflowSummary` carries its own `executionState`, so the dropdown can display running indicators per-instance.
 
 **`WorkflowSummary`** type (for dropdown display, sent by extension):
+
 ```typescript
 interface WorkflowSummary {
   id: string;
@@ -586,97 +612,97 @@ This section maps every single-runner constraint found in the codebase to how th
 
 ### Backend — FlightPathManager.ts
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| Single `promptQueue` field | ~L48 | Moved into `WorkflowInstance`; orchestrator holds `Map<id, WorkflowInstance>` |
-| Single `currentPromptFile` field | ~L60 | Moved into `WorkflowInstance` |
-| Single `activeIntegration` field | ~L61 | Moved into `WorkflowInstance`; each instance owns its integration |
-| `startPending: boolean` race guard | ~L64 | Removed — becomes a per-instance guard inside `WorkflowInstance.execute()` |
-| `loadPromptFile()` calls `clearQueue()` (destructive replace) | ~L307 | `WorkflowOrchestrator.createWorkflow()` adds to registry without clearing existing |
-| `startWorkflowExecution()` sets global `startPending` | ~L878 | Per-instance flag; no global gate |
-| `pause()`, `resume()`, `stop()` call queue/executor directly | ~L959-1057 | Delegate to `WorkflowInstance` by ID; active workflow is default |
-| `clearWorkflow()` resets entire global state | ~L1088 | `dismissWorkflow(id)` removes specific instance; other instances unaffected |
-| Pre-created shared harness integration instances | ~L49-52 | `IntegrationFactory.createForHarness()` called per-instance on `execute()` |
-| `triggerAutoLoad()` restores single last session | (initialize) | `WorkflowOrchestrator.restoreState()` restores all persisted instances, all forced `PAUSED` |
+| Constraint                                                    | Location     | Resolution                                                                                  |
+| ------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------- |
+| Single `promptQueue` field                                    | ~L48         | Moved into `WorkflowInstance`; orchestrator holds `Map<id, WorkflowInstance>`               |
+| Single `currentPromptFile` field                              | ~L60         | Moved into `WorkflowInstance`                                                               |
+| Single `activeIntegration` field                              | ~L61         | Moved into `WorkflowInstance`; each instance owns its integration                           |
+| `startPending: boolean` race guard                            | ~L64         | Removed — becomes a per-instance guard inside `WorkflowInstance.execute()`                  |
+| `loadPromptFile()` calls `clearQueue()` (destructive replace) | ~L307        | `WorkflowOrchestrator.createWorkflow()` adds to registry without clearing existing          |
+| `startWorkflowExecution()` sets global `startPending`         | ~L878        | Per-instance flag; no global gate                                                           |
+| `pause()`, `resume()`, `stop()` call queue/executor directly  | ~L959-1057   | Delegate to `WorkflowInstance` by ID; active workflow is default                            |
+| `clearWorkflow()` resets entire global state                  | ~L1088       | `dismissWorkflow(id)` removes specific instance; other instances unaffected                 |
+| Pre-created shared harness integration instances              | ~L49-52      | `IntegrationFactory.createForHarness()` called per-instance on `execute()`                  |
+| `triggerAutoLoad()` restores single last session              | (initialize) | `WorkflowOrchestrator.restoreState()` restores all persisted instances, all forced `PAUSED` |
 
 ### Backend — WorkflowExecutor.ts
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| Single `pendingResponseResolver` / `pendingResponseText` / `isWaitingForResponse` | ~L76-88 | One `WorkflowExecutor` per `WorkflowInstance`; fields scoped to that instance |
-| Single `stepStatusMessages` accumulator | ~L89 | Per-instance; cleared when instance is dismissed |
-| Constructor takes single `PromptQueue` (one-to-one relationship) | constructor | Unchanged — executor is constructed inside `WorkflowInstance`, paired with that instance's queue |
+| Constraint                                                                        | Location    | Resolution                                                                                       |
+| --------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| Single `pendingResponseResolver` / `pendingResponseText` / `isWaitingForResponse` | ~L76-88     | One `WorkflowExecutor` per `WorkflowInstance`; fields scoped to that instance                    |
+| Single `stepStatusMessages` accumulator                                           | ~L89        | Per-instance; cleared when instance is dismissed                                                 |
+| Constructor takes single `PromptQueue` (one-to-one relationship)                  | constructor | Unchanged — executor is constructed inside `WorkflowInstance`, paired with that instance's queue |
 
 ### Backend — PromptQueue.ts
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| Single `state` object (one workflow state total) | ~L83 | One `PromptQueue` per `WorkflowInstance` — no change to queue structure itself |
-| `clearQueue()` resets all state | ~L134 | Only called when the owning `WorkflowInstance` is dismissed; doesn't affect other instances |
-| `loadPrompts()` replaces entire state | ~L161 | Same — scoped to the instance's queue |
-| Single `workingFilePath` in state | ~L178 | Per-instance; filenames include workflow ID to guarantee uniqueness |
+| Constraint                                       | Location | Resolution                                                                                  |
+| ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------- |
+| Single `state` object (one workflow state total) | ~L83     | One `PromptQueue` per `WorkflowInstance` — no change to queue structure itself              |
+| `clearQueue()` resets all state                  | ~L134    | Only called when the owning `WorkflowInstance` is dismissed; doesn't affect other instances |
+| `loadPrompts()` replaces entire state            | ~L161    | Same — scoped to the instance's queue                                                       |
+| Single `workingFilePath` in state                | ~L178    | Per-instance; filenames include workflow ID to guarantee uniqueness                         |
 
 ### Backend — FlightPathWebviewProvider.ts
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| Single `currentWorkflowName` field | ~L63 | Removed; `activeWorkflowId` maintained by orchestrator, name derived from active instance |
-| Single `pendingWorkflowProperties` set | ~L92-100 | Moved into `WorkflowInstance`; pending props scoped to each instance |
-| `handleClearWorkflow()` clears single workflow | ~L1087 | Routes to `orchestrator.dismissWorkflow(activeId)` |
-| `sendInit()` sends one workflow's state | (sendInit) | On switch: `sendWorkflowStateSync(workflowId)` sends full state for switched-to instance |
-| No `workflowId` on any outgoing message | all `sendMessage()` calls | Active-workflow messages don't need workflowId (webview displays what's active). Summary updates use `WORKFLOW_SUMMARY_UPDATED` with id for dropdown-only updates |
-| History tracking scoped to single workflow | OutputHistoryManager refs | `OutputHistoryManager` instantiated per `WorkflowInstance`; history files namespaced by workflow ID |
+| Constraint                                     | Location                  | Resolution                                                                                                                                                        |
+| ---------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Single `currentWorkflowName` field             | ~L63                      | Removed; `activeWorkflowId` maintained by orchestrator, name derived from active instance                                                                         |
+| Single `pendingWorkflowProperties` set         | ~L92-100                  | Moved into `WorkflowInstance`; pending props scoped to each instance                                                                                              |
+| `handleClearWorkflow()` clears single workflow | ~L1087                    | Routes to `orchestrator.dismissWorkflow(activeId)`                                                                                                                |
+| `sendInit()` sends one workflow's state        | (sendInit)                | On switch: `sendWorkflowStateSync(workflowId)` sends full state for switched-to instance                                                                          |
+| No `workflowId` on any outgoing message        | all `sendMessage()` calls | Active-workflow messages don't need workflowId (webview displays what's active). Summary updates use `WORKFLOW_SUMMARY_UPDATED` with id for dropdown-only updates |
+| History tracking scoped to single workflow     | OutputHistoryManager refs | `OutputHistoryManager` instantiated per `WorkflowInstance`; history files namespaced by workflow ID                                                               |
 
 ### Backend — extension.ts (Command Registration)
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| `flightpath.takeOff` routes to single manager | ~L252 | Routes to `orchestrator.executeWorkflow()` (defaults to active workflow) |
-| `flightpath.pause/resume/stop` route to single manager | ~L276-295 | Routes to `orchestrator.pauseWorkflow()` / etc. (defaults to active workflow) |
-| `flightpath.runFromContext` calls `executePromptFile()` (replaces workflow) | ~L454 | Calls `orchestrator.createWorkflow(filePath)` then `executeWorkflow()` on new instance |
-| `flightpath.loadFromContext` calls `loadPromptFile()` (replaces workflow) | ~L475 | Calls `orchestrator.createWorkflow(filePath)` — adds to registry, switches active view |
+| Constraint                                                                  | Location  | Resolution                                                                             |
+| --------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------- |
+| `flightpath.takeOff` routes to single manager                               | ~L252     | Routes to `orchestrator.executeWorkflow()` (defaults to active workflow)               |
+| `flightpath.pause/resume/stop` route to single manager                      | ~L276-295 | Routes to `orchestrator.pauseWorkflow()` / etc. (defaults to active workflow)          |
+| `flightpath.runFromContext` calls `executePromptFile()` (replaces workflow) | ~L454     | Calls `orchestrator.createWorkflow(filePath)` then `executeWorkflow()` on new instance |
+| `flightpath.loadFromContext` calls `loadPromptFile()` (replaces workflow)   | ~L475     | Calls `orchestrator.createWorkflow(filePath)` — adds to registry, switches active view |
 
 ### Frontend — Message Protocol (useMessageHandler.ts + DashboardConstants.ts)
 
-| Constraint | Location | Resolution |
-|---|---|---|
+| Constraint                                                                              | Location     | Resolution                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ALL message handlers write directly to global `workflowStore` — no `workflowId` routing | all handlers | Strategy: **webview displays active workflow**. Active-workflow messages replace store contents as before. Inactive workflows' messages are handled by the backend buffering approach (not sent to webview until user switches). No per-message workflowId routing needed in the webview. |
-| `FILE_SELECTED` handler calls `workflowStore.loadWorkflow()` (destructive) | ~L136 | Replaced by `SESSION_RESTORED` / `ACTIVE_WORKFLOW_CHANGED` messages that do the same full-state replace |
-| `SESSION_RESTORED` replaces entire store | ~L161 | Behavior preserved — this is now also the switch mechanism |
-| `PROMPTS_EXTENDED` mutates single prompt list | ~L182 | Active-workflow-only message; behavior unchanged |
-| `EXECUTION_STATE_CHANGED` targets single store | ~L285 | Active-workflow-only; behavior unchanged |
-| `PROGRESS_UPDATE` targets single store | ~L293 | Active-workflow-only; behavior unchanged |
+| `FILE_SELECTED` handler calls `workflowStore.loadWorkflow()` (destructive)              | ~L136        | Replaced by `SESSION_RESTORED` / `ACTIVE_WORKFLOW_CHANGED` messages that do the same full-state replace                                                                                                                                                                                   |
+| `SESSION_RESTORED` replaces entire store                                                | ~L161        | Behavior preserved — this is now also the switch mechanism                                                                                                                                                                                                                                |
+| `PROMPTS_EXTENDED` mutates single prompt list                                           | ~L182        | Active-workflow-only message; behavior unchanged                                                                                                                                                                                                                                          |
+| `EXECUTION_STATE_CHANGED` targets single store                                          | ~L285        | Active-workflow-only; behavior unchanged                                                                                                                                                                                                                                                  |
+| `PROGRESS_UPDATE` targets single store                                                  | ~L293        | Active-workflow-only; behavior unchanged                                                                                                                                                                                                                                                  |
 
 **Key design decision**: The webview always shows ONE workflow (the active one). Messages from background running workflows are held by the backend and only flushed when the user switches to that workflow. This means **no workflowId routing is needed in the webview message handlers**. This is the simplest approach and avoids restructuring the entire store.
 
 ### Frontend — Zustand Stores
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| `workflowStore` holds single workflow state | workflowStore.ts | Structure unchanged. `loadWorkflow()` is the switch mechanism. Background workflows don't update this store. |
-| `workflowStore.resetWorkflow()` clears everything | workflowStore.ts | Used only when the active workflow is dismissed. |
-| `uiStore` has no concept of multiple loaded workflows | uiStore.ts | Add `loadedWorkflows: WorkflowSummary[]` and `activeWorkflowId` fields |
+| Constraint                                            | Location         | Resolution                                                                                                   |
+| ----------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workflowStore` holds single workflow state           | workflowStore.ts | Structure unchanged. `loadWorkflow()` is the switch mechanism. Background workflows don't update this store. |
+| `workflowStore.resetWorkflow()` clears everything     | workflowStore.ts | Used only when the active workflow is dismissed.                                                             |
+| `uiStore` has no concept of multiple loaded workflows | uiStore.ts       | Add `loadedWorkflows: WorkflowSummary[]` and `activeWorkflowId` fields                                       |
 
 ### Frontend — UI Component Restrictions
 
-| Component | Constraint | Resolution |
-|---|---|---|
-| `WorkflowControls.tsx` | `isExecuting` guard on all handlers + `disabled={isExecuting}` on all buttons | Remove all `isExecuting` guards and `disabled` props. Buttons always active. |
-| `WorkflowStatus.tsx` | `if (isRunning) return` in `toggleDropdown`; `disabled={isRunning}` on chevron button | Remove both. Dropdown always openable. |
-| `Header.tsx` | `canRun` / `canPause` / `canStop` logic all correct | **No change needed** — these already scope to the active workflow's own state |
-| `EditorSection.tsx` | "New Prompt" button `disabled={isRunning}` | Remove — editing prompts in the active workflow while it's running (to add to the queue) should be allowed |
-| `EditorFooter.tsx` | All editor action buttons `disabled={isRunning}` | Review per-button: "Send" (add prompt) should work while running; "Save" should always work. Remove blanket disable. |
-| `PromptsPanel.tsx` | No blocking, reads from single store | No change needed — reads from active workflow store correctly |
-| `OutputSection.tsx` | No blocking, reads from single store | No change needed |
+| Component              | Constraint                                                                            | Resolution                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `WorkflowControls.tsx` | `isExecuting` guard on all handlers + `disabled={isExecuting}` on all buttons         | Remove all `isExecuting` guards and `disabled` props. Buttons always active.                                         |
+| `WorkflowStatus.tsx`   | `if (isRunning) return` in `toggleDropdown`; `disabled={isRunning}` on chevron button | Remove both. Dropdown always openable.                                                                               |
+| `Header.tsx`           | `canRun` / `canPause` / `canStop` logic all correct                                   | **No change needed** — these already scope to the active workflow's own state                                        |
+| `EditorSection.tsx`    | "New Prompt" button `disabled={isRunning}`                                            | Remove — editing prompts in the active workflow while it's running (to add to the queue) should be allowed           |
+| `EditorFooter.tsx`     | All editor action buttons `disabled={isRunning}`                                      | Review per-button: "Send" (add prompt) should work while running; "Save" should always work. Remove blanket disable. |
+| `PromptsPanel.tsx`     | No blocking, reads from single store                                                  | No change needed — reads from active workflow store correctly                                                        |
+| `OutputSection.tsx`    | No blocking, reads from single store                                                  | No change needed                                                                                                     |
 
 ### Persistence / Session Management
 
-| Constraint | Location | Resolution |
-|---|---|---|
-| Single working file path per queue | PromptQueue.ts `state.workingFilePath` | Filenames include workflow instance ID (UUID segment) to prevent collision |
-| `OutputHistoryManager` tracks history for single workflow | (OutputHistoryManager) | Instantiated per `WorkflowInstance`; history directory namespaced by workflow (e.g. `.flightpath/.history/{workflowName}-{id}/`) |
-| `WorkspaceSessionManager` restores single session | (WorkspaceSessionManager) | Instantiated per `WorkflowInstance`; session keys namespaced by workflow ID |
-| Auto-load loads single last session on extension start | FlightPathManager.initialize() | `WorkflowOrchestrator.restoreState()` reads persisted `WorkflowSummary[]` from `context.workspaceState`, creates instances for all, all forced `PAUSED` |
+| Constraint                                                | Location                               | Resolution                                                                                                                                              |
+| --------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Single working file path per queue                        | PromptQueue.ts `state.workingFilePath` | Filenames include workflow instance ID (UUID segment) to prevent collision                                                                              |
+| `OutputHistoryManager` tracks history for single workflow | (OutputHistoryManager)                 | Instantiated per `WorkflowInstance`; history directory namespaced by workflow (e.g. `.flightpath/.history/{workflowName}-{id}/`)                        |
+| `WorkspaceSessionManager` restores single session         | (WorkspaceSessionManager)              | Instantiated per `WorkflowInstance`; session keys namespaced by workflow ID                                                                             |
+| Auto-load loads single last session on extension start    | FlightPathManager.initialize()         | `WorkflowOrchestrator.restoreState()` reads persisted `WorkflowSummary[]` from `context.workspaceState`, creates instances for all, all forced `PAUSED` |
 
 ---
 
@@ -687,6 +713,7 @@ This section maps every single-runner constraint found in the codebase to how th
 **Goal**: Extract `WorkflowInstance` from `FlightPathManager` with zero behavior change. The orchestrator manages exactly one instance. No UI changes.
 
 **Steps**:
+
 1. Create `WorkflowInstance` class — move all per-workflow state and methods from `FlightPathManager`
 2. Create `WorkflowOrchestrator` with `Map<string, WorkflowInstance>` but initially always contains ≤ 1 instance
 3. Create `IntegrationFactory` — extract harness creation from `FlightPathManager`
@@ -700,6 +727,7 @@ This section maps every single-runner constraint found in the codebase to how th
 **Goal**: Allow `WorkflowOrchestrator` to hold multiple `WorkflowInstance` objects and execute them concurrently. Backend fully supports parallel execution; UI not yet updated.
 
 **Steps**:
+
 1. `createWorkflow()` no longer replaces existing instance — adds to registry
 2. Add `activeWorkflowId` tracking — all dashboard messages route from active instance
 3. Implement `setActiveWorkflow()` with full state sync to dashboard
@@ -715,6 +743,7 @@ This section maps every single-runner constraint found in the codebase to how th
 **Goal**: Add new message types for multi-workflow coordination. No UI changes yet.
 
 **Steps**:
+
 1. Add new `MESSAGE_TYPES` constants to `DashboardConstants.ts`
 2. Add `workflowId` to outgoing messages from active instance
 3. Implement `WORKFLOWS_LIST` / `WORKFLOW_ADDED` / `WORKFLOW_DISMISSED` dispatch from orchestrator
@@ -728,6 +757,7 @@ This section maps every single-runner constraint found in the codebase to how th
 **Goal**: Extend `WorkflowStatus` dropdown to show loaded workflows and enable switching.
 
 **Steps**:
+
 1. Add `loadedWorkflows`, `activeWorkflowId` to `uiStore`
 2. Handle `WORKFLOWS_LIST`, `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `WORKFLOW_SUMMARY_UPDATED` in message handler — update `uiStore`
 3. Handle `SESSION_RESTORED` / `ACTIVE_WORKFLOW_CHANGED` — replace `workflowStore` state
@@ -747,6 +777,7 @@ This section maps every single-runner constraint found in the codebase to how th
 **Goal**: Handle all edge cases and improve UX.
 
 **Steps**:
+
 1. Workflow persistence (restore loaded workflows on VS Code reload)
 2. Dismiss confirmation when paused mid-run: "Workflow is paused. Dismiss anyway?"
 3. Running workflow badge on dropdown trigger (small pulsing indicator when background workflow runs)
@@ -791,6 +822,7 @@ This section maps every single-runner constraint found in the codebase to how th
 ```
 
 **Interaction rules**:
+
 - Click any "Loaded Workflow" row → switch view (always enabled)
 - Click [×] on a workflow → dismiss (confirm if running or paused)
 - Click "Load Another" row → loads file as new instance (always enabled)
@@ -811,15 +843,15 @@ This gives the user peripheral awareness without cluttering the header.
 
 Controls in the header apply exclusively to the **active/viewed** workflow. Other workflows running in background have no bearing on button state:
 
-| Active Workflow State | Run Button | Pause Button | Stop Button |
-|---|---|---|---|
-| IDLE (no file) | Disabled (no file loaded) | Disabled | Disabled |
-| IDLE (file loaded) | Enabled — starts execution | Disabled | Disabled |
-| RUNNING | Disabled (already running) | Enabled | Enabled |
-| PAUSED | Enabled (Restart) | Enabled (Resume) | Enabled |
-| STOPPED | Enabled (Restart) | Enabled (Resume) | Disabled |
-| COMPLETED | Enabled (Restart) | Disabled | Disabled |
-| CANCELLING | Disabled | Disabled | Enabled (re-press to check) |
+| Active Workflow State | Run Button                 | Pause Button     | Stop Button                 |
+| --------------------- | -------------------------- | ---------------- | --------------------------- |
+| IDLE (no file)        | Disabled (no file loaded)  | Disabled         | Disabled                    |
+| IDLE (file loaded)    | Enabled — starts execution | Disabled         | Disabled                    |
+| RUNNING               | Disabled (already running) | Enabled          | Enabled                     |
+| PAUSED                | Enabled (Restart)          | Enabled (Resume) | Enabled                     |
+| STOPPED               | Enabled (Restart)          | Enabled (Resume) | Disabled                    |
+| COMPLETED             | Enabled (Restart)          | Disabled         | Disabled                    |
+| CANCELLING            | Disabled                   | Disabled         | Enabled (re-press to check) |
 
 Note that **other workflows running in parallel do not affect these buttons**. If the viewed workflow is IDLE and another is RUNNING, the Run button is still enabled for the viewed one.
 
@@ -832,6 +864,7 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 **Problem**: User switches to another workflow while one is running. Dashboard updates for the running workflow continue arriving.
 
 **Solution**:
+
 - `WorkflowInstance.setActive(false)` → instance buffers subsequent events in memory
 - Running workflow's working file still updates on disk (no change to persistence)
 - When user switches back: `setActive(true)` flushes buffer, sends `SESSION_RESTORED` for full sync
@@ -842,6 +875,7 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 **Problem**: User dismisses a workflow that's paused mid-execution.
 
 **Solution**:
+
 - Show confirmation: "Workflow is paused at step 2/5. Dismiss? Progress will be lost."
 - If confirmed: call `workflow.stop()` then `orchestrator.dismissWorkflow(id)`
 - Working file preserved in `.flightpath/.queue/` for manual recovery
@@ -852,6 +886,7 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 **Problem**: User loads the same `.flightpath.yaml` twice.
 
 **Solution**:
+
 - `WorkflowOrchestrator.createWorkflow(filePath)` checks for existing instance with same `filePath`
 - If found and **idle**: switch to that instance, show toast "Switched to existing workflow"
 - If found and **running/paused**: offer choice — "This workflow is already loaded and running. Switch to it, or create a new instance from the same file?" (new instance gets a copy of the file path)
@@ -862,6 +897,7 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 **Problem**: All loaded workflow instances are lost on extension reload.
 
 **Solution**:
+
 - `WorkflowOrchestrator.saveState()` called on relevant lifecycle events (pausing, stopping, switching)
 - Persists `WorkflowSummary[]` to `context.workspaceState`
 - On activation: `restoreState()` creates `WorkflowInstance` for each persisted summary, restores from working file
@@ -873,6 +909,7 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 **Problem**: User accumulates many loaded workflows (memory growth).
 
 **Solution**:
+
 - Setting: `flightpath.maxLoadedWorkflows` (default: 20, range: 1–50)
 - On create: if at limit, offer to dismiss oldest completed workflow automatically
 - If all are non-completed and at limit, show error with list of workflows to dismiss
@@ -887,10 +924,11 @@ Note that **other workflows running in parallel do not affect these buttons**. I
 // In WorkflowOrchestrator.executeWorkflow()
 if (usesChat && chatAlreadyRunning) {
   const choice = await vscode.window.showWarningMessage(
-    'A Chat workflow is already running. Starting another Chat workflow may cause conflicts.',
-    'Start Anyway', 'Cancel'
+    "A Chat workflow is already running. Starting another Chat workflow may cause conflicts.",
+    "Start Anyway",
+    "Cancel"
   );
-  if (choice !== 'Start Anyway') return;
+  if (choice !== "Start Anyway") return;
 }
 ```
 
@@ -901,6 +939,7 @@ if (usesChat && chatAlreadyRunning) {
 **Problem**: `EditorSection` and `EditorFooter` use `disabled={isRunning}` to block editing. With parallel workflows, "the running workflow" is no longer a global concept.
 
 **Solution**: Change the disable logic from "any running workflow" to "this step is currently executing":
+
 - "Send" button (add prompt to queue): Always enabled — user can queue prompts for a running workflow
 - "Save" (update existing prompt): Disabled only if that specific prompt's status is `SENT` or `RUNNING`
 - "Cancel Edit": Always enabled
@@ -913,6 +952,7 @@ This removes the blanket `isRunning` guard in favor of per-prompt status checks.
 **Problem**: Background running workflow accumulates buffered events. User never switches back. Memory grows.
 
 **Solution**:
+
 - Buffer cap: keep last 500 streaming chunks + all CLI output events per step
 - For completed steps: keep full output (low size), streaming chunks cleared
 - Dashboard can request a full reload from working file at any time (disk-based fallback)
@@ -954,20 +994,20 @@ This removes the blanket `isRunning` guard in favor of per-prompt status checks.
 
 ### Context-Aware Commands (Apply to Active Workflow)
 
-| Command | Current Behavior | New Behavior |
-|---|---|---|
-| `flightpath.takeOff` | Runs current file | Runs active workflow (if none running) |
-| `flightpath.pause` | Pauses execution | Pauses active workflow |
-| `flightpath.resume` | Resumes execution | Resumes active workflow |
-| `flightpath.stop` | Stops execution | Stops active workflow |
-| `flightpath.clearWorkflow` | Clears workflow | Clears/dismisses active workflow |
+| Command                    | Current Behavior  | New Behavior                           |
+| -------------------------- | ----------------- | -------------------------------------- |
+| `flightpath.takeOff`       | Runs current file | Runs active workflow (if none running) |
+| `flightpath.pause`         | Pauses execution  | Pauses active workflow                 |
+| `flightpath.resume`        | Resumes execution | Resumes active workflow                |
+| `flightpath.stop`          | Stops execution   | Stops active workflow                  |
+| `flightpath.clearWorkflow` | Clears workflow   | Clears/dismisses active workflow       |
 
 ### New Commands
 
-| Command | Description |
-|---|---|
-| `flightpath.switchWorkflow` | Show workflow selector quick-pick |
-| `flightpath.dismissWorkflow` | Dismiss active workflow instance |
+| Command                          | Description                          |
+| -------------------------------- | ------------------------------------ |
+| `flightpath.switchWorkflow`      | Show workflow selector quick-pick    |
+| `flightpath.dismissWorkflow`     | Dismiss active workflow instance     |
 | `flightpath.dismissAllWorkflows` | Dismiss all completed/idle workflows |
 
 **Workflow Switcher Quick-Pick** (for command palette):

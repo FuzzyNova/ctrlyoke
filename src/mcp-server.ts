@@ -526,8 +526,7 @@ class FlightPathMCPServer {
       // Check 1: Already completed (per-prompt _runtime.completedAt is authoritative)
       const alreadyCompleted = existingPrompts.some(
         (p) =>
-          p._runtime?.completedAt !== undefined &&
-          p.prompt === newPrompt.prompt
+          p._runtime?.completedAt !== undefined && p.prompt === newPrompt.prompt
       );
 
       if (alreadyCompleted) {

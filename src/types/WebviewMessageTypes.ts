@@ -15,7 +15,14 @@
  * - React webview: src/ui/webview-react/components/**
  */
 
-import { ExecutionState, StepStatus, HarnessId, MESSAGE_TYPES, STATUS_MESSAGE_SEVERITY, EXECUTION_MODES } from "./DashboardConstants";
+import {
+  ExecutionState,
+  StepStatus,
+  HarnessId,
+  MESSAGE_TYPES,
+  STATUS_MESSAGE_SEVERITY,
+  EXECUTION_MODES,
+} from "./DashboardConstants";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -58,10 +65,11 @@ export {
 // ============================================================================
 
 /** Severity level type (single source from STATUS_MESSAGE_SEVERITY) */
-type StatusSeverity = typeof STATUS_MESSAGE_SEVERITY[keyof typeof STATUS_MESSAGE_SEVERITY];
+type StatusSeverity =
+  (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];
 
 /** Execution mode type (single source from EXECUTION_MODES) */
-type ExecutionMode = typeof EXECUTION_MODES[keyof typeof EXECUTION_MODES];
+type ExecutionMode = (typeof EXECUTION_MODES)[keyof typeof EXECUTION_MODES];
 
 // ============================================================================
 // CLI OUTPUT DATA TYPES
@@ -135,7 +143,21 @@ export type CliOutputItem = CliOutput;
  */
 
 // Re-export event data types
-export type { TextData, BashCommandData, FileReadData, FileWriteData, FileEditData, FileDeleteData, McpToolCallData, WebSearchData, ThinkingBlock, ToolCall, ToolResultData, UniversalCliOutput, UnifiedDiffHunk } from "./CliOutputTypes";
+export type {
+  TextData,
+  BashCommandData,
+  FileReadData,
+  FileWriteData,
+  FileEditData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
+  ThinkingBlock,
+  ToolCall,
+  ToolResultData,
+  UniversalCliOutput,
+  UnifiedDiffHunk,
+} from "./CliOutputTypes";
 
 // Alias for the detailed CliEvent type from CliOutputTypes
 export type CliEvent = CliOutputEvent;

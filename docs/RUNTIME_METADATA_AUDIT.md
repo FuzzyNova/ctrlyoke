@@ -9,11 +9,13 @@ Comprehensive audit of all places where `_runtime` metadata should be updated bu
 ## ✅ Already Fixed
 
 ### 1. Provider/Model Updates on Resume (FIXED)
+
 **Issue:** When restarting from working files, `_runtime.provider` and `_runtime.model` were not updated to reflect what actually ran.
 
 **Location:** `src/flightpath/cli/CliIntegration.ts` lines 1543-1574
 
 **Fix Applied:**
+
 ```typescript
 // IMPORTANT: Always create/update provider and model fields, even when resuming
 const actualProvider = resolvedProperties?.provider ?? this.getIntegrationMode();
@@ -36,15 +38,18 @@ if (!prompt._runtime) {
 
 ## ⚠️ Issues Found
 
-### 2. Retry Count Not Persisted to _runtime
+### 2. Retry Count Not Persisted to \_runtime
+
 **Issue:** `retryCount` is tracked in `PromptResult` (transient in-memory state) but never copied to `prompt._runtime.retryCount` (persistent working file).
 
 **Impact:**
+
 - After VS Code restart, retry count information is lost
 - Users can't see how many times a prompt was retried by inspecting working files
 - Session resumption logic can't use retry count for decision making
 
 **Evidence:**
+
 - `PromptRuntimeMetadata` defines `retryCount?: number` (line 118 in FlightPathTypes.ts)
 - `PromptQueue` tracks retries in `state.results[i].retryCount` (line 660)
 - **BUT** `CliIntegration` never sets `prompt._runtime.retryCount`
@@ -53,6 +58,7 @@ if (!prompt._runtime) {
 `src/flightpath/cli/CliIntegration.ts` lines 1543-1583
 
 **Proposed Fix:**
+
 ```typescript
 // Store runtime metadata in prompt's _runtime (always on success, session ID optional)
 if (success) {
@@ -60,7 +66,8 @@ if (success) {
 
   // Add retry count if applicable
   if (workflowContext?.promptQueue) {
-    const currentRetryCount = workflowContext.promptQueue.getCurrentRetryCount();
+    const currentRetryCount =
+      workflowContext.promptQueue.getCurrentRetryCount();
     if (currentRetryCount > 0) {
       prompt._runtime.retryCount = currentRetryCount;
     }
@@ -84,15 +91,18 @@ if (success) {
 
 ---
 
-### 3. Failure Cases Don't Update _runtime
+### 3. Failure Cases Don't Update \_runtime
+
 **Issue:** When prompt execution fails (errors, validation failures, user cancellation), `_runtime` is not updated at all.
 
 **Impact:**
+
 - Working file shows stale `_runtime` from previous successful attempt
 - Users can't see when/why prompts failed by inspecting working files
 - No failure timestamp or error message in persistent metadata
 
 **Evidence:**
+
 - Line 1544: `if (success) { ... }` - Only updates `_runtime` on success
 - Failure paths (lines 1586+) return early without updating `_runtime`
 
@@ -101,7 +111,8 @@ Add failure metadata tracking:
 
 ```typescript
 // Store runtime metadata in prompt's _runtime (always, not just on success)
-const actualProvider = resolvedProperties?.provider ?? this.getIntegrationMode();
+const actualProvider =
+  resolvedProperties?.provider ?? this.getIntegrationMode();
 const actualModel = resolvedProperties?.model ?? "";
 
 if (!prompt._runtime) {
@@ -124,7 +135,7 @@ if (success) {
     prompt._runtime.sessionId = extractedSessionId;
   }
   prompt._runtime.completedAt = Date.now();
-  delete prompt._runtime.failedAt;  // Clear any previous failure
+  delete prompt._runtime.failedAt; // Clear any previous failure
   delete prompt._runtime.failureReason;
 } else {
   // Failure-specific updates
@@ -139,12 +150,13 @@ if (workflowContext?.promptQueue) {
 ```
 
 **Note:** This requires extending `PromptRuntimeMetadata` interface:
+
 ```typescript
 export interface PromptRuntimeMetadata extends ExecutionProperties {
   startedAt: number;
   completedAt?: number;
-  failedAt?: number;        // NEW: Timestamp when prompt failed
-  failureReason?: string;   // NEW: Why it failed
+  failedAt?: number; // NEW: Timestamp when prompt failed
+  failureReason?: string; // NEW: Why it failed
   retryCount?: number;
 }
 ```
@@ -153,12 +165,14 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
 ---
 
-### 4. Chat Integration May Not Update _runtime
+### 4. Chat Integration May Not Update \_runtime
+
 **Issue:** Haven't audited `CopilotChatIntegration` to verify it updates `_runtime` consistently with CLI integrations.
 
 **Location:** `src/flightpath/chat/CopilotChatIntegration.ts`
 
 **Action Needed:** Review chat integration's sendPrompt implementation to ensure:
+
 - Provider/model/agent are saved to `_runtime`
 - Session IDs are tracked (if applicable to chat)
 - Retry counts are persisted
@@ -171,7 +185,9 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 ## ✅ Working Correctly
 
 ### 5. Working File Updates Are Comprehensive
+
 **Good:** `PromptQueue.updateWorkingFile()` is called in all the right places:
+
 - ✅ After state changes (running, paused, completed, error, stopped)
 - ✅ After prompt completion
 - ✅ After queue extensions/merges
@@ -185,7 +201,9 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 ---
 
 ### 6. Working File Serialization Is Correct
+
 **Good:** Working file includes all `_runtime` fields when saving:
+
 - Provider, model, agent
 - Session ID
 - Start/completion timestamps
@@ -201,7 +219,7 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
 
 ### High Priority Fixes
 
-1. **Add retryCount to _runtime** (Issue #2)
+1. **Add retryCount to \_runtime** (Issue #2)
    - Low complexity, high value for debugging
    - Enables retry count to survive VS Code restarts
 
@@ -221,7 +239,7 @@ export interface PromptRuntimeMetadata extends ExecutionProperties {
    - `_runtime.executionDuration = completedAt - startedAt`
    - Helpful for performance analysis
 
-5. **Add response preview to _runtime**
+5. **Add response preview to \_runtime**
    - `_runtime.responsePreview = response.substring(0, 200)`
    - Helpful for workflow debugging without opening full logs
 

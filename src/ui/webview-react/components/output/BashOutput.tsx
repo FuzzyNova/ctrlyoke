@@ -1,5 +1,10 @@
 import React, { useState, useId } from "react";
-import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE, TOOL_ERROR_LINE } from "./outputStyles";
+import {
+  TOOL_CALL_TERMINAL,
+  TOOL_CALL_LINE,
+  TOOL_RESULT_LINE,
+  TOOL_ERROR_LINE,
+} from "./outputStyles";
 import type { FileOperationStatus } from "../../types/cliEvents";
 import { OPERATION_STATUS } from "../../types/cliEvents";
 
@@ -70,13 +75,12 @@ export const BashOutput: React.FC<BashOutputProps> = ({
     return (
       <div className={cssClass}>
         <span className="text-vscode-description-fg shrink-0">{"  ⎿  "}</span>
-        <div className="inline whitespace-pre-wrap break-words" id={`${containerId}-${type}`}>
-          <span className={isExpanded ? "hidden" : ""}>
-            {truncatedContent}
-          </span>
-          <span className={isExpanded ? "" : "hidden"}>
-            {content}
-          </span>
+        <div
+          className="inline whitespace-pre-wrap break-words"
+          id={`${containerId}-${type}`}
+        >
+          <span className={isExpanded ? "hidden" : ""}>{truncatedContent}</span>
+          <span className={isExpanded ? "" : "hidden"}>{content}</span>
           {isTruncated && (
             <a
               href="#"
@@ -100,7 +104,9 @@ export const BashOutput: React.FC<BashOutputProps> = ({
   const renderStatusBadge = () => {
     if (isRunning) {
       return (
-        <span className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES.running}`}>
+        <span
+          className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES.running}`}
+        >
           running
         </span>
       );
@@ -109,7 +115,9 @@ export const BashOutput: React.FC<BashOutputProps> = ({
       const success = exitCode === 0;
       const variant = success ? "success" : "error";
       return (
-        <span className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES[variant]}`}>
+        <span
+          className={`inline ml-2 text-[11px] font-normal ${STATUS_BADGE_STYLES[variant]}`}
+        >
           (exit: {exitCode})
         </span>
       );

@@ -7,6 +7,7 @@
 ## Problem Statement
 
 Claude Code has strict file reading limits that cause workflow failures:
+
 - **Token limit**: Files >25,000 tokens cause Claude to spin using `tail` instead of reading the full file
 - **Line limit**: Files >2,000 lines are only partially read (first 2,000 lines by default)
 
@@ -15,6 +16,7 @@ FlightPath's large workflows with dynamic queue instructions and context attachm
 ## Solution Overview
 
 Implemented automatic prompt splitting that:
+
 1. **Detects** when prompts exceed safe thresholds (20K tokens OR 1.8K lines)
 2. **Splits** intelligently while preserving content structure
 3. **Creates** multiple temp files with decimal notation (e.g., `prompt-1.1.md`, `prompt-1.2.md`)
@@ -28,12 +30,14 @@ Implemented automatic prompt splitting that:
 **Purpose**: Smart splitting with structure preservation
 
 **Key Features**:
+
 - Uses `gpt-tokenizer` for accurate token counting
 - Falls back to character approximation if tokenizer fails
 - Safety margins: 20K tokens (80% of limit), 1.8K lines (90% of limit)
 - Minimum chunk size: 5K tokens (avoids tiny fragments)
 
 **Splitting Algorithm**:
+
 ```
 1. Try paragraph boundaries (double newlines) - best for structure
 2. If paragraph too large → split on line boundaries
@@ -42,6 +46,7 @@ Implemented automatic prompt splitting that:
 ```
 
 **API**:
+
 ```typescript
 interface SplitResult {
   needsSplit: boolean;
@@ -71,12 +76,14 @@ async deleteFiles(filePaths: string[]): Promise<void>
 ```
 
 **File Naming Convention**:
+
 - Single file: `1234567890-workflow-1.prompt.md`
 - Split files: `1234567890-workflow-1.1.prompt.md`
-              `1234567890-workflow-1.2.prompt.md`
-              `1234567890-workflow-1.3.prompt.md`
+  `1234567890-workflow-1.2.prompt.md`
+  `1234567890-workflow-1.3.prompt.md`
 
 **Error Handling**:
+
 - Validates chunks are non-empty
 - Cleans up partial files on creation failure
 - Logs warnings for individual file deletion failures
@@ -84,25 +91,29 @@ async deleteFiles(filePaths: string[]): Promise<void>
 ### 3. Updated CliIntegration (`src/flightpath/cli/CliIntegration.ts`)
 
 **Changed Return Type**:
+
 ```typescript
 interface PromptFileResult {
-  tempFilePaths: string[];      // Array instead of single path
+  tempFilePaths: string[]; // Array instead of single path
   promptWithInstruction: string;
 }
 ```
 
 **Updated Methods**:
+
 - `createPromptFileWithReference()`: Now returns array of file paths
 - `formatMultipleFileReferences()`: Formats natural language instructions
 - `withInteractiveTuiExecution()`: Cleanup handles multiple files
 - `executeHeadlessWithPromptFile()`: Cleanup handles multiple files
 
 **Instruction Formatting**:
+
 - 1 file: `"Follow instructions in @file "`
 - 2 files: `"Follow instructions in @file1 and @file2 "`
 - 3+ files: `"Follow instructions in @file1, @file2, and @file3 "`
 
 **Logging Output**:
+
 ```
 📁 Prompt split into 3 files:
    1. .flightpath/temp/xxx-1.1.prompt.md (18234 tokens, 1750 lines)
@@ -113,6 +124,7 @@ interface PromptFileResult {
 ## Backward Compatibility
 
 **100% Backward Compatible**:
+
 - Small prompts work exactly as before
 - Single-file prompts use same code path
 - No changes to prompt file formats
@@ -120,6 +132,7 @@ interface PromptFileResult {
 - Works with all 3 CLI providers (Copilot, Claude, Codex)
 
 **No Breaking Changes**:
+
 - Existing workflows continue to work
 - Temp file cleanup mechanism unchanged
 - Configuration settings unchanged (no new settings required)
@@ -133,6 +146,7 @@ interface PromptFileResult {
 **Test File**: `src/test/promptFileSplitter.test.ts`
 
 **Test Coverage**:
+
 - ✅ Small prompts (no split)
 - ✅ Prompts under token limit (no split)
 - ✅ Prompts over line limit (2000+ lines)
@@ -158,12 +172,14 @@ interface PromptFileResult {
 ## Performance Impact
 
 **Minimal Overhead**:
+
 - Token counting: ~1-5ms for typical prompts
 - File I/O: ~10-20ms per additional file
 - Total overhead: <50ms even for large multi-split prompts
 - Negligible compared to CLI execution time (seconds to minutes)
 
 **Optimization Opportunities** (future):
+
 - Parallel file creation with `Promise.all()`
 - Cached token counts for unchanged prompts
 - Compression/whitespace removal before splitting
@@ -181,6 +197,7 @@ interface PromptFileResult {
 **Current**: No configuration required (hardcoded defaults)
 
 **Future Enhancements** (optional):
+
 ```json
 {
   "flightpath.promptSplitting.enabled": true,
@@ -192,11 +209,13 @@ interface PromptFileResult {
 ## Limitations & Future Work
 
 **Current Limitations**:
+
 1. **Token counting approximation**: Uses GPT tokenizer; Claude may count differently (mitigated by 20% safety margin)
 2. **No continuation markers**: Split files don't have explicit "continued from previous file" headers
 3. **No compression**: Doesn't remove redundant whitespace before splitting
 
 **Future Enhancements**:
+
 1. Smart continuation markers with context preservation
 2. Compression optimization (remove extra whitespace)
 3. Split preview in VS Code notification
@@ -206,6 +225,7 @@ interface PromptFileResult {
 ## Security Considerations
 
 **Safe Implementation**:
+
 - All split files created in `.flightpath/temp/` (workspace-scoped)
 - Cleanup on both success and failure paths
 - No shell injection risks (uses file path arrays)
@@ -214,6 +234,7 @@ interface PromptFileResult {
 ## Rollback Plan
 
 **If Issues Arise**:
+
 1. No database migrations or persistent state changes
 2. Can revert by removing 3 files and reverting 2 edits
 3. No data loss risk (all changes are to execution logic, not data storage)
@@ -221,6 +242,7 @@ interface PromptFileResult {
 ## Success Criteria
 
 ✅ **Implementation Complete**:
+
 - [x] TypeScript compilation succeeds
 - [x] No breaking changes to existing code
 - [x] Backward compatible with existing workflows
@@ -231,6 +253,7 @@ interface PromptFileResult {
 - [x] **25 comprehensive unit tests - ALL PASSING**
 
 🔄 **Integration Testing Recommended**:
+
 - [ ] Manual test with 2K+ line prompt in real workflow
 - [ ] Manual test with 20K+ token prompt in real workflow
 - [ ] Verify Claude reads all split files successfully

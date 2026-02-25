@@ -12,18 +12,20 @@ This document details the fixes applied to session resumption functionality for 
 When no explicit session ID was provided but `resumeSession: true` was set (equivalent to old `newChatSession: false`), FlightPath would use Claude's `-c` (continue) flag. This flag resumes the **most recent Claude session globally**, not workspace-specific.
 
 **Why This is Bad:**
+
 1. ❌ Resumes most recent session **across all projects**, not just current workspace
 2. ❌ If user has multiple Claude sessions open in different repos, might resume wrong one
 3. ❌ No guarantee which session will be resumed
 4. ❌ Could accidentally contaminate sessions with context from different projects
 
 **Example Scenario:**
+
 ```yaml
 # Workflow in project A
 prompts:
   - prompt: "Analyze code"
   - prompt: "Continue analysis"
-    resumeSession: true  # ← Used to add `-c` flag
+    resumeSession: true # ← Used to add `-c` flag
 ```
 
 If user also has Claude session open in project B, the `-c` flag might resume project B's session instead!
@@ -32,13 +34,14 @@ If user also has Claude session open in project B, the `-c` flag might resume pr
 Removed `-c` flag support entirely. Now Claude only resumes sessions when we have an **explicit session ID** from workflow state.
 
 **Code Changes:**
+
 - File: `src/flightpath/cli/claude/ClaudeCliProvider.ts` (lines 184-197)
 - Before:
   ```typescript
   if (sessionId) {
     args.push("-r", sessionId);
   } else if (!shouldStartNewSession) {
-    args.push("-c");  // ← DANGEROUS
+    args.push("-c"); // ← DANGEROUS
   }
   ```
 - After:
@@ -65,6 +68,7 @@ Removed `-c` flag support entirely. Now Claude only resumes sessions when we hav
 When resuming a Claude session, the log file exists but has an old modification time (`mtime`). The CLI needs time to update the file with new content, but FlightPath's retry logic only waited 500ms total.
 
 **Error Logs:**
+
 ```
 [ClaudeLogParser] Session log exists but not yet updated (mtime: 2026-01-21T04:48:22.658Z, startTime: 2026-01-21T04:54:06.195Z), will retry...
 [ClaudeLogParser] Session log not ready (attempt 2/5), retrying in 50ms...
@@ -81,6 +85,7 @@ The file existed but wasn't updated within 500ms, causing false failures.
 Increased retry timing from 500ms to ~5 seconds with more aggressive backoff:
 
 **Code Changes:**
+
 - File: `src/flightpath/cli/claude/ClaudeLogParser.ts` (lines 285-286)
 - Before:
   ```typescript
@@ -116,7 +121,9 @@ This gives Claude CLI plenty of time to process the resume request and update th
 ## Impact
 
 ### Breaking Changes
+
 None. The `-c` flag removal only affects edge cases where:
+
 - `resumeSession: true` is set (old `newChatSession: false`)
 - No explicit `sessionId` is provided
 - User expected to resume previous session
@@ -124,6 +131,7 @@ None. The `-c` flag removal only affects edge cases where:
 These workflows will now start **new sessions** instead of using `-c`. This is safer behavior.
 
 ### Improvements
+
 1. ✅ **More reliable session resumption** - 5-second retry window catches slow updates
 2. ✅ **Safer session isolation** - No accidental cross-project contamination
 3. ✅ **Predictable behavior** - Sessions only resume when explicitly requested via sessionId
@@ -132,30 +140,33 @@ These workflows will now start **new sessions** instead of using `-c`. This is s
 ## Testing Recommendations
 
 ### Test Case 1: Explicit Session Resume (Should Work)
+
 ```yaml
 prompts:
   - id: first
     prompt: "Analyze code"
 
   - prompt: "Continue analysis"
-    sessionId: 1  # Resume first prompt's session
+    sessionId: 1 # Resume first prompt's session
 ```
 
 **Expected:** Second prompt resumes first prompt's session successfully.
 
 ### Test Case 2: resumeSession: true (Behavior Changed)
+
 ```yaml
 prompts:
   - prompt: "First prompt"
 
   - prompt: "Second prompt"
-    resumeSession: true  # No longer uses -c flag
+    resumeSession: true # No longer uses -c flag
 ```
 
 **Old Behavior:** Used `-c` flag (might resume wrong session)
 **New Behavior:** Starts new session (safe)
 
 ### Test Case 3: Slow File Update (Should Work Now)
+
 ```yaml
 prompts:
   - prompt: "Test prompt"
@@ -163,6 +174,7 @@ prompts:
 ```
 
 **Expected:**
+
 - Waits up to 5 seconds for log file to update
 - Succeeds even if file takes 2-3 seconds to update
 - No false failures
@@ -178,12 +190,13 @@ prompts:
 If these changes cause issues:
 
 1. **Revert `-c` flag removal:**
+
    ```typescript
    // In ClaudeCliProvider.ts line 190
    if (sessionId) {
      args.push("-r", sessionId);
    } else if (!shouldStartNewSession) {
-     args.push("-c");  // Restore -c flag
+     args.push("-c"); // Restore -c flag
    }
    ```
 

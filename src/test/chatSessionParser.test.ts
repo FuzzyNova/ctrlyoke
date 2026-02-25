@@ -25,10 +25,7 @@ suite("ChatSessionParser Tests", () => {
   /**
    * Helper to create a mock session file
    */
-  function createMockSessionFile(
-    sessionId: string,
-    requests: any[]
-  ): string {
+  function createMockSessionFile(sessionId: string, requests: any[]): string {
     const sessionFile = {
       version: 3,
       sessionId,
@@ -210,7 +207,9 @@ suite("ChatSessionParser Tests", () => {
       // Error message added as text event
       assert.ok(output.events.length > 0);
       const errorEvent = output.events.find(
-        (e) => e.type === CLI_EVENT_TYPES.TEXT && (e.data as any).text.includes("Error")
+        (e) =>
+          e.type === CLI_EVENT_TYPES.TEXT &&
+          (e.data as any).text.includes("Error")
       );
       assert.ok(errorEvent, "Should have error event");
     });
@@ -223,7 +222,9 @@ suite("ChatSessionParser Tests", () => {
 
       assert.strictEqual(output.events.length, 1);
       assert.strictEqual(output.events[0].type, CLI_EVENT_TYPES.TEXT);
-      assert.ok((output.events[0].data as any).text.includes("Failed to parse"));
+      assert.ok(
+        (output.events[0].data as any).text.includes("Failed to parse")
+      );
     });
 
     test("should handle empty requests array", () => {
@@ -242,7 +243,9 @@ suite("ChatSessionParser Tests", () => {
 
       assert.strictEqual(output.events.length, 1);
       assert.strictEqual(output.events[0].type, CLI_EVENT_TYPES.TEXT);
-      assert.ok((output.events[0].data as any).text.includes("Failed to parse"));
+      assert.ok(
+        (output.events[0].data as any).text.includes("Failed to parse")
+      );
     });
   });
 
@@ -268,7 +271,9 @@ suite("ChatSessionParser Tests", () => {
       const output = parser.extractResponse(sessionFile);
 
       assert.strictEqual(output.events.length, 1);
-      assert.deepStrictEqual(output.events[0].data, { text: "Second response" });
+      assert.deepStrictEqual(output.events[0].data, {
+        text: "Second response",
+      });
     });
 
     test("should extract specific request by index", () => {
@@ -298,9 +303,7 @@ suite("ChatSessionParser Tests", () => {
 
   suite("extractSessionId", () => {
     test("should extract session ID from path", () => {
-      const sessionId = parser.extractSessionId(
-        "/path/to/abc-123-def.json"
-      );
+      const sessionId = parser.extractSessionId("/path/to/abc-123-def.json");
       assert.strictEqual(sessionId, "abc-123-def");
     });
 
@@ -395,10 +398,7 @@ suite("ChatSessionParser Tests", () => {
     });
 
     test("should return 0 for non-existent file", () => {
-      assert.strictEqual(
-        parser.getRequestCount("/nonexistent/file.json"),
-        0
-      );
+      assert.strictEqual(parser.getRequestCount("/nonexistent/file.json"), 0);
     });
   });
 

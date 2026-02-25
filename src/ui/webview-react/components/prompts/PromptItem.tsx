@@ -81,14 +81,9 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
   // Add hover and selection states
   if (isSelected) {
-    containerClasses.push(
-      "bg-list-active-bg",
-      "text-list-active-fg"
-    );
+    containerClasses.push("bg-list-active-bg", "text-list-active-fg");
   } else if (isCurrent) {
-    containerClasses.push(
-      "bg-list-inactive-bg"
-    );
+    containerClasses.push("bg-list-inactive-bg");
   } else {
     containerClasses.push("hover:bg-list-hover-bg");
   }

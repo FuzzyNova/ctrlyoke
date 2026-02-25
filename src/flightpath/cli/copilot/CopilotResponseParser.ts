@@ -39,11 +39,7 @@ export class CopilotResponseParser
    * @param exitCode Process exit code
    * @returns Structured output with events array and metadata
    */
-  parse(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): UniversalCliOutput {
+  parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
     const events: CliEvent[] = [];
 
     // Copilot outputs plain text (no structured events)
@@ -122,7 +118,8 @@ export class CopilotResponseParser
     return {
       prompt: parseValue(match[1], match[2]),
       completion: parseValue(match[3], match[4]),
-      cached: match[5] !== undefined ? parseValue(match[5], match[6]) : undefined,
+      cached:
+        match[5] !== undefined ? parseValue(match[5], match[6]) : undefined,
     };
   }
 }

@@ -263,7 +263,9 @@ export class CliProcessManager {
 
     // Handle headless process execution - kill immediately, no grace period
     if (this.currentProcess) {
-      this.logger?.("⏹️ Force-killing headless CLI process (user-initiated stop)...");
+      this.logger?.(
+        "⏹️ Force-killing headless CLI process (user-initiated stop)..."
+      );
       this.killImmediately(this.currentProcess);
     }
   }

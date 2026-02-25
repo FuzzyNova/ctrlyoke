@@ -124,7 +124,8 @@ export class ChatSessionMonitor {
       }
     } else {
       // Linux
-      const configDir = process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config");
+      const configDir =
+        process.env.XDG_CONFIG_HOME || path.join(homeDir, ".config");
       paths.push(path.join(configDir, variant, "User", "workspaceStorage"));
       if (variant !== "Code") {
         paths.push(path.join(configDir, "Code", "User", "workspaceStorage"));
@@ -399,15 +400,19 @@ export class ChatSessionMonitor {
       if (debug) {
         const hasResult = lastRequest.result != null;
         const hasTimings = hasResult && lastRequest.result.timings != null;
-        const totalElapsed = hasTimings ? lastRequest.result.timings.totalElapsed : "N/A";
+        const totalElapsed = hasTimings
+          ? lastRequest.result.timings.totalElapsed
+          : "N/A";
         Log.info(
           `      🔍 Last request: result=${hasResult}, timings=${hasTimings}, totalElapsed=${totalElapsed}`
         );
       }
 
       // Check for cancellation first
-      if (typeof lastRequest.result?.errorDetails?.message === "string" &&
-          lastRequest.result.errorDetails.message.includes("cancel")) {
+      if (
+        typeof lastRequest.result?.errorDetails?.message === "string" &&
+        lastRequest.result.errorDetails.message.includes("cancel")
+      ) {
         return { complete: true, cancelled: true };
       }
 
@@ -496,7 +501,9 @@ export class ChatSessionMonitor {
         Log.warn("⚠️ Cached session file no longer exists, resetting");
         this.resetSession();
       } else {
-        this.requestCountBeforeSend = this.getRequestCount(this.sessionFilePath);
+        this.requestCountBeforeSend = this.getRequestCount(
+          this.sessionFilePath
+        );
         Log.info(
           `📍 Resume session: ${path.basename(this.sessionFilePath)}, requests: ${this.requestCountBeforeSend}`
         );
@@ -610,10 +617,13 @@ export class ChatSessionMonitor {
           // IMPORTANT: Check if the response is already complete when we find the file
           // This handles the case where Copilot finished before we found the session
           if (requestCount > 0) {
-            const { complete, cancelled } = this.isLastRequestComplete(matchedFile);
+            const { complete, cancelled } =
+              this.isLastRequestComplete(matchedFile);
             if (complete) {
               if (cancelled) {
-                Log.info("⚠️ User cancelled in chat (detected on file discovery)");
+                Log.info(
+                  "⚠️ User cancelled in chat (detected on file discovery)"
+                );
                 return {
                   completed: false,
                   userCancelled: true,

@@ -64,18 +64,19 @@ C:\Users\natha\.codex\sessions\2026\01\21\rollout-2026-01-21T14-17-40-019be234-a
 
 ### Path Components
 
-| Component | Description | Example |
-|-----------|-------------|---------|
-| Base | User's home directory | `C:\Users\natha` |
-| Root | Codex sessions directory | `.codex\sessions\` |
-| Year | 4-digit year | `2026` |
-| Month | 2-digit month (zero-padded) | `01` |
-| Day | 2-digit day (zero-padded) | `21` |
-| Filename | `rollout-<timestamp>-<session-id>.jsonl` | `rollout-2026-01-21T14-17-40-019be234-a937-7a83-957a-5e6ca36cfa13.jsonl` |
+| Component | Description                              | Example                                                                  |
+| --------- | ---------------------------------------- | ------------------------------------------------------------------------ |
+| Base      | User's home directory                    | `C:\Users\natha`                                                         |
+| Root      | Codex sessions directory                 | `.codex\sessions\`                                                       |
+| Year      | 4-digit year                             | `2026`                                                                   |
+| Month     | 2-digit month (zero-padded)              | `01`                                                                     |
+| Day       | 2-digit day (zero-padded)                | `21`                                                                     |
+| Filename  | `rollout-<timestamp>-<session-id>.jsonl` | `rollout-2026-01-21T14-17-40-019be234-a937-7a83-957a-5e6ca36cfa13.jsonl` |
 
 ### Discovery Implications
 
 **No Index File:**
+
 - Codex does NOT maintain a central index file (unlike Copilot's `~/.copilot/session-state/index.json`)
 - Session discovery requires:
   1. Calculate date directory from execution start time
@@ -84,6 +85,7 @@ C:\Users\natha\.codex\sessions\2026\01\21\rollout-2026-01-21T14-17-40-019be234-a
   4. Read first N events to find matching prompt text
 
 **Session ID Matching:**
+
 - If session ID is known, use fast path: search for file ending with `-<session-id>.jsonl`
 - If resuming, same log file is updated (check `mtime >= startTime`)
 
@@ -96,17 +98,19 @@ All Codex events follow this base structure:
 ```json
 {
   "type": "event_type_name",
-  "payload": { /* event-specific data */ },
+  "payload": {
+    /* event-specific data */
+  },
   "timestamp": "ISO-8601-timestamp"
 }
 ```
 
 ### Base Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Event type identifier |
-| `payload` | object | Event-specific nested data (structure varies by type) |
+| Field       | Type   | Description                                             |
+| ----------- | ------ | ------------------------------------------------------- |
+| `type`      | string | Event type identifier                                   |
+| `payload`   | object | Event-specific nested data (structure varies by type)   |
 | `timestamp` | string | ISO 8601 timestamp (e.g., `"2026-01-21T20:17:40.727Z"`) |
 
 **Note:** Unlike Copilot (which uses `id` and `parentId` for event graphs), Codex events are flat with just timestamp ordering.
@@ -147,20 +151,20 @@ All Codex events follow this base structure:
 
 ### Payload Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Session ID (UUID or `thread_xxx` format) |
-| `timestamp` | string | Session start timestamp |
-| `cwd` | string | Current working directory |
-| `originator` | string | Always `"codex_cli_rs"` (Codex CLI executable) |
-| `cli_version` | string | Codex CLI version (e.g., `"0.87.0"`) |
-| `instructions` | string | System instructions / agent context |
-| `source` | string | Always `"cli"` (vs web interface) |
-| `model_provider` | string | AI provider (e.g., `"openai"`) |
-| `git` | object | Git repository metadata (optional) |
-| `git.commit_hash` | string | Current commit SHA |
-| `git.branch` | string | Current branch name |
-| `git.repository_url` | string | Remote repository URL |
+| Field                | Type   | Description                                    |
+| -------------------- | ------ | ---------------------------------------------- |
+| `id`                 | string | Session ID (UUID or `thread_xxx` format)       |
+| `timestamp`          | string | Session start timestamp                        |
+| `cwd`                | string | Current working directory                      |
+| `originator`         | string | Always `"codex_cli_rs"` (Codex CLI executable) |
+| `cli_version`        | string | Codex CLI version (e.g., `"0.87.0"`)           |
+| `instructions`       | string | System instructions / agent context            |
+| `source`             | string | Always `"cli"` (vs web interface)              |
+| `model_provider`     | string | AI provider (e.g., `"openai"`)                 |
+| `git`                | object | Git repository metadata (optional)             |
+| `git.commit_hash`    | string | Current commit SHA                             |
+| `git.branch`         | string | Current branch name                            |
+| `git.repository_url` | string | Remote repository URL                          |
 
 ### Parsing Example
 
@@ -225,13 +229,13 @@ extractSessionId(events: any[]): string | null {
 
 ### Payload Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"message"` for user messages |
-| `role` | string | Always `"user"` |
-| `content` | array | Array of content blocks (always `input_text` for user) |
-| `content[].type` | string | Content type (`"input_text"`) |
-| `content[].text` | string | User's message text |
+| Field            | Type   | Description                                            |
+| ---------------- | ------ | ------------------------------------------------------ |
+| `type`           | string | Always `"message"` for user messages                   |
+| `role`           | string | Always `"user"`                                        |
+| `content`        | array  | Array of content blocks (always `input_text` for user) |
+| `content[].type` | string | Content type (`"input_text"`)                          |
+| `content[].text` | string | User's message text                                    |
 
 ### Developer Instructions
 
@@ -298,19 +302,19 @@ Codex also sends system-level instructions as `role: "developer"` messages:
 
 ### Payload Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `cwd` | string | Current working directory |
-| `approval_policy` | string | Approval mode (`"on-request"`, `"full-auto"`, etc.) |
-| `sandbox_policy` | object | Sandbox configuration |
-| `sandbox_policy.type` | string | Sandbox mode (`"workspace-write"`, `"workspace-read"`, `"none"`) |
-| `sandbox_policy.writable_roots` | array | Directories allowed for writes |
-| `sandbox_policy.network_access` | boolean | Whether network access is permitted |
-| `model` | string | Model name (e.g., `"gpt-5.1-codex-mini"`) |
-| `effort` | string | Effort level (`"low"`, `"medium"`, `"high"`) |
-| `summary` | string | Summary mode (`"auto"`, `"manual"`, `"none"`) |
-| `user_instructions` | string | Custom instructions for this session |
-| `truncation_policy` | object | Context window truncation settings |
+| Field                           | Type    | Description                                                      |
+| ------------------------------- | ------- | ---------------------------------------------------------------- |
+| `cwd`                           | string  | Current working directory                                        |
+| `approval_policy`               | string  | Approval mode (`"on-request"`, `"full-auto"`, etc.)              |
+| `sandbox_policy`                | object  | Sandbox configuration                                            |
+| `sandbox_policy.type`           | string  | Sandbox mode (`"workspace-write"`, `"workspace-read"`, `"none"`) |
+| `sandbox_policy.writable_roots` | array   | Directories allowed for writes                                   |
+| `sandbox_policy.network_access` | boolean | Whether network access is permitted                              |
+| `model`                         | string  | Model name (e.g., `"gpt-5.1-codex-mini"`)                        |
+| `effort`                        | string  | Effort level (`"low"`, `"medium"`, `"high"`)                     |
+| `summary`                       | string  | Summary mode (`"auto"`, `"manual"`, `"none"`)                    |
+| `user_instructions`             | string  | Custom instructions for this session                             |
+| `truncation_policy`             | object  | Context window truncation settings                               |
 
 ### Usage in FlightPath
 
@@ -319,10 +323,10 @@ FlightPath uses `turn_context` to discover user messages during session log matc
 ```typescript
 // CodexLogParser.discoverSessionLog()
 if (event.type === "turn_context" && event.payload?.messages) {
-  const userMsg = event.payload.messages.find(m => m.role === "user");
+  const userMsg = event.payload.messages.find((m) => m.role === "user");
   if (userMsg?.content) {
     userMessage = Array.isArray(userMsg.content)
-      ? userMsg.content.map(c => c.text).join("")
+      ? userMsg.content.map((c) => c.text).join("")
       : userMsg.content;
   }
 }
@@ -359,12 +363,12 @@ if (event.type === "turn_context" && event.payload?.messages) {
 
 ### Content Block Types
 
-| Type | Description | Fields |
-|------|-------------|--------|
-| `input_text` | Text content (legacy) | `text` |
-| `output_text` | Text content (preferred) | `text` |
-| `tool_use` | Tool call (Format A) | `name`, `input`, `id` |
-| `thinking` | Reasoning/thinking block | `text` |
+| Type          | Description              | Fields                |
+| ------------- | ------------------------ | --------------------- |
+| `input_text`  | Text content (legacy)    | `text`                |
+| `output_text` | Text content (preferred) | `text`                |
+| `tool_use`    | Tool call (Format A)     | `name`, `input`, `id` |
+| `thinking`    | Reasoning/thinking block | `text`                |
 
 **Note:** Both `input_text` and `output_text` appear in assistant messages. FlightPath treats them identically.
 
@@ -460,12 +464,12 @@ if (item.type === "thinking" && item.text) {
 
 **Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"reasoning"` |
-| `summary` | array | Summary points (usually empty) |
-| `content` | string/null | Plaintext reasoning (null if encrypted) |
-| `encrypted_content` | string | Base64-encoded encrypted reasoning block |
+| Field               | Type        | Description                              |
+| ------------------- | ----------- | ---------------------------------------- |
+| `type`              | string      | Always `"reasoning"`                     |
+| `summary`           | array       | Summary points (usually empty)           |
+| `content`           | string/null | Plaintext reasoning (null if encrypted)  |
+| `encrypted_content` | string      | Base64-encoded encrypted reasoning block |
 
 **Note:** FlightPath does NOT decrypt encrypted reasoning blocks. These are for debugging/logging only.
 
@@ -512,12 +516,12 @@ if (item.type === "thinking" && item.text) {
 
 **Tool Use Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"tool_use"` |
-| `name` | string | Tool name (e.g., `"write_file"`, `"shell_command"`) |
-| `input` | **object** | Tool parameters as **object** (already parsed!) |
-| `id` | string | Unique tool call identifier |
+| Field   | Type       | Description                                         |
+| ------- | ---------- | --------------------------------------------------- |
+| `type`  | string     | Always `"tool_use"`                                 |
+| `name`  | string     | Tool name (e.g., `"write_file"`, `"shell_command"`) |
+| `input` | **object** | Tool parameters as **object** (already parsed!)     |
+| `id`    | string     | Unique tool call identifier                         |
 
 **Parsing:**
 
@@ -555,12 +559,12 @@ if (item.type === "tool_use") {
 
 **Function Call Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"function_call"` |
-| `name` | string | Function name (e.g., `"shell_command"`) |
+| Field       | Type       | Description                                              |
+| ----------- | ---------- | -------------------------------------------------------- |
+| `type`      | string     | Always `"function_call"`                                 |
+| `name`      | string     | Function name (e.g., `"shell_command"`)                  |
 | `arguments` | **string** | Function parameters as **JSON string** (must be parsed!) |
-| `call_id` | string | Unique call identifier |
+| `call_id`   | string     | Unique call identifier                                   |
 
 **CRITICAL: `arguments` is a JSON string!**
 
@@ -592,14 +596,14 @@ const command = params.command;
 
 ### Tool Call Comparison Table
 
-| Aspect | Format A (`tool_use`) | Format B (`function_call`) |
-|--------|----------------------|---------------------------|
-| Location | Inside `content` array | Separate event |
-| Payload type | `"message"` | `"function_call"` |
-| Parameters field | `input` (object) | `arguments` (string!) |
-| ID field | `id` | `call_id` |
-| Parsing required | ❌ No (already object) | ✅ **YES (JSON.parse)** |
-| Similar to | Claude `tool_use` | OpenAI function calling |
+| Aspect           | Format A (`tool_use`)  | Format B (`function_call`) |
+| ---------------- | ---------------------- | -------------------------- |
+| Location         | Inside `content` array | Separate event             |
+| Payload type     | `"message"`            | `"function_call"`          |
+| Parameters field | `input` (object)       | `arguments` (string!)      |
+| ID field         | `id`                   | `call_id`                  |
+| Parsing required | ❌ No (already object) | ✅ **YES (JSON.parse)**    |
+| Similar to       | Claude `tool_use`      | OpenAI function calling    |
 
 ### Which Format Does Codex Use?
 
@@ -637,7 +641,7 @@ if (event.type === "response_item" && event.payload?.type === "function_call") {
 
 **Structure:**
 
-```json
+````json
 {
   "timestamp": "2026-01-21T21:46:12.815Z",
   "type": "response_item",
@@ -647,15 +651,15 @@ if (event.type === "response_item" && event.payload?.type === "function_call") {
     "output": "Exit code: 0\nWall time: 0.4 seconds\nOutput:\n<attachment id=\"symbol:src/flightpath/cli/codex/CodexCliProvider.ts:52-402\">\r\nSymbol: CodexCliProvider in src/flightpath/cli/codex/CodexCliProvider.ts, lines 52 to 402:\r\n```typescript\r\nexport class CodexCliProvider implements ICliProvider {\r\n  readonly config: ProviderConfig = {\r\n..."
   }
 }
-```
+````
 
 **Payload Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"function_call_output"` |
-| `call_id` | string | Matches `call_id` from `function_call` event |
-| `output` | string | Tool execution result (stdout, file content, etc.) |
+| Field     | Type   | Description                                        |
+| --------- | ------ | -------------------------------------------------- |
+| `type`    | string | Always `"function_call_output"`                    |
+| `call_id` | string | Matches `call_id` from `function_call` event       |
+| `output`  | string | Tool execution result (stdout, file content, etc.) |
 
 **Note:** FlightPath does NOT currently parse tool results. These are logged but not used in response extraction.
 
@@ -692,13 +696,13 @@ if (event.type === "response_item" && event.payload?.type === "function_call") {
 
 **Fields:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Always `"user_message"` |
-| `message` | string | User's prompt text |
-| `images` | array | Attached images (URLs) |
-| `local_images` | array | Local image paths |
-| `text_elements` | array | Text attachments |
+| Field           | Type   | Description             |
+| --------------- | ------ | ----------------------- |
+| `type`          | string | Always `"user_message"` |
+| `message`       | string | User's prompt text      |
+| `images`        | array  | Attached images (URLs)  |
+| `local_images`  | array  | Local image paths       |
+| `text_elements` | array  | Text attachments        |
 
 ### Subtype: `agent_message`
 
@@ -719,9 +723,11 @@ if (event.type === "response_item" && event.payload?.type === "function_call") {
 
 ```typescript
 // CodexLogParser.extractContentFromEvent()
-if (event.type === "event_msg" &&
-    event.payload?.type === "agent_message" &&
-    event.payload.message) {
+if (
+  event.type === "event_msg" &&
+  event.payload?.type === "agent_message" &&
+  event.payload.message
+) {
   return event.payload.message;
 }
 ```
@@ -781,17 +787,17 @@ See [Completion Detection](#completion-detection) section below.
 
 ### Token Usage Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `info.total_token_usage` | object | Cumulative tokens for entire session |
-| `info.last_token_usage` | object | Tokens for last turn only |
-| `input_tokens` | number | Prompt tokens sent to model |
-| `cached_input_tokens` | number | Cached tokens (not charged) |
-| `output_tokens` | number | Response tokens generated |
-| `reasoning_output_tokens` | number | Tokens used for reasoning/thinking |
-| `total_tokens` | number | Sum of input + output tokens |
-| `model_context_window` | number | Maximum context window size |
-| `rate_limits` | object | Rate limit information (usually null) |
+| Field                     | Type   | Description                           |
+| ------------------------- | ------ | ------------------------------------- |
+| `info.total_token_usage`  | object | Cumulative tokens for entire session  |
+| `info.last_token_usage`   | object | Tokens for last turn only             |
+| `input_tokens`            | number | Prompt tokens sent to model           |
+| `cached_input_tokens`     | number | Cached tokens (not charged)           |
+| `output_tokens`           | number | Response tokens generated             |
+| `reasoning_output_tokens` | number | Tokens used for reasoning/thinking    |
+| `total_tokens`            | number | Sum of input + output tokens          |
+| `model_context_window`    | number | Maximum context window size           |
+| `rate_limits`             | object | Rate limit information (usually null) |
 
 ### Usage in FlightPath
 
@@ -914,29 +920,29 @@ export class CodexLogParser extends BaseLogParser {
     text: string;
     toolCalls: any[];
     metadata: any;
-  }
+  };
 
   // Check if event signals completion
-  isComplete(event: any): boolean
+  isComplete(event: any): boolean;
 
   // Discover session log file by prompt text or session ID
   discoverSessionLog(
     promptText: string,
     startTime: Date,
     sessionId?: string
-  ): Promise<string | null>
+  ): Promise<string | null>;
 
   // Extract session ID from events
-  extractSessionId(events: any[]): string | null
+  extractSessionId(events: any[]): string | null;
 
   // Extract text content from single event (for streaming)
-  extractContentFromEvent(event: any): string | undefined
+  extractContentFromEvent(event: any): string | undefined;
 
   // Format metadata into statistics string
-  formatStatistics(metadata: any): string
+  formatStatistics(metadata: any): string;
 
   // Process event for buffering (internal state management)
-  processEvent(event: any): any | null
+  processEvent(event: any): any | null;
 }
 ```
 
@@ -1024,43 +1030,43 @@ if (event.payload?.type === "function_call") {
 
 ### Structure Comparison
 
-| Aspect | Codex CLI | Claude CLI | Copilot CLI |
-|--------|-----------|------------|-------------|
-| **File Format** | JSONL | JSONL | JSONL |
-| **Directory** | `~/.codex/sessions/YYYY/MM/DD/` | `~/.claude/projects/<path>/<session>.jsonl` | `~/.copilot/session-state/<session>.jsonl` |
-| **File Naming** | `rollout-<timestamp>-<session>.jsonl` | `<session-id>.jsonl` | `<session-id>.jsonl` |
-| **Index File** | ❌ None | ❌ None | ✅ `index.json` |
-| **Event Structure** | `{type, payload, timestamp}` | `{type, message/content, timestamp}` | `{type, data, id, parentId}` |
-| **Nested Payloads** | ✅ Yes | ✅ Yes | ❌ No (flat `data`) |
-| **Session ID** | `thread_xxx` or UUID | UUID | UUID |
-| **Completion Signal** | `event_msg.turn.completed` | `message_stop` | `turn.completed` |
+| Aspect                | Codex CLI                             | Claude CLI                                  | Copilot CLI                                |
+| --------------------- | ------------------------------------- | ------------------------------------------- | ------------------------------------------ |
+| **File Format**       | JSONL                                 | JSONL                                       | JSONL                                      |
+| **Directory**         | `~/.codex/sessions/YYYY/MM/DD/`       | `~/.claude/projects/<path>/<session>.jsonl` | `~/.copilot/session-state/<session>.jsonl` |
+| **File Naming**       | `rollout-<timestamp>-<session>.jsonl` | `<session-id>.jsonl`                        | `<session-id>.jsonl`                       |
+| **Index File**        | ❌ None                               | ❌ None                                     | ✅ `index.json`                            |
+| **Event Structure**   | `{type, payload, timestamp}`          | `{type, message/content, timestamp}`        | `{type, data, id, parentId}`               |
+| **Nested Payloads**   | ✅ Yes                                | ✅ Yes                                      | ❌ No (flat `data`)                        |
+| **Session ID**        | `thread_xxx` or UUID                  | UUID                                        | UUID                                       |
+| **Completion Signal** | `event_msg.turn.completed`            | `message_stop`                              | `turn.completed`                           |
 
 ### Tool Call Comparison
 
-| Provider | Format | Parameters Field | Type |
-|----------|--------|------------------|------|
-| **Codex A** | `content[].tool_use` | `input` | Object |
-| **Codex B** | `payload.function_call` | `arguments` | **String!** |
-| **Claude** | `content[].tool_use` | `input` | Object |
-| **Copilot** | `data.tools[]` | `parameters` | Object |
+| Provider    | Format                  | Parameters Field | Type        |
+| ----------- | ----------------------- | ---------------- | ----------- |
+| **Codex A** | `content[].tool_use`    | `input`          | Object      |
+| **Codex B** | `payload.function_call` | `arguments`      | **String!** |
+| **Claude**  | `content[].tool_use`    | `input`          | Object      |
+| **Copilot** | `data.tools[]`          | `parameters`     | Object      |
 
 **Key Takeaway:** Only Codex's `function_call` format uses a JSON string for parameters. All others use objects.
 
 ### Reasoning Comparison
 
-| Provider | Format | Visibility |
-|----------|--------|-----------|
-| **Codex** | Inline `thinking` + encrypted `reasoning` | Encrypted by default |
-| **Claude** | Inline `thinking` content block | Always visible |
-| **Copilot** | N/A (no reasoning blocks) | N/A |
+| Provider    | Format                                    | Visibility           |
+| ----------- | ----------------------------------------- | -------------------- |
+| **Codex**   | Inline `thinking` + encrypted `reasoning` | Encrypted by default |
+| **Claude**  | Inline `thinking` content block           | Always visible       |
+| **Copilot** | N/A (no reasoning blocks)                 | N/A                  |
 
 ### Discovery Comparison
 
-| Provider | Method | Complexity |
-|----------|--------|-----------|
-| **Codex** | Date directory + prompt matching | High (no index) |
-| **Claude** | Direct path (project-based) | Low (session ID in filename) |
-| **Copilot** | Index file + session ID lookup | Medium (requires index parsing) |
+| Provider    | Method                           | Complexity                      |
+| ----------- | -------------------------------- | ------------------------------- |
+| **Codex**   | Date directory + prompt matching | High (no index)                 |
+| **Claude**  | Direct path (project-based)      | Low (session ID in filename)    |
+| **Copilot** | Index file + session ID lookup   | Medium (requires index parsing) |
 
 ---
 
@@ -1231,7 +1237,7 @@ extractResponse(events: any[]) {
 const logPath = await retryWithBackoff(
   async () => {
     const files = fs.readdirSync(datePath);
-    const match = files.find(f => f.endsWith(`-${sessionId}.jsonl`));
+    const match = files.find((f) => f.endsWith(`-${sessionId}.jsonl`));
 
     if (match) {
       const stats = fs.statSync(path.join(datePath, match));
@@ -1319,9 +1325,9 @@ npm test -- --grep "CodexLogParser"
 
 ## Revision History
 
-| Date | Version | Changes |
-|------|---------|---------|
-| 2026-01-21 | 1.0.0 | Initial documentation based on Codex CLI 0.87.0 and FlightPath codebase |
+| Date       | Version | Changes                                                                 |
+| ---------- | ------- | ----------------------------------------------------------------------- |
+| 2026-01-21 | 1.0.0   | Initial documentation based on Codex CLI 0.87.0 and FlightPath codebase |
 
 ---
 

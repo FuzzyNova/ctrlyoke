@@ -9,6 +9,7 @@
 **Purpose**: Real-time streaming responses with complete session metadata, token statistics, and tool execution tracking
 
 **Primary Use Cases**:
+
 - Headless automation and CI/CD pipelines
 - Stream chaining (piping output between Claude instances)
 - Real-time token-by-token response processing
@@ -16,6 +17,7 @@
 - Session management and resumption
 
 **When This Format is Used**:
+
 - Headless mode with `--output-format stream-json` flag
 - Print mode (`-p` flag) required for streaming
 - `--verbose` flag is REQUIRED
@@ -25,14 +27,14 @@
 
 ## Message Type Summary
 
-| Message Type | Frequency | Description | When Emitted |
-|--------------|-----------|-------------|--------------|
-| `system` | 1 (per session) | Session initialization with metadata | Session start |
-| `stream_event` | Varies | Real-time streaming events (6 subtypes) | Only with `--include-partial-messages` |
-| `assistant` | Per response | Complete assistant response with content blocks | After each assistant response |
-| `user` | Per tool | User messages and tool results | After tool execution |
-| `result` | 1 (per session) | Final statistics and completion status | Session end |
-| `compact_boundary` | As needed | Conversation compaction marker | When conversation is compacted |
+| Message Type       | Frequency       | Description                                     | When Emitted                           |
+| ------------------ | --------------- | ----------------------------------------------- | -------------------------------------- |
+| `system`           | 1 (per session) | Session initialization with metadata            | Session start                          |
+| `stream_event`     | Varies          | Real-time streaming events (6 subtypes)         | Only with `--include-partial-messages` |
+| `assistant`        | Per response    | Complete assistant response with content blocks | After each assistant response          |
+| `user`             | Per tool        | User messages and tool results                  | After tool execution                   |
+| `result`           | 1 (per session) | Final statistics and completion status          | Session end                            |
+| `compact_boundary` | As needed       | Conversation compaction marker                  | When conversation is compacted         |
 
 **Total Message Types**: 6
 
@@ -44,9 +46,9 @@ All messages share some common top-level fields:
 
 ```typescript
 interface BaseMessage {
-  type: string;                      // Message type discriminator
-  uuid: string;                      // Unique message identifier (UUID)
-  session_id: string;                // Session UUID (present in most messages)
+  type: string; // Message type discriminator
+  uuid: string; // Unique message identifier (UUID)
+  session_id: string; // Session UUID (present in most messages)
   parent_tool_use_id: string | null; // Parent tool use ID if nested
 }
 ```
@@ -62,29 +64,30 @@ interface BaseMessage {
 **Frequency**: 1 per session
 
 **Fields**:
+
 ```typescript
 interface SystemMessage {
   type: "system";
   subtype: "init";
   uuid: string;
   session_id: string;
-  cwd: string;                       // Working directory path
-  tools: string[];                   // Available built-in tools
-  mcp_servers: MCPServer[];          // Connected MCP servers
-  model: string;                     // Active Claude model
-  permissionMode: PermissionMode;    // Current permission level
-  slash_commands: string[];          // Available slash commands
-  apiKeySource: string;              // API key source ("none" for default)
-  claude_code_version: string;       // CLI version (e.g., "2.1.23")
-  output_style: string;              // Output style setting
-  agents: string[];                  // Available agents
-  skills: string[];                  // Available skills
-  plugins: string[];                 // Loaded plugins
+  cwd: string; // Working directory path
+  tools: string[]; // Available built-in tools
+  mcp_servers: MCPServer[]; // Connected MCP servers
+  model: string; // Active Claude model
+  permissionMode: PermissionMode; // Current permission level
+  slash_commands: string[]; // Available slash commands
+  apiKeySource: string; // API key source ("none" for default)
+  claude_code_version: string; // CLI version (e.g., "2.1.23")
+  output_style: string; // Output style setting
+  agents: string[]; // Available agents
+  skills: string[]; // Available skills
+  plugins: string[]; // Loaded plugins
 }
 
 interface MCPServer {
   name: string;
-  status: string;                    // Connection status
+  status: string; // Connection status
 }
 
 type PermissionMode =
@@ -96,26 +99,27 @@ type PermissionMode =
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `type` | string | Always `"system"` | Always | `"system"` |
-| `subtype` | string | Always `"init"` | Always | `"init"` |
-| `uuid` | string | Unique message ID | Always | `"08c9ca4c-741f-40d6-be6d-d1a81b225a5c"` |
-| `session_id` | string | Session UUID for resumption | Always | `"1acb40d9-8de6-4248-ac7b-29a06b3a2da3"` |
-| `cwd` | string | Current working directory | Always | `"C:\\dev\\FlightPath"` |
-| `tools` | array | Available built-in tools | Always | `["Task", "Bash", "Read", "Write", ...]` |
-| `mcp_servers` | array | Connected MCP servers | Always | `[]` or `[{name: "github", status: "connected"}]` |
-| `model` | string | Active Claude model ID | Always | `"claude-sonnet-4-5-20250929"` |
-| `permissionMode` | string | Permission level | Always | `"acceptEdits"` |
-| `slash_commands` | array | Available slash commands | Always | `["compact", "context", "cost", ...]` |
-| `apiKeySource` | string | API key source | Always | `"none"` |
-| `claude_code_version` | string | CLI version | Always | `"2.1.23"` |
-| `output_style` | string | Output style setting | Always | `"default"` |
-| `agents` | array | Available agents | Always | `["Bash", "general-purpose", ...]` |
-| `skills` | array | Available skills | Always | `["keybindings-help"]` |
-| `plugins` | array | Loaded plugins | Always | `[]` |
+| Field                 | Type   | Description                 | When Present | Example                                           |
+| --------------------- | ------ | --------------------------- | ------------ | ------------------------------------------------- |
+| `type`                | string | Always `"system"`           | Always       | `"system"`                                        |
+| `subtype`             | string | Always `"init"`             | Always       | `"init"`                                          |
+| `uuid`                | string | Unique message ID           | Always       | `"08c9ca4c-741f-40d6-be6d-d1a81b225a5c"`          |
+| `session_id`          | string | Session UUID for resumption | Always       | `"1acb40d9-8de6-4248-ac7b-29a06b3a2da3"`          |
+| `cwd`                 | string | Current working directory   | Always       | `"C:\\dev\\FlightPath"`                           |
+| `tools`               | array  | Available built-in tools    | Always       | `["Task", "Bash", "Read", "Write", ...]`          |
+| `mcp_servers`         | array  | Connected MCP servers       | Always       | `[]` or `[{name: "github", status: "connected"}]` |
+| `model`               | string | Active Claude model ID      | Always       | `"claude-sonnet-4-5-20250929"`                    |
+| `permissionMode`      | string | Permission level            | Always       | `"acceptEdits"`                                   |
+| `slash_commands`      | array  | Available slash commands    | Always       | `["compact", "context", "cost", ...]`             |
+| `apiKeySource`        | string | API key source              | Always       | `"none"`                                          |
+| `claude_code_version` | string | CLI version                 | Always       | `"2.1.23"`                                        |
+| `output_style`        | string | Output style setting        | Always       | `"default"`                                       |
+| `agents`              | array  | Available agents            | Always       | `["Bash", "general-purpose", ...]`                |
+| `skills`              | array  | Available skills            | Always       | `["keybindings-help"]`                            |
+| `plugins`             | array  | Loaded plugins              | Always       | `[]`                                              |
 
 **Example**:
+
 ```json
 {
   "type": "system",
@@ -146,10 +150,11 @@ type PermissionMode =
 **Frequency**: Varies (hundreds per response with partial messages)
 
 **Base Structure**:
+
 ```typescript
 interface StreamEventMessage {
   type: "stream_event";
-  event: RawMessageStreamEvent;      // Event payload (6 subtypes)
+  event: RawMessageStreamEvent; // Event payload (6 subtypes)
   session_id: string;
   parent_tool_use_id: string | null;
   uuid: string;
@@ -173,30 +178,31 @@ type RawMessageStreamEvent =
 interface MessageStartEvent {
   type: "message_start";
   message: {
-    model: string;                   // Model ID
-    id: string;                      // Message ID
+    model: string; // Model ID
+    id: string; // Message ID
     type: "message";
     role: "assistant";
-    content: [];                     // Empty at start
+    content: []; // Empty at start
     stop_reason: null;
     stop_sequence: null;
-    usage: UsageStats;               // Initial token usage
+    usage: UsageStats; // Initial token usage
   };
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `message.model` | string | Model identifier | Always | `"claude-sonnet-4-5-20250929"` |
-| `message.id` | string | Message ID | Always | `"msg_01AYLcuEpUYgkjEUAymydKur"` |
-| `message.role` | string | Always `"assistant"` | Always | `"assistant"` |
-| `message.content` | array | Empty array at start | Always | `[]` |
-| `message.stop_reason` | null | Always null at start | Always | `null` |
-| `message.usage` | object | Initial token statistics | Always | (see UsageStats) |
+| Field                 | Type   | Description              | When Present | Example                          |
+| --------------------- | ------ | ------------------------ | ------------ | -------------------------------- |
+| `message.model`       | string | Model identifier         | Always       | `"claude-sonnet-4-5-20250929"`   |
+| `message.id`          | string | Message ID               | Always       | `"msg_01AYLcuEpUYgkjEUAymydKur"` |
+| `message.role`        | string | Always `"assistant"`     | Always       | `"assistant"`                    |
+| `message.content`     | array  | Empty array at start     | Always       | `[]`                             |
+| `message.stop_reason` | null   | Always null at start     | Always       | `null`                           |
+| `message.usage`       | object | Initial token statistics | Always       | (see UsageStats)                 |
 
 **Example**:
+
 ```json
 {
   "type": "stream_event",
@@ -232,35 +238,36 @@ interface MessageStartEvent {
 ```typescript
 interface ContentBlockStartEvent {
   type: "content_block_start";
-  index: number;                     // Content block index
+  index: number; // Content block index
   content_block: TextBlock | ToolUseBlock;
 }
 
 interface TextBlock {
   type: "text";
-  text: string;                      // Empty string at start
+  text: string; // Empty string at start
 }
 
 interface ToolUseBlock {
   type: "tool_use";
-  id: string;                        // Tool use ID
-  name: string;                      // Tool name
-  input: object;                     // Empty object at start
+  id: string; // Tool use ID
+  name: string; // Tool name
+  input: object; // Empty object at start
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `index` | number | Content block index (0-based) | Always | `0` |
-| `content_block.type` | string | `"text"` or `"tool_use"` | Always | `"text"` |
-| `content_block.text` | string | Empty at start (text blocks) | If text | `""` |
-| `content_block.id` | string | Tool use ID (tool blocks) | If tool_use | `"toolu_011pN8ReJMeSkzpBvYzod1gT"` |
-| `content_block.name` | string | Tool name (tool blocks) | If tool_use | `"Write"` |
-| `content_block.input` | object | Empty at start (tool blocks) | If tool_use | `{}` |
+| Field                 | Type   | Description                   | When Present | Example                            |
+| --------------------- | ------ | ----------------------------- | ------------ | ---------------------------------- |
+| `index`               | number | Content block index (0-based) | Always       | `0`                                |
+| `content_block.type`  | string | `"text"` or `"tool_use"`      | Always       | `"text"`                           |
+| `content_block.text`  | string | Empty at start (text blocks)  | If text      | `""`                               |
+| `content_block.id`    | string | Tool use ID (tool blocks)     | If tool_use  | `"toolu_011pN8ReJMeSkzpBvYzod1gT"` |
+| `content_block.name`  | string | Tool name (tool blocks)       | If tool_use  | `"Write"`                          |
+| `content_block.input` | object | Empty at start (tool blocks)  | If tool_use  | `{}`                               |
 
 **Example (Text Block)**:
+
 ```json
 {
   "type": "stream_event",
@@ -279,6 +286,7 @@ interface ToolUseBlock {
 ```
 
 **Example (Tool Use Block)**:
+
 ```json
 {
   "type": "stream_event",
@@ -306,31 +314,32 @@ interface ToolUseBlock {
 ```typescript
 interface ContentBlockDeltaEvent {
   type: "content_block_delta";
-  index: number;                     // Content block index
+  index: number; // Content block index
   delta: TextDelta | InputJsonDelta;
 }
 
 interface TextDelta {
   type: "text_delta";
-  text: string;                      // Text chunk (can be single token)
+  text: string; // Text chunk (can be single token)
 }
 
 interface InputJsonDelta {
   type: "input_json_delta";
-  partial_json: string;              // Partial JSON string
+  partial_json: string; // Partial JSON string
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `index` | number | Content block index | Always | `0` |
-| `delta.type` | string | `"text_delta"` or `"input_json_delta"` | Always | `"text_delta"` |
-| `delta.text` | string | Text chunk (text deltas) | If text_delta | `"Fingers"` |
-| `delta.partial_json` | string | Partial JSON (tool deltas) | If input_json_delta | `"{\"file_path\": \""` |
+| Field                | Type   | Description                            | When Present        | Example                |
+| -------------------- | ------ | -------------------------------------- | ------------------- | ---------------------- |
+| `index`              | number | Content block index                    | Always              | `0`                    |
+| `delta.type`         | string | `"text_delta"` or `"input_json_delta"` | Always              | `"text_delta"`         |
+| `delta.text`         | string | Text chunk (text deltas)               | If text_delta       | `"Fingers"`            |
+| `delta.partial_json` | string | Partial JSON (tool deltas)             | If input_json_delta | `"{\"file_path\": \""` |
 
 **Example (Text Delta)**:
+
 ```json
 {
   "type": "stream_event",
@@ -349,6 +358,7 @@ interface InputJsonDelta {
 ```
 
 **Example (Tool Input JSON Delta)**:
+
 ```json
 {
   "type": "stream_event",
@@ -374,17 +384,18 @@ interface InputJsonDelta {
 ```typescript
 interface ContentBlockStopEvent {
   type: "content_block_stop";
-  index: number;                     // Content block index
+  index: number; // Content block index
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `index` | number | Content block index | Always | `0` |
+| Field   | Type   | Description         | When Present | Example |
+| ------- | ------ | ------------------- | ------------ | ------- |
+| `index` | number | Content block index | Always       | `0`     |
 
 **Example**:
+
 ```json
 {
   "type": "stream_event",
@@ -407,32 +418,33 @@ interface ContentBlockStopEvent {
 interface MessageDeltaEvent {
   type: "message_delta";
   delta: {
-    stop_reason: string;             // Reason for stopping
-    stop_sequence: string | null;    // Stop sequence if applicable
+    stop_reason: string; // Reason for stopping
+    stop_sequence: string | null; // Stop sequence if applicable
   };
-  usage: UsageStats;                 // Updated token usage
+  usage: UsageStats; // Updated token usage
   context_management?: {
     applied_edits: any[];
   };
 }
 
 type StopReason =
-  | "end_turn"                       // Natural completion
-  | "tool_use"                       // Stopped to invoke tool
-  | "max_tokens"                     // Token limit reached
-  | "stop_sequence";                 // Stop sequence matched
+  | "end_turn" // Natural completion
+  | "tool_use" // Stopped to invoke tool
+  | "max_tokens" // Token limit reached
+  | "stop_sequence"; // Stop sequence matched
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `delta.stop_reason` | string | Reason for stopping | Always | `"end_turn"` |
-| `delta.stop_sequence` | string \| null | Stop sequence matched | Always | `null` |
-| `usage` | object | Updated token statistics | Always | (see UsageStats) |
-| `context_management` | object | Context edits applied | Optional | `{applied_edits: []}` |
+| Field                 | Type           | Description              | When Present | Example               |
+| --------------------- | -------------- | ------------------------ | ------------ | --------------------- |
+| `delta.stop_reason`   | string         | Reason for stopping      | Always       | `"end_turn"`          |
+| `delta.stop_sequence` | string \| null | Stop sequence matched    | Always       | `null`                |
+| `usage`               | object         | Updated token statistics | Always       | (see UsageStats)      |
+| `context_management`  | object         | Context edits applied    | Optional     | `{applied_edits: []}` |
 
 **Example**:
+
 ```json
 {
   "type": "stream_event",
@@ -470,6 +482,7 @@ interface MessageStopEvent {
 ```
 
 **Example**:
+
 ```json
 {
   "type": "stream_event",
@@ -491,19 +504,20 @@ interface MessageStopEvent {
 **Frequency**: 1 per assistant response
 
 **Fields**:
+
 ```typescript
 interface AssistantMessage {
   type: "assistant";
   message: {
-    model: string;                   // Model ID
-    id: string;                      // Message ID
+    model: string; // Model ID
+    id: string; // Message ID
     type: "message";
     role: "assistant";
     content: AssistantContentBlock[]; // Array of content blocks
-    stop_reason: string | null;      // Stop reason
-    stop_sequence: string | null;    // Stop sequence if applicable
-    usage: UsageStats;               // Token usage statistics
-    context_management: any | null;  // Context management info
+    stop_reason: string | null; // Stop reason
+    stop_sequence: string | null; // Stop sequence if applicable
+    usage: UsageStats; // Token usage statistics
+    context_management: any | null; // Context management info
   };
   parent_tool_use_id: string | null;
   session_id: string;
@@ -515,41 +529,44 @@ type AssistantContentBlock = TextBlock | ToolUseBlock;
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `message.model` | string | Model identifier | Always | `"claude-sonnet-4-5-20250929"` |
-| `message.id` | string | Message ID | Always | `"msg_01QrpTGEANwo88xeQCu58G95"` |
-| `message.role` | string | Always `"assistant"` | Always | `"assistant"` |
-| `message.content` | array | Content blocks | Always | (see content blocks) |
-| `message.stop_reason` | string \| null | Stop reason | Always | `"end_turn"` or `null` |
-| `message.stop_sequence` | string \| null | Stop sequence matched | Always | `null` |
-| `message.usage` | object | Token statistics | Always | (see UsageStats) |
-| `message.context_management` | any \| null | Context management | Always | `null` |
-| `parent_tool_use_id` | string \| null | Parent tool use ID | Always | `null` |
-| `session_id` | string | Session UUID | Always | `"1acb40d9-..."` |
-| `uuid` | string | Message UUID | Always | `"34de804b-..."` |
+| Field                        | Type           | Description           | When Present | Example                          |
+| ---------------------------- | -------------- | --------------------- | ------------ | -------------------------------- |
+| `message.model`              | string         | Model identifier      | Always       | `"claude-sonnet-4-5-20250929"`   |
+| `message.id`                 | string         | Message ID            | Always       | `"msg_01QrpTGEANwo88xeQCu58G95"` |
+| `message.role`               | string         | Always `"assistant"`  | Always       | `"assistant"`                    |
+| `message.content`            | array          | Content blocks        | Always       | (see content blocks)             |
+| `message.stop_reason`        | string \| null | Stop reason           | Always       | `"end_turn"` or `null`           |
+| `message.stop_sequence`      | string \| null | Stop sequence matched | Always       | `null`                           |
+| `message.usage`              | object         | Token statistics      | Always       | (see UsageStats)                 |
+| `message.context_management` | any \| null    | Context management    | Always       | `null`                           |
+| `parent_tool_use_id`         | string \| null | Parent tool use ID    | Always       | `null`                           |
+| `session_id`                 | string         | Session UUID          | Always       | `"1acb40d9-..."`                 |
+| `uuid`                       | string         | Message UUID          | Always       | `"34de804b-..."`                 |
 
 **Content Block Types**:
 
 **Text Block**:
+
 ```typescript
 interface TextBlock {
   type: "text";
-  text: string;                      // Response text
+  text: string; // Response text
 }
 ```
 
 **Tool Use Block**:
+
 ```typescript
 interface ToolUseBlock {
   type: "tool_use";
-  id: string;                        // Tool use ID
-  name: string;                      // Tool name
-  input: Record<string, any>;        // Tool-specific parameters
+  id: string; // Tool use ID
+  name: string; // Tool name
+  input: Record<string, any>; // Tool-specific parameters
 }
 ```
 
 **Example (Text Response)**:
+
 ```json
 {
   "type": "assistant",
@@ -586,6 +603,7 @@ interface ToolUseBlock {
 ```
 
 **Example (Tool Use Response - Write)**:
+
 ```json
 {
   "type": "assistant",
@@ -627,6 +645,7 @@ interface ToolUseBlock {
 ```
 
 **Example (Tool Use Response - Edit)**:
+
 ```json
 {
   "type": "assistant",
@@ -680,79 +699,82 @@ interface ToolUseBlock {
 **Frequency**: 1 per tool execution
 
 **Fields**:
+
 ```typescript
 interface UserMessage {
   type: "user";
   message: {
     role: "user";
-    content: ToolResultBlock[];      // Array of tool results
+    content: ToolResultBlock[]; // Array of tool results
   };
   parent_tool_use_id: string | null;
   session_id: string;
   uuid: string;
-  tool_use_result?: ToolUseResult;   // Structured metadata
+  tool_use_result?: ToolUseResult; // Structured metadata
 }
 
 interface ToolResultBlock {
-  tool_use_id: string;               // Matches assistant's tool_use ID
+  tool_use_id: string; // Matches assistant's tool_use ID
   type: "tool_result";
-  content: string;                   // Tool execution result
+  content: string; // Tool execution result
 }
 
 interface ToolUseResult {
-  type?: string;                     // Result type (e.g., "create", or omitted for edits)
-  filePath?: string;                 // File path affected by operation
-  content?: string;                  // File content (for Write operations)
+  type?: string; // Result type (e.g., "create", or omitted for edits)
+  filePath?: string; // File path affected by operation
+  content?: string; // File content (for Write operations)
 
   // Edit operation fields (dual format - both can appear)
-  oldString?: string;                // Original text (Edit only) - headless mode
-  newString?: string;                // Replacement text (Edit only) - headless mode
-  old_string?: string;               // Original text (Edit only) - interactive terminal
-  new_string?: string;               // Replacement text (Edit only) - interactive terminal
+  oldString?: string; // Original text (Edit only) - headless mode
+  newString?: string; // Replacement text (Edit only) - headless mode
+  old_string?: string; // Original text (Edit only) - interactive terminal
+  new_string?: string; // Replacement text (Edit only) - interactive terminal
 
-  originalFile?: string;             // Full file content before edit (Edit only)
+  originalFile?: string; // Full file content before edit (Edit only)
   structuredPatch?: UnifiedDiffHunk[]; // Unified diff format (Edit only)
-  userModified?: boolean;            // Whether user modified the edit
-  replaceAll?: boolean;              // Whether replace_all was used
+  userModified?: boolean; // Whether user modified the edit
+  replaceAll?: boolean; // Whether replace_all was used
 }
 
 interface UnifiedDiffHunk {
-  oldStart: number;                  // Starting line number in old file
-  oldLines: number;                  // Number of lines in old file
-  newStart: number;                  // Starting line number in new file
-  newLines: number;                  // Number of lines in new file
-  lines: string[];                   // Diff lines (prefixed with " ", "-", "+")
+  oldStart: number; // Starting line number in old file
+  oldLines: number; // Number of lines in old file
+  newStart: number; // Starting line number in new file
+  newLines: number; // Number of lines in new file
+  lines: string[]; // Diff lines (prefixed with " ", "-", "+")
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `message.role` | string | Always `"user"` | Always | `"user"` |
-| `message.content` | array | Tool result blocks | Always | (see ToolResultBlock) |
-| `message.content[].tool_use_id` | string | Matches tool_use ID | Always | `"toolu_011pN..."` |
-| `message.content[].type` | string | Always `"tool_result"` | Always | `"tool_result"` |
-| `message.content[].content` | string | Tool output | Always | `"File created..."` |
-| `tool_use_result` | object | Structured metadata with rich diff data | Optional | (see ToolUseResult) |
-| `tool_use_result.filePath` | string | File path affected | If file op | `"C:\\dev\\..."` |
-| `tool_use_result.oldString` | string | Text before edit (headless) | If Edit | `"old text"` |
-| `tool_use_result.newString` | string | Text after edit (headless) | If Edit | `"new text"` |
-| `tool_use_result.old_string` | string | Text before edit (terminal) | If Edit | `"old text"` |
-| `tool_use_result.new_string` | string | Text after edit (terminal) | If Edit | `"new text"` |
-| `tool_use_result.originalFile` | string | Full file before edit | If Edit | `"# File\n..."` |
-| `tool_use_result.structuredPatch` | array | Unified diff hunks | If Edit | (see example) |
-| `parent_tool_use_id` | string \| null | Parent tool use ID | Always | `null` |
-| `session_id` | string | Session UUID | Always | `"9b8c43dd-..."` |
-| `uuid` | string | Message UUID | Always | `"7b1257af-..."` |
+| Field                             | Type           | Description                             | When Present | Example               |
+| --------------------------------- | -------------- | --------------------------------------- | ------------ | --------------------- |
+| `message.role`                    | string         | Always `"user"`                         | Always       | `"user"`              |
+| `message.content`                 | array          | Tool result blocks                      | Always       | (see ToolResultBlock) |
+| `message.content[].tool_use_id`   | string         | Matches tool_use ID                     | Always       | `"toolu_011pN..."`    |
+| `message.content[].type`          | string         | Always `"tool_result"`                  | Always       | `"tool_result"`       |
+| `message.content[].content`       | string         | Tool output                             | Always       | `"File created..."`   |
+| `tool_use_result`                 | object         | Structured metadata with rich diff data | Optional     | (see ToolUseResult)   |
+| `tool_use_result.filePath`        | string         | File path affected                      | If file op   | `"C:\\dev\\..."`      |
+| `tool_use_result.oldString`       | string         | Text before edit (headless)             | If Edit      | `"old text"`          |
+| `tool_use_result.newString`       | string         | Text after edit (headless)              | If Edit      | `"new text"`          |
+| `tool_use_result.old_string`      | string         | Text before edit (terminal)             | If Edit      | `"old text"`          |
+| `tool_use_result.new_string`      | string         | Text after edit (terminal)              | If Edit      | `"new text"`          |
+| `tool_use_result.originalFile`    | string         | Full file before edit                   | If Edit      | `"# File\n..."`       |
+| `tool_use_result.structuredPatch` | array          | Unified diff hunks                      | If Edit      | (see example)         |
+| `parent_tool_use_id`              | string \| null | Parent tool use ID                      | Always       | `null`                |
+| `session_id`                      | string         | Session UUID                            | Always       | `"9b8c43dd-..."`      |
+| `uuid`                            | string         | Message UUID                            | Always       | `"7b1257af-..."`      |
 
 **Note on Edit Field Format**: Claude CLI outputs Edit tool results with different field naming depending on execution mode:
+
 - **Headless mode** (background process): Uses camelCase (`oldString`, `newString`)
 - **Interactive terminal**: Uses snake_case (`old_string`, `new_string`)
 
 Parsers should check **both formats** to ensure compatibility across all execution modes.
 
 **Example (Write Result)**:
+
 ```json
 {
   "type": "user",
@@ -780,6 +802,7 @@ Parsers should check **both formats** to ensure compatibility across all executi
 ```
 
 **Example (Edit Result with Diff Data)**:
+
 ```json
 {
   "type": "user",
@@ -823,6 +846,7 @@ Parsers should check **both formats** to ensure compatibility across all executi
 ```
 
 **Note**: Edit operations provide rich diff data in `tool_use_result`:
+
 - `oldString`/`newString`: The exact strings that were searched/replaced
 - `originalFile`: Complete file content before the edit (useful for rendering full context)
 - `structuredPatch`: Unified diff format showing changes with line numbers
@@ -839,29 +863,30 @@ Parsers should check **both formats** to ensure compatibility across all executi
 **Frequency**: 1 per session
 
 **Fields**:
+
 ```typescript
 interface ResultMessage {
   type: "result";
   subtype: ResultSubtype;
   is_error: boolean;
-  duration_ms?: number;              // Total duration
-  duration_api_ms?: number;          // API call duration
-  num_turns?: number;                // Number of turns
-  result?: string;                   // Final result text
+  duration_ms?: number; // Total duration
+  duration_api_ms?: number; // API call duration
+  num_turns?: number; // Number of turns
+  result?: string; // Final result text
   session_id: string;
-  total_cost_usd?: number;           // Total cost in USD
-  usage?: UsageStats;                // Aggregate usage
+  total_cost_usd?: number; // Total cost in USD
+  usage?: UsageStats; // Aggregate usage
   modelUsage?: Record<string, ModelUsage>; // Per-model breakdown
   permission_denials?: PermissionDenial[];
-  errors?: string[];                 // Error messages (if is_error)
+  errors?: string[]; // Error messages (if is_error)
   uuid: string;
 }
 
 type ResultSubtype =
-  | "success"                        // Successful completion
-  | "error_max_turns"                // Max turns exceeded
-  | "error_during_execution"         // Execution error
-  | "error_max_budget_usd";          // Budget exceeded
+  | "success" // Successful completion
+  | "error_max_turns" // Max turns exceeded
+  | "error_during_execution" // Execution error
+  | "error_max_budget_usd"; // Budget exceeded
 
 interface ModelUsage {
   inputTokens: number;
@@ -882,23 +907,24 @@ interface PermissionDenial {
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `subtype` | string | Result type | Always | `"success"` |
-| `is_error` | boolean | Whether result is error | Always | `false` |
-| `duration_ms` | number | Total duration (ms) | If success | `3082` |
-| `duration_api_ms` | number | API duration (ms) | If success | `2977` |
-| `num_turns` | number | Number of turns | If success | `1` |
-| `result` | string | Final result text | If success | `"2 + 2 = 4"` |
-| `session_id` | string | Session UUID | Always | `"1acb40d9-..."` |
-| `total_cost_usd` | number | Total cost in USD | If success | `0.116956` |
-| `usage` | object | Aggregate usage | If success | (see UsageStats) |
-| `modelUsage` | object | Per-model breakdown | If success | (see ModelUsage) |
-| `permission_denials` | array | Denied permissions | If success | `[]` |
-| `errors` | array | Error messages | If error | `["Maximum turns exceeded"]` |
-| `uuid` | string | Message UUID | Always | `"d335aa6d-..."` |
+| Field                | Type    | Description             | When Present | Example                      |
+| -------------------- | ------- | ----------------------- | ------------ | ---------------------------- |
+| `subtype`            | string  | Result type             | Always       | `"success"`                  |
+| `is_error`           | boolean | Whether result is error | Always       | `false`                      |
+| `duration_ms`        | number  | Total duration (ms)     | If success   | `3082`                       |
+| `duration_api_ms`    | number  | API duration (ms)       | If success   | `2977`                       |
+| `num_turns`          | number  | Number of turns         | If success   | `1`                          |
+| `result`             | string  | Final result text       | If success   | `"2 + 2 = 4"`                |
+| `session_id`         | string  | Session UUID            | Always       | `"1acb40d9-..."`             |
+| `total_cost_usd`     | number  | Total cost in USD       | If success   | `0.116956`                   |
+| `usage`              | object  | Aggregate usage         | If success   | (see UsageStats)             |
+| `modelUsage`         | object  | Per-model breakdown     | If success   | (see ModelUsage)             |
+| `permission_denials` | array   | Denied permissions      | If success   | `[]`                         |
+| `errors`             | array   | Error messages          | If error     | `["Maximum turns exceeded"]` |
+| `uuid`               | string  | Message UUID            | Always       | `"d335aa6d-..."`             |
 
 **Example (Success)**:
+
 ```json
 {
   "type": "result",
@@ -943,6 +969,7 @@ interface PermissionDenial {
 ```
 
 **Example (Error - Max Turns)**:
+
 ```json
 {
   "type": "result",
@@ -955,6 +982,7 @@ interface PermissionDenial {
 ```
 
 **Example (Error - During Execution)**:
+
 ```json
 {
   "type": "result",
@@ -975,6 +1003,7 @@ interface PermissionDenial {
 **Frequency**: As needed
 
 **Fields**:
+
 ```typescript
 interface CompactBoundaryMessage {
   type: "system";
@@ -982,24 +1011,25 @@ interface CompactBoundaryMessage {
   uuid: string;
   session_id: string;
   compact_metadata: {
-    trigger: "auto" | "manual";      // Compaction trigger
-    pre_tokens: number;              // Tokens before compaction
+    trigger: "auto" | "manual"; // Compaction trigger
+    pre_tokens: number; // Tokens before compaction
   };
 }
 ```
 
 **Field Details**:
 
-| Field | Type | Description | When Present | Example |
-|-------|------|-------------|--------------|---------|
-| `type` | string | Always `"system"` | Always | `"system"` |
-| `subtype` | string | Always `"compact_boundary"` | Always | `"compact_boundary"` |
-| `compact_metadata.trigger` | string | Trigger type | Always | `"auto"` |
-| `compact_metadata.pre_tokens` | number | Tokens before compact | Always | `50000` |
-| `session_id` | string | Session UUID | Always | `"1acb40d9-..."` |
-| `uuid` | string | Message UUID | Always | `"550e8400-..."` |
+| Field                         | Type   | Description                 | When Present | Example              |
+| ----------------------------- | ------ | --------------------------- | ------------ | -------------------- |
+| `type`                        | string | Always `"system"`           | Always       | `"system"`           |
+| `subtype`                     | string | Always `"compact_boundary"` | Always       | `"compact_boundary"` |
+| `compact_metadata.trigger`    | string | Trigger type                | Always       | `"auto"`             |
+| `compact_metadata.pre_tokens` | number | Tokens before compact       | Always       | `50000`              |
+| `session_id`                  | string | Session UUID                | Always       | `"1acb40d9-..."`     |
+| `uuid`                        | string | Message UUID                | Always       | `"550e8400-..."`     |
 
 **Example**:
+
 ```json
 {
   "type": "system",
@@ -1029,7 +1059,7 @@ interface UsageStats {
     web_search_requests: number;
     web_fetch_requests: number;
   };
-  service_tier: string;              // "standard"
+  service_tier: string; // "standard"
   cache_creation?: {
     ephemeral_1h_input_tokens: number;
     ephemeral_5m_input_tokens: number;
@@ -1039,17 +1069,17 @@ interface UsageStats {
 
 **Field Details**:
 
-| Field | Type | Description | Example |
-|-------|------|-------------|---------|
-| `input_tokens` | number | Input tokens consumed | `3` |
-| `cache_creation_input_tokens` | number | Tokens used for cache creation | `31134` |
-| `cache_read_input_tokens` | number | Tokens read from cache | `0` |
-| `output_tokens` | number | Output tokens generated | `13` |
-| `server_tool_use.web_search_requests` | number | Web search requests | `0` |
-| `server_tool_use.web_fetch_requests` | number | Web fetch requests | `0` |
-| `service_tier` | string | Service tier | `"standard"` |
-| `cache_creation.ephemeral_1h_input_tokens` | number | 1-hour cache tokens | `31134` |
-| `cache_creation.ephemeral_5m_input_tokens` | number | 5-minute cache tokens | `0` |
+| Field                                      | Type   | Description                    | Example      |
+| ------------------------------------------ | ------ | ------------------------------ | ------------ |
+| `input_tokens`                             | number | Input tokens consumed          | `3`          |
+| `cache_creation_input_tokens`              | number | Tokens used for cache creation | `31134`      |
+| `cache_read_input_tokens`                  | number | Tokens read from cache         | `0`          |
+| `output_tokens`                            | number | Output tokens generated        | `13`         |
+| `server_tool_use.web_search_requests`      | number | Web search requests            | `0`          |
+| `server_tool_use.web_fetch_requests`       | number | Web fetch requests             | `0`          |
+| `service_tier`                             | string | Service tier                   | `"standard"` |
+| `cache_creation.ephemeral_1h_input_tokens` | number | 1-hour cache tokens            | `31134`      |
+| `cache_creation.ephemeral_5m_input_tokens` | number | 5-minute cache tokens          | `0`          |
 
 ---
 
@@ -1107,8 +1137,8 @@ interface UsageStats {
 ### Parsing NDJSON Stream
 
 ```typescript
-import { createInterface } from 'readline';
-import { createReadStream } from 'fs';
+import { createInterface } from "readline";
+import { createReadStream } from "fs";
 
 type SDKMessage =
   | SystemMessage
@@ -1122,7 +1152,7 @@ async function parseStreamJson(filePath: string): Promise<SDKMessage[]> {
   const messages: SDKMessage[] = [];
   const rl = createInterface({
     input: createReadStream(filePath),
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
@@ -1140,13 +1170,13 @@ async function parseStreamJson(filePath: string): Promise<SDKMessage[]> {
 ```typescript
 function extractSessionId(messages: SDKMessage[]): string | null {
   // Session ID is in system message
-  const systemMsg = messages.find(m => m.type === 'system') as SystemMessage;
+  const systemMsg = messages.find((m) => m.type === "system") as SystemMessage;
   return systemMsg?.session_id || null;
 }
 
 // Alternative: Extract from result message
 function extractSessionIdFromResult(messages: SDKMessage[]): string | null {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
   return resultMsg?.session_id || null;
 }
 ```
@@ -1154,28 +1184,33 @@ function extractSessionIdFromResult(messages: SDKMessage[]): string | null {
 ### Real-Time Token Streaming
 
 ```typescript
-import { spawn } from 'child_process';
-import { createInterface } from 'readline';
+import { spawn } from "child_process";
+import { createInterface } from "readline";
 
 async function streamTokens(prompt: string): Promise<void> {
-  const claude = spawn('claude', [
-    '-p', prompt,
-    '--output-format', 'stream-json',
-    '--include-partial-messages',
-    '--verbose'
+  const claude = spawn("claude", [
+    "-p",
+    prompt,
+    "--output-format",
+    "stream-json",
+    "--include-partial-messages",
+    "--verbose",
   ]);
 
   const rl = createInterface({
     input: claude.stdout,
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
     const message = JSON.parse(line) as SDKMessage;
 
-    if (message.type === 'stream_event') {
+    if (message.type === "stream_event") {
       const event = message.event;
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
         // Real-time token output
         process.stdout.write(event.delta.text);
       }
@@ -1189,7 +1224,7 @@ async function streamTokens(prompt: string): Promise<void> {
 ```typescript
 function isSessionComplete(messages: SDKMessage[]): boolean {
   // Session is complete when result message is present
-  return messages.some(m => m.type === 'result');
+  return messages.some((m) => m.type === "result");
 }
 
 function getCompletionStatus(messages: SDKMessage[]): {
@@ -1197,7 +1232,7 @@ function getCompletionStatus(messages: SDKMessage[]): {
   success: boolean;
   errors?: string[];
 } {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
 
   if (!resultMsg) {
     return { complete: false, success: false };
@@ -1206,7 +1241,7 @@ function getCompletionStatus(messages: SDKMessage[]): {
   return {
     complete: true,
     success: !resultMsg.is_error,
-    errors: resultMsg.errors
+    errors: resultMsg.errors,
   };
 }
 ```
@@ -1215,19 +1250,21 @@ function getCompletionStatus(messages: SDKMessage[]): {
 
 ```typescript
 function extractFinalResult(messages: SDKMessage[]): string | null {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
   return resultMsg?.result || null;
 }
 
 // Alternative: Concatenate all text from assistant messages
 function extractAllAssistantText(messages: SDKMessage[]): string {
-  const assistantMessages = messages.filter(m => m.type === 'assistant') as AssistantMessage[];
+  const assistantMessages = messages.filter(
+    (m) => m.type === "assistant"
+  ) as AssistantMessage[];
 
   return assistantMessages
-    .flatMap(msg => msg.message.content)
-    .filter(block => block.type === 'text')
-    .map(block => (block as TextBlock).text)
-    .join('\n');
+    .flatMap((msg) => msg.message.content)
+    .filter((block) => block.type === "text")
+    .map((block) => (block as TextBlock).text)
+    .join("\n");
 }
 ```
 
@@ -1235,17 +1272,17 @@ function extractAllAssistantText(messages: SDKMessage[]): string {
 
 ```typescript
 function calculateTotalUsage(messages: SDKMessage[]): UsageStats | null {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
   return resultMsg?.usage || null;
 }
 
 function calculateCostUSD(messages: SDKMessage[]): number {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
   return resultMsg?.total_cost_usd || 0;
 }
 
 function getPerModelUsage(messages: SDKMessage[]): Record<string, ModelUsage> {
-  const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+  const resultMsg = messages.find((m) => m.type === "result") as ResultMessage;
   return resultMsg?.modelUsage || {};
 }
 ```
@@ -1257,14 +1294,22 @@ function getPerModelUsage(messages: SDKMessage[]): Record<string, ModelUsage> {
 ### ClaudeResponseParser Implementation
 
 ```typescript
-import { IResponseParser, ParsedResponse, StreamChunk } from '../shared/interfaces/IResponseParser';
+import {
+  IResponseParser,
+  ParsedResponse,
+  StreamChunk,
+} from "../shared/interfaces/IResponseParser";
 
 export class ClaudeResponseParser implements IResponseParser {
   parseResponse(output: string): ParsedResponse {
     const messages = this.parseNDJSON(output);
 
-    const systemMsg = messages.find(m => m.type === 'system') as SystemMessage;
-    const resultMsg = messages.find(m => m.type === 'result') as ResultMessage;
+    const systemMsg = messages.find(
+      (m) => m.type === "system"
+    ) as SystemMessage;
+    const resultMsg = messages.find(
+      (m) => m.type === "result"
+    ) as ResultMessage;
 
     return {
       content: resultMsg?.result || this.extractAssistantText(messages),
@@ -1272,7 +1317,7 @@ export class ClaudeResponseParser implements IResponseParser {
       usage: resultMsg?.usage,
       cost: resultMsg?.total_cost_usd,
       isError: resultMsg?.is_error || false,
-      errors: resultMsg?.errors
+      errors: resultMsg?.errors,
     };
   }
 
@@ -1280,34 +1325,39 @@ export class ClaudeResponseParser implements IResponseParser {
     try {
       const message = JSON.parse(chunk) as SDKMessage;
 
-      if (message.type === 'stream_event') {
+      if (message.type === "stream_event") {
         const event = message.event;
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
           return { text: event.delta.text };
         }
       }
 
-      return { text: '' };
+      return { text: "" };
     } catch {
-      return { text: '' };
+      return { text: "" };
     }
   }
 
   private parseNDJSON(output: string): SDKMessage[] {
     return output
-      .split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line) as SDKMessage);
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line) as SDKMessage);
   }
 
   private extractAssistantText(messages: SDKMessage[]): string {
-    const assistantMessages = messages.filter(m => m.type === 'assistant') as AssistantMessage[];
+    const assistantMessages = messages.filter(
+      (m) => m.type === "assistant"
+    ) as AssistantMessage[];
 
     return assistantMessages
-      .flatMap(msg => msg.message.content)
-      .filter(block => block.type === 'text')
-      .map(block => (block as TextBlock).text)
-      .join('\n');
+      .flatMap((msg) => msg.message.content)
+      .filter((block) => block.type === "text")
+      .map((block) => (block as TextBlock).text)
+      .join("\n");
   }
 }
 ```
@@ -1317,11 +1367,11 @@ export class ClaudeResponseParser implements IResponseParser {
 ```typescript
 // From system message (recommended - available immediately)
 function extractSessionIdFromSystem(output: string): string | null {
-  const lines = output.split('\n');
-  const systemLine = lines.find(line => {
+  const lines = output.split("\n");
+  const systemLine = lines.find((line) => {
     try {
       const msg = JSON.parse(line);
-      return msg.type === 'system' && msg.subtype === 'init';
+      return msg.type === "system" && msg.subtype === "init";
     } catch {
       return false;
     }
@@ -1337,11 +1387,11 @@ function extractSessionIdFromSystem(output: string): string | null {
 
 // From result message (fallback - only at end)
 function extractSessionIdFromResult(output: string): string | null {
-  const lines = output.split('\n');
-  const resultLine = lines.find(line => {
+  const lines = output.split("\n");
+  const resultLine = lines.find((line) => {
     try {
       const msg = JSON.parse(line);
-      return msg.type === 'result';
+      return msg.type === "result";
     } catch {
       return false;
     }
@@ -1361,12 +1411,12 @@ function extractSessionIdFromResult(output: string): string | null {
 ```typescript
 function detectCompletion(output: string): boolean {
   // Check for result message (final line indicator)
-  const lines = output.split('\n').filter(line => line.trim());
+  const lines = output.split("\n").filter((line) => line.trim());
   const lastLine = lines[lines.length - 1];
 
   try {
     const message = JSON.parse(lastLine) as SDKMessage;
-    return message.type === 'result';
+    return message.type === "result";
   } catch {
     return false;
   }
@@ -1376,12 +1426,12 @@ function waitForCompletion(
   onLine: (line: string) => void,
   onComplete: (success: boolean) => void
 ): void {
-  let buffer = '';
+  let buffer = "";
 
   return (chunk: string) => {
     buffer += chunk;
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
     for (const line of lines) {
       if (!line.trim()) continue;
@@ -1390,7 +1440,7 @@ function waitForCompletion(
 
       try {
         const message = JSON.parse(line) as SDKMessage;
-        if (message.type === 'result') {
+        if (message.type === "result") {
           onComplete(!message.is_error);
         }
       } catch {
@@ -1420,6 +1470,7 @@ function waitForCompletion(
 - Best for simple automation
 
 **Example**:
+
 ```json
 {
   "type": "result",
@@ -1510,14 +1561,14 @@ claude -p "Your prompt" \
 
 ### Common Flags
 
-| Flag | Description |
-|------|-------------|
-| `-p`, `--print` | Non-interactive mode (required for stream-json) |
-| `--output-format stream-json` | Enable NDJSON streaming output |
-| `--include-partial-messages` | Include token-by-token streaming events |
-| `--verbose` | Required for stream-json output |
-| `--allowedTools` | Auto-approve specific tools (e.g., `"Read,Write,Bash"`) |
-| `--resume <session-id>` | Resume previous session |
+| Flag                          | Description                                             |
+| ----------------------------- | ------------------------------------------------------- |
+| `-p`, `--print`               | Non-interactive mode (required for stream-json)         |
+| `--output-format stream-json` | Enable NDJSON streaming output                          |
+| `--include-partial-messages`  | Include token-by-token streaming events                 |
+| `--verbose`                   | Required for stream-json output                         |
+| `--allowedTools`              | Auto-approve specific tools (e.g., `"Read,Write,Bash"`) |
+| `--resume <session-id>`       | Resume previous session                                 |
 
 ---
 
@@ -1543,7 +1594,11 @@ interface SystemMessage {
   tools: string[];
   mcp_servers: Array<{ name: string; status: string }>;
   model: string;
-  permissionMode: "acceptEdits" | "dangerouslySkipPermissions" | "allowAll" | "custom";
+  permissionMode:
+    | "acceptEdits"
+    | "dangerouslySkipPermissions"
+    | "allowAll"
+    | "custom";
   slash_commands: string[];
   apiKeySource: string;
   claude_code_version: string;
@@ -1586,13 +1641,17 @@ interface MessageStartEvent {
 interface ContentBlockStartEvent {
   type: "content_block_start";
   index: number;
-  content_block: { type: "text"; text: "" } | { type: "tool_use"; id: string; name: string; input: {} };
+  content_block:
+    | { type: "text"; text: "" }
+    | { type: "tool_use"; id: string; name: string; input: {} };
 }
 
 interface ContentBlockDeltaEvent {
   type: "content_block_delta";
   index: number;
-  delta: { type: "text_delta"; text: string } | { type: "input_json_delta"; partial_json: string };
+  delta:
+    | { type: "text_delta"; text: string }
+    | { type: "input_json_delta"; partial_json: string };
 }
 
 interface ContentBlockStopEvent {
@@ -1624,7 +1683,10 @@ interface AssistantMessage {
     id: string;
     type: "message";
     role: "assistant";
-    content: Array<{ type: "text"; text: string } | { type: "tool_use"; id: string; name: string; input: any }>;
+    content: Array<
+      | { type: "text"; text: string }
+      | { type: "tool_use"; id: string; name: string; input: any }
+    >;
     stop_reason: string | null;
     stop_sequence: string | null;
     usage: UsageStats;
@@ -1640,7 +1702,11 @@ interface UserMessage {
   type: "user";
   message: {
     role: "user";
-    content: Array<{ tool_use_id: string; type: "tool_result"; content: string }>;
+    content: Array<{
+      tool_use_id: string;
+      type: "tool_result";
+      content: string;
+    }>;
   };
   parent_tool_use_id: string | null;
   session_id: string;
@@ -1649,10 +1715,10 @@ interface UserMessage {
     type?: string;
     filePath?: string;
     content?: string;
-    oldString?: string;           // Edit: original text (headless mode)
-    newString?: string;           // Edit: replacement text (headless mode)
-    old_string?: string;          // Edit: original text (interactive terminal)
-    new_string?: string;          // Edit: replacement text (interactive terminal)
+    oldString?: string; // Edit: original text (headless mode)
+    newString?: string; // Edit: replacement text (headless mode)
+    old_string?: string; // Edit: original text (interactive terminal)
+    new_string?: string; // Edit: replacement text (interactive terminal)
     structuredPatch?: any[];
     originalFile?: any;
   };
@@ -1661,7 +1727,11 @@ interface UserMessage {
 // Result message (final statistics)
 interface ResultMessage {
   type: "result";
-  subtype: "success" | "error_max_turns" | "error_during_execution" | "error_max_budget_usd";
+  subtype:
+    | "success"
+    | "error_max_turns"
+    | "error_during_execution"
+    | "error_max_budget_usd";
   is_error: boolean;
   duration_ms?: number;
   duration_api_ms?: number;
@@ -1670,16 +1740,19 @@ interface ResultMessage {
   session_id: string;
   total_cost_usd?: number;
   usage?: UsageStats;
-  modelUsage?: Record<string, {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadInputTokens: number;
-    cacheCreationInputTokens: number;
-    webSearchRequests: number;
-    costUSD: number;
-    contextWindow: number;
-    maxOutputTokens: number;
-  }>;
+  modelUsage?: Record<
+    string,
+    {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+      webSearchRequests: number;
+      costUSD: number;
+      contextWindow: number;
+      maxOutputTokens: number;
+    }
+  >;
   permission_denials?: Array<{ tool: string; reason: string }>;
   errors?: string[];
   uuid: string;

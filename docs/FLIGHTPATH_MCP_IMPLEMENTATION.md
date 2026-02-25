@@ -1894,7 +1894,7 @@ Final queue: [existing, A, B, C, D, E] (or similar based on positions and timing
 | Copilot CLI config generation | ✅ **Complete** | Generates temp JSON with correct format        |
 | Codex CLI inline TOML         | ✅ **Complete** | Generate TOML string via CliMcpConfigGenerator |
 | Claude CLI config generation  | ✅ **Complete** | Similar to Copilot                             |
-| Setup UI prompts              | ⏸ **Deferred** | Notify user on first use                       |
+| Setup UI prompts              | ⏸ **Deferred**  | Notify user on first use                       |
 | End-to-end testing            | ✅ **Complete** | Testing all CLI platforms                      |
 
 **Phase 3: VS Code Chat Integration** ✅ **COMPLETED**

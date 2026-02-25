@@ -52,6 +52,7 @@ if (resolvedSessionId) {
 ```
 
 This creates a three-tier log discovery strategy:
+
 1. **Resumed sessions** (highest priority): Use `resolvedSessionId` directly → Fast path
 2. **SessionStart hook** (Claude new sessions): Wait for hook notification → Reliable for new sessions
 3. **Prompt matching** (Copilot/Codex fallback): Match prompt text in logs → Slowest/least reliable
@@ -131,11 +132,11 @@ ClaudeLogParser already correctly implemented the sessionId parameter.
 
 Each provider stores log files differently:
 
-| Provider | Directory Structure | Session Resumption Path |
-|----------|---------------------|-------------------------|
-| **Copilot** | `~/.copilot/session-state/` | `{sessionId}/events.jsonl` (directory format)<br>OR `{sessionId}.jsonl` (flat file format) |
-| **Claude** | `{projectDir}/` | `{sessionId}.jsonl` |
-| **Codex** | `~/.codex/sessions/YYYY/MM/DD/` | `rollout-*-{sessionId}.jsonl` |
+| Provider    | Directory Structure             | Session Resumption Path                                                                    |
+| ----------- | ------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Copilot** | `~/.copilot/session-state/`     | `{sessionId}/events.jsonl` (directory format)<br>OR `{sessionId}.jsonl` (flat file format) |
+| **Claude**  | `{projectDir}/`                 | `{sessionId}.jsonl`                                                                        |
+| **Codex**   | `~/.codex/sessions/YYYY/MM/DD/` | `rollout-*-{sessionId}.jsonl`                                                              |
 
 ## Testing
 

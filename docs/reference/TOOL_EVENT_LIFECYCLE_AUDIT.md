@@ -16,16 +16,16 @@
 
 ### Tool Types Supported (7 Total)
 
-| Tool Type | Parser Location | Two-Event Support | Result Value |
-|-----------|----------------|-------------------|--------------|
-| **Bash/Shell** | ClaudeLogParser:178, ClaudeResponseParser:296 | ❌ No (should add) | Exit code, output, error |
-| **File Edit** | ClaudeLogParser:200, ClaudeResponseParser:332 | ✅ Yes (INITIATED + COMPLETED) | Diff, patch, success |
-| **File Write** | ClaudeLogParser:189, ClaudeResponseParser:317 | ✅ Yes (INITIATED + COMPLETED) | Success, content |
-| **File Read** | ClaudeLogParser:212, ClaudeResponseParser:357 | ✅ Yes (INITIATED + COMPLETED) | Content, success |
-| **File Delete** | ClaudeLogParser:222 | ❌ No (single event only) | N/A |
-| **Web Search** | ClaudeLogParser:231, ClaudeResponseParser:387 | ❌ No (single event only) | Results array |
-| **MCP Tools** | ClaudeLogParser:240, ClaudeResponseParser:401 | ❌ No (single event only) | Server-specific |
-| **Generic Fallback** | ClaudeLogParser:252, ClaudeResponseParser:420 | ❌ No (single event only) | Tool result |
+| Tool Type            | Parser Location                               | Two-Event Support              | Result Value             |
+| -------------------- | --------------------------------------------- | ------------------------------ | ------------------------ |
+| **Bash/Shell**       | ClaudeLogParser:178, ClaudeResponseParser:296 | ❌ No (should add)             | Exit code, output, error |
+| **File Edit**        | ClaudeLogParser:200, ClaudeResponseParser:332 | ✅ Yes (INITIATED + COMPLETED) | Diff, patch, success     |
+| **File Write**       | ClaudeLogParser:189, ClaudeResponseParser:317 | ✅ Yes (INITIATED + COMPLETED) | Success, content         |
+| **File Read**        | ClaudeLogParser:212, ClaudeResponseParser:357 | ✅ Yes (INITIATED + COMPLETED) | Content, success         |
+| **File Delete**      | ClaudeLogParser:222                           | ❌ No (single event only)      | N/A                      |
+| **Web Search**       | ClaudeLogParser:231, ClaudeResponseParser:387 | ❌ No (single event only)      | Results array            |
+| **MCP Tools**        | ClaudeLogParser:240, ClaudeResponseParser:401 | ❌ No (single event only)      | Server-specific          |
+| **Generic Fallback** | ClaudeLogParser:252, ClaudeResponseParser:420 | ❌ No (single event only)      | Tool result              |
 
 ---
 
@@ -34,6 +34,7 @@
 ### 1. Bash/Shell Commands
 
 **Current State:**
+
 ```typescript
 // ClaudeLogParser.ts:178-188 - tool_use block
 if (toolName === "bash" || toolName === "shell") {
@@ -43,7 +44,7 @@ if (toolName === "bash" || toolName === "shell") {
     data: {
       command: input.command || "unknown",
       workingDir: input.working_dir || input.cwd,
-      status: "in_progress",  // ⚠️ Hardcoded, no completion tracking
+      status: "in_progress", // ⚠️ Hardcoded, no completion tracking
     } as BashCommandData,
   });
 }
@@ -52,19 +53,21 @@ if (toolName === "bash" || toolName === "shell") {
 **Missing:** No `tool_result` processing for bash commands in ClaudeLogParser.
 
 **BashCommandData Interface:**
+
 ```typescript
 // CliOutputTypes.ts:172-185
 export interface BashCommandData {
   command: string;
   workingDir?: string;
-  exitCode?: number;        // ✅ Present
-  output?: string;          // ✅ Present
-  error?: string;           // ✅ Present
+  exitCode?: number; // ✅ Present
+  output?: string; // ✅ Present
+  error?: string; // ✅ Present
   status?: "in_progress" | "completed" | "failed"; // ✅ Present
 }
 ```
 
 **Problem:**
+
 - Interface already supports two-event pattern (`status`, `exitCode`, `output`, `error`)
 - Parser only creates INITIATED event (from `tool_use`)
 - Parser never creates COMPLETED event (from `tool_result`)
@@ -81,6 +84,7 @@ Yes - Bash commands have valuable result data (exit code, stdout, stderr) that m
 ### 2. File Edit (Already Implemented Correctly)
 
 **Current State:**
+
 ```typescript
 // INITIATED event (from tool_use block)
 // ClaudeLogParser.ts:200-211
@@ -92,7 +96,7 @@ if (toolName === "edit" || toolName === "apply_patch") {
       path: input.path || "unknown",
       oldContent: input.old_content || input.old_str,
       newContent: input.new_content || input.new_str,
-      status: FILE_OPERATION_STATUS.INITIATED,  // ✅ First event
+      status: FILE_OPERATION_STATUS.INITIATED, // ✅ First event
     } as FileEditData,
   });
 }
@@ -107,11 +111,11 @@ if (oldString && newString) {
       path: toolUseResult.filePath || "unknown",
       oldContent: oldString,
       newContent: newString,
-      structuredPatch: toolUseResult.structuredPatch,  // ✅ Rich diff data
+      structuredPatch: toolUseResult.structuredPatch, // ✅ Rich diff data
       originalFile: toolUseResult.originalFile,
       userModified: toolUseResult.userModified,
       replaceAll: toolUseResult.replaceAll,
-      status: FILE_OPERATION_STATUS.COMPLETED,  // ✅ Second event
+      status: FILE_OPERATION_STATUS.COMPLETED, // ✅ Second event
       success: true,
     } as FileEditData,
   });
@@ -119,6 +123,7 @@ if (oldString && newString) {
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:396-422
 if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
@@ -134,13 +139,17 @@ if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
 }
 
 // Only render diff for completed edits
-if (event.data.status !== FILE_OPERATION_STATUS.INITIATED &&
-    (event.data.structuredPatch || (event.data.oldContent && event.data.newContent))) {
+if (
+  event.data.status !== FILE_OPERATION_STATUS.INITIATED &&
+  (event.data.structuredPatch ||
+    (event.data.oldContent && event.data.newContent))
+) {
   html += renderDiffVisualization(event.data);
 }
 ```
 
 **Why Two Events Are Essential:**
+
 1. **Progress feedback:** User sees "Editing file.ts (starting...)" immediately
 2. **Rich diff data:** `structuredPatch` only available in COMPLETED event (from `toolUseResult`)
 3. **Error handling:** Can show "Edit failed: file.ts - Permission denied"
@@ -154,6 +163,7 @@ if (event.data.status !== FILE_OPERATION_STATUS.INITIATED &&
 ### 3. File Write (Already Implemented Correctly)
 
 **Current State:**
+
 ```typescript
 // INITIATED event
 // ClaudeLogParser.ts:189-199
@@ -164,7 +174,7 @@ if (toolName === "write") {
     data: {
       path: input.path || "unknown",
       content: input.content || "",
-      status: FILE_OPERATION_STATUS.INITIATED,  // ✅ First event
+      status: FILE_OPERATION_STATUS.INITIATED, // ✅ First event
     } as FileWriteData,
   });
 }
@@ -178,7 +188,7 @@ if (toolUseResult.type === "create" || toolUseResult.content) {
     data: {
       path: toolUseResult.filePath || toolUseResult.path || "unknown",
       content: toolUseResult.content || "",
-      status: FILE_OPERATION_STATUS.COMPLETED,  // ✅ Second event
+      status: FILE_OPERATION_STATUS.COMPLETED, // ✅ Second event
       success: true,
     } as FileWriteData,
   });
@@ -186,6 +196,7 @@ if (toolUseResult.type === "create" || toolUseResult.content) {
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:429-451
 if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
@@ -204,6 +215,7 @@ if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
 ```
 
 **Why Two Events Are Essential:**
+
 1. **Progress feedback:** User sees "Writing file.ts (starting...)" immediately
 2. **Success confirmation:** COMPLETED event confirms file was actually written
 3. **Error handling:** Can show "Write failed: file.ts - Disk full"
@@ -217,6 +229,7 @@ if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
 ### 4. File Read (Already Implemented Correctly)
 
 **Current State:**
+
 ```typescript
 // INITIATED event
 // ClaudeLogParser.ts:212-221
@@ -226,7 +239,7 @@ if (toolName === "read" || toolName === "read_file") {
     timestamp,
     data: {
       path: input.path || "unknown",
-      status: FILE_OPERATION_STATUS.INITIATED,  // ✅ First event
+      status: FILE_OPERATION_STATUS.INITIATED, // ✅ First event
     } as FileReadData,
   });
 }
@@ -240,7 +253,7 @@ if (toolUseResult.type === "text" && toolUseResult.file) {
     data: {
       path: toolUseResult.file.filePath || "unknown",
       content: toolUseResult.file.content || "",
-      status: FILE_OPERATION_STATUS.COMPLETED,  // ✅ Second event
+      status: FILE_OPERATION_STATUS.COMPLETED, // ✅ Second event
       success: true,
     } as FileReadData,
   });
@@ -248,6 +261,7 @@ if (toolUseResult.type === "text" && toolUseResult.file) {
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:454-474
 if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
@@ -263,6 +277,7 @@ if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
 ```
 
 **Why Two Events Are Essential:**
+
 1. **Progress feedback:** User sees "Reading file.ts (starting...)" immediately
 2. **Success confirmation:** COMPLETED event confirms file was actually read
 3. **Error handling:** Can show "Read failed: file.ts - File not found"
@@ -275,6 +290,7 @@ if (event.data.status === FILE_OPERATION_STATUS.INITIATED) {
 ### 5. File Delete (Single Event Only)
 
 **Current State:**
+
 ```typescript
 // ClaudeLogParser.ts:222-230 - tool_use block only
 if (toolName === "delete" || toolName === "delete_file") {
@@ -289,16 +305,18 @@ if (toolName === "delete" || toolName === "delete_file") {
 ```
 
 **FileDeleteData Interface:**
+
 ```typescript
 // CliOutputTypes.ts:272-280
 export interface FileDeleteData {
   path: string;
-  success?: boolean;   // ❓ Unused - no tool_result processing
-  error?: string;      // ❓ Unused - no tool_result processing
+  success?: boolean; // ❓ Unused - no tool_result processing
+  error?: string; // ❓ Unused - no tool_result processing
 }
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:477-485
 case "fileDelete":
@@ -313,6 +331,7 @@ case "fileDelete":
 ```
 
 **Analysis:**
+
 - Delete operations are fast (milliseconds)
 - No valuable result data to show (file is just gone)
 - Interface has `success`/`error` fields but they're never populated
@@ -328,6 +347,7 @@ case "fileDelete":
 ### 6. Web Search (Single Event Only)
 
 **Current State:**
+
 ```typescript
 // ClaudeLogParser.ts:231-239 - tool_use block only
 if (toolName.includes("search") || toolName === "web_search") {
@@ -342,21 +362,24 @@ if (toolName.includes("search") || toolName === "web_search") {
 ```
 
 **WebSearchData Interface:**
+
 ```typescript
 // CliOutputTypes.ts:298-312
 export interface WebSearchData {
   query: string;
-  results?: Array<{       // ❓ Unused - no tool_result processing
+  results?: Array<{
+    // ❓ Unused - no tool_result processing
     title: string;
     url: string;
     snippet?: string;
   }>;
-  success?: boolean;      // ❓ Unused
-  error?: string;         // ❓ Unused
+  success?: boolean; // ❓ Unused
+  error?: string; // ❓ Unused
 }
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:503-511
 case "webSearch":
@@ -371,6 +394,7 @@ case "webSearch":
 ```
 
 **Analysis:**
+
 - Interface has `results` array but it's never populated
 - Could show search results in COMPLETED event
 - But: Search results are typically very verbose (titles, URLs, snippets)
@@ -380,6 +404,7 @@ case "webSearch":
 ⚠️ **Consider adding later** - Two-event pattern would be useful to show search results, but requires UX design for result display. Not critical for MVP.
 
 **Future Enhancement:**
+
 ```typescript
 // COMPLETED event (future)
 {
@@ -401,6 +426,7 @@ case "webSearch":
 ### 7. MCP Tools (Single Event Only)
 
 **Current State:**
+
 ```typescript
 // ClaudeLogParser.ts:240-250 - tool_use block only
 if (toolName.includes("mcp_") || input.server) {
@@ -417,17 +443,19 @@ if (toolName.includes("mcp_") || input.server) {
 ```
 
 **McpToolCallData Interface:**
+
 ```typescript
 // CliOutputTypes.ts:284-294
 export interface McpToolCallData {
   server: string;
   tool: string;
   parameters?: Record<string, unknown>;
-  result?: ToolResult;    // ❓ Unused - no tool_result processing
+  result?: ToolResult; // ❓ Unused - no tool_result processing
 }
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:488-500
 case "mcpToolCall":
@@ -442,6 +470,7 @@ case "mcpToolCall":
 ```
 
 **Analysis:**
+
 - MCP tools are server-specific (GitHub, Slack, etc.)
 - Results vary wildly by tool type
 - Interface has `result` field but it's never populated
@@ -451,6 +480,7 @@ case "mcpToolCall":
 ⚠️ **Consider adding later** - MCP tool results could be valuable, but each server has different result schemas. Would need custom rendering per MCP server. Not critical for MVP.
 
 **Future Enhancement:**
+
 ```typescript
 // COMPLETED event (future)
 {
@@ -474,6 +504,7 @@ case "mcpToolCall":
 ### 8. Generic Fallback (Single Event Only)
 
 **Current State:**
+
 ```typescript
 // ClaudeLogParser.ts:252-262 - tool_use block only
 // Unknown tool - fallback to generic TOOL_CALL
@@ -489,17 +520,19 @@ outputEvents.push({
 ```
 
 **ToolCall Interface:**
+
 ```typescript
 // CliOutputTypes.ts:114-123
 export interface ToolCall {
   name: string;
   parameters: Record<string, unknown>;
   id?: string;
-  result?: ToolResult;    // ❓ Unused - no tool_result processing
+  result?: ToolResult; // ❓ Unused - no tool_result processing
 }
 ```
 
 **Dashboard Rendering:**
+
 ```javascript
 // output-manager.js:514-539
 case "toolCall":
@@ -523,6 +556,7 @@ case "toolCall":
 ```
 
 **Analysis:**
+
 - Generic fallback for unknown tools
 - Already has `result` field and dashboard renders it
 - But: No parser code populates the result field
@@ -546,6 +580,7 @@ export const FILE_OPERATION_STATUS = {
 ```
 
 **Usage:**
+
 - Only used for file operations (Edit, Write, Read)
 - Name is accurate and specific
 - Clear semantic meaning
@@ -553,11 +588,13 @@ export const FILE_OPERATION_STATUS = {
 **Rename Proposal: `OPERATION_STATUS`**
 
 **Pros:**
+
 - More generic, could apply to Bash, Web Search, MCP tools
 - Future-proof if we add two-event pattern to other tools
 - Shorter name
 
 **Cons:**
+
 - Less specific (loses "FILE" context)
 - Would require renaming all references (40+ files)
 - Current name is more self-documenting
@@ -566,6 +603,7 @@ export const FILE_OPERATION_STATUS = {
 ⚠️ **Rename for future extensibility** - If we're adding Bash command two-event pattern, rename now to avoid future churn.
 
 **Migration Plan:**
+
 1. Rename constant: `FILE_OPERATION_STATUS` → `OPERATION_STATUS`
 2. Update all imports (TypeScript will catch most)
 3. Update documentation
@@ -580,6 +618,7 @@ export const FILE_OPERATION_STATUS = {
 **1. Bash Commands - Two-Event Pattern**
 
 **Why:** Bash commands are the most common tool type. Users need to see:
+
 - Command execution started
 - Exit code (success/failure)
 - Stdout output
@@ -699,7 +738,8 @@ export const OPERATION_STATUS = {
 } as const;
 
 // Type alias (for compatibility)
-export type OperationStatus = (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
+export type OperationStatus =
+  (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
 export type FileOperationStatus = OperationStatus; // Deprecated alias
 ```
 
@@ -719,7 +759,7 @@ export interface BashCommandData {
   exitCode?: number;
   output?: string;
   error?: string;
-  status?: OperationStatus;  // Use new generic constant
+  status?: OperationStatus; // Use new generic constant
 }
 ```
 
@@ -792,7 +832,7 @@ if (contentBlock.type === "tool_use") {
       data: {
         command: input.command || "unknown",
         workingDir: input.working_dir || input.cwd,
-        status: OPERATION_STATUS.INITIATED,  // ✅ First event
+        status: OPERATION_STATUS.INITIATED, // ✅ First event
       } as BashCommandData,
     });
   }
@@ -817,9 +857,10 @@ if (event.type === "user" && event.toolUseResult) {
         exitCode: toolUseResult.exitCode,
         output: toolUseResult.output,
         error: toolUseResult.error,
-        status: toolUseResult.exitCode === 0
-          ? OPERATION_STATUS.COMPLETED  // ✅ Second event (success)
-          : OPERATION_STATUS.FAILED,     // ✅ Second event (failure)
+        status:
+          toolUseResult.exitCode === 0
+            ? OPERATION_STATUS.COMPLETED // ✅ Second event (success)
+            : OPERATION_STATUS.FAILED, // ✅ Second event (failure)
       } as BashCommandData,
     });
   }
@@ -868,26 +909,28 @@ case "bashCommand":
 
 ## Summary Table
 
-| Tool Type | Current Events | Should Have | Parser Update Needed | Dashboard Update Needed |
-|-----------|---------------|-------------|---------------------|------------------------|
-| **Bash** | 1 (initiated only) | 2 (initiated + completed) | ✅ Yes - Add tool_result processing | ❌ No - Already correct |
-| **File Edit** | 2 (initiated + completed) | 2 | ❌ No - Already correct | ❌ No - Already correct |
-| **File Write** | 2 (initiated + completed) | 2 | ❌ No - Already correct | ❌ No - Already correct |
-| **File Read** | 2 (initiated + completed) | 2 | ❌ No - Already correct | ❌ No - Already correct |
-| **File Delete** | 1 (single event) | 1 | ❌ No - Correct | ❌ No - Correct |
-| **Web Search** | 1 (single event) | 1 (maybe 2 later) | ⚠️ Future enhancement | ⚠️ Future enhancement |
-| **MCP Tools** | 1 (single event) | 1 (maybe 2 later) | ⚠️ Future enhancement | ⚠️ Future enhancement |
-| **Generic Fallback** | 1 (single event) | 1 | ❌ No - Correct | ❌ No - Correct |
+| Tool Type            | Current Events            | Should Have               | Parser Update Needed                | Dashboard Update Needed |
+| -------------------- | ------------------------- | ------------------------- | ----------------------------------- | ----------------------- |
+| **Bash**             | 1 (initiated only)        | 2 (initiated + completed) | ✅ Yes - Add tool_result processing | ❌ No - Already correct |
+| **File Edit**        | 2 (initiated + completed) | 2                         | ❌ No - Already correct             | ❌ No - Already correct |
+| **File Write**       | 2 (initiated + completed) | 2                         | ❌ No - Already correct             | ❌ No - Already correct |
+| **File Read**        | 2 (initiated + completed) | 2                         | ❌ No - Already correct             | ❌ No - Already correct |
+| **File Delete**      | 1 (single event)          | 1                         | ❌ No - Correct                     | ❌ No - Correct         |
+| **Web Search**       | 1 (single event)          | 1 (maybe 2 later)         | ⚠️ Future enhancement               | ⚠️ Future enhancement   |
+| **MCP Tools**        | 1 (single event)          | 1 (maybe 2 later)         | ⚠️ Future enhancement               | ⚠️ Future enhancement   |
+| **Generic Fallback** | 1 (single event)          | 1                         | ❌ No - Correct                     | ❌ No - Correct         |
 
 ---
 
 ## Conclusion
 
 **Immediate Action Required:**
+
 1. ✅ Add Bash command two-event pattern (high priority, parser updates only)
 2. ✅ Rename `FILE_OPERATION_STATUS` → `OPERATION_STATUS` (medium priority, clean refactor)
 
 **No Action Needed:**
+
 - File operations (Edit, Write, Read) - Already correct
 - File Delete - Single event is appropriate
 - Web Search - Defer until UX design available

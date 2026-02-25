@@ -193,10 +193,10 @@ Architecture: #file:docs/bmad/architecture.md
 | Aspect         | Stock BMAD                           | FlightPath BMAD                   |
 | -------------- | ------------------------------------ | --------------------------------- |
 | Agent loading  | Stub → manual load                   | Full content embedded             |
-| Execution mode | Interactive (default), YOLO (opt-in) | Autonomous only (no toggle)        |
-| Menu system    | Show menu, wait for selection        | Direct workflow execution          |
-| Confirmations  | Pause at template-output             | None—continue automatically        |
-| Fresh chats    | User manually opens new chat         | `resumeSession: false` per prompt  |
+| Execution mode | Interactive (default), YOLO (opt-in) | Autonomous only (no toggle)       |
+| Menu system    | Show menu, wait for selection        | Direct workflow execution         |
+| Confirmations  | Pause at template-output             | None—continue automatically       |
+| Fresh chats    | User manually opens new chat         | `resumeSession: false` per prompt |
 | Context files  | Agent must discover/load             | `#file:` references pre-attached  |
 
 ---

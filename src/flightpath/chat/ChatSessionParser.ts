@@ -155,7 +155,11 @@ export class ChatSessionParser {
         continue;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const patch = JSON.parse(lines[i]) as { kind: number; k: (string | number)[]; v: any };
+      const patch = JSON.parse(lines[i]) as {
+        kind: number;
+        k: (string | number)[];
+        v: any;
+      };
       if (patch.kind === 1) {
         ChatSessionParser.jsonlSetAtPath(state, patch.k, patch.v);
       } else if (patch.kind === 2) {
@@ -166,7 +170,11 @@ export class ChatSessionParser {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private static jsonlSetAtPath(obj: any, keyPath: (string | number)[], value: unknown): void {
+  private static jsonlSetAtPath(
+    obj: any,
+    keyPath: (string | number)[],
+    value: unknown
+  ): void {
     if (!keyPath?.length) {
       return;
     }
@@ -317,7 +325,10 @@ export class ChatSessionParser {
         item.kind === "undoStop"
       ) {
         // VS Code UI structural items — informational only, not included as events
-        Log.debug(`Skipping structural item: ${item.kind}`, "ChatSessionParser");
+        Log.debug(
+          `Skipping structural item: ${item.kind}`,
+          "ChatSessionParser"
+        );
       } else if (!item.kind && item.value) {
         // Text response (no "kind" field means it's a text response)
         const textContent =
@@ -351,7 +362,9 @@ export class ChatSessionParser {
               e.type === CLI_EVENT_TYPES.TOOL_CALL &&
               e.data &&
               "name" in e.data &&
-              ChatSessionParser.normalizeCopilotToolName(e.data.name as string) === canonicalName
+              ChatSessionParser.normalizeCopilotToolName(
+                e.data.name as string
+              ) === canonicalName
           );
           const matchedByNormalization = !!toolEvent;
 
@@ -477,11 +490,13 @@ export class ChatSessionParser {
     }
 
     if (name === "multi_replace_string_in_file") {
-      const replacements = params.replacements as Array<{
-        filePath: string;
-        oldString?: string;
-        newString?: string;
-      }> | undefined;
+      const replacements = params.replacements as
+        | Array<{
+            filePath: string;
+            oldString?: string;
+            newString?: string;
+          }>
+        | undefined;
       if (!replacements?.length) {
         return [event];
       }

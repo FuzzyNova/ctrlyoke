@@ -24,23 +24,23 @@ as the human-readable `name` field.
 
 ### Current `id` usage (everything it does today)
 
-| Location | What it does |
-|---|---|
-| `prompt-schema.json` | `"pattern": "^[a-zA-Z0-9-_]+$"`, `"maxLength": 50` — machine-key constraint |
-| `PromptIdentity.ts:markPromptCompleted` | Builds tracking string `"${id}:${hash}"` or `"${hash}"` |
-| `PromptIdentity.ts:isPromptCompleted` | Checks `"{id}:{hash}"` and hash fallback against `completedIds` Set |
-| `PromptQueue.ts:restoreFromWorkingFile` | Loads `completedPrompts[]` → `completedIds` Set |
-| `PromptQueue.ts:updateWorkingFile` | Writes `completedIds` → `completedPrompts[]` on disk |
-| `PromptQueue.ts:reloadAndMergeQueue` | Calls `isPromptCompleted()`, also builds `currentPromptHashes` using `prompt.id` |
-| `PromptQueue.ts:mergePromptsFromDisk` | `memoryPromptMap.set(prompt.id, prompt)` for identity lookup |
-| `PromptQueue.ts:updateWorkingFile` | Auto-assigns `id = hash` for prompts without an explicit id |
-| `mcp-server.ts:validatePrompts` | Checks 2 & 3: pending-queue dedup by ID and hash |
-| `mcp-server.ts:getPromptStatus` | `runtime.completedPrompts.includes(String(index))` |
-| `mcp-server.ts:append_queue tool` | `new Set(runtime.completedPrompts)` → passes to `validatePrompts` |
-| `FlightPathManager.ts:executeEphemeralPrompt` | Sanitizes `promptName` → kebab-case → `promptId = "${sanitized}-${date}-${time}"` |
-| `FlightPathManager.ts:generateWorkflowNameFromPrompt` | Uses `promptName` to name the working file |
-| `editorStore.ts:enterEditMode` | `promptName: promptData.id ?? ""` — loads `id` into the name input |
-| `editorStore.ts:getPromptProperties` | `result.id = promptName.trim()` — saves name input back to `id` |
+| Location                                              | What it does                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `prompt-schema.json`                                  | `"pattern": "^[a-zA-Z0-9-_]+$"`, `"maxLength": 50` — machine-key constraint       |
+| `PromptIdentity.ts:markPromptCompleted`               | Builds tracking string `"${id}:${hash}"` or `"${hash}"`                           |
+| `PromptIdentity.ts:isPromptCompleted`                 | Checks `"{id}:{hash}"` and hash fallback against `completedIds` Set               |
+| `PromptQueue.ts:restoreFromWorkingFile`               | Loads `completedPrompts[]` → `completedIds` Set                                   |
+| `PromptQueue.ts:updateWorkingFile`                    | Writes `completedIds` → `completedPrompts[]` on disk                              |
+| `PromptQueue.ts:reloadAndMergeQueue`                  | Calls `isPromptCompleted()`, also builds `currentPromptHashes` using `prompt.id`  |
+| `PromptQueue.ts:mergePromptsFromDisk`                 | `memoryPromptMap.set(prompt.id, prompt)` for identity lookup                      |
+| `PromptQueue.ts:updateWorkingFile`                    | Auto-assigns `id = hash` for prompts without an explicit id                       |
+| `mcp-server.ts:validatePrompts`                       | Checks 2 & 3: pending-queue dedup by ID and hash                                  |
+| `mcp-server.ts:getPromptStatus`                       | `runtime.completedPrompts.includes(String(index))`                                |
+| `mcp-server.ts:append_queue tool`                     | `new Set(runtime.completedPrompts)` → passes to `validatePrompts`                 |
+| `FlightPathManager.ts:executeEphemeralPrompt`         | Sanitizes `promptName` → kebab-case → `promptId = "${sanitized}-${date}-${time}"` |
+| `FlightPathManager.ts:generateWorkflowNameFromPrompt` | Uses `promptName` to name the working file                                        |
+| `editorStore.ts:enterEditMode`                        | `promptName: promptData.id ?? ""` — loads `id` into the name input                |
+| `editorStore.ts:getPromptProperties`                  | `result.id = promptName.trim()` — saves name input back to `id`                   |
 
 ### Why `completedPrompts[]` is redundant
 
@@ -53,8 +53,7 @@ truth.
 
 Checks 2 & 3 in `mcp-server.ts:validatePrompts` reject a prompt if its content or `id` matches
 something already in the pending queue. This prevents users from queueing the same prompt
-multiple times (e.g., "run the tests" ten times in a row). The `maxQueueSize` limit (default
-100) is sufficient protection against infinite loops. These checks should be removed; only
+multiple times (e.g., "run the tests" ten times in a row). The `maxQueueSize` limit (default 100) is sufficient protection against infinite loops. These checks should be removed; only
 Check 1 (already completed) should remain.
 
 ---
@@ -277,11 +276,13 @@ This file has the most changes. Go through each relevant function:
 #### `restoreFromWorkingFile()` (line ~194)
 
 Old:
+
 ```typescript
 const completedIds = new Set<string>(runtime?.completedPrompts || []);
 ```
 
 New — build `completedIds` from per-prompt `_runtime.completedAt`:
+
 ```typescript
 // Build completedIds from per-prompt _runtime.completedAt
 // This is the new source of truth (completedPrompts array is ignored)
@@ -299,6 +300,7 @@ const completedIds = new Set<string>(
 Also update the results-rebuilding loop:
 
 Old:
+
 ```typescript
 if (isPromptCompleted(prompt, this.state.completedIds)) {
   status = STEP_STATUS.COMPLETED;
@@ -306,6 +308,7 @@ if (isPromptCompleted(prompt, this.state.completedIds)) {
 ```
 
 New:
+
 ```typescript
 if (prompt._runtime?.completedAt !== undefined) {
   status = STEP_STATUS.COMPLETED;
@@ -315,6 +318,7 @@ if (prompt._runtime?.completedAt !== undefined) {
 #### `markPromptCompleted()` (line ~796)
 
 Old:
+
 ```typescript
 markPromptCompleted(prompt: PromptItem): void {
   const hash = hashPromptContent(prompt.prompt);
@@ -325,6 +329,7 @@ markPromptCompleted(prompt: PromptItem): void {
 ```
 
 New — add `completedAt` to the prompt's `_runtime` and update in-memory index by position:
+
 ```typescript
 markPromptCompleted(index: number): void {
   // Set completedAt on the prompt's own _runtime (source of truth)
@@ -344,11 +349,13 @@ markPromptCompleted(index: number): void {
 Update the call site in `completeCurrentAndMoveNext()`:
 
 Old:
+
 ```typescript
 this.markPromptCompleted(currentPrompt);
 ```
 
 New:
+
 ```typescript
 this.markPromptCompleted(this.state.currentIndex);
 ```
@@ -356,6 +363,7 @@ this.markPromptCompleted(this.state.currentIndex);
 #### `updateWorkingFile()` (line ~1433)
 
 Old:
+
 ```typescript
 workingFile._runtime = {
   currentIndex: this.state.currentIndex,
@@ -365,6 +373,7 @@ workingFile._runtime = {
 ```
 
 New — remove `completedPrompts`:
+
 ```typescript
 workingFile._runtime = {
   currentIndex: this.state.currentIndex,
@@ -378,6 +387,7 @@ so no additional change needed there.
 Also remove the auto-id-assignment block (line ~1404-1414):
 
 Old:
+
 ```typescript
 workingFile.prompts = this.state.prompts.map((prompt) => {
   if (!prompt.id) {
@@ -391,6 +401,7 @@ workingFile.prompts = this.state.prompts.map((prompt) => {
 ```
 
 New — just spread as-is (no auto-id needed):
+
 ```typescript
 workingFile.prompts = this.state.prompts.map((prompt) => ({ ...prompt }));
 ```
@@ -398,6 +409,7 @@ workingFile.prompts = this.state.prompts.map((prompt) => ({ ...prompt }));
 #### `reloadAndMergeQueue()` (line ~818)
 
 Old:
+
 ```typescript
 // Build set of hashes for prompts currently in queue
 for (const existingPrompt of this.state.prompts) {
@@ -414,7 +426,10 @@ for (const prompt of reloadedPrompts) {
     continue;
   }
   const hash = hashPromptContent(prompt.prompt);
-  if (currentPromptHashes.has(hash) || (prompt.id && currentPromptHashes.has(prompt.id))) {
+  if (
+    currentPromptHashes.has(hash) ||
+    (prompt.id && currentPromptHashes.has(prompt.id))
+  ) {
     continue;
   }
   newPrompts.push(prompt);
@@ -422,6 +437,7 @@ for (const prompt of reloadedPrompts) {
 ```
 
 New — completion check uses `completedAt`, not `completedIds`:
+
 ```typescript
 // Build set of hashes for prompts currently in queue (still needed for pending-queue dedup)
 for (const existingPrompt of this.state.prompts) {
@@ -451,6 +467,7 @@ scenario where the same prompt file is re-read, not a user intentionally adding 
 #### `mergePromptsFromDisk()` (line ~948)
 
 Old:
+
 ```typescript
 const memoryPromptMap = new Map<string, PromptItem>();
 for (const prompt of this.state.prompts) {
@@ -467,6 +484,7 @@ const existsInMemory =
 ```
 
 New — remove `prompt.id` references:
+
 ```typescript
 const memoryPromptMap = new Map<string, PromptItem>();
 for (const prompt of this.state.prompts) {
@@ -482,6 +500,7 @@ const existsInMemory = memoryPromptMap.has(hash);
 Remove `completedPrompts: []` from the initial `_runtime`:
 
 Old:
+
 ```typescript
 _runtime: {
   currentIndex: 0,
@@ -491,6 +510,7 @@ _runtime: {
 ```
 
 New:
+
 ```typescript
 _runtime: {
   currentIndex: 0,
@@ -507,6 +527,7 @@ _runtime: {
 **Remove checks 2, 3, and 4** (pending-queue dedup). Keep only check 1 (already completed).
 
 Old:
+
 ```typescript
 validatePrompts(newPrompts, existingPrompts, completedIds) {
   const seenHashes = new Set<string>();
@@ -572,6 +593,7 @@ validatePrompts(
 Update the call site to remove the `completedIds` argument:
 
 Old:
+
 ```typescript
 const validationResults = this.validatePrompts(
   prompts,
@@ -581,6 +603,7 @@ const validationResults = this.validatePrompts(
 ```
 
 New:
+
 ```typescript
 const validationResults = this.validatePrompts(
   prompts,
@@ -591,6 +614,7 @@ const validationResults = this.validatePrompts(
 #### `getPromptStatus()` (line ~650)
 
 Old:
+
 ```typescript
 private getPromptStatus(index: number, runtime: WorkingFileRuntime): string {
   if (runtime.completedPrompts.includes(String(index))) {
@@ -603,6 +627,7 @@ private getPromptStatus(index: number, runtime: WorkingFileRuntime): string {
 ```
 
 New — pass prompts array to check `_runtime.completedAt`:
+
 ```typescript
 private getPromptStatus(index: number, runtime: WorkingFileRuntime, prompts: PromptItem[]): string {
   if (prompts[index]?._runtime?.completedAt !== undefined) {
@@ -626,6 +651,7 @@ still used for content-hash comparison in `validatePrompts`).
 #### `executeEphemeralPrompt()` (line ~1645)
 
 The `promptName` argument is used for:
+
 1. Naming the workflow working file
 2. Setting `promptItem.id` (→ becomes `promptItem.name`)
 3. Building a timestamped `promptId` to avoid dedup collisions
@@ -635,10 +661,13 @@ field). The working file naming still sanitizes to kebab-case (that's a filename
 a schema constraint).
 
 Old:
+
 ```typescript
 let promptId: string;
 if (promptName && promptName.trim().length > 0) {
-  const sanitizedName = promptName.trim().toLowerCase()
+  const sanitizedName = promptName
+    .trim()
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   promptId = `${sanitizedName}-${dateStr}-${timeStr}`;
@@ -654,6 +683,7 @@ const promptItem: PromptItem = {
 ```
 
 New:
+
 ```typescript
 const promptItem: PromptItem = {
   prompt: text,
@@ -679,11 +709,13 @@ logic is identical.
 #### `enterEditMode()` (line ~277)
 
 Old:
+
 ```typescript
 promptName: promptData.id ?? "",
 ```
 
 New:
+
 ```typescript
 promptName: promptData.name ?? "",
 ```
@@ -691,6 +723,7 @@ promptName: promptData.name ?? "",
 #### `getPromptProperties()` (line ~517)
 
 Old:
+
 ```typescript
 if (promptName.trim()) {
   result.id = promptName.trim();
@@ -698,6 +731,7 @@ if (promptName.trim()) {
 ```
 
 New:
+
 ```typescript
 if (promptName.trim()) {
   result.name = promptName.trim();
@@ -715,6 +749,7 @@ Currently `id` is received but immediately discarded (`id: _id`, `void _id`). Af
 receive `name` instead and display it as the primary label when present:
 
 Old props interface:
+
 ```typescript
 interface PromptItemProps {
   text: string;
@@ -726,6 +761,7 @@ interface PromptItemProps {
 ```
 
 New:
+
 ```typescript
 interface PromptItemProps {
   text: string;
@@ -739,11 +775,13 @@ interface PromptItemProps {
 Update the display line (currently line ~123):
 
 Old:
+
 ```tsx
 <span className="font-medium">{index + 1}.</span> {truncate(text, 60)}
 ```
 
 New:
+
 ```tsx
 <span className="font-medium">{index + 1}.</span>{" "}
 {name ? name : truncate(text, 60)}
@@ -756,11 +794,13 @@ New:
 Find where `PromptItem` is rendered and update prop name from `id` to `name`:
 
 Old:
+
 ```tsx
 <PromptItem id={prompt.id} text={prompt.prompt} ... />
 ```
 
 New:
+
 ```tsx
 <PromptItem name={prompt.name} text={prompt.prompt} ... />
 ```
@@ -772,6 +812,7 @@ New:
 If `PromptItem` is defined here as well (it is, at line ~205), rename `id` → `name`:
 
 Old:
+
 ```typescript
 export interface PromptItem {
   id?: string;
@@ -781,6 +822,7 @@ export interface PromptItem {
 ```
 
 New:
+
 ```typescript
 export interface PromptItem {
   name?: string;
@@ -832,6 +874,7 @@ test file:
 Update the test at line ~308 ("should update working file to clear completedPrompts"):
 
 Old:
+
 ```typescript
 assert.strictEqual(
   workingFile._runtime!.completedPrompts.length,
@@ -841,6 +884,7 @@ assert.strictEqual(
 ```
 
 New — check that `completedPrompts` is not present (or check per-prompt `completedAt`):
+
 ```typescript
 assert.strictEqual(
   workingFile._runtime!.completedPrompts,
@@ -859,12 +903,16 @@ Existing working files on disk have `completedPrompts[]` but no per-prompt `_run
 
 ```typescript
 // New: per-prompt completedAt is the source of truth
-const hasPerPromptTracking = workingFile.prompts.some(p => p._runtime?.completedAt !== undefined);
+const hasPerPromptTracking = workingFile.prompts.some(
+  (p) => p._runtime?.completedAt !== undefined
+);
 
 if (!hasPerPromptTracking && runtime?.completedPrompts?.length) {
   // Old format: fall back to currentIndex as the completion boundary
   // Prompts before currentIndex are considered completed
-  Log.info("Old working file format detected: using currentIndex for completion boundary");
+  Log.info(
+    "Old working file format detected: using currentIndex for completion boundary"
+  );
   // Mark prompts 0..currentIndex-1 as completed using position-based completedIds
   for (let i = 0; i < (runtime.currentIndex || 0); i++) {
     completedIds.add(String(i));
@@ -917,6 +965,7 @@ Keep `completedIds: Set<string>` in `QueueState` but change its key format from
 `"{id}:{hash}"` tracking strings to **prompt index strings** (`"0"`, `"1"`, `"2"`).
 
 Rationale:
+
 - The in-memory Set is still useful for O(1) lookup in `mergePromptsFromDisk` and during
   execution
 - Position-based keys are simpler and unambiguous
@@ -936,14 +985,16 @@ After migration, also show the name input in **edit mode** (since `name` is now 
 rather than a machine key, users will want to set it on existing prompts too):
 
 ```tsx
-{/* Show name input in both new and edit modes */}
+{
+  /* Show name input in both new and edit modes */
+}
 <input
   type="text"
   className="prompt-name-input ..."
   placeholder="Prompt name (optional)"
   value={promptName}
   onChange={(e) => setPromptName(e.target.value)}
-/>
+/>;
 ```
 
 Remove the `{!isEditMode && (` guard. This is a UX improvement enabled by the rename.
@@ -957,25 +1008,25 @@ should include `name` in the properties when updating an existing prompt. Check
 
 ## Summary of All Changed Files
 
-| File | Change type |
-|---|---|
-| `schemas/prompt-schema.json` | `id` → `name`, remove `completedPrompts` from `runtimeMetadata` |
-| `schemas/prompt-schema.yaml` | Auto-generated — run `npm run generate-schema` |
-| `src/types/FlightPathTypes.ts` | `id` → `name` in `PromptItem`, remove `completedPrompts` from `WorkingFileRuntime` |
-| `src/types/WebviewMessageTypes.ts` | `id` → `name` in `PromptItem` |
-| `src/utils/PromptIdentity.ts` | Delete `isPromptCompleted()` |
-| `src/flightpath/PromptQueue.ts` | `restoreFromWorkingFile`, `markPromptCompleted`, `updateWorkingFile`, `reloadAndMergeQueue`, `mergePromptsFromDisk`, `createWorkingFile` |
-| `src/flightpath/FlightPathManager.ts` | `executeEphemeralPrompt`: `id` → `name`, remove sanitized ID generation |
-| `src/mcp-server.ts` | `validatePrompts`: remove checks 2-4, remove `completedIds` param; `getPromptStatus`: use `completedAt` |
-| `src/ui/FlightPathWebviewProvider.ts` | No change (passes `promptName` string through unchanged) |
-| `src/ui/webview-react/store/editorStore.ts` | `promptData.id` → `promptData.name`, `result.id` → `result.name` |
-| `src/ui/webview-react/store/workflowStore.ts` | `id` → `name` in local `PromptItem` type |
-| `src/ui/webview-react/utils/prompt.ts` | `id` → `name` in local `PromptItem` interface |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx` | `id` prop → `name` prop, display `name` as primary label |
-| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | `id={prompt.id}` → `name={prompt.name}` |
-| `src/ui/webview-react/components/layout/EditorSection.tsx` | Show name input in edit mode too |
-| `src/test/promptIdentity.test.ts` | Delete `isPromptCompleted` tests, keep `hashPromptContent` tests |
-| `src/test/promptQueue.test.ts` | Update `completedPrompts` assertions |
+| File                                                       | Change type                                                                                                                              |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/prompt-schema.json`                               | `id` → `name`, remove `completedPrompts` from `runtimeMetadata`                                                                          |
+| `schemas/prompt-schema.yaml`                               | Auto-generated — run `npm run generate-schema`                                                                                           |
+| `src/types/FlightPathTypes.ts`                             | `id` → `name` in `PromptItem`, remove `completedPrompts` from `WorkingFileRuntime`                                                       |
+| `src/types/WebviewMessageTypes.ts`                         | `id` → `name` in `PromptItem`                                                                                                            |
+| `src/utils/PromptIdentity.ts`                              | Delete `isPromptCompleted()`                                                                                                             |
+| `src/flightpath/PromptQueue.ts`                            | `restoreFromWorkingFile`, `markPromptCompleted`, `updateWorkingFile`, `reloadAndMergeQueue`, `mergePromptsFromDisk`, `createWorkingFile` |
+| `src/flightpath/FlightPathManager.ts`                      | `executeEphemeralPrompt`: `id` → `name`, remove sanitized ID generation                                                                  |
+| `src/mcp-server.ts`                                        | `validatePrompts`: remove checks 2-4, remove `completedIds` param; `getPromptStatus`: use `completedAt`                                  |
+| `src/ui/FlightPathWebviewProvider.ts`                      | No change (passes `promptName` string through unchanged)                                                                                 |
+| `src/ui/webview-react/store/editorStore.ts`                | `promptData.id` → `promptData.name`, `result.id` → `result.name`                                                                         |
+| `src/ui/webview-react/store/workflowStore.ts`              | `id` → `name` in local `PromptItem` type                                                                                                 |
+| `src/ui/webview-react/utils/prompt.ts`                     | `id` → `name` in local `PromptItem` interface                                                                                            |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`   | `id` prop → `name` prop, display `name` as primary label                                                                                 |
+| `src/ui/webview-react/components/prompts/PromptsPanel.tsx` | `id={prompt.id}` → `name={prompt.name}`                                                                                                  |
+| `src/ui/webview-react/components/layout/EditorSection.tsx` | Show name input in edit mode too                                                                                                         |
+| `src/test/promptIdentity.test.ts`                          | Delete `isPromptCompleted` tests, keep `hashPromptContent` tests                                                                         |
+| `src/test/promptQueue.test.ts`                             | Update `completedPrompts` assertions                                                                                                     |
 
 **Estimated scope**: ~300 lines changed across 16 files. No new files needed.
 

@@ -12,12 +12,14 @@
 When using Copilot CLI or Claude CLI in interactive mode, FlightPath was encountering timing issues where the SessionStart hook notification would arrive before the CLI had finished creating the log file. This caused session log discovery to fail with errors:
 
 ### Copilot CLI Error
+
 ```
 [ClaudeLogParser] No matching session log found
 ERROR: ❌ Could not discover session log - no matching prompt found
 ```
 
 ### Claude CLI Error
+
 ```
 [ClaudeLogParser] Session log exists but modified before startTime
 [ClaudeLogParser] No matching session log found
@@ -29,6 +31,7 @@ ERROR: ❌ Could not find log file for session <session-id> - this should not ha
 ## Root Cause
 
 **Race condition:**
+
 1. FlightPath receives SessionStart hook notification
 2. FlightPath immediately tries to find the session log file
 3. The CLI is still in the process of creating/writing the log file
@@ -60,6 +63,7 @@ export class PermanentFailureError extends Error
 ```
 
 **Features:**
+
 - Configurable retry attempts (default: 5)
 - Customizable delay patterns (default: [0, 50, 100, 150, 200] ms)
 - Support for permanent failure detection via `PermanentFailureError`
@@ -67,15 +71,17 @@ export class PermanentFailureError extends Error
 - Total max wait time: 500ms (non-blocking)
 
 **Options:**
+
 ```typescript
 interface RetryOptions {
-  maxAttempts?: number;        // Default: 5
-  delays?: number | number[];  // Default: [0, 50, 100, 150, 200]
+  maxAttempts?: number; // Default: 5
+  delays?: number | number[]; // Default: [0, 50, 100, 150, 200]
   onRetry?: (attempt, max, delay) => void;
 }
 ```
 
 **Use Cases:**
+
 - Waiting for files to be created (CLI log files)
 - Polling for resources that may not be immediately available
 - Network requests with transient failures
@@ -86,12 +92,14 @@ interface RetryOptions {
 **File:** `src/flightpath/cli/copilot/CopilotLogParser.ts`
 
 **Changes:**
+
 - Wrapped entire `discoverSessionLog()` discovery loop in `retryWithBackoff()`
 - Retries up to 5 times with delays: [0, 50, 100, 150, 200] ms
 - Logs retry attempts at DEBUG level
 - Total maximum wait: 500ms before giving up
 
 **Before:**
+
 ```typescript
 // Get recently modified files/directories
 const candidates = this.findModifiedSessionLogs(logDir, startTime);
@@ -102,6 +110,7 @@ if (candidates.length === 0) {
 ```
 
 **After:**
+
 ```typescript
 const result = await retryWithBackoff(
   async () => {
@@ -117,7 +126,9 @@ const result = await retryWithBackoff(
     delays: [0, 50, 100, 150, 200],
     onRetry: (attempt, max, delay) => {
       if (attempt > 1) {
-        Log.debug(`[CopilotLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`);
+        Log.debug(
+          `[CopilotLogParser] Session log file not found (attempt ${attempt}/${max}), retrying in ${delay}ms...`
+        );
       }
     },
   }
@@ -129,6 +140,7 @@ const result = await retryWithBackoff(
 **File:** `src/flightpath/cli/claude/ClaudeLogParser.ts`
 
 **Changes:**
+
 - Replaced inline retry logic with shared `retryWithBackoff()` utility
 - **IMPORTANT:** Does NOT throw PermanentFailureError for "file too old" case
 - Maintains same retry behavior (5 attempts, 500ms max total wait)
@@ -138,6 +150,7 @@ const result = await retryWithBackoff(
 When **resuming a session**, the log file will have an old modification time initially because it's from the previous session. The CLI will update the file as it writes new content. If we treat "file exists but is old" as a permanent failure, session resumption would break.
 
 **Solution:**
+
 ```typescript
 if (fs.existsSync(logPath)) {
   const stats = fs.statSync(logPath);
@@ -174,6 +187,7 @@ if (fs.existsSync(logPath)) {
 **Test File:** `src/test/retryUtils.test.ts` (new file, 317 lines)
 
 Comprehensive unit tests covering:
+
 - ✅ Successful retries after N attempts
 - ✅ Exhausted retries (returns undefined)
 - ✅ Permanent failures (stops immediately via PermanentFailureError)
@@ -187,6 +201,7 @@ Comprehensive unit tests covering:
 ### Debug Logs
 
 When retry logic is active, you'll see debug logs like:
+
 ```
 [CopilotLogParser] Session log file not found (attempt 2/5), retrying in 50ms...
 [CopilotLogParser] Session log file not found (attempt 3/5), retrying in 100ms...
@@ -194,6 +209,7 @@ When retry logic is active, you'll see debug logs like:
 ```
 
 For Claude CLI with session resumption:
+
 ```
 [ClaudeLogParser] Session log exists but not yet updated (mtime: 2026-01-20T10:00:00.000Z, startTime: 2026-01-21T04:00:00.000Z), will retry...
 [ClaudeLogParser] Session log not ready (attempt 2/5), retrying in 50ms...
@@ -217,6 +233,7 @@ For Claude CLI with session resumption:
 No configuration needed - retry logic is automatic. Defaults are tuned for typical CLI file creation timing (~50-100ms).
 
 To adjust retry behavior (if needed), edit the retry parameters in the log parser files:
+
 ```typescript
 {
   maxAttempts: 5,                   // Number of attempts
@@ -231,11 +248,13 @@ Total maximum wait: 500ms
 ## Related Files
 
 ### New Files
+
 - `src/utils/RetryUtils.ts` - Shared retry utility (162 lines)
 - `src/test/retryUtils.test.ts` - Retry utility tests (317 lines)
 - `docs/SESSION_LOG_DISCOVERY_RETRY_FIX.md` - This documentation
 
 ### Modified Files
+
 - `src/flightpath/cli/copilot/CopilotLogParser.ts` - Added retry to discoverSessionLog()
 - `src/flightpath/cli/claude/ClaudeLogParser.ts` - Refactored inline retry to use shared utility
 
@@ -244,6 +263,7 @@ Total maximum wait: 500ms
 ## Code Changes Summary
 
 ### RetryUtils.ts (NEW)
+
 ```typescript
 export async function retryWithBackoff<T>(
   operation: () => Promise<T | null | undefined>,
@@ -259,11 +279,13 @@ export class PermanentFailureError extends Error {
 ```
 
 ### CopilotLogParser.ts (MODIFIED)
+
 - Added import: `retryWithBackoff` from `RetryUtils`
 - Wrapped `discoverSessionLog()` discovery loop in `retryWithBackoff()`
 - Added debug logging for retry attempts
 
 ### ClaudeLogParser.ts (MODIFIED)
+
 - Added import: `retryWithBackoff` from `RetryUtils`
 - Removed inline retry loop (38 lines)
 - Replaced with `retryWithBackoff()` call
@@ -274,6 +296,7 @@ export class PermanentFailureError extends Error {
 ## Future Enhancements
 
 Potential improvements if needed:
+
 - Make retry delays configurable via settings
 - Add metrics to track retry success rates
 - Adaptive delays based on CLI performance

@@ -175,7 +175,9 @@ export async function activate(context: vscode.ExtensionContext) {
     webviewProvider.setFlightPathManager(flightPathManager);
 
     // Share OutputHistoryManager with webview provider (single instance)
-    webviewProvider.setOutputHistoryManager(flightPathManager.getOutputHistoryManager());
+    webviewProvider.setOutputHistoryManager(
+      flightPathManager.getOutputHistoryManager()
+    );
 
     // Fire-and-forget: don't block activate() on initialization.
     // This lets VS Code call resolveWebviewView() immediately so the

@@ -254,14 +254,20 @@
         const text = typeof p === "string" ? p : p[PROMPT_PROPERTIES.PROMPT];
 
         // Extract all properties from incoming prompt (including undefined to clear overrides)
-        const updatedProps = typeof p === "string" ? {} : {
-          [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
-          [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
-          [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
-          [PROMPT_PROPERTIES.RESUME_SESSION]: p[PROMPT_PROPERTIES.RESUME_SESSION],
-          [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]: p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
-          [PROMPT_PROPERTIES.END_CONDITION]: p[PROMPT_PROPERTIES.END_CONDITION],
-        };
+        const updatedProps =
+          typeof p === "string"
+            ? {}
+            : {
+                [PROMPT_PROPERTIES.PROVIDER]: p[PROMPT_PROPERTIES.PROVIDER],
+                [PROMPT_PROPERTIES.MODEL]: p[PROMPT_PROPERTIES.MODEL],
+                [PROMPT_PROPERTIES.AGENT]: p[PROMPT_PROPERTIES.AGENT],
+                [PROMPT_PROPERTIES.RESUME_SESSION]:
+                  p[PROMPT_PROPERTIES.RESUME_SESSION],
+                [PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION]:
+                  p[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION],
+                [PROMPT_PROPERTIES.END_CONDITION]:
+                  p[PROMPT_PROPERTIES.END_CONDITION],
+              };
 
         return {
           ...existing,

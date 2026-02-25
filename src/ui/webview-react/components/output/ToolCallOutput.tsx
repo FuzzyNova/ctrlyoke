@@ -6,7 +6,11 @@ import {
   generateDiffLines,
   type DiffLine,
 } from "@utils/outputUtils";
-import { TOOL_CALL_TERMINAL, TOOL_CALL_LINE, TOOL_RESULT_LINE } from "./outputStyles";
+import {
+  TOOL_CALL_TERMINAL,
+  TOOL_CALL_LINE,
+  TOOL_RESULT_LINE,
+} from "./outputStyles";
 import type {
   CliEvent,
   FileOperationStatus,

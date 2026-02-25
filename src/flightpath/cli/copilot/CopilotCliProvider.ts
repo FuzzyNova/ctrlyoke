@@ -499,8 +499,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Extract session ID from first event (stateless read, safe after monitoring)
-    const sessionId =
-      await this.logParser.extractSessionIdFromLogPath(logPath);
+    const sessionId = await this.logParser.extractSessionIdFromLogPath(logPath);
     return sessionId ?? undefined;
   }
 }

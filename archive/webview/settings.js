@@ -158,7 +158,9 @@
     const value = e.target.value.trim();
 
     // Parse as number if it's a valid integer, otherwise keep as string
-    const parsedValue = /^\d+$/.test(value) ? parseInt(value, 10) : value || undefined;
+    const parsedValue = /^\d+$/.test(value)
+      ? parseInt(value, 10)
+      : value || undefined;
 
     workflowProperties.sessionId = parsedValue;
     updateSetAsDefaultButton("sessionId");
@@ -436,7 +438,8 @@
 
     // Session ID
     const sessionId = workflowProperties.sessionId;
-    elements.workflowSessionId.value = sessionId !== undefined ? String(sessionId) : "";
+    elements.workflowSessionId.value =
+      sessionId !== undefined ? String(sessionId) : "";
     elements.workflowSessionId.disabled = !resumeSession;
     elements.workflowSessionId.placeholder = !resumeSession
       ? "enable Resume Session to input session ID"

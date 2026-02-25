@@ -9,6 +9,7 @@
 Claude CLI's `--output-format stream-json` flag outputs newline-delimited JSON (NDJSON) with real-time streaming events. Each line is a complete JSON object representing different phases of the conversation: system initialization, streaming tokens, assistant messages, user tool results, and final completion statistics.
 
 **Key Features:**
+
 - NDJSON format (one JSON object per line)
 - Real-time token-by-token streaming with `--include-partial-messages`
 - Complete session metadata and token usage tracking
@@ -16,6 +17,7 @@ Claude CLI's `--output-format stream-json` flag outputs newline-delimited JSON (
 - Session continuity via session_id
 
 **Primary Use Cases:**
+
 - Headless automation and CI/CD pipelines
 - Stream chaining (piping output between Claude instances)
 - Real-time response processing
@@ -45,14 +47,14 @@ claude -p "Your prompt" \
 
 ### Common Flags
 
-| Flag | Description |
-|------|-------------|
-| `-p`, `--print` | Non-interactive mode (required for stream-json) |
-| `--output-format stream-json` | Enable NDJSON streaming output |
-| `--include-partial-messages` | Include token-by-token streaming events |
-| `--verbose` | Required for stream-json output |
-| `--allowedTools` | Auto-approve specific tools (e.g., `"Read,Write,Bash"`) |
-| `--input-format stream-json` | Accept NDJSON input for stream chaining |
+| Flag                          | Description                                             |
+| ----------------------------- | ------------------------------------------------------- |
+| `-p`, `--print`               | Non-interactive mode (required for stream-json)         |
+| `--output-format stream-json` | Enable NDJSON streaming output                          |
+| `--include-partial-messages`  | Include token-by-token streaming events                 |
+| `--verbose`                   | Required for stream-json output                         |
+| `--allowedTools`              | Auto-approve specific tools (e.g., `"Read,Write,Bash"`) |
+| `--input-format stream-json`  | Accept NDJSON input for stream chaining                 |
 
 ---
 
@@ -87,6 +89,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Key Fields:**
+
 - `session_id` - UUID for session continuity (use with `--resume`)
 - `tools` - Available built-in tools for this session
 - `model` - Active Claude model
@@ -155,6 +158,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **For Tool Use:**
+
 ```json
 {
   "type": "stream_event",
@@ -176,6 +180,7 @@ The stream outputs 6 primary message types, each with `type` field:
 **Purpose:** Incremental token/JSON updates
 
 **Text Delta:**
+
 ```json
 {
   "type": "stream_event",
@@ -194,6 +199,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Tool Input JSON Delta:**
+
 ```json
 {
   "type": "stream_event",
@@ -255,6 +261,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Stop Reasons:**
+
 - `"end_turn"` - Natural completion
 - `"tool_use"` - Stopped to invoke tool
 - `"max_tokens"` - Token limit reached
@@ -321,6 +328,7 @@ The stream outputs 6 primary message types, each with `type` field:
 **Content Block Types:**
 
 **Text Block:**
+
 ```json
 {
   "type": "text",
@@ -329,6 +337,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Tool Use Block:**
+
 ```json
 {
   "type": "tool_use",
@@ -375,6 +384,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Key Fields:**
+
 - `tool_use_id` - Matches the assistant's tool_use block
 - `content` - Tool execution result (string)
 - `tool_use_result` - Structured metadata about the tool execution
@@ -434,6 +444,7 @@ The stream outputs 6 primary message types, each with `type` field:
 #### Error Result Subtypes
 
 **Error Max Turns:**
+
 ```json
 {
   "type": "result",
@@ -444,6 +455,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Error During Execution:**
+
 ```json
 {
   "type": "result",
@@ -454,6 +466,7 @@ The stream outputs 6 primary message types, each with `type` field:
 ```
 
 **Error Max Budget:**
+
 ```json
 {
   "type": "result",
@@ -606,6 +619,7 @@ claude -p "Write a haiku" \
 ```
 
 **Output:**
+
 ```
 Fingers dance on keys,
 Logic flows through silent lines—
@@ -621,6 +635,7 @@ claude -p "Calculate 123 * 456" \
 ```
 
 **Output:**
+
 ```
 56088
 ```
@@ -679,8 +694,8 @@ type SDKMessage =
   | SDKCompactBoundaryMessage;
 
 interface SDKSystemMessage {
-  type: 'system';
-  subtype: 'init';
+  type: "system";
+  subtype: "init";
   uuid: string;
   session_id: string;
   cwd: string;
@@ -698,7 +713,7 @@ interface SDKSystemMessage {
 }
 
 interface SDKPartialAssistantMessage {
-  type: 'stream_event';
+  type: "stream_event";
   event: RawMessageStreamEvent; // From Anthropic SDK
   parent_tool_use_id: string | null;
   uuid: string;
@@ -706,13 +721,13 @@ interface SDKPartialAssistantMessage {
 }
 
 interface SDKAssistantMessage {
-  type: 'assistant';
+  type: "assistant";
   uuid: string;
   session_id: string;
   message: {
     model: string;
     id: string;
-    role: 'assistant';
+    role: "assistant";
     content: Array<TextBlock | ToolUseBlock>;
     stop_reason: string | null;
     usage: Usage;
@@ -721,8 +736,12 @@ interface SDKAssistantMessage {
 }
 
 interface SDKResultMessage {
-  type: 'result';
-  subtype: 'success' | 'error_max_turns' | 'error_during_execution' | 'error_max_budget_usd';
+  type: "result";
+  subtype:
+    | "success"
+    | "error_max_turns"
+    | "error_during_execution"
+    | "error_max_budget_usd";
   is_error: boolean;
   duration_ms: number;
   duration_api_ms: number;
@@ -750,11 +769,11 @@ type RawMessageStreamEvent =
   | MessageStopEvent;
 
 interface MessageStartEvent {
-  type: 'message_start';
+  type: "message_start";
   message: {
     id: string;
     model: string;
-    role: 'assistant';
+    role: "assistant";
     content: [];
     stop_reason: null;
     usage: Usage;
@@ -762,34 +781,34 @@ interface MessageStartEvent {
 }
 
 interface ContentBlockStartEvent {
-  type: 'content_block_start';
+  type: "content_block_start";
   index: number;
   content_block: TextBlock | ToolUseBlock;
 }
 
 interface ContentBlockDeltaEvent {
-  type: 'content_block_delta';
+  type: "content_block_delta";
   index: number;
   delta: TextDelta | InputJsonDelta;
 }
 
 interface TextDelta {
-  type: 'text_delta';
+  type: "text_delta";
   text: string;
 }
 
 interface InputJsonDelta {
-  type: 'input_json_delta';
+  type: "input_json_delta";
   partial_json: string;
 }
 
 interface ContentBlockStopEvent {
-  type: 'content_block_stop';
+  type: "content_block_stop";
   index: number;
 }
 
 interface MessageDeltaEvent {
-  type: 'message_delta';
+  type: "message_delta";
   delta: {
     stop_reason: string;
     stop_sequence: string | null;
@@ -801,7 +820,7 @@ interface MessageDeltaEvent {
 }
 
 interface MessageStopEvent {
-  type: 'message_stop';
+  type: "message_stop";
 }
 ```
 
@@ -814,28 +833,28 @@ interface MessageStopEvent {
 Each line is a complete, independent JSON object:
 
 ```typescript
-import { createInterface } from 'readline';
-import { createReadStream } from 'fs';
+import { createInterface } from "readline";
+import { createReadStream } from "fs";
 
 const rl = createInterface({
-  input: createReadStream('output.ndjson'),
-  crlfDelay: Infinity
+  input: createReadStream("output.ndjson"),
+  crlfDelay: Infinity,
 });
 
 for await (const line of rl) {
   const message: SDKMessage = JSON.parse(line);
 
   switch (message.type) {
-    case 'system':
-      console.log('Session:', message.session_id);
+    case "system":
+      console.log("Session:", message.session_id);
       break;
-    case 'stream_event':
-      if (message.event.type === 'content_block_delta') {
-        process.stdout.write(message.event.delta.text || '');
+    case "stream_event":
+      if (message.event.type === "content_block_delta") {
+        process.stdout.write(message.event.delta.text || "");
       }
       break;
-    case 'result':
-      console.log('\nCost:', message.total_cost_usd);
+    case "result":
+      console.log("\nCost:", message.total_cost_usd);
       break;
   }
 }
@@ -844,27 +863,31 @@ for await (const line of rl) {
 ### Real-Time Stream Processing
 
 ```typescript
-import { spawn } from 'child_process';
-import { createInterface } from 'readline';
+import { spawn } from "child_process";
+import { createInterface } from "readline";
 
-const claude = spawn('claude', [
-  '-p', 'Your prompt',
-  '--output-format', 'stream-json',
-  '--include-partial-messages',
-  '--verbose'
+const claude = spawn("claude", [
+  "-p",
+  "Your prompt",
+  "--output-format",
+  "stream-json",
+  "--include-partial-messages",
+  "--verbose",
 ]);
 
 const rl = createInterface({
   input: claude.stdout,
-  crlfDelay: Infinity
+  crlfDelay: Infinity,
 });
 
 for await (const line of rl) {
   const message = JSON.parse(line);
 
-  if (message.type === 'stream_event' &&
-      message.event.type === 'content_block_delta' &&
-      message.event.delta.type === 'text_delta') {
+  if (
+    message.type === "stream_event" &&
+    message.event.type === "content_block_delta" &&
+    message.event.delta.type === "text_delta"
+  ) {
     // Real-time token streaming
     process.stdout.write(message.event.delta.text);
   }
@@ -878,12 +901,12 @@ for await (const line of rl) {
   try {
     const message: SDKMessage = JSON.parse(line);
 
-    if (message.type === 'result' && message.is_error) {
-      console.error('Errors:', message.errors);
+    if (message.type === "result" && message.is_error) {
+      console.error("Errors:", message.errors);
       process.exit(1);
     }
   } catch (err) {
-    console.error('Failed to parse JSON:', line);
+    console.error("Failed to parse JSON:", line);
   }
 }
 ```
@@ -907,6 +930,7 @@ for await (const line of rl) {
 - Best for simple automation
 
 **Example:**
+
 ```json
 {
   "type": "result",
@@ -994,9 +1018,10 @@ FlightPath's `CodexCliProvider` uses JSONL events with notify hook:
 
 ```typescript
 // FlightPath currently uses this for Codex CLI
-const events = output.split('\n')
-  .filter(line => line.trim())
-  .map(line => JSON.parse(line));
+const events = output
+  .split("\n")
+  .filter((line) => line.trim())
+  .map((line) => JSON.parse(line));
 ```
 
 ### Proposed Claude CLI Integration
@@ -1013,31 +1038,36 @@ interface ClaudeStreamParser {
 
 class ClaudeResponseParser implements IResponseParser {
   parseResponse(output: string): ParsedResponse {
-    const messages = output.split('\n')
-      .filter(line => line.trim())
-      .map(line => JSON.parse(line) as SDKMessage);
+    const messages = output
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line) as SDKMessage);
 
-    const systemMsg = messages.find(m => m.type === 'system');
-    const resultMsg = messages.find(m => m.type === 'result') as SDKResultMessage;
+    const systemMsg = messages.find((m) => m.type === "system");
+    const resultMsg = messages.find(
+      (m) => m.type === "result"
+    ) as SDKResultMessage;
 
     return {
-      content: resultMsg?.result || '',
+      content: resultMsg?.result || "",
       sessionId: systemMsg?.session_id || null,
       usage: resultMsg?.usage,
-      cost: resultMsg?.total_cost_usd
+      cost: resultMsg?.total_cost_usd,
     };
   }
 
   parseStreamingChunk(chunk: string): StreamChunk {
     const message = JSON.parse(chunk) as SDKMessage;
 
-    if (message.type === 'stream_event' &&
-        message.event.type === 'content_block_delta' &&
-        message.event.delta.type === 'text_delta') {
+    if (
+      message.type === "stream_event" &&
+      message.event.type === "content_block_delta" &&
+      message.event.delta.type === "text_delta"
+    ) {
       return { text: message.event.delta.text };
     }
 
-    return { text: '' };
+    return { text: "" };
   }
 }
 ```

@@ -596,9 +596,7 @@ if (!hasQueue) {
     <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
       ⏸
     </button>
-    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>
-      ⏹
-    </button>
+    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>⏹</button>
   </div>
 </div>
 ```
@@ -651,9 +649,7 @@ if (!hasQueue) {
     <button id="btn-pause" class="btn-secondary" title="Pause" disabled>
       ⏸
     </button>
-    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>
-      ⏹
-    </button>
+    <button id="btn-stop" class="btn-secondary" title="Stop" disabled>⏹</button>
   </div>
 </div>
 ```

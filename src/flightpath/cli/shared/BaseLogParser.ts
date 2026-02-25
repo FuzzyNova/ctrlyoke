@@ -464,9 +464,6 @@ export abstract class BaseLogParser implements ILogParser {
    * ```
    */
   protected normalizePromptForMatching(text: string): string {
-    return text
-      .toLowerCase()
-      .trim()
-      .replace(/\\/g, "/"); // Convert all backslashes to forward slashes
+    return text.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
   }
 }

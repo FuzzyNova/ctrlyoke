@@ -93,7 +93,9 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           });
         }
       } catch (error) {
-        WebviewLog.error(`[CodeMirror] Failed to load Typo.js dictionaries: ${error instanceof Error ? error.message : String(error)}`);
+        WebviewLog.error(
+          `[CodeMirror] Failed to load Typo.js dictionaries: ${error instanceof Error ? error.message : String(error)}`
+        );
         typoCheckerRef.current = null;
       }
     };

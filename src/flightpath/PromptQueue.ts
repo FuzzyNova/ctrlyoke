@@ -121,10 +121,7 @@ export class PromptQueue {
   static extractWorkflowName(filePath: string): string {
     const fileName = path.basename(filePath);
     // Remove FlightPath extensions: .flightpath.json, .flightpath.yaml, .flightpath.yml, .prompt.md
-    return fileName.replace(
-      /\.(flightpath\.(json|yaml|yml)|prompt\.md)$/,
-      ""
-    );
+    return fileName.replace(/\.(flightpath\.(json|yaml|yml)|prompt\.md)$/, "");
   }
 
   /**
@@ -1196,11 +1193,15 @@ export class PromptQueue {
     await fs.mkdir(queueDir, { recursive: true });
 
     // Sanitize filename to avoid spaces/special chars in generated working file path
-    const sanitizedFileName = (fileName || "workflow")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "workflow";
-    return path.join(queueDir, `${sanitizedFileName}-${timestamp}.flightpath.json`);
+    const sanitizedFileName =
+      (fileName || "workflow")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "workflow";
+    return path.join(
+      queueDir,
+      `${sanitizedFileName}-${timestamp}.flightpath.json`
+    );
   }
 
   /**
@@ -1412,7 +1413,9 @@ export class PromptQueue {
 
         // Now write back the prompts array (merged or direct from memory)
         // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.prompts = this.state.prompts.map((prompt) => ({ ...prompt }));
+        workingFile.prompts = this.state.prompts.map((prompt) => ({
+          ...prompt,
+        }));
         // Count prompts with _runtime metadata (Phase 4: Session Management)
         const promptsWithRuntime = workingFile.prompts.filter(
           (p) => p._runtime

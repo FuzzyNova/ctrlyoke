@@ -41,11 +41,11 @@ interface UiState {
   selectedOutputStep: number | null; // Which step's output to show (null = current)
 
   // Run history display state
-  isViewingHistory: boolean;   // true when showing a historical run (not live)
-  viewingRunIndex: number;     // 0 = most recent, 1 = second most recent, etc.
-  availableRuns: number;       // Total runs saved for this workflow
-  runTimestamps: (number | undefined)[];  // startedAt timestamps, index 0 = most recent
-  runStates: (string | undefined)[];      // executionState for each run, index 0 = most recent
+  isViewingHistory: boolean; // true when showing a historical run (not live)
+  viewingRunIndex: number; // 0 = most recent, 1 = second most recent, etc.
+  availableRuns: number; // Total runs saved for this workflow
+  runTimestamps: (number | undefined)[]; // startedAt timestamps, index 0 = most recent
+  runStates: (string | undefined)[]; // executionState for each run, index 0 = most recent
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
@@ -120,7 +120,12 @@ interface UiActions {
   hideToast: () => void;
 
   // Run history view
-  setHistoryView: (runIndex: number, availableRuns: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[]) => void;
+  setHistoryView: (
+    runIndex: number,
+    availableRuns: number,
+    runTimestamps?: (number | undefined)[],
+    runStates?: (string | undefined)[]
+  ) => void;
   setRunTimestamps: (timestamps: (number | undefined)[]) => void;
   setRunStates: (states: (string | undefined)[]) => void;
   clearHistoryView: () => void;
@@ -204,7 +209,8 @@ export const useUiStore = create<UiState & UiActions>()(
       toggleSettingsCollapse: () =>
         set((state) => ({ settingsCollapsed: !state.settingsCollapsed })),
 
-      setSettingsCollapsed: (collapsed) => set({ settingsCollapsed: collapsed }),
+      setSettingsCollapsed: (collapsed) =>
+        set({ settingsCollapsed: collapsed }),
 
       // ============================================================================
       // OUTPUT PANEL
@@ -285,11 +291,9 @@ export const useUiStore = create<UiState & UiActions>()(
           ...(runStates !== undefined ? { runStates } : {}),
         }),
 
-      setRunTimestamps: (timestamps) =>
-        set({ runTimestamps: timestamps }),
+      setRunTimestamps: (timestamps) => set({ runTimestamps: timestamps }),
 
-      setRunStates: (states) =>
-        set({ runStates: states }),
+      setRunStates: (states) => set({ runStates: states }),
 
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),

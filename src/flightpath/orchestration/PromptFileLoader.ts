@@ -96,9 +96,8 @@ export class PromptFileLoader {
             }
 
             if (Object.keys(updates).length > 0) {
-              const result = await this.promptQueue.updateWorkingFileProperties(
-                updates
-              );
+              const result =
+                await this.promptQueue.updateWorkingFileProperties(updates);
 
               if (result?.appliedKeys.length) {
                 for (const key of result.appliedKeys) {

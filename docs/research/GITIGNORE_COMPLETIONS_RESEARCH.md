@@ -33,6 +33,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
 ```
 
 **Issue:** Hardcoded excludes bypass VS Code's native .gitignore handling. This means:
+
 - Files in `.gitignore` but NOT in the hardcoded list still appear
 - Developers using different build/output folder names (e.g., `target/`, `bin/`) won't get automatic filtering
 
@@ -73,10 +74,11 @@ Dashboard sends `requestCompletions` message to extension, which routes through 
 **Source:** [VS Code Issue #36617](https://github.com/Microsoft/vscode/issues/36617)
 
 ```typescript
-vscode.workspace.findFiles(include, exclude, maxResults, token)
+vscode.workspace.findFiles(include, exclude, maxResults, token);
 ```
 
 **Key Behaviors:**
+
 - **DOES respect `.gitignore` by default** when exclude pattern is not provided or when using simple patterns
 - **Manual excludes bypass gitignore** (current FlightPath behavior)
 - Also respects:
@@ -93,10 +95,10 @@ vscode.workspace.findFiles(include, exclude, maxResults, token)
 
 ```typescript
 // PROPOSED API (not available yet)
-await vscode.workspace.findFiles2('**/*', {
-  exclude: '**/*.log',
-  useIgnoreFiles: true  // Explicit control
-})
+await vscode.workspace.findFiles2("**/*", {
+  exclude: "**/*.log",
+  useIgnoreFiles: true, // Explicit control
+});
 ```
 
 **Status:** API proposal in discussion, not available in stable VS Code
@@ -121,7 +123,7 @@ interface Repository {
 
 ```typescript
 // Get Git extension
-const gitExtension = vscode.extensions.getExtension('vscode.git');
+const gitExtension = vscode.extensions.getExtension("vscode.git");
 if (!gitExtension?.isActive) {
   await gitExtension?.activate();
 }
@@ -130,19 +132,21 @@ const gitApi = gitExtension?.exports.getAPI(1);
 const repository = gitApi.getRepository(workspaceUri);
 
 // Check which files are ignored
-const filePaths = files.map(uri => uri.fsPath);
+const filePaths = files.map((uri) => uri.fsPath);
 const ignoredPaths = await repository.checkIgnore(filePaths);
 
 // Filter out ignored files
-const filteredFiles = files.filter(uri => !ignoredPaths.has(uri.fsPath));
+const filteredFiles = files.filter((uri) => !ignoredPaths.has(uri.fsPath));
 ```
 
 **Advantages:**
+
 - Explicit control over gitignore filtering
 - Works with current stable VS Code
 - Handles complex `.gitignore` patterns correctly
 
 **Limitations:**
+
 - Requires Git extension to be installed (99.9% of developers have this)
 - Only works in Git repositories (non-Git workspaces won't benefit)
 - Batch checking is more efficient than per-file checks
@@ -162,8 +166,8 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   // ON (true):  Let VS Code respect .gitignore, .ignore, files.exclude, etc.
   // OFF (false): Show ALL files (only exclude .git database directory - never useful)
   const exclude = respectGitignore
-    ? undefined  // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
-    : "**/.git/**";  // Only exclude Git database - show EVERYTHING else
+    ? undefined // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
+    : "**/.git/**"; // Only exclude Git database - show EVERYTHING else
 
   const files = await vscode.workspace.findFiles("**/*", exclude);
   return files;
@@ -171,6 +175,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
 ```
 
 **Behavior:**
+
 - **Setting ON** (default): Respects `.gitignore`, `.ignore`, `.rgignore`, and VS Code's `files.exclude`/`search.exclude` settings
 - **Setting OFF**: Shows ALL workspace files including:
   - `node_modules/` (dependencies)
@@ -181,6 +186,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   - **Only excludes:** `.git/` directory itself (binary Git database - never useful in prompts)
 
 **Pros:**
+
 - Minimal code changes
 - Zero external dependencies
 - Works with any ignore file format (`.gitignore`, `.ignore`, `.rgignore`)
@@ -188,6 +194,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
 - **True toggle behavior** - OFF shows everything users need
 
 **Cons:**
+
 - Less explicit control
 - Behavior depends on VS Code's internal implementation
 
@@ -202,7 +209,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   // Get ALL files (only exclude .git database - never useful in prompts)
   const files = await vscode.workspace.findFiles(
     "**/*",
-    "**/.git/**"  // Only exclude Git database directory
+    "**/.git/**" // Only exclude Git database directory
   );
 
   if (!respectGitignore) {
@@ -215,10 +222,12 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   return filtered;
 }
 
-async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]> {
+async function filterGitIgnoredFiles(
+  files: vscode.Uri[]
+): Promise<vscode.Uri[]> {
   try {
     // Get Git extension
-    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    const gitExtension = vscode.extensions.getExtension("vscode.git");
     if (!gitExtension) {
       Log.warn("Git extension not found, cannot filter gitignored files");
       return files;
@@ -263,16 +272,15 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
       }
 
       // Batch check all files in this repository
-      const filePaths = repoFiles.map(uri => uri.fsPath);
+      const filePaths = repoFiles.map((uri) => uri.fsPath);
       const ignoredPaths = await repo.checkIgnore(filePaths);
 
       // Keep only non-ignored files
-      const kept = repoFiles.filter(uri => !ignoredPaths.has(uri.fsPath));
+      const kept = repoFiles.filter((uri) => !ignoredPaths.has(uri.fsPath));
       filteredFiles.push(...kept);
     }
 
     return filteredFiles;
-
   } catch (error) {
     Log.error("Failed to filter gitignored files:", error);
     return files; // Fallback: return all files
@@ -281,12 +289,14 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 ```
 
 **Pros:**
+
 - Explicit control over filtering
 - Clear error handling and logging
 - Can provide user feedback if Git extension is missing
 - Handles multi-root workspaces correctly
 
 **Cons:**
+
 - More complex code
 - Dependency on Git extension (but acceptable)
 - Performance overhead (batch API call per repository)
@@ -296,9 +306,11 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 ## Toggle Behavior & Use Cases
 
 ### Setting ON (Default): Respect .gitignore
+
 **Goal:** Clean completions dropdown - hide irrelevant files
 
 **What's Hidden:**
+
 - ✅ `node_modules/` - Dependencies (rarely need to reference)
 - ✅ `dist/`, `out/`, `build/` - Build artifacts (generated files)
 - ✅ `.cache/`, `.temp/` - Cache directories
@@ -310,9 +322,11 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 **Use Case:** Normal workflow - focus on source code files you're actively developing
 
 ### Setting OFF: Show ALL Files
+
 **Goal:** Reference ANY file in workspace, even if gitignored
 
 **What's Shown (that would normally be hidden):**
+
 - ✅ `node_modules/` - Need to reference a dependency's types or implementation
 - ✅ `dist/bundle.js` - Debugging bundler output or checking compiled code
 - ✅ `logs/error.log` - Including error logs in prompt for debugging
@@ -354,6 +368,7 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 ### Quick Toggle Workflow
 
 **Keyboard shortcut recommended:**
+
 1. Open Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
 2. Type "Preferences: Open Settings (UI)"
 3. Search "gitignore completions"
@@ -361,9 +376,10 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 5. Return to prompt editor - cache cleared automatically
 
 **Faster alternative (settings.json):**
+
 ```json
 {
-  "flightpath.respectGitignoreForCompletions": false  // Show ALL files
+  "flightpath.respectGitignoreForCompletions": false // Show ALL files
 }
 ```
 
@@ -416,8 +432,8 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
       <span>Respect .gitignore for completions</span>
     </label>
     <span class="setting-description">
-      When enabled, hides gitignored files from @ and # completions.
-      Disable to reference build outputs, logs, or dependencies.
+      When enabled, hides gitignored files from @ and # completions. Disable to
+      reference build outputs, logs, or dependencies.
     </span>
   </div>
 </div>
@@ -427,25 +443,31 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 
 ```javascript
 // Add to init() or loadSettings()
-const respectGitignoreCheckbox = document.getElementById('respect-gitignore');
+const respectGitignoreCheckbox = document.getElementById("respect-gitignore");
 
 // Load initial value from VS Code setting
-vscode.postMessage({ type: 'getConfig', key: 'respectGitignoreForCompletions' });
+vscode.postMessage({
+  type: "getConfig",
+  key: "respectGitignoreForCompletions",
+});
 
 // Handle config response
-window.addEventListener('message', event => {
+window.addEventListener("message", (event) => {
   const message = event.data;
-  if (message.type === 'configValue' && message.key === 'respectGitignoreForCompletions') {
+  if (
+    message.type === "configValue" &&
+    message.key === "respectGitignoreForCompletions"
+  ) {
     respectGitignoreCheckbox.checked = message.value ?? true;
   }
 });
 
 // Update setting when checkbox changes
-respectGitignoreCheckbox.addEventListener('change', (e) => {
+respectGitignoreCheckbox.addEventListener("change", (e) => {
   vscode.postMessage({
-    type: 'updateConfig',
-    key: 'respectGitignoreForCompletions',
-    value: e.target.checked
+    type: "updateConfig",
+    key: "respectGitignoreForCompletions",
+    value: e.target.checked,
   });
 });
 ```
@@ -518,8 +540,8 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   // ON (true):  Let VS Code respect .gitignore, .ignore, files.exclude, etc.
   // OFF (false): Show ALL files (only exclude .git database - never useful)
   const exclude = respectGitignore
-    ? undefined  // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
-    : "**/.git/**";  // Only exclude Git database - show EVERYTHING else
+    ? undefined // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
+    : "**/.git/**"; // Only exclude Git database - show EVERYTHING else
 
   const files = await vscode.workspace.findFiles("**/*", exclude);
 
@@ -551,7 +573,7 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   // Get ALL files (only exclude .git database directory)
   const files = await vscode.workspace.findFiles(
     "**/*",
-    "**/.git/**"  // Only exclude Git database - never useful in prompts
+    "**/.git/**" // Only exclude Git database - never useful in prompts
   );
 
   // OFF: Return ALL files (node_modules, dist, logs, everything)
@@ -568,11 +590,15 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
 }
 
 // Add new helper function
-async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]> {
+async function filterGitIgnoredFiles(
+  files: vscode.Uri[]
+): Promise<vscode.Uri[]> {
   try {
-    const gitExtension = vscode.extensions.getExtension('vscode.git');
+    const gitExtension = vscode.extensions.getExtension("vscode.git");
     if (!gitExtension) {
-      Log.warn("[Completions] Git extension not found, cannot filter .gitignore files");
+      Log.warn(
+        "[Completions] Git extension not found, cannot filter .gitignore files"
+      );
       return files;
     }
 
@@ -607,11 +633,11 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
     const filteredFiles: vscode.Uri[] = [...nonGitFiles];
 
     for (const [repo, repoFiles] of filesByRepo.entries()) {
-      const filePaths = repoFiles.map(uri => uri.fsPath);
+      const filePaths = repoFiles.map((uri) => uri.fsPath);
       const ignoredSet = await repo.checkIgnore(filePaths);
 
       // Keep only non-ignored files
-      const kept = repoFiles.filter(uri => !ignoredSet.has(uri.fsPath));
+      const kept = repoFiles.filter((uri) => !ignoredSet.has(uri.fsPath));
       filteredFiles.push(...kept);
 
       Log.debug(
@@ -620,7 +646,6 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
     }
 
     return filteredFiles;
-
   } catch (error) {
     Log.error("[Completions] Failed to filter gitignored files:", error);
     return files; // Fallback: return all files
@@ -633,6 +658,7 @@ async function filterGitIgnoredFiles(files: vscode.Uri[]): Promise<vscode.Uri[]>
 **No changes needed** - `vscode.executeWorkspaceSymbolProvider` likely already respects `.gitignore` since it uses VS Code's indexed files.
 
 **Verification:** Test manually by:
+
 1. Creating a file in `.gitignore`
 2. Adding a symbol to it
 3. Checking if it appears in `#` completions
@@ -664,10 +690,12 @@ let configWatcher: vscode.Disposable | undefined;
 /**
  * Initialize configuration watcher to clear cache on setting change
  */
-export function initializeCompletionHelpers(context: vscode.ExtensionContext): void {
+export function initializeCompletionHelpers(
+  context: vscode.ExtensionContext
+): void {
   // Clear cache when gitignore setting changes
-  configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-    if (e.affectsConfiguration('flightpath.respectGitignoreForCompletions')) {
+  configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration("flightpath.respectGitignoreForCompletions")) {
       clearFilesCache();
       Log.info("[Completions] Cache cleared due to gitignore setting change");
     }
@@ -688,7 +716,7 @@ export function disposeCompletionHelpers(): void {
 
 ```typescript
 // In activate() function
-import { initializeCompletionHelpers } from './completions/CompletionHelpers';
+import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 
 export async function activate(context: vscode.ExtensionContext) {
   // ... existing code ...
@@ -782,12 +810,14 @@ export async function activate(context: vscode.ExtensionContext) {
 ### Start with Option A (Simple), Upgrade to Option B if Needed
 
 **Rationale:**
+
 1. **Option A is lower risk** - relies on VS Code's built-in behavior
 2. **Option A is simpler** - less code to maintain
 3. **Option B can be added later** if users report issues with VS Code's native filtering
 4. **Both approaches share the same setting** - users don't need to reconfigure
 
 **Migration Path:**
+
 1. Ship with Option A (remove manual excludes, use `undefined`)
 2. Monitor user feedback for 1-2 releases
 3. If issues arise (e.g., gitignore not respected in certain scenarios), implement Option B
@@ -833,6 +863,7 @@ export async function activate(context: vscode.ExtensionContext) {
 ### 2. ❌ Parse .gitignore Files Manually
 
 **Rejected:**
+
 - Complex (must handle negation patterns, directory vs file patterns, nested `.gitignore`)
 - Duplicate work (VS Code and Git extension already do this)
 - Cross-platform path issues
@@ -840,6 +871,7 @@ export async function activate(context: vscode.ExtensionContext) {
 ### 3. ❌ Shell Out to `git check-ignore`
 
 **Rejected:**
+
 - Slower than API calls
 - Requires Git CLI installation
 - Security concerns with shell execution
@@ -852,6 +884,7 @@ export async function activate(context: vscode.ExtensionContext) {
 ### Cache Effectiveness
 
 Current 5-second cache (CACHE_DURATION_MS) should remain effective:
+
 - Cache key includes setting state implicitly (different results = different cache entry)
 - Configuration change listener clears cache immediately
 - No additional memory overhead
@@ -859,6 +892,7 @@ Current 5-second cache (CACHE_DURATION_MS) should remain effective:
 ### Git API Batch Performance
 
 If using Option B:
+
 - `checkIgnore(paths)` accepts array → single API call per repository
 - Multi-root workspaces: 1 API call per repo (acceptable)
 - Large workspaces (10k files): ~50-100ms per checkIgnore call (acceptable)
@@ -866,6 +900,7 @@ If using Option B:
 ### Completions Latency Budget
 
 VS Code completions should appear within **500ms** for good UX:
+
 - Current findFiles: ~100-200ms (10k files)
 - Git API checkIgnore: ~50-100ms (batched)
 - Total: ~150-300ms (well within budget)
@@ -875,6 +910,7 @@ VS Code completions should appear within **500ms** for good UX:
 ## Breaking Changes
 
 **None.** This is a purely additive feature:
+
 - New setting defaults to `true` (respects `.gitignore`)
 - Previous behavior available by setting to `false`
 - No API changes for extension consumers
@@ -886,6 +922,7 @@ VS Code completions should appear within **500ms** for good UX:
 ### 1. Respect Additional Ignore Files
 
 Support other ignore file formats:
+
 - `.dockerignore`
 - `.npmignore`
 - `.eslintignore`
@@ -911,10 +948,7 @@ Allow users to define additional exclude patterns beyond `.gitignore`:
 
 ```json
 {
-  "flightpath.completionExcludePatterns": [
-    "**/temp/**",
-    "**/*.backup"
-  ]
+  "flightpath.completionExcludePatterns": ["**/temp/**", "**/*.backup"]
 }
 ```
 
@@ -937,6 +971,7 @@ Allow users to define additional exclude patterns beyond `.gitignore`:
 4. **Monitor feedback** and upgrade to Git API (Option B) if needed
 
 **Toggle Behavior:**
+
 ```
 Setting ON  (default) → ~5,000 files  (clean, focused)
 Setting OFF           → ~10,000 files (everything, including gitignored)
@@ -945,6 +980,7 @@ Setting OFF           → ~10,000 files (everything, including gitignored)
 **Estimated Effort:** 2-3 hours (including testing)
 
 **User Impact:**
+
 - Cleaner completion dropdowns by default
 - Quick toggle for referencing gitignored files (logs, builds, deps)
 - Better alignment with version control

@@ -33,9 +33,7 @@ export const IconToggleButton: React.FC<{
       onClick={() => onToggle(!active)}
       title={active ? activeTooltip : inactiveTooltip}
       className={`flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors ${
-        active
-          ? "text-link-fg"
-          : "text-description-fg hover:text-foreground"
+        active ? "text-link-fg" : "text-description-fg hover:text-foreground"
       }`}
     >
       <i

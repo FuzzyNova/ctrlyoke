@@ -14,14 +14,14 @@
 
 ## Event Type Summary
 
-| Event Type | Count | Description |
-|------------|-------|-------------|
-| `progress` | 518 | Progress updates (hooks, bash, agents) |
-| `assistant` | 327 | Claude's responses (messages, thinking, tool calls) |
-| `user` | 169 | User messages and tool results |
-| `file-history-snapshot` | 35 | File backup tracking |
-| `system` | 7 | System messages (hook summaries, durations, commands) |
-| `summary` | 1 | Session summary (final line) |
+| Event Type              | Count | Description                                           |
+| ----------------------- | ----- | ----------------------------------------------------- |
+| `progress`              | 518   | Progress updates (hooks, bash, agents)                |
+| `assistant`             | 327   | Claude's responses (messages, thinking, tool calls)   |
+| `user`                  | 169   | User messages and tool results                        |
+| `file-history-snapshot` | 35    | File backup tracking                                  |
+| `system`                | 7     | System messages (hook summaries, durations, commands) |
+| `summary`               | 1     | Session summary (final line)                          |
 
 **Total Event Types**: 6 main types
 
@@ -33,21 +33,21 @@ All events share these top-level fields:
 
 ```typescript
 interface BaseEvent {
-  type: string;                    // Event type discriminator
-  timestamp?: string;              // ISO 8601 timestamp (most events)
-  uuid?: string;                   // Unique event identifier (most events)
+  type: string; // Event type discriminator
+  timestamp?: string; // ISO 8601 timestamp (most events)
+  uuid?: string; // Unique event identifier (most events)
 
   // Session context (present in most events except summary/file-history-snapshot)
-  sessionId?: string;              // Session UUID
-  version?: string;                // Claude CLI version (e.g., "2.1.17")
-  cwd?: string;                    // Working directory (e.g., "C:\\dev\\FlightPath")
-  gitBranch?: string;              // Current git branch (e.g., "main")
+  sessionId?: string; // Session UUID
+  version?: string; // Claude CLI version (e.g., "2.1.17")
+  cwd?: string; // Working directory (e.g., "C:\\dev\\FlightPath")
+  gitBranch?: string; // Current git branch (e.g., "main")
 
   // Parent tracking
-  parentUuid?: string | null;      // Parent event UUID (conversation chain)
-  isSidechain?: boolean;           // Whether event is in sidechain
-  userType?: string;               // Usually "external"
-  slug?: string;                   // Session slug (e.g., "concurrent-yawning-crown")
+  parentUuid?: string | null; // Parent event UUID (conversation chain)
+  isSidechain?: boolean; // Whether event is in sidechain
+  userType?: string; // Usually "external"
+  slug?: string; // Session slug (e.g., "concurrent-yawning-crown")
 }
 ```
 
@@ -62,12 +62,13 @@ Progress updates for hooks, bash commands, and agent tasks.
 **Frequency**: 518 events
 
 **Fields**:
+
 ```typescript
 interface ProgressEvent extends BaseEvent {
   type: "progress";
-  data: ProgressData;              // Nested progress data (see below)
-  parentToolUseID?: string;        // Associated tool use ID
-  toolUseID?: string;              // Tool use ID for this progress
+  data: ProgressData; // Nested progress data (see below)
+  parentToolUseID?: string; // Associated tool use ID
+  toolUseID?: string; // Tool use ID for this progress
   timestamp: string;
   uuid: string;
 }
@@ -81,12 +82,13 @@ type ProgressData = HookProgress | BashProgress | AgentProgress;
 interface HookProgress {
   type: "hook_progress";
   hookEvent: "SessionStart" | "PostToolUse" | "Stop";
-  hookName: string;                // e.g., "SessionStart:startup", "PostToolUse:Grep"
-  command: string;                 // Hook command or "callback"
+  hookName: string; // e.g., "SessionStart:startup", "PostToolUse:Grep"
+  command: string; // Hook command or "callback"
 }
 ```
 
 **Example**:
+
 ```json
 {
   "parentUuid": null,
@@ -115,14 +117,15 @@ interface HookProgress {
 ```typescript
 interface BashProgress {
   type: "bash_progress";
-  output: string;                  // Current output chunk
-  fullOutput: string;              // Cumulative output
-  elapsedTimeSeconds: number;      // Elapsed time
-  totalLines: number;              // Total output lines
+  output: string; // Current output chunk
+  fullOutput: string; // Cumulative output
+  elapsedTimeSeconds: number; // Elapsed time
+  totalLines: number; // Total output lines
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "progress",
@@ -143,17 +146,18 @@ interface AgentProgress {
   type: "agent_progress";
   message: {
     type: "user" | "assistant";
-    message?: object;              // Full message object
+    message?: object; // Full message object
     timestamp?: string;
     uuid?: string;
   };
-  normalizedMessages: any[];       // Usually empty array
-  prompt: string;                  // Task prompt for agent
-  agentId: string;                 // Agent identifier (e.g., "ad3a624")
+  normalizedMessages: any[]; // Usually empty array
+  prompt: string; // Task prompt for agent
+  agentId: string; // Agent identifier (e.g., "ad3a624")
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "progress",
@@ -189,11 +193,12 @@ Claude's assistant responses including thinking, text, and tool calls.
 **Frequency**: 327 events
 
 **Fields**:
+
 ```typescript
 interface AssistantEvent extends BaseEvent {
   type: "assistant";
   message: AssistantMessage;
-  requestId: string;               // API request ID (e.g., "req_011CXUgBZHVei3pxkYSj3i5v")
+  requestId: string; // API request ID (e.g., "req_011CXUgBZHVei3pxkYSj3i5v")
   timestamp: string;
   uuid: string;
   parentUuid: string;
@@ -207,14 +212,14 @@ interface AssistantEvent extends BaseEvent {
 }
 
 interface AssistantMessage {
-  model: string;                   // e.g., "claude-sonnet-4-5-20250929"
-  id: string;                      // Message ID (e.g., "msg_01VTkavuhCNTJuATRnPKy7o2")
+  model: string; // e.g., "claude-sonnet-4-5-20250929"
+  id: string; // Message ID (e.g., "msg_01VTkavuhCNTJuATRnPKy7o2")
   type: "message";
   role: "assistant";
-  content: ContentBlock[];         // Array of content blocks
-  stop_reason: string | null;      // Reason for stopping (null if incomplete)
-  stop_sequence: string | null;    // Stop sequence if applicable
-  usage: UsageStats;               // Token usage statistics
+  content: ContentBlock[]; // Array of content blocks
+  stop_reason: string | null; // Reason for stopping (null if incomplete)
+  stop_sequence: string | null; // Stop sequence if applicable
+  usage: UsageStats; // Token usage statistics
   context_management?: any | null; // Context management info
 }
 
@@ -228,8 +233,8 @@ type ContentBlock = ThinkingBlock | TextBlock | ToolUseBlock;
 ```typescript
 interface ThinkingBlock {
   type: "thinking";
-  thinking: string;                // Claude's internal reasoning
-  signature: string;               // Cryptographic signature (long base64 string)
+  thinking: string; // Claude's internal reasoning
+  signature: string; // Cryptographic signature (long base64 string)
 }
 ```
 
@@ -238,7 +243,7 @@ interface ThinkingBlock {
 ```typescript
 interface TextBlock {
   type: "text";
-  text: string;                    // Response text
+  text: string; // Response text
 }
 ```
 
@@ -247,13 +252,14 @@ interface TextBlock {
 ```typescript
 interface ToolUseBlock {
   type: "tool_use";
-  id: string;                      // Tool use ID (e.g., "toolu_01Q3NwTz2ifw5qBLKtrZ4zta")
-  name: string;                    // Tool name: "Bash" | "Edit" | "Grep" | "Read" | "Task"
-  input: Record<string, any>;      // Tool-specific input parameters
+  id: string; // Tool use ID (e.g., "toolu_01Q3NwTz2ifw5qBLKtrZ4zta")
+  name: string; // Tool name: "Bash" | "Edit" | "Grep" | "Read" | "Task"
+  input: Record<string, any>; // Tool-specific input parameters
 }
 ```
 
 **Tool Names Found**:
+
 - `Bash` - Execute shell commands
 - `Edit` - Edit files
 - `Grep` - Search files
@@ -272,11 +278,12 @@ interface UsageStats {
     ephemeral_1h_input_tokens: number;
   };
   output_tokens: number;
-  service_tier: string;            // e.g., "standard"
+  service_tier: string; // e.g., "standard"
 }
 ```
 
 **Complete Example**:
+
 ```json
 {
   "parentUuid": "13a79665-d27c-4e26-bdef-e5275533a115",
@@ -341,6 +348,7 @@ User messages and tool results.
 **Frequency**: 169 events
 
 **Fields**:
+
 ```typescript
 interface UserEvent extends BaseEvent {
   type: "user";
@@ -357,7 +365,7 @@ interface UserEvent extends BaseEvent {
   slug?: string;
   thinkingMetadata?: ThinkingMetadata;
   todos?: any[];
-  permissionMode?: string;         // e.g., "acceptEdits"
+  permissionMode?: string; // e.g., "acceptEdits"
 
   // Tool result specific (when content is tool_result)
   toolUseResult?: ToolUseResult;
@@ -374,23 +382,24 @@ type UserContentBlock = TextBlock | ToolResultBlock;
 interface ToolResultBlock {
   tool_use_id: string;
   type: "tool_result";
-  content: string;                 // Tool output
+  content: string; // Tool output
 }
 
 interface ThinkingMetadata {
-  level: string;                   // e.g., "high"
+  level: string; // e.g., "high"
   disabled: boolean;
   triggers: any[];
 }
 
 interface ToolUseResult {
-  mode?: string;                   // e.g., "files_with_matches"
+  mode?: string; // e.g., "files_with_matches"
   filenames?: string[];
   numFiles?: number;
 }
 ```
 
 **Example (String Content)**:
+
 ```json
 {
   "parentUuid": "d3ec3d1d-99cb-4328-a4bd-46916e0b917c",
@@ -418,6 +427,7 @@ interface ToolUseResult {
 ```
 
 **Example (Tool Result Content)**:
+
 ```json
 {
   "parentUuid": "f2b44a4a-55e3-4b7f-be24-b644edf381bf",
@@ -443,10 +453,7 @@ interface ToolUseResult {
   "timestamp": "2026-01-25T19:49:51.363Z",
   "toolUseResult": {
     "mode": "files_with_matches",
-    "filenames": [
-      "schemas\\prompt-schema.yaml",
-      "schemas\\prompt-schema.json"
-    ],
+    "filenames": ["schemas\\prompt-schema.yaml", "schemas\\prompt-schema.json"],
     "numFiles": 13
   },
   "sourceToolAssistantUUID": "f2b44a4a-55e3-4b7f-be24-b644edf381bf"
@@ -462,11 +469,13 @@ System messages for hooks, durations, and commands.
 **Frequency**: 7 events
 
 **Subtypes**:
+
 - `stop_hook_summary` - Hook execution summary at turn end
 - `turn_duration` - Turn duration statistics
 - `local_command` - Local slash commands (e.g., `/usage`)
 
 **Fields**:
+
 ```typescript
 interface SystemEvent extends BaseEvent {
   type: "system";
@@ -481,8 +490,8 @@ interface SystemEvent extends BaseEvent {
   version: string;
   gitBranch: string;
   slug: string;
-  level?: string;                  // "suggestion" | "info"
-  isMeta?: boolean;                // Whether event is metadata
+  level?: string; // "suggestion" | "info"
+  isMeta?: boolean; // Whether event is metadata
 
   // stop_hook_summary specific
   hookCount?: number;
@@ -497,11 +506,12 @@ interface SystemEvent extends BaseEvent {
   durationMs?: number;
 
   // local_command specific
-  content?: string;                // Command XML content
+  content?: string; // Command XML content
 }
 ```
 
 **Example (stop_hook_summary)**:
+
 ```json
 {
   "parentUuid": "32d584ab-e0c4-4357-8dc1-ad580cdb137a",
@@ -532,6 +542,7 @@ interface SystemEvent extends BaseEvent {
 ```
 
 **Example (turn_duration)**:
+
 ```json
 {
   "parentUuid": "97bd42fc-9fe7-4f72-95d7-38b8a9f05a3f",
@@ -552,6 +563,7 @@ interface SystemEvent extends BaseEvent {
 ```
 
 **Example (local_command)**:
+
 ```json
 {
   "parentUuid": "3446796e-61a4-4587-bc62-d74a4c9fa72a",
@@ -581,28 +593,30 @@ File backup tracking for edited files.
 **Frequency**: 35 events
 
 **Fields**:
+
 ```typescript
 interface FileHistorySnapshotEvent {
   type: "file-history-snapshot";
   messageId: string;
   snapshot: FileSnapshot;
-  isSnapshotUpdate: boolean;       // True if updating existing snapshot
+  isSnapshotUpdate: boolean; // True if updating existing snapshot
 }
 
 interface FileSnapshot {
   messageId: string;
   trackedFileBackups: Record<string, FileBackup>;
-  timestamp: string;               // ISO 8601
+  timestamp: string; // ISO 8601
 }
 
 interface FileBackup {
-  backupFileName: string;          // e.g., "fa0d9b36d9394828@v1"
+  backupFileName: string; // e.g., "fa0d9b36d9394828@v1"
   version: number;
-  backupTime: string;              // ISO 8601
+  backupTime: string; // ISO 8601
 }
 ```
 
 **Example (Initial Snapshot)**:
+
 ```json
 {
   "type": "file-history-snapshot",
@@ -617,6 +631,7 @@ interface FileBackup {
 ```
 
 **Example (Updated Snapshot)**:
+
 ```json
 {
   "type": "file-history-snapshot",
@@ -650,15 +665,17 @@ Session summary (final line of log file).
 **Frequency**: 1 event (end of session)
 
 **Fields**:
+
 ```typescript
 interface SummaryEvent {
   type: "summary";
-  summary: string;                 // Human-readable session summary
-  leafUuid: string;                // UUID of final event in conversation tree
+  summary: string; // Human-readable session summary
+  leafUuid: string; // UUID of final event in conversation tree
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "summary",
@@ -672,32 +689,38 @@ interface SummaryEvent {
 ## Enumeration Values
 
 ### Hook Events
+
 ```typescript
 type HookEvent = "SessionStart" | "PostToolUse" | "Stop";
 ```
 
 ### Tool Names
+
 ```typescript
 type ToolName = "Bash" | "Edit" | "Grep" | "Read" | "Task";
 ```
 
 ### System Subtypes
+
 ```typescript
 type SystemSubtype = "stop_hook_summary" | "turn_duration" | "local_command";
 ```
 
 ### Content Block Types
+
 ```typescript
 type ContentType = "thinking" | "text" | "tool_use" | "tool_result";
 ```
 
 ### User Content Types
+
 ```typescript
 type UserContentType = "text" | "tool_result";
 // Note: User message.content can also be a plain string
 ```
 
 ### Assistant Content Types
+
 ```typescript
 type AssistantContentType = "thinking" | "text" | "tool_use";
 ```
@@ -751,15 +774,15 @@ function parseLogLine(line: string): ClaudeLogEvent {
 ### Sequential Reading
 
 ```typescript
-import * as fs from 'fs';
-import * as readline from 'readline';
+import * as fs from "fs";
+import * as readline from "readline";
 
 async function parseClaudeLog(filePath: string): Promise<ClaudeLogEvent[]> {
   const events: ClaudeLogEvent[] = [];
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({
     input: fileStream,
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
@@ -775,8 +798,8 @@ async function parseClaudeLog(filePath: string): Promise<ClaudeLogEvent[]> {
 ### Stream Processing
 
 ```typescript
-import * as fs from 'fs';
-import * as readline from 'readline';
+import * as fs from "fs";
+import * as readline from "readline";
 
 async function streamClaudeLog(
   filePath: string,
@@ -785,7 +808,7 @@ async function streamClaudeLog(
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({
     input: fileStream,
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
@@ -803,7 +826,7 @@ function filterEventsByType<T extends ClaudeLogEvent["type"]>(
   events: ClaudeLogEvent[],
   type: T
 ): Extract<ClaudeLogEvent, { type: T }>[] {
-  return events.filter(e => e.type === type) as any;
+  return events.filter((e) => e.type === type) as any;
 }
 
 // Usage
@@ -828,15 +851,15 @@ function buildConversationTree(events: ClaudeLogEvent[]): ConversationNode[] {
   const roots: ConversationNode[] = [];
 
   // Create nodes
-  events.forEach(event => {
-    if ('uuid' in event) {
+  events.forEach((event) => {
+    if ("uuid" in event) {
       nodeMap.set(event.uuid, { event, children: [] });
     }
   });
 
   // Build tree
-  events.forEach(event => {
-    if ('uuid' in event && 'parentUuid' in event) {
+  events.forEach((event) => {
+    if ("uuid" in event && "parentUuid" in event) {
       const node = nodeMap.get(event.uuid)!;
       if (event.parentUuid) {
         const parent = nodeMap.get(event.parentUuid);
@@ -873,22 +896,27 @@ interface TokenStats {
 function calculateTokenUsage(events: ClaudeLogEvent[]): TokenStats {
   const assistantEvents = filterEventsByType(events, "assistant");
 
-  return assistantEvents.reduce((acc, event) => {
-    const usage = event.message.usage;
-    return {
-      totalInputTokens: acc.totalInputTokens + usage.input_tokens,
-      totalOutputTokens: acc.totalOutputTokens + usage.output_tokens,
-      totalCacheCreationTokens: acc.totalCacheCreationTokens + usage.cache_creation_input_tokens,
-      totalCacheReadTokens: acc.totalCacheReadTokens + usage.cache_read_input_tokens,
-      messageCount: acc.messageCount + 1
-    };
-  }, {
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalCacheCreationTokens: 0,
-    totalCacheReadTokens: 0,
-    messageCount: 0
-  });
+  return assistantEvents.reduce(
+    (acc, event) => {
+      const usage = event.message.usage;
+      return {
+        totalInputTokens: acc.totalInputTokens + usage.input_tokens,
+        totalOutputTokens: acc.totalOutputTokens + usage.output_tokens,
+        totalCacheCreationTokens:
+          acc.totalCacheCreationTokens + usage.cache_creation_input_tokens,
+        totalCacheReadTokens:
+          acc.totalCacheReadTokens + usage.cache_read_input_tokens,
+        messageCount: acc.messageCount + 1,
+      };
+    },
+    {
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheCreationTokens: 0,
+      totalCacheReadTokens: 0,
+      messageCount: 0,
+    }
+  );
 }
 ```
 
@@ -900,13 +928,13 @@ The last line is always a `summary` event:
 
 ```typescript
 async function getSessionSummary(filePath: string): Promise<string | null> {
-  const content = await fs.promises.readFile(filePath, 'utf8');
-  const lines = content.trim().split('\n');
+  const content = await fs.promises.readFile(filePath, "utf8");
+  const lines = content.trim().split("\n");
   const lastLine = lines[lines.length - 1];
 
   if (lastLine) {
     const event = JSON.parse(lastLine);
-    if (event.type === 'summary') {
+    if (event.type === "summary") {
       return event.summary;
     }
   }
@@ -933,12 +961,12 @@ function extractHookExecutions(events: ClaudeLogEvent[]): HookExecution[] {
   const progressEvents = filterEventsByType(events, "progress");
 
   return progressEvents
-    .filter(e => e.data.type === "hook_progress")
-    .map(e => ({
+    .filter((e) => e.data.type === "hook_progress")
+    .map((e) => ({
       hookEvent: (e.data as HookProgress).hookEvent,
       hookName: (e.data as HookProgress).hookName,
       command: (e.data as HookProgress).command,
-      timestamp: e.timestamp
+      timestamp: e.timestamp,
     }));
 }
 ```
@@ -961,15 +989,17 @@ function extractFileEdits(events: ClaudeLogEvent[]): FileEdit[] {
   const snapshotEvents = filterEventsByType(events, "file-history-snapshot");
   const edits: FileEdit[] = [];
 
-  snapshotEvents.forEach(event => {
-    Object.entries(event.snapshot.trackedFileBackups).forEach(([filePath, backup]) => {
-      edits.push({
-        filePath,
-        version: backup.version,
-        backupFileName: backup.backupFileName,
-        backupTime: backup.backupTime
-      });
-    });
+  snapshotEvents.forEach((event) => {
+    Object.entries(event.snapshot.trackedFileBackups).forEach(
+      ([filePath, backup]) => {
+        edits.push({
+          filePath,
+          version: backup.version,
+          backupFileName: backup.backupFileName,
+          backupTime: backup.backupTime,
+        });
+      }
+    );
   });
 
   return edits;

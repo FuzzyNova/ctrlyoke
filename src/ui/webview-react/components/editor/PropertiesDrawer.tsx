@@ -141,8 +141,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   options={[
                     { value: "default", label: "Default" },
                     ...(models.length === 0
-                      ? [{ value: "", label: "Loading models...", disabled: true }]
-                      : models.map((m) => ({ value: m.value, label: m.label }))),
+                      ? [
+                          {
+                            value: "",
+                            label: "Loading models...",
+                            disabled: true,
+                          },
+                        ]
+                      : models.map((m) => ({
+                          value: m.value,
+                          label: m.label,
+                        }))),
                   ]}
                 />
               </div>
@@ -186,7 +195,10 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onChange={(v) => setProperty("allowDynamicExtension", v)}
                   options={[
                     { value: "default", label: "Default" },
-                    { value: "yes", label: "Yes - Allow AI to extend workflow" },
+                    {
+                      value: "yes",
+                      label: "Yes - Allow AI to extend workflow",
+                    },
                     { value: "no", label: "No - Disable dynamic extension" },
                   ]}
                 />

@@ -681,17 +681,15 @@ async function dumpVsCodeCssVariables(
         generatedAt: new Date().toISOString(),
         count: message.count,
         vars: Object.fromEntries(
-          Object.entries(message.vars as Record<string, string>).sort(([a], [b]) =>
-            a.localeCompare(b)
+          Object.entries(message.vars as Record<string, string>).sort(
+            ([a], [b]) => a.localeCompare(b)
           )
         ),
       };
 
       try {
         fs.writeFileSync(outputPath, JSON.stringify(output, null, 2) + "\n");
-        Log.info(
-          `✅ Dumped ${message.count} CSS variables to ${outputPath}`
-        );
+        Log.info(`✅ Dumped ${message.count} CSS variables to ${outputPath}`);
 
         const action = await vscode.window.showInformationMessage(
           `Dumped ${message.count} --vscode-* CSS variables to docs/reference/vscode-css-vars.json`,
@@ -797,9 +795,8 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "flightpath.investigateChatLogs",
       async () => {
-        const { runAllInvestigations } = await import(
-          "../test/chat-log-investigation"
-        );
+        const { runAllInvestigations } =
+          await import("../test/chat-log-investigation");
         await runAllInvestigations(context);
         vscode.window.showInformationMessage(
           "Chat log investigation complete! Check the console for results."

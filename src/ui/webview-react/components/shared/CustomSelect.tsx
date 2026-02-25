@@ -56,12 +56,16 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
   return (
-    <div className={`relative inline-block w-full ${className}`} ref={containerRef}>
+    <div
+      className={`relative inline-block w-full ${className}`}
+      ref={containerRef}
+    >
       <button
         id={id}
         type="button"

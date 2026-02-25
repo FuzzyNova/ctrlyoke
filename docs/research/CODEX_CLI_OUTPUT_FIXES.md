@@ -11,6 +11,7 @@
 **Solution**: Added `stripAnsiCodes()` utility method to `CodexResponseParser.ts` that removes all ANSI escape sequences using the regex pattern `/\x1b\[[0-9;]*[a-zA-Z]/g`.
 
 **Files Modified**:
+
 - `src/flightpath/cli/codex/CodexResponseParser.ts`:
   - Added `stripAnsiCodes()` private method
   - Updated `parseItemToEvents()` to strip ANSI codes from command output
@@ -21,6 +22,7 @@
 **Problem**: File edit events showed "File update: path" but no diff visualization.
 
 **Root Cause**: **Codex CLI does NOT provide file content or diff information** in its `file_change` events. The events only contain:
+
 ```json
 {
   "type": "file_change",
@@ -37,11 +39,13 @@
 No `oldContent`, `newContent`, or `structuredPatch` fields are included.
 
 **Solution**: Added graceful fallback messaging in `output-manager.js` to inform users when diff data is unavailable:
+
 - Webview HTML output: Shows `⎿  (Diff not available)`
 - Markdown export: Includes same message in exported output
 - Note: Message is generic and applies to any provider that doesn't supply diff data
 
 **Files Modified**:
+
 - `src/ui/webview/output-manager.js`:
   - Updated `renderStructuredOutput()` fileEdit case to check for diff data availability
   - Updated `generateMarkdownOutput()` fileEdit case with same check
@@ -53,11 +57,13 @@ No `oldContent`, `newContent`, or `structuredPatch` fields are included.
 **Root Cause**: Background opacity was too low (0.2) and no border provided sufficient contrast.
 
 **Solution**: Enhanced status badge styling with:
+
 - Increased background opacity from 0.2 to 0.3
 - Added subtle border (1px solid with 0.5 opacity) for better definition
 - Maintained color consistency with VS Code theme variables
 
 **Files Modified**:
+
 - `src/ui/webview/dashboard.scss`:
   - Updated `.status-badge.success` styling
   - Updated `.status-badge.error` styling
@@ -65,7 +71,9 @@ No `oldContent`, `newContent`, or `structuredPatch` fields are included.
 ## Codex CLI Limitations
 
 ### File Change Events
+
 Codex CLI `file_change` events are **metadata-only** and do not include:
+
 - File content (before/after)
 - Unified diff patches
 - Line-by-line changes
@@ -73,11 +81,13 @@ Codex CLI `file_change` events are **metadata-only** and do not include:
 **Workaround**: FlightPath displays a message indicating diff is unavailable rather than silently showing nothing.
 
 **Comparison with other CLIs**:
+
 - **Claude CLI**: Provides `structuredPatch` with unified diff format including accurate line numbers
 - **Copilot CLI**: Provides oldContent/newContent for diff generation
 - **Codex CLI**: Only provides `{path, kind}` metadata
 
 ### ANSI Color Codes
+
 Codex CLI captures raw terminal output including ANSI formatting codes. This is expected behavior for terminal output but requires stripping for webview display.
 
 **Handled by**: `stripAnsiCodes()` method automatically removes all ANSI sequences.
@@ -104,6 +114,7 @@ To verify these fixes work correctly:
 ## Future Enhancements
 
 If Codex CLI adds diff support in future versions, the following would need updates:
+
 1. Check Codex event schema for new diff/content fields
 2. Update `CodexResponseParser.parseItemToEvents()` to extract diff data
 3. Remove "Diff not available" fallback messages from `output-manager.js`

@@ -322,8 +322,7 @@ suite("PromptFileParser Tests", () => {
 
     test("shouldResumeSessionForPrompt should fall back to global setting when prompt value is undefined", () => {
       // The global setting defaults to false
-      const result =
-        ConfigurationUtils.shouldResumeSessionForPrompt(undefined);
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(undefined);
       // We can't mock VS Code settings in unit tests, so we just verify it returns a boolean
       assert.strictEqual(
         typeof result,

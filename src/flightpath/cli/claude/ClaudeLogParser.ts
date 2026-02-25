@@ -129,7 +129,14 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let totalOutputTokens = 0;
     let cacheCreationTokens = 0;
     let cacheReadTokens = 0;
-    let lastAssistantUsage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } | undefined;
+    let lastAssistantUsage:
+      | {
+          input_tokens: number;
+          output_tokens: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        }
+      | undefined;
     let model: string | undefined;
     let turnDurationMs: number | undefined;
 
@@ -425,14 +432,21 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
                 totalTokens: totalInputTokens + totalOutputTokens,
-                cachedInputTokens: cacheReadTokens > 0 ? cacheReadTokens : undefined,
-                cacheCreatedTokens: cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
+                cachedInputTokens:
+                  cacheReadTokens > 0 ? cacheReadTokens : undefined,
+                cacheCreatedTokens:
+                  cacheCreationTokens > 0 ? cacheCreationTokens : undefined,
                 contextWindowUsedTokens,
                 contextWindowSize: getClaudeContextWindowSize(model ?? ""),
               }
             : undefined,
         ...(cacheCreationTokens > 0 || cacheReadTokens > 0
-          ? { cacheTokens: { created: cacheCreationTokens, read: cacheReadTokens } }
+          ? {
+              cacheTokens: {
+                created: cacheCreationTokens,
+                read: cacheReadTokens,
+              },
+            }
           : {}),
       },
     };

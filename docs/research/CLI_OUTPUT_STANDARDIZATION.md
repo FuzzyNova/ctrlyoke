@@ -6,12 +6,14 @@
 
 **Problem Statement:**
 Currently, each CLI provider has different log formats and the parsers handle events inconsistently:
+
 - **Copilot**: Doesn't build `thinkingBlocks` array, only prefixes reasoning text
 - **Claude**: `extractContentFromEvent()` skips thinking blocks during streaming
 - **Codex**: Stores `reasoningBlocks` in metadata instead of top-level, has two tool call formats
 - **Dashboard**: Receives raw text strings with no structured data for tool calls or thinking
 
 **Target State:**
+
 - Single `UniversalCliOutput` interface used across all providers
 - Complete event handlers in all parsers (no missing types)
 - Shared formatter converts parser output → dashboard format
@@ -42,7 +44,7 @@ export interface UniversalCliOutput {
 
 export interface ToolCall {
   name: string;
-  parameters: Record<string, any>;  // Normalized from 'input' or 'arguments'
+  parameters: Record<string, any>; // Normalized from 'input' or 'arguments'
   id?: string;
   result?: ToolResult;
 }
@@ -56,7 +58,7 @@ export interface ToolResult {
 export interface ThinkingBlock {
   text: string;
   timestamp?: number;
-  label?: string;  // e.g., "Reasoning", "Planning"
+  label?: string; // e.g., "Reasoning", "Planning"
 }
 
 export interface OutputMetadata {
@@ -76,6 +78,7 @@ export interface TokenUsage {
 ```
 
 **Rationale:**
+
 - `parameters` instead of provider-specific `input`/`arguments`
 - Top-level `thinkingBlocks` array (not nested in metadata)
 - Consistent `usage` format with camelCase property names
@@ -86,7 +89,10 @@ export interface TokenUsage {
 **File:** `src/flightpath/cli/shared/CliOutputFormatter.ts` (NEW)
 
 ```typescript
-import { UniversalCliOutput, OutputMetadata } from "../../../types/CliOutputTypes";
+import {
+  UniversalCliOutput,
+  OutputMetadata,
+} from "../../../types/CliOutputTypes";
 
 export class CliOutputFormatter {
   /**
@@ -102,9 +108,13 @@ export class CliOutputFormatter {
     if (output.toolCalls.length > 0) {
       parts.push("\n--- Tool Calls ---");
       for (const tool of output.toolCalls) {
-        parts.push(`• ${tool.name}(${JSON.stringify(tool.parameters, null, 2)})`);
+        parts.push(
+          `• ${tool.name}(${JSON.stringify(tool.parameters, null, 2)})`
+        );
         if (tool.result) {
-          parts.push(`  Result: ${tool.result.success ? "✓" : "✗"} ${tool.result.output || tool.result.error || ""}`);
+          parts.push(
+            `  Result: ${tool.result.success ? "✓" : "✗"} ${tool.result.output || tool.result.error || ""}`
+          );
         }
       }
     }
@@ -126,18 +136,18 @@ export class CliOutputFormatter {
   static toDashboardFormat(output: UniversalCliOutput) {
     return {
       text: output.text,
-      toolCalls: output.toolCalls.map(tool => ({
+      toolCalls: output.toolCalls.map((tool) => ({
         name: tool.name,
         parameters: tool.parameters,
         id: tool.id,
-        result: tool.result
+        result: tool.result,
       })),
-      thinkingBlocks: output.thinkingBlocks.map(block => ({
+      thinkingBlocks: output.thinkingBlocks.map((block) => ({
         text: block.text,
         label: block.label || "Thinking",
-        timestamp: block.timestamp
+        timestamp: block.timestamp,
       })),
-      metadata: output.metadata
+      metadata: output.metadata,
     };
   }
 
@@ -156,7 +166,9 @@ export class CliOutputFormatter {
       parts.push(`Model: ${metadata.model}`);
     }
     if (metadata.usage) {
-      parts.push(`Tokens: ${metadata.usage.inputTokens} in / ${metadata.usage.outputTokens} out`);
+      parts.push(
+        `Tokens: ${metadata.usage.inputTokens} in / ${metadata.usage.outputTokens} out`
+      );
     }
 
     return parts.join(" | ");
@@ -165,6 +177,7 @@ export class CliOutputFormatter {
 ```
 
 **Rationale:**
+
 - Provides both plain text (for VS Code Output) and structured data (for dashboard)
 - Backward-compatible statistics formatting
 - Centralizes all formatting logic
@@ -178,11 +191,12 @@ export class CliOutputFormatter {
 **File:** `src/flightpath/cli/shared/interfaces/ILogParser.ts`
 
 **Change:**
+
 ```typescript
 import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 export interface ILogParser {
-  extractResponse(events: any[]): UniversalCliOutput;  // ✅ Now strongly typed!
+  extractResponse(events: any[]): UniversalCliOutput; // ✅ Now strongly typed!
   // ... rest unchanged ...
 }
 ```
@@ -194,6 +208,7 @@ export interface ILogParser {
 **File:** `src/flightpath/cli/copilot/CopilotLogParser.ts`
 
 **Current Issues:**
+
 - ❌ Doesn't build `thinkingBlocks` array (only concatenates with prefix)
 - ❌ Returns `sessionInfo` separately instead of in `metadata`
 - ⚠️ Tool call structure may vary
@@ -250,6 +265,7 @@ extractResponse(events: any[]): UniversalCliOutput {
 ```
 
 **Rationale:**
+
 - Builds `thinkingBlocks` array instead of mixing with text
 - Normalizes tool call field names
 - Consolidates `sessionInfo` into `metadata`
@@ -259,6 +275,7 @@ extractResponse(events: any[]): UniversalCliOutput {
 **File:** `src/flightpath/cli/claude/ClaudeLogParser.ts`
 
 **Current Issues:**
+
 - ✅ Already builds `thinkingBlocks` correctly in `extractResponse()`
 - ❌ `extractContentFromEvent()` ignores thinking blocks during streaming
 - ⚠️ Tool calls use `input` field (needs renaming to `parameters`)
@@ -299,7 +316,7 @@ extractContentFromEvent(event: any): string | undefined {
 if (contentBlock.type === "tool_use") {
   toolCalls.push({
     name: contentBlock.name,
-    parameters: contentBlock.input,  // ✅ Rename field for consistency
+    parameters: contentBlock.input, // ✅ Rename field for consistency
     id: contentBlock.id,
   });
 }
@@ -312,17 +329,21 @@ return {
   metadata: {
     sessionId,
     model,
-    usage: totalInputTokens > 0 ? {
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-      totalTokens: totalInputTokens + totalOutputTokens,
-    } : undefined,
-    provider: "claude-cli"  // ✅ Add provider
+    usage:
+      totalInputTokens > 0
+        ? {
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            totalTokens: totalInputTokens + totalOutputTokens,
+          }
+        : undefined,
+    provider: "claude-cli", // ✅ Add provider
   },
 };
 ```
 
 **Rationale:**
+
 - Enables streaming display of thinking blocks and tool calls
 - Normalizes field names to match universal format
 - Already correctly structured, minimal changes needed
@@ -332,6 +353,7 @@ return {
 **File:** `src/flightpath/cli/codex/CodexLogParser.ts`
 
 **Current Issues:**
+
 - ❌ `reasoningBlocks` stored in `metadata` (should be top-level `thinkingBlocks`)
 - ❌ Tool calls use both `input` and `arguments` (inconsistent)
 - ⚠️ Two different tool call formats in log events
@@ -402,6 +424,7 @@ extractResponse(events: any[]): UniversalCliOutput {
 ```
 
 **Rationale:**
+
 - Moves `thinkingBlocks` to top-level (consistent with Claude)
 - Handles both tool call formats (`input` and `arguments`)
 - Adds `provider` field to metadata
@@ -415,6 +438,7 @@ extractResponse(events: any[]): UniversalCliOutput {
 **File:** `src/flightpath/WorkflowExecutor.ts`
 
 **Current:** Sends simple object to dashboard:
+
 ```typescript
 {
   prompt: prompt.prompt,
@@ -439,21 +463,24 @@ const parsedOutput = await logParser.extractResponse(events);
 // Convert to dashboard format
 const dashboardOutput = {
   prompt: prompt.prompt,
-  response: CliOutputFormatter.toPlainText(parsedOutput),  // ✅ Formatted text
-  structured: CliOutputFormatter.toDashboardFormat(parsedOutput),  // ✅ Structured data
+  response: CliOutputFormatter.toPlainText(parsedOutput), // ✅ Formatted text
+  structured: CliOutputFormatter.toDashboardFormat(parsedOutput), // ✅ Structured data
   elapsed: duration,
-  tokens: parsedOutput.metadata.usage ? {
-    prompt: parsedOutput.metadata.usage.inputTokens,
-    completion: parsedOutput.metadata.usage.outputTokens
-  } : undefined,
+  tokens: parsedOutput.metadata.usage
+    ? {
+        prompt: parsedOutput.metadata.usage.inputTokens,
+        completion: parsedOutput.metadata.usage.outputTokens,
+      }
+    : undefined,
   isStreaming: false,
-  cliCommand
+  cliCommand,
 };
 
 context.dashboardProvider.updateCliOutput(currentIndex, dashboardOutput);
 ```
 
 **Rationale:**
+
 - Enriches output with structured tool calls and thinking blocks
 - Maintains backward compatibility with existing `response` field
 - Dashboard can progressively enhance UI
@@ -501,7 +528,10 @@ public updateCliOutput(stepIndex: number, output: {
 ```scss
 /* Base output container - terminal styling */
 #output-content {
-  font-family: var(--vscode-terminal-font-family, var(--vscode-editor-font-family));
+  font-family: var(
+    --vscode-terminal-font-family,
+    var(--vscode-editor-font-family)
+  );
   font-size: var(--vscode-terminal-font-size, 11px);
   background: var(--vscode-terminal-background);
   color: var(--vscode-terminal-foreground);
@@ -512,7 +542,7 @@ public updateCliOutput(stepIndex: number, output: {
 }
 
 .cli-output-item {
-  background: transparent;  // No background, let terminal color show
+  background: transparent; // No background, let terminal color show
   padding: var(--spacing-sm) 0;
   margin-bottom: var(--spacing-md);
   border: none;
@@ -520,13 +550,16 @@ public updateCliOutput(stepIndex: number, output: {
 }
 
 .output-response {
-  background: transparent;  // Remove green background
+  background: transparent; // Remove green background
   border-left: 3px solid var(--vscode-terminal-ansiGreen);
   padding: var(--spacing-sm);
   margin: var(--spacing-sm) 0;
   white-space: pre-wrap;
   word-wrap: break-word;
-  font-family: var(--vscode-terminal-font-family, var(--vscode-editor-font-family));
+  font-family: var(
+    --vscode-terminal-font-family,
+    var(--vscode-editor-font-family)
+  );
   color: var(--vscode-terminal-foreground);
 }
 
@@ -545,6 +578,7 @@ public updateCliOutput(stepIndex: number, output: {
 ```
 
 **Rationale:**
+
 - Uses VS Code terminal color palette for consistency
 - Terminal font family matches integrated terminal
 - Transparent backgrounds let terminal theme shine through
@@ -560,7 +594,10 @@ public updateCliOutput(stepIndex: number, output: {
 // Tool call code diffs
 .tool-call-diff {
   margin-top: 8px;
-  font-family: var(--vscode-terminal-font-family, var(--vscode-editor-font-family));
+  font-family: var(
+    --vscode-terminal-font-family,
+    var(--vscode-editor-font-family)
+  );
   font-size: 11px;
   border-radius: 3px;
   overflow: hidden;
@@ -574,7 +611,10 @@ public updateCliOutput(stepIndex: number, output: {
   line-height: 1.4;
 
   &.added {
-    background: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.15));
+    background: var(
+      --vscode-diffEditor-insertedTextBackground,
+      rgba(0, 255, 0, 0.15)
+    );
     color: var(--vscode-terminal-ansiGreen);
 
     &::before {
@@ -586,7 +626,10 @@ public updateCliOutput(stepIndex: number, output: {
   }
 
   &.removed {
-    background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.15));
+    background: var(
+      --vscode-diffEditor-removedTextBackground,
+      rgba(255, 0, 0, 0.15)
+    );
     color: var(--vscode-terminal-ansiRed);
 
     &::before {
@@ -609,6 +652,7 @@ public updateCliOutput(stepIndex: number, output: {
 ```
 
 **Rationale:**
+
 - Uses VS Code's diff editor colors (red/green with transparency)
 - Shows `+` and `-` prefixes like git diff
 - Monospace terminal font for alignment
@@ -625,30 +669,32 @@ public updateCliOutput(stepIndex: number, output: {
  * Check if tool is a file modification operation
  */
 function isFileModificationTool(toolName) {
-  const fileTools = ['Edit', 'Write', 'MultiEdit', 'sed', 'patch'];
-  return fileTools.some(t => toolName.toLowerCase().includes(t.toLowerCase()));
+  const fileTools = ["Edit", "Write", "MultiEdit", "sed", "patch"];
+  return fileTools.some((t) =>
+    toolName.toLowerCase().includes(t.toLowerCase())
+  );
 }
 
 /**
  * Render tool call with diff visualization
  */
 function renderToolWithDiff(tool) {
-  let html = '';
+  let html = "";
 
   // Try to extract old_string and new_string from parameters
   if (tool.parameters.old_string && tool.parameters.new_string) {
     html += `<div class="tool-call-diff">`;
 
-    const oldLines = tool.parameters.old_string.split('\n');
-    const newLines = tool.parameters.new_string.split('\n');
+    const oldLines = tool.parameters.old_string.split("\n");
+    const newLines = tool.parameters.new_string.split("\n");
 
     // Show removed lines
-    oldLines.forEach(line => {
+    oldLines.forEach((line) => {
       html += `<div class="diff-line removed">${escapeHtml(line)}</div>`;
     });
 
     // Show added lines
-    newLines.forEach(line => {
+    newLines.forEach((line) => {
       html += `<div class="diff-line added">${escapeHtml(line)}</div>`;
     });
 
@@ -697,7 +743,7 @@ function renderStructuredOutput(output) {
 
       if (tool.result) {
         const icon = tool.result.success ? "✓" : "✗";
-        html += `<div class="tool-result ${tool.result.success ? 'success' : 'error'}">`;
+        html += `<div class="tool-result ${tool.result.success ? "success" : "error"}">`;
         html += `${icon} ${escapeHtml(tool.result.output || tool.result.error || "")}`;
         html += `</div>`;
       }
@@ -707,7 +753,10 @@ function renderStructuredOutput(output) {
   }
 
   // Thinking blocks (NEW)
-  if (output.structured?.thinkingBlocks && output.structured.thinkingBlocks.length > 0) {
+  if (
+    output.structured?.thinkingBlocks &&
+    output.structured.thinkingBlocks.length > 0
+  ) {
     html += `<div class="output-thinking">`;
     html += `<div class="thinking-header">💭 Thinking</div>`;
     for (const block of output.structured.thinkingBlocks) {
@@ -734,6 +783,7 @@ html += outputHtml;
 ```
 
 **Rationale:**
+
 - Detects file modification tools automatically
 - Shows diffs for Edit operations (old_string → new_string)
 - Shows file path for Write operations
@@ -855,6 +905,7 @@ html += outputHtml;
 ```
 
 **Rationale:**
+
 - VS Code theme integration via CSS variables
 - Distinct visual sections for tool calls and thinking
 - File paths styled with terminal blue color
@@ -866,7 +917,7 @@ html += outputHtml;
 
 **Update generateMarkdownOutput():**
 
-```javascript
+````javascript
 function generateMarkdownOutput() {
   const state = stateManager.getState();
   const lines = [];
@@ -878,7 +929,9 @@ function generateMarkdownOutput() {
   lines.push(`**File:** ${state.fileName || "Unknown"}`);
   lines.push(`**Exported:** ${timestamp}`);
   lines.push(`**Status:** ${state.executionState}`);
-  lines.push(`**Progress:** ${state.currentStep} of ${state.totalSteps} completed`);
+  lines.push(
+    `**Progress:** ${state.currentStep} of ${state.totalSteps} completed`
+  );
   lines.push("");
   lines.push("---");
   lines.push("");
@@ -897,7 +950,8 @@ function generateMarkdownOutput() {
       const output = item.data;
       const attemptIndex = item.attemptIndex;
       const stepIndex = item.stepIndex;
-      const attemptLabel = attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
+      const attemptLabel =
+        attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
 
       lines.push(`## Prompt ${stepIndex + 1} - ${attemptLabel}`);
       lines.push("");
@@ -933,21 +987,24 @@ function generateMarkdownOutput() {
       }
 
       // ✅ NEW: Export tool calls with diff formatting
-      if (output.structured?.toolCalls && output.structured.toolCalls.length > 0) {
+      if (
+        output.structured?.toolCalls &&
+        output.structured.toolCalls.length > 0
+      ) {
         lines.push("### Tool Calls");
         lines.push("");
 
-        output.structured.toolCalls.forEach(tool => {
+        output.structured.toolCalls.forEach((tool) => {
           lines.push(`**${tool.name}**`);
           lines.push("");
 
           // Special handling for file modifications with diff
           if (tool.parameters.old_string && tool.parameters.new_string) {
             lines.push("```diff");
-            tool.parameters.old_string.split('\n').forEach(line => {
+            tool.parameters.old_string.split("\n").forEach((line) => {
               lines.push(`- ${line}`);
             });
-            tool.parameters.new_string.split('\n').forEach(line => {
+            tool.parameters.new_string.split("\n").forEach((line) => {
               lines.push(`+ ${line}`);
             });
             lines.push("```");
@@ -980,11 +1037,14 @@ function generateMarkdownOutput() {
       }
 
       // ✅ NEW: Export thinking blocks
-      if (output.structured?.thinkingBlocks && output.structured.thinkingBlocks.length > 0) {
+      if (
+        output.structured?.thinkingBlocks &&
+        output.structured.thinkingBlocks.length > 0
+      ) {
         lines.push("### Thinking");
         lines.push("");
 
-        output.structured.thinkingBlocks.forEach(block => {
+        output.structured.thinkingBlocks.forEach((block) => {
           if (block.label) {
             lines.push(`**${block.label}**`);
             lines.push("");
@@ -1000,7 +1060,9 @@ function generateMarkdownOutput() {
       const stats = [];
       if (output.tokens) {
         const total = output.tokens.prompt + output.tokens.completion;
-        stats.push(`Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`);
+        stats.push(
+          `Tokens: ${output.tokens.prompt} prompt / ${output.tokens.completion} completion / ${total} total`
+        );
       }
       if (output.elapsed !== undefined) {
         stats.push(`${output.elapsed}s`);
@@ -1018,11 +1080,11 @@ function generateMarkdownOutput() {
 
   return lines.join("\n");
 }
-```
+````
 
 **Example Exported Markdown:**
 
-```markdown
+````markdown
 ## Prompt 1 - Initial Attempt
 
 ### Tool Calls
@@ -1033,8 +1095,9 @@ function generateMarkdownOutput() {
 - const oldValue = 42;
 + const newValue = 100;
 ```
+````
 
-*✓ Success*
+_✓ Success_
 
 **Write**
 
@@ -1044,7 +1107,7 @@ File: `src/test.ts`
 console.log("Hello world");
 ```
 
-*✓ Success*
+_✓ Success_
 
 ### Thinking
 
@@ -1054,8 +1117,9 @@ console.log("Hello world");
 I need to update the value to 100 because the requirements changed.
 ```
 
-*Tokens: 1500 prompt / 300 completion / 1800 total | 3.2s*
-```
+_Tokens: 1500 prompt / 300 completion / 1800 total | 3.2s_
+
+````
 
 **Rationale:**
 - Diffs exported as `diff` code blocks (GitHub/VS Code renders with colors)
@@ -1114,7 +1178,7 @@ suite("CliOutputFormatter Tests", () => {
     assert.strictEqual(result, "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out");
   });
 });
-```
+````
 
 #### 5.2 Parser Tests
 
@@ -1130,7 +1194,7 @@ suite("CliOutputFormatter Tests", () => {
 test("extractResponse - returns UniversalCliOutput with thinkingBlocks", () => {
   const events = [
     { type: "assistant.reasoning", data: { content: "I need to analyze..." } },
-    { type: "assistant.message", data: { content: "Here's the solution" } }
+    { type: "assistant.message", data: { content: "Here's the solution" } },
   ];
 
   const result = parser.extractResponse(events);
@@ -1161,15 +1225,18 @@ test("extractResponse - returns UniversalCliOutput with thinkingBlocks", () => {
 ### Backward Compatibility
 
 **Phase 1-2:** No breaking changes
+
 - New types/formatter are additive
 - Parser updates return new structure but don't break existing consumers
 
 **Phase 3:** Opt-in enrichment
+
 - WorkflowExecutor adds `structured` field alongside existing `response`
 - Old code continues using `response` text
 - New code can use `structured` data
 
 **Phase 4:** Progressive enhancement
+
 - Dashboard checks for `structured` field before rendering
 - Falls back to plain text if not present
 - Existing workflows continue working
@@ -1177,26 +1244,31 @@ test("extractResponse - returns UniversalCliOutput with thinkingBlocks", () => {
 ### Rollout Plan
 
 **Week 1:** Foundation (Phase 1)
+
 - Create types and formatter
 - Add unit tests
 - No user-facing changes
 
 **Week 2:** Parser updates (Phase 2)
+
 - Update all three parsers
 - Add parser tests
 - Still no UI changes (data collected but not displayed)
 
 **Week 3:** Integration (Phase 3)
+
 - Update WorkflowExecutor to use formatter
 - Dashboard receives structured data but doesn't display yet
 - Verify data flow end-to-end
 
 **Week 4:** UI enhancement (Phase 4)
+
 - Add structured rendering in output-manager.js
 - Add styles
 - User sees rich tool call/thinking display
 
 **Week 5:** Polish & documentation
+
 - Fix edge cases
 - Update docs/research plan (this file)
 - Write user guide
@@ -1206,12 +1278,14 @@ test("extractResponse - returns UniversalCliOutput with thinkingBlocks", () => {
 ## Critical Files to Modify
 
 ### New Files (4)
+
 1. **src/types/CliOutputTypes.ts** - Universal output interfaces
 2. **src/flightpath/cli/shared/CliOutputFormatter.ts** - Shared formatter class
 3. **src/test/unit/CliOutputFormatter.test.ts** - Formatter tests
 4. **docs/research/CLI_OUTPUT_STANDARDIZATION.md** - This plan
 
 ### Modified Files (10)
+
 5. **src/flightpath/cli/shared/interfaces/ILogParser.ts** - Update extractResponse return type
 6. **src/flightpath/cli/copilot/CopilotLogParser.ts** - Add thinkingBlocks, normalize tools
 7. **src/flightpath/cli/claude/ClaudeLogParser.ts** - Fix extractContentFromEvent, rename input→parameters
@@ -1405,7 +1479,7 @@ toolCalls.push({ name: event.payload.name, parameters: params });
 toolCalls.push({
   name: toolReq.name || toolReq.tool || "unknown",
   parameters: toolReq.parameters || toolReq.args || toolReq.input || {},
-  id: toolReq.id
+  id: toolReq.id,
 });
 ```
 
@@ -1674,15 +1748,17 @@ if ((item.type === "input_text" || item.type === "output_text") && item.text) {
 ```
 
 **Fields:**
+
 - `input_tokens` - New input tokens
 - `cache_creation_input_tokens` - Cache creation cost
 - `cache_read_input_tokens` - Cache hits (90% discount)
 - `output_tokens` - Generated tokens
 
 **Total Calculation:**
+
 ```typescript
-const total = usage.input_tokens + usage.cache_creation_input_tokens +
-              usage.output_tokens;
+const total =
+  usage.input_tokens + usage.cache_creation_input_tokens + usage.output_tokens;
 ```
 
 #### Codex CLI - Token Count Events
@@ -1713,9 +1789,10 @@ const total = usage.input_tokens + usage.cache_creation_input_tokens +
 
 **Format:** Human-readable string
 **Parsing Required:**
+
 ```typescript
 const match = stats.match(/(\d+\.?\d*)k?\s+input,\s+(\d+)\s+output/);
-const inputTokens = parseFloat(match[1]) * (match[1].includes('k') ? 1000 : 1);
+const inputTokens = parseFloat(match[1]) * (match[1].includes("k") ? 1000 : 1);
 const outputTokens = parseInt(match[2]);
 ```
 
@@ -1762,6 +1839,7 @@ For complete event structures and more examples, see:
 - **`docs/CODEX_CLI_LOG_STRUCTURE.md`** - 15 sections, 1,328 lines
 
 These documents include:
+
 - Full JSON schemas for all event types
 - Field-by-field descriptions
 - Multiple real-world examples

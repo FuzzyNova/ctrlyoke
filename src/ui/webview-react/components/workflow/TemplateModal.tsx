@@ -371,9 +371,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         {/* Template Variables */}
         {currentTemplate?.variables && currentTemplate.variables.length > 0 && (
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-foreground">
-              Variables
-            </h4>
+            <h4 className="text-sm font-medium text-foreground">Variables</h4>
             {currentTemplate.variables.map((variable) => (
               <div key={variable} className="form-group">
                 <label
@@ -419,9 +417,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             }`}
           />
           {filenameError && (
-            <p className="mt-1 text-xs text-error-fg">
-              {filenameError}
-            </p>
+            <p className="mt-1 text-xs text-error-fg">{filenameError}</p>
           )}
         </div>
 

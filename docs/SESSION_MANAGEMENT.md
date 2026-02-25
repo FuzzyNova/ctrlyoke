@@ -220,13 +220,13 @@ prompts:
   - id: claude-implement
     provider: claude-cli
     prompt: "Implement improvements"
-    resumeSession: true  # No sessionId specified
+    resumeSession: true # No sessionId specified
     # ✅ Auto-resumes Claude session abc-123 (skips Copilot session)
 
   - id: copilot-test
     provider: copilot-cli
     prompt: "Add tests"
-    resumeSession: true  # No sessionId specified
+    resumeSession: true # No sessionId specified
     # ✅ Auto-resumes Copilot session xyz-789 (skips Claude session)
 ```
 
@@ -244,7 +244,7 @@ prompts:
   - id: step2
     provider: copilot-cli
     prompt: "Review analysis"
-    sessionId: 1  # ⚠️ Trying to use Claude session with Copilot!
+    sessionId: 1 # ⚠️ Trying to use Claude session with Copilot!
 ```
 
 **What Happens:**
@@ -263,12 +263,12 @@ prompts:
 
 ### When to Use Each Approach
 
-| Scenario | Configuration | Behavior |
-|----------|---------------|----------|
-| **All prompts same provider** | `sessionId: 1` on all prompts | ✅ All share session from prompt 1 |
-| **Mixed providers, auto-resume** | `resumeSession: true` (no `sessionId`) | ✅ Each provider resumes its own last session |
-| **Mixed providers, explicit ref** | `sessionId: 1` across providers | ⚠️ Warns and starts new session on provider change |
-| **Force new session** | `resumeSession: false` | ✅ Always starts new session |
+| Scenario                          | Configuration                          | Behavior                                           |
+| --------------------------------- | -------------------------------------- | -------------------------------------------------- |
+| **All prompts same provider**     | `sessionId: 1` on all prompts          | ✅ All share session from prompt 1                 |
+| **Mixed providers, auto-resume**  | `resumeSession: true` (no `sessionId`) | ✅ Each provider resumes its own last session      |
+| **Mixed providers, explicit ref** | `sessionId: 1` across providers        | ⚠️ Warns and starts new session on provider change |
+| **Force new session**             | `resumeSession: false`                 | ✅ Always starts new session                       |
 
 ### Best Practice: Use Auto-Resume for Mixed Providers
 

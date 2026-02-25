@@ -251,9 +251,7 @@ export class FlightPathTools {
   }
 }
 
-export class FileAnalysisTool
-  implements vscode.LanguageModelTool<FileAnalysisParams>
-{
+export class FileAnalysisTool implements vscode.LanguageModelTool<FileAnalysisParams> {
   async invoke(
     options: vscode.LanguageModelToolInvocationOptions<FileAnalysisParams>,
     token: vscode.CancellationToken

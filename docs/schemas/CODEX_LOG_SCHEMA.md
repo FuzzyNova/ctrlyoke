@@ -11,16 +11,19 @@
 ### File Location and Naming
 
 **Path Pattern:**
+
 ```
 ~/.codex/sessions/YYYY/MM/DD/rollout-YYYY-MM-DDTHH-MM-SS-<session-id>.jsonl
 ```
 
 **Example:**
+
 ```
 C:\Users\<username>\.codex\sessions\2026\01\17\rollout-2026-01-17T10-36-57-019bccd1-249e-77b3-bac1-89238b4647c7.jsonl
 ```
 
 **Characteristics:**
+
 - JSONL format: One JSON object per line
 - Chronological event stream
 - Date-based directory hierarchy (YYYY/MM/DD)
@@ -37,12 +40,13 @@ Codex logs use a **two-level type hierarchy**:
 2. **Payload Type** (`event.payload.type`): Nested event subtype (when applicable)
 
 **Structure:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:57.184Z",
-  "type": "event_type",          // Level 1: Event category
+  "type": "event_type", // Level 1: Event category
   "payload": {
-    "type": "payload_type",      // Level 2: Event subtype
+    "type": "payload_type" // Level 2: Event subtype
     // ... additional fields
   }
 }
@@ -64,9 +68,9 @@ All events share this base structure:
 
 ```typescript
 interface CodexLogEvent {
-  timestamp: string;  // ISO 8601 format: "2026-01-17T16:36:57.184Z"
-  type: string;       // Event type (see Event Types section)
-  payload: object;    // Type-specific payload (see Payload Types section)
+  timestamp: string; // ISO 8601 format: "2026-01-17T16:36:57.184Z"
+  type: string; // Event type (see Event Types section)
+  payload: object; // Type-specific payload (see Payload Types section)
 }
 ```
 
@@ -82,16 +86,17 @@ interface CodexLogEvent {
 **Purpose:** Captures session initialization metadata including CLI version, working directory, Git context, and user instructions.
 
 **Fields:**
+
 ```typescript
 interface SessionMetaPayload {
-  id: string;              // Session UUID
-  timestamp: string;       // Session start time (ISO 8601)
-  cwd: string;             // Working directory
-  originator: string;      // Always "codex_cli_rs"
-  cli_version: string;     // CLI version (e.g., "0.87.0")
-  instructions: string;    // User instructions/context
-  source: string;          // Always "cli"
-  model_provider: string;  // Model provider (e.g., "openai")
+  id: string; // Session UUID
+  timestamp: string; // Session start time (ISO 8601)
+  cwd: string; // Working directory
+  originator: string; // Always "codex_cli_rs"
+  cli_version: string; // CLI version (e.g., "0.87.0")
+  instructions: string; // User instructions/context
+  source: string; // Always "cli"
+  model_provider: string; // Model provider (e.g., "openai")
   git: {
     commit_hash: string;
     branch: string;
@@ -101,6 +106,7 @@ interface SessionMetaPayload {
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:57.184Z",
@@ -133,29 +139,31 @@ interface SessionMetaPayload {
 **Purpose:** Captures context for each conversational turn, including sandbox settings, model configuration, and truncation policies.
 
 **Fields:**
+
 ```typescript
 interface TurnContextPayload {
-  cwd: string;                   // Working directory
-  approval_policy: string;       // "on-request"
+  cwd: string; // Working directory
+  approval_policy: string; // "on-request"
   sandbox_policy: {
-    type: string;                // "workspace-write"
-    writable_roots: string[];    // Allowed write paths
-    network_access: boolean;     // Network permission
+    type: string; // "workspace-write"
+    writable_roots: string[]; // Allowed write paths
+    network_access: boolean; // Network permission
     exclude_tmpdir_env_var: boolean;
     exclude_slash_tmp: boolean;
   };
-  model: string;                 // Model name (e.g., "gpt-5.2-codex")
-  effort: string;                // "medium"
-  summary: string;               // "auto"
-  user_instructions: string;     // User instructions for this turn
+  model: string; // Model name (e.g., "gpt-5.2-codex")
+  effort: string; // "medium"
+  summary: string; // "auto"
+  user_instructions: string; // User instructions for this turn
   truncation_policy: {
-    mode: string;                // "tokens"
-    limit: number;               // Token limit (e.g., 10000)
+    mode: string; // "tokens"
+    limit: number; // Token limit (e.g., 10000)
   };
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:58.893Z",
@@ -198,17 +206,19 @@ interface TurnContextPayload {
 **Frequency:** 2 events
 
 **Fields:**
+
 ```typescript
 interface UserMessagePayload {
   type: "user_message";
-  message: string;           // User's message text
-  images: any[];            // Image attachments (if any)
-  local_images: any[];      // Local image attachments (if any)
-  text_elements: any[];     // Additional text elements (if any)
+  message: string; // User's message text
+  images: any[]; // Image attachments (if any)
+  local_images: any[]; // Local image attachments (if any)
+  text_elements: any[]; // Additional text elements (if any)
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:58.892Z",
@@ -230,14 +240,16 @@ interface UserMessagePayload {
 **Frequency:** 2 events
 
 **Fields:**
+
 ```typescript
 interface AgentMessagePayload {
   type: "agent_message";
-  message: string;           // Agent's complete response text
+  message: string; // Agent's complete response text
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:44:56.109Z",
@@ -256,6 +268,7 @@ interface AgentMessagePayload {
 **Frequency:** 217 events
 
 **Fields:**
+
 ```typescript
 interface TokenCountPayload {
   type: "token_count";
@@ -275,7 +288,7 @@ interface TokenCountPayload {
       total_tokens: number;
     };
     model_context_window: number;
-  } | null;                      // null when no statistics available
+  } | null; // null when no statistics available
   rate_limits: {
     primary: any | null;
     secondary: any | null;
@@ -286,6 +299,7 @@ interface TokenCountPayload {
 ```
 
 **Example (with statistics):**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:59.590Z",
@@ -320,6 +334,7 @@ interface TokenCountPayload {
 ```
 
 **Example (no statistics):**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:59.590Z",
@@ -353,18 +368,20 @@ interface TokenCountPayload {
 **Frequency:** 7 events
 
 **Fields:**
+
 ```typescript
 interface MessagePayload {
   type: "message";
-  role: string;              // "developer" or "assistant"
+  role: string; // "developer" or "assistant"
   content: Array<{
-    type: string;            // "input_text"
-    text: string;            // Message content
+    type: string; // "input_text"
+    text: string; // Message content
   }>;
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:36:57.184Z",
@@ -389,16 +406,18 @@ interface MessagePayload {
 **Frequency:** 90 events
 
 **Fields:**
+
 ```typescript
 interface ReasoningPayload {
   type: "reasoning";
-  summary: any[];            // Summary of reasoning (typically empty array)
-  content: null;             // Plaintext reasoning (always null in this log)
+  summary: any[]; // Summary of reasoning (typically empty array)
+  content: null; // Plaintext reasoning (always null in this log)
   encrypted_content: string; // Encrypted reasoning content
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:37:00.941Z",
@@ -419,16 +438,18 @@ interface ReasoningPayload {
 **Frequency:** 77 events
 
 **Fields:**
+
 ```typescript
 interface FunctionCallPayload {
   type: "function_call";
-  name: string;              // Function name (e.g., "shell_command")
-  arguments: string;         // JSON-encoded arguments
-  call_id: string;           // Unique call identifier
+  name: string; // Function name (e.g., "shell_command")
+  arguments: string; // JSON-encoded arguments
+  call_id: string; // Unique call identifier
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:37:01.407Z",
@@ -443,6 +464,7 @@ interface FunctionCallPayload {
 ```
 
 **Observed Function Names:**
+
 - `shell_command` - Execute shell commands
 
 ---
@@ -452,15 +474,17 @@ interface FunctionCallPayload {
 **Frequency:** 77 events
 
 **Fields:**
+
 ```typescript
 interface FunctionCallOutputPayload {
   type: "function_call_output";
-  call_id: string;           // Matches function_call.call_id
-  output: string;            // Function output (may include exit code, timing, stdout/stderr)
+  call_id: string; // Matches function_call.call_id
+  output: string; // Function output (may include exit code, timing, stdout/stderr)
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:37:02.503Z",
@@ -480,17 +504,19 @@ interface FunctionCallOutputPayload {
 **Frequency:** 18 events
 
 **Fields:**
+
 ```typescript
 interface CustomToolCallPayload {
   type: "custom_tool_call";
-  status: string;            // "completed" (other statuses may exist)
-  call_id: string;           // Unique call identifier
-  name: string;              // Tool name (e.g., "apply_patch")
-  input: string;             // Tool input data
+  status: string; // "completed" (other statuses may exist)
+  call_id: string; // Unique call identifier
+  name: string; // Tool name (e.g., "apply_patch")
+  input: string; // Tool input data
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:59:57.413Z",
@@ -506,9 +532,11 @@ interface CustomToolCallPayload {
 ```
 
 **Observed Tool Names:**
+
 - `apply_patch` - Apply code patches
 
 **Observed Status Values:**
+
 - `completed` - Tool execution completed successfully
 
 ---
@@ -518,15 +546,17 @@ interface CustomToolCallPayload {
 **Frequency:** 18 events
 
 **Fields:**
+
 ```typescript
 interface CustomToolCallOutputPayload {
   type: "custom_tool_call_output";
-  call_id: string;           // Matches custom_tool_call.call_id
-  output: string;            // JSON-encoded tool output
+  call_id: string; // Matches custom_tool_call.call_id
+  output: string; // JSON-encoded tool output
 }
 ```
 
 **Example:**
+
 ```json
 {
   "timestamp": "2026-01-17T16:59:57.516Z",
@@ -554,7 +584,7 @@ interface CustomToolCallOutputPayload {
  * Base structure for all Codex log events
  */
 interface CodexLogEvent {
-  timestamp: string;  // ISO 8601 timestamp
+  timestamp: string; // ISO 8601 timestamp
   type: EventType;
   payload: EventPayload;
 }
@@ -703,7 +733,7 @@ interface ReasoningPayload {
 interface FunctionCallPayload {
   type: "function_call";
   name: string;
-  arguments: string;  // JSON-encoded
+  arguments: string; // JSON-encoded
   call_id: string;
 }
 
@@ -715,7 +745,7 @@ interface FunctionCallOutputPayload {
 
 interface CustomToolCallPayload {
   type: "custom_tool_call";
-  status: string;  // "completed", possibly others
+  status: string; // "completed", possibly others
   call_id: string;
   name: string;
   input: string;
@@ -724,7 +754,7 @@ interface CustomToolCallPayload {
 interface CustomToolCallOutputPayload {
   type: "custom_tool_call_output";
   call_id: string;
-  output: string;  // JSON-encoded
+  output: string; // JSON-encoded
 }
 ```
 
@@ -734,19 +764,19 @@ interface CustomToolCallOutputPayload {
 
 Based on analysis of 629 events:
 
-| Event Type | Payload Type | Count | Percentage |
-|------------|-------------|-------|------------|
-| `response_item` | `reasoning` | 90 | 14.3% |
-| `response_item` | `function_call` | 77 | 12.2% |
-| `response_item` | `function_call_output` | 77 | 12.2% |
-| `response_item` | `custom_tool_call` | 18 | 2.9% |
-| `response_item` | `custom_tool_call_output` | 18 | 2.9% |
-| `response_item` | `message` | 7 | 1.1% |
-| `event_msg` | `token_count` | 217 | 34.5% |
-| `event_msg` | `user_message` | 2 | 0.3% |
-| `event_msg` | `agent_message` | 2 | 0.3% |
-| `turn_context` | (no type) | 120 | 19.1% |
-| `session_meta` | (no type) | 1 | 0.2% |
+| Event Type      | Payload Type              | Count | Percentage |
+| --------------- | ------------------------- | ----- | ---------- |
+| `response_item` | `reasoning`               | 90    | 14.3%      |
+| `response_item` | `function_call`           | 77    | 12.2%      |
+| `response_item` | `function_call_output`    | 77    | 12.2%      |
+| `response_item` | `custom_tool_call`        | 18    | 2.9%       |
+| `response_item` | `custom_tool_call_output` | 18    | 2.9%       |
+| `response_item` | `message`                 | 7     | 1.1%       |
+| `event_msg`     | `token_count`             | 217   | 34.5%      |
+| `event_msg`     | `user_message`            | 2     | 0.3%       |
+| `event_msg`     | `agent_message`           | 2     | 0.3%       |
+| `turn_context`  | (no type)                 | 120   | 19.1%      |
+| `session_meta`  | (no type)                 | 1     | 0.2%       |
 
 ---
 
@@ -764,12 +794,13 @@ Based on analysis of 629 events:
 **Session ID Location:** `session_meta.payload.id` (first event)
 
 **Example:**
+
 ```typescript
 function extractSessionId(logPath: string): string | null {
   const firstLine = readFirstLine(logPath);
   const event = JSON.parse(firstLine);
 
-  if (event.type === 'session_meta') {
+  if (event.type === "session_meta") {
     return event.payload.id;
   }
 
@@ -783,10 +814,11 @@ function extractSessionId(logPath: string): string | null {
 
 ```typescript
 function extractTokenStats(events: CodexLogEvent[]): TokenUsageInfo | null {
-  const tokenEvents = events.filter(e =>
-    e.type === 'event_msg' &&
-    e.payload.type === 'token_count' &&
-    e.payload.info !== null
+  const tokenEvents = events.filter(
+    (e) =>
+      e.type === "event_msg" &&
+      e.payload.type === "token_count" &&
+      e.payload.info !== null
   );
 
   if (tokenEvents.length === 0) return null;
@@ -805,32 +837,39 @@ function extractTokenStats(events: CodexLogEvent[]): TokenUsageInfo | null {
 interface ToolCallPair {
   call: FunctionCallPayload | CustomToolCallPayload;
   output: FunctionCallOutputPayload | CustomToolCallOutputPayload;
-  duration?: number;  // Time between call and output
+  duration?: number; // Time between call and output
 }
 
 function matchToolCalls(events: CodexLogEvent[]): ToolCallPair[] {
-  const calls = new Map<string, { event: CodexLogEvent, timestamp: string }>();
+  const calls = new Map<string, { event: CodexLogEvent; timestamp: string }>();
   const pairs: ToolCallPair[] = [];
 
   for (const event of events) {
-    if (event.type !== 'response_item') continue;
+    if (event.type !== "response_item") continue;
 
     const payload = event.payload;
 
-    if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
+    if (
+      payload.type === "function_call" ||
+      payload.type === "custom_tool_call"
+    ) {
       calls.set(payload.call_id, { event, timestamp: event.timestamp });
     }
 
-    if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+    if (
+      payload.type === "function_call_output" ||
+      payload.type === "custom_tool_call_output"
+    ) {
       const callData = calls.get(payload.call_id);
       if (callData) {
-        const duration = new Date(event.timestamp).getTime() -
-                        new Date(callData.timestamp).getTime();
+        const duration =
+          new Date(event.timestamp).getTime() -
+          new Date(callData.timestamp).getTime();
 
         pairs.push({
           call: callData.event.payload,
           output: payload,
-          duration
+          duration,
         });
       }
     }
@@ -863,7 +902,7 @@ function detectCompletion(
   const now = Date.now();
   const lastTimestamp = new Date(lastEvent.timestamp).getTime();
 
-  return (now - lastTimestamp) > inactivityThresholdMs;
+  return now - lastTimestamp > inactivityThresholdMs;
 }
 ```
 
@@ -873,9 +912,8 @@ function detectCompletion(
 
 ```typescript
 function hasAgentResponse(events: CodexLogEvent[]): boolean {
-  return events.some(e =>
-    e.type === 'event_msg' &&
-    e.payload.type === 'agent_message'
+  return events.some(
+    (e) => e.type === "event_msg" && e.payload.type === "agent_message"
   );
 }
 ```
@@ -884,15 +922,15 @@ function hasAgentResponse(events: CodexLogEvent[]): boolean {
 
 ## Key Differences from Copilot CLI Logs
 
-| Feature | Codex CLI | Copilot CLI |
-|---------|-----------|-------------|
-| **Format** | JSONL events | Plain text with sections |
-| **Session ID** | In `session_meta` event | In log filename or embedded in text |
-| **Token Stats** | Structured in `token_count` events | Embedded in chat output |
-| **Completion Detection** | Inactivity or agent message | "Chat completed" message |
-| **Tool Calls** | Separate `function_call` + `output` events | Inline in chat text |
-| **Reasoning** | Encrypted in `reasoning` events | Not logged |
-| **Real-time Parsing** | Event-by-event streaming | Line-by-line text parsing |
+| Feature                  | Codex CLI                                  | Copilot CLI                         |
+| ------------------------ | ------------------------------------------ | ----------------------------------- |
+| **Format**               | JSONL events                               | Plain text with sections            |
+| **Session ID**           | In `session_meta` event                    | In log filename or embedded in text |
+| **Token Stats**          | Structured in `token_count` events         | Embedded in chat output             |
+| **Completion Detection** | Inactivity or agent message                | "Chat completed" message            |
+| **Tool Calls**           | Separate `function_call` + `output` events | Inline in chat text                 |
+| **Reasoning**            | Encrypted in `reasoning` events            | Not logged                          |
+| **Real-time Parsing**    | Event-by-event streaming                   | Line-by-line text parsing           |
 
 ---
 
@@ -907,9 +945,9 @@ function hasAgentResponse(events: CodexLogEvent[]): boolean {
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0 | 2026-01-28 | Initial schema documentation based on CLI v0.87.0 |
+| Version | Date       | Changes                                           |
+| ------- | ---------- | ------------------------------------------------- |
+| 1.0     | 2026-01-28 | Initial schema documentation based on CLI v0.87.0 |
 
 ---
 

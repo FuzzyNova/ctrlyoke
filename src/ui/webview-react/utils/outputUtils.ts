@@ -351,8 +351,7 @@ function renderStructuredEventsToMarkdown(
             data.status === OPERATION_STATUS.COMPLETED ||
             data.status === OPERATION_STATUS.FAILED
           ) {
-            const exitCode =
-              data.exitCode !== undefined ? data.exitCode : "?";
+            const exitCode = data.exitCode !== undefined ? data.exitCode : "?";
             lines.push("");
             lines.push(`  ⎿  (exit: ${exitCode})`);
           }
@@ -379,8 +378,7 @@ function renderStructuredEventsToMarkdown(
           // Render diff for completed edits
           if (
             data.status !== OPERATION_STATUS.INITIATED &&
-            (data.structuredPatch ||
-              (data.oldContent && data.newContent))
+            (data.structuredPatch || (data.oldContent && data.newContent))
           ) {
             lines.push("");
             lines.push("```diff");
@@ -455,10 +453,7 @@ function renderStructuredEventsToMarkdown(
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
         const data = event.data as ToolCallEventData;
-        const toolLine = formatToolCallForMarkdown(
-          data.name,
-          data.parameters
-        );
+        const toolLine = formatToolCallForMarkdown(data.name, data.parameters);
         lines.push(toolLine);
 
         if (data.result) {
@@ -473,9 +468,7 @@ function renderStructuredEventsToMarkdown(
         const data = event.data as ThinkingEventData;
         if (data.text) {
           const label =
-            data.label && data.label !== "Thinking"
-              ? data.label
-              : "Thinking";
+            data.label && data.label !== "Thinking" ? data.label : "Thinking";
           lines.push(`● ${label}: ${data.text}`);
           lines.push("");
         }
@@ -551,7 +544,13 @@ export function generateMarkdownExport(
         response?: string;
         cliCommand?: string;
         workingDirectory?: string;
-        tokens?: { prompt: number; completion: number; cached?: number; contextWindowUsed?: number; contextWindowSize?: number };
+        tokens?: {
+          prompt: number;
+          completion: number;
+          cached?: number;
+          contextWindowUsed?: number;
+          contextWindowSize?: number;
+        };
         elapsed?: number;
         structured?: { events: Array<{ type: string; data: unknown }> };
       };
@@ -583,10 +582,7 @@ export function generateMarkdownExport(
       }
 
       // Export events in chronological order (structured) or fall back to plain response
-      if (
-        output.structured?.events &&
-        output.structured.events.length > 0
-      ) {
+      if (output.structured?.events && output.structured.events.length > 0) {
         lines.push("### Response");
         lines.push("");
         renderStructuredEventsToMarkdown(
@@ -605,15 +601,26 @@ export function generateMarkdownExport(
       // Stats section
       const stats: string[] = [];
       if (output.tokens) {
-        const { prompt, completion, cached, contextWindowUsed, contextWindowSize } = output.tokens;
+        const {
+          prompt,
+          completion,
+          cached,
+          contextWindowUsed,
+          contextWindowSize,
+        } = output.tokens;
         if (contextWindowUsed !== undefined && contextWindowSize) {
-          const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+          const fmt = (n: number) =>
+            n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
           const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
-          stats.push(`Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`);
+          stats.push(
+            `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+          );
         }
         const total = prompt + completion;
         const cachedSuffix = cached ? ` / ${cached} cached` : "";
-        stats.push(`Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`);
+        stats.push(
+          `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
+        );
       }
       if (output.elapsed !== undefined) {
         stats.push(`${output.elapsed}s`);

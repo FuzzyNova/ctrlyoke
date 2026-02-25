@@ -3,6 +3,7 @@
 **Reference documentation for Copilot Chat session JSON files**
 
 VS Code stores Copilot Chat sessions in JSON files located at:
+
 - **Windows**: `%APPDATA%\Code\User\workspaceStorage\{workspaceId}\chatSessions\`
 - **macOS**: `~/Library/Application Support/Code/User/workspaceStorage/{workspaceId}/chatSessions/`
 - **Linux**: `~/.config/Code/User/workspaceStorage/{workspaceId}/chatSessions/`
@@ -12,6 +13,7 @@ Each chat session creates a file named `{sessionId}.json` (e.g., `2722d7f2-ad41-
 ## Overview
 
 Session files are the **single source of truth** for Chat responses in FlightPath. They provide:
+
 - **100% reliability** (vs ~70% for clipboard-based approaches)
 - **Structured data** (thinking blocks, tool calls, metadata)
 - **Complete history** (all requests/responses in one file)
@@ -26,29 +28,33 @@ Session files are the **single source of truth** for Chat responses in FlightPat
   "responderUsername": "GitHub Copilot",
   "responderAvatarIconUri": { "id": "copilot" },
   "initialLocation": "panel",
-  "requests": [ /* array of request/response pairs */ ],
+  "requests": [
+    /* array of request/response pairs */
+  ],
   "creationDate": 1769444619441,
   "lastMessageDate": 1769444653893,
   "customTitle": "Simple greeting request",
   "hasPendingEdits": false,
-  "inputState": { /* current input state */ }
+  "inputState": {
+    /* current input state */
+  }
 }
 ```
 
 ### Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | number | Session file format version (currently 3) |
-| `sessionId` | string | Unique UUID for this session |
-| `responderUsername` | string | Display name ("GitHub Copilot") |
-| `initialLocation` | string | Where chat opened ("panel", "editor", "window") |
-| `requests` | array | Request/response pairs (see below) |
-| `creationDate` | number | Unix timestamp (ms) |
-| `lastMessageDate` | number | Unix timestamp (ms) of last message |
-| `customTitle` | string | Auto-generated or user-set title |
-| `hasPendingEdits` | boolean | Whether agent has pending file edits |
-| `inputState` | object | Current chat input state |
+| Field               | Type    | Description                                     |
+| ------------------- | ------- | ----------------------------------------------- |
+| `version`           | number  | Session file format version (currently 3)       |
+| `sessionId`         | string  | Unique UUID for this session                    |
+| `responderUsername` | string  | Display name ("GitHub Copilot")                 |
+| `initialLocation`   | string  | Where chat opened ("panel", "editor", "window") |
+| `requests`          | array   | Request/response pairs (see below)              |
+| `creationDate`      | number  | Unix timestamp (ms)                             |
+| `lastMessageDate`   | number  | Unix timestamp (ms) of last message             |
+| `customTitle`       | string  | Auto-generated or user-set title                |
+| `hasPendingEdits`   | boolean | Whether agent has pending file edits            |
+| `inputState`        | object  | Current chat input state                        |
 
 ## Request Structure
 
@@ -58,42 +64,57 @@ Each request in the `requests` array contains:
 {
   "requestId": "request_15b5009a-ff7e-4f2c-ac5d-ae2d5612f870",
   "message": {
-    "parts": [ /* message parts */ ],
+    "parts": [
+      /* message parts */
+    ],
     "text": "just say hi please"
   },
   "variableData": {
-    "variables": [ /* attached files, instruction files */ ]
+    "variables": [
+      /* attached files, instruction files */
+    ]
   },
-  "response": [ /* array of response items */ ],
-  "agent": { /* agent metadata */ },
+  "response": [
+    /* array of response items */
+  ],
+  "agent": {
+    /* agent metadata */
+  },
   "timestamp": 1769444653892,
   "modelId": "copilot/oswe-vscode-prime",
   "responseId": "response_61a5c3fb-f789-4896-b65f-1379de7413f8",
   "result": {
-    "timings": { /* timing data */ },
-    "metadata": { /* tool calls, cache, session info */ },
-    "errorDetails": { /* if error occurred */ }
+    "timings": {
+      /* timing data */
+    },
+    "metadata": {
+      /* tool calls, cache, session info */
+    },
+    "errorDetails": {
+      /* if error occurred */
+    }
   }
 }
 ```
 
 ### Key Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `requestId` | string | Unique ID for this request |
-| `message.text` | string | User's prompt text |
-| `response` | array | Response items (see Response Item Types) |
-| `modelId` | string | Model used (e.g., "copilot/claude-sonnet-4.5") |
-| `result.timings` | object | Performance metrics |
-| `result.metadata` | object | Tool calls, cache, reasoning |
-| `result.errorDetails` | object | Error info if request failed/cancelled |
+| Field                 | Type   | Description                                    |
+| --------------------- | ------ | ---------------------------------------------- |
+| `requestId`           | string | Unique ID for this request                     |
+| `message.text`        | string | User's prompt text                             |
+| `response`            | array  | Response items (see Response Item Types)       |
+| `modelId`             | string | Model used (e.g., "copilot/claude-sonnet-4.5") |
+| `result.timings`      | object | Performance metrics                            |
+| `result.metadata`     | object | Tool calls, cache, reasoning                   |
+| `result.errorDetails` | object | Error info if request failed/cancelled         |
 
 ## Response Item Types
 
 The `response` array contains items of 5 different types:
 
 ### 1. MCP Server Start
+
 Indicates MCP servers are starting (informational only).
 
 ```json
@@ -104,9 +125,11 @@ Indicates MCP servers are starting (informational only).
 ```
 
 ### 2. Thinking Block
+
 Copilot's internal reasoning (may be encrypted or plaintext).
 
 **Plaintext thinking:**
+
 ```json
 {
   "kind": "thinking",
@@ -117,6 +140,7 @@ Copilot's internal reasoning (may be encrypted or plaintext).
 ```
 
 **Encrypted thinking (skipped by parser):**
+
 ```json
 {
   "kind": "thinking",
@@ -132,6 +156,7 @@ Copilot's internal reasoning (may be encrypted or plaintext).
 **Note:** Encrypted thinking starts with base64-like strings (100+ chars). ChatSessionParser filters these out.
 
 ### 3. Tool Preparation
+
 Indicates a tool is about to be invoked (informational only).
 
 ```json
@@ -142,6 +167,7 @@ Indicates a tool is about to be invoked (informational only).
 ```
 
 ### 4. Tool Invocation
+
 Actual tool call with metadata.
 
 ```json
@@ -196,6 +222,7 @@ Actual tool call with metadata.
 ```
 
 ### 5. Text Response
+
 Regular text output (no `kind` field).
 
 ```json
@@ -224,7 +251,9 @@ The `result` object contains completion status, timings, and metadata:
     },
     "metadata": {
       "codeBlocks": [],
-      "toolCallRounds": [ /* see Tool Invocation section */ ],
+      "toolCallRounds": [
+        /* see Tool Invocation section */
+      ],
       "modelMessageId": "c9864232-ef26-495e-82ed-3130b6d0a639",
       "responseId": "0800af3b-ffc4-4802-968d-2b02d68b0755",
       "sessionId": "5a00eb97-798e-4888-88c9-6d1735d5bf8e",
@@ -243,13 +272,15 @@ The `result` object contains completion status, timings, and metadata:
 ### Completion Detection
 
 **A request is considered complete when:**
+
 ```javascript
-result.timings.totalElapsed > 0
+result.timings.totalElapsed > 0;
 ```
 
 This is the **100% reliable** method used by ChatSessionMonitor.
 
 **Request states:**
+
 - `totalElapsed === 0` → In progress
 - `totalElapsed > 0` → Complete (success or error)
 - `errorDetails.code === "canceled"` → User cancelled
@@ -353,6 +384,7 @@ ChatSessionParser converts session files to `UniversalCliOutput` format:
 ```
 
 **Parsed output:**
+
 ```typescript
 {
   events: [
@@ -371,16 +403,19 @@ ChatSessionParser converts session files to `UniversalCliOutput` format:
 ## Usage in FlightPath
 
 ### ChatSessionMonitor
+
 - **Discovery**: Finds session files by scanning `workspaceStorage/{id}/chatSessions/`
 - **Monitoring**: Polls session file for `totalElapsed > 0`
 - **Caching**: Tracks completed requests to avoid re-parsing
 
 ### ChatSessionParser
+
 - **Parsing**: Reads session JSON and extracts structured events
 - **Filtering**: Skips encrypted thinking, informational items
 - **Conversion**: Transforms to `UniversalCliOutput` format
 
 ### CopilotChatIntegration
+
 - **Extraction**: Calls `ChatSessionParser.extractResponse(sessionFile)`
 - **Formatting**: Uses `CliOutputFormatter.toPlainText(output)` for output window
 - **Event firing**: Emits formatted text via `responseCompleteEmitter`
@@ -389,29 +424,32 @@ ChatSessionParser converts session files to `UniversalCliOutput` format:
 
 Common model IDs found in session files:
 
-| Model ID | Display Name | Notes |
-|----------|--------------|-------|
-| `copilot/claude-sonnet-4.5` | Claude Sonnet 4.5 | Most capable |
-| `copilot/claude-sonnet-4` | Claude Sonnet 4 | Previous version |
-| `copilot/claude-haiku-4.5` | Claude Haiku 4.5 | Fastest |
-| `copilot/gpt-5` | GPT-5 | OpenAI model |
-| `copilot/oswe-vscode-prime` | Raptor mini (Preview) | Experimental |
+| Model ID                    | Display Name          | Notes            |
+| --------------------------- | --------------------- | ---------------- |
+| `copilot/claude-sonnet-4.5` | Claude Sonnet 4.5     | Most capable     |
+| `copilot/claude-sonnet-4`   | Claude Sonnet 4       | Previous version |
+| `copilot/claude-haiku-4.5`  | Claude Haiku 4.5      | Fastest          |
+| `copilot/gpt-5`             | GPT-5                 | OpenAI model     |
+| `copilot/oswe-vscode-prime` | Raptor mini (Preview) | Experimental     |
 
 **Note:** ChatSessionParser normalizes model IDs by removing the `copilot/` prefix.
 
 ## Troubleshooting
 
 ### Session file not found
+
 - Check if workspaceStorage directory exists
 - Verify workspace ID matches current workspace
 - Ensure Copilot Chat has been used at least once
 
 ### Empty response events
+
 - Request may still be in progress (`totalElapsed === 0`)
 - Check `result.errorDetails` for cancellation/errors
 - Verify session file is valid JSON
 
 ### Encrypted thinking blocks
+
 - These are intentionally encrypted by VS Code
 - ChatSessionParser filters them out (base64-like strings)
 - Plaintext thinking is available in some responses
@@ -426,6 +464,6 @@ Common model IDs found in session files:
 
 ## Version History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author            | Changes                                                   |
+| ---------- | ----------------- | --------------------------------------------------------- |
 | 2026-01-28 | Claude Sonnet 4.5 | Initial documentation based on real session file analysis |

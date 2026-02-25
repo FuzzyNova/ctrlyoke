@@ -34,9 +34,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
   // During execution: Show "Completed N of M"
   if (isRunning && totalSteps > 0) {
     return (
-      <span
-        className={`text-xs text-description-fg ${className}`}
-      >
+      <span className={`text-xs text-description-fg ${className}`}>
         Completed {completedCount} of {totalSteps}
       </span>
     );
@@ -44,9 +42,7 @@ export const PromptCounter: React.FC<PromptCounterProps> = ({
 
   // Idle state: Just show count
   return (
-    <span
-      className={`text-xs text-description-fg ${className}`}
-    >
+    <span className={`text-xs text-description-fg ${className}`}>
       {totalSteps} {totalSteps === 1 ? "prompt" : "prompts"}
     </span>
   );

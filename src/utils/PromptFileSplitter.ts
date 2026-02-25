@@ -258,7 +258,8 @@ export class PromptFileSplitter {
       }
 
       segments.push(remaining.substring(0, splitPos).trim());
-      remaining = continuationMarker + " " + remaining.substring(splitPos).trim();
+      remaining =
+        continuationMarker + " " + remaining.substring(splitPos).trim();
     }
 
     // Add final segment

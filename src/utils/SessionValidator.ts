@@ -78,10 +78,7 @@ export class SessionValidator {
    * @param harnessName Harness display name for error messages
    * @returns True if valid UUID, false otherwise
    */
-  private static validateUuid(
-    sessionId: string,
-    harnessName: string
-  ): boolean {
+  private static validateUuid(sessionId: string, harnessName: string): boolean {
     if (!this.UUID_REGEX.test(sessionId)) {
       Log.warn(
         `⚠️ Session ID "${sessionId}" is not a valid UUID for ${harnessName}. ` +

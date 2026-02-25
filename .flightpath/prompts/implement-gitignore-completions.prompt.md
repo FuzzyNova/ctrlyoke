@@ -61,8 +61,8 @@ export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   // ON (true):  Let VS Code respect .gitignore, .ignore, files.exclude, etc.
   // OFF (false): Show ALL files (only exclude .git database - never useful)
   const exclude = respectGitignore
-    ? undefined  // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
-    : "**/.git/**";  // Only exclude Git database - show EVERYTHING else
+    ? undefined // VS Code handles exclusions (.gitignore, .ignore, files.exclude)
+    : "**/.git/**"; // Only exclude Git database - show EVERYTHING else
 
   const files = await vscode.workspace.findFiles("**/*", exclude);
 
@@ -85,10 +85,12 @@ let configWatcher: vscode.Disposable | undefined;
 /**
  * Initialize configuration watcher to clear cache on setting change
  */
-export function initializeCompletionHelpers(context: vscode.ExtensionContext): void {
+export function initializeCompletionHelpers(
+  context: vscode.ExtensionContext
+): void {
   // Clear cache when gitignore setting changes
-  configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-    if (e.affectsConfiguration('flightpath.respectGitignoreForCompletions')) {
+  configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration("flightpath.respectGitignoreForCompletions")) {
       clearFilesCache();
       Log.info("[Completions] Cache cleared due to gitignore setting change");
     }
@@ -112,7 +114,7 @@ export function disposeCompletionHelpers(): void {
 **Add import:**
 
 ```typescript
-import { initializeCompletionHelpers } from './completions/CompletionHelpers';
+import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 ```
 
 **In activate() function** (after other initializations):
@@ -136,8 +138,8 @@ initializeCompletionHelpers(context);
     <span>Respect .gitignore for completions</span>
   </label>
   <span class="setting-description">
-    When enabled, hides gitignored files from @ and # completions.
-    Disable to reference build outputs, logs, or dependencies.
+    When enabled, hides gitignored files from @ and # completions. Disable to
+    reference build outputs, logs, or dependencies.
   </span>
 </div>
 ```
@@ -182,7 +184,7 @@ respectGitignoreCheckbox.addEventListener('change', (e) => {
 
 **File:** @src/ui/FlightPathSettingsProvider.ts
 
-**In _handleWebviewMessage() method** (add these cases):
+**In \_handleWebviewMessage() method** (add these cases):
 
 ```typescript
 case 'getConfig': {
@@ -209,17 +211,20 @@ case 'updateConfig': {
 ## Expected Behavior
 
 **Setting ON (default):**
+
 - Dashboard completions: Hides gitignored files
 - VS Code editor completions: Hides gitignored files
 - Dropdown shows ~5,000 files (clean, source files only)
 
 **Setting OFF:**
+
 - Dashboard completions: Shows ALL files including node_modules/, dist/, logs
 - VS Code editor completions: Shows ALL files
 - Dropdown shows ~10,000 files (everything except .git/)
 - Only `.git/` directory excluded (binary database)
 
 **Checkbox in Settings Panel:**
+
 - Checked = ON (respect .gitignore)
 - Unchecked = OFF (show all files)
 - Changes global VS Code setting immediately

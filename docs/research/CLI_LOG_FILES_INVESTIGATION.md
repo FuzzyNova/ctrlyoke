@@ -14,11 +14,11 @@ This document investigates chat log files for **all three CLI providers** (Claud
 
 ## Quick Reference: Log File Locations
 
-| Provider | Log Directory | File Naming | Index File |
-|----------|--------------|-------------|------------|
-| **Claude** | `~/.claude/projects/<project-path>/` | `<session-id>.jsonl` | `sessions-index.json` |
-| **Copilot** | `~/.copilot/session-state/` | **Old:** `<session-id>.jsonl`<br>**New (v0.0.384+):** `<session-id>/events.jsonl` | `history-session-state/session_*.json` |
-| **Codex** | `~/.codex/sessions/YYYY/MM/DD/` | `rollout-<timestamp>-<session-id>.jsonl` | None (date-based organization) |
+| Provider    | Log Directory                        | File Naming                                                                       | Index File                             |
+| ----------- | ------------------------------------ | --------------------------------------------------------------------------------- | -------------------------------------- |
+| **Claude**  | `~/.claude/projects/<project-path>/` | `<session-id>.jsonl`                                                              | `sessions-index.json`                  |
+| **Copilot** | `~/.copilot/session-state/`          | **Old:** `<session-id>.jsonl`<br>**New (v0.0.384+):** `<session-id>/events.jsonl` | `history-session-state/session_*.json` |
+| **Codex**   | `~/.codex/sessions/YYYY/MM/DD/`      | `rollout-<timestamp>-<session-id>.jsonl`                                          | None (date-based organization)         |
 
 **⚠️ Note:** Copilot changed log format in version 0.0.384 (mid-January 2026). FlightPath must support both old and new formats.
 
@@ -31,6 +31,7 @@ C:\Users\<username>\.claude\projects\<project-path>\
 ```
 
 Example for FlightPath project:
+
 ```
 C:\Users\natha\.claude\projects\C--dev-FlightPath\
 ```
@@ -38,14 +39,17 @@ C:\Users\natha\.claude\projects\C--dev-FlightPath\
 ### File Organization
 
 **Session Files:**
+
 - One `.jsonl` file per session: `<session-id>.jsonl`
 - One directory per session (for subagents): `<session-id>/`
 - Agent sessions: `agent-<short-id>.jsonl`
 
 **Index File:**
+
 - `sessions-index.json` - Master index of all sessions with metadata
 
 **Example Directory Contents:**
+
 ```
 0052ba5f-5354-48cd-bede-558c1258090b.jsonl
 0052ba5f-5354-48cd-bede-558c1258090b/
@@ -80,6 +84,7 @@ The `sessions-index.json` file tracks metadata for all sessions:
 ```
 
 **Key Fields:**
+
 - `sessionId` - Unique session identifier (UUID)
 - `fullPath` - Absolute path to the JSONL file
 - `fileMtime` - File modification timestamp (for tracking updates)
@@ -97,6 +102,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 ### Event Types
 
 **1. Queue Operations** (FlightPath-specific):
+
 ```json
 {
   "type": "queue-operation",
@@ -107,6 +113,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 ```
 
 **2. User Messages:**
+
 ```json
 {
   "parentUuid": null,
@@ -127,6 +134,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 ```
 
 **3. Assistant Messages:**
+
 ```json
 {
   "parentUuid": "64f2143e-5972-46c3-baa2-0dbf3837c636",
@@ -171,6 +179,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 ### Message Structure Details
 
 **Metadata Fields (Common to All Events):**
+
 - `type` - Event type: "user", "assistant", "queue-operation"
 - `uuid` - Unique identifier for this message
 - `parentUuid` - UUID of the message this is responding to (null for user prompts)
@@ -184,6 +193,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 - `agentId` - Present for agent sessions (e.g., "afe734d")
 
 **Message Content (message field):**
+
 - `role` - "user" or "assistant"
 - `content` - String (user) or Array of content blocks (assistant)
   - Content block types: "text", "thinking", "tool_use", "tool_result"
@@ -193,6 +203,7 @@ Each session file (`<session-id>.jsonl`) contains one JSON object per line. Each
 - `usage` - Token counts and costs (assistant only)
 
 **Usage Statistics (assistant messages):**
+
 ```json
 "usage": {
   "input_tokens": 3,
@@ -220,17 +231,21 @@ C:\Users\<username>\.copilot\session-state\
 **⚠️ IMPORTANT: Copilot changed their log format around version 0.0.384 (mid-January 2026)**
 
 **Old Format (pre-v0.0.384):**
+
 - One `.jsonl` file per session in root directory: `<session-id>.jsonl`
 - No subdirectories
 
 **New Format (v0.0.384+, current as of Jan 18, 2026):**
+
 - One subdirectory per session: `<session-id>/`
 - Log file inside subdirectory: `<session-id>/events.jsonl`
 
 **History Files (both formats):**
+
 - `history-session-state/session_<session-id>_<timestamp>.json` - Session metadata
 
 **Example Directory Contents (Mixed Old/New):**
+
 ```
 session-state/
 ├── ff5d67ac-6252-496a-a8e1-0c739361f6b2.jsonl          # Old format (flat file)
@@ -253,6 +268,7 @@ history-session-state/
 Copilot uses a **type-based event system** with granular event types for every action.
 
 **Event Types (New Format - v0.0.384+):**
+
 - `session.start` - Session initialization
 - `session.info` - Session info (authentication, MCP connections)
 - `session.model_change` - Model selection
@@ -266,9 +282,11 @@ Copilot uses a **type-based event system** with granular event types for every a
 - `tool.execution_result` - Tool call result (deprecated in new format)
 
 **Event Types (Old Format - pre-v0.0.384):**
+
 - Same as above but without `session.info`, `assistant.turn_end`, and `tool.execution_complete`
 
 **Sample Session Start (New Format):**
+
 ```json
 {
   "type": "session.start",
@@ -287,6 +305,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample Session Info (New in v0.0.384+):**
+
 ```json
 {
   "type": "session.info",
@@ -314,18 +333,21 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample User Message (Enhanced in New Format):**
+
 ```json
 {
   "type": "user.message",
   "data": {
     "content": "Follow instructions in @.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md",
     "transformedContent": "<current_datetime>2026-01-19T01:36:08.274Z</current_datetime>\n\nFollow instructions...",
-    "attachments": [{
-      "type": "file",
-      "path": "C:\\dev\\FlightPath\\.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md",
-      "displayName": "@.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md",
-      "mentionIndex": 23
-    }]
+    "attachments": [
+      {
+        "type": "file",
+        "path": "C:\\dev\\FlightPath\\.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md",
+        "displayName": "@.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md",
+        "mentionIndex": 23
+      }
+    ]
   },
   "id": "d919f62c-60dc-42ad-ad6e-d019b10e613b",
   "timestamp": "2026-01-19T01:36:08.274Z",
@@ -334,6 +356,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample Assistant Message:**
+
 ```json
 {
   "type": "assistant.message",
@@ -349,19 +372,22 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample Tool Call:**
+
 ```json
 {
   "type": "assistant.message",
   "data": {
     "messageId": "a4684eb8-2be3-4ba2-9627-f005baccbd27",
     "content": "",
-    "toolRequests": [{
-      "toolCallId": "call_QHzc9P78VBl2CuDfGdOZ2sgU",
-      "name": "view",
-      "arguments": {
-        "path": "C:\\dev\\FlightPath\\.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md"
+    "toolRequests": [
+      {
+        "toolCallId": "call_QHzc9P78VBl2CuDfGdOZ2sgU",
+        "name": "view",
+        "arguments": {
+          "path": "C:\\dev\\FlightPath\\.flightpath\\temp\\1768786559-spaces-in-workflow-name-1.1.prompt.md"
+        }
       }
-    }]
+    ]
   },
   "id": "608dfaf8-df71-4bcb-864c-2a2fc8824276",
   "timestamp": "2026-01-19T01:36:19.566Z",
@@ -370,6 +396,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample Tool Execution Complete (New in v0.0.384+):**
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -399,6 +426,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 ```
 
 **Sample Assistant Turn End (New in v0.0.384+):**
+
 ```json
 {
   "type": "assistant.turn_end",
@@ -414,6 +442,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 ### Key Features
 
 **Metadata Fields:**
+
 - `type` - Event type (hierarchical: category.action)
 - `id` - Unique event identifier (UUID)
 - `parentId` - Parent event ID (forms event chain)
@@ -421,6 +450,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 - `data` - Event-specific payload
 
 **Advantages:**
+
 - **Granular events**: Separate events for each action (turn start, truncation, etc.)
 - **Event chains**: `parentId` links events into conversation flow
 - **Tool tracking**: Full tool execution lifecycle (start → complete) with telemetry
@@ -429,6 +459,7 @@ Copilot uses a **type-based event system** with granular event types for every a
 - **Enhanced attachments**: File attachments with full metadata (path, displayName, mentionIndex)
 
 **Challenges:**
+
 - **Multi-event responses**: Assistant responses split across multiple events
 - **Reconstruction needed**: Must aggregate events to get full response
 - **No built-in session index**: Must scan directory for session discovery
@@ -444,6 +475,7 @@ C:\Users\<username>\.codex\sessions\YYYY\MM\DD\
 ```
 
 Example:
+
 ```
 C:\Users\natha\.codex\sessions\2026\01\17\
 ```
@@ -451,20 +483,24 @@ C:\Users\natha\.codex\sessions\2026\01\17\
 ### File Organization
 
 **Date-Based Hierarchy:**
+
 - Sessions organized by year/month/day directories
 - No session index file (use directory structure for discovery)
 
 **File Naming:**
+
 ```
 rollout-<timestamp>-<session-id>.jsonl
 ```
 
 Example:
+
 ```
 rollout-2026-01-17T15-47-25-019bcded-64fd-7b21-b80b-be2a50ec8767.jsonl
 ```
 
 **Example Directory Structure:**
+
 ```
 .codex/sessions/
 ├── 2025/
@@ -485,6 +521,7 @@ rollout-2026-01-17T15-47-25-019bcded-64fd-7b21-b80b-be2a50ec8767.jsonl
 Codex uses a **payload-based event system** with comprehensive session metadata.
 
 **Event Types:**
+
 - `session_meta` - Session initialization with full context
 - `response_item` - Individual response items (user/assistant messages, permissions, environment)
 - `event_msg` - System events (user_message, token_count, turn.completed)
@@ -492,6 +529,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 - `reasoning` - Internal reasoning blocks (encrypted)
 
 **Sample Session Metadata:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:25.875Z",
@@ -515,6 +553,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 ```
 
 **Sample User Message:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:27.672Z",
@@ -522,15 +561,18 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
   "payload": {
     "type": "message",
     "role": "user",
-    "content": [{
-      "type": "input_text",
-      "text": "Follow instructions in .flightpath\\temp\\1768686441-wow-looks-like-2-things-1.prompt.md"
-    }]
+    "content": [
+      {
+        "type": "input_text",
+        "text": "Follow instructions in .flightpath\\temp\\1768686441-wow-looks-like-2-things-1.prompt.md"
+      }
+    ]
   }
 }
 ```
 
 **Sample Turn Context:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:27.672Z",
@@ -556,6 +598,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 ```
 
 **Sample Tool Call:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:29.906Z",
@@ -570,6 +613,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 ```
 
 **Sample Reasoning Block:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:29.494Z",
@@ -584,6 +628,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 ```
 
 **Sample Event Messages:**
+
 ```json
 {
   "timestamp": "2026-01-17T21:47:27.672Z",
@@ -618,6 +663,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 ### Key Features
 
 **Metadata Fields:**
+
 - `timestamp` - ISO 8601 timestamp
 - `type` - Top-level event type
 - `payload` - Event data with nested structure
@@ -625,6 +671,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
   - Provider-specific fields
 
 **Advantages:**
+
 - **Rich context**: Full session metadata including git info, approval policies, sandbox settings
 - **Reasoning blocks**: Internal reasoning captured (encrypted for now)
 - **Date-based organization**: Easy to find sessions by date
@@ -633,6 +680,7 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 - **Environment capture**: Working directory, shell, instructions
 
 **Challenges:**
+
 - **No session index**: Must traverse directory tree to discover sessions
 - **Nested payloads**: Two-level type system (event type + payload type)
 - **Encrypted reasoning**: Reasoning blocks not immediately readable
@@ -642,43 +690,43 @@ Codex uses a **payload-based event system** with comprehensive session metadata.
 
 ### Log File Organization
 
-| Provider | Organization | Session Discovery | Subagents | Format Changes |
-|----------|--------------|------------------|-----------|----------------|
-| **Claude** | Project-based | sessions-index.json | Subdirectories | Stable |
-| **Copilot** | Flat directory (old)<br>Session subdirs (new) | history-session-state/*.json | Not tracked | **Changed v0.0.384** (Jan 2026) |
-| **Codex** | Date hierarchy (YYYY/MM/DD) | Directory traversal | Not tracked | Stable |
+| Provider    | Organization                                  | Session Discovery             | Subagents      | Format Changes                  |
+| ----------- | --------------------------------------------- | ----------------------------- | -------------- | ------------------------------- |
+| **Claude**  | Project-based                                 | sessions-index.json           | Subdirectories | Stable                          |
+| **Copilot** | Flat directory (old)<br>Session subdirs (new) | history-session-state/\*.json | Not tracked    | **Changed v0.0.384** (Jan 2026) |
+| **Codex**   | Date hierarchy (YYYY/MM/DD)                   | Directory traversal           | Not tracked    | Stable                          |
 
 ### Event Structure
 
-| Provider | Event Model | Response Assembly | Metadata Richness |
-|----------|-------------|------------------|------------------|
-| **Claude** | Simple (user/assistant) | Single event per message | Medium (tokens, model, stop_reason) |
-| **Copilot** | Granular (type.action) | Multi-event aggregation | High (truncation, turn tracking) |
-| **Codex** | Nested payloads | Multi-event aggregation | Very High (git, sandbox, reasoning) |
+| Provider    | Event Model             | Response Assembly        | Metadata Richness                   |
+| ----------- | ----------------------- | ------------------------ | ----------------------------------- |
+| **Claude**  | Simple (user/assistant) | Single event per message | Medium (tokens, model, stop_reason) |
+| **Copilot** | Granular (type.action)  | Multi-event aggregation  | High (truncation, turn tracking)    |
+| **Codex**   | Nested payloads         | Multi-event aggregation  | Very High (git, sandbox, reasoning) |
 
 ### Key Events for Response Streaming
 
-| Event | Claude | Copilot | Codex |
-|-------|--------|---------|-------|
-| **Session Start** | `type: "user"` (first) | `type: "session.start"` | `type: "session_meta"` |
-| **User Prompt** | `type: "user"` | `type: "user.message"` | `type: "event_msg"` (payload.type: "user_message") |
-| **Assistant Text** | `type: "assistant"` | `type: "assistant.message"` | `type: "response_item"` (payload.type: "message", role: "assistant") |
-| **Tool Call** | `content[].type: "tool_use"` | `toolRequests[]` | `type: "response_item"` (payload.type: "function_call") |
-| **Thinking** | `content[].type: "thinking"` | Not tracked | `type: "response_item"` (payload.type: "reasoning") |
-| **Completion** | `stop_reason !== null` | Custom (last event) | `type: "event_msg"` (payload.type: "turn.completed") |
-| **Token Counts** | `usage` object | `type: "event_msg"` (payload.type: "token_count") | `type: "event_msg"` (payload.type: "token_count") |
+| Event              | Claude                       | Copilot                                           | Codex                                                                |
+| ------------------ | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- |
+| **Session Start**  | `type: "user"` (first)       | `type: "session.start"`                           | `type: "session_meta"`                                               |
+| **User Prompt**    | `type: "user"`               | `type: "user.message"`                            | `type: "event_msg"` (payload.type: "user_message")                   |
+| **Assistant Text** | `type: "assistant"`          | `type: "assistant.message"`                       | `type: "response_item"` (payload.type: "message", role: "assistant") |
+| **Tool Call**      | `content[].type: "tool_use"` | `toolRequests[]`                                  | `type: "response_item"` (payload.type: "function_call")              |
+| **Thinking**       | `content[].type: "thinking"` | Not tracked                                       | `type: "response_item"` (payload.type: "reasoning")                  |
+| **Completion**     | `stop_reason !== null`       | Custom (last event)                               | `type: "event_msg"` (payload.type: "turn.completed")                 |
+| **Token Counts**   | `usage` object               | `type: "event_msg"` (payload.type: "token_count") | `type: "event_msg"` (payload.type: "token_count")                    |
 
 ### Parsing Complexity
 
-| Aspect | Claude | Copilot | Codex |
-|--------|--------|---------|-------|
-| **Event Parsing** | Simple | Medium (event aggregation) | Medium (nested payloads) |
-| **Session Discovery** | Easy (index file) | Medium (history files, **check subdirs first**) | Hard (directory traversal) |
-| **Response Extraction** | Easy (single event) | Medium (multi-event) | Medium (multi-event) |
-| **Tool Call Tracking** | Easy (content blocks) | Easy (toolRequests array) | Easy (function_call type) |
-| **Metadata Extraction** | Easy (top-level fields) | Medium (event-specific) | Easy (session_meta, turn_context) |
-| **Format Versioning** | Stable | **Two formats** (old/new) | Stable |
-| **Completion Detection** | Simple (stop_reason) | **Complex** (assistant.turn_end in new, heuristic in old) | Simple (turn.completed event) |
+| Aspect                   | Claude                  | Copilot                                                   | Codex                             |
+| ------------------------ | ----------------------- | --------------------------------------------------------- | --------------------------------- |
+| **Event Parsing**        | Simple                  | Medium (event aggregation)                                | Medium (nested payloads)          |
+| **Session Discovery**    | Easy (index file)       | Medium (history files, **check subdirs first**)           | Hard (directory traversal)        |
+| **Response Extraction**  | Easy (single event)     | Medium (multi-event)                                      | Medium (multi-event)              |
+| **Tool Call Tracking**   | Easy (content blocks)   | Easy (toolRequests array)                                 | Easy (function_call type)         |
+| **Metadata Extraction**  | Easy (top-level fields) | Medium (event-specific)                                   | Easy (session_meta, turn_context) |
+| **Format Versioning**    | Stable                  | **Two formats** (old/new)                                 | Stable                            |
+| **Completion Detection** | Simple (stop_reason)    | **Complex** (assistant.turn_end in new, heuristic in old) | Simple (turn.completed event)     |
 
 ## Current TUI Parsing Approach (FlightPath)
 
@@ -689,6 +737,7 @@ FlightPath currently uses `TuiStreamProcessor.ts` to parse Claude CLI output by 
 **File:** `src/utils/TuiStreamProcessor.ts` (997 lines)
 
 **Key Responsibilities:**
+
 1. Stream TUI output from `TerminalShellExecution.read()`
 2. Strip ANSI escape codes and terminal control sequences
 3. Detect TUI readiness (first complete screen)
@@ -702,6 +751,7 @@ FlightPath currently uses `TuiStreamProcessor.ts` to parse Claude CLI output by 
 ### Current Parsing Challenges
 
 **1. ANSI Code Stripping (lines 709-724):**
+
 ```typescript
 stripAnsiCodes(text: string): string {
   return text
@@ -719,27 +769,32 @@ stripAnsiCodes(text: string): string {
 ```
 
 **2. Screen Parsing (lines 511-537):**
+
 - Uses CLI-specific regex patterns to detect screen boundaries
 - Must extract complete screens from partial buffer chunks
 - Requires CLI-specific configuration (escapeIndicator, screenEndPattern)
 
 **3. Content Deduplication (lines 556-677):**
+
 - Tracks line occurrence counts between screens
 - Handles progressive updates where annotations get added
 - Complex logic to prevent duplicate output while preserving new content
 - Must collapse excessive blank lines (max 2 consecutive)
 
 **4. TUI Chrome Filtering (lines 691-702):**
+
 - Filters status indicators like "(Esc to cancel)"
 - Removes spinner-only lines and pure UI chrome
 - Uses CLI-specific patterns from each integration
 
 **5. Completion Detection (lines 381-407):**
+
 - Watches for escape indicator appearing (CLI generating)
 - Waits for indicator to disappear for 2+ consecutive screens
 - Requires careful state tracking across chunks
 
 **6. Error Detection (lines 734-793):**
+
 - Distinguishes real errors from pasted prompt content
 - Checks for TUI chrome before/after error patterns
 - Extracts error messages with stack traces
@@ -747,6 +802,7 @@ stripAnsiCodes(text: string): string {
 ### Current Implementation Complexity
 
 **Complexity Metrics:**
+
 - **Total lines:** 997
 - **Complex methods:**
   - `processStream()` - 394 lines (main processing loop)
@@ -757,6 +813,7 @@ stripAnsiCodes(text: string): string {
   - `extractScreensFromBuffer()` - 27 lines (screen parsing)
 
 **State Management:**
+
 - Multiple boolean flags (tuiReady, promptTextSent, promptSubmitted, completed, errorDetected, fileEchoDetected, indicatorEverSeen)
 - Line occurrence counting maps (lastEmittedContent)
 - Screen buffers and echo buffers
@@ -764,6 +821,7 @@ stripAnsiCodes(text: string): string {
 - Recent lines buffer (Set with 100-line limit)
 
 **Configuration Complexity:**
+
 ```typescript
 export interface TuiStreamConfig {
   useTimeBasedExtraction?: boolean;
@@ -781,57 +839,57 @@ export interface TuiStreamConfig {
 
 ### Data Quality
 
-| Aspect | TUI Parsing | JSONL Log Files (All 3 Providers) |
-|--------|-------------|-----------------------------------|
-| **Structured Data** | ❌ Unstructured text | ✅ Clean JSON objects |
-| **ANSI Codes** | ❌ Must strip manually | ✅ No ANSI codes |
-| **TUI Chrome** | ❌ Must filter status bars, spinners | ✅ No TUI chrome |
-| **Content Format** | ❌ Plain text with markdown | ✅ Typed content blocks (text, thinking, tool_use) |
-| **Metadata** | ❌ Not available | ✅ Full metadata (model, tokens, timestamps, UUIDs) |
-| **Tool Calls** | ❌ Embedded in text | ✅ Structured objects (all providers) |
-| **Token Counts** | ❌ Must parse from statistics string | ✅ Structured usage/event objects |
-| **Session ID** | ⚠️ Must parse from logs | ✅ In session metadata (all providers) |
-| **Reasoning** | ❌ Not captured | ✅ Available (Claude thinking blocks, Codex encrypted reasoning) |
+| Aspect              | TUI Parsing                          | JSONL Log Files (All 3 Providers)                                |
+| ------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| **Structured Data** | ❌ Unstructured text                 | ✅ Clean JSON objects                                            |
+| **ANSI Codes**      | ❌ Must strip manually               | ✅ No ANSI codes                                                 |
+| **TUI Chrome**      | ❌ Must filter status bars, spinners | ✅ No TUI chrome                                                 |
+| **Content Format**  | ❌ Plain text with markdown          | ✅ Typed content blocks (text, thinking, tool_use)               |
+| **Metadata**        | ❌ Not available                     | ✅ Full metadata (model, tokens, timestamps, UUIDs)              |
+| **Tool Calls**      | ❌ Embedded in text                  | ✅ Structured objects (all providers)                            |
+| **Token Counts**    | ❌ Must parse from statistics string | ✅ Structured usage/event objects                                |
+| **Session ID**      | ⚠️ Must parse from logs              | ✅ In session metadata (all providers)                           |
+| **Reasoning**       | ❌ Not captured                      | ✅ Available (Claude thinking blocks, Codex encrypted reasoning) |
 
 ### Implementation Complexity
 
-| Aspect | TUI Parsing | JSONL Log Files |
-|--------|-------------|-----------------|
-| **Lines of Code** | ❌ ~1000 lines (shared) | ✅ ~100-200 lines per provider |
-| **Parsing Logic** | ❌ Complex regex, state machines | ✅ Simple line-by-line JSON.parse() |
-| **Deduplication** | ❌ Manual line occurrence counting | ✅ Not needed (each line is unique event) |
-| **Screen Parsing** | ❌ Complex buffer management | ✅ Not needed (line-delimited) |
-| **Error Handling** | ❌ Must distinguish errors from content | ✅ Structured error/event objects |
-| **Provider Differences** | ❌ 3 different TUI formats (shared processor) | ✅ 3 different event schemas (separate parsers) |
-| **Code Reuse** | ⚠️ Some shared TUI logic, provider-specific patterns | ✅ Shared log monitoring, provider-specific event parsing |
+| Aspect                   | TUI Parsing                                          | JSONL Log Files                                           |
+| ------------------------ | ---------------------------------------------------- | --------------------------------------------------------- |
+| **Lines of Code**        | ❌ ~1000 lines (shared)                              | ✅ ~100-200 lines per provider                            |
+| **Parsing Logic**        | ❌ Complex regex, state machines                     | ✅ Simple line-by-line JSON.parse()                       |
+| **Deduplication**        | ❌ Manual line occurrence counting                   | ✅ Not needed (each line is unique event)                 |
+| **Screen Parsing**       | ❌ Complex buffer management                         | ✅ Not needed (line-delimited)                            |
+| **Error Handling**       | ❌ Must distinguish errors from content              | ✅ Structured error/event objects                         |
+| **Provider Differences** | ❌ 3 different TUI formats (shared processor)        | ✅ 3 different event schemas (separate parsers)           |
+| **Code Reuse**           | ⚠️ Some shared TUI logic, provider-specific patterns | ✅ Shared log monitoring, provider-specific event parsing |
 
 ### Reliability
 
-| Aspect | TUI Parsing | JSONL Log Files |
-|--------|-------------|-----------------|
-| **Breaking Changes** | ❌ TUI UI changes break parsing | ✅ Stable format (versioned) |
-| **Race Conditions** | ⚠️ Buffer timing issues | ✅ File system provides ordering |
-| **Partial Reads** | ❌ Must handle incomplete screens | ✅ Complete JSON objects per line |
-| **Error Recovery** | ❌ Complex state recovery | ✅ Simply continue from next line |
+| Aspect               | TUI Parsing                       | JSONL Log Files                   |
+| -------------------- | --------------------------------- | --------------------------------- |
+| **Breaking Changes** | ❌ TUI UI changes break parsing   | ✅ Stable format (versioned)      |
+| **Race Conditions**  | ⚠️ Buffer timing issues           | ✅ File system provides ordering  |
+| **Partial Reads**    | ❌ Must handle incomplete screens | ✅ Complete JSON objects per line |
+| **Error Recovery**   | ❌ Complex state recovery         | ✅ Simply continue from next line |
 
 ### Features
 
-| Aspect | TUI Parsing | JSONL Log Files |
-|--------|-------------|-----------------|
-| **Real-time Streaming** | ✅ Yes (via terminal read) | ✅ Yes (via file watching) |
-| **Historical Access** | ❌ Lost after stream ends | ✅ Persistent history |
-| **Thinking Blocks** | ⚠️ Embedded in text | ✅ Separate content block type |
-| **Tool Call Details** | ❌ Text summary only | ✅ Full tool name and input parameters |
-| **Multi-turn Context** | ❌ Only current response | ✅ Full conversation history |
-| **Subagent Tracking** | ❌ Not available | ✅ isSidechain, agentId fields |
+| Aspect                  | TUI Parsing                | JSONL Log Files                        |
+| ----------------------- | -------------------------- | -------------------------------------- |
+| **Real-time Streaming** | ✅ Yes (via terminal read) | ✅ Yes (via file watching)             |
+| **Historical Access**   | ❌ Lost after stream ends  | ✅ Persistent history                  |
+| **Thinking Blocks**     | ⚠️ Embedded in text        | ✅ Separate content block type         |
+| **Tool Call Details**   | ❌ Text summary only       | ✅ Full tool name and input parameters |
+| **Multi-turn Context**  | ❌ Only current response   | ✅ Full conversation history           |
+| **Subagent Tracking**   | ❌ Not available           | ✅ isSidechain, agentId fields         |
 
 ### Performance
 
-| Aspect | TUI Parsing | JSONL Log Files |
-|--------|-------------|-----------------|
-| **CPU Usage** | ❌ High (regex, deduplication) | ✅ Low (simple JSON parsing) |
-| **Memory Usage** | ⚠️ Screen buffers, line sets | ✅ Minimal (line-by-line) |
-| **Latency** | ✅ Immediate (terminal stream) | ⚠️ File system polling delay |
+| Aspect           | TUI Parsing                    | JSONL Log Files              |
+| ---------------- | ------------------------------ | ---------------------------- |
+| **CPU Usage**    | ❌ High (regex, deduplication) | ✅ Low (simple JSON parsing) |
+| **Memory Usage** | ⚠️ Screen buffers, line sets   | ✅ Minimal (line-by-line)    |
+| **Latency**      | ✅ Immediate (terminal stream) | ⚠️ File system polling delay |
 
 ## Recommended Approach: Hybrid Strategy
 
@@ -840,6 +898,7 @@ Based on the investigation, the optimal solution is a **hybrid approach** that c
 ### Phase 1: Initial Response (TUI Streaming)
 
 **Use TUI parsing for real-time streaming during active generation:**
+
 - Provides immediate feedback to user
 - Shows streaming responses as they're generated
 - No file system polling overhead
@@ -848,6 +907,7 @@ Based on the investigation, the optimal solution is a **hybrid approach** that c
 ### Phase 2: Final Response (JSONL Verification)
 
 **Use JSONL log files for final verification and metadata extraction:**
+
 - Parse complete message from log file after generation completes
 - Extract structured metadata (model, tokens, tool calls, thinking blocks)
 - Verify TUI parsing accuracy
@@ -857,23 +917,31 @@ Based on the investigation, the optimal solution is a **hybrid approach** that c
 ### Implementation Strategy
 
 **1. Log File Discovery:**
+
 ```typescript
 // Use sessions-index.json to find the current session
-const indexPath = path.join(os.homedir(), '.claude', 'projects', workspacePath, 'sessions-index.json');
-const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-const session = index.entries.find(e => e.sessionId === currentSessionId);
+const indexPath = path.join(
+  os.homedir(),
+  ".claude",
+  "projects",
+  workspacePath,
+  "sessions-index.json"
+);
+const index = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
+const session = index.entries.find((e) => e.sessionId === currentSessionId);
 const logPath = session.fullPath;
 ```
 
 **2. Real-time Log Monitoring:**
+
 ```typescript
 // Watch JSONL file for new lines
 const watcher = fs.watch(logPath, async (eventType) => {
-  if (eventType === 'change') {
+  if (eventType === "change") {
     const newLines = await readNewLines(logPath, lastReadPosition);
     for (const line of newLines) {
       const event = JSON.parse(line);
-      if (event.type === 'assistant') {
+      if (event.type === "assistant") {
         processAssistantMessage(event);
       }
     }
@@ -882,19 +950,20 @@ const watcher = fs.watch(logPath, async (eventType) => {
 ```
 
 **3. Message Extraction:**
+
 ```typescript
 function processAssistantMessage(event: any) {
   const content = event.message.content;
 
   // Extract text content
-  const textBlocks = content.filter(c => c.type === 'text');
-  const fullText = textBlocks.map(b => b.text).join('\n');
+  const textBlocks = content.filter((c) => c.type === "text");
+  const fullText = textBlocks.map((b) => b.text).join("\n");
 
   // Extract thinking blocks
-  const thinkingBlocks = content.filter(c => c.type === 'thinking');
+  const thinkingBlocks = content.filter((c) => c.type === "thinking");
 
   // Extract tool calls
-  const toolCalls = content.filter(c => c.type === 'tool_use');
+  const toolCalls = content.filter((c) => c.type === "tool_use");
 
   // Extract metadata
   const metadata = {
@@ -903,7 +972,7 @@ function processAssistantMessage(event: any) {
     tokens: event.message.usage,
     stopReason: event.message.stop_reason,
     timestamp: event.timestamp,
-    uuid: event.uuid
+    uuid: event.uuid,
   };
 
   return { fullText, thinkingBlocks, toolCalls, metadata };
@@ -911,12 +980,13 @@ function processAssistantMessage(event: any) {
 ```
 
 **4. Completion Detection:**
+
 ```typescript
 // Instead of watching for TUI indicators, watch for final assistant message
 // with non-null stop_reason
 function isResponseComplete(event: any): boolean {
   return (
-    event.type === 'assistant' &&
+    event.type === "assistant" &&
     event.message.stop_reason !== null &&
     event.message.stop_reason !== undefined
   );
@@ -950,6 +1020,7 @@ function isResponseComplete(event: any): boolean {
 ### File System Watching
 
 **Options:**
+
 1. **fs.watch()** - Native Node.js file watching
    - Pros: No dependencies, event-driven
    - Cons: Platform inconsistencies, may miss rapid writes
@@ -969,6 +1040,7 @@ function isResponseComplete(event: any): boolean {
 **Challenge:** JSONL file updates may lag behind TUI output.
 
 **Solution:**
+
 - Use TUI for primary streaming (no lag)
 - Use JSONL for verification after completion detected in TUI
 - Track last read position in JSONL to avoid re-reading
@@ -978,15 +1050,18 @@ function isResponseComplete(event: any): boolean {
 **Challenge:** Must correlate FlightPath execution with Claude session ID.
 
 **Current Approach (TuiStreamProcessor):**
+
 - Waits for TUI to output session ID
 - Parses from terminal output
 
 **JSONL Approach:**
+
 - Session ID is in every log entry
 - Can read from first line of new JSONL file
 - More reliable than TUI parsing
 
 **Recommendation:**
+
 - Continue using TUI for session ID extraction during startup
 - Use JSONL session ID as verification/fallback
 
@@ -995,12 +1070,14 @@ function isResponseComplete(event: any): boolean {
 **Challenge:** Multiple sessions may be active (main + agents).
 
 **JSONL Advantages:**
+
 - Each session has its own file
 - `isSidechain` flag identifies agent sessions
 - `agentId` field for agent tracking
 - Subagent files in session subdirectories
 
 **Implementation:**
+
 - Track active session IDs in FlightPath
 - Monitor multiple JSONL files simultaneously
 - Correlate agent sessions with parent workflow
@@ -1012,12 +1089,14 @@ function isResponseComplete(event: any): boolean {
 **Goal:** Validate JSONL approach without changing user-facing behavior.
 
 **Tasks:**
+
 1. Add JSONL log file monitoring alongside TUI parsing
 2. Compare TUI output with JSONL content
 3. Log discrepancies for analysis
 4. Collect metrics on JSONL reliability
 
 **Success Criteria:**
+
 - JSONL content matches TUI output 99%+ of the time
 - No performance degradation
 - Clean error handling for missing/corrupted logs
@@ -1027,12 +1106,14 @@ function isResponseComplete(event: any): boolean {
 **Goal:** Add features that only JSONL can provide.
 
 **Tasks:**
+
 1. Extract and display token counts from JSONL usage field
 2. Parse and display tool calls as structured data
 3. Extract thinking blocks (if present in future Claude versions)
 4. Show conversation UUIDs for debugging
 
 **Success Criteria:**
+
 - Users see richer metadata in dashboard
 - Token counts are accurate
 - Tool calls are clearly displayed
@@ -1042,12 +1123,14 @@ function isResponseComplete(event: any): boolean {
 **Goal:** Use JSONL as primary source, TUI as fallback.
 
 **Tasks:**
+
 1. Implement file watching for real-time JSONL updates
 2. Stream content from JSONL instead of TUI
 3. Fall back to TUI if JSONL unavailable/delayed
 4. Add user setting to choose mode (TUI/JSONL/Hybrid)
 
 **Success Criteria:**
+
 - Streaming latency comparable to TUI
 - No visual glitches or missing content
 - Smooth fallback when needed
@@ -1057,12 +1140,14 @@ function isResponseComplete(event: any): boolean {
 **Goal:** Reduce dependency on TUI parsing.
 
 **Tasks:**
+
 1. Mark TuiStreamProcessor as deprecated
 2. Move all streaming to JSONL-based approach
 3. Keep minimal TUI parsing for error detection only
 4. Remove complex deduplication/chrome filtering code
 
 **Success Criteria:**
+
 - Code complexity reduced by 50%+
 - Maintenance burden significantly lower
 - Breaking TUI changes don't affect FlightPath
@@ -1082,6 +1167,7 @@ function isResponseComplete(event: any): boolean {
 ### Critical Implications for FlightPath
 
 **TUI parsing can be completely removed:**
+
 - Current approach: 997-line `TuiStreamProcessor.ts` shared across all providers
 - JSONL approach: ~100-200 lines per provider (3 separate parsers)
 - **Net reduction**: ~400-600 lines of code (60-80% reduction)
@@ -1111,12 +1197,14 @@ function isResponseComplete(event: any): boolean {
 ### Recommended Implementation Strategy
 
 **Phase 1: Log-Based Verification (Low Risk)**
+
 - Add JSONL monitoring alongside TUI parsing
 - Compare outputs for accuracy validation
 - Collect metrics on reliability and performance
 - **Success metric**: 99%+ match rate across all providers
 
 **Phase 2: Hybrid Streaming (Medium Risk)**
+
 - Use JSONL as primary source with TUI fallback
 - Implement provider-specific log parsers:
   - `ClaudeLogParser` - Parse Claude JSONL events
@@ -1126,12 +1214,14 @@ function isResponseComplete(event: any): boolean {
 - **Success metric**: Latency comparable to TUI, smooth fallback
 
 **Phase 3: TUI Deprecation (High Risk)**
+
 - Mark `TuiStreamProcessor` as deprecated
 - Move all streaming to JSONL
 - Keep minimal TUI for error detection only
 - **Success metric**: 50%+ code reduction, stable performance
 
 **Phase 4: Metadata Enhancement (Future)**
+
 - Extract thinking blocks (Claude) and reasoning (Codex)
 - Display tool calls as structured data
 - Show rich metadata (tokens, models, timing)
@@ -1141,6 +1231,7 @@ function isResponseComplete(event: any): boolean {
 ### Architecture Changes
 
 **Current Architecture:**
+
 ```
 CliIntegration
   ├── CopilotCliProvider
@@ -1150,6 +1241,7 @@ CliIntegration
 ```
 
 **JSONL Architecture:**
+
 ```
 CliIntegration
   ├── CopilotCliProvider
@@ -1161,6 +1253,7 @@ CliIntegration
 ```
 
 **Shared utilities:**
+
 - `LogFileMonitor` - File watching and line reading (shared)
 - `ILogParser` - Interface for provider-specific parsers
 - Session discovery helpers (provider-specific)
@@ -1193,32 +1286,35 @@ CliIntegration
 
 ### Migration Risks and Mitigations
 
-| Risk | Mitigation |
-|------|-----------|
-| **Log file delays** | Keep TUI as fallback, measure latency in Phase 1 |
-| **Missing log files** | Check file existence before parsing, fail gracefully |
-| **Format changes** | Version detection, backward compatibility |
-| **Copilot format migration** | **Support both old (flat) and new (subdirectory) formats, check subdirs first** |
-| **Session discovery** | Provider-specific discovery strategies, caching |
-| **Multi-event assembly** | State machine for Copilot/Codex event aggregation |
-| **File watching issues** | Fallback to polling on watch failures |
-| **Completion detection changes** | **Use assistant.turn_end when available, fallback to heuristics** |
+| Risk                             | Mitigation                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------- |
+| **Log file delays**              | Keep TUI as fallback, measure latency in Phase 1                                |
+| **Missing log files**            | Check file existence before parsing, fail gracefully                            |
+| **Format changes**               | Version detection, backward compatibility                                       |
+| **Copilot format migration**     | **Support both old (flat) and new (subdirectory) formats, check subdirs first** |
+| **Session discovery**            | Provider-specific discovery strategies, caching                                 |
+| **Multi-event assembly**         | State machine for Copilot/Codex event aggregation                               |
+| **File watching issues**         | Fallback to polling on watch failures                                           |
+| **Completion detection changes** | **Use assistant.turn_end when available, fallback to heuristics**               |
 
 ### Expected Benefits
 
 **Code Quality:**
+
 - 60-80% reduction in CLI parsing code
 - Simpler, more maintainable parsers
 - Provider-specific logic isolated
 - Clear separation of concerns
 
 **Reliability:**
+
 - No TUI format dependencies
 - Structured error handling
 - Complete conversation history
 - Accurate metadata extraction
 
 **Features:**
+
 - Thinking blocks (Claude)
 - Reasoning tracking (Codex)
 - Tool call visualization
@@ -1242,12 +1338,12 @@ export abstract class BaseLogParser {
    * Read new lines from JSONL file since last read
    */
   async readNewLines(filePath: string): Promise<any[]> {
-    const content = await fs.readFile(filePath, 'utf-8');
+    const content = await fs.readFile(filePath, "utf-8");
     const newContent = content.substring(this.lastReadPosition);
     this.lastReadPosition = content.length;
 
-    const lines = newContent.split('\n').filter(line => line.trim());
-    return lines.map(line => JSON.parse(line));
+    const lines = newContent.split("\n").filter((line) => line.trim());
+    return lines.map((line) => JSON.parse(line));
   }
 
   /**
@@ -1255,7 +1351,7 @@ export abstract class BaseLogParser {
    */
   watchLogFile(filePath: string, callback: (entry: any) => void): fs.FSWatcher {
     return fs.watch(filePath, async (eventType) => {
-      if (eventType === 'change') {
+      if (eventType === "change") {
         const newLines = await this.readNewLines(filePath);
         newLines.forEach(callback);
       }
@@ -1297,21 +1393,21 @@ export class ClaudeLogParser extends BaseLogParser {
     // Claude uses single event per response
     const entry = events[0];
 
-    if (entry.type !== 'assistant') {
-      throw new Error('Not an assistant message');
+    if (entry.type !== "assistant") {
+      throw new Error("Not an assistant message");
     }
 
     const content = entry.message.content;
 
     // Extract text blocks
-    const textBlocks = content.filter((c: any) => c.type === 'text');
-    const text = textBlocks.map((b: any) => b.text).join('\n');
+    const textBlocks = content.filter((c: any) => c.type === "text");
+    const text = textBlocks.map((b: any) => b.text).join("\n");
 
     // Extract tool calls
-    const toolCalls = content.filter((c: any) => c.type === 'tool_use');
+    const toolCalls = content.filter((c: any) => c.type === "tool_use");
 
     // Extract thinking blocks
-    const thinkingBlocks = content.filter((c: any) => c.type === 'thinking');
+    const thinkingBlocks = content.filter((c: any) => c.type === "thinking");
 
     // Extract metadata
     const metadata = {
@@ -1321,7 +1417,7 @@ export class ClaudeLogParser extends BaseLogParser {
       stopReason: entry.message.stop_reason,
       timestamp: entry.timestamp,
       uuid: entry.uuid,
-      sessionId: entry.sessionId
+      sessionId: entry.sessionId,
     };
 
     return { text, toolCalls, thinkingBlocks, metadata };
@@ -1332,7 +1428,7 @@ export class ClaudeLogParser extends BaseLogParser {
    */
   isComplete(event: any): boolean {
     return (
-      event.type === 'assistant' &&
+      event.type === "assistant" &&
       event.message?.stop_reason !== null &&
       event.message?.stop_reason !== undefined
     );
@@ -1355,10 +1451,10 @@ export class CopilotLogParser extends BaseLogParser {
    * Checks for new format first (subdirectory), falls back to old format (flat file)
    */
   static async getLogPath(sessionId: string): Promise<string | null> {
-    const baseDir = path.join(os.homedir(), '.copilot', 'session-state');
+    const baseDir = path.join(os.homedir(), ".copilot", "session-state");
 
     // Try new format first (v0.0.384+): <session-id>/events.jsonl
-    const newFormatPath = path.join(baseDir, sessionId, 'events.jsonl');
+    const newFormatPath = path.join(baseDir, sessionId, "events.jsonl");
     if (await fs.pathExists(newFormatPath)) {
       return newFormatPath;
     }
@@ -1383,25 +1479,26 @@ export class CopilotLogParser extends BaseLogParser {
     sessionInfo?: any[];
   } {
     // Aggregate all assistant.message events
-    const assistantEvents = events.filter(e => e.type === 'assistant.message');
+    const assistantEvents = events.filter(
+      (e) => e.type === "assistant.message"
+    );
 
     // Combine text content
     const text = assistantEvents
-      .map(e => e.data.content)
-      .filter(c => c)
-      .join('\n');
+      .map((e) => e.data.content)
+      .filter((c) => c)
+      .join("\n");
 
     // Aggregate tool requests
-    const toolCalls = assistantEvents
-      .flatMap(e => e.data.toolRequests || []);
+    const toolCalls = assistantEvents.flatMap((e) => e.data.toolRequests || []);
 
     // Extract session info (new format only)
     const sessionInfo = events
-      .filter(e => e.type === 'session.info')
-      .map(e => ({
+      .filter((e) => e.type === "session.info")
+      .map((e) => ({
         infoType: e.data.infoType,
         message: e.data.message,
-        timestamp: e.timestamp
+        timestamp: e.timestamp,
       }));
 
     // Extract metadata from first event
@@ -1410,7 +1507,7 @@ export class CopilotLogParser extends BaseLogParser {
       messageId: firstEvent?.data?.messageId,
       timestamp: firstEvent?.timestamp,
       eventId: firstEvent?.id,
-      parentId: firstEvent?.parentId
+      parentId: firstEvent?.parentId,
     };
 
     return { text, toolCalls, metadata, sessionInfo };
@@ -1423,14 +1520,15 @@ export class CopilotLogParser extends BaseLogParser {
    */
   isComplete(event: any): boolean {
     // New format: explicit turn end event
-    if (event.type === 'assistant.turn_end') {
+    if (event.type === "assistant.turn_end") {
       return true;
     }
 
     // Old format fallback: assistant.message with no pending tool requests
     // Note: This is a heuristic and may need tuning
-    return event.type === 'assistant.message' &&
-           !event.data.toolRequests?.length;
+    return (
+      event.type === "assistant.message" && !event.data.toolRequests?.length
+    );
   }
 
   /**
@@ -1471,38 +1569,39 @@ export class CodexLogParser extends BaseLogParser {
     metadata: any;
   } {
     // Filter response_item events
-    const responseItems = events.filter(e => e.type === 'response_item');
+    const responseItems = events.filter((e) => e.type === "response_item");
 
     // Extract text content (role: assistant, type: message)
-    const textEvents = responseItems.filter(e =>
-      e.payload?.type === 'message' &&
-      e.payload?.role === 'assistant'
+    const textEvents = responseItems.filter(
+      (e) => e.payload?.type === "message" && e.payload?.role === "assistant"
     );
     const text = textEvents
-      .map(e => e.payload.content.find((c: any) => c.type === 'input_text')?.text)
+      .map(
+        (e) => e.payload.content.find((c: any) => c.type === "input_text")?.text
+      )
       .filter(Boolean)
-      .join('\n');
+      .join("\n");
 
     // Extract tool calls (type: function_call)
     const toolCalls = responseItems
-      .filter(e => e.payload?.type === 'function_call')
-      .map(e => ({
+      .filter((e) => e.payload?.type === "function_call")
+      .map((e) => ({
         name: e.payload.name,
         arguments: JSON.parse(e.payload.arguments),
-        callId: e.payload.call_id
+        callId: e.payload.call_id,
       }));
 
     // Extract reasoning blocks (type: reasoning)
     const reasoning = responseItems
-      .filter(e => e.payload?.type === 'reasoning')
-      .map(e => ({
+      .filter((e) => e.payload?.type === "reasoning")
+      .map((e) => ({
         summary: e.payload.summary,
         encrypted: e.payload.encrypted_content,
-        timestamp: e.timestamp
+        timestamp: e.timestamp,
       }));
 
     // Extract metadata from turn_context and session_meta
-    const turnContext = events.find(e => e.type === 'turn_context')?.payload;
+    const turnContext = events.find((e) => e.type === "turn_context")?.payload;
     const metadata = {
       sessionId: this.sessionMeta?.id,
       model: turnContext?.model,
@@ -1511,7 +1610,7 @@ export class CodexLogParser extends BaseLogParser {
       approvalPolicy: turnContext?.approval_policy,
       sandboxPolicy: turnContext?.sandbox_policy,
       git: this.sessionMeta?.git,
-      cliVersion: this.sessionMeta?.cli_version
+      cliVersion: this.sessionMeta?.cli_version,
     };
 
     return { text, toolCalls, reasoning, metadata };
@@ -1522,8 +1621,7 @@ export class CodexLogParser extends BaseLogParser {
    */
   isComplete(event: any): boolean {
     return (
-      event.type === 'event_msg' &&
-      event.payload?.type === 'turn.completed'
+      event.type === "event_msg" && event.payload?.type === "turn.completed"
     );
   }
 
@@ -1532,7 +1630,7 @@ export class CodexLogParser extends BaseLogParser {
    */
   processEvent(event: any): any | null {
     // Capture session metadata
-    if (event.type === 'session_meta') {
+    if (event.type === "session_meta") {
       this.sessionMeta = event.payload;
     }
 
@@ -1557,12 +1655,12 @@ let parser: BaseLogParser;
 let logPath: string | null;
 
 switch (provider) {
-  case 'claude':
+  case "claude":
     parser = new ClaudeLogParser();
     logPath = getClaudeLogPath(sessionId); // From sessions-index.json
     break;
 
-  case 'copilot':
+  case "copilot":
     parser = new CopilotLogParser();
     // IMPORTANT: Check for both old and new formats
     logPath = await CopilotLogParser.getLogPath(sessionId);
@@ -1571,7 +1669,7 @@ switch (provider) {
     }
     break;
 
-  case 'codex':
+  case "codex":
     parser = new CodexLogParser();
     logPath = getCodexLogPath(sessionId); // Search date hierarchy
     break;
@@ -1580,22 +1678,22 @@ switch (provider) {
 // Watch log file
 parser.watchLogFile(logPath, (event) => {
   // For Claude: process each event directly
-  if (provider === 'claude' && parser.isComplete(event)) {
+  if (provider === "claude" && parser.isComplete(event)) {
     const response = parser.extractResponse([event]);
-    console.log('Response:', response.text);
-    console.log('Tokens:', response.metadata.usage);
+    console.log("Response:", response.text);
+    console.log("Tokens:", response.metadata.usage);
   }
 
   // For Copilot/Codex: buffer events
-  if (provider !== 'claude') {
+  if (provider !== "claude") {
     const response = (parser as any).processEvent(event);
     if (response) {
-      console.log('Response:', response.text);
-      console.log('Tool calls:', response.toolCalls);
+      console.log("Response:", response.text);
+      console.log("Tool calls:", response.toolCalls);
 
       // Copilot new format: show session info
-      if (provider === 'copilot' && response.sessionInfo?.length) {
-        console.log('Session info:', response.sessionInfo);
+      if (provider === "copilot" && response.sessionInfo?.length) {
+        console.log("Session info:", response.sessionInfo);
       }
     }
   }
@@ -1616,29 +1714,35 @@ async function findCopilotLogPath(sessionId: string): Promise<string | null> {
 /**
  * Discover all Copilot sessions (both formats)
  */
-async function discoverCopilotSessions(): Promise<Array<{sessionId: string, path: string, format: 'old' | 'new'}>> {
-  const baseDir = path.join(os.homedir(), '.copilot', 'session-state');
+async function discoverCopilotSessions(): Promise<
+  Array<{ sessionId: string; path: string; format: "old" | "new" }>
+> {
+  const baseDir = path.join(os.homedir(), ".copilot", "session-state");
   const entries = await fs.readdir(baseDir, { withFileTypes: true });
-  const sessions: Array<{sessionId: string, path: string, format: 'old' | 'new'}> = [];
+  const sessions: Array<{
+    sessionId: string;
+    path: string;
+    format: "old" | "new";
+  }> = [];
 
   for (const entry of entries) {
     if (entry.isDirectory()) {
       // New format: <session-id>/events.jsonl
-      const eventsPath = path.join(baseDir, entry.name, 'events.jsonl');
+      const eventsPath = path.join(baseDir, entry.name, "events.jsonl");
       if (await fs.pathExists(eventsPath)) {
         sessions.push({
           sessionId: entry.name,
           path: eventsPath,
-          format: 'new'
+          format: "new",
         });
       }
-    } else if (entry.name.endsWith('.jsonl')) {
+    } else if (entry.name.endsWith(".jsonl")) {
       // Old format: <session-id>.jsonl
-      const sessionId = entry.name.replace('.jsonl', '');
+      const sessionId = entry.name.replace(".jsonl", "");
       sessions.push({
         sessionId,
         path: path.join(baseDir, entry.name),
-        format: 'old'
+        format: "old",
       });
     }
   }
@@ -1650,16 +1754,19 @@ async function discoverCopilotSessions(): Promise<Array<{sessionId: string, path
 ## References
 
 **CLI Documentation:**
+
 - Claude Code CLI: https://docs.anthropic.com/claude/docs/claude-code
 - GitHub Copilot CLI: https://github.com/github/copilot-cli
 - OpenAI Codex CLI: https://github.com/openai/codex-cli
 
 **Technical Specifications:**
+
 - JSONL Format: https://jsonlines.org/
 - Node.js fs.watch API: https://nodejs.org/api/fs.html#fswatchfilename-options-listener
 - VS Code File System API: https://code.visualstudio.com/api/references/vscode-api#FileSystemWatcher
 
 **Related FlightPath Documentation:**
+
 - Current TUI Implementation: `src/utils/TuiStreamProcessor.ts`
 - CLI Provider Interfaces: `src/flightpath/cli/shared/interfaces/`
 - Response Parsers: `src/flightpath/cli/*/ResponseParser.ts`

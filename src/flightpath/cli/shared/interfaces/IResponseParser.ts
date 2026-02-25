@@ -1,8 +1,5 @@
 import { CliResult } from "../../../../types/CliOutputTypes";
-import {
-  UniversalCliOutput,
-  CliEvent,
-} from "../../../../types/CliOutputTypes";
+import { UniversalCliOutput, CliEvent } from "../../../../types/CliOutputTypes";
 
 /**
  * Response parsing interface
@@ -18,11 +15,7 @@ export interface IResponseParser {
    * @param exitCode Process exit code
    * @returns Structured output with events array and metadata
    */
-  parse(
-    stdout: string,
-    stderr: string,
-    exitCode: number
-  ): UniversalCliOutput;
+  parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput;
 
   /**
    * Process streaming chunk for real-time display

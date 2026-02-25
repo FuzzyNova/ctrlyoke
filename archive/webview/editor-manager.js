@@ -197,9 +197,10 @@
       // When Resume Session is "yes", enable session ID input
       // When Resume Session is "default" or "no", disable session ID input
       elements.propSessionId.disabled = value !== "yes";
-      elements.propSessionId.placeholder = value !== "yes"
-        ? "enable Resume Session to input session ID"
-        : "enter session ID or prompt number";
+      elements.propSessionId.placeholder =
+        value !== "yes"
+          ? "enable Resume Session to input session ID"
+          : "enter session ID or prompt number";
 
       // Clear session ID when Resume Session is disabled
       if (value !== "yes") {
@@ -385,11 +386,14 @@
 
       // Session ID
       const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
-      elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-      elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
-      elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
-        ? "enable Resume Session to input session ID"
-        : "enter session ID or prompt number";
+      elements.propSessionId.value =
+        sessionId !== undefined ? String(sessionId) : "";
+      elements.propSessionId.disabled =
+        elements.propResumeSession.value !== "yes";
+      elements.propSessionId.placeholder =
+        elements.propResumeSession.value !== "yes"
+          ? "enable Resume Session to input session ID"
+          : "enter session ID or prompt number";
 
       const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
       elements.propAllowDynamic.value =
@@ -523,10 +527,12 @@
     elements.propAgent.value = propertyDefaults.AGENT;
     elements.propResumeSession.value = propertyDefaults.RESUME_SESSION;
     elements.propSessionId.value = "";
-    elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
-    elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
-      ? "enable Resume Session to input session ID"
-      : "enter session ID or prompt number";
+    elements.propSessionId.disabled =
+      elements.propResumeSession.value !== "yes";
+    elements.propSessionId.placeholder =
+      elements.propResumeSession.value !== "yes"
+        ? "enable Resume Session to input session ID"
+        : "enter session ID or prompt number";
     elements.propAllowDynamic.value = propertyDefaults.ALLOW_DYNAMIC;
     setEndConditionControls(elements, propertyDefaults, undefined);
   }
@@ -592,11 +598,14 @@
 
     // Session ID
     const sessionId = prompt[PROMPT_PROPERTIES.SESSION_ID];
-    elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-    elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
-    elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
-      ? "enable Resume Session to input session ID"
-      : "enter session ID or prompt number";
+    elements.propSessionId.value =
+      sessionId !== undefined ? String(sessionId) : "";
+    elements.propSessionId.disabled =
+      elements.propResumeSession.value !== "yes";
+    elements.propSessionId.placeholder =
+      elements.propResumeSession.value !== "yes"
+        ? "enable Resume Session to input session ID"
+        : "enter session ID or prompt number";
 
     const allowDynamic = prompt[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
     elements.propAllowDynamic.value =
@@ -956,11 +965,14 @@
                 : "no";
 
           const sessionId = props[PROMPT_PROPERTIES.SESSION_ID];
-          elements.propSessionId.value = sessionId !== undefined ? String(sessionId) : "";
-          elements.propSessionId.disabled = elements.propResumeSession.value !== "yes";
-          elements.propSessionId.placeholder = elements.propResumeSession.value !== "yes"
-            ? "enable Resume Session to input session ID"
-            : "enter session ID or prompt number";
+          elements.propSessionId.value =
+            sessionId !== undefined ? String(sessionId) : "";
+          elements.propSessionId.disabled =
+            elements.propResumeSession.value !== "yes";
+          elements.propSessionId.placeholder =
+            elements.propResumeSession.value !== "yes"
+              ? "enable Resume Session to input session ID"
+              : "enter session ID or prompt number";
 
           const allowDynamic = props[PROMPT_PROPERTIES.ALLOW_DYNAMIC_EXTENSION];
           elements.propAllowDynamic.value =

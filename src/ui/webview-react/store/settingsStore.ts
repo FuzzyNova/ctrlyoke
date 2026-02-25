@@ -165,10 +165,22 @@ const initialGlobalSettings: GlobalSettings = {
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
-  [HARNESS_IDS.COPILOT_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
-  [HARNESS_IDS.COPILOT_CHAT]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
-  [HARNESS_IDS.CLAUDE_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
-  [HARNESS_IDS.CODEX_CLI]: { available: false, status: HARNESS_STATUS_STRINGS.CHECKING },
+  [HARNESS_IDS.COPILOT_CLI]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
+  [HARNESS_IDS.COPILOT_CHAT]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
+  [HARNESS_IDS.CLAUDE_CLI]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
+  [HARNESS_IDS.CODEX_CLI]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
 };
 
 const initialState: SettingsState = {

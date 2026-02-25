@@ -576,7 +576,11 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public notifyRunHistoryUpdated(runCount: number, runTimestamps?: (number | undefined)[], runStates?: (string | undefined)[]): void {
+  public notifyRunHistoryUpdated(
+    runCount: number,
+    runTimestamps?: (number | undefined)[],
+    runStates?: (string | undefined)[]
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.RUN_HISTORY_UPDATED,
       runCount,
@@ -757,7 +761,8 @@ window.vscodeApi = acquireVsCodeApi();
     try {
       const workflowId =
         this.outputHistoryManager.extractWorkflowId(workingFilePath);
-      const runs = await this.outputHistoryManager.getRunsForWorkflow(workflowId);
+      const runs =
+        await this.outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {
         return;
       }
@@ -772,7 +777,9 @@ window.vscodeApi = acquireVsCodeApi();
         this.outputHistoryManager.getRunTimestamps(workflowId),
         this.outputHistoryManager.getRunStates(workflowId),
       ]);
-      Log.info(`[FlightPathWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`);
+      Log.info(
+        `[FlightPathWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
+      );
 
       this.postMessage({
         type: MESSAGE_TYPES.OUTPUT_HISTORY_LOADED,
@@ -793,7 +800,10 @@ window.vscodeApi = acquireVsCodeApi();
    * authoritative retry-based check overrides the quick no-retry check that
    * runs during construction.
    */
-  public notifyHarnessAvailability(harnessId: string, available: boolean): void {
+  public notifyHarnessAvailability(
+    harnessId: string,
+    available: boolean
+  ): void {
     this.harnessStatus[harnessId] = {
       available,
       status: available
@@ -1376,7 +1386,10 @@ window.vscodeApi = acquireVsCodeApi();
 
           // expanded = "<attachment ...>...</attachment>\n\n<rawRef>"
           // Extract only the attachment content (everything before "\n\n<rawRef>")
-          const attachmentContent = expanded.slice(0, expanded.lastIndexOf(`\n\n${rawRef}`));
+          const attachmentContent = expanded.slice(
+            0,
+            expanded.lastIndexOf(`\n\n${rawRef}`)
+          );
           counts[rawRef] = encode(attachmentContent).length;
         } catch (error) {
           Log.warn(`Failed to count tokens for reference "${rawRef}":`, error);
@@ -1634,7 +1647,8 @@ window.vscodeApi = acquireVsCodeApi();
       // Read available runs directly from disk — single source of truth
       const workflowId =
         this.outputHistoryManager.extractWorkflowId(workingFilePath);
-      const runs = await this.outputHistoryManager.getRunsForWorkflow(workflowId);
+      const runs =
+        await this.outputHistoryManager.getRunsForWorkflow(workflowId);
       if (!runs.length) {
         return;
       }
@@ -1906,4 +1920,3 @@ window.vscodeApi = acquireVsCodeApi();
     }
   }
 }
-

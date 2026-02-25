@@ -6,9 +6,9 @@ import { EXECUTION_STATES } from "../../types/messages";
 
 export interface RunSelectorProps {
   availableRuns: number;
-  currentRunIndex: number;    // 0 = newest
+  currentRunIndex: number; // 0 = newest
   isViewingHistory: boolean;
-  isLiveRunActive: boolean;   // whether a workflow is currently executing
+  isLiveRunActive: boolean; // whether a workflow is currently executing
   onSelectRun: (runIndex: number) => void;
   onBackToLive: () => void;
   /** startedAt timestamps for each run, index 0 = most recent. Optional. */
@@ -41,7 +41,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   // Get current execution state from the live workflow
   const { executionState } = useWorkflowStore();
 
@@ -62,7 +62,8 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
@@ -85,14 +86,11 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
     [isLiveRunActive, onSelectRun, onBackToLive]
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setIsOpen(false);
-      }
-    },
-    []
-  );
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setIsOpen(false);
+    }
+  }, []);
 
   return (
     <div
@@ -145,7 +143,11 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
             bg-dropdown-bg
             border border-dropdown-border
             rounded shadow-lg z-50 overflow-y-auto overflow-x-hidden py-0.5"
-          style={{ maxHeight: "var(--run-selector-max-h, 160px)", minWidth: "160px", maxWidth: "320px" }}
+          style={{
+            maxHeight: "var(--run-selector-max-h, 160px)",
+            minWidth: "160px",
+            maxWidth: "320px",
+          }}
         >
           {Array.from({ length: availableRuns }, (_, i) => {
             // i=0 is most recent, i=1 is second most recent, etc.
@@ -153,7 +155,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
             const isLiveRun = i === 0 && isLiveRunActive;
             const isSelected = i === currentRunIndex;
             const timeAgo = formatRelativeTimeVerbose(runTimestamps?.[i]);
-            
+
             // For the live run (index 0), show the current execution state from the store
             // if it's not actively running. This ensures completed/error states show correctly.
             // For actively running workflows, show "running".
@@ -161,9 +163,10 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
             let runState: string | undefined;
             if (i === 0) {
               // Most recent run - use live execution state
-              runState = executionState === EXECUTION_STATES.IDLE 
-                ? runStates?.[i]  // If idle with no workflow, use stored state
-                : executionState;  // Otherwise use current live state (running/completed/error)
+              runState =
+                executionState === EXECUTION_STATES.IDLE
+                  ? runStates?.[i] // If idle with no workflow, use stored state
+                  : executionState; // Otherwise use current live state (running/completed/error)
             } else {
               // Historical run - use stored state
               runState = runStates?.[i];

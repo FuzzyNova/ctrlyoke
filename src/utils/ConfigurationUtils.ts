@@ -547,5 +547,4 @@ export const ConfigurationUtils = {
   getMaxHistoryRuns(): number {
     return getConfig().get<number>("maxHistoryRuns", -1)!;
   },
-
 };

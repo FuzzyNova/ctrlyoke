@@ -42,7 +42,8 @@ function ensureGlobalListener(): void {
 
   window.addEventListener("message", (event: MessageEvent) => {
     const message = event.data;
-    if (message?.type !== MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE) return;
+    if (message?.type !== MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE)
+      return;
 
     const counts: Record<string, number> = message.counts ?? {};
     let changed = false;

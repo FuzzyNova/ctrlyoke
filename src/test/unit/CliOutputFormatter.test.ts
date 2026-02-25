@@ -550,8 +550,14 @@ suite("CliOutputFormatter Tests", () => {
       assert.strictEqual(result.events.length, 2);
       assert.strictEqual(result.events[0].type, CLI_EVENT_TYPES.THINKING);
       assert.strictEqual(result.events[1].type, CLI_EVENT_TYPES.THINKING);
-      assert.strictEqual((result.events[0].data as ThinkingBlock).text, "First thought");
-      assert.strictEqual((result.events[1].data as ThinkingBlock).text, "Second thought");
+      assert.strictEqual(
+        (result.events[0].data as ThinkingBlock).text,
+        "First thought"
+      );
+      assert.strictEqual(
+        (result.events[1].data as ThinkingBlock).text,
+        "Second thought"
+      );
     });
 
     test("last metadata wins", () => {

@@ -11,15 +11,18 @@ This document provides a comprehensive schema reference for GitHub Copilot CLI l
 ### File Location
 
 **CLI v0.0.384+** (Directory-based Sessions):
+
 ```
 ~/.copilot/session-state/<session-id>/events.jsonl
 ```
 
 Each session creates a dedicated directory containing:
+
 - `events.jsonl` - All session events in JSONL format
 - Other session-related files (if applicable)
 
 **Example Path**:
+
 ```
 C:\Users\<username>\.copilot\session-state\6e2ec013-11bd-4862-ab32-c5b4d5a71131\events.jsonl
 ```
@@ -35,18 +38,18 @@ C:\Users\<username>\.copilot\session-state\6e2ec013-11bd-4862-ab32-c5b4d5a71131\
 
 Based on analysis of a real session with 227 events:
 
-| Event Type | Count | Description |
-|------------|-------|-------------|
-| `tool.execution_start` | 46 | Tool call initiated |
-| `tool.execution_complete` | 46 | Tool call completed |
-| `assistant.message` | 42 | Assistant response with content/tool requests |
-| `assistant.turn_start` | 38 | Assistant turn begins |
-| `assistant.turn_end` | 38 | Assistant turn completes |
-| `assistant.reasoning` | 10 | Extended reasoning (when model uses chain-of-thought) |
-| `user.message` | 3 | User input message |
-| `session.info` | 2 | Session information (auth, MCP connections) |
-| `session.start` | 1 | Session initialization |
-| `session.error` | 1 | Session-level error |
+| Event Type                | Count | Description                                           |
+| ------------------------- | ----- | ----------------------------------------------------- |
+| `tool.execution_start`    | 46    | Tool call initiated                                   |
+| `tool.execution_complete` | 46    | Tool call completed                                   |
+| `assistant.message`       | 42    | Assistant response with content/tool requests         |
+| `assistant.turn_start`    | 38    | Assistant turn begins                                 |
+| `assistant.turn_end`      | 38    | Assistant turn completes                              |
+| `assistant.reasoning`     | 10    | Extended reasoning (when model uses chain-of-thought) |
+| `user.message`            | 3     | User input message                                    |
+| `session.info`            | 2     | Session information (auth, MCP connections)           |
+| `session.start`           | 1     | Session initialization                                |
+| `session.error`           | 1     | Session-level error                                   |
 
 ## Common Event Structure
 
@@ -54,10 +57,10 @@ Based on analysis of a real session with 227 events:
 
 ```typescript
 interface BaseEvent {
-  type: string;           // Event type identifier
-  data: object;           // Event-specific data payload
-  id: string;             // Unique UUID for this event
-  timestamp: string;      // ISO 8601 timestamp (e.g., "2026-01-19T01:36:05.198Z")
+  type: string; // Event type identifier
+  data: object; // Event-specific data payload
+  id: string; // Unique UUID for this event
+  timestamp: string; // ISO 8601 timestamp (e.g., "2026-01-19T01:36:05.198Z")
   parentId: string | null; // UUID of parent event (null for root events)
 }
 ```
@@ -81,6 +84,7 @@ session.start (parentId: null)
 ```
 
 **Key Relationships:**
+
 - Root event (`session.start`) has `parentId: null`
 - Each `assistant.turn_start` → `assistant.message` → `tool.execution_start` forms a chain
 - `tool.execution_complete` always references its `tool.execution_start` as parent
@@ -97,22 +101,24 @@ session.start (parentId: null)
 **Frequency**: 1 per session (always first event)
 
 **Fields**:
+
 ```typescript
 interface SessionStartEvent extends BaseEvent {
   type: "session.start";
   data: {
-    sessionId: string;       // UUID matching directory name
-    version: number;         // Log format version (1)
-    producer: string;        // "copilot-agent"
-    copilotVersion: string;  // CLI version (e.g., "0.0.384")
-    startTime: string;       // ISO 8601 timestamp
-    selectedModel: string;   // Model identifier (e.g., "gpt-5-mini")
+    sessionId: string; // UUID matching directory name
+    version: number; // Log format version (1)
+    producer: string; // "copilot-agent"
+    copilotVersion: string; // CLI version (e.g., "0.0.384")
+    startTime: string; // ISO 8601 timestamp
+    selectedModel: string; // Model identifier (e.g., "gpt-5-mini")
   };
-  parentId: null;            // Always null (root event)
+  parentId: null; // Always null (root event)
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "session.start",
@@ -139,24 +145,27 @@ interface SessionStartEvent extends BaseEvent {
 **Frequency**: 1-10 per session (varies by configuration)
 
 **Fields**:
+
 ```typescript
 interface SessionInfoEvent extends BaseEvent {
   type: "session.info";
   data: {
     infoType: "authentication" | "mcp" | string; // Category of info
-    message: string;                              // Human-readable message
+    message: string; // Human-readable message
   };
-  parentId: string;  // References previous session.info or session.start
+  parentId: string; // References previous session.info or session.start
 }
 ```
 
 **Known `infoType` Values**:
+
 - `"authentication"` - User authentication status
 - `"mcp"` - MCP (Model Context Protocol) server connections
 
 **Examples**:
 
 **Authentication Info**:
+
 ```json
 {
   "type": "session.info",
@@ -171,6 +180,7 @@ interface SessionInfoEvent extends BaseEvent {
 ```
 
 **MCP Connection Info**:
+
 ```json
 {
   "type": "session.info",
@@ -193,26 +203,29 @@ interface SessionInfoEvent extends BaseEvent {
 **Frequency**: 1+ per session (varies by conversation length)
 
 **Fields**:
+
 ```typescript
 interface UserMessageEvent extends BaseEvent {
   type: "user.message";
   data: {
-    content: string;           // Original user input
+    content: string; // Original user input
     transformedContent: string; // Content with <current_datetime> prepended
-    attachments: Array<{       // File attachments (from @file mentions)
+    attachments: Array<{
+      // File attachments (from @file mentions)
       type: "file";
-      path: string;            // Absolute file path
-      displayName: string;     // Mention syntax (e.g., "@.flightpath\\temp\\file.md,")
-      mentionIndex: number;    // Character position in content
+      path: string; // Absolute file path
+      displayName: string; // Mention syntax (e.g., "@.flightpath\\temp\\file.md,")
+      mentionIndex: number; // Character position in content
     }>;
   };
-  parentId: string;  // Usually references previous assistant.turn_end or session.info
+  parentId: string; // Usually references previous assistant.turn_end or session.info
 }
 ```
 
 **Examples**:
 
 **With File Attachments**:
+
 ```json
 {
   "type": "user.message",
@@ -235,6 +248,7 @@ interface UserMessageEvent extends BaseEvent {
 ```
 
 **Without Attachments**:
+
 ```json
 {
   "type": "user.message",
@@ -250,6 +264,7 @@ interface UserMessageEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - `transformedContent` always includes `<current_datetime>` tag at start
 - Empty `attachments: []` when no files mentioned
 - `displayName` includes trailing comma when multiple files mentioned
@@ -263,17 +278,19 @@ interface UserMessageEvent extends BaseEvent {
 **Frequency**: 1 per assistant response (pairs with `assistant.turn_end`)
 
 **Fields**:
+
 ```typescript
 interface AssistantTurnStartEvent extends BaseEvent {
   type: "assistant.turn_start";
   data: {
-    turnId: string;  // Sequential turn number ("0", "1", "2", ...)
+    turnId: string; // Sequential turn number ("0", "1", "2", ...)
   };
-  parentId: string;  // References user.message or previous assistant.turn_end
+  parentId: string; // References user.message or previous assistant.turn_end
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "assistant.turn_start",
@@ -287,6 +304,7 @@ interface AssistantTurnStartEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - `turnId` is string-formatted number starting at "0"
 - Turn counter increments with each assistant response
 - Always followed by `assistant.message` event
@@ -300,25 +318,28 @@ interface AssistantTurnStartEvent extends BaseEvent {
 **Frequency**: 1+ per turn (may be multiple if streaming)
 
 **Fields**:
+
 ```typescript
 interface AssistantMessageEvent extends BaseEvent {
   type: "assistant.message";
   data: {
-    messageId: string;       // Unique message UUID
-    content: string;         // Text response (empty if only tool calls)
-    toolRequests?: Array<{   // Tool calls requested (optional)
-      toolCallId: string;    // Unique call identifier
-      name: string;          // Tool name (e.g., "view", "grep", "report_intent")
-      arguments: object;     // Tool-specific arguments
+    messageId: string; // Unique message UUID
+    content: string; // Text response (empty if only tool calls)
+    toolRequests?: Array<{
+      // Tool calls requested (optional)
+      toolCallId: string; // Unique call identifier
+      name: string; // Tool name (e.g., "view", "grep", "report_intent")
+      arguments: object; // Tool-specific arguments
     }>;
   };
-  parentId: string;  // References assistant.turn_start or assistant.reasoning
+  parentId: string; // References assistant.turn_start or assistant.reasoning
 }
 ```
 
 **Examples**:
 
 **Tool Calls Only (Empty Content)**:
+
 ```json
 {
   "type": "assistant.message",
@@ -342,6 +363,7 @@ interface AssistantMessageEvent extends BaseEvent {
 ```
 
 **Multiple Tool Calls**:
+
 ```json
 {
   "type": "assistant.message",
@@ -372,6 +394,7 @@ interface AssistantMessageEvent extends BaseEvent {
 ```
 
 **With Content and Tool Calls**:
+
 ```json
 {
   "type": "assistant.message",
@@ -396,6 +419,7 @@ interface AssistantMessageEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - `content` may be empty string when only tool calls present
 - `toolRequests` may be omitted if no tools called
 - Each tool request spawns `tool.execution_start` → `tool.execution_complete` events
@@ -409,18 +433,20 @@ interface AssistantMessageEvent extends BaseEvent {
 **Frequency**: 0-10+ per session (only when model performs extended thinking)
 
 **Fields**:
+
 ```typescript
 interface AssistantReasoningEvent extends BaseEvent {
   type: "assistant.reasoning";
   data: {
-    reasoningId: string;  // Unique reasoning block UUID
-    content: string;      // Markdown-formatted reasoning text
+    reasoningId: string; // Unique reasoning block UUID
+    content: string; // Markdown-formatted reasoning text
   };
-  parentId: string;  // References assistant.message
+  parentId: string; // References assistant.message
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "assistant.reasoning",
@@ -435,6 +461,7 @@ interface AssistantReasoningEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - Content is markdown-formatted with `**Headers**` and `\n\n` paragraph breaks
 - Not present in all sessions (depends on model behavior)
 - Typically appears before tool calls in complex reasoning scenarios
@@ -448,21 +475,23 @@ interface AssistantReasoningEvent extends BaseEvent {
 **Frequency**: 1 per tool call (pairs with `tool.execution_complete`)
 
 **Fields**:
+
 ```typescript
 interface ToolExecutionStartEvent extends BaseEvent {
   type: "tool.execution_start";
   data: {
-    toolCallId: string;  // Matches toolCallId from assistant.message
-    toolName: string;    // Tool identifier
-    arguments: object;   // Tool-specific arguments
+    toolCallId: string; // Matches toolCallId from assistant.message
+    toolName: string; // Tool identifier
+    arguments: object; // Tool-specific arguments
   };
-  parentId: string;  // References assistant.message or previous tool.execution_start
+  parentId: string; // References assistant.message or previous tool.execution_start
 }
 ```
 
 **Examples**:
 
 **Simple Tool (report_intent)**:
+
 ```json
 {
   "type": "tool.execution_start",
@@ -480,6 +509,7 @@ interface ToolExecutionStartEvent extends BaseEvent {
 ```
 
 **File Tool (view)**:
+
 ```json
 {
   "type": "tool.execution_start",
@@ -497,6 +527,7 @@ interface ToolExecutionStartEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - When multiple tools called, `parentId` forms a chain (tool1 → tool2 → tool3)
 - `toolCallId` links back to `assistant.message.toolRequests[].toolCallId`
 
@@ -509,17 +540,20 @@ interface ToolExecutionStartEvent extends BaseEvent {
 **Frequency**: 1 per tool call (pairs with `tool.execution_start`)
 
 **Fields**:
+
 ```typescript
 interface ToolExecutionCompleteEvent extends BaseEvent {
   type: "tool.execution_complete";
   data: {
-    toolCallId: string;     // Matches tool.execution_start.toolCallId
-    success: boolean;       // true if tool succeeded
+    toolCallId: string; // Matches tool.execution_start.toolCallId
+    success: boolean; // true if tool succeeded
     result: {
-      content: string;      // Tool output (text, JSON, or error message)
+      content: string; // Tool output (text, JSON, or error message)
     };
-    toolTelemetry: {        // Telemetry metadata (may be empty object)
-      properties?: {        // Tool-specific metadata
+    toolTelemetry: {
+      // Telemetry metadata (may be empty object)
+      properties?: {
+        // Tool-specific metadata
         command?: string;
         options?: string;
         inputs?: string;
@@ -529,21 +563,23 @@ interface ToolExecutionCompleteEvent extends BaseEvent {
         largeOutputOriginalSizeBytes?: string;
         // ... other tool-specific properties
       };
-      metrics?: {           // Performance metrics
+      metrics?: {
+        // Performance metrics
         resultLength?: number;
         resultForLlmLength?: number;
         responseTokenLimit?: number;
       };
-      restrictedProperties?: object;  // Always empty object in examples
+      restrictedProperties?: object; // Always empty object in examples
     };
   };
-  parentId: string;  // References corresponding tool.execution_start
+  parentId: string; // References corresponding tool.execution_start
 }
 ```
 
 **Examples**:
 
 **Simple Success (Empty Telemetry)**:
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -562,6 +598,7 @@ interface ToolExecutionCompleteEvent extends BaseEvent {
 ```
 
 **With Rich Telemetry (view tool)**:
+
 ```json
 {
   "type": "tool.execution_complete",
@@ -597,6 +634,7 @@ interface ToolExecutionCompleteEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - `success: true` for successful execution, `success: false` for errors
 - `toolTelemetry` structure varies by tool (may be empty object `{}`)
 - `properties` keys are tool-specific (not standardized)
@@ -611,17 +649,19 @@ interface ToolExecutionCompleteEvent extends BaseEvent {
 **Frequency**: 1 per assistant response (pairs with `assistant.turn_start`)
 
 **Fields**:
+
 ```typescript
 interface AssistantTurnEndEvent extends BaseEvent {
   type: "assistant.turn_end";
   data: {
-    turnId: string;  // Matches corresponding assistant.turn_start.turnId
+    turnId: string; // Matches corresponding assistant.turn_start.turnId
   };
-  parentId: string;  // References last event in turn (usually tool.execution_complete)
+  parentId: string; // References last event in turn (usually tool.execution_complete)
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "assistant.turn_end",
@@ -635,6 +675,7 @@ interface AssistantTurnEndEvent extends BaseEvent {
 ```
 
 **Notes**:
+
 - `turnId` matches the corresponding `assistant.turn_start` event
 - `parentId` typically references the last `tool.execution_complete` in the turn
 - Next event is usually `assistant.turn_start` (new turn) or `user.message`
@@ -648,19 +689,21 @@ interface AssistantTurnEndEvent extends BaseEvent {
 **Frequency**: 0-1+ per session (only when errors occur)
 
 **Fields**:
+
 ```typescript
 interface SessionErrorEvent extends BaseEvent {
   type: "session.error";
   data: {
-    errorType: "model_call" | string;  // Error category
-    message: string;                    // Human-readable error message
-    stack?: string;                     // Stack trace (optional)
+    errorType: "model_call" | string; // Error category
+    message: string; // Human-readable error message
+    stack?: string; // Stack trace (optional)
   };
-  parentId: string;  // References event that triggered error
+  parentId: string; // References event that triggered error
 }
 ```
 
 **Example**:
+
 ```json
 {
   "type": "session.error",
@@ -676,9 +719,11 @@ interface SessionErrorEvent extends BaseEvent {
 ```
 
 **Known `errorType` Values**:
+
 - `"model_call"` - Model API call failed
 
 **Notes**:
+
 - May include `stack` field with JavaScript stack trace
 - `message` may include request ID for debugging
 - Session continues after error (not fatal)
@@ -694,8 +739,8 @@ interface SessionErrorEvent extends BaseEvent {
 interface BaseEvent {
   type: string;
   data: object;
-  id: string;           // UUID
-  timestamp: string;    // ISO 8601
+  id: string; // UUID
+  timestamp: string; // ISO 8601
   parentId: string | null;
 }
 
@@ -869,11 +914,13 @@ type CopilotLogEvent =
 ### CLI v0.0.384+ (Current)
 
 **Directory-based sessions**:
+
 - Each session in separate directory: `~/.copilot/session-state/<session-id>/`
 - Log file: `events.jsonl`
 - Format: JSONL (one event per line)
 
 **Session ID Format**:
+
 - UUID v4 format (e.g., `6e2ec013-11bd-4862-ab32-c5b4d5a71131`)
 - Matches directory name
 - Logged in `session.start.data.sessionId`
@@ -881,12 +928,14 @@ type CopilotLogEvent =
 ### CLI v0.0.377 and Earlier (Legacy)
 
 **Flat file format**:
+
 - Single log file for all sessions: `~/.copilot/logs/copilot.log`
 - Mixed format (not pure JSONL)
 - Session IDs only at DEBUG level
 - Harder to parse and isolate sessions
 
 **Migration Notes**:
+
 - Session resumption requires directory-based format (v0.0.384+)
 - Older sessions cannot be reliably resumed without session ID
 - FlightPath requires CLI v0.0.384+ for session continuity
@@ -900,9 +949,13 @@ type CopilotLogEvent =
 Wait for `assistant.turn_end` event with matching `turnId`:
 
 ```typescript
-function isResponseComplete(turnId: string, events: CopilotLogEvent[]): boolean {
+function isResponseComplete(
+  turnId: string,
+  events: CopilotLogEvent[]
+): boolean {
   return events.some(
-    event => event.type === "assistant.turn_end" && event.data.turnId === turnId
+    (event) =>
+      event.type === "assistant.turn_end" && event.data.turnId === turnId
   );
 }
 ```
@@ -917,10 +970,10 @@ function areToolsComplete(
   events: CopilotLogEvent[]
 ): boolean {
   const completedIds = events
-    .filter(e => e.type === "tool.execution_complete")
-    .map(e => (e as ToolExecutionCompleteEvent).data.toolCallId);
+    .filter((e) => e.type === "tool.execution_complete")
+    .map((e) => (e as ToolExecutionCompleteEvent).data.toolCallId);
 
-  return toolRequests.every(req => completedIds.includes(req.toolCallId));
+  return toolRequests.every((req) => completedIds.includes(req.toolCallId));
 }
 ```
 
@@ -928,7 +981,7 @@ function areToolsComplete(
 
 ```typescript
 function hasSessionError(events: CopilotLogEvent[]): boolean {
-  return events.some(e => e.type === "session.error");
+  return events.some((e) => e.type === "session.error");
 }
 ```
 
@@ -995,7 +1048,7 @@ async function parseLogStream(filePath: string): Promise<CopilotLogEvent[]> {
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({
     input: fileStream,
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
@@ -1025,13 +1078,13 @@ function buildEventTree(events: CopilotLogEvent[]): EventNode {
   const eventMap = new Map<string, EventNode>();
 
   // Create nodes
-  events.forEach(event => {
+  events.forEach((event) => {
     eventMap.set(event.id, { event, children: [] });
   });
 
   // Build tree
   let root: EventNode | undefined;
-  events.forEach(event => {
+  events.forEach((event) => {
     const node = eventMap.get(event.id)!;
     if (event.parentId === null) {
       root = node;
@@ -1051,7 +1104,9 @@ function buildEventTree(events: CopilotLogEvent[]): EventNode {
 
 ```typescript
 function extractSessionId(events: CopilotLogEvent[]): string | null {
-  const startEvent = events.find(e => e.type === "session.start") as SessionStartEvent;
+  const startEvent = events.find(
+    (e) => e.type === "session.start"
+  ) as SessionStartEvent;
   return startEvent?.data.sessionId ?? null;
 }
 ```
@@ -1059,15 +1114,20 @@ function extractSessionId(events: CopilotLogEvent[]): string | null {
 ### 4. Turn Isolation
 
 ```typescript
-function extractTurn(turnId: string, events: CopilotLogEvent[]): CopilotLogEvent[] {
+function extractTurn(
+  turnId: string,
+  events: CopilotLogEvent[]
+): CopilotLogEvent[] {
   const startIdx = events.findIndex(
-    e => e.type === "assistant.turn_start" &&
-         (e as AssistantTurnStartEvent).data.turnId === turnId
+    (e) =>
+      e.type === "assistant.turn_start" &&
+      (e as AssistantTurnStartEvent).data.turnId === turnId
   );
 
   const endIdx = events.findIndex(
-    e => e.type === "assistant.turn_end" &&
-         (e as AssistantTurnEndEvent).data.turnId === turnId
+    (e) =>
+      e.type === "assistant.turn_end" &&
+      (e as AssistantTurnEndEvent).data.turnId === turnId
   );
 
   if (startIdx === -1 || endIdx === -1) {
@@ -1108,9 +1168,9 @@ Tool telemetry may include token counts:
 ```typescript
 interface ToolTelemetry {
   metrics?: {
-    resultLength?: number;        // Character count
-    resultForLlmLength?: number;  // Tokens sent to LLM
-    responseTokenLimit?: number;  // Max response tokens
+    resultLength?: number; // Character count
+    resultForLlmLength?: number; // Tokens sent to LLM
+    responseTokenLimit?: number; // Max response tokens
   };
 }
 ```
@@ -1120,6 +1180,7 @@ Use for tracking usage and optimizing prompts.
 ### Error Handling
 
 Check for:
+
 - `session.error` events → Abort workflow
 - `tool.execution_complete` with `success: false` → Retry or skip
 - Missing `assistant.turn_end` after timeout → Inactivity timeout
@@ -1129,6 +1190,7 @@ Check for:
 ## Changelog
 
 ### 2026-01-28
+
 - Initial schema documentation
 - Based on CLI v0.0.384 analysis
 - 9 event types documented
@@ -1159,7 +1221,7 @@ enum CopilotEventType {
   ASSISTANT_REASONING = "assistant.reasoning",
   TOOL_EXECUTION_START = "tool.execution_start",
   TOOL_EXECUTION_COMPLETE = "tool.execution_complete",
-  ASSISTANT_TURN_END = "assistant.turn_end"
+  ASSISTANT_TURN_END = "assistant.turn_end",
 }
 ```
 

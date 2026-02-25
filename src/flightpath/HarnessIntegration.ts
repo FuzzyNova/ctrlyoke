@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem, PromptFile } from "../types/FlightPathTypes";
-import { CliResult, UniversalCliOutput, CliEvent } from "../types/CliOutputTypes";
+import {
+  CliResult,
+  UniversalCliOutput,
+  CliEvent,
+} from "../types/CliOutputTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";

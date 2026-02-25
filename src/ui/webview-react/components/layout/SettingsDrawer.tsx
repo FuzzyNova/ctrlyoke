@@ -273,7 +273,6 @@ export const SettingsPanel: React.FC<{
   // Session ID input state
   const [sessionIdInput, setSessionIdInput] = useState("");
 
-
   // Sync sessionIdInput with store changes
   useEffect(() => {
     const sessionId = workflowProperties.sessionId;
@@ -591,7 +590,7 @@ export const SettingsPanel: React.FC<{
             Settings
           </span>
         </div>
-<button
+        <button
           onClick={(e) => {
             e.stopPropagation();
             handleOpenSettings();
@@ -651,7 +650,10 @@ export const SettingsPanel: React.FC<{
               options={
                 currentHarnessModels.length === 0
                   ? [{ value: "", label: "Loading models...", disabled: true }]
-                  : currentHarnessModels.map((m) => ({ value: m.value, label: m.label }))
+                  : currentHarnessModels.map((m) => ({
+                      value: m.value,
+                      label: m.label,
+                    }))
               }
             />
           </FormField>

@@ -797,7 +797,9 @@
       const stateClass = `state-${workflow.executionState.toLowerCase()}`;
 
       // Format relative time for last modified timestamp
-      const timeAgo = formatRelativeTime(workflow.lastModifiedAt || workflow.startedAt);
+      const timeAgo = formatRelativeTime(
+        workflow.lastModifiedAt || workflow.startedAt
+      );
 
       const item = document.createElement("button");
       item.className = `workflow-menu-item ${isCurrent ? "current" : ""}`;

@@ -90,7 +90,13 @@ export const OutputSection: React.FC = () => {
       cliOutputs: cliOutputs[i] ?? [],
       statusMessages: statusMessages[i] ?? [],
     }));
-  }, [isViewingHistory, historyOutputs, totalSteps, cliOutputs, statusMessages]);
+  }, [
+    isViewingHistory,
+    historyOutputs,
+    totalSteps,
+    cliOutputs,
+    statusMessages,
+  ]);
 
   // Build chronologically sorted list of all messages
   const allMessages = useMemo((): OutputMessage[] => {
@@ -147,7 +153,8 @@ export const OutputSection: React.FC = () => {
     const el = outputRef.current;
     if (!el) return;
     const atBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_BOTTOM_THRESHOLD;
+      el.scrollHeight - el.scrollTop - el.clientHeight <=
+      SCROLL_BOTTOM_THRESHOLD;
     autoscrollEnabled.current = atBottom;
   }, []);
 
@@ -277,10 +284,11 @@ export const OutputSection: React.FC = () => {
         {isViewingHistory && historyOutputs && (
           <div className="px-3 py-2 text-[11px] text-description-fg bg-editor-bg border-b border-widget-border flex items-center justify-between flex-shrink-0">
             <span>
-              Run {historyOutputs.runMetadata.runId}{" "}
-              &middot;{" "}
+              Run {historyOutputs.runMetadata.runId} &middot;{" "}
               {new Date(historyOutputs.runMetadata.startedAt).toLocaleString()}
-              {historyOutputs.runMetadata.completedAt ? " \u2713" : " (incomplete)"}
+              {historyOutputs.runMetadata.completedAt
+                ? " \u2713"
+                : " (incomplete)"}
             </span>
             {executionState === EXECUTION_STATES.RUNNING && (
               <button

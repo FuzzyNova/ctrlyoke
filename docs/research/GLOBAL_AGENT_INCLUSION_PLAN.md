@@ -207,12 +207,13 @@ Following GitHub Copilot's pattern with `<modeInstructions>`, we use semanticall
 **Location**: `src/flightpath/base/CopilotIntegration.ts`
 
 **Current Flow**:
+
 ```typescript
 protected async buildPromptText(prompt: PromptItem): Promise<string> {
   const expander = new ContextExpander(workspaceRoot);
   return await expander.expandContext(prompt.prompt);
 }
-````
+```
 
 **New Flow**:
 
@@ -277,6 +278,7 @@ private insertAgentInstructions(expandedPrompt: string, agentContent: string): s
 3. **User prompt LAST**: Remains at the end for maximum weight
 
 **Final structure**:
+
 ```
 <attachment>file1 content</attachment>
 <attachment>file2 content</attachment>
@@ -461,22 +463,24 @@ Following GitHub Copilot's pattern with `<modeInstructions>`, we use this struct
 
 ### Example Final Prompt
 
-```
+````
 <attachment id="file:src/extension.ts">
 File: src/extension.ts
 ```typescript
 export function activate(context: vscode.ExtensionContext) {
   // Extension code...
 }
-```
+````
+
 </attachment>
 
-<agentInstructions>
----
+## <agentInstructions>
+
 name: flightpath-orchestrator
 description: Creates structured FlightPath workflow files
 tools: ["search", "fetch", "githubRepo"]
 model: Claude Sonnet 4.5
+
 ---
 
 # FlightPath Orchestrator
@@ -488,9 +492,10 @@ You are an AI workflow architect specialized in creating FlightPath workflows...
 1. **Understand** the user's feature request
 2. **Analyze** the codebase structure
 3. **Create** a structured .flightpath.yaml workflow
-</agentInstructions>
+   </agentInstructions>
 
 Help me create a workflow to add authentication to this extension.
+
 ```
 
 ### Benefits
@@ -825,3 +830,4 @@ Help me create a workflow to add authentication to this extension.
 ---
 
 **END OF PLAN**
+```

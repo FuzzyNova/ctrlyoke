@@ -38,7 +38,8 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
   [EXECUTION_STATES.CANCELLING]: {
     icon: "close",
     text: "Cancelling",
-    className: "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
+    className:
+      "bg-[var(--status-warning)] text-[var(--btn-fg)] animate-pulse-cancelling",
   },
   [EXECUTION_STATES.COMPLETED]: {
     icon: "check",

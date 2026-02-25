@@ -27,6 +27,7 @@ codex exec --json "your prompt here"
 ```
 
 **Key Characteristics**:
+
 - Real-time streaming of events to stdout as they occur
 - Each line is independent JSON (not a single JSON array)
 - Events arrive chronologically but timing is not guaranteed
@@ -44,11 +45,13 @@ $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<thread-id>.jsonl
 ```
 
 **Default Path**:
+
 ```
 ~/.codex/sessions/YYYY/MM/DD/rollout-0199a213-81c0-7800-8aa1-bbab2a035a53.jsonl
 ```
 
 **File Structure**:
+
 1. **Metadata header** (first line): Session information
 2. **Event stream** (subsequent lines): All events in chronological order
 
@@ -58,16 +61,16 @@ $CODEX_HOME/sessions/YYYY/MM/DD/rollout-<thread-id>.jsonl
 
 The Codex JSON format uses **8 distinct event types**:
 
-| Event Type | Description |
-|------------|-------------|
-| `thread.started` | Session initialization with thread ID |
-| `turn.started` | User prompt submitted, agent begins processing |
+| Event Type       | Description                                       |
+| ---------------- | ------------------------------------------------- |
+| `thread.started` | Session initialization with thread ID             |
+| `turn.started`   | User prompt submitted, agent begins processing    |
 | `turn.completed` | Turn finishes successfully (includes token usage) |
-| `turn.failed` | Turn encounters fatal error |
-| `item.started` | Work item created and begins processing |
-| `item.updated` | Work item state changes during processing |
-| `item.completed` | Work item reaches terminal state |
-| `error` | Top-level error (non-item-specific) |
+| `turn.failed`    | Turn encounters fatal error                       |
+| `item.started`   | Work item created and begins processing           |
+| `item.updated`   | Work item state changes during processing         |
+| `item.completed` | Work item reaches terminal state                  |
+| `error`          | Top-level error (non-item-specific)               |
 
 **Total Event Types**: 8
 
@@ -77,17 +80,17 @@ The Codex JSON format uses **8 distinct event types**:
 
 Items represent discrete units of work. The Codex JSON format includes **8 item types**:
 
-| Item Type | Description |
-|------------|-------------|
-| `agent_message` | Assistant's text response or structured JSON output |
-| `reasoning` | Agent's internal reasoning/thinking process |
-| `command_execution` | Shell command with output and status |
-| `file_change` | File modifications (add/update/delete) |
-| `mcp_tool_call` | Model Context Protocol tool invocation |
-| `web_search` | Web search query performed by agent |
-| `todo_list` | Agent's task list with completion tracking |
-| `error` | Non-fatal error as item (vs. top-level error) |
-| `unknown` | Forward compatibility for unrecognized types |
+| Item Type           | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `agent_message`     | Assistant's text response or structured JSON output |
+| `reasoning`         | Agent's internal reasoning/thinking process         |
+| `command_execution` | Shell command with output and status                |
+| `file_change`       | File modifications (add/update/delete)              |
+| `mcp_tool_call`     | Model Context Protocol tool invocation              |
+| `web_search`        | Web search query performed by agent                 |
+| `todo_list`         | Agent's task list with completion tracking          |
+| `error`             | Non-fatal error as item (vs. top-level error)       |
+| `unknown`           | Forward compatibility for unrecognized types        |
 
 **Total Item Types**: 8 (+ 1 for forward compatibility)
 
@@ -99,7 +102,7 @@ Items represent discrete units of work. The Codex JSON format includes **8 item 
 
 ```typescript
 interface BaseEvent {
-  type: string;  // Event type discriminator
+  type: string; // Event type discriminator
   // Additional fields vary by event type
 }
 ```
@@ -119,19 +122,25 @@ The `type` field determines which additional fields are present. Use TypeScript 
 **Frequency**: 1 per session (always first event)
 
 **Fields**:
+
 ```typescript
 interface ThreadStartedEvent {
   type: "thread.started";
-  thread_id: string;  // UUID format for session resumption
+  thread_id: string; // UUID format for session resumption
 }
 ```
 
 **Example**:
+
 ```json
-{"type":"thread.started","thread_id":"0199a213-81c0-7800-8aa1-bbab2a035a53"}
+{
+  "type": "thread.started",
+  "thread_id": "0199a213-81c0-7800-8aa1-bbab2a035a53"
+}
 ```
 
 **Notes**:
+
 - `thread_id` is required for session resumption via `--thread-id <id>` flag
 - UUID format (8-4-4-4-12 hex digits)
 - Always `parentId: null` equivalent (root event)
@@ -145,6 +154,7 @@ interface ThreadStartedEvent {
 **Frequency**: 1 per user prompt
 
 **Fields**:
+
 ```typescript
 interface TurnStartedEvent {
   type: "turn.started";
@@ -152,11 +162,13 @@ interface TurnStartedEvent {
 ```
 
 **Example**:
+
 ```json
-{"type":"turn.started"}
+{ "type": "turn.started" }
 ```
 
 **Notes**:
+
 - No additional fields
 - Pairs with `turn.completed` or `turn.failed`
 - Followed by item events (item.started, item.updated, item.completed)
@@ -170,6 +182,7 @@ interface TurnStartedEvent {
 **Frequency**: 1 per successful turn
 
 **Fields**:
+
 ```typescript
 interface TurnCompletedEvent {
   type: "turn.completed";
@@ -177,29 +190,31 @@ interface TurnCompletedEvent {
 }
 
 interface Usage {
-  input_tokens: number;          // Total input tokens (including cached)
-  cached_input_tokens: number;   // Tokens served from cache
-  output_tokens: number;         // Generated output tokens
+  input_tokens: number; // Total input tokens (including cached)
+  cached_input_tokens: number; // Tokens served from cache
+  output_tokens: number; // Generated output tokens
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "type":"turn.completed",
-  "usage":{
-    "input_tokens":24763,
-    "cached_input_tokens":24448,
-    "output_tokens":122
+  "type": "turn.completed",
+  "usage": {
+    "input_tokens": 24763,
+    "cached_input_tokens": 24448,
+    "output_tokens": 122
   }
 }
 ```
 
 **Notes**:
+
 - `input_tokens` includes `cached_input_tokens` (total input)
 - `cached_input_tokens` indicates cache hits (lower cost)
 - `output_tokens` is generated tokens only
-- Total cost = (input_tokens - cached_input_tokens) * input_rate + output_tokens * output_rate
+- Total cost = (input_tokens - cached_input_tokens) _ input_rate + output_tokens _ output_rate
 
 ---
 
@@ -210,6 +225,7 @@ interface Usage {
 **Frequency**: 0-1 per turn (only when errors occur)
 
 **Fields**:
+
 ```typescript
 interface TurnFailedEvent {
   type: "turn.failed";
@@ -217,21 +233,23 @@ interface TurnFailedEvent {
 }
 
 interface ThreadError {
-  message: string;  // Human-readable error message
+  message: string; // Human-readable error message
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "type":"turn.failed",
-  "error":{
-    "message":"Model API request failed: timeout after 60s"
+  "type": "turn.failed",
+  "error": {
+    "message": "Model API request failed: timeout after 60s"
   }
 }
 ```
 
 **Notes**:
+
 - Mutually exclusive with `turn.completed`
 - Session may continue after error (not necessarily fatal)
 - Check for this event to detect failures
@@ -245,40 +263,44 @@ interface ThreadError {
 **Frequency**: 1 per item (pairs with `item.completed`)
 
 **Fields**:
+
 ```typescript
 interface ItemStartedEvent {
   type: "item.started";
-  item: ThreadItem;  // Type-specific item data
+  item: ThreadItem; // Type-specific item data
 }
 ```
 
 **Example** (reasoning):
+
 ```json
 {
-  "type":"item.started",
-  "item":{
-    "id":"item_0",
-    "type":"reasoning",
-    "text":"**Searching for README files**"
+  "type": "item.started",
+  "item": {
+    "id": "item_0",
+    "type": "reasoning",
+    "text": "**Searching for README files**"
   }
 }
 ```
 
 **Example** (command):
+
 ```json
 {
-  "type":"item.started",
-  "item":{
-    "id":"item_1",
-    "type":"command_execution",
-    "command":"bash -lc ls",
-    "aggregated_output":"",
-    "status":"in_progress"
+  "type": "item.started",
+  "item": {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "bash -lc ls",
+    "aggregated_output": "",
+    "status": "in_progress"
   }
 }
 ```
 
 **Notes**:
+
 - Item lifecycle: `item.started` → `item.updated` (0+) → `item.completed`
 - `item.updated` events are optional (depends on item type)
 - `item` field structure varies by item type (see Item Type Schemas below)
@@ -292,28 +314,31 @@ interface ItemStartedEvent {
 **Frequency**: 0+ per item (varies by item type)
 
 **Fields**:
+
 ```typescript
 interface ItemUpdatedEvent {
   type: "item.updated";
-  item: ThreadItem;  // Updated item data
+  item: ThreadItem; // Updated item data
 }
 ```
 
 **Example** (command output):
+
 ```json
 {
-  "type":"item.updated",
-  "item":{
-    "id":"item_1",
-    "type":"command_execution",
-    "command":"bash -lc ls",
-    "aggregated_output":"docs\nsdk\nexamples\n",
-    "status":"in_progress"
+  "type": "item.updated",
+  "item": {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "bash -lc ls",
+    "aggregated_output": "docs\nsdk\nexamples\n",
+    "status": "in_progress"
   }
 }
 ```
 
 **Notes**:
+
 - Common for `command_execution` (streaming output)
 - Less common for other item types
 - `aggregated_output` grows progressively with each update
@@ -328,41 +353,45 @@ interface ItemUpdatedEvent {
 **Frequency**: 1 per item (pairs with `item.started`)
 
 **Fields**:
+
 ```typescript
 interface ItemCompletedEvent {
   type: "item.completed";
-  item: ThreadItem;  // Final item data
+  item: ThreadItem; // Final item data
 }
 ```
 
 **Example** (command):
+
 ```json
 {
-  "type":"item.completed",
-  "item":{
-    "id":"item_1",
-    "type":"command_execution",
-    "command":"bash -lc ls",
-    "aggregated_output":"docs\nsdk\nexamples\n",
-    "exit_code":0,
-    "status":"completed"
+  "type": "item.completed",
+  "item": {
+    "id": "item_1",
+    "type": "command_execution",
+    "command": "bash -lc ls",
+    "aggregated_output": "docs\nsdk\nexamples\n",
+    "exit_code": 0,
+    "status": "completed"
   }
 }
 ```
 
 **Example** (message):
+
 ```json
 {
-  "type":"item.completed",
-  "item":{
-    "id":"item_3",
-    "type":"agent_message",
-    "text":"Repo contains docs, sdk, and examples directories."
+  "type": "item.completed",
+  "item": {
+    "id": "item_3",
+    "type": "agent_message",
+    "text": "Repo contains docs, sdk, and examples directories."
   }
 }
 ```
 
 **Notes**:
+
 - Final state may include additional fields (e.g., `exit_code` for commands)
 - Use this event to extract final results
 - Check `status` field for success/failure (when present)
@@ -376,22 +405,25 @@ interface ItemCompletedEvent {
 **Frequency**: 0+ per session (only when errors occur)
 
 **Fields**:
+
 ```typescript
 interface ErrorEvent {
   type: "error";
-  message: string;  // Error description
+  message: string; // Error description
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "type":"error",
-  "message":"Failed to initialize MCP server: connection refused"
+  "type": "error",
+  "message": "Failed to initialize MCP server: connection refused"
 }
 ```
 
 **Notes**:
+
 - Different from `turn.failed` (turn-level) and `error` items (item-level)
 - May occur outside turn boundaries
 - Indicates session-level issues
@@ -406,8 +438,8 @@ interface ErrorEvent {
 
 ```typescript
 interface BaseItem {
-  id: string;    // Unique item identifier (e.g., "item_0", "item_1")
-  type: string;  // Item type discriminator
+  id: string; // Unique item identifier (e.g., "item_0", "item_1")
+  type: string; // Item type discriminator
 }
 ```
 
@@ -420,33 +452,37 @@ interface BaseItem {
 **Purpose**: Assistant's final text response or structured JSON output
 
 **Fields**:
+
 ```typescript
 interface AgentMessageItem {
   id: string;
   type: "agent_message";
-  text: string;  // Response text (may be markdown or JSON string)
+  text: string; // Response text (may be markdown or JSON string)
 }
 ```
 
 **Example** (text):
+
 ```json
 {
-  "id":"item_3",
-  "type":"agent_message",
-  "text":"Repo contains docs, sdk, and examples directories."
+  "id": "item_3",
+  "type": "agent_message",
+  "text": "Repo contains docs, sdk, and examples directories."
 }
 ```
 
 **Example** (JSON):
+
 ```json
 {
-  "id":"item_5",
-  "type":"agent_message",
-  "text":"{\"files\":[\"README.md\",\"package.json\"],\"status\":\"complete\"}"
+  "id": "item_5",
+  "type": "agent_message",
+  "text": "{\"files\":[\"README.md\",\"package.json\"],\"status\":\"complete\"}"
 }
 ```
 
 **Notes**:
+
 - `text` may contain markdown formatting
 - When using `--output-schema`, `text` is JSON string (validate with schema)
 - Parse as final response from agent
@@ -459,24 +495,27 @@ interface AgentMessageItem {
 **Purpose**: Agent's internal reasoning/thinking process (chain-of-thought)
 
 **Fields**:
+
 ```typescript
 interface ReasoningItem {
   id: string;
   type: "reasoning";
-  text: string;  // Reasoning summary (often markdown formatted)
+  text: string; // Reasoning summary (often markdown formatted)
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_0",
-  "type":"reasoning",
-  "text":"**Searching for README files**\n\nI need to explore the repository structure to understand the codebase."
+  "id": "item_0",
+  "type": "reasoning",
+  "text": "**Searching for README files**\n\nI need to explore the repository structure to understand the codebase."
 }
 ```
 
 **Notes**:
+
 - Often markdown formatted with `**Headers**`
 - Shows agent's decision-making process
 - May precede tool calls or messages
@@ -489,59 +528,64 @@ interface ReasoningItem {
 **Purpose**: Shell command execution with output and status
 
 **Fields**:
+
 ```typescript
 interface CommandExecutionItem {
   id: string;
   type: "command_execution";
-  command: string;                    // Full shell command
-  aggregated_output: string;          // Combined stdout/stderr
-  exit_code?: number;                 // Exit code (present when completed)
-  status: CommandExecutionStatus;     // Execution state
+  command: string; // Full shell command
+  aggregated_output: string; // Combined stdout/stderr
+  exit_code?: number; // Exit code (present when completed)
+  status: CommandExecutionStatus; // Execution state
 }
 
 type CommandExecutionStatus =
-  | "in_progress"  // Command is running
-  | "completed"    // Command finished successfully (exit_code present)
-  | "failed";      // Command exited with non-zero code
+  | "in_progress" // Command is running
+  | "completed" // Command finished successfully (exit_code present)
+  | "failed"; // Command exited with non-zero code
 ```
 
 **Lifecycle Examples**:
 
 **item.started** (initial):
+
 ```json
 {
-  "id":"item_1",
-  "type":"command_execution",
-  "command":"bash -lc ls",
-  "aggregated_output":"",
-  "status":"in_progress"
+  "id": "item_1",
+  "type": "command_execution",
+  "command": "bash -lc ls",
+  "aggregated_output": "",
+  "status": "in_progress"
 }
 ```
 
 **item.updated** (progressive):
+
 ```json
 {
-  "id":"item_1",
-  "type":"command_execution",
-  "command":"bash -lc ls",
-  "aggregated_output":"docs\nsdk\n",
-  "status":"in_progress"
+  "id": "item_1",
+  "type": "command_execution",
+  "command": "bash -lc ls",
+  "aggregated_output": "docs\nsdk\n",
+  "status": "in_progress"
 }
 ```
 
 **item.completed** (final):
+
 ```json
 {
-  "id":"item_1",
-  "type":"command_execution",
-  "command":"bash -lc ls",
-  "aggregated_output":"docs\nsdk\nexamples\n",
-  "exit_code":0,
-  "status":"completed"
+  "id": "item_1",
+  "type": "command_execution",
+  "command": "bash -lc ls",
+  "aggregated_output": "docs\nsdk\nexamples\n",
+  "exit_code": 0,
+  "status": "completed"
 }
 ```
 
 **Notes**:
+
 - `aggregated_output` grows with each `item.updated` event
 - `exit_code` only present in `item.completed`
 - `status: "completed"` does not guarantee `exit_code: 0` (may be non-zero)
@@ -555,44 +599,47 @@ type CommandExecutionStatus =
 **Purpose**: File modifications (add/update/delete operations)
 
 **Fields**:
+
 ```typescript
 interface FileChangeItem {
   id: string;
   type: "file_change";
-  changes: FileUpdateChange[];  // List of file modifications
-  status: PatchApplyStatus;     // Overall patch result
+  changes: FileUpdateChange[]; // List of file modifications
+  status: PatchApplyStatus; // Overall patch result
 }
 
 interface FileUpdateChange {
-  path: string;          // File path relative to workspace
+  path: string; // File path relative to workspace
   kind: PatchChangeKind; // Type of modification
 }
 
 type PatchChangeKind =
-  | "add"     // New file created
-  | "delete"  // File removed
+  | "add" // New file created
+  | "delete" // File removed
   | "update"; // Existing file modified
 
 type PatchApplyStatus =
-  | "completed"  // All changes applied successfully
-  | "failed";    // One or more changes failed
+  | "completed" // All changes applied successfully
+  | "failed"; // One or more changes failed
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_2",
-  "type":"file_change",
-  "changes":[
-    {"path":"src/main.ts","kind":"update"},
-    {"path":"src/utils.ts","kind":"add"},
-    {"path":"old/legacy.ts","kind":"delete"}
+  "id": "item_2",
+  "type": "file_change",
+  "changes": [
+    { "path": "src/main.ts", "kind": "update" },
+    { "path": "src/utils.ts", "kind": "add" },
+    { "path": "old/legacy.ts", "kind": "delete" }
   ],
-  "status":"completed"
+  "status": "completed"
 }
 ```
 
 **Notes**:
+
 - `changes` is array (multiple files may change in one item)
 - `kind` indicates operation type (add/update/delete)
 - `path` is relative to workspace root
@@ -606,33 +653,36 @@ type PatchApplyStatus =
 **Purpose**: Model Context Protocol (MCP) tool invocation
 
 **Fields**:
+
 ```typescript
 interface McpToolCallItem {
   id: string;
   type: "mcp_tool_call";
-  server: string;           // MCP server name
-  tool: string;             // Tool name invoked
+  server: string; // MCP server name
+  tool: string; // Tool name invoked
   status: McpToolCallStatus;
 }
 
 type McpToolCallStatus =
-  | "in_progress"  // Tool is executing
-  | "completed"    // Tool finished successfully
-  | "failed";      // Tool execution failed
+  | "in_progress" // Tool is executing
+  | "completed" // Tool finished successfully
+  | "failed"; // Tool execution failed
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_4",
-  "type":"mcp_tool_call",
-  "server":"github",
-  "tool":"search_repositories",
-  "status":"completed"
+  "id": "item_4",
+  "type": "mcp_tool_call",
+  "server": "github",
+  "tool": "search_repositories",
+  "status": "completed"
 }
 ```
 
 **Notes**:
+
 - `server` matches MCP server name from config
 - `tool` is tool identifier within that server
 - Status transitions: `in_progress` → `completed`/`failed`
@@ -645,24 +695,27 @@ type McpToolCallStatus =
 **Purpose**: Web search query performed by agent
 
 **Fields**:
+
 ```typescript
 interface WebSearchItem {
   id: string;
   type: "web_search";
-  query: string;  // Search query text
+  query: string; // Search query text
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_5",
-  "type":"web_search",
-  "query":"TypeScript best practices 2026"
+  "id": "item_5",
+  "type": "web_search",
+  "query": "TypeScript best practices 2026"
 }
 ```
 
 **Notes**:
+
 - Results not included in this item (incorporated into agent's reasoning)
 - Query is user-visible intent
 - Subsequent `reasoning` or `agent_message` items will reference results
@@ -674,6 +727,7 @@ interface WebSearchItem {
 **Purpose**: Agent's task list with completion tracking
 
 **Fields**:
+
 ```typescript
 interface TodoListItem {
   id: string;
@@ -682,25 +736,27 @@ interface TodoListItem {
 }
 
 interface TodoItem {
-  text: string;       // Task description
+  text: string; // Task description
   completed: boolean; // Completion status
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_6",
-  "type":"todo_list",
-  "items":[
-    {"text":"Analyze repository structure","completed":true},
-    {"text":"Identify main entry points","completed":false},
-    {"text":"Document API endpoints","completed":false}
+  "id": "item_6",
+  "type": "todo_list",
+  "items": [
+    { "text": "Analyze repository structure", "completed": true },
+    { "text": "Identify main entry points", "completed": false },
+    { "text": "Document API endpoints", "completed": false }
   ]
 }
 ```
 
 **Notes**:
+
 - Progressive completion tracking via `item.updated` events
 - `completed` transitions from `false` → `true`
 - Useful for long-running multi-step tasks
@@ -713,24 +769,27 @@ interface TodoItem {
 **Purpose**: Non-fatal errors as items (vs. top-level error events)
 
 **Fields**:
+
 ```typescript
 interface ErrorItem {
   id: string;
   type: "error";
-  message: string;  // Error description
+  message: string; // Error description
 }
 ```
 
 **Example**:
+
 ```json
 {
-  "id":"item_7",
-  "type":"error",
-  "message":"Failed to read file: permission denied"
+  "id": "item_7",
+  "type": "error",
+  "message": "Failed to read file: permission denied"
 }
 ```
 
 **Notes**:
+
 - Item-level errors (vs. turn-level or session-level)
 - Non-fatal (turn continues after error item)
 - Agent may recover and continue processing
@@ -743,24 +802,27 @@ interface ErrorItem {
 **Purpose**: Unrecognized item types (future-proofing)
 
 **Fields**:
+
 ```typescript
 interface UnknownThreadItem {
-  type: string;  // Raw item type string (not recognized)
+  type: string; // Raw item type string (not recognized)
   // Additional fields preserved as raw JSON
 }
 ```
 
 **Example** (hypothetical future type):
+
 ```json
 {
-  "id":"item_8",
-  "type":"code_review",
-  "file":"src/main.ts",
-  "issues":5
+  "id": "item_8",
+  "type": "code_review",
+  "file": "src/main.ts",
+  "issues": 5
 }
 ```
 
 **Notes**:
+
 - SDK provides `UnknownThreadItem` for graceful handling
 - New item types may be added in future versions
 - Parse unknown types as generic objects
@@ -920,48 +982,37 @@ interface UnknownThreadItem {
  * Token usage statistics
  */
 interface Usage {
-  input_tokens: number;          // Total input tokens (including cached)
-  cached_input_tokens: number;   // Tokens served from cache
-  output_tokens: number;         // Generated output tokens
+  input_tokens: number; // Total input tokens (including cached)
+  cached_input_tokens: number; // Tokens served from cache
+  output_tokens: number; // Generated output tokens
 }
 
 /**
  * Error information
  */
 interface ThreadError {
-  message: string;  // Human-readable error message
+  message: string; // Human-readable error message
 }
 
 /**
  * Command execution status
  */
-type CommandExecutionStatus =
-  | "in_progress"
-  | "completed"
-  | "failed";
+type CommandExecutionStatus = "in_progress" | "completed" | "failed";
 
 /**
  * Patch application status
  */
-type PatchApplyStatus =
-  | "completed"
-  | "failed";
+type PatchApplyStatus = "completed" | "failed";
 
 /**
  * File change kind
  */
-type PatchChangeKind =
-  | "add"
-  | "delete"
-  | "update";
+type PatchChangeKind = "add" | "delete" | "update";
 
 /**
  * MCP tool call status
  */
-type McpToolCallStatus =
-  | "in_progress"
-  | "completed"
-  | "failed";
+type McpToolCallStatus = "in_progress" | "completed" | "failed";
 ```
 
 ---
@@ -974,24 +1025,28 @@ The `usage` object in `turn.completed` events provides comprehensive token stati
 
 ```typescript
 interface Usage {
-  input_tokens: number;          // Total input tokens (including cached)
-  cached_input_tokens: number;   // Tokens served from cache
-  output_tokens: number;         // Generated output tokens
+  input_tokens: number; // Total input tokens (including cached)
+  cached_input_tokens: number; // Tokens served from cache
+  output_tokens: number; // Generated output tokens
 }
 ```
 
 ### Field Descriptions
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `input_tokens` | number | Total input tokens sent to model (includes cached_input_tokens) |
-| `cached_input_tokens` | number | Input tokens served from prompt cache (lower cost) |
-| `output_tokens` | number | Generated output tokens (response) |
+| Field                 | Type   | Description                                                     |
+| --------------------- | ------ | --------------------------------------------------------------- |
+| `input_tokens`        | number | Total input tokens sent to model (includes cached_input_tokens) |
+| `cached_input_tokens` | number | Input tokens served from prompt cache (lower cost)              |
+| `output_tokens`       | number | Generated output tokens (response)                              |
 
 ### Calculating Costs
 
 ```typescript
-function calculateCost(usage: Usage, inputRate: number, outputRate: number): number {
+function calculateCost(
+  usage: Usage,
+  inputRate: number,
+  outputRate: number
+): number {
   const uncachedInputTokens = usage.input_tokens - usage.cached_input_tokens;
   const inputCost = uncachedInputTokens * inputRate;
   const outputCost = usage.output_tokens * outputRate;
@@ -1010,12 +1065,14 @@ function calculateCost(usage: Usage, inputRate: number, outputRate: number): num
 ```
 
 **Interpretation**:
+
 - Total input: 24,763 tokens
 - Cached (from previous turns): 24,448 tokens (98.7% cache hit rate)
 - New input: 315 tokens (24,763 - 24,448)
 - Output generated: 122 tokens
 
 **Cost Calculation** (example rates):
+
 - Uncached input: 315 tokens × $0.01/1K = $0.00315
 - Output: 122 tokens × $0.03/1K = $0.00366
 - Total: $0.00681
@@ -1027,15 +1084,15 @@ function calculateCost(usage: Usage, inputRate: number, outputRate: number): num
 ### 1. Parsing JSONL Stream
 
 ```typescript
-import * as fs from 'fs';
-import * as readline from 'readline';
+import * as fs from "fs";
+import * as readline from "readline";
 
 async function parseCodexJsonl(filePath: string): Promise<ThreadEvent[]> {
   const events: ThreadEvent[] = [];
   const fileStream = fs.createReadStream(filePath);
   const rl = readline.createInterface({
     input: fileStream,
-    crlfDelay: Infinity
+    crlfDelay: Infinity,
   });
 
   for await (const line of rl) {
@@ -1045,7 +1102,7 @@ async function parseCodexJsonl(filePath: string): Promise<ThreadEvent[]> {
         const event = JSON.parse(trimmed) as ThreadEvent;
         events.push(event);
       } catch (error) {
-        console.error('Failed to parse line:', line, error);
+        console.error("Failed to parse line:", line, error);
       }
     }
   }
@@ -1066,39 +1123,41 @@ interface ExecutionResult {
 
 function detectCompletion(events: ThreadEvent[]): ExecutionResult {
   // Check for turn completion
-  const completed = events.find(e => e.type === 'turn.completed');
+  const completed = events.find((e) => e.type === "turn.completed");
   if (completed) {
     const response = extractAgentResponse(events);
     return {
       success: true,
       response,
-      usage: (completed as TurnCompletedEvent).usage
+      usage: (completed as TurnCompletedEvent).usage,
     };
   }
 
   // Check for turn failure
-  const failed = events.find(e => e.type === 'turn.failed');
+  const failed = events.find((e) => e.type === "turn.failed");
   if (failed) {
     return {
       success: false,
-      error: (failed as TurnFailedEvent).error.message
+      error: (failed as TurnFailedEvent).error.message,
     };
   }
 
   // Incomplete
   return {
     success: false,
-    error: 'Turn did not complete'
+    error: "Turn did not complete",
   };
 }
 
 function extractAgentResponse(events: ThreadEvent[]): string {
   const messages = events
-    .filter(e => e.type === 'item.completed' && e.item.type === 'agent_message')
-    .map(e => (e as ItemCompletedEvent).item as AgentMessageItem);
+    .filter(
+      (e) => e.type === "item.completed" && e.item.type === "agent_message"
+    )
+    .map((e) => (e as ItemCompletedEvent).item as AgentMessageItem);
 
   // Return last message (typically the final response)
-  return messages[messages.length - 1]?.text || '';
+  return messages[messages.length - 1]?.text || "";
 }
 ```
 
@@ -1106,18 +1165,18 @@ function extractAgentResponse(events: ThreadEvent[]): string {
 
 ```typescript
 function extractSessionId(events: ThreadEvent[]): string | null {
-  const startEvent = events.find(e => e.type === 'thread.started');
+  const startEvent = events.find((e) => e.type === "thread.started");
   return startEvent ? (startEvent as ThreadStartedEvent).thread_id : null;
 }
 
 // Usage
-const output = await runCodexCommand('--json', 'initial prompt');
+const output = await runCodexCommand("--json", "initial prompt");
 const events = parseJsonlOutput(output);
 const sessionId = extractSessionId(events);
 
 if (sessionId) {
   // Resume in next prompt
-  await runCodexCommand('--json', '--thread-id', sessionId, 'follow-up');
+  await runCodexCommand("--json", "--thread-id", sessionId, "follow-up");
 }
 ```
 
@@ -1128,9 +1187,12 @@ function streamCommandOutput(events: AsyncIterable<ThreadEvent>): void {
   const commandStates = new Map<string, string>();
 
   for await (const event of events) {
-    if (event.type === 'item.updated' && event.item.type === 'command_execution') {
+    if (
+      event.type === "item.updated" &&
+      event.item.type === "command_execution"
+    ) {
       const item = event.item as CommandExecutionItem;
-      const previousOutput = commandStates.get(item.id) || '';
+      const previousOutput = commandStates.get(item.id) || "";
       const newOutput = item.aggregated_output.slice(previousOutput.length);
 
       if (newOutput) {
@@ -1153,22 +1215,26 @@ interface TokenStats {
 }
 
 function calculateTokenUsage(events: ThreadEvent[]): TokenStats {
-  const completions = events.filter(e => e.type === 'turn.completed');
+  const completions = events.filter((e) => e.type === "turn.completed");
 
-  return completions.reduce((acc, event) => {
-    const usage = (event as TurnCompletedEvent).usage;
-    return {
-      totalInputTokens: acc.totalInputTokens + usage.input_tokens,
-      totalCachedInputTokens: acc.totalCachedInputTokens + usage.cached_input_tokens,
-      totalOutputTokens: acc.totalOutputTokens + usage.output_tokens,
-      turnCount: acc.turnCount + 1
-    };
-  }, {
-    totalInputTokens: 0,
-    totalCachedInputTokens: 0,
-    totalOutputTokens: 0,
-    turnCount: 0
-  });
+  return completions.reduce(
+    (acc, event) => {
+      const usage = (event as TurnCompletedEvent).usage;
+      return {
+        totalInputTokens: acc.totalInputTokens + usage.input_tokens,
+        totalCachedInputTokens:
+          acc.totalCachedInputTokens + usage.cached_input_tokens,
+        totalOutputTokens: acc.totalOutputTokens + usage.output_tokens,
+        turnCount: acc.turnCount + 1,
+      };
+    },
+    {
+      totalInputTokens: 0,
+      totalCachedInputTokens: 0,
+      totalOutputTokens: 0,
+      turnCount: 0,
+    }
+  );
 }
 ```
 
@@ -1215,9 +1281,12 @@ function calculateTokenUsage(events: ThreadEvent[]): TokenStats {
 
 ```typescript
 export class CodexResponseParser implements IResponseParser {
-  parseResponse(output: string): { response: string; usage: TokenUsage | null } {
-    const lines = output.split('\n').filter(line => line.trim());
-    const events: ThreadEvent[] = lines.map(line => JSON.parse(line));
+  parseResponse(output: string): {
+    response: string;
+    usage: TokenUsage | null;
+  } {
+    const lines = output.split("\n").filter((line) => line.trim());
+    const events: ThreadEvent[] = lines.map((line) => JSON.parse(line));
 
     // Extract response
     const response = this.extractAgentResponse(events);
@@ -1230,14 +1299,16 @@ export class CodexResponseParser implements IResponseParser {
 
   private extractAgentResponse(events: ThreadEvent[]): string {
     const messages = events
-      .filter(e => e.type === 'item.completed' && e.item.type === 'agent_message')
-      .map(e => (e.item as AgentMessageItem).text);
+      .filter(
+        (e) => e.type === "item.completed" && e.item.type === "agent_message"
+      )
+      .map((e) => (e.item as AgentMessageItem).text);
 
-    return messages[messages.length - 1] || '';
+    return messages[messages.length - 1] || "";
   }
 
   private extractTokenUsage(events: ThreadEvent[]): TokenUsage | null {
-    const completed = events.find(e => e.type === 'turn.completed');
+    const completed = events.find((e) => e.type === "turn.completed");
     if (!completed) return null;
 
     const usage = (completed as TurnCompletedEvent).usage;
@@ -1245,7 +1316,7 @@ export class CodexResponseParser implements IResponseParser {
       inputTokens: usage.input_tokens - usage.cached_input_tokens,
       cachedInputTokens: usage.cached_input_tokens,
       outputTokens: usage.output_tokens,
-      totalTokens: usage.input_tokens + usage.output_tokens
+      totalTokens: usage.input_tokens + usage.output_tokens,
     };
   }
 }
@@ -1281,7 +1352,7 @@ npm install @openai/codex-sdk
 ### Usage Example: Streaming Events
 
 ```typescript
-import { Codex } from '@openai/codex-sdk';
+import { Codex } from "@openai/codex-sdk";
 
 const codex = new Codex();
 const thread = await codex.startThread();
@@ -1316,7 +1387,9 @@ for await (const event of events) {
       break;
 
     case "turn.completed":
-      console.log(`Tokens: ${event.usage.input_tokens} in, ${event.usage.output_tokens} out`);
+      console.log(
+        `Tokens: ${event.usage.input_tokens} in, ${event.usage.output_tokens} out`
+      );
       break;
 
     case "turn.failed":
@@ -1432,17 +1505,20 @@ This outputs TypeScript type definitions matching the current version's JSONL pr
 ### Output Control Flags
 
 **`--json`**:
+
 - **Purpose**: Enable JSONL event stream to stdout
 - **Format**: Newline-delimited JSON
 - **Usage**: `codex exec --json "prompt"`
 
 **`--output-last-message <path>` / `-o <path>`**:
+
 - **Purpose**: Write final agent message to file
 - **Format**: Plain text (not JSON)
 - **Usage**: `codex exec --json --output-last-message summary.txt "prompt"`
 - **Benefit**: Capture both machine-readable events (stdout) and human-readable summary (file)
 
 **`--output-schema <schema-file>`**:
+
 - **Purpose**: Request structured JSON response conforming to JSON Schema
 - **Format**: JSON Schema specification
 - **Usage**: `codex exec --output-schema schema.json "extract data"`
@@ -1451,6 +1527,7 @@ This outputs TypeScript type definitions matching the current version's JSONL pr
 ### Session Management Flags
 
 **`--thread-id <id>`**:
+
 - **Purpose**: Resume existing conversation thread
 - **Source**: `thread_id` from `thread.started` event
 - **Usage**: `codex exec --thread-id "0199a213..." "follow-up prompt"`
@@ -1496,6 +1573,7 @@ This outputs TypeScript type definitions matching the current version's JSONL pr
 ## Changelog
 
 ### 2026-01-28
+
 - Initial schema documentation
 - Based on Codex CLI v0.44.0+ research
 - 8 event types documented

@@ -46,6 +46,7 @@ All session events include these common fields:
 ```
 
 **Field Descriptions:**
+
 - `sessionId` - Unique UUID for this Claude session
 - `version` - Claude CLI version (e.g., "2.0.76", "2.1.12", "2.1.15")
 - `gitBranch` - Current git branch (if in a git repository)
@@ -115,6 +116,7 @@ User messages represent prompts sent to Claude.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "user" for user messages
 - `message.role` - Always "user"
 - `message.content` - The prompt text sent to Claude
@@ -222,15 +224,16 @@ Assistant messages contain Claude's responses.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "assistant" for assistant messages
 - `message.role` - Always "assistant"
 - `message.model` - Model used (e.g., "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929")
-- `message.id` - Anthropic API message ID (format: "msg_...")
+- `message.id` - Anthropic API message ID (format: "msg\_...")
 - `message.content` - Array of content blocks (see below)
 - `message.stop_reason` - Reason for stopping (null if ongoing, "end_turn" when complete)
 - `message.stop_sequence` - Stop sequence that triggered end (usually null)
 - `message.usage` - Token usage statistics (see Token Usage section)
-- `requestId` - Anthropic API request ID (format: "req_...")
+- `requestId` - Anthropic API request ID (format: "req\_...")
 - `uuid` - Unique identifier for this message event
 - `timestamp` - ISO 8601 timestamp
 
@@ -264,11 +267,13 @@ Thinking blocks contain Claude's internal reasoning.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "thinking"
 - `thinking` - The thinking text (can be very long, often 1000+ characters)
 - `signature` - Cryptographic signature (base64-encoded, very long string)
 
 **Notes:**
+
 - Thinking content can be multi-paragraph
 - Signature is typically 2000-5000+ characters
 - Thinking is only included if thinking mode is enabled
@@ -289,10 +294,12 @@ Text blocks contain Claude's regular text responses.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "text"
 - `text` - The response text (can contain markdown, code blocks, etc.)
 
 **Notes:**
+
 - Text can include markdown formatting
 - Code blocks use triple backticks
 - Can be split across multiple text blocks
@@ -392,12 +399,14 @@ Tool use blocks represent calls to tools (Edit, Write, Read, Bash, etc.).
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "tool_use"
-- `id` - Unique tool call ID (format: "toolu_...")
+- `id` - Unique tool call ID (format: "toolu\_...")
 - `name` - Tool name ("Read", "Write", "Edit", "Bash", "Grep", "Glob", etc.)
 - `input` - Object containing tool parameters (varies by tool)
 
 **Common Tools:**
+
 - **Read** - Read file contents
   - `file_path` - Absolute path to file
   - `offset` - Optional line offset
@@ -420,7 +429,7 @@ Tool use blocks represent calls to tools (Edit, Write, Read, Bash, etc.).
   - `output_mode` - "content", "files_with_matches", or "count"
   - `head_limit` - Limit results
 - **Glob** - Find files by pattern
-  - `pattern` - Glob pattern (e.g., "*.ts")
+  - `pattern` - Glob pattern (e.g., "\*.ts")
   - `path` - Optional directory path
 
 ---
@@ -468,6 +477,7 @@ Tool result blocks contain the output from executed tools.
 ```
 
 **Field Descriptions:**
+
 - `type` - "user" (tool results are sent as user messages)
 - `message.role` - "user"
 - `message.content[].type` - "tool_result"
@@ -484,6 +494,7 @@ Tool result blocks contain the output from executed tools.
 - `slug` - Optional human-readable slug (e.g., "synthetic-sniffing-wind")
 
 **Notes:**
+
 - Tool results are sent as user messages (role: "user")
 - Results reference the original tool_use via `tool_use_id`
 - Content includes both raw output and structured metadata
@@ -537,6 +548,7 @@ File history snapshots track file modifications during a session.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "file-history-snapshot"
 - `messageId` - Associated message UUID
 - `snapshot.trackedFileBackups` - Object mapping file paths to backup info
@@ -549,6 +561,7 @@ File history snapshots track file modifications during a session.
 - `isSnapshotUpdate` - Whether this updates an existing snapshot
 
 **Notes:**
+
 - Snapshots are created at message boundaries
 - Files are tracked when edited via Edit or Write tools
 - Backup files are stored in `.claude/projects/<project>/backups/`
@@ -585,6 +598,7 @@ Progress events track hook execution and other background tasks.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "progress"
 - `data.type` - Progress type (e.g., "hook_progress")
 - `data.hookEvent` - Hook event name ("SessionStart", "SessionStop")
@@ -596,6 +610,7 @@ Progress events track hook execution and other background tasks.
 - `uuid` - Unique identifier
 
 **Hook Events:**
+
 - **SessionStart** - Runs when session starts
 - **SessionStop** - Runs when session ends/stops
 
@@ -636,6 +651,7 @@ System events provide information about hook execution and other system-level ac
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "system"
 - `subtype` - System event subtype (e.g., "stop_hook_summary")
 - `hookCount` - Number of hooks executed
@@ -667,11 +683,13 @@ Summary events provide a brief summary of the conversation or action.
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "summary"
 - `summary` - Brief summary text (usually 1-10 words)
 - `leafUuid` - UUID of the leaf message (final message in this branch)
 
 **Notes:**
+
 - Summaries are generated by Claude
 - Used for conversation history and navigation
 - Appears at the end of a conversation turn
@@ -694,12 +712,14 @@ Queue operation events track queue management operations (used by MCP tools).
 ```
 
 **Field Descriptions:**
+
 - `type` - Always "queue-operation"
 - `operation` - Operation type (e.g., "dequeue", "enqueue")
 - `timestamp` - ISO 8601 timestamp
 - `sessionId` - Session UUID
 
 **Notes:**
+
 - Used for tracking MCP tool queue operations
 - Typically appears at the start of sessions
 - May be logged by external tools (e.g., FlightPath)
@@ -729,6 +749,7 @@ Token usage statistics are included in assistant messages.
 ```
 
 **Field Descriptions:**
+
 - `input_tokens` - New input tokens (not cached)
 - `cache_creation_input_tokens` - Tokens used to create cache
 - `cache_read_input_tokens` - Tokens read from cache
@@ -739,6 +760,7 @@ Token usage statistics are included in assistant messages.
 - `service_tier` - Service tier used ("standard")
 
 **Notes:**
+
 - Cache significantly reduces token costs
 - Cache is shared within a session
 - Input tokens = new + cache_creation + cache_read
@@ -749,41 +771,41 @@ Token usage statistics are included in assistant messages.
 
 ### Common Fields Across All Events
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | string | Event type identifier |
-| `uuid` | string | Unique identifier (UUID v4) |
-| `timestamp` | string | ISO 8601 timestamp |
-| `sessionId` | string | Session UUID |
-| `version` | string | Claude CLI version |
-| `parentUuid` | string \| null | Parent message UUID |
+| Field        | Type           | Description                 |
+| ------------ | -------------- | --------------------------- |
+| `type`       | string         | Event type identifier       |
+| `uuid`       | string         | Unique identifier (UUID v4) |
+| `timestamp`  | string         | ISO 8601 timestamp          |
+| `sessionId`  | string         | Session UUID                |
+| `version`    | string         | Claude CLI version          |
+| `parentUuid` | string \| null | Parent message UUID         |
 
 ### Event Types
 
-| Type | Description |
-|------|-------------|
-| `user` | User message/prompt |
-| `assistant` | Assistant response |
-| `file-history-snapshot` | File modification tracking |
-| `progress` | Background task progress |
-| `system` | System-level events |
-| `summary` | Conversation summary |
-| `queue-operation` | Queue management operations |
+| Type                    | Description                 |
+| ----------------------- | --------------------------- |
+| `user`                  | User message/prompt         |
+| `assistant`             | Assistant response          |
+| `file-history-snapshot` | File modification tracking  |
+| `progress`              | Background task progress    |
+| `system`                | System-level events         |
+| `summary`               | Conversation summary        |
+| `queue-operation`       | Queue management operations |
 
 ### Content Block Types
 
-| Type | Description |
-|------|-------------|
-| `thinking` | Claude's reasoning process |
-| `text` | Regular text response |
-| `tool_use` | Tool call/invocation |
-| `tool_result` | Tool execution result |
+| Type          | Description                |
+| ------------- | -------------------------- |
+| `thinking`    | Claude's reasoning process |
+| `text`        | Regular text response      |
+| `tool_use`    | Tool call/invocation       |
+| `tool_result` | Tool execution result      |
 
 ### Message Roles
 
-| Role | Description |
-|------|-------------|
-| `user` | User prompt |
+| Role        | Description     |
+| ----------- | --------------- |
+| `user`      | User prompt     |
 | `assistant` | Claude response |
 
 ---
@@ -849,10 +871,12 @@ Assistant messages include a `stop_reason` field indicating why generation stopp
 4. **Final event** has `stop_reason: "end_turn"` or `"tool_use"`
 
 **Example sequence:**
+
 - Event 1: `msg_01ABC...` with thinking block, `stop_reason: null`
 - Event 2: `msg_01ABC...` with text content, `stop_reason: "end_turn"`
 
 **Key points:**
+
 - Same `parentUuid` and `message.id` for all streaming chunks
 - Different `uuid` for each log event
 - Token usage appears in each event (may be incremental)
@@ -910,15 +934,15 @@ To detect when Claude has finished responding:
 ```typescript
 // Pseudocode for completion detection
 const events = parseJsonlFile(logPath);
-const assistantMessages = events.filter(e => e.type === 'assistant');
+const assistantMessages = events.filter((e) => e.type === "assistant");
 const lastMessage = assistantMessages[assistantMessages.length - 1];
 
-if (lastMessage?.message?.stop_reason === 'end_turn') {
+if (lastMessage?.message?.stop_reason === "end_turn") {
   // Response complete
   const finalText = lastMessage.message.content
-    .filter(c => c.type === 'text')
-    .map(c => c.text)
-    .join('\n');
+    .filter((c) => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
 }
 ```
 
@@ -926,7 +950,7 @@ if (lastMessage?.message?.stop_reason === 'end_turn') {
 
 ```typescript
 // Calculate total tokens used
-const assistantMessages = events.filter(e => e.type === 'assistant');
+const assistantMessages = events.filter((e) => e.type === "assistant");
 const totalTokens = assistantMessages.reduce((sum, msg) => {
   const usage = msg.message?.usage;
   return sum + (usage?.output_tokens || 0);
@@ -977,6 +1001,7 @@ For FlightPath's Claude CLI integration, the log file provides:
 5. **Error detection** - Check for tool failures or system errors
 
 **Recommended approach:**
+
 - Use log file for completion detection (reliable)
 - Parse incrementally during active sessions
 - Extract session ID on first run

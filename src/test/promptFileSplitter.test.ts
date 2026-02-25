@@ -67,7 +67,10 @@ suite("PromptFileSplitter Tests", () => {
       const result = splitter.split(largePrompt);
 
       assert.strictEqual(result.needsSplit, true);
-      assert.ok(result.chunks.length >= 2, "Should split into at least 2 chunks");
+      assert.ok(
+        result.chunks.length >= 2,
+        "Should split into at least 2 chunks"
+      );
 
       // Verify each chunk is under limits
       result.chunks.forEach((chunk, idx) => {
@@ -83,7 +86,10 @@ suite("PromptFileSplitter Tests", () => {
 
       // Verify chunks can be reassembled
       const reassembled = result.chunks.join("\n\n");
-      assert.ok(reassembled.length > 0, "Reassembled content should not be empty");
+      assert.ok(
+        reassembled.length > 0,
+        "Reassembled content should not be empty"
+      );
     });
 
     test("should split prompts over token limit into multiple chunks", () => {
@@ -93,7 +99,10 @@ suite("PromptFileSplitter Tests", () => {
       const result = splitter.split(hugePrompt);
 
       assert.strictEqual(result.needsSplit, true);
-      assert.ok(result.chunks.length >= 2, "Should split into at least 2 chunks");
+      assert.ok(
+        result.chunks.length >= 2,
+        "Should split into at least 2 chunks"
+      );
 
       // Verify each chunk is under token limit
       result.chunks.forEach((chunk, idx) => {
@@ -109,7 +118,9 @@ suite("PromptFileSplitter Tests", () => {
       // Create prompt with clear paragraph structure
       const paragraphs: string[] = [];
       for (let i = 0; i < 2500; i++) {
-        paragraphs.push(`Paragraph ${i}:\nThis is some content.\nMore content here.`);
+        paragraphs.push(
+          `Paragraph ${i}:\nThis is some content.\nMore content here.`
+        );
       }
       const largePrompt = paragraphs.join("\n\n");
       const result = splitter.split(largePrompt);
@@ -120,10 +131,7 @@ suite("PromptFileSplitter Tests", () => {
       result.chunks.forEach((chunk, idx) => {
         const trimmed = chunk.trim();
         // Should have actual content (not just whitespace)
-        assert.ok(
-          trimmed.length > 0,
-          `Chunk ${idx} should have content`
-        );
+        assert.ok(trimmed.length > 0, `Chunk ${idx} should have content`);
         // Should contain complete paragraphs (look for "Paragraph X:" pattern)
         assert.ok(
           /Paragraph \d+:/.test(trimmed),
@@ -161,7 +169,10 @@ suite("PromptFileSplitter Tests", () => {
 
       // If split occurred, line count should be high
       if (result.needsSplit) {
-        const totalLines = result.lineCounts.reduce((sum, count) => sum + count, 0);
+        const totalLines = result.lineCounts.reduce(
+          (sum, count) => sum + count,
+          0
+        );
         assert.ok(totalLines > 1000, "Should account for high line count");
       }
     });
@@ -214,7 +225,9 @@ suite("PromptFileSplitter Tests", () => {
       const content: string[] = [];
 
       for (let i = 0; i < 500; i++) {
-        content.push(`## Section ${i}\n\nSome paragraph text here.\n\n\`\`\`javascript\nfunction test() {\n  return ${i};\n}\n\`\`\`\n\n- List item 1\n- List item 2`);
+        content.push(
+          `## Section ${i}\n\nSome paragraph text here.\n\n\`\`\`javascript\nfunction test() {\n  return ${i};\n}\n\`\`\`\n\n- List item 1\n- List item 2`
+        );
       }
 
       const mixedPrompt = content.join("\n\n");
@@ -320,10 +333,7 @@ suite("PromptFileSplitter Tests", () => {
 
       // All chunks should have content
       result.chunks.forEach((chunk, idx) => {
-        assert.ok(
-          chunk.trim().length > 0,
-          `Chunk ${idx} should not be empty`
-        );
+        assert.ok(chunk.trim().length > 0, `Chunk ${idx} should not be empty`);
       });
     });
 

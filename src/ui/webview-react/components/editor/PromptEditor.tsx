@@ -115,7 +115,14 @@ export const PromptEditor: React.FC = () => {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [promptText, promptName, properties, selectedPromptIndex, saveToVsCodeState, vscode]);
+  }, [
+    promptText,
+    promptName,
+    properties,
+    selectedPromptIndex,
+    saveToVsCodeState,
+    vscode,
+  ]);
 
   // Flush pending save on close/unload so state survives VS Code restart
   useEffect(() => {

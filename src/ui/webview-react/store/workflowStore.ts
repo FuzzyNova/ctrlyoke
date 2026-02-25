@@ -43,7 +43,10 @@ interface WorkflowState {
   historyOutputs: {
     stepCount: number;
     steps: Record<number, StepOutput>;
-    runMetadata: Pick<WorkflowOutputHistory, "runId" | "startedAt" | "completedAt" | "executionState">;
+    runMetadata: Pick<
+      WorkflowOutputHistory,
+      "runId" | "startedAt" | "completedAt" | "executionState"
+    >;
   } | null;
 }
 
@@ -87,7 +90,11 @@ interface WorkflowActions {
   setStepStatus: (stepIndex: number, status: StepStatus) => void;
 
   // History management
-  loadHistoryRun: (history: WorkflowOutputHistory, availableRuns: number, runIndex: number) => void;
+  loadHistoryRun: (
+    history: WorkflowOutputHistory,
+    availableRuns: number,
+    runIndex: number
+  ) => void;
   clearHistoryOutputs: () => void;
 
   // Partial runtime state clear (for append-continuation runs)
@@ -519,7 +526,9 @@ export const useWorkflowStore = create<
   promoteHistoryToLive: (stepCount) =>
     set((state) => {
       if (!state.historyOutputs) {
-        WebviewLog.debug(`[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`);
+        WebviewLog.debug(
+          `[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`
+        );
         return {};
       }
 
@@ -541,7 +550,9 @@ export const useWorkflowStore = create<
         }
       }
 
-      WebviewLog.debug(`[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`);
+      WebviewLog.debug(
+        `[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`
+      );
       return { cliOutputs: newCliOutputs, statusMessages: newStatusMessages };
     }),
 
