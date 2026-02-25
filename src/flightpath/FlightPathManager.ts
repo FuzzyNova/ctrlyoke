@@ -344,9 +344,10 @@ export class FlightPathManager {
 
     // Set currentPromptFile so getCurrentPromptFile() works correctly
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
-    if (workingFile && workingFile.originalFile && workingFile.prompts) {
+    if (workingFile && workingFile.prompts) {
+      const filePath = workingFile.originalFile || workingFilePath;
       this.currentPromptFile = {
-        filePath: workingFile.originalFile,
+        filePath,
         promptFile: { prompts: workingFile.prompts },
       };
     }
@@ -1278,9 +1279,12 @@ export class FlightPathManager {
           // Set currentPromptFile so getCurrentPromptFile() works correctly
           const workingFile =
             await this.promptQueue.readWorkingFile(workingFilePath);
-          if (workingFile && workingFile.originalFile && workingFile.prompts) {
+          if (workingFile && workingFile.prompts) {
+            // Use original file for file-based workflows; fall back to working file
+            // path for ephemeral workflows (created from dashboard with no original file)
+            const filePath = workingFile.originalFile || workingFilePath;
             this.currentPromptFile = {
-              filePath: workingFile.originalFile,
+              filePath,
               promptFile: { prompts: workingFile.prompts },
             };
           }
@@ -1445,9 +1449,10 @@ export class FlightPathManager {
         // Keep currentPromptFile in sync with working file (for queue extensions)
         const workingFile =
           await this.promptQueue.readWorkingFile(changedFilePath);
-        if (workingFile && workingFile.originalFile && workingFile.prompts) {
+        if (workingFile && workingFile.prompts) {
+          const filePath = workingFile.originalFile || changedFilePath;
           this.currentPromptFile = {
-            filePath: workingFile.originalFile,
+            filePath,
             promptFile: { prompts: workingFile.prompts },
           };
         }

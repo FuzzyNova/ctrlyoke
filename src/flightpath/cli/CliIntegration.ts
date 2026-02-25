@@ -559,6 +559,34 @@ export class CliIntegration extends HarnessIntegration {
       const startTime = new Date();
       Log.info(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
+      // Clean up any stale stop notification file from a previous run of this session.
+      // If the previous run crashed before cleanup, the leftover file would cause an
+      // immediate false completion the next time this session is resumed.
+      if (resolvedSessionId && this.provider.notificationMonitor) {
+        const workspaceRoot = this.getWorkspaceRoot();
+        if (workspaceRoot) {
+          const notifyDir =
+            this.provider.notificationMonitor.getNotificationDirectory(
+              workspaceRoot
+            );
+          const staleStopFile = path.join(
+            notifyDir,
+            `${resolvedSessionId}-stop.json`
+          );
+          if (fs.existsSync(staleStopFile)) {
+            try {
+              fs.unlinkSync(staleStopFile);
+              Log.debug(
+                `🧹 Cleaned up stale stop notification for session ${resolvedSessionId.substring(0, 8)}`
+              );
+            } catch {
+              // Non-fatal — worst case the notification monitor will find it
+              // but the startTime filter will ignore it if it's old enough
+            }
+          }
+        }
+      }
+
       // 2. Spawn CLI in terminal (TUI displays for user)
       const startResult = await this.startCliProcess(
         args,

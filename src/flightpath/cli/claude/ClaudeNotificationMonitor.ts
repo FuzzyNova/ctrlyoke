@@ -65,12 +65,12 @@ export class ClaudeNotificationMonitor
 
     // Poll for -stop.json notification file
     while (Date.now() - startTime.getTime() < config.timeoutMs) {
-      // Check for cancellation
+      // Check for cancellation or early exit (e.g. completion already detected via log file)
       if (onCancel && onCancel()) {
-        Log.info("🛑 User cancelled - stopping Stop hook monitoring");
+        Log.debug("⏹️ Stop hook monitoring stopped (cancelled or already completed)");
         return {
           completed: false,
-          error: "User cancelled execution",
+          error: "Execution cancelled",
         };
       }
 
