@@ -31,6 +31,10 @@ export const MESSAGE_TYPES = {
   DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",
   DYNAMIC_QUEUE_DISABLED: "dynamicQueueDisabled",
 
+  // Webview -> Extension (Logging)
+  LOG_MESSAGE: "logMessage", // Forward webview log entries to extension Log class (payload: { level: LogLevel, message: string })
+
+
   // Webview -> Extension
   READY: "ready",
   NEW_PROMPT: "newPrompt",
@@ -311,6 +315,16 @@ export const CLI_EVENT_TYPES = {
 } as const;
 
 // ============================================================================
+// LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
+// ============================================================================
+export const LOG_LEVELS = {
+  DEBUG: "debug",
+  INFO: "info",
+  WARN: "warn",
+  ERROR: "error",
+} as const;
+
+// ============================================================================
 // TYPE HELPERS - For TypeScript type safety
 // ============================================================================
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -329,3 +343,4 @@ export type CliEventType =
   (typeof CLI_EVENT_TYPES)[keyof typeof CLI_EVENT_TYPES];
 export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
+export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];

@@ -18,6 +18,7 @@ import { linter } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
+import { WebviewLog } from "../../utils/logger";
 
 // Typo.js spell checker (will be loaded from window.Typo)
 declare global {
@@ -92,10 +93,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           });
         }
       } catch (error) {
-        console.error(
-          "[CodeMirror] Failed to load Typo.js dictionaries:",
-          error
-        );
+        WebviewLog.error(`[CodeMirror] Failed to load Typo.js dictionaries: ${error instanceof Error ? error.message : String(error)}`);
         typoCheckerRef.current = null;
       }
     };

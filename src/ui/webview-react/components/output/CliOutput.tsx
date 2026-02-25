@@ -12,6 +12,7 @@ import {
   GenericToolCallOutput,
 } from "./ToolCallOutput";
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
+import { WebviewLog } from "../../utils/logger";
 import type {
   CliOutputItem,
   CliEvent,
@@ -92,11 +93,8 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   if (typeof result.output === "string") {
     outputStr = result.output;
   } else if (result.output != null) {
-    console.warn(
-      "[ToolResultOutput] result.output is not a string — parser may need updating. Actual type:",
-      typeof result.output,
-      "Value:",
-      result.output
+    WebviewLog.warn(
+      `[ToolResultOutput] result.output is not a string — parser may need updating. Actual type: ${typeof result.output}, Value: ${JSON.stringify(result.output)}`
     );
     outputStr = JSON.stringify(result.output);
   }
@@ -105,11 +103,8 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   if (typeof result.error === "string") {
     errorStr = result.error;
   } else if (result.error != null) {
-    console.warn(
-      "[ToolResultOutput] result.error is not a string — parser may need updating. Actual type:",
-      typeof result.error,
-      "Value:",
-      result.error
+    WebviewLog.warn(
+      `[ToolResultOutput] result.error is not a string — parser may need updating. Actual type: ${typeof result.error}, Value: ${JSON.stringify(result.error)}`
     );
     errorStr = JSON.stringify(result.error);
   }

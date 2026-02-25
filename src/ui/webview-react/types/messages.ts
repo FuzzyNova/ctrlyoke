@@ -9,6 +9,7 @@
 // Re-export all constants from DashboardConstants
 export {
   MESSAGE_TYPES,
+  LOG_LEVELS,
   EXECUTION_STATES,
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
@@ -18,6 +19,7 @@ export {
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
   type MessageType,
+  type WebviewLogLevel,
   type ExecutionState,
   type StepStatus,
   type StatusMessageSeverity,

@@ -1,4 +1,5 @@
 import { encode } from "gpt-tokenizer";
+import { WebviewLog } from "./logger";
 
 /**
  * Count tokens in text using GPT tokenizer
@@ -9,7 +10,7 @@ export function countTokens(text: string): number {
     const tokens = encode(text);
     return tokens.length;
   } catch (error) {
-    console.error("Token counting failed:", error);
+    WebviewLog.error(`Token counting failed: ${error instanceof Error ? error.message : String(error)}`);
     return 0;
   }
 }

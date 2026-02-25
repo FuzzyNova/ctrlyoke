@@ -8,6 +8,7 @@ import {
 } from "react-resizable-panels";
 import { useMessageHandler } from "@hooks/useMessageHandler";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
+import { WebviewLog } from "@utils/logger";
 import { useIsMobile } from "@hooks/useMediaQuery";
 import { useUiStore } from "@store/uiStore";
 import { MESSAGE_TYPES } from "@/types/messages";
@@ -181,10 +182,12 @@ function App() {
         try {
           verticalGroupRef.current.setLayout(layout);
         } catch (error) {
-          console.error("[LAYOUT] ❌ setLayout() failed:", error);
+          WebviewLog.error(
+            `[LAYOUT] setLayout() failed: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       } else {
-        console.error("[LAYOUT] ❌ verticalGroupRef.current is null!");
+        WebviewLog.error("[LAYOUT] verticalGroupRef.current is null!");
       }
 
       needsForcedResize.current = false;
@@ -341,14 +344,26 @@ function App() {
   // Store → mobile panel sync (before paint to avoid flash)
   useLayoutEffect(() => {
     if (!isMobile) return;
+
+    // Apply collapsed state first, then expand open panels. In mobile stacked
+    // layout this prevents "collapse in place" gaps when a middle panel
+    // collapses while neighboring panels are already collapsed.
     if (promptsCollapsed) mobilePromptsRef.current?.collapse();
-    else mobilePromptsRef.current?.expand();
     if (outputCollapsed) mobileOutputRef.current?.collapse();
-    else mobileOutputRef.current?.expand();
     if (editorCollapsed) mobileEditorRef.current?.collapse();
-    else mobileEditorRef.current?.expand();
     if (settingsCollapsed) mobileSettingsRef.current?.collapse();
-    else mobileSettingsRef.current?.expand();
+
+    if (!promptsCollapsed) mobilePromptsRef.current?.expand();
+    if (!outputCollapsed) mobileOutputRef.current?.expand();
+    if (!editorCollapsed) mobileEditorRef.current?.expand();
+    if (!settingsCollapsed) mobileSettingsRef.current?.expand();
+
+    // Guard against a react-resizable-panels edge case in mobile where
+    // collapsing editor (with output open and settings collapsed) can leave
+    // output at its previous size until the next interaction.
+    if (editorCollapsed && !outputCollapsed && settingsCollapsed) {
+      mobileOutputRef.current?.expand();
+    }
   }, [
     isMobile,
     promptsCollapsed,

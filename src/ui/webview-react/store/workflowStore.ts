@@ -14,6 +14,7 @@ import type {
   StepOutput,
 } from "@root/types/OutputHistoryTypes";
 import { useUiStore } from "./uiStore";
+import { WebviewLog } from "@utils/logger";
 
 /**
  * Workflow state - Core workflow execution data
@@ -240,8 +241,8 @@ export const useWorkflowStore = create<
         }
       } else if (attemptIndex > 0 && !retryState) {
         // Bug: retry output without retry state — replace attempt 0 and warn
-        console.warn(
-          `⚠️ WorkflowStore: Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. Replacing initial output (likely a bug).`
+        WebviewLog.warn(
+          `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. Replacing initial output (likely a bug).`
         );
         newOutputs = [output];
       } else {
@@ -518,7 +519,7 @@ export const useWorkflowStore = create<
   promoteHistoryToLive: (stepCount) =>
     set((state) => {
       if (!state.historyOutputs) {
-        console.log(`[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`);
+        WebviewLog.debug(`[WorkflowStore] promoteHistoryToLive(${stepCount}): no historyOutputs, nothing to promote`);
         return {};
       }
 
@@ -540,7 +541,7 @@ export const useWorkflowStore = create<
         }
       }
 
-      console.log(`[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`);
+      WebviewLog.debug(`[WorkflowStore] promoteHistoryToLive(${stepCount}): promoted ${promoted} step(s) from history into live cliOutputs`);
       return { cliOutputs: newCliOutputs, statusMessages: newStatusMessages };
     }),
 

@@ -4,6 +4,7 @@ import * as fs from "fs/promises";
 import * as fsSync from "fs";
 import {
   MESSAGE_TYPES,
+  LOG_LEVELS,
   EXECUTION_STATES,
   HARNESS_IDS,
   HARNESS_STATUS_STRINGS,
@@ -13,6 +14,7 @@ import {
   DEFAULT_MODELS,
   QUEUE_POSITION,
   type HarnessStatusString,
+  type WebviewLogLevel,
 } from "../types/DashboardConstants";
 import { CliEvent, CliOutputData } from "../types/WebviewMessageTypes";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
@@ -494,6 +496,10 @@ window.vscodeApi = acquireVsCodeApi();
 
         case MESSAGE_TYPES.UPDATE_CONFIG:
           this.handleUpdateConfig(message.key, message.value);
+          break;
+
+        case MESSAGE_TYPES.LOG_MESSAGE:
+          this.handleWebviewLog(message.level, message.message);
           break;
 
         default:
@@ -1831,6 +1837,24 @@ window.vscodeApi = acquireVsCodeApi();
 
   private async handleUpdateConfig(key: string, value: any): Promise<void> {
     await ConfigurationUtils.updateSetting(key, value);
+  }
+
+  private handleWebviewLog(level: WebviewLogLevel, message: string): void {
+    const prefixed = `[Webview] ${message}`;
+    switch (level) {
+      case LOG_LEVELS.DEBUG:
+        Log.debug(prefixed);
+        break;
+      case LOG_LEVELS.WARN:
+        Log.warn(prefixed);
+        break;
+      case LOG_LEVELS.ERROR:
+        Log.error(prefixed);
+        break;
+      default:
+        Log.info(prefixed);
+        break;
+    }
   }
 
   // ============================================================================

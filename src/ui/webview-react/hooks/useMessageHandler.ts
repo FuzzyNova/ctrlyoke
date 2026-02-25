@@ -23,6 +23,7 @@ import {
   type StepStatus,
   type HarnessId,
 } from "../types/messages";
+import { WebviewLog } from "@utils/logger";
 
 // ============================================================================
 // Types
@@ -227,7 +228,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const isContinuation = message.isContinuation === true;
     const preserveStepCount = message.preserveStepCount ?? 0;
 
-    console.log(
+    WebviewLog.debug(
       `[EXECUTION_STARTED] isContinuation=${isContinuation}, preserveStepCount=${preserveStepCount}, ` +
       `totalSteps=${message.totalSteps}, isViewingHistory=${uiStore.isViewingHistory}, ` +
       `historyOutputs=${workflowStore.historyOutputs ? `{stepCount:${workflowStore.historyOutputs.stepCount}}` : "null"}, ` +
@@ -237,7 +238,7 @@ function createMessageHandlers(): MessageHandlerMap {
     if (isContinuation && preserveStepCount > 0) {
       // Append-continuation run: promote history snapshot into live cliOutputs BEFORE
       // clearing history view, so the user still sees previous prompts' output.
-      console.log(`[EXECUTION_STARTED] Continuation — promoting ${preserveStepCount} history step(s) to live, then switching to live view`);
+      WebviewLog.debug(`[EXECUTION_STARTED] Continuation — promoting ${preserveStepCount} history step(s) to live, then switching to live view`);
       workflowStore.promoteHistoryToLive(preserveStepCount);
 
       // Now safe to switch to live view (live data is populated)
@@ -261,12 +262,12 @@ function createMessageHandlers(): MessageHandlerMap {
       // Clear runtime state only for the new steps (steps >= preserveStepCount)
       workflowStore.clearRuntimeStateFromStep(preserveStepCount);
 
-      console.log(
+      WebviewLog.debug(
         `[EXECUTION_STARTED] After promote — liveOutputKeys=${Object.keys(useWorkflowStore.getState().cliOutputs).join(",") || "none"}`
       );
     } else {
       // Fresh start: switch to live view and reset everything
-      console.log(`[EXECUTION_STARTED] Fresh start — clearing all runtime state`);
+      WebviewLog.debug(`[EXECUTION_STARTED] Fresh start — clearing all runtime state`);
       workflowStore.clearHistoryOutputs();
       uiStore.clearHistoryView();
 
@@ -357,8 +358,8 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_CHUNK] = (message) => {
     const workflowStore = useWorkflowStore.getState();
-    console.log(
-      `🔍 Dashboard: Received CLI_STREAMING_CHUNK, stepIndex=${message.stepIndex}, chunk length=${message.chunk?.length}`
+    WebviewLog.debug(
+      `[CLI_STREAMING_CHUNK] stepIndex=${message.stepIndex}, chunk length=${message.chunk?.length}`
     );
     workflowStore.appendStreamingChunk(message.stepIndex, message.chunk || "");
   };
@@ -370,8 +371,8 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     const events = message.events || [];
 
-    console.log(
-      `🔍 Dashboard: Received CLI_STREAMING_EVENTS, stepIndex=${message.stepIndex}, event count=${events.length}`
+    WebviewLog.debug(
+      `[CLI_STREAMING_EVENTS] stepIndex=${message.stepIndex}, event count=${events.length}`
     );
 
     // Append events to streaming buffer (creates buffer if needed)
@@ -541,7 +542,7 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.CONFIG_VALUE] = (message) => {
     // Config values are typically handled by specific components
     // that requested them. This handler logs for debugging.
-    console.log(
+    WebviewLog.debug(
       `[MessageHandler] Received CONFIG_VALUE: ${message.key} = ${message.value}`
     );
   };
@@ -552,7 +553,7 @@ function createMessageHandlers(): MessageHandlerMap {
   handlers[MESSAGE_TYPES.COMPLETIONS_RESPONSE] = (message) => {
     // Completions are handled by the editor component directly
     // This is logged for debugging
-    console.log(
+    WebviewLog.debug(
       `[MessageHandler] Received COMPLETIONS_RESPONSE: ${message.items?.length} items, from=${message.from}`
     );
   };
@@ -561,7 +562,7 @@ function createMessageHandlers(): MessageHandlerMap {
   // RUN_HISTORY_UPDATED - Available run count changed (new run initialized)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.RUN_HISTORY_UPDATED] = (message) => {
-    console.log(`[MessageHandler] RUN_HISTORY_UPDATED: runCount=${message.runCount}, runTimestamps=`, message.runTimestamps);
+    WebviewLog.debug(`[MessageHandler] RUN_HISTORY_UPDATED: runCount=${message.runCount}, runTimestamps=${JSON.stringify(message.runTimestamps)}`);
     const update: { availableRuns: number; runTimestamps?: (number | undefined)[]; runStates?: (string | undefined)[] } = {
       availableRuns: message.runCount,
     };
@@ -586,7 +587,7 @@ function createMessageHandlers(): MessageHandlerMap {
       // Also clear availableRuns since all history was deleted
       useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
     } else {
-      console.log(`[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, runTimestamps=`, runTimestamps);
+      WebviewLog.debug(`[MessageHandler] OUTPUT_HISTORY_LOADED: availableRuns=${availableRuns}, runTimestamps=${JSON.stringify(runTimestamps)}`);
       useWorkflowStore.getState().loadHistoryRun(history, availableRuns, currentRunIndex);
       if (runTimestamps !== undefined) {
         useUiStore.getState().setRunTimestamps(runTimestamps);
@@ -659,7 +660,7 @@ export function useMessageHandler(): UseMessageHandlerReturn {
       if (handler) {
         handler(message);
       } else {
-        console.warn(`[MessageHandler] Unknown message type: ${message.type}`);
+        WebviewLog.warn(`[MessageHandler] Unknown message type: ${message.type}`);
       }
     };
 
