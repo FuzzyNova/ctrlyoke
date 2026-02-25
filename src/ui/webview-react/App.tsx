@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Panel,
   Group,
@@ -37,6 +37,7 @@ import {
 function App() {
   const vscode = useVsCodeApi();
   const isMobile = useIsMobile();
+  const [uiLayoutReady, setUiLayoutReady] = useState(false);
 
   // Panel imperative refs for programmatic collapse/expand
   const settingsRef = useRef<PanelImperativeHandle>(null);
@@ -81,6 +82,37 @@ function App() {
     settings: String(DEFAULT_MOBILE_SIZES.settings),
   });
 
+  const getMobilePanelSnapshot = () => ({
+    isMobile,
+    mobileInitialized: mobileInitializedRef.current,
+    store: {
+      promptsCollapsed,
+      outputCollapsed,
+      editorCollapsed,
+      settingsCollapsed,
+    },
+    panelState: {
+      prompts: {
+        collapsed: mobilePromptsRef.current?.isCollapsed() ?? null,
+        size: mobilePromptsRef.current?.getSize().asPercentage ?? null,
+      },
+      output: {
+        collapsed: mobileOutputRef.current?.isCollapsed() ?? null,
+        size: mobileOutputRef.current?.getSize().asPercentage ?? null,
+      },
+      editor: {
+        collapsed: mobileEditorRef.current?.isCollapsed() ?? null,
+        size: mobileEditorRef.current?.getSize().asPercentage ?? null,
+      },
+      settings: {
+        collapsed: mobileSettingsRef.current?.isCollapsed() ?? null,
+        size: mobileSettingsRef.current?.getSize().asPercentage ?? null,
+      },
+    },
+    lastMobileSizes: { ...lastMobileSizes.current },
+    mountDefaults: { ...mobileMountDefaults.current },
+  });
+
   // Collapse state from store (source of truth)
   const settingsCollapsed = useUiStore((s) => s.settingsCollapsed);
   const setSettingsCollapsed = useUiStore((s) => s.setSettingsCollapsed);
@@ -90,6 +122,62 @@ function App() {
   const setOutputCollapsed = useUiStore((s) => s.setOutputCollapsed);
   const editorCollapsed = useUiStore((s) => s.editorCollapsed);
   const setEditorCollapsed = useUiStore((s) => s.setEditorCollapsed);
+
+  // Restore persisted layout from VS Code webview state.
+  useLayoutEffect(() => {
+    try {
+      const persisted = vscode.getState()?.uiLayout;
+      if (persisted && typeof persisted === "object") {
+        if (typeof persisted.promptsCollapsed === "boolean") {
+          setPromptsCollapsed(persisted.promptsCollapsed);
+        }
+        if (typeof persisted.outputCollapsed === "boolean") {
+          setOutputCollapsed(persisted.outputCollapsed);
+        }
+        if (typeof persisted.editorCollapsed === "boolean") {
+          setEditorCollapsed(persisted.editorCollapsed);
+        }
+        if (typeof persisted.settingsCollapsed === "boolean") {
+          setSettingsCollapsed(persisted.settingsCollapsed);
+        }
+      }
+    } catch (error) {
+      WebviewLog.warn(
+        `[LAYOUT][RESTORE] failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setUiLayoutReady(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist collapsed state into VS Code webview state so it survives VS Code restarts.
+  useEffect(() => {
+    if (!uiLayoutReady) return;
+    try {
+      const current = vscode.getState() ?? {};
+      vscode.setState({
+        ...current,
+        uiLayout: {
+          promptsCollapsed,
+          outputCollapsed,
+          editorCollapsed,
+          settingsCollapsed,
+        },
+      });
+    } catch (error) {
+      WebviewLog.warn(
+        `[LAYOUT][PERSIST] failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }, [
+    uiLayoutReady,
+    vscode,
+    promptsCollapsed,
+    outputCollapsed,
+    editorCollapsed,
+    settingsCollapsed,
+  ]);
 
   // Stable mount defaults — only recomputed on the both-collapsed → one-open
   // transition (i.e. when the vertical Group remounts).  Keeping defaultSize
@@ -127,33 +215,37 @@ function App() {
   // collapsed panels, so they mount at the correct visual size — collapse()
   // just sets the library's internal flag without needing to resize.
   useLayoutEffect(() => {
+    if (!uiLayoutReady) return;
     if (isMobile) return;
     if (settingsCollapsed) settingsRef.current?.collapse();
     else settingsRef.current?.expand();
     if (promptsCollapsed) promptsRef.current?.collapse();
     else promptsRef.current?.expand();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile]);
+  }, [isMobile, uiLayoutReady]);
 
   // Horizontal gate management: open after mount onResize events have settled.
   // useEffect runs after child effects (including Panel mount onResize), so by
   // the time this fires, all spurious mount events have been gated.
   useEffect(() => {
+    if (!uiLayoutReady) return;
     if (!isMobile) {
       horizontalInitializedRef.current = true;
     }
-  }, [isMobile]);
+  }, [isMobile, uiLayoutReady]);
 
   // Ongoing store → panel sync
   useEffect(() => {
+    if (!uiLayoutReady) return;
     if (settingsCollapsed) settingsRef.current?.collapse();
     else settingsRef.current?.expand();
-  }, [settingsCollapsed]);
+  }, [settingsCollapsed, uiLayoutReady]);
 
   useEffect(() => {
+    if (!uiLayoutReady) return;
     if (promptsCollapsed) promptsRef.current?.collapse();
     else promptsRef.current?.expand();
-  }, [promptsCollapsed]);
+  }, [promptsCollapsed, uiLayoutReady]);
 
   // Sync store → panels imperatively.  Runs before paint so there is no visible
   // flash of the default 60/40 split before the persisted collapsed state is
@@ -161,6 +253,7 @@ function App() {
   // below, which runs after all child effects (including the Panel mount
   // onResize events) have fired.
   useLayoutEffect(() => {
+    if (!uiLayoutReady) return;
     const shouldForceResize =
       !outputCollapsed && !editorCollapsed && needsForcedResize.current;
 
@@ -214,13 +307,14 @@ function App() {
         }
       }
     }
-  }, [outputCollapsed, editorCollapsed, isMobile]);
+  }, [outputCollapsed, editorCollapsed, isMobile, uiLayoutReady]);
 
   // Gate management: closed when both panels are collapsed (the Group
   // unmounts; next mount needs re-sync before onResize is trusted).  Opened
   // in useEffect (not useLayoutEffect) so that the Panel mount onResize
   // events — which fire in child useEffects — are still gated when they run.
   useEffect(() => {
+    if (!uiLayoutReady) return;
     if (outputCollapsed && editorCollapsed) {
       initializedRef.current = false;
       // Clear forced resize flag when both collapse
@@ -230,7 +324,7 @@ function App() {
     } else {
       initializedRef.current = true;
     }
-  }, [outputCollapsed, editorCollapsed, isMobile]);
+  }, [outputCollapsed, editorCollapsed, isMobile, uiLayoutReady]);
 
   // Manage layout transitions between desktop and mobile.
   // Collapsed state is global (shared between layouts) — switching layouts
@@ -343,6 +437,7 @@ function App() {
 
   // Store → mobile panel sync (before paint to avoid flash)
   useLayoutEffect(() => {
+    if (!uiLayoutReady) return;
     if (!isMobile) return;
 
     // Apply collapsed state first, then expand open panels. In mobile stacked
@@ -362,9 +457,131 @@ function App() {
     // collapsing editor (with output open and settings collapsed) can leave
     // output at its previous size until the next interaction.
     if (editorCollapsed && !outputCollapsed && settingsCollapsed) {
+      WebviewLog.warn(
+        "[MOBILE][SYNC] editor collapsed + output open + settings collapsed; forcing output expand",
+        getMobilePanelSnapshot()
+      );
       mobileOutputRef.current?.expand();
+
+      const editorActuallyCollapsed =
+        mobileEditorRef.current?.isCollapsed() ?? false;
+
+      if (!editorActuallyCollapsed && mobileGroupRef.current) {
+        const promptsSize =
+          mobilePromptsRef.current?.getSize().asPercentage ??
+          lastMobileSizes.current.prompts;
+        const outputSize =
+          mobileOutputRef.current?.getSize().asPercentage ??
+          lastMobileSizes.current.output;
+        const editorSize =
+          mobileEditorRef.current?.getSize().asPercentage ??
+          lastMobileSizes.current.editor;
+        const settingsSize =
+          mobileSettingsRef.current?.getSize().asPercentage ??
+          lastMobileSizes.current.settings;
+
+        const collapsedReference =
+          (promptsCollapsed ? promptsSize : undefined) ??
+          (settingsCollapsed ? settingsSize : undefined) ??
+          2.5;
+        const targetEditorSize = Math.max(0.5, collapsedReference);
+        const reclaimed = Math.max(0, editorSize - targetEditorSize);
+        const nextOutputSize = outputSize + reclaimed;
+
+        const fallbackLayout = {
+          "mobile-prompts-panel": promptsSize,
+          "mobile-output-panel": nextOutputSize,
+          "mobile-editor-panel": targetEditorSize,
+          "mobile-settings-panel": settingsSize,
+        };
+
+        WebviewLog.warn(
+          "[MOBILE][SYNC] editor still not collapsed after imperative collapse(); applying fallback setLayout",
+          {
+            before: {
+              promptsSize,
+              outputSize,
+              editorSize,
+              settingsSize,
+              collapsedReference,
+            },
+            fallbackLayout,
+          }
+        );
+
+        try {
+          mobileGroupRef.current.setLayout(fallbackLayout);
+        } catch (error) {
+          WebviewLog.error(
+            `[MOBILE][SYNC] fallback setLayout failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+    }
+
+    // Symmetric guard: expanding editor (with output open and side panels
+    // collapsed) can also be ignored by the panel library. If store says
+    // editor should be open but panel is still collapsed, force a layout that
+    // restores editor toward its previous open size.
+    if (
+      !editorCollapsed &&
+      !outputCollapsed &&
+      promptsCollapsed &&
+      settingsCollapsed
+    ) {
+      const editorActuallyCollapsed =
+        mobileEditorRef.current?.isCollapsed() ?? false;
+
+      if (editorActuallyCollapsed && mobileGroupRef.current) {
+        const promptsSize =
+          mobilePromptsRef.current?.getSize().asPercentage ??
+          (promptsCollapsed ? 2.5 : lastMobileSizes.current.prompts);
+        const settingsSize =
+          mobileSettingsRef.current?.getSize().asPercentage ??
+          (settingsCollapsed ? 2.5 : lastMobileSizes.current.settings);
+        const reserved = promptsSize + settingsSize;
+        const available = Math.max(1, 100 - reserved);
+
+        const minOpenSize = Number.parseFloat(PANEL_MIN_SIZE_SMALL) || 10;
+        const desiredEditorSize = Math.max(
+          minOpenSize,
+          lastMobileSizes.current.editor
+        );
+        const targetEditorSize = Math.min(desiredEditorSize, available - 1);
+        const targetOutputSize = Math.max(1, available - targetEditorSize);
+
+        const fallbackLayout = {
+          "mobile-prompts-panel": promptsSize,
+          "mobile-output-panel": targetOutputSize,
+          "mobile-editor-panel": targetEditorSize,
+          "mobile-settings-panel": settingsSize,
+        };
+
+        WebviewLog.warn(
+          "[MOBILE][SYNC] editor still collapsed after imperative expand(); applying fallback setLayout",
+          {
+            before: {
+              promptsSize,
+              settingsSize,
+              available,
+              desiredEditorSize,
+              lastMobileSizes: { ...lastMobileSizes.current },
+            },
+            fallbackLayout,
+          }
+        );
+
+        try {
+          mobileGroupRef.current.setLayout(fallbackLayout);
+        } catch (error) {
+          WebviewLog.error(
+            `[MOBILE][SYNC] expand fallback setLayout failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
     }
   }, [
+    uiLayoutReady,
     isMobile,
     promptsCollapsed,
     outputCollapsed,
@@ -374,6 +591,7 @@ function App() {
 
   // Mobile gate management: close when all collapsed, open after sync
   useEffect(() => {
+    if (!uiLayoutReady) return;
     if (!isMobile) return;
     const allCollapsed =
       promptsCollapsed &&
@@ -382,6 +600,7 @@ function App() {
       settingsCollapsed;
     mobileInitializedRef.current = !allCollapsed;
   }, [
+    uiLayoutReady,
     isMobile,
     promptsCollapsed,
     outputCollapsed,
@@ -469,14 +688,17 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-prompts-panel"
               onResize={() => {
-                if (!mobileInitializedRef.current) return;
+                if (!mobileInitializedRef.current || !uiLayoutReady) return;
                 const isCollapsed =
                   mobilePromptsRef.current?.isCollapsed() ?? false;
+                const size =
+                  mobilePromptsRef.current?.getSize().asPercentage ?? null;
                 if (!isCollapsed) {
-                  const size = mobilePromptsRef.current?.getSize().asPercentage;
                   if (size != null) lastMobileSizes.current.prompts = size;
                 }
-                setPromptsCollapsed(isCollapsed);
+                if (isCollapsed !== promptsCollapsed) {
+                  setPromptsCollapsed(isCollapsed);
+                }
               }}
             >
               <PromptsPanel panelBarOrientation="horizontal" />
@@ -492,14 +714,17 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-output-panel"
               onResize={() => {
-                if (!mobileInitializedRef.current) return;
+                if (!mobileInitializedRef.current || !uiLayoutReady) return;
                 const isCollapsed =
                   mobileOutputRef.current?.isCollapsed() ?? false;
+                const size =
+                  mobileOutputRef.current?.getSize().asPercentage ?? null;
                 if (!isCollapsed) {
-                  const size = mobileOutputRef.current?.getSize().asPercentage;
                   if (size != null) lastMobileSizes.current.output = size;
                 }
-                setOutputCollapsed(isCollapsed);
+                if (isCollapsed !== outputCollapsed) {
+                  setOutputCollapsed(isCollapsed);
+                }
               }}
             >
               <OutputSection />
@@ -515,14 +740,17 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-editor-panel"
               onResize={() => {
-                if (!mobileInitializedRef.current) return;
+                if (!mobileInitializedRef.current || !uiLayoutReady) return;
                 const isCollapsed =
                   mobileEditorRef.current?.isCollapsed() ?? false;
+                const size =
+                  mobileEditorRef.current?.getSize().asPercentage ?? null;
                 if (!isCollapsed) {
-                  const size = mobileEditorRef.current?.getSize().asPercentage;
                   if (size != null) lastMobileSizes.current.editor = size;
                 }
-                setEditorCollapsed(isCollapsed);
+                if (isCollapsed !== editorCollapsed) {
+                  setEditorCollapsed(isCollapsed);
+                }
               }}
             >
               <EditorSection />
@@ -538,15 +766,17 @@ function App() {
               minSize={PANEL_MIN_SIZE_SMALL}
               id="mobile-settings-panel"
               onResize={() => {
-                if (!mobileInitializedRef.current) return;
+                if (!mobileInitializedRef.current || !uiLayoutReady) return;
                 const isCollapsed =
                   mobileSettingsRef.current?.isCollapsed() ?? false;
+                const size =
+                  mobileSettingsRef.current?.getSize().asPercentage ?? null;
                 if (!isCollapsed) {
-                  const size =
-                    mobileSettingsRef.current?.getSize().asPercentage;
                   if (size != null) lastMobileSizes.current.settings = size;
                 }
-                setSettingsCollapsed(isCollapsed);
+                if (isCollapsed !== settingsCollapsed) {
+                  setSettingsCollapsed(isCollapsed);
+                }
               }}
             >
               <SettingsPanel panelBarOrientation="horizontal" />
@@ -582,7 +812,7 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="prompts-panel"
           onResize={() => {
-            if (!horizontalInitializedRef.current) return;
+            if (!horizontalInitializedRef.current || !uiLayoutReady) return;
             const isCollapsed = promptsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = promptsRef.current?.getSize().asPercentage;
@@ -626,7 +856,7 @@ function App() {
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="output-panel"
                 onResize={() => {
-                  if (!initializedRef.current) {
+                  if (!initializedRef.current || !uiLayoutReady) {
                     return;
                   }
                   const outputCollapsed =
@@ -659,7 +889,7 @@ function App() {
                 minSize={PANEL_MIN_SIZE_CENTER}
                 id="editor-panel"
                 onResize={() => {
-                  if (!initializedRef.current) {
+                  if (!initializedRef.current || !uiLayoutReady) {
                     return;
                   }
                   const editorCollapsed =
@@ -698,7 +928,7 @@ function App() {
           maxSize={PANEL_MAX_SIZE_SIDEBAR}
           id="settings-panel"
           onResize={() => {
-            if (!horizontalInitializedRef.current) return;
+            if (!horizontalInitializedRef.current || !uiLayoutReady) return;
             const isCollapsed = settingsRef.current?.isCollapsed() ?? false;
             if (!isCollapsed) {
               const size = settingsRef.current?.getSize().asPercentage;
