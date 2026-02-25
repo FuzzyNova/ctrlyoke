@@ -151,6 +151,10 @@ function createMessageHandlers(): MessageHandlerMap {
     uiStore.clearHistoryView();
     useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
+    // Reset editor to new prompt mode — any edit mode state from the previous
+    // workflow (selectedPromptIndex, originalPromptData) is no longer valid.
+    editorStore.resetEditor();
+
     editorStore.setHasActiveQueue(true);
     settingsStore.setWorkflowLoaded(true);
   };
@@ -171,6 +175,10 @@ function createMessageHandlers(): MessageHandlerMap {
       currentStep: message.currentIndex || 0,
       results: message.results || [],
     });
+
+    // Reset editor to new prompt mode — stale edit state from a prior session
+    // is not meaningful for the restored workflow.
+    editorStore.resetEditor();
 
     editorStore.setHasActiveQueue(true);
     settingsStore.setWorkflowLoaded(true);

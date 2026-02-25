@@ -223,9 +223,14 @@ export class ChatSessionParser {
       // Read and parse session file (supports .json and .jsonl)
       const session = ChatSessionParser.parseSessionFile(sessionFilePath);
 
-      if (!session || !session.requests || session.requests.length === 0) {
+      if (!session) {
+        // File doesn't exist or couldn't be parsed — surface as error event
+        throw new Error(`session file could not be read or parsed`);
+      }
+
+      if (!session.requests || session.requests.length === 0) {
         Log.warn("Session file has no requests");
-        return this.createEmptyOutput(session?.sessionId ?? "unknown");
+        return this.createEmptyOutput(session.sessionId ?? "unknown");
       }
 
       // Get target request
@@ -331,27 +336,45 @@ export class ChatSessionParser {
 
     // Extract tool call arguments from metadata.
     // Matching strategy:
-    //   - By ID: response item toolCallId "call_abc" vs round id "call_abc__vscode-NNN" → use startsWith
     //   - By name: response item toolId "copilot_createFile" vs round name "create_file" → use normalization map
+    //   - By ID: response item toolCallId "call_abc" vs round id "call_abc__vscode-NNN" → use startsWith
+    // Name overwrite: only when matched by normalization (needed for upgrade pass).
+    // When matched by ID for an unknown tool, preserve the original toolId for display.
     if (request.result.metadata?.toolCallRounds) {
       for (const round of request.result.metadata.toolCallRounds) {
         for (const toolCall of round.toolCalls) {
           const canonicalName = toolCall.name;
-          const toolEvent = events.find(
+
+          // Try name-normalized match first
+          let toolEvent = events.find(
             (e) =>
               e.type === CLI_EVENT_TYPES.TOOL_CALL &&
               e.data &&
               "name" in e.data &&
-              (ChatSessionParser.normalizeCopilotToolName(e.data.name as string) === canonicalName ||
-                ("id" in e.data &&
-                  !!e.data.id &&
-                  toolCall.id.startsWith(e.data.id as string)))
+              ChatSessionParser.normalizeCopilotToolName(e.data.name as string) === canonicalName
           );
+          const matchedByNormalization = !!toolEvent;
+
+          // Fall back to ID match
+          if (!toolEvent) {
+            toolEvent = events.find(
+              (e) =>
+                e.type === CLI_EVENT_TYPES.TOOL_CALL &&
+                e.data &&
+                "id" in e.data &&
+                !!e.data.id &&
+                toolCall.id.startsWith(e.data.id as string)
+            );
+          }
 
           if (toolEvent && "parameters" in toolEvent.data) {
             try {
-              // Set canonical name so upgrade pass can match correctly
-              (toolEvent.data as ToolCall).name = canonicalName;
+              // Only overwrite name when matched by normalization so the upgrade
+              // pass can resolve the canonical snake_case name (e.g. "create_file").
+              // For ID-only matches, preserve the original toolId (e.g. "copilot_getChangedFiles").
+              if (matchedByNormalization) {
+                (toolEvent.data as ToolCall).name = canonicalName;
+              }
               (toolEvent.data as ToolCall).parameters = JSON.parse(
                 toolCall.arguments || "{}"
               );
