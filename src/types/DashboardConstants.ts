@@ -115,6 +115,13 @@ export const MESSAGE_TYPES = {
   LOAD_RUN_HISTORY: "loadRunHistory", // Webview -> Extension: Request specific run
   CLEAR_RUN_HISTORY: "clearRunHistory", // Webview -> Extension: Delete run history
   RUN_HISTORY_UPDATED: "runHistoryUpdated", // Extension -> Webview: Available run count changed (new run started)
+
+  // Save Workflow - Webview <-> Extension
+  SAVE_WORKFLOW_REQUEST: "saveWorkflowRequest", // Webview -> Extension: Request default save path/format
+  SAVE_WORKFLOW_DIALOG_DATA: "saveWorkflowDialogData", // Extension -> Webview: Default path, format, workflowsDir
+  SAVE_WORKFLOW: "saveWorkflow", // Webview -> Extension: { filePath, format } confirmed by user
+  WORKFLOW_SAVED: "workflowSaved", // Extension -> Webview: { filePath } success
+  WORKFLOW_SAVE_FAILED: "workflowSaveFailed", // Extension -> Webview: { error } failure
 } as const;
 
 // ============================================================================

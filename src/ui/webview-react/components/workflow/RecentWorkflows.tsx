@@ -38,14 +38,14 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
     <div className={`recent-workflows flex flex-col h-full ${className}`}>
       {/* Header */}
       <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg flex-shrink-0">
-        Recent Workflows
+        Workflows
       </div>
 
       {/* Scrollable Items */}
       <div className="workflow-menu-items overflow-y-auto overflow-x-hidden flex-1 min-h-0 py-1">
         {workflows.length === 0 ? (
           <div className="workflow-menu-empty px-3 py-6 text-center text-description-fg text-sm">
-            No recent workflows
+            No workflows found
           </div>
         ) : (
           workflows.map((workflow) => {

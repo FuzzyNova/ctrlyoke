@@ -647,6 +647,38 @@ function createMessageHandlers(): MessageHandlerMap {
     workflowStore.setExecutionState(EXECUTION_STATES.STOPPED);
   };
 
+  // --------------------------------------------------------------------------
+  // SAVE_WORKFLOW_DIALOG_DATA - Extension responded with defaults; open dialog
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.openSaveWorkflowDialog({
+      defaultPath: message.defaultPath,
+      defaultFormat: message.defaultFormat,
+      workflowsDir: message.workflowsDir,
+    });
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_SAVED - File was written successfully; close dialog + toast
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_SAVED] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.closeSaveWorkflowDialog();
+    // Extract filename for a concise toast
+    const fileName = message.filePath.split(/[/\\]/).pop() ?? message.filePath;
+    uiStore.showToast(`Saved as ${fileName}`, "success");
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_SAVE_FAILED - Save failed; close dialog and show error toast
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_SAVE_FAILED] = (message) => {
+    const uiStore = useUiStore.getState();
+    uiStore.closeSaveWorkflowDialog();
+    uiStore.showToast(`Save failed: ${message.error}`, "error");
+  };
+
   return handlers;
 }
 

@@ -4,6 +4,8 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
+import { SaveWorkflowButton } from "../workflow/SaveWorkflowButton";
+import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 
 /**
  * Execution state badge configuration
@@ -122,10 +124,14 @@ export const Header: React.FC = () => {
 
   return (
     <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
-      {/* Left Section: Workflow Controls */}
+      {/* Left Section: Workflow Controls + Save button */}
       <div className="header-left flex items-center gap-2">
         <WorkflowControls />
+        <SaveWorkflowButton />
       </div>
+
+      {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
+      <SaveWorkflowDialog />
 
       {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
       <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0">

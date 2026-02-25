@@ -507,6 +507,33 @@ export interface RecentWorkflowsMessage {
 }
 
 /**
+ * Save workflow dialog data message (extension -> webview)
+ * Sent when the user clicks the Save button; provides the default path / format.
+ */
+export interface SaveWorkflowDialogDataMessage {
+  type: typeof MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA;
+  defaultPath: string;
+  defaultFormat: "yaml" | "json";
+  workflowsDir: string;
+}
+
+/**
+ * Workflow saved message (extension -> webview)
+ */
+export interface WorkflowSavedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_SAVED;
+  filePath: string;
+}
+
+/**
+ * Workflow save failed message (extension -> webview)
+ */
+export interface WorkflowSaveFailedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_SAVE_FAILED;
+  error: string;
+}
+
+/**
  * Union type for all incoming messages from extension to webview
  */
 export type IncomingMessage =
@@ -546,4 +573,7 @@ export type IncomingMessage =
       type: typeof MESSAGE_TYPES.ATTACHMENT_TOKEN_COUNTS_RESPONSE;
       /** Map from reference key (e.g. "file:src/foo.ts") to token count */
       counts: Record<string, number>;
-    };
+    }
+  | SaveWorkflowDialogDataMessage
+  | WorkflowSavedMessage
+  | WorkflowSaveFailedMessage;

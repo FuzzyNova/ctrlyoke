@@ -14,6 +14,15 @@ export interface TemplateInfo {
 }
 
 /**
+ * Data for the Save Workflow dialog
+ */
+export interface SaveWorkflowDialogData {
+  defaultPath: string;
+  defaultFormat: "yaml" | "json";
+  workflowsDir: string;
+}
+
+/**
  * Recent workflow entry
  */
 export interface RecentWorkflow {
@@ -46,6 +55,10 @@ interface UiState {
   availableRuns: number; // Total runs saved for this workflow
   runTimestamps: (number | undefined)[]; // startedAt timestamps, index 0 = most recent
   runStates: (string | undefined)[]; // executionState for each run, index 0 = most recent
+
+  // Save workflow dialog state
+  saveWorkflowDialogOpen: boolean;
+  saveWorkflowDialogData: SaveWorkflowDialogData | null;
 
   // New workflow modal state
   newWorkflowModalOpen: boolean;
@@ -94,6 +107,10 @@ interface UiActions {
   // Output panel
   selectOutputStep: (stepIndex: number | null) => void;
 
+  // Save workflow dialog
+  openSaveWorkflowDialog: (data: SaveWorkflowDialogData) => void;
+  closeSaveWorkflowDialog: () => void;
+
   // New workflow modal
   openNewWorkflowModal: (data: {
     templates: TemplateInfo[];
@@ -135,6 +152,8 @@ interface UiActions {
 }
 
 const initialState: UiState = {
+  saveWorkflowDialogOpen: false,
+  saveWorkflowDialogData: null,
   promptsCollapsed: false,
   outputCollapsed: false,
   editorCollapsed: false,
@@ -217,6 +236,16 @@ export const useUiStore = create<UiState & UiActions>()(
       // ============================================================================
 
       selectOutputStep: (stepIndex) => set({ selectedOutputStep: stepIndex }),
+
+      // ============================================================================
+      // SAVE WORKFLOW DIALOG
+      // ============================================================================
+
+      openSaveWorkflowDialog: (data) =>
+        set({ saveWorkflowDialogOpen: true, saveWorkflowDialogData: data }),
+
+      closeSaveWorkflowDialog: () =>
+        set({ saveWorkflowDialogOpen: false, saveWorkflowDialogData: null }),
 
       // ============================================================================
       // NEW WORKFLOW MODAL
@@ -305,6 +334,8 @@ export const useUiStore = create<UiState & UiActions>()(
       resetUi: () =>
         set({
           // Reset non-persisted state
+          saveWorkflowDialogOpen: false,
+          saveWorkflowDialogData: null,
           propertiesDrawerOpen: false,
           selectedOutputStep: null,
           newWorkflowModalOpen: false,

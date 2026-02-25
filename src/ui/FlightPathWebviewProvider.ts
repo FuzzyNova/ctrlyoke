@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as fsSync from "fs";
+import * as yaml from "js-yaml";
 import {
   MESSAGE_TYPES,
   LOG_LEVELS,
@@ -500,6 +501,17 @@ window.vscodeApi = acquireVsCodeApi();
 
         case MESSAGE_TYPES.LOG_MESSAGE:
           this.handleWebviewLog(message.level, message.message);
+          break;
+
+        // ============================================================================
+        // Save Workflow
+        // ============================================================================
+        case MESSAGE_TYPES.SAVE_WORKFLOW_REQUEST:
+          await this.handleSaveWorkflowRequest();
+          break;
+
+        case MESSAGE_TYPES.SAVE_WORKFLOW:
+          await this.handleSaveWorkflow(message.filePath, message.format);
           break;
 
         default:
@@ -1851,6 +1863,212 @@ window.vscodeApi = acquireVsCodeApi();
 
   private async handleUpdateConfig(key: string, value: any): Promise<void> {
     await ConfigurationUtils.updateSetting(key, value);
+  }
+
+  // ============================================================================
+  // Private Methods - Save Workflow
+  // ============================================================================
+
+  /**
+   * Handle SAVE_WORKFLOW_REQUEST from the webview.
+   * Determines the default save path and format from the working file and
+   * sends SAVE_WORKFLOW_DIALOG_DATA back so the webview can open the dialog.
+   */
+  private async handleSaveWorkflowRequest(): Promise<void> {
+    if (!this.flightPathManager) {
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow manager available.",
+      });
+      return;
+    }
+
+    const queueState = this.flightPathManager.getQueueState();
+    const workingFilePath = queueState.workingFilePath;
+
+    if (!workingFilePath) {
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow loaded.",
+      });
+      return;
+    }
+
+    // Determine workflowsDir (absolute path for the dialog)
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workflowsDir = workspaceFolder
+      ? path.join(workspaceFolder.uri.fsPath, ".flightpath", "workflows")
+      : ".flightpath/workflows";
+
+    try {
+      // Read working file to get originalFile and workflowName
+      const rawContent = await fs.readFile(workingFilePath, "utf-8");
+      const workingFile = JSON.parse(rawContent);
+
+      let defaultPath: string;
+      if (workingFile.originalFile) {
+        // Use the original source file as the default save target
+        defaultPath = workingFile.originalFile;
+      } else {
+        // Derive a sensible default from the workflow name
+        const name =
+          workingFile.workflowName ||
+          path
+            .basename(workingFilePath)
+            .replace(/\.flightpath\.(ya?ml|json)$/i, "");
+        defaultPath = path.join(workflowsDir, `${name}.flightpath.yaml`);
+      }
+
+      // Infer format from the default path extension
+      const defaultFormat: "yaml" | "json" = defaultPath
+        .toLowerCase()
+        .endsWith(".json")
+        ? "json"
+        : "yaml";
+
+      this.postMessage({
+        type: MESSAGE_TYPES.SAVE_WORKFLOW_DIALOG_DATA,
+        defaultPath,
+        defaultFormat,
+        workflowsDir,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: `Failed to read workflow: ${msg}`,
+      });
+    }
+  }
+
+  /**
+   * Handle SAVE_WORKFLOW from the webview.
+   * Strips runtime metadata from the working file and serializes it to the
+   * requested format and path.
+   */
+  private async handleSaveWorkflow(
+    filePath: string,
+    format: "yaml" | "json"
+  ): Promise<void> {
+    if (!this.flightPathManager) {
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow manager available.",
+      });
+      return;
+    }
+
+    const queueState = this.flightPathManager.getQueueState();
+    const workingFilePath = queueState.workingFilePath;
+
+    if (!workingFilePath) {
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: "No workflow loaded.",
+      });
+      return;
+    }
+
+    try {
+      // Read working file
+      const rawContent = await fs.readFile(workingFilePath, "utf-8");
+      const workingFile = JSON.parse(rawContent);
+
+      // Build clean PromptFile — strip all working-file-only and runtime fields.
+      // Fields to keep at workflow root level (ExecutionProperties + prompt/prompts):
+      const WORKFLOW_FIELDS = [
+        "prompt",
+        "prompts",
+        "harness",
+        "model",
+        "agent",
+        "resumeSession",
+        "allowDynamicExtension",
+        "sessionId",
+        "endCondition",
+      ] as const;
+
+      // Fields to keep per-prompt item:
+      const PROMPT_FIELDS = [
+        "name",
+        "prompt",
+        "harness",
+        "model",
+        "agent",
+        "resumeSession",
+        "allowDynamicExtension",
+        "sessionId",
+        "endCondition",
+      ] as const;
+
+      const clean: Record<string, unknown> = {};
+
+      // Copy workflow-level fields
+      for (const field of WORKFLOW_FIELDS) {
+        if (field in workingFile && field !== "prompts") {
+          clean[field] = workingFile[field];
+        }
+      }
+
+      // Clean each prompt (strip _runtime, status, id)
+      if (Array.isArray(workingFile.prompts)) {
+        clean.prompts = workingFile.prompts.map(
+          (p: Record<string, unknown>) => {
+            const cleanPrompt: Record<string, unknown> = {};
+            for (const field of PROMPT_FIELDS) {
+              if (field in p) {
+                cleanPrompt[field] = p[field];
+              }
+            }
+            return cleanPrompt;
+          }
+        );
+      } else if (workingFile.prompt !== undefined) {
+        clean.prompt = workingFile.prompt;
+      }
+
+      // Resolve absolute path (support relative paths from workspace root)
+      let absolutePath = filePath;
+      if (!path.isAbsolute(filePath)) {
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+        if (workspaceFolder) {
+          absolutePath = path.join(workspaceFolder.uri.fsPath, filePath);
+        }
+      }
+
+      // Ensure parent directory exists
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+
+      // Serialize
+      let serialized: string;
+      if (format === "yaml") {
+        serialized = yaml.dump(clean, {
+          lineWidth: -1,
+          noRefs: true,
+          quotingType: '"',
+          forceQuotes: false,
+        });
+      } else {
+        serialized = JSON.stringify(clean, null, 2);
+      }
+
+      // Write file
+      await fs.writeFile(absolutePath, serialized, "utf-8");
+
+      Log.info(`Saved workflow to: ${absolutePath}`);
+
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVED,
+        filePath: absolutePath,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Log.error("Failed to save workflow:", error);
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_SAVE_FAILED,
+        error: msg,
+      });
+    }
   }
 
   private handleWebviewLog(level: WebviewLogLevel, message: string): void {
