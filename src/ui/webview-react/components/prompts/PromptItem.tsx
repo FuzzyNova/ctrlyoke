@@ -35,6 +35,14 @@ interface PromptItemProps {
   isSelected?: boolean;
   /** Click handler for selection */
   onClick?: () => void;
+  /** Harness display name (e.g. "Claude CLI") */
+  harnessLabel?: string;
+  /** True when harness is inherited (not set at prompt level) */
+  harnessIsDefault?: boolean;
+  /** Model display name (e.g. "sonnet") */
+  modelLabel?: string;
+  /** True when model is inherited (not set at prompt level) */
+  modelIsDefault?: boolean;
 }
 
 /**
@@ -70,6 +78,10 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   isCurrent = false,
   isSelected = false,
   onClick,
+  harnessLabel,
+  harnessIsDefault,
+  modelLabel,
+  modelIsDefault,
 }) => {
   // Build class names for the container
   const containerClasses = [
@@ -118,6 +130,31 @@ export const PromptItem: React.FC<PromptItemProps> = ({
           {name ? name : truncate(text, 60)}
         </span>
       </div>
+
+      {/* Harness / model metadata */}
+      {(harnessLabel || modelLabel) && (
+        <div className="mt-0.5 pl-5 flex items-center gap-1 text-[10px] text-description-fg opacity-75">
+          {harnessLabel && (
+            <span>
+              {harnessLabel}
+              {harnessIsDefault && (
+                <span className="opacity-60"> (default)</span>
+              )}
+            </span>
+          )}
+          {harnessLabel && modelLabel && (
+            <span className="opacity-40 mx-0.5">·</span>
+          )}
+          {modelLabel && (
+            <span>
+              {modelLabel}
+              {modelIsDefault && (
+                <span className="opacity-60"> (default)</span>
+              )}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Retry indicator */}
       {retryState && retryState.currentRetry > 0 && (

@@ -1,5 +1,8 @@
 # FlightPath CLI Design
 
+**Document Status**: Active Planning
+**Last Updated**: 2026-02-25
+
 ## Overview
 
 FlightPath CLI is a standalone command-line tool that executes FlightPath prompt workflows without requiring VS Code. It **shares core code** with the VS Code extension, providing the same AI-powered workflow automation through Copilot CLI and Claude CLI integrations, but runs directly in any terminal environment.
@@ -122,9 +125,9 @@ flightpath run workflow.flightpath.json
 # Run a single prompt
 flightpath run prompt.prompt.md
 
-# Specify provider explicitly
-flightpath run workflow.json --provider copilot
-flightpath run workflow.json --provider claude
+# Specify harness explicitly
+flightpath run workflow.yaml --harness copilot-cli
+flightpath run workflow.yaml --harness claude-cli
 
 # Override model
 flightpath run workflow.json --model claude-sonnet-4.5
@@ -160,22 +163,30 @@ flightpath run <file> [options]
 Positional:
   file             Path to .flightpath.json, .flightpath.yaml, or .prompt.md
 
-Options:
-  --provider, -p   AI provider: 'copilot' or 'claude' (default: copilot)
+Workflow Options (override file-level and config settings):
+  --harness, -H    AI harness: 'copilot-cli', 'claude-cli', 'codex-cli' (default: copilot-cli)
   --model, -m      Model to use (overrides file and config)
   --cwd, -d        Working directory (default: directory of prompt file)
   --config, -c     Path to config file (default: .flightpathrc.json)
   --timeout, -t    Global timeout in seconds (default: 3600)
   --resume, -r     Resume session with given ID
   --new-session    Force new session (ignore resume)
+  --allow-dynamic-extension  Allow the AI to extend the workflow queue
 
-Tool Permissions (Copilot):
+  Note: --harness and --model are especially useful for .prompt.md files, which
+  cannot embed these settings in the file format itself.
+
+Execution Mode:
+  --interactive    Force interactive mode (PTY, user can respond to prompts)
+  --headless       Force headless mode (CI/CD, no user interaction)
+
+Tool Permissions (Copilot CLI):
   --allow-all-tools          Allow all tools without prompting
   --allow-tool <pattern>     Allow specific tool pattern (can repeat)
   --deny-tool <pattern>      Deny specific tool pattern (can repeat)
   --add-dir <path>           Add directory to allowed paths (can repeat)
 
-Tool Permissions (Claude):
+Tool Permissions (Claude CLI):
   --skip-permissions         Skip all permission prompts (dangerous)
   --allowed-tools <list>     Comma-separated list of allowed tools
 
@@ -191,25 +202,28 @@ Output Control:
 
 ```bash
 # Basic workflow execution
-flightpath run my-workflow.flightpath.json
+flightpath run my-workflow.flightpath.yaml
+
+# Single prompt file with harness and model (required for .prompt.md)
+flightpath run refactor.prompt.md --harness claude-cli --model opus
 
 # CI/CD usage with JSON output
 flightpath run ci-checks.flightpath.json --json --quiet > results.json
 
-# Claude with specific model
-flightpath run refactor.prompt.md --provider claude --model opus
-
-# Copilot with restricted permissions
-flightpath run deploy.flightpath.json \
-  --provider copilot \
+# Copilot CLI with restricted permissions
+flightpath run deploy.flightpath.yaml \
+  --harness copilot-cli \
   --allow-tool 'shell(git:*)' \
   --deny-tool 'shell(rm:*)'
 
+# Codex CLI with specific model
+flightpath run analyze.flightpath.yaml --harness codex-cli --model gpt-5.1-codex
+
 # Resume previous session
-flightpath run continue.prompt.md --resume abc123
+flightpath run continue.prompt.md --resume abc123 --harness claude-cli
 
 # Validate without running
-flightpath validate workflow.flightpath.json
+flightpath validate workflow.flightpath.yaml
 ```
 
 ---
@@ -232,7 +246,7 @@ Located in:
 
 ```json
 {
-  "provider": "copilot",
+  "harness": "copilot-cli",
   "model": "claude-sonnet-4.5",
   "timeout": 3600,
   "scriptTimeout": 30000,
@@ -259,7 +273,7 @@ Located in:
 ### Environment Variables
 
 ```bash
-FLIGHTPATH_PROVIDER=copilot|claude
+FLIGHTPATH_HARNESS=copilot-cli|claude-cli|codex-cli
 FLIGHTPATH_MODEL=claude-sonnet-4.5
 FLIGHTPATH_TIMEOUT=3600
 FLIGHTPATH_SCRIPT_TIMEOUT=30000
@@ -273,11 +287,30 @@ FLIGHTPATH_NO_COLOR=true|false
 
 ## Architecture
 
+### VS Code Compatibility Guarantee
+
+**The VS Code extension is the primary product. The CLI adds a new entry point — it does not modify the existing VS Code code paths.**
+
+The `PlatformAdapter` pattern is a **wrapping** pattern, not a replacement:
+
+- `VsCodeAdapter` wraps the same `vscode.*` calls that exist today — behavior of the extension is **unchanged**
+- `CliAdapter` provides a new implementation for the same interface points
+- Shared code calls `platform.createInteractiveTerminal()` instead of `vscode.window.createTerminal()` directly — but when the platform is `VsCodeAdapter`, it calls `vscode.window.createTerminal()` internally, exactly as before
+- All `vscode.window.show*Message()`, `vscode.workspace.getConfiguration()`, `vscode.workspace.workspaceFolders`, terminal creation — all preserved in `VsCodeAdapter` with identical behavior
+
+The refactoring is strictly additive. Every `vscode.*` call that exists today either:
+1. Moves into `VsCodeAdapter` where it continues to be called identically, or
+2. Stays in VS Code-only files (`FlightPathManager`, `WorkflowOrchestrator`, `ui/`, `chat/`) that the CLI build never touches
+
+The test for success: **zero behavior change** in the VS Code extension after any Platform Abstraction refactoring step. The extension must work identically before and after each individual change.
+
+---
+
 ### Code Sharing Strategy
 
 The key insight: **Most FlightPath code is already platform-agnostic**. Only a thin layer touches VS Code APIs.
 
-**Refactoring Reality**: Some VS Code-specific code will inevitably need to move to separate files. This is actually beneficial - it clarifies boundaries and makes the codebase cleaner. The goal isn't to avoid all refactoring, but to minimize it while maintaining clean separation.
+**The enabling refactor**: The [Parallel Workflows Architecture](./PARALLEL_WORKFLOWS_ARCHITECTURE.md) plan extracts `WorkflowInstance` from `FlightPathManager` as a self-contained execution unit. Once that extraction happens, the CLI can directly instantiate a single `WorkflowInstance` without pulling in any VS Code orchestration (`WorkflowOrchestrator`, dashboard, status bar). The CLI build is a natural byproduct of making parallel workflows work cleanly.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -289,30 +322,46 @@ The key insight: **Most FlightPath code is already platform-agnostic**. Only a t
 │  ─────────────────              │  ──────────────               │
 │  • extension.ts (entry)         │  • cli.ts (entry)             │
 │  • VsCodeAdapter.ts             │  • CliAdapter.ts              │
+│  • WorkflowOrchestrator.ts      │  • (not used — single         │
+│  • FlightPathManager.ts         │    WorkflowInstance only)     │
 │  • ui/* (dashboard, webview)    │  • (terminal output only)     │
-│  • completions/* (IntelliSense) │  • (none)                     │
+│  • chat/* (VS Code Chat API)    │  • (not supported)            │
+│  • completions/* (IntelliSense) │  • (not supported)            │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    SHARED CORE (Platform-Agnostic)               │
-│  (90%+ of the code - imports PlatformAdapter, not vscode)        │
+│  (imports PlatformAdapter, not vscode directly)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  src/flightpath/                                                 │
-│  ├── PromptQueue.ts         # State machine, execution logic    │
-│  ├── PromptFileParser.ts    # JSON parsing, validation (AJV)    │
-│  ├── EndConditionEvaluator.ts  # Script execution, timeout      │
-│  ├── EndConditionHandler.ts    # Retry logic                    │
-│  └── cli/                                                        │
-│      ├── BaseCliIntegration.ts  # Process spawning, streaming   │
-│      ├── CopilotCommandLineIntegration.ts                       │
-│      └── ClaudeCommandLineIntegration.ts                        │
+│  ├── WorkflowInstance.ts    # NEW (parallel workflows plan)     │
+│  │                          # Self-contained execution unit;    │
+│  │                          # THE key bridge for CLI           │
+│  ├── PromptQueue.ts         # State machine (replace vscode.   │
+│  │                          # EventEmitter with Node EventEmit) │
+│  ├── WorkflowExecutor.ts    # Prompt execution loop            │
+│  ├── PromptFileParser.ts    # JSON/YAML parsing (AJV)          │
+│  ├── EndConditionEvaluator.ts  # Script execution, timeout     │
+│  ├── EndConditionHandler.ts    # Retry logic                   │
+│  ├── HarnessIntegration.ts  # Abstract interface               │
+│  └── cli/                                                       │
+│      ├── CliIntegration.ts  # Generic CLI class (all harnesses)│
+│      ├── copilot/           # Copilot CLI provider             │
+│      ├── claude/            # Claude CLI provider              │
+│      ├── codex/             # Codex CLI provider               │
+│      └── shared/            # Process mgmt, log parsing utils  │
+│                                                                  │
+│  src/flightpath/orchestration/                                   │
+│  ├── WorkspaceSessionManager.ts  # Session persistence         │
+│  ├── OutputHistoryManager.ts     # Run history                 │
+│  ├── EndConditionHandler.ts      # Retry orchestration         │
+│  └── PromptFileWatcher.ts        # Dynamic queue monitoring    │
 │                                                                  │
 │  src/types/                                                      │
 │  ├── FlightPathTypes.ts     # All interfaces and types          │
-│  ├── CopilotTypes.ts        # CLI result types                  │
 │  └── DashboardConstants.ts  # Shared constants                  │
 │                                                                  │
 │  src/utils/                                                      │
@@ -328,149 +377,168 @@ The key insight: **Most FlightPath code is already platform-agnostic**. Only a t
 
 ### Platform Abstraction Interface
 
-Create a simple interface that both platforms implement:
+Create a simple interface that both platforms implement. This replaces direct `vscode.*` usage in the shared core.
 
 ```typescript
 // src/platform/PlatformAdapter.ts
 
 export interface PlatformAdapter {
-  // Configuration
+  // Configuration (replaces vscode.workspace.getConfiguration)
   getConfig<T>(key: string, defaultValue: T): T;
 
-  // Logging/Output
+  // Workspace root (replaces vscode.workspace.workspaceFolders)
+  getWorkspaceRoot(): string;
+
+  // Logging/Output (replaces vscode.window.show*Message)
   log(message: string): void;
+  warn(message: string): void;
   error(message: string): void;
   showProgress(message: string): void;
 
-  // Events (unified interface)
-  createEventEmitter<T>(): EventEmitter<T>;
+  // User prompts (replaces vscode.window.showWarningMessage with buttons)
+  // Returns the chosen option or undefined if dismissed
+  showChoice(message: string, ...options: string[]): Promise<string | undefined>;
 
-  // File system (already uses Node fs)
-  // No abstraction needed - both use fs/promises
+  // File system (already uses Node fs — no abstraction needed)
+  // Process execution (already uses child_process — no abstraction needed)
 
-  // Process execution
-  spawnProcess(
-    command: string,
-    args: string[],
-    options: SpawnOptions
-  ): ChildProcess;
-
-  // Interactive terminal (for tool approvals)
+  // Interactive terminal for tool approvals
+  // VS Code: creates a vscode.Terminal with shell integration
+  // CLI: spawns with stdio:'inherit' (PTY pass-through)
   createInteractiveTerminal?(name: string): InteractiveTerminal;
 }
 
-// VS Code implementation
+// VS Code implementation — wraps existing vscode.* calls, behavior UNCHANGED
 // src/platform/VsCodeAdapter.ts
 export class VsCodeAdapter implements PlatformAdapter {
+  constructor(private context: vscode.ExtensionContext) {}
+
+  // Same call as today, just behind an interface
   getConfig<T>(key: string, defaultValue: T): T {
     return vscode.workspace
       .getConfiguration("flightpath")
       .get(key, defaultValue);
   }
-  // ... etc
+
+  // Same as vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  getWorkspaceRoot(): string {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+  }
+
+  // Same as vscode.window.showWarningMessage()
+  warn(message: string): void {
+    vscode.window.showWarningMessage(message);
+  }
+
+  // Same as vscode.window.createTerminal() + shellIntegration.executeCommand()
+  // This is the EXISTING interactive terminal path — nothing changes
+  createInteractiveTerminal(name: string): InteractiveTerminal {
+    return new VsCodeInteractiveTerminal(name, this.context);
+  }
 }
 
 // CLI implementation
 // src/platform/CliAdapter.ts
 export class CliAdapter implements PlatformAdapter {
-  constructor(private config: CliConfig) {}
+  constructor(private config: ResolvedCliConfig) {}
 
   getConfig<T>(key: string, defaultValue: T): T {
-    return this.config[key] ?? defaultValue;
+    return (this.config as Record<string, unknown>)[key] as T ?? defaultValue;
+  }
+
+  getWorkspaceRoot(): string {
+    return this.config.cwd ?? process.cwd();
+  }
+
+  warn(message: string): void {
+    console.warn(`⚠ ${message}`);
   }
   // ... etc
 }
 ```
 
+**What does NOT need abstraction** (already platform-agnostic):
+- `fs/promises` — used identically in both contexts
+- `child_process.spawn` — used identically in both contexts
+- `PromptQueue` event emitter — replace `vscode.EventEmitter` with Node.js `EventEmitter` directly (VS Code runs on Node, both are available; the `.event` subscription pattern is VS Code-specific but only used in VS Code-specific subscribers)
+
 ### Refactoring Strategy
 
-**Phase 1: Extract Platform Dependencies**
+**The key challenge**: `FlightPathManager.ts` currently imports ALL integrations directly, including VS Code-only `CopilotChatIntegration`. This would break the CLI build. The solution is the `WorkflowInstance` extraction from the [Parallel Workflows plan](./PARALLEL_WORKFLOWS_ARCHITECTURE.md).
 
-1. Identify all `import * as vscode from 'vscode'` statements
-2. Create `PlatformAdapter` interface for each usage pattern
-3. Inject adapter via constructor instead of importing vscode directly
+**Phase 1: WorkflowInstance Extraction (shared with parallel workflows work)**
 
-**Phase 2: Dependency Injection for Integrations**
+This work happens as part of the parallel workflows refactor. Once `WorkflowInstance` is extracted:
+- It owns `PromptQueue`, `WorkflowExecutor`, `CliIntegration`, `WorkspaceSessionManager`, etc.
+- It communicates via events (not vscode APIs)
+- The CLI can create a single `WorkflowInstance` directly, bypassing `WorkflowOrchestrator`
 
-The key challenge: `FlightPathManager.ts` currently imports ALL integrations directly, including VS Code-only `CopilotChatIntegration`. This would break the CLI build.
-
-**Solution**: Use dependency injection so each entry point provides only its supported integrations:
+**Phase 2: Harness Factory (already partially designed in parallel workflows plan)**
 
 ```typescript
-// src/flightpath/IntegrationFactory.ts (NEW - shared interface)
+// src/flightpath/IntegrationFactory.ts (shared interface)
 export interface IntegrationFactory {
-  createIntegration(provider: Provider, context: any): CopilotIntegration;
-  getSupportedProviders(): Provider[];
+  createIntegration(harness: Harness, adapter: PlatformAdapter): HarnessIntegration;
+  getSupportedHarnesses(): Harness[];
 }
 
-// extension.ts - provides ALL integrations
-import { CopilotChatIntegration } from "./flightpath/chat/CopilotChatIntegration";
-import { CopilotCommandLineIntegration } from "./flightpath/cli/CopilotCommandLineIntegration";
-import { ClaudeCommandLineIntegration } from "./flightpath/cli/ClaudeCommandLineIntegration";
-
+// extension.ts - provides ALL harnesses (including VS Code Chat)
 const vsCodeFactory: IntegrationFactory = {
-  createIntegration(provider, context) {
-    switch (provider) {
-      case Provider.CopilotChat:
-        return new CopilotChatIntegration(context); // VS Code only
-      case Provider.CopilotCli:
-        return new CopilotCommandLineIntegration(context, outputChannel);
-      case Provider.ClaudeCli:
-        return new ClaudeCommandLineIntegration(context, outputChannel);
+  createIntegration(harness, adapter) {
+    switch (harness) {
+      case 'copilot-chat':
+        return new CopilotChatIntegration(adapter); // VS Code only
+      case 'copilot-cli':
+        return new CliIntegration(new CopilotCliProvider(), adapter);
+      case 'claude-cli':
+        return new CliIntegration(new ClaudeCliProvider(), adapter);
+      case 'codex-cli':
+        return new CliIntegration(new CodexCliProvider(), adapter);
     }
   },
-  getSupportedProviders: () => [
-    Provider.CopilotChat,
-    Provider.CopilotCli,
-    Provider.ClaudeCli,
-  ],
+  getSupportedHarnesses: () => ['copilot-chat', 'copilot-cli', 'claude-cli', 'codex-cli'],
 };
 
-// cli.ts - provides ONLY CLI integrations (no vscode imports in tree!)
-import { CopilotCommandLineIntegration } from "./flightpath/cli/CopilotCommandLineIntegration";
-import { ClaudeCommandLineIntegration } from "./flightpath/cli/ClaudeCommandLineIntegration";
-
+// cli.ts - only CLI harnesses (no vscode imports in tree!)
 const cliFactory: IntegrationFactory = {
-  createIntegration(provider, context) {
-    switch (provider) {
-      case Provider.CopilotCli:
-        return new CopilotCommandLineIntegration(context);
-      case Provider.ClaudeCli:
-        return new ClaudeCommandLineIntegration(context);
+  createIntegration(harness, adapter) {
+    switch (harness) {
+      case 'copilot-cli':
+        return new CliIntegration(new CopilotCliProvider(), adapter);
+      case 'claude-cli':
+        return new CliIntegration(new ClaudeCliProvider(), adapter);
+      case 'codex-cli':
+        return new CliIntegration(new CodexCliProvider(), adapter);
       default:
-        throw new Error(
-          `Provider "${provider}" requires VS Code. Use copilot or claude.`
-        );
+        throw new Error(`Harness "${harness}" requires VS Code. Use copilot-cli, claude-cli, or codex-cli.`);
     }
   },
-  getSupportedProviders: () => [Provider.CopilotCli, Provider.ClaudeCli],
+  getSupportedHarnesses: () => ['copilot-cli', 'claude-cli', 'codex-cli'],
 };
 ```
 
-**esbuild tree-shaking handles the rest**: Since `cli.ts` never imports `CopilotChatIntegration` (directly or transitively), it won't be bundled. No special esbuild configuration needed.
+**esbuild tree-shaking handles the rest**: Since `cli.ts` never imports `CopilotChatIntegration` (directly or transitively), it won't be bundled.
 
-**Files that need VS Code extraction:**
+**Phase 3: Platform Adapter Injection**
 
-| File                    | Current Issue                                        | Solution                             |
-| ----------------------- | ---------------------------------------------------- | ------------------------------------ |
-| `FlightPathManager.ts`  | Imports CopilotChatIntegration, Dashboard, StatusBar | Inject via factory                   |
-| `CopilotIntegration.ts` | Uses vscode.ExtensionContext, vscode.EventEmitter    | Inject PlatformAdapter               |
-| `BaseCliIntegration.ts` | Uses vscode.OutputChannel, vscode.workspace          | Inject PlatformAdapter               |
-| `PromptFileParser.ts`   | Uses vscode.window.showErrorMessage                  | Use platform.error()                 |
-| `PromptQueue.ts`        | Uses vscode.EventEmitter, vscode.workspace           | Use Node EventEmitter, inject config |
+Replace direct `vscode.*` calls in shared files with `PlatformAdapter` method calls:
 
-**Phase 3: Minimal Changes to Existing Code**
+| File                   | Current VS Code Usage                                      | Solution                                |
+| ---------------------- | ---------------------------------------------------------- | --------------------------------------- |
+| `PromptQueue.ts`       | `vscode.EventEmitter`, `vscode.window.show*`               | Node `EventEmitter`, `platform.warn()`  |
+| `WorkflowExecutor.ts`  | `vscode.commands.executeCommand`, `vscode.window.show*`    | No-op or `platform.log()` in CLI        |
+| `CliIntegration.ts`    | `vscode.Terminal`, `vscode.ExtensionContext`, `getConfiguration` | `platform.createInteractiveTerminal()`, `platform.getConfig()` |
+| `PromptFileParser.ts`  | `vscode.window.showErrorMessage`                           | `platform.error()`                      |
+| `WorkspaceSessionManager.ts` | `vscode.workspace.workspaceFolders`                  | `platform.getWorkspaceRoot()`           |
 
-Example refactoring of `BaseCliIntegration.ts`:
+Example — `CliIntegration.ts` (currently uses `vscode.workspace.getConfiguration`):
 
 ```typescript
 // BEFORE (VS Code coupled)
 import * as vscode from "vscode";
 
-export abstract class BaseCliIntegration {
-  protected outputChannel?: vscode.OutputChannel;
-
-  protected shouldShowOutput(): boolean {
+export class CliIntegration extends CopilotIntegration {
+  private shouldShowOutput(): boolean {
     return vscode.workspace
       .getConfiguration("flightpath")
       .get<boolean>("showCliOutput", true);
@@ -478,22 +546,15 @@ export abstract class BaseCliIntegration {
 }
 
 // AFTER (Platform agnostic)
-import { PlatformAdapter } from "../platform/PlatformAdapter";
-
-export abstract class BaseCliIntegration {
+export class CliIntegration extends CopilotIntegration {
   constructor(
-    protected platform: PlatformAdapter
+    private provider: ICliProvider,
+    private platform: PlatformAdapter,
     // ... other params
-  ) {}
+  ) { super(); }
 
-  protected shouldShowOutput(): boolean {
+  private shouldShowOutput(): boolean {
     return this.platform.getConfig<boolean>("showCliOutput", true);
-  }
-
-  protected log(message: string): void {
-    if (this.shouldShowOutput()) {
-      this.platform.log(message);
-    }
   }
 }
 ```
@@ -504,32 +565,47 @@ export abstract class BaseCliIntegration {
 src/
 ├── extension.ts              # VS Code entry point
 ├── cli.ts                    # CLI entry point (NEW)
+├── mcp-server.ts             # MCP server entry point (already exists)
 ├── platform/                 # Platform abstraction (NEW)
 │   ├── PlatformAdapter.ts    # Interface definition
 │   ├── VsCodeAdapter.ts      # VS Code implementation
 │   └── CliAdapter.ts         # Node.js CLI implementation
 ├── flightpath/               # SHARED - Core logic
-│   ├── FlightPathManager.ts  # Orchestration (needs adapter injection)
-│   ├── PromptQueue.ts        # Execution queue (minimal changes)
+│   ├── WorkflowInstance.ts   # NEW (parallel workflows) — key CLI bridge
+│   ├── FlightPathManager.ts  # VS Code orchestration (not shared)
+│   ├── PromptQueue.ts        # Execution queue (replace vscode.EventEmitter)
+│   ├── WorkflowExecutor.ts   # Execution loop (inject platform adapter)
 │   ├── PromptFileParser.ts   # File parsing (remove vscode.window)
 │   ├── EndConditionEvaluator.ts  # Script runner (no vscode deps)
-│   ├── EndConditionHandler.ts    # Retry logic (no vscode deps)
+│   ├── HarnessIntegration.ts  # Abstract interface (no vscode deps)
 │   ├── base/
-│   │   └── CopilotIntegration.ts  # Abstract base (needs adapter)
-│   └── cli/
-│       ├── BaseCliIntegration.ts      # Process spawning (needs adapter)
-│       ├── CopilotCommandLineIntegration.ts
-│       └── ClaudeCommandLineIntegration.ts
+│   │   └── CopilotIntegration.ts  # Abstract base (inject adapter)
+│   ├── cli/
+│   │   ├── CliIntegration.ts      # Generic CLI (inject adapter)
+│   │   ├── copilot/               # Copilot CLI provider
+│   │   ├── claude/                # Claude CLI provider
+│   │   ├── codex/                 # Codex CLI provider
+│   │   └── shared/                # Process mgmt, log parsing
+│   ├── chat/                  # VS Code only - NOT shared
+│   │   └── CopilotChatIntegration.ts
+│   └── orchestration/         # Partially shared
+│       ├── WorkspaceSessionManager.ts  # Shared (inject platform)
+│       ├── OutputHistoryManager.ts     # Shared (no vscode deps)
+│       ├── EndConditionHandler.ts      # Shared (no vscode deps)
+│       └── PromptFileWatcher.ts        # Shared (no vscode deps)
 ├── types/                    # SHARED - All types (no vscode deps)
 ├── utils/                    # SHARED - Utilities (mostly no vscode deps)
 └── ui/                       # VS Code only - not shared
-    ├── FlightPathDashboardProvider.ts
-    └── webview/
+    ├── FlightPathWebviewProvider.ts
+    ├── StatusBarManager.ts
+    └── webview-react/
 ```
 
 ### Build Configuration
 
-**esbuild.js** additions:
+The MCP server build already establishes the precedent for a second entry point alongside the extension. The CLI follows the same pattern.
+
+**esbuild.js** additions (follow the existing MCP server build pattern):
 
 ```javascript
 // Extension bundle (existing)
@@ -539,10 +615,19 @@ await esbuild.build({
   outfile: "out/extension.js",
   external: ["vscode"],
   platform: "node",
-  // ...
+  // ..existing plugins..
 });
 
-// CLI bundle (NEW)
+// MCP server bundle (already exists)
+await esbuild.build({
+  entryPoints: ["src/mcp-server.ts"],
+  bundle: true,
+  outfile: "out/mcp-server.js",
+  external: ["@modelcontextprotocol/sdk"],
+  platform: "node",
+});
+
+// CLI bundle (NEW — same pattern as MCP server)
 await esbuild.build({
   entryPoints: ["src/cli.ts"],
   bundle: true,
@@ -551,23 +636,22 @@ await esbuild.build({
   banner: {
     js: "#!/usr/bin/env node", // Make executable
   },
-  // No 'vscode' in external - we don't import it
+  // No 'vscode' in external — if vscode leaks in, the build will fail (good!)
 });
 ```
 
-**package.json** additions for CLI distribution:
+**package.json** — add CLI to existing `bin` entry (MCP server already has one):
 
 ```json
 {
-  "name": "flightpath",
   "bin": {
+    "flightpath-mcp": "./out/mcp-server.js",
     "flightpath": "./out/cli.js"
-  },
-  "files": ["out/cli.js", "out/schemas/"]
+  }
 }
 ```
 
-**Note**: The extension and CLI share the same package.json. When publishing to npm for CLI use, only the `bin` and `files` entries matter. The VS Code extension is published separately via `vsce`.
+**Note**: The extension and CLI share the same package.json. The VS Code extension is published via `vsce`. If vscode is accidentally imported in the CLI build tree, esbuild will fail (since vscode is not in externals) — this acts as a build-time guard against leaking VS Code dependencies.
 
 ---
 
@@ -795,7 +879,7 @@ Results:
 {
   "version": "1.0.0",
   "file": "my-workflow.flightpath.json",
-  "provider": "copilot",
+  "harness": "copilot-cli",
   "model": "claude-sonnet-4.5",
   "status": "completed",
   "results": [
@@ -866,7 +950,7 @@ Error: Copilot CLI not installed
     npm install -g @anthropic/copilot-cli
 
   Or use Claude instead:
-    flightpath run workflow.json --provider claude
+    flightpath run workflow.yaml --harness claude-cli
 ```
 
 ```
@@ -888,122 +972,131 @@ Error: End condition failed after 3 retries
 
 ---
 
+## Compatibility with Parallel Workflows Architecture
+
+The [Parallel Workflows Architecture](./PARALLEL_WORKFLOWS_ARCHITECTURE.md) is the **enabling refactor** for the CLI. Both plans share the same foundational work:
+
+| Parallel Workflows Need                     | CLI Need                                    | Shared Work                               |
+| ------------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| Extract `WorkflowInstance` from Manager     | Single execution unit without VS Code deps  | Same extraction, same class               |
+| `IntegrationFactory` pattern                | CLI-only factory without `CopilotChat`      | Same interface, different implementations |
+| `WorkspaceSessionManager` per instance      | Session persistence in CLI context          | Same class, inject `platform.getRoot()`   |
+| `PromptQueue` owns its own state            | Queue runs without VS Code EventEmitter     | Replace `vscode.EventEmitter` with Node   |
+| `WorkflowExecutor` per instance             | Execution loop works outside VS Code        | Same class, inject `PlatformAdapter`      |
+
+**Sequencing recommendation**: Do the parallel workflows extraction first (or concurrently). The `WorkflowInstance` extraction is the hard work — once it exists and uses `PlatformAdapter`, writing `src/cli.ts` is straightforward.
+
+**CLI is a single-instance consumer**: The CLI creates one `WorkflowInstance` and runs it directly. The `WorkflowOrchestrator` (multi-instance manager) is VS Code-specific — it manages dashboard routing, background buffering, and message coordination. None of that is needed for CLI execution.
+
+```typescript
+// src/cli.ts — simplified execution flow
+const adapter = new CliAdapter(resolvedConfig);
+const factory = createCliIntegrationFactory(adapter);
+
+const instance = new WorkflowInstance({ adapter, factory, filePath });
+await instance.loadPromptFile(filePath);
+await instance.execute();
+
+process.exit(instance.status === 'completed' ? 0 : 1);
+```
+
+---
+
 ## Implementation Plan
 
-### Phase 1: Platform Abstraction (Week 1)
+### Phase 1: WorkflowInstance Extraction (prerequisite — shared with parallel workflows)
 
-**Goal**: Create abstraction layer without breaking VS Code extension
+**Goal**: Extract `WorkflowInstance` from `FlightPathManager` with zero behavior change. This is the parallel workflows Phase 1.
 
-1. **Create PlatformAdapter Interface**
-   - Define interface for all VS Code API touchpoints
-   - Keep minimal - only what's actually used
+1. Create `WorkflowInstance` class — move all per-workflow state and methods from `FlightPathManager`
+2. Create `IntegrationFactory` interface and VS Code implementation
+3. `FlightPathManager` delegates to single `WorkflowInstance`
+4. All existing tests pass, behavior identical
 
-2. **Implement VsCodeAdapter**
-   - Wraps existing vscode.\* calls
-   - Drop-in replacement - existing code keeps working
+### Phase 2: Platform Abstraction Layer
 
-3. **Identify VS Code Dependencies**
-   - Audit all files for `import * as vscode`
-   - Categorize: essential vs. removable
-   - Document in comments what needs abstraction
+**Goal**: Add an abstraction layer so shared code can run without VS Code. **The VS Code extension behavior must remain identical after every step.**
 
-4. **Refactor BaseCliIntegration**
-   - This is the main shared component
-   - Inject PlatformAdapter via constructor
-   - Test that VS Code extension still works
+1. **Create `PlatformAdapter` Interface**
+   - `getConfig<T>()`, `getWorkspaceRoot()`, `log()`, `warn()`, `error()`, `showChoice()`
+   - Keep minimal — only what's actually used in shared files
 
-### Phase 2: CLI Entry Point (Week 1-2)
+2. **Implement `VsCodeAdapter`** — *wrap existing calls, do not change behavior*
+   - `VsCodeAdapter.getConfig()` calls `vscode.workspace.getConfiguration()` — same as today
+   - `VsCodeAdapter.warn()` calls `vscode.window.showWarningMessage()` — same as today
+   - `VsCodeAdapter.createInteractiveTerminal()` encapsulates the existing terminal creation + shell integration path — same behavior, just behind an interface
+   - **Validation**: Run extension after each file change — behavior must be identical
 
-5. **Create cli.ts Entry Point**
-   - Commander.js setup
-   - Argument parsing
-   - Config loading (file + env + flags)
+3. **Refactor shared files to inject adapter** (in order of simplicity):
+   - `PromptFileParser.ts` — call `platform.error()` instead of `vscode.window.showErrorMessage()` directly (VsCodeAdapter.error calls showErrorMessage — same behavior)
+   - `PromptQueue.ts` — use Node.js `EventEmitter` instead of `vscode.EventEmitter` (VS Code runs on Node — the runtime behavior is identical; subscribers update to Node event pattern)
+   - `WorkspaceSessionManager.ts` — call `platform.getWorkspaceRoot()` instead of `vscode.workspace.workspaceFolders` directly
+   - `WorkflowExecutor.ts` — call `platform.warn()` / `platform.log()` instead of `vscode.window.*` directly; `platform.focusDashboard()` instead of `vscode.commands.executeCommand`
+   - `CliIntegration.ts` — call `platform.createInteractiveTerminal()` for the interactive path (VsCodeAdapter wraps the existing terminal + shell integration code); call `platform.getConfig()` instead of `vscode.workspace.getConfiguration()`
 
-6. **Implement CliAdapter**
-   - Node.js implementations of PlatformAdapter
-   - Configuration from file/env/flags
-   - Console logging with chalk
+### Phase 3: CLI Entry Point
 
-7. **Build Configuration**
-   - Add CLI bundle to esbuild.js
-   - Test both bundles build correctly
-   - Verify no vscode imports leak into CLI bundle
+**Goal**: Wire everything together for terminal execution
 
-### Phase 3: Core Refactoring (Week 2)
+4. **Create `src/cli.ts`**
+   - Commander.js argument parsing
+   - Config loading (flags → env vars → `.flightpathrc.json` → defaults)
+   - Instantiate `CliAdapter` with resolved config
+   - Instantiate `WorkflowInstance` with CLI factory
+   - Execute and stream output to terminal
+   - Exit with appropriate code
 
-8. **Refactor PromptFileParser**
-   - Remove `vscode.window.showErrorMessage`
-   - Use PlatformAdapter.error() instead
-   - Test parsing works in both contexts
+5. **Implement `CliAdapter`**
+   - `getConfig()` reads from resolved CLI config
+   - `getWorkspaceRoot()` returns `--cwd` or `process.cwd()`
+   - `log()`/`warn()`/`error()` write to console with optional color (chalk)
+   - `createInteractiveTerminal()` spawns with `stdio: 'inherit'`
 
-9. **Refactor PromptQueue**
-   - Replace `vscode.EventEmitter` with Node.js EventEmitter
-   - Or use a cross-platform event library
-   - Test queue logic in both contexts
+6. **Build Configuration**
+   - Add CLI bundle to `esbuild.js` (follow MCP server pattern)
+   - Add `flightpath` to `bin` in `package.json`
+   - Verify no `vscode` imports leak into CLI bundle (build fails if they do)
 
-10. **Refactor FlightPathManager**
-    - This is the orchestrator
-    - Inject dependencies via constructor
-    - May need to split VS Code-specific parts
+### Phase 4: Interactive & Headless Modes
 
-### Phase 4: Interactive Mode (Week 2-3)
+7. **Validate interactive mode end-to-end**
+   - TTY auto-detection already designed
+   - Test with Copilot CLI and Claude CLI tool approval prompts
+   - Verify Ctrl+C handling (SIGINT → graceful stop)
 
-11. **Interactive Terminal Support**
-    - Detect TTY vs piped
-    - Implement stdio: 'inherit' mode
-    - Test with both Copilot and Claude CLIs
+8. **Validate headless mode**
+   - Auto-add `--allow-all-tools` / `--dangerously-skip-permissions` flags
+   - CI/CD JSON output (`--json`)
+   - Timeout handling
 
-12. **Headless Mode**
-    - Output capture and streaming
-    - Auto-add permission flags
-    - Timeout handling
+### Phase 5: Polish
 
-### Phase 5: Features & Polish (Week 3-4)
-
-13. **End Conditions**
-    - Already mostly platform-agnostic
-    - Verify script execution works
-    - Test retry logic
-
-14. **Output & Reporting**
-    - Human-readable terminal output
-    - JSON output (`--json`)
-    - Exit codes
-
-15. **Error Handling**
-    - User-friendly error messages
-    - Graceful shutdown (Ctrl+C)
-    - Help text
-
-16. **Testing**
-    - Unit tests for CliAdapter
-    - Integration tests with mock CLIs
-    - Manual testing matrix
-
-17. **Documentation**
-    - README for CLI
-    - Config file reference
-    - Examples
+9. **Output & Reporting** — human-readable format, JSON mode, exit codes
+10. **Error Messages** — user-friendly errors for missing files, missing CLIs, auth failures
+11. **Testing** — unit tests for `CliAdapter`, integration tests with mock harnesses
+12. **Documentation** — CLI README, config file reference, examples
 
 ### Files to Modify (Priority Order)
 
-| File                                        | Changes                                  | Effort |
-| ------------------------------------------- | ---------------------------------------- | ------ |
-| `src/flightpath/IntegrationFactory.ts`      | NEW - Factory interface                  | Low    |
-| `src/platform/PlatformAdapter.ts`           | NEW - Platform interface                 | Low    |
-| `src/platform/VsCodeAdapter.ts`             | NEW - VS Code impl                       | Low    |
-| `src/platform/CliAdapter.ts`                | NEW - Node impl                          | Medium |
-| `src/cli.ts`                                | NEW - Entry point with CLI factory       | Medium |
-| `src/extension.ts`                          | Add VS Code factory, inject into manager | Low    |
-| `src/flightpath/FlightPathManager.ts`       | Accept factory + adapter via constructor | High   |
-| `src/flightpath/cli/BaseCliIntegration.ts`  | Inject adapter                           | Medium |
-| `src/flightpath/PromptFileParser.ts`        | Remove vscode.window                     | Low    |
-| `src/flightpath/PromptQueue.ts`             | Use Node EventEmitter                    | Low    |
-| `src/flightpath/base/CopilotIntegration.ts` | Inject adapter                           | Medium |
-| `esbuild.js`                                | Add CLI bundle                           | Low    |
-| `package.json`                              | Add bin entry                            | Low    |
+| File                                           | Changes                                          | Effort |
+| ---------------------------------------------- | ------------------------------------------------ | ------ |
+| `src/flightpath/WorkflowInstance.ts`           | NEW — extracted from FlightPathManager (Phase 1) | High   |
+| `src/flightpath/IntegrationFactory.ts`         | NEW — factory interface (Phase 1)                | Low    |
+| `src/platform/PlatformAdapter.ts`              | NEW — platform interface (Phase 2)               | Low    |
+| `src/platform/VsCodeAdapter.ts`                | NEW — VS Code impl (Phase 2)                     | Low    |
+| `src/platform/CliAdapter.ts`                   | NEW — Node.js CLI impl (Phase 3)                 | Medium |
+| `src/cli.ts`                                   | NEW — CLI entry point (Phase 3)                  | Medium |
+| `src/flightpath/PromptFileParser.ts`           | Remove `vscode.window` (1 call)                  | Low    |
+| `src/flightpath/PromptQueue.ts`                | Replace `vscode.EventEmitter` → Node EventEmitter | Low   |
+| `src/flightpath/orchestration/WorkspaceSessionManager.ts` | Inject `platform.getWorkspaceRoot()`  | Low    |
+| `src/flightpath/WorkflowExecutor.ts`           | Inject adapter, remove `vscode.commands`         | Medium |
+| `src/flightpath/cli/CliIntegration.ts`         | Inject adapter for config + terminal             | Medium |
+| `src/flightpath/base/CopilotIntegration.ts`    | Inject adapter                                   | Low    |
+| `src/extension.ts`                             | Pass `VsCodeAdapter` to `WorkflowInstance`       | Low    |
+| `esbuild.js`                                   | Add CLI bundle (follow MCP server pattern)       | Low    |
+| `package.json`                                 | Add `flightpath` to `bin`                        | Low    |
 
-**Note on CopilotChatIntegration.ts**: This file stays VS Code-only and doesn't need modification. It's simply not imported by the CLI entry point, so esbuild's tree-shaking excludes it automatically.
+**Note on `CopilotChatIntegration.ts`**: Stays VS Code-only, no modifications needed. It's never imported by `cli.ts`, so esbuild tree-shaking excludes it automatically.
 
 ---
 
@@ -1076,14 +1169,15 @@ These are already in the extension and will be shared:
 
 ## Comparison with Similar Tools
 
-| Feature            | FlightPath CLI    | Aider | Claude CLI | Copilot CLI |
-| ------------------ | ----------------- | ----- | ---------- | ----------- |
-| Workflow Files     | ✅ JSON/MD        | ❌    | ❌         | ❌          |
-| Multi-Prompt       | ✅ Sequential     | ❌    | ❌         | ❌          |
-| End Conditions     | ✅ Scripts        | ❌    | ❌         | ❌          |
-| Multiple Providers | ✅ Copilot+Claude | ❌    | ❌         | ❌          |
-| Session Resume     | ✅                | ✅    | ✅         | ✅          |
-| CI/CD Ready        | ✅ JSON output    | ⚠️    | ⚠️         | ⚠️          |
+| Feature               | FlightPath CLI              | Aider | Claude CLI | Copilot CLI |
+| --------------------- | --------------------------- | ----- | ---------- | ----------- |
+| Workflow Files        | ✅ YAML/JSON/MD             | ❌    | ❌         | ❌          |
+| Multi-Prompt          | ✅ Sequential               | ❌    | ❌         | ❌          |
+| End Conditions        | ✅ Scripts                  | ❌    | ❌         | ❌          |
+| Multiple Harnesses    | ✅ Copilot+Claude+Codex CLI | ❌    | ❌         | ❌          |
+| Session Resume        | ✅                          | ✅    | ✅         | ✅          |
+| CI/CD Ready           | ✅ JSON output              | ⚠️    | ⚠️         | ⚠️          |
+| Dynamic Queue         | ✅ (shared with extension)  | ❌    | ❌         | ❌          |
 
 ---
 
@@ -1093,28 +1187,31 @@ FlightPath CLI brings structured AI workflow automation to any terminal environm
 
 ### Key Design Decisions
 
-1. **Shared Codebase**: Single repo with platform abstraction, not a rewrite
-2. **Interactive by Default**: TTY detection enables tool approval workflows
-3. **Minimal New Dependencies**: Only Commander.js and chalk for CLI-specific needs
-4. **Incremental Refactoring**: Extension keeps working throughout migration
+1. **WorkflowInstance is the bridge**: The parallel workflows refactor extracts `WorkflowInstance` as a self-contained execution unit. The CLI uses it directly — no VS Code orchestration needed.
+2. **Shared Codebase**: Single repo with platform abstraction, not a rewrite
+3. **Interactive by Default**: TTY detection enables tool approval workflows
+4. **Minimal New Dependencies**: Only Commander.js and chalk for CLI-specific needs
+5. **Incremental Refactoring**: Extension keeps working throughout migration
+6. **Build-time safety**: No `vscode` in CLI externals — any leak causes build failure
 
 ### MVP Deliverables
 
-1. **Platform Abstraction Layer** - `PlatformAdapter` interface + implementations
-2. **CLI Entry Point** - `src/cli.ts` with Commander.js
-3. **Interactive + Headless Modes** - TTY detection, permission flags
-4. **Streaming Output** - Real-time CLI output with colors
-5. **End Conditions** - Full support (shared code)
-6. **JSON Output** - CI/CD integration
+1. **WorkflowInstance Extraction** — prerequisite, shared with parallel workflows work
+2. **Platform Abstraction Layer** - `PlatformAdapter` interface + implementations
+3. **CLI Entry Point** - `src/cli.ts` with Commander.js
+4. **Interactive + Headless Modes** - TTY detection, permission flags
+5. **Streaming Output** - Real-time CLI output with colors
+6. **End Conditions** - Full support (shared code)
+7. **JSON Output** - CI/CD integration
 
 ### Code Sharing Benefits
 
 | Metric             | Rewrite Approach | Shared Code Approach |
 | ------------------ | ---------------- | -------------------- |
-| New code to write  | ~3000 lines      | ~500 lines           |
+| New code to write  | ~3000 lines      | ~300 lines           |
 | Maintenance burden | 2x               | 1x (single source)   |
 | Feature parity     | Manual sync      | Automatic            |
 | Bug fixes          | Need in both     | Fix once             |
 | Testing            | Separate suites  | Shared tests         |
 
-The architecture is designed for maximum code reuse while allowing platform-specific optimizations where needed. Future features like Dynamic Queue will automatically work in both CLI and extension.
+The architecture is designed for maximum code reuse while allowing platform-specific optimizations where needed. All existing features (Dynamic Queue, session management, end conditions, all three CLI harnesses) work automatically in the CLI since they live in the shared `WorkflowInstance` layer.

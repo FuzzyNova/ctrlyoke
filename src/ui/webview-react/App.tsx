@@ -520,16 +520,11 @@ function App() {
       }
     }
 
-    // Symmetric guard: expanding editor (with output open and side panels
-    // collapsed) can also be ignored by the panel library. If store says
-    // editor should be open but panel is still collapsed, force a layout that
-    // restores editor toward its previous open size.
-    if (
-      !editorCollapsed &&
-      !outputCollapsed &&
-      promptsCollapsed &&
-      settingsCollapsed
-    ) {
+    // Symmetric guard: expanding editor (while output is open) can also be
+    // ignored by the panel library. If store says editor should be open but
+    // panel is still collapsed, force a layout that restores editor toward its
+    // previous open size.
+    if (!editorCollapsed && !outputCollapsed) {
       const editorActuallyCollapsed =
         mobileEditorRef.current?.isCollapsed() ?? false;
 

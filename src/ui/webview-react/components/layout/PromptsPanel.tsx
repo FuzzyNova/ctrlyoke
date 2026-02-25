@@ -2,6 +2,9 @@ import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useEditorStore } from "@store/editorStore";
+import { useSettingsStore } from "@store/settingsStore";
+import { useElementNarrow } from "../../hooks/useElementNarrow";
+import { HARNESS_INFO } from "../../types/messages";
 import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
@@ -28,6 +31,47 @@ export const PromptsPanel: React.FC<{
     useWorkflowStore();
   const { promptsCollapsed, togglePromptsCollapse } = useUiStore();
   const { selectedPromptIndex, selectPrompt } = useEditorStore();
+  const { workflowProperties, globalSettings } = useSettingsStore();
+  const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
+
+  // Compute the harness/model to display for a prompt.
+  //
+  // For prompts that have already started executing, use _runtime values so
+  // the display shows what was actually used and doesn't change if the
+  // workflow-level settings are later modified.
+  //
+  // For pending prompts, compute from the three-tier precedence (prompt →
+  // workflow → global) so the display stays live and reflects any changes.
+  const getPromptHarnessModel = (prompt: (typeof prompts)[0]) => {
+    if (prompt._runtime?.harness ?? prompt._runtime?.model) {
+      const h = prompt._runtime!.harness;
+      const m = prompt._runtime!.model;
+      return {
+        harnessLabel: h
+          ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
+          : undefined,
+        harnessIsDefault: false,
+        modelLabel: m,
+        modelIsDefault: false,
+      };
+    }
+
+    // Pending / queued — reflect live settings with default indicators
+    const harnessIsDefault = prompt.harness === undefined;
+    const modelIsDefault = prompt.model === undefined;
+    const effectiveHarness =
+      prompt.harness ?? workflowProperties.harness ?? globalSettings.harness;
+    const effectiveModel =
+      prompt.model ?? workflowProperties.model ?? globalSettings.model;
+    return {
+      harnessLabel:
+        HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
+        effectiveHarness,
+      harnessIsDefault,
+      modelLabel: effectiveModel,
+      modelIsDefault,
+    };
+  };
 
   // Handle clicking a prompt to edit it
   const handlePromptClick = useCallback(
@@ -105,6 +149,7 @@ export const PromptsPanel: React.FC<{
     <div className="flex flex-col h-full bg-editor-bg">
       {/* Header - clickable to collapse */}
       <div
+        ref={headerRef}
         className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
         onClick={togglePromptsCollapse}
         role="button"
@@ -118,7 +163,7 @@ export const PromptsPanel: React.FC<{
           Prompts
         </span>
         <span className="ml-auto">
-          <PromptCounter />
+          <PromptCounter narrow={isHeaderNarrow} />
         </span>
       </div>
 
@@ -139,6 +184,7 @@ export const PromptsPanel: React.FC<{
               const latestOutput = getLatestOutput(index);
               const isCurrent = isRunning && index === currentStep;
               const isSelected = selectedPromptIndex === index;
+              const harnessModel = getPromptHarnessModel(prompt);
 
               return (
                 <PromptItem
@@ -153,6 +199,10 @@ export const PromptsPanel: React.FC<{
                   isCurrent={isCurrent}
                   isSelected={isSelected}
                   onClick={() => handlePromptClick(index)}
+                  harnessLabel={harnessModel.harnessLabel}
+                  harnessIsDefault={harnessModel.harnessIsDefault}
+                  modelLabel={harnessModel.modelLabel}
+                  modelIsDefault={harnessModel.modelIsDefault}
                 />
               );
             })}
