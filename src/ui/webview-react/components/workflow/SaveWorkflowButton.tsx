@@ -23,7 +23,7 @@ export const SaveWorkflowButton: React.FC = () => {
 
   return (
     <button
-      className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
+      className={`control-button flex items-center justify-center min-w-[28px] px-1 py-0.5 text-sm rounded border border-btn-border transition-colors ${
         hasWorkflow
           ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
           : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -33,7 +33,7 @@ export const SaveWorkflowButton: React.FC = () => {
       title={hasWorkflow ? "Save workflow as..." : "No workflow to save"}
       aria-label="Save workflow"
     >
-      <i className="codicon codicon-save" />
+      <i className="codicon codicon-lg codicon-save" />
     </button>
   );
 };

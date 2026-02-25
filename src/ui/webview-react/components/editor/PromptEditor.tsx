@@ -8,6 +8,7 @@ import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
 import { EditorFooter } from "./EditorFooter";
 import { Modal } from "../shared/Modal";
+import { Button } from "../shared";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -421,26 +422,20 @@ export const PromptEditor: React.FC = () => {
         size="sm"
         footer={
           <>
-            <button
-              onClick={handleDeleteCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
-            >
+            <Button variant="secondary" size="md" onClick={handleDeleteCancel}>
               Cancel
-            </button>
-            <button
-              onClick={handleDeleteConfirm}
-              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-            >
+            </Button>
+            <Button variant="danger" size="md" onClick={handleDeleteConfirm}>
               Delete
-            </button>
+            </Button>
           </>
         }
       >
-        <p className="text-gray-700 dark:text-gray-300">
+        <p className="text-foreground">
           Are you sure you want to delete prompt{" "}
           {(selectedPromptIndex ?? 0) + 1}?
         </p>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-sm text-description-fg">
           This action cannot be undone.
         </p>
       </Modal>

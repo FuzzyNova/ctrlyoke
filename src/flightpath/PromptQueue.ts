@@ -1206,27 +1206,29 @@ export class PromptQueue {
 
   /**
    * Create working file from original prompt file
-   * @param originalFilePath Path to original prompt file
+   * @param nameForFile Display name or file path used to generate the working file's filename
    * @param prompts Prompts to store in working file
    * @param workspaceFolder Current workspace folder
+   * @param originalFilePath The true source file path (if any). Only set for file-based workflows;
+   *   leave undefined for ephemeral/dashboard-created workflows so the save dialog defaults correctly.
    * @returns Path to created working file
    */
   public async createWorkingFile(
-    originalFilePath: string,
+    nameForFile: string,
     prompts: PromptItem[],
-    workspaceFolder: vscode.WorkspaceFolder
+    workspaceFolder: vscode.WorkspaceFolder,
+    originalFilePath?: string
   ): Promise<string> {
     const workingFilePath = await this.generateWorkingFilePath(
-      originalFilePath,
+      nameForFile,
       workspaceFolder
     );
 
     const workingFile: WorkingFile = {
-      originalFile: originalFilePath,
-      // Use existing workflow name from state if set, otherwise derive from file path
+      ...(originalFilePath ? { originalFile: originalFilePath } : {}),
+      // Use existing workflow name from state if set, otherwise derive from the name/path
       workflowName:
-        this.state.workflowName ||
-        PromptQueue.extractWorkflowName(originalFilePath),
+        this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile),
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
       prompts: prompts,

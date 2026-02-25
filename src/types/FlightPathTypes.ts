@@ -77,7 +77,7 @@ export interface WorkingFileRuntime {
  * Stored in .flightpath/.queue/ directory
  */
 export interface WorkingFile extends PromptFile {
-  originalFile: string; // Path to original prompt file
+  originalFile?: string; // Path to original prompt file (undefined for ephemeral/dashboard-created workflows)
   workflowName: string; // Derived from original filename
   startedAt: number; // Timestamp when workflow started
   lastModifiedAt?: number; // Timestamp when workflow was last modified (optional for backward compatibility)

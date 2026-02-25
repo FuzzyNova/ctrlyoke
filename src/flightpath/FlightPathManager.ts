@@ -1592,7 +1592,8 @@ export class FlightPathManager {
         workingFilePath = await this.promptQueue.createWorkingFile(
           displayName,
           prompts,
-          workspaceFolder
+          workspaceFolder,
+          originalFilePath // undefined for ephemeral; real path for file-based workflows
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
 

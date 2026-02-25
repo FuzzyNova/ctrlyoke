@@ -1910,12 +1910,17 @@ window.vscodeApi = acquireVsCodeApi();
         // Use the original source file as the default save target
         defaultPath = workingFile.originalFile;
       } else {
-        // Derive a sensible default from the workflow name
-        const name =
+        // Derive a sensible default from the workflow name, sanitized to kebab-case
+        const rawName =
           workingFile.workflowName ||
           path
             .basename(workingFilePath)
             .replace(/\.flightpath\.(ya?ml|json)$/i, "");
+        const name =
+          rawName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "workflow";
         defaultPath = path.join(workflowsDir, `${name}.flightpath.yaml`);
       }
 

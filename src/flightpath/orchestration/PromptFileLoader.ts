@@ -72,7 +72,8 @@ export class PromptFileLoader {
           workingFilePath = await this.promptQueue.createWorkingFile(
             filePath,
             promptFile.prompts,
-            workspaceFolder
+            workspaceFolder,
+            filePath // real source file path — stored as originalFile
           );
 
           // Copy workflow-level properties from loaded file to working file
@@ -231,7 +232,10 @@ export class PromptFileLoader {
         );
 
         if (this.dashboardProvider) {
-          const fileName = path.basename(workingFile.originalFile);
+          // Use original file basename when available; fall back to workflow name for ephemeral workflows
+          const fileName = workingFile.originalFile
+            ? path.basename(workingFile.originalFile)
+            : workingFile.workflowName || path.basename(workingFilePath);
           // Get the restored state to send accurate prompt info with runtime state
           const restoredState = this.promptQueue.getState();
           this.dashboardProvider.updateSessionRestored(

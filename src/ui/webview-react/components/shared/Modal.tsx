@@ -53,18 +53,18 @@ export const Modal: React.FC<ModalProps> = ({
     >
       <div
         ref={modalRef}
-        className={`relative w-full ${sizeClasses[size]} mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl`}
+        className={`relative w-full ${sizeClasses[size]} mx-4 bg-editor-bg rounded-lg shadow-xl border border-panel-border`}
         onClick={(e) => e.stopPropagation()}
         tabIndex={-1}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-panel-border">
+          <h2 className="text-xl font-semibold text-foreground">
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+            className="text-description-fg hover:text-foreground transition-colors"
             aria-label="Close modal"
           >
             <svg
@@ -84,11 +84,11 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">{children}</div>
+        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto text-foreground">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-panel-border">
             {footer}
           </div>
         )}
