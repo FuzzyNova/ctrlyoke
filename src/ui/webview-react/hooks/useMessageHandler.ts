@@ -54,6 +54,26 @@ export function sendMessage(
 }
 
 // ============================================================================
+// Shared Helpers
+// ============================================================================
+
+/**
+ * Reset all cross-cutting state when the active workflow changes.
+ * Called by FILE_SELECTED and SESSION_RESTORED after loadWorkflow().
+ *
+ * Clears history view, run counters, editor state, and enables the queue UI
+ * so each handler doesn't have to duplicate these six lines.
+ */
+function applyWorkflowChange(): void {
+  useWorkflowStore.getState().clearHistoryOutputs();
+  useUiStore.getState().clearHistoryView();
+  useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
+  useEditorStore.getState().resetEditor();
+  useEditorStore.getState().setHasActiveQueue(true);
+  useSettingsStore.getState().setWorkflowLoaded(true);
+}
+
+// ============================================================================
 // Message Handlers
 // ============================================================================
 
@@ -135,40 +155,19 @@ function createMessageHandlers(): MessageHandlerMap {
   // FILE_SELECTED - New workflow file loaded
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.FILE_SELECTED] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
-    const editorStore = useEditorStore.getState();
-    const settingsStore = useSettingsStore.getState();
-    const uiStore = useUiStore.getState();
-
-    workflowStore.loadWorkflow({
+    useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
       prompts: message.prompts || [],
     });
-
-    // Reset run history — a newly loaded file has no known run count yet.
-    // The extension will send RUN_HISTORY_UPDATED if there are existing runs.
-    workflowStore.clearHistoryOutputs();
-    uiStore.clearHistoryView();
-    useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
-
-    // Reset editor to new prompt mode — any edit mode state from the previous
-    // workflow (selectedPromptIndex, originalPromptData) is no longer valid.
-    editorStore.resetEditor();
-
-    editorStore.setHasActiveQueue(true);
-    settingsStore.setWorkflowLoaded(true);
+    applyWorkflowChange();
   };
 
   // --------------------------------------------------------------------------
   // SESSION_RESTORED - Restore previous session with runtime state
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.SESSION_RESTORED] = (message) => {
-    const workflowStore = useWorkflowStore.getState();
-    const editorStore = useEditorStore.getState();
-    const settingsStore = useSettingsStore.getState();
-
-    workflowStore.loadWorkflow({
+    useWorkflowStore.getState().loadWorkflow({
       fileName: message.fileName,
       workflowName: message.workflowName,
       prompts: message.prompts || [],
@@ -176,13 +175,7 @@ function createMessageHandlers(): MessageHandlerMap {
       currentStep: message.currentIndex || 0,
       results: message.results || [],
     });
-
-    // Reset editor to new prompt mode — stale edit state from a prior session
-    // is not meaningful for the restored workflow.
-    editorStore.resetEditor();
-
-    editorStore.setHasActiveQueue(true);
-    settingsStore.setWorkflowLoaded(true);
+    applyWorkflowChange();
   };
 
   // --------------------------------------------------------------------------

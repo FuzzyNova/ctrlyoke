@@ -162,6 +162,23 @@ module.exports = {
           "var(--vscode-progressBar-background, rgba(14, 99, 156, 0.8))",
         "exec-stopped-bg":
           "var(--vscode-editorInfo-foreground, rgba(150, 150, 150, 0.8))",
+
+        // ── Streamdown / shadcn-ui compatibility ──────────────────────────────
+        // Streamdown's table Copy/Download controls use shadcn/ui Tailwind class
+        // names: bg-background, bg-sidebar, border-border, text-muted-foreground,
+        // hover:text-foreground, ring-ring. Mapping them here causes the host
+        // Tailwind build to generate VS Code-themed CSS for those classes.
+        // 'foreground' is already mapped above.
+        // Fallback to transparent where a VS Code theme may leave a value unset.
+        "background": "var(--vscode-editor-background)",
+        "sidebar": "var(--vscode-sideBar-background)",
+        "border": "var(--vscode-panel-border, transparent)",
+        "muted": {
+          DEFAULT:
+            "var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1))",
+          foreground: "var(--vscode-descriptionForeground)",
+        },
+        "ring": "var(--vscode-focusBorder, transparent)",
       },
 
       keyframes: {

@@ -53,7 +53,8 @@
       "WebFetch(domain:aihackers.net)",
       "WebFetch(domain:venturebeat.com)",
       "WebFetch(domain:paddo.dev)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:streamdown.ai)"
     ],
     "deny": [],
     "ask": []
