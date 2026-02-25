@@ -105,7 +105,9 @@ export class ClaudeResponseParser
 
         // Track each assistant turn's usage; last one = current context window state
         if (json.message.usage) {
-          lastAssistantUsage = this.extractExtendedUsageStats(json.message.usage);
+          lastAssistantUsage = this.extractExtendedUsageStats(
+            json.message.usage
+          );
           usage = lastAssistantUsage;
         }
       }
@@ -466,6 +468,22 @@ export class ClaudeResponseParser
   ): void {
     for (const contentBlock of content) {
       if (contentBlock.type === "tool_result") {
+        // contentBlock.content can be a string or an array of content blocks
+        // e.g. [{"type":"text","text":"..."}] — extract text for display
+        const rawContent = contentBlock.content;
+        let outputText: string;
+        if (typeof rawContent === "string") {
+          outputText = rawContent;
+        } else if (Array.isArray(rawContent)) {
+          outputText = rawContent
+            .filter((b: any) => b.type === "text" && typeof b.text === "string")
+            .map((b: any) => b.text)
+            .join("\n");
+        } else if (rawContent != null) {
+          outputText = JSON.stringify(rawContent);
+        } else {
+          outputText = "";
+        }
         events.push({
           type: CLI_EVENT_TYPES.TOOL_RESULT,
           timestamp: Date.now(),
@@ -473,7 +491,7 @@ export class ClaudeResponseParser
             toolCallId: contentBlock.tool_use_id,
             result: {
               success: true, // Assume success if we got a result
-              output: contentBlock.content,
+              output: outputText,
             },
           },
         });

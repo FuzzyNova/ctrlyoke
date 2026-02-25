@@ -64,9 +64,7 @@ const ThinkingOutput: React.FC<ThinkingOutputProps> = ({
   const displayLabel = label && label !== "Thinking" ? label : "Thinking";
   return (
     <div className={`my-2 ${className}`}>
-      <div className="text-xs text-description-fg mb-1">
-        ● {displayLabel}
-      </div>
+      <div className="text-xs text-description-fg mb-1">● {displayLabel}</div>
       <div className="text-description-fg pl-3 border-l border-panel-border">
         <MarkdownText>{text}</MarkdownText>
       </div>
@@ -90,10 +88,36 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   const prefix = "  ⎿  ";
   let content: string;
 
-  if (!result.success && result.error) {
-    content = prefix + result.error.substring(0, 200);
-  } else if (result.output) {
-    content = prefix + result.output.substring(0, 100);
+  let outputStr: string | undefined;
+  if (typeof result.output === "string") {
+    outputStr = result.output;
+  } else if (result.output != null) {
+    console.warn(
+      "[ToolResultOutput] result.output is not a string — parser may need updating. Actual type:",
+      typeof result.output,
+      "Value:",
+      result.output
+    );
+    outputStr = JSON.stringify(result.output);
+  }
+
+  let errorStr: string | undefined;
+  if (typeof result.error === "string") {
+    errorStr = result.error;
+  } else if (result.error != null) {
+    console.warn(
+      "[ToolResultOutput] result.error is not a string — parser may need updating. Actual type:",
+      typeof result.error,
+      "Value:",
+      result.error
+    );
+    errorStr = JSON.stringify(result.error);
+  }
+
+  if (!result.success && errorStr) {
+    content = prefix + errorStr.substring(0, 200);
+  } else if (outputStr) {
+    content = prefix + outputStr.substring(0, 100);
   } else {
     content = prefix + (result.success ? "Success" : "Failed");
   }
@@ -358,19 +382,30 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     const parts: string[] = [];
 
     if (output.tokens) {
-      const { prompt, completion, cached, contextWindowUsed, contextWindowSize } = output.tokens;
+      const {
+        prompt,
+        completion,
+        cached,
+        contextWindowUsed,
+        contextWindowSize,
+      } = output.tokens;
 
       // Context window usage (most useful: shows how full the window is)
       if (contextWindowUsed !== undefined && contextWindowSize) {
-        const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+        const fmt = (n: number) =>
+          n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
         const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
-        parts.push(`Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`);
+        parts.push(
+          `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+        );
       }
 
       // Billing tokens
       const total = prompt + completion;
       const cachedSuffix = cached ? ` / ${cached} cached` : "";
-      parts.push(`Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`);
+      parts.push(
+        `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
+      );
     }
 
     if (!output.isStreaming && output.elapsed !== undefined) {

@@ -1,1119 +1,987 @@
-# Parallel Workflows Architecture Plan
+# Multi-Workflow Architecture Plan
 
-**Document Status**: Planning / Research
-**Last Updated**: 2026-01-12
+**Document Status**: Active Planning
+**Last Updated**: 2026-02-24
 **Author**: Claude Code Planning Agent
 
 ---
 
 ## Executive Summary
 
-This document outlines a comprehensive plan to re-architect FlightPath to support **concurrent workflow execution**. Currently, FlightPath is designed around a single-workflow-at-a-time model with a singleton `PromptQueue` and `FlightPathManager`. To enable parallel workflows, we need fundamental changes to state management, UI/UX, resource orchestration, and command routing.
+This document outlines the plan to re-architect FlightPath to support **multiple loaded workflows with a dropdown selector UI**. The current single-workflow singleton model will be replaced by a `WorkflowOrchestrator` managing multiple `WorkflowInstance` objects, while the UI will use an extended version of the existing `WorkflowStatus` split-button dropdown — not a tab system.
+
+**Core Design Decisions**:
+
+- **True parallel execution** — multiple workflows run simultaneously, each in its own terminal/process; no single-runner constraint
+- **Dropdown, not tabs** — the existing `WorkflowStatus` split-button pattern is extended to show all loaded workflows, not replaced by a tab bar
+- **Controls are per-active-workflow** — Run/Pause/Stop apply to the currently viewed workflow; other running workflows are unaffected
+- **Remove existing blocking restrictions** — `WorkflowControls` currently disables all actions when executing; those guards are removed to enable parallel creation and loading
 
 **Key Goals**:
 
-1. Allow users to run multiple workflows simultaneously
-2. Maintain independent state for each workflow (queue, execution status, results)
-3. Provide clear UI/UX for managing multiple workflows (tabs, controls, visual feedback)
-4. Handle resource constraints (terminal sessions, process limits, API rate limits)
-5. Preserve existing single-workflow UX for users who don't need parallelism
+1. Load multiple workflows simultaneously, each maintaining independent state
+2. Switch between loaded workflows via the existing dropdown UI pattern
+3. Preserve existing single-workflow UX for users who never load a second workflow
+4. Resume paused or completed workflows without losing their output history
+5. Clean session/process management per workflow instance
 
 ---
 
 ## Current Architecture Analysis
 
-### Core Components (Single Workflow)
+### State of the Codebase (February 2026)
 
-#### 1. FlightPathManager (Singleton Pattern)
+The codebase has evolved significantly since this plan was first drafted. The major additions:
 
-**File**: `src/flightpath/FlightPathManager.ts`
+- **React webview** (`src/ui/webview-react/`) fully replaces the old vanilla JS dashboard
+- **Zustand stores** (`workflowStore`, `uiStore`, `editorStore`, `settingsStore`) manage all UI state
+- **WorkflowExecutor** extracted from FlightPathManager (separation of concerns)
+- **WorkspaceSessionManager** for session persistence
+- **OutputHistoryManager** for run history
+- **PromptFileWatcher** for dynamic queue file monitoring
+- **`WorkflowStatus` split-button** with recent-workflows dropdown already implemented
 
-**Current State**:
+### Existing Single-Workflow Components
 
-- Single `promptQueue: PromptQueue` instance
-- Single `currentPromptFile?: { filePath: string; promptFile: PromptFile }` reference
-- Single `activeIntegration?: CopilotIntegration` reference
-- Single `workflowExecutor: WorkflowExecutor` instance
-- Single `startPending: boolean` flag for race condition guard
+#### FlightPathManager (`src/flightpath/FlightPathManager.ts`)
 
-**Responsibilities**:
+Currently the monolithic orchestrator (~1,866 lines). Manages:
 
-- Orchestrates single workflow lifecycle (load, execute, pause, resume, stop, clear)
-- Factory pattern for creating integrations (CLI/Chat)
-- Delegates to `WorkflowExecutor` for execution loop
-- Sends updates to single dashboard provider
+```typescript
+// Single workflow state
+private promptQueue: PromptQueue;
+private workflowExecutor: WorkflowExecutor;
+private currentPromptFile?: { filePath: string; promptFile: PromptFile };
+private activeIntegration?: HarnessIntegration;
+private lastKnownPromptCount: number;
 
-**Key Methods**:
+// All 4 harness integrations (shared factories)
+private copilotCliIntegration: CliIntegration;
+private chatIntegration: CopilotChatIntegration;
+private claudeCliIntegration: CliIntegration;
+private codexCliIntegration: CliIntegration;
 
-- `loadPromptFile(filePath)` - Loads a workflow
-- `executeLoadedPromptFile(modeOverride?, continueFromCurrent?)` - Starts execution
-- `pause()`, `resume()`, `stop()` - Execution controls (no workflow ID parameter)
-- `clearWorkflow()` - Clears current workflow state
+// Supporting services
+private endConditionEvaluator: EndConditionEvaluator;
+private endConditionHandler: EndConditionHandler;
+private dashboardProvider?: FlightPathWebviewProvider;
+private workspaceSessionManager: WorkspaceSessionManager;
+private outputHistoryManager: OutputHistoryManager;
+private promptFileWatcher: PromptFileWatcher;
+```
 
-#### 2. PromptQueue (State Machine)
+#### PromptQueue (`src/flightpath/PromptQueue.ts`)
 
-**File**: `src/flightpath/PromptQueue.ts`
+State machine managing a single workflow's execution queue:
 
-**Current State**:
+```typescript
+interface QueueState {
+  currentIndex: number;
+  status: ExecutionState;
+  prompts: PromptItem[];
+  results: PromptResult[];
+  stopped: boolean;
+  completedIds: Set<string>;
+  totalExecutionTime: number;
+  queueExtensions: number;
+  totalPausedDuration: number;
+  workingFilePath?: string;
+  workflowName?: string;
+}
+```
 
-- Single queue state: `{ currentIndex, status, prompts, results, completedIds, workingFilePath, workflowName }`
-- Single execution state: `IDLE → RUNNING → PAUSED/STOPPED/COMPLETED/ERROR`
-- Single working file path (`.flightpath/.queue/workflow-timestamp.flightpath.json`)
+#### WorkflowExecutor (`src/flightpath/orchestration/WorkflowExecutor.ts`)
 
-**Responsibilities**:
+Extracted execution loop. Runs sequentially through prompts with pause/resume support.
 
-- Manages single workflow state
-- Sequential execution tracking (currentIndex, completedIds)
-- Working file persistence (create, read, update)
-- State change events (emits to FlightPathManager)
+#### React Webview (`src/ui/webview-react/`)
 
-**Key Methods**:
+**Stores** (Zustand):
+- `workflowStore.ts` — single workflow: `fileName`, `workflowName`, `executionState`, `prompts`, `cliOutputs`, etc.
+- `uiStore.ts` — layout state, history view, modal state, `recentWorkflows`
+- `editorStore.ts` — prompt editor state
+- `settingsStore.ts` — harness/model configuration
 
-- `start()`, `pause()`, `resume()`, `stop()` - State transitions (no workflow ID)
-- `markCurrentAsSent()`, `completeCurrentAndMoveNext()` - Progress tracking
-- `createWorkingFile()`, `updateWorkingFile()`, `restoreFromWorkingFile()` - Persistence
+**Key UI Components** (relevant to this plan):
+- `Header.tsx` — `[WorkflowControls] | [WorkflowStatus (center)] | [Run/Pause/Stop]`
+- `WorkflowStatus.tsx` — Split-button: workflow name (editable) + dropdown trigger
+- `WorkflowControls.tsx` — Split-button: New/From Template/Load File/Queue File
+- `RecentWorkflows.tsx` — Dropdown list of recent (historical) workflows
 
-#### 3. WorkflowExecutor (Execution Loop)
+**Current Enforcement** (already in place):
+- `WorkflowStatus` dropdown: `disabled={isRunning}` — cannot switch while running
+- `WorkflowControls` buttons: `disabled={isExecuting}` — cannot load/create while running/paused
 
-**File**: `src/flightpath/WorkflowExecutor.ts`
+#### Message Types (`src/types/DashboardConstants.ts`)
 
-**Current State**:
-
-- Single execution loop (`execute()` method)
-- Single pending response state (`pendingResponseResolver`, `pendingResponseText`)
-- Single integration reference passed as parameter
-
-**Responsibilities**:
-
-- Sequential prompt execution with pause/resume support
-- Response waiting and completion detection
-- End condition evaluation (delegates to `EndConditionHandler`)
-- Dashboard updates for single workflow
-
-**Key Methods**:
-
-- `execute(integration, context)` - Main execution loop
-- `waitForResponseComplete()` - Blocks until response ready
-- `hasPendingResponse()`, `resumePendingResponse()` - Pause/resume state
-
-#### 4. Dashboard UI (Single Workflow View)
-
-**Files**:
-
-- Backend: `src/ui/FlightPathDashboardProvider.ts`
-- Frontend: `src/ui/webview/dashboard.html`, `dashboard.js`
-
-**Current State**:
-
-- Single workflow status header (workflow name, execution state)
-- Single prompts list (shows all prompts for current workflow)
-- Single output stream (shows execution log for current workflow)
-- Single editor (shared for creating/editing prompts)
-- Single set of execution controls (run/pause/stop buttons apply to current workflow)
-
-**Message Types** (from `src/types/DashboardConstants.ts`):
-
-- `FILE_SELECTED` - Loads workflow into dashboard
-- `EXECUTION_STARTED` - Starts showing progress
-- `PROGRESS_UPDATE` - Updates current/total prompt counts
-- `EXECUTION_STATE_CHANGED` - Updates status (IDLE, RUNNING, PAUSED, etc.)
-- `STEP_STATUS_CHANGED` - Updates individual prompt status
-- `EXECUTION_COMPLETED` - Marks workflow complete
-
-**No Workflow Identification**: All messages assume single workflow context.
+All messages between extension ↔ webview. No `workflowId` field exists yet; all messages assume single workflow context.
 
 ---
 
-## Design Constraints & Considerations
+## Design Constraints
 
-### 1. Integration Limits (Critical)
+### 1. True Parallel Execution
 
-**CLI Integrations** (Copilot, Claude, Codex):
+**Decision**: Multiple workflows can be `RUNNING` simultaneously. There is **no single-runner constraint**.
 
-- **Terminal Sessions**: Each workflow needs its own terminal/process
-  - VS Code terminal limit: ~50 terminals (practical limit lower)
-  - Background processes: No hard limit, but memory/CPU constraints apply
-- **Session Continuity**: CLI integrations maintain session state (chat history)
-  - Claude CLI: Maintains conversation history via `--session` flag
-  - Copilot CLI: Maintains session via temp log files
-  - Codex CLI: Maintains session via JSONL event streaming
-- **Concurrent Execution**: ✅ Can run multiple CLI processes simultaneously
-  - Each process is independent (no shared state)
-  - Limited by system resources (RAM, CPU, file handles)
+**Rationale**:
+- Each CLI harness runs in its own independent terminal/process — there is no technical conflict
+- Users should be able to, e.g., run a bug-fix workflow while a doc-generation workflow is already executing
+- The whole purpose of this architecture is parallel execution
 
-**Chat Integration** (Copilot Chat UI):
+**Implications**:
+- Run/Pause/Stop buttons in the header apply to the **currently viewed** workflow, not "the" workflow
+- `WorkflowOrchestrator` tracks each instance's state independently
+- The `runningWorkflowId` field is replaced by checking `instance.status === RUNNING` per-instance
 
-- **Single Chat Window**: Only one active Copilot Chat instance in VS Code
-  - ❌ **Cannot run multiple Chat workflows in parallel**
-  - Must serialize Chat workflows or fall back to CLI for parallelism
-- **UI Automation**: Requires exclusive control of chat input
-  - ⚠️ Race conditions if multiple workflows try to use chat simultaneously
+**Chat harness caveat**: `CopilotChatIntegration` drives a single VS Code Chat window — running two Chat-harness workflows simultaneously would conflict. The orchestrator will warn but not hard-block (the user may know what they're doing). CLI harnesses (copilot-cli, claude-cli, codex-cli) have no such limitation.
 
-**Recommendation**:
+### 2. Current UX Restrictions That Must Be Removed
 
-- ✅ Allow parallel CLI workflows (Copilot CLI, Claude CLI, Codex CLI)
-- ❌ Restrict Chat integration to single workflow at a time
-- Show warning if user tries to run multiple Chat workflows
+The current codebase **explicitly blocks** these actions when any execution is in progress. These restrictions must be lifted to enable parallel workflows:
 
-### 2. Working File Conflicts
+| Component | Current Restriction | New Behavior |
+|---|---|---|
+| `WorkflowControls.tsx` | All buttons `disabled={isExecuting}` | Buttons always enabled (New, Load, Queue work while another runs) |
+| `WorkflowStatus.tsx` | Dropdown `if (isRunning) return` | Dropdown always openable |
+| `Header.tsx` | Run button checks `isRunning` globally | Run button only checks the **active** workflow's own state |
+| `EditorSection.tsx` | "New Prompt" button `disabled={isRunning}` | Always enabled |
+| `EditorFooter.tsx` | All editor buttons `disabled={isRunning}` | Per-prompt status check instead of global `isRunning` |
 
-**Current System** (`.flightpath/.queue/`):
+The key insight: controls apply to the **active/viewed** workflow. Whether other workflows are running is irrelevant.
 
-- Each workflow creates a working file: `{workflowName}-{timestamp}.flightpath.json`
-- File watcher monitors working file for external changes (MCP appends)
-- File naming prevents conflicts (timestamp ensures uniqueness)
+### 3. Dropdown Selector (Not Tabs)
 
-**Parallel Workflows**:
+**Decision**: Extend the existing `WorkflowStatus` split-button to show **all loaded workflows** (not just recent history files). The dropdown becomes a "loaded workflow switcher."
 
-- ✅ Each workflow gets its own working file (no conflicts)
-- ✅ File watchers are per-workflow (no cross-talk)
-- ⚠️ Increased disk I/O if many workflows run simultaneously
-- ⚠️ .queue directory may accumulate many files (consider cleanup policy)
+**Rationale**:
+- Consistent with existing UX — no new UI paradigm
+- Fits the narrow panel width of a VS Code sidebar
+- Avoids horizontal tab overflow issues
+- The "recent workflows" concept already exists and works
 
-### 3. Resource Management
+**Dropdown sections**:
+1. **Active Workflows** — currently loaded instances (with status badges)
+2. **Recent Workflows** — historical files not currently loaded (existing behavior)
+3. **Clear History** — existing footer action
 
-**Memory Usage**:
+### 4. Switching While Running
 
-- Each workflow instance holds: queue state, prompts array, results array, completedIds set
-- Estimated ~1-10 MB per workflow (depending on prompt count and response sizes)
-- Limit: Recommend max 10-20 concurrent workflows
+**Decision**: Switching the **viewed** workflow is allowed at any time. Creating/loading/running additional workflows is always allowed.
 
-**CPU Usage**:
+**Implementation**:
+- `WorkflowStatus` dropdown: always openable (remove `if (isRunning) return`)
+- `WorkflowControls` buttons: always enabled (remove `disabled={isExecuting}`)
+- When "New" is clicked while the active workflow is running: creates a new instance and switches the view to it; the original keeps running in background
+- Switching sends `SWITCH_WORKFLOW` message — UI replaces store contents with new workflow's state
+- Running workflows continue executing and buffering output regardless of which is viewed
 
-- CLI processes consume CPU during execution
-- End condition scripts consume CPU
-- Limit: Tied to process limits (see Integration Limits)
+### 5. Working Files per Instance
 
-**API Rate Limits**:
-
-- Copilot/Claude/Codex APIs may have rate limits
-- Running 10+ workflows could hit rate limits
-- Consider: Queue system for pending workflows if limit reached
-
-### 4. UX Complexity
-
-**Single Workflow** (Current):
-
-- Simple, linear flow: Load → Run → Monitor → Complete
-- All controls apply to one workflow (no ambiguity)
-- User knows exactly what's running at any moment
-
-**Parallel Workflows** (Proposed):
-
-- **Cognitive load**: User must track multiple workflows
-- **Control ambiguity**: Which workflow do commands apply to?
-- **Visual clutter**: How to show 5+ workflows without overwhelming UI?
-- **Context switching**: User must switch between workflows to monitor progress
-
-**Design Goal**: Maintain simplicity while enabling parallelism for power users.
+Each `WorkflowInstance` gets its own working file in `.flightpath/.queue/`:
+- Naming: `{workflowName}-{timestamp}.flightpath.json` (no conflicts, already unique by timestamp)
+- File watchers: per-instance (no cross-talk)
+- Cleanup: when workflow is dismissed from the loaded list
 
 ---
 
-## Proposed Architecture (Multi-Workflow)
+## Proposed Architecture
 
-### Overview: Workflow Manager Pattern
-
-**Core Concept**: Introduce a `WorkflowOrchestrator` that manages multiple `WorkflowInstance` objects. Each instance encapsulates its own queue, executor, state, and working file.
+### Overview: WorkflowOrchestrator Pattern
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    WorkflowOrchestrator                          │
-│  - Manages Map<workflowId, WorkflowInstance>                    │
-│  - Routes commands to specific workflows                         │
-│  - Tracks active workflow ID for context                         │
-│  - Enforces resource limits (max concurrent workflows)           │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    WorkflowOrchestrator                      │
+│  - workflows: Map<workflowId, WorkflowInstance>              │
+│  - activeWorkflowId: string | null  (currently viewed)       │
+│  - Routes dashboard messages for active instance             │
+│  - Buffers messages from non-active running instances        │
+└─────────────────────────────────────────────────────────────┘
                               │
-                              │ creates/manages
-                              ▼
-         ┌────────────────────────────────────────────┐
-         │         WorkflowInstance                   │
-         │  - id: string (UUID)                       │
-         │  - promptQueue: PromptQueue                │
-         │  - workflowExecutor: WorkflowExecutor      │
-         │  - activeIntegration?: CopilotIntegration  │
-         │  - currentPromptFile?: PromptFile          │
-         │  - status: WorkflowStatus                  │
-         │  - createdAt: number                       │
-         │  - startedAt?: number                      │
-         │  - completedAt?: number                    │
-         └────────────────────────────────────────────┘
+                    creates/manages N instances
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        ▼                     ▼                     ▼
+  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+  │WorkflowInst.  │   │WorkflowInst.  │   │WorkflowInst.  │
+  │status: RUNNING│   │status: RUNNING│   │status: PAUSED │
+  │promptQueue    │   │promptQueue    │   │promptQueue    │
+  │executor       │   │executor       │   │executor       │
+  │integration    │   │integration    │   │(no integration│
+  └───────────────┘   └───────────────┘   └───────────────┘
+   ← active/viewed →   ← background →      ← background →
 ```
 
 ### Component Changes
 
-#### 1. NEW: WorkflowOrchestrator
+#### 1. NEW: `WorkflowOrchestrator` (`src/flightpath/WorkflowOrchestrator.ts`)
 
-**File**: `src/flightpath/WorkflowOrchestrator.ts` (NEW)
-
-**Responsibilities**:
-
-- Create and destroy workflow instances
-- Maintain registry of active workflows (Map<workflowId, WorkflowInstance>)
-- Route commands to specific workflows (by workflowId)
-- Track active workflow for keyboard shortcuts and context menus
-- Enforce concurrent workflow limits (max count, resource checks)
-- Coordinate with dashboard for multi-workflow UI updates
-
-**Key Properties**:
+Replaces the singleton state in `FlightPathManager`. Manages the registry of loaded workflow instances.
 
 ```typescript
 class WorkflowOrchestrator {
   private workflows: Map<string, WorkflowInstance> = new Map();
-  private activeWorkflowId: string | null = null; // For context-aware commands
-  private maxConcurrentWorkflows: number = 10; // Configurable setting
-  private dashboardProvider?: FlightPathDashboardProvider;
+  private activeWorkflowId: string | null = null;  // UI-visible workflow
+  private dashboardProvider?: FlightPathWebviewProvider;
   private context: vscode.ExtensionContext;
+  private integrationFactory: IntegrationFactory;
+
+  // No runningWorkflowId — multiple can run; query via getRunningWorkflows()
 }
 ```
 
 **Key Methods**:
 
 ```typescript
-// Workflow Lifecycle
-createWorkflow(filePath: string, options?: WorkflowOptions): Promise<WorkflowInstance>
-destroyWorkflow(workflowId: string): Promise<void>
+// Workflow registry
+createWorkflow(filePath: string): Promise<WorkflowInstance>
+dismissWorkflow(workflowId: string): Promise<void>
 getWorkflow(workflowId: string): WorkflowInstance | undefined
 getAllWorkflows(): WorkflowInstance[]
+getRunningWorkflows(): WorkflowInstance[]  // May be multiple
+
+// Active workflow (UI-visible)
 getActiveWorkflow(): WorkflowInstance | undefined
 setActiveWorkflow(workflowId: string): void
 
-// Execution Control (routes to specific workflow)
-executeWorkflow(workflowId: string, modeOverride?: Provider): Promise<void>
-pauseWorkflow(workflowId: string): void
-resumeWorkflow(workflowId: string): Promise<void>
-stopWorkflow(workflowId: string): Promise<void>
-clearWorkflow(workflowId: string): void
+// Command routing — all apply to active workflow by default
+executeWorkflow(workflowId?: string, modeOverride?: Provider): Promise<void>
+pauseWorkflow(workflowId?: string): void
+resumeWorkflow(workflowId?: string): Promise<void>
+stopWorkflow(workflowId?: string): Promise<void>
+clearWorkflow(workflowId?: string): void
 
-// Resource Management
-canCreateWorkflow(): { allowed: boolean; reason?: string }
-getRunningWorkflowCount(): number
-getTotalWorkflowCount(): number
-
-// Context-aware shortcuts (use activeWorkflowId)
-executeActive(): Promise<void>
-pauseActive(): void
-resumeActive(): Promise<void>
-stopActive(): Promise<void>
+// Persistence
+saveState(): Promise<void>
+restoreState(): Promise<void>
 ```
 
-**Resource Limits**:
+**No single-runner restriction** — `executeWorkflow()` starts the specified (or active) workflow regardless of other instances' states. The only guard is for Chat harness conflicts:
 
 ```typescript
-// Check before creating new workflow
-canCreateWorkflow(): { allowed: boolean; reason?: string } {
-  const runningCount = Array.from(this.workflows.values())
-    .filter(w => w.status === 'RUNNING')
-    .length;
+async executeWorkflow(workflowId?: string, modeOverride?: Provider): Promise<void> {
+  const workflow = workflowId
+    ? this.workflows.get(workflowId)
+    : this.getActiveWorkflow();
 
-  if (runningCount >= this.maxConcurrentWorkflows) {
-    return {
-      allowed: false,
-      reason: `Maximum concurrent workflows reached (${this.maxConcurrentWorkflows}). Pause or stop a workflow first.`
-    };
+  if (!workflow) { return; }
+
+  // Warn (not block) if starting a second Chat-harness workflow
+  const usesChat = workflow.harness === 'copilot-chat';
+  const chatAlreadyRunning = this.getRunningWorkflows().some(
+    w => w.id !== workflow.id && w.harness === 'copilot-chat'
+  );
+  if (usesChat && chatAlreadyRunning) {
+    vscode.window.showWarningMessage(
+      'Another Chat workflow is already running. Starting this one may cause conflicts.'
+    );
+    // Continue anyway — user decided
   }
 
-  // Check Chat integration conflicts
-  const chatWorkflows = Array.from(this.workflows.values())
-    .filter(w => w.integration instanceof CopilotChatIntegration && w.status === 'RUNNING');
-
-  if (chatWorkflows.length > 0) {
-    return {
-      allowed: false,
-      reason: 'Cannot run multiple Chat workflows simultaneously. Use CLI mode for parallel execution.'
-    };
-  }
-
-  return { allowed: true };
+  await workflow.execute(modeOverride);
 }
 ```
 
-#### 2. NEW: WorkflowInstance
+**Dashboard Coordination**:
 
-**File**: `src/flightpath/WorkflowInstance.ts` (NEW)
+When the running workflow (not the active/viewed one) sends output events, the orchestrator buffers those events keyed by `workflowId`. When the user switches to view that workflow, the buffered events are sent as a state sync. This is an optimization — the working file already persists all state so a full reload from disk is always an option.
 
-**Responsibilities**:
+#### 2. NEW: `WorkflowInstance` (`src/flightpath/WorkflowInstance.ts`)
 
-- Encapsulates single workflow's state and dependencies
-- Wraps PromptQueue, WorkflowExecutor, and integration
-- Provides workflow metadata (id, name, status, timestamps)
-- Self-contained: Can be serialized/restored from working file
-
-**Key Properties**:
+Encapsulates a single workflow's complete state and components. Extracted from `FlightPathManager`.
 
 ```typescript
-class WorkflowInstance {
+class WorkflowInstance extends EventEmitter {
   // Identity
-  readonly id: string; // UUID generated at creation
-  workflowName: string; // User-friendly name (editable)
+  readonly id: string;           // UUID
+  workflowName: string;
+  filePath: string;
 
-  // Core Components (same as current FlightPathManager)
+  // Components (same as current FlightPathManager fields)
   private promptQueue: PromptQueue;
   private workflowExecutor: WorkflowExecutor;
-  private activeIntegration?: CopilotIntegration;
+  private activeIntegration?: HarnessIntegration;
+  private endConditionHandler: EndConditionHandler;
+  private workspaceSessionManager: WorkspaceSessionManager;
+  private outputHistoryManager: OutputHistoryManager;
+  private promptFileWatcher?: PromptFileWatcher;
 
-  // Context
+  // Prompt file context
   currentPromptFile?: { filePath: string; promptFile: PromptFile };
-  workingFilePath?: string;
+
+  // Buffered output (for background accumulation while not viewed)
+  private bufferedEvents: BufferedWorkflowEvent[] = [];
+  private isActive: boolean = false; // Whether this is the currently viewed workflow
 
   // Status
-  status: WorkflowStatus; // 'IDLE' | 'RUNNING' | 'PAUSED' | 'STOPPED' | 'COMPLETED' | 'ERROR'
+  status: WorkflowStatus;  // derived from promptQueue.state.status
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
-
-  // Execution State
-  private startPending: boolean = false; // Race condition guard
 }
 ```
 
-**Key Methods**:
+**Lifecycle Methods** (mirrors current `FlightPathManager` methods):
 
 ```typescript
-// Lifecycle (mirrors current FlightPathManager methods)
 async loadPromptFile(filePath: string): Promise<void>
-async executeLoadedPromptFile(modeOverride?: Provider, continueFromCurrent?: boolean): Promise<void>
+async execute(modeOverride?: Provider, continueFromCurrent?: boolean): Promise<void>
 pause(): void
 async resume(): Promise<void>
 async stop(): Promise<void>
-clearWorkflow(): void
+clear(): void
 
-// State Access
+// State access
 getQueueState(): QueueState
-getCurrentPromptFile(): { fileName: string; prompts: any[] } | null
 getStatus(): WorkflowStatus
-getMetadata(): WorkflowMetadata
+getSummary(): WorkflowSummary  // For dropdown display
 ```
 
-**Serialization Support**:
+**Background Buffering**:
 
 ```typescript
-// Export state for persistence
-toJSON(): WorkflowInstanceState {
-  return {
-    id: this.id,
-    workflowName: this.workflowName,
-    workingFilePath: this.workingFilePath,
-    currentPromptFilePath: this.currentPromptFile?.filePath,
-    status: this.status,
-    createdAt: this.createdAt,
-    startedAt: this.startedAt,
-    completedAt: this.completedAt,
-    queueState: this.promptQueue.getState()
-  };
+// Called by orchestrator when user switches away
+setActive(isActive: boolean): void {
+  this.isActive = isActive;
+  if (isActive) {
+    // Flush buffered events to dashboard
+    this.flushBufferedEvents();
+  }
 }
 
-// Restore from persisted state
-static async fromJSON(state: WorkflowInstanceState, context: vscode.ExtensionContext): Promise<WorkflowInstance> {
-  const instance = new WorkflowInstance(state.id, context);
-  instance.workflowName = state.workflowName;
-  instance.status = state.status;
-  // ... restore all state
-  if (state.workingFilePath) {
-    await instance.promptQueue.restoreFromWorkingFile(state.workingFilePath);
+private emit(eventType: string, data: unknown): void {
+  if (this.isActive) {
+    // Send directly to dashboard
+    this.dashboardProvider?.sendMessage(eventType, data);
+  } else {
+    // Buffer for later
+    this.bufferedEvents.push({ eventType, data, timestamp: Date.now() });
+    // Also update in-memory state so getSummary() is current
   }
-  return instance;
 }
 ```
 
-#### 3. REFACTOR: FlightPathManager
+#### 3. REFACTOR: `FlightPathManager` (`src/flightpath/FlightPathManager.ts`)
 
-**File**: `src/flightpath/FlightPathManager.ts` (REFACTOR)
-
-**Old Role**: Singleton orchestrator for single workflow
-**New Role**: Thin facade over WorkflowOrchestrator for command routing
-
-**Responsibilities** (Simplified):
-
-- Command registration (register VS Code commands)
-- Orchestrator lifecycle (create WorkflowOrchestrator on activation)
-- Context-aware command routing (use activeWorkflowId from orchestrator)
-- Dashboard provider coordination (pass to orchestrator)
-- Settings management (read configuration, pass to orchestrator)
-
-**Key Changes**:
+**New Role**: Thin command dispatcher. All orchestration logic moves to `WorkflowOrchestrator` and `WorkflowInstance`.
 
 ```typescript
 class FlightPathManager {
-  // REMOVE: Single workflow state
-  // private promptQueue: PromptQueue; ❌
-  // private workflowExecutor: WorkflowExecutor; ❌
-  // private activeIntegration?: CopilotIntegration; ❌
-  // private currentPromptFile?: PromptFile; ❌
+  // REMOVE: All single-workflow state fields
+  // ADD: Single orchestrator reference
+  private workflowOrchestrator: WorkflowOrchestrator;
 
-  // ADD: Orchestrator reference
-  private workflowOrchestrator: WorkflowOrchestrator; ✅
+  constructor(context, dashboardProvider) {
+    // Integration factories stay at this level (shared across all instances)
+    const integrationFactory = new IntegrationFactory(context);
 
-  constructor(context: vscode.ExtensionContext, dashboardProvider?: FlightPathDashboardProvider) {
-    this.context = context;
-    this.dashboardProvider = dashboardProvider;
-
-    // Create orchestrator (manages all workflows)
-    this.workflowOrchestrator = new WorkflowOrchestrator(context, dashboardProvider);
-
-    // Integration factories stay here (shared across workflows)
-    this.copilotCliIntegration = new CopilotCommandLineIntegration(context);
-    this.chatIntegration = new CopilotChatIntegration(context);
-    this.claudeCliIntegration = new ClaudeCommandLineIntegration(context);
-    this.codexCliIntegration = new CodexCommandLineIntegration(context);
+    this.workflowOrchestrator = new WorkflowOrchestrator(
+      context,
+      dashboardProvider,
+      integrationFactory
+    );
   }
 
-  // Command routing (context-aware: uses active workflow)
-  async executeLoadedPromptFile(): Promise<void> {
-    await this.workflowOrchestrator.executeActive();
+  // Command handlers just delegate to orchestrator
+  async loadPromptFile(filePath: string): Promise<void> {
+    await this.workflowOrchestrator.createWorkflow(filePath);
   }
 
-  pause(): void {
-    this.workflowOrchestrator.pauseActive();
+  async executeLoadedPromptFile(modeOverride?: Provider): Promise<void> {
+    await this.workflowOrchestrator.executeWorkflow(undefined, modeOverride);
   }
 
-  async resume(): Promise<void> {
-    await this.workflowOrchestrator.resumeActive();
-  }
-
-  async stop(): Promise<void> {
-    await this.workflowOrchestrator.stopActive();
-  }
+  pause(): void { this.workflowOrchestrator.pauseWorkflow(); }
+  async resume(): Promise<void> { await this.workflowOrchestrator.resumeWorkflow(); }
+  async stop(): Promise<void> { await this.workflowOrchestrator.stopWorkflow(); }
+  clear(): void { this.workflowOrchestrator.clearWorkflow(); }
 }
 ```
 
-**Command Parameter Updates**:
+**Integration Factory** (extracted from FlightPathManager):
 
 ```typescript
-// OLD: No workflow ID (assumes single workflow)
-vscode.commands.registerCommand("flightpath.pause", () => manager.pause());
-
-// NEW: Optional workflow ID (defaults to active workflow)
-vscode.commands.registerCommand("flightpath.pause", (workflowId?: string) => {
-  if (workflowId) {
-    orchestrator.pauseWorkflow(workflowId);
-  } else {
-    orchestrator.pauseActive();
-  }
-});
-```
-
-#### 4. REFACTOR: Dashboard (Multi-Workflow UI)
-
-**Files**:
-
-- Backend: `src/ui/FlightPathDashboardProvider.ts` (REFACTOR)
-- Frontend: `src/ui/webview/dashboard.html` (MAJOR REFACTOR)
-- Frontend: `src/ui/webview/dashboard.js` (MAJOR REFACTOR)
-
-**UI Design: Tab-Based Layout**
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│  FlightPath Dashboard                                     [×]   │
-├────────────────────────────────────────────────────────────────┤
-│  ┌──────────┬──────────┬──────────┬─────────┬────────────┐     │
-│  │ Workflow │ Workflow │ Workflow │         │ New (+)    │     │
-│  │ 1 ●      │ 2 ✓      │ 3 ⏸      │   ...   │            │     │
-│  └──────────┴──────────┴──────────┴─────────┴────────────┘     │
-│                                                                  │
-│  Active Tab Content (Workflow 1):                               │
-│  ┌────────────────────────────────────────────────────────────┐ │
-│  │ Workflow Name: "Feature Implementation"        [▶] [⏸] [⏹] │ │
-│  │ Status: Running (3/5 prompts)                              │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │ Prompts List                                               │ │
-│  │  ✓ 1. Analyze codebase                                     │ │
-│  │  ✓ 2. Design architecture                                  │ │
-│  │  ● 3. Implement feature (running...)                       │ │
-│  │    4. Write tests                                          │ │
-│  │    5. Update docs                                          │ │
-│  ├────────────────────────────────────────────────────────────┤ │
-│  │ Output                                                     │ │
-│  │  [Streaming response from prompt 3...]                     │ │
-│  └────────────────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────────┘
-```
-
-**Tab States**:
-
-- **Active Tab**: Bold text, highlighted border
-- **Running Workflow**: Blue dot (●) indicator
-- **Paused Workflow**: Orange pause icon (⏸)
-- **Completed Workflow**: Green checkmark (✓)
-- **Error Workflow**: Red X (✗)
-
-**Tab Actions**:
-
-- **Click Tab**: Switch to that workflow
-- **Right-Click Tab**: Context menu (Pause, Stop, Close, Rename)
-- **Close Button**: Close tab (confirm if running)
-- **New Button**: Create new workflow
-
-**Message Protocol Updates**:
-
-Add `workflowId` to all messages for routing:
-
-```typescript
-// OLD: No workflow identification
-{ type: 'EXECUTION_STARTED', fileName: 'test.yaml', totalSteps: 5 }
-
-// NEW: Include workflow ID
-{ type: 'EXECUTION_STARTED', workflowId: 'abc123', fileName: 'test.yaml', totalSteps: 5 }
-```
-
-**New Message Types** (add to `src/types/DashboardConstants.ts`):
-
-```typescript
-// Workflow Management
-WORKFLOW_CREATED: 'workflow-created',           // New workflow instance created
-WORKFLOW_CLOSED: 'workflow-closed',             // Workflow removed
-WORKFLOW_SWITCHED: 'workflow-switched',         // User switched active tab
-WORKFLOWS_LIST: 'workflows-list',               // Full list of workflows
-SET_ACTIVE_WORKFLOW: 'set-active-workflow',     // Change active workflow
-
-// Tab-Specific Updates (include workflowId in each)
-WORKFLOW_STATUS_CHANGED: 'workflow-status-changed',  // Update tab status indicator
-WORKFLOW_NAME_CHANGED: 'workflow-name-changed',      // Update tab label
-```
-
-**Frontend State Manager Updates**:
-
-```javascript
-// src/ui/webview/state-manager.js (REFACTOR)
-
-window.FlightPathStateManager = {
-  // OLD: Single workflow state
-  // state: { workflowName, executionState, prompts, currentStep, totalSteps }
-
-  // NEW: Multiple workflows state
-  workflows: new Map(), // Map<workflowId, WorkflowState>
-  activeWorkflowId: null, // Currently visible tab
-
-  // Get active workflow state
-  getActiveWorkflow() {
-    return this.workflows.get(this.activeWorkflowId);
-  },
-
-  // Add new workflow
-  addWorkflow(workflowId, initialState) {
-    this.workflows.set(workflowId, initialState);
-    this.activeWorkflowId = workflowId; // Auto-switch to new workflow
-  },
-
-  // Remove workflow
-  removeWorkflow(workflowId) {
-    this.workflows.delete(workflowId);
-    if (this.activeWorkflowId === workflowId) {
-      // Switch to another workflow or show empty state
-      const remaining = Array.from(this.workflows.keys());
-      this.activeWorkflowId = remaining.length > 0 ? remaining[0] : null;
-    }
-  },
-
-  // Update specific workflow state
-  updateWorkflow(workflowId, updates) {
-    const workflow = this.workflows.get(workflowId);
-    if (workflow) {
-      Object.assign(workflow, updates);
-    }
-  },
-};
-```
-
-**Tab Rendering**:
-
-```javascript
-// src/ui/webview/dashboard.js (NEW SECTION)
-
-function renderWorkflowTabs() {
-  const tabsContainer = document.getElementById("workflow-tabs");
-  tabsContainer.innerHTML = "";
-
-  // Render tabs for each workflow
-  for (const [workflowId, workflow] of stateManager.workflows) {
-    const tab = document.createElement("button");
-    tab.className = "workflow-tab";
-    if (workflowId === stateManager.activeWorkflowId) {
-      tab.classList.add("active");
-    }
-
-    // Status indicator
-    const statusIcon = getStatusIcon(workflow.executionState);
-
-    // Tab content
-    tab.innerHTML = `
-      ${statusIcon}
-      <span class="tab-label">${workflow.workflowName}</span>
-      <button class="tab-close" onclick="closeWorkflow('${workflowId}')">&times;</button>
-    `;
-
-    // Click to switch
-    tab.onclick = () => switchToWorkflow(workflowId);
-
-    tabsContainer.appendChild(tab);
-  }
-
-  // New workflow button
-  const newTab = document.createElement("button");
-  newTab.className = "workflow-tab new-tab";
-  newTab.innerHTML = '<i class="codicon codicon-add"></i> New';
-  newTab.onclick = () => createNewWorkflow();
-  tabsContainer.appendChild(newTab);
+class IntegrationFactory {
+  // Creates HarnessIntegration instances on demand
+  // Shared across all WorkflowInstances (each gets its own instance when executing)
+  createForHarness(harness: Harness, context: vscode.ExtensionContext): HarnessIntegration
 }
+```
 
-function switchToWorkflow(workflowId) {
-  stateManager.activeWorkflowId = workflowId;
-  renderWorkflowTabs();
-  renderActiveWorkflowContent();
+#### 4. REFACTOR: Dashboard Multi-Workflow UI
 
-  // Notify extension
-  vscode.postMessage({
-    type: MESSAGE_TYPES.SET_ACTIVE_WORKFLOW,
+##### Backend: `FlightPathWebviewProvider.ts`
+
+**New message handling**:
+- All outgoing messages gain optional `workflowId` field
+- New messages: `WORKFLOWS_LIST`, `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `ACTIVE_WORKFLOW_CHANGED`
+- `SET_ACTIVE_WORKFLOW` from webview routes to `orchestrator.setActiveWorkflow(workflowId)`
+
+**State sync on switch**:
+
+```typescript
+// When user switches to a workflow, send full state sync
+async sendWorkflowStateSync(workflowId: string): Promise<void> {
+  const workflow = this.orchestrator.getWorkflow(workflowId);
+  if (!workflow) return;
+
+  const queueState = workflow.getQueueState();
+
+  // Send full workflow state (same as current INIT / SESSION_RESTORED flow)
+  this.sendMessage(MESSAGE_TYPES.SESSION_RESTORED, {
     workflowId,
-  });
-}
-
-function closeWorkflow(workflowId) {
-  const workflow = stateManager.workflows.get(workflowId);
-
-  // Confirm if running
-  if (workflow.executionState === "RUNNING") {
-    if (
-      !confirm(
-        `Workflow "${workflow.workflowName}" is still running. Stop and close?`
-      )
-    ) {
-      return;
-    }
-  }
-
-  // Notify extension to stop and destroy workflow
-  vscode.postMessage({
-    type: MESSAGE_TYPES.CLOSE_WORKFLOW,
-    workflowId,
+    fileName: workflow.filePath,
+    workflowName: workflow.workflowName,
+    prompts: queueState.prompts,
+    executionState: queueState.status,
+    currentStep: queueState.currentIndex,
+    results: queueState.results,
+    // ... buffered CLI outputs for steps
   });
 }
 ```
 
-#### 5. NEW: Multi-Workflow Settings
+##### Frontend: `WorkflowStatus.tsx` (Extended Dropdown)
 
-**File**: `package.json` (contributes.configuration)
+The `WorkflowStatus` split-button dropdown is extended to show two sections:
 
-**New Settings**:
+**Section 1: Loaded Workflows** (new)
+- All currently loaded `WorkflowInstance` objects
+- Shows name, status badge, current step progress
+- Clicking switches the active workflow (always enabled)
 
-```json
-{
-  "flightpath.maxConcurrentWorkflows": {
-    "type": "number",
-    "default": 10,
-    "minimum": 1,
-    "maximum": 50,
-    "description": "Maximum number of workflows that can run simultaneously"
-  },
-  "flightpath.autoSwitchToNewWorkflow": {
-    "type": "boolean",
-    "default": true,
-    "description": "Automatically switch to newly created workflows"
-  },
-  "flightpath.closeCompletedWorkflows": {
-    "type": "boolean",
-    "default": false,
-    "description": "Automatically close workflow tabs when execution completes"
-  },
-  "flightpath.showWorkflowTabIcons": {
-    "type": "boolean",
-    "default": true,
-    "description": "Show status icons in workflow tabs"
+**Section 2: Recent Workflows** (existing behavior, renamed to "Load Another")
+- Historical file list for loading additional workflows
+- **Always enabled** — loading another workflow while one runs is a core parallel use case
+
+**Changed behavior**: The dropdown trigger is **no longer disabled when `isRunning`**. It remains fully interactive to allow switching and loading additional workflows at any time.
+
+```tsx
+// WorkflowStatus.tsx - Updated dropdown toggle
+const toggleDropdown = useCallback(() => {
+  // CHANGED: Remove `if (isRunning) return;` restriction
+  // Dropdown is always openable — switching is allowed while running
+  if (!isDropdownOpen) {
+    vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
   }
+  setIsDropdownOpen(!isDropdownOpen);
+}, [isDropdownOpen, vscode]);
+```
+
+**New dropdown content**:
+
+```tsx
+// RecentWorkflows.tsx → WorkflowSelector.tsx (renamed/extended)
+<div className="workflow-selector flex flex-col h-full">
+  {/* Section 1: Loaded Workflows (always shown if any loaded) */}
+  {loadedWorkflows.length > 0 && (
+    <>
+      <SectionHeader>Loaded Workflows</SectionHeader>
+      {loadedWorkflows.map((wf) => (
+        <WorkflowSelectorItem
+          key={wf.id}
+          workflow={wf}
+          isCurrent={wf.id === activeWorkflowId}
+          onClick={() => onSwitchWorkflow(wf.id)}
+          onDismiss={() => onDismissWorkflow(wf.id)}
+        />
+      ))}
+      <Divider />
+    </>
+  )}
+
+  {/* Section 2: Load Another (historical files) — always enabled, parallel is the goal */}
+  <SectionHeader>Load Another</SectionHeader>
+  {recentWorkflows.map((wf) => (
+    <RecentWorkflowItem
+      key={wf.filePath}
+      workflow={wf}
+      onClick={() => onLoadWorkflow(wf.filePath)}
+    />
+  ))}
+  <ClearHistoryFooter />
+</div>
+```
+
+**`WorkflowSelectorItem`** — new component for loaded workflows:
+
+```tsx
+// Shows: [status icon] [name] [step count] [X dismiss button]
+// Status icon: spinning for RUNNING, pause for PAUSED, check for COMPLETED, etc.
+// The dismiss X: confirms if workflow is paused mid-run
+```
+
+##### Frontend: `WorkflowControls.tsx` (Restrictions Removed)
+
+The existing `disabled={isExecuting}` guards must be removed from all buttons. Creating a new workflow, loading from file, or queueing another file are all valid while the current workflow is running — that's the whole point.
+
+```typescript
+// BEFORE (current code — to be removed)
+const isExecuting = isRunning || isPaused;
+// All buttons: disabled={isExecuting}
+
+// AFTER
+// No isExecuting gate. Buttons are always enabled.
+// The only remaining disable: "Queue File" when no file is loaded (hasQueue check stays)
+```
+
+The "New" button clicking while the active workflow is running creates a new instance and switches view to it. The original workflow keeps running uninterrupted.
+
+##### Frontend: Zustand Stores
+
+**`workflowStore.ts`** — minimal changes:
+- Store continues to represent the **single active/viewed workflow**
+- No need for `Map<workflowId, WorkflowState>` — switching workflows sends a full state sync, replacing store contents
+
+**`uiStore.ts`** — new fields:
+```typescript
+// New multi-workflow UI state
+loadedWorkflows: WorkflowSummary[];  // All loaded workflow instances (for dropdown)
+activeWorkflowId: string | null;     // Currently viewed
+```
+
+Note: No `anyWorkflowRunning` gate — parallel running is the goal. Each `WorkflowSummary` carries its own `executionState`, so the dropdown can display running indicators per-instance.
+
+**`WorkflowSummary`** type (for dropdown display, sent by extension):
+```typescript
+interface WorkflowSummary {
+  id: string;
+  workflowName: string;
+  filePath: string;
+  executionState: ExecutionState;
+  currentStep: number;
+  totalSteps: number;
+  startedAt?: number;
+  completedAt?: number;
 }
 ```
+
+#### 5. Message Protocol Updates
+
+**New message types** in `DashboardConstants.ts`:
+
+```typescript
+// Extension -> Webview
+WORKFLOWS_LIST: "workflowsList",          // Full list of loaded WorkflowSummary[]
+WORKFLOW_ADDED: "workflowAdded",          // New workflow loaded
+WORKFLOW_DISMISSED: "workflowDismissed",  // Workflow removed from loaded list
+WORKFLOW_SUMMARY_UPDATED: "workflowSummaryUpdated", // Status/progress changed (for dropdown badge)
+ACTIVE_WORKFLOW_CHANGED: "activeWorkflowChanged",   // Active workflow switched, full state follows
+
+// Webview -> Extension
+GET_WORKFLOWS_LIST: "getWorkflowsList",   // Request all loaded WorkflowSummary[]
+SWITCH_WORKFLOW: "switchWorkflow",        // Switch active workflow: { workflowId }
+DISMISS_WORKFLOW: "dismissWorkflow",      // Remove from loaded list: { workflowId }
+```
+
+**All existing messages remain unchanged** for backward compatibility. The `workflowId` field is added as optional to outgoing messages from the extension, allowing the webview to update dropdown summaries without disrupting the main workflow store.
+
+**Key distinction**: `workflowId` in outgoing messages is used only to update `uiStore.loadedWorkflows` summaries. The main `workflowStore` state only updates on a full `SESSION_RESTORED` (switch) or the normal execution update messages (for the active workflow).
+
+---
+
+## Complete Constraint Removal Checklist
+
+This section maps every single-runner constraint found in the codebase to how the plan removes it. Used as a pre-implementation verification checklist.
+
+### Backend — FlightPathManager.ts
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| Single `promptQueue` field | ~L48 | Moved into `WorkflowInstance`; orchestrator holds `Map<id, WorkflowInstance>` |
+| Single `currentPromptFile` field | ~L60 | Moved into `WorkflowInstance` |
+| Single `activeIntegration` field | ~L61 | Moved into `WorkflowInstance`; each instance owns its integration |
+| `startPending: boolean` race guard | ~L64 | Removed — becomes a per-instance guard inside `WorkflowInstance.execute()` |
+| `loadPromptFile()` calls `clearQueue()` (destructive replace) | ~L307 | `WorkflowOrchestrator.createWorkflow()` adds to registry without clearing existing |
+| `startWorkflowExecution()` sets global `startPending` | ~L878 | Per-instance flag; no global gate |
+| `pause()`, `resume()`, `stop()` call queue/executor directly | ~L959-1057 | Delegate to `WorkflowInstance` by ID; active workflow is default |
+| `clearWorkflow()` resets entire global state | ~L1088 | `dismissWorkflow(id)` removes specific instance; other instances unaffected |
+| Pre-created shared harness integration instances | ~L49-52 | `IntegrationFactory.createForHarness()` called per-instance on `execute()` |
+| `triggerAutoLoad()` restores single last session | (initialize) | `WorkflowOrchestrator.restoreState()` restores all persisted instances, all forced `PAUSED` |
+
+### Backend — WorkflowExecutor.ts
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| Single `pendingResponseResolver` / `pendingResponseText` / `isWaitingForResponse` | ~L76-88 | One `WorkflowExecutor` per `WorkflowInstance`; fields scoped to that instance |
+| Single `stepStatusMessages` accumulator | ~L89 | Per-instance; cleared when instance is dismissed |
+| Constructor takes single `PromptQueue` (one-to-one relationship) | constructor | Unchanged — executor is constructed inside `WorkflowInstance`, paired with that instance's queue |
+
+### Backend — PromptQueue.ts
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| Single `state` object (one workflow state total) | ~L83 | One `PromptQueue` per `WorkflowInstance` — no change to queue structure itself |
+| `clearQueue()` resets all state | ~L134 | Only called when the owning `WorkflowInstance` is dismissed; doesn't affect other instances |
+| `loadPrompts()` replaces entire state | ~L161 | Same — scoped to the instance's queue |
+| Single `workingFilePath` in state | ~L178 | Per-instance; filenames include workflow ID to guarantee uniqueness |
+
+### Backend — FlightPathWebviewProvider.ts
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| Single `currentWorkflowName` field | ~L63 | Removed; `activeWorkflowId` maintained by orchestrator, name derived from active instance |
+| Single `pendingWorkflowProperties` set | ~L92-100 | Moved into `WorkflowInstance`; pending props scoped to each instance |
+| `handleClearWorkflow()` clears single workflow | ~L1087 | Routes to `orchestrator.dismissWorkflow(activeId)` |
+| `sendInit()` sends one workflow's state | (sendInit) | On switch: `sendWorkflowStateSync(workflowId)` sends full state for switched-to instance |
+| No `workflowId` on any outgoing message | all `sendMessage()` calls | Active-workflow messages don't need workflowId (webview displays what's active). Summary updates use `WORKFLOW_SUMMARY_UPDATED` with id for dropdown-only updates |
+| History tracking scoped to single workflow | OutputHistoryManager refs | `OutputHistoryManager` instantiated per `WorkflowInstance`; history files namespaced by workflow ID |
+
+### Backend — extension.ts (Command Registration)
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| `flightpath.takeOff` routes to single manager | ~L252 | Routes to `orchestrator.executeWorkflow()` (defaults to active workflow) |
+| `flightpath.pause/resume/stop` route to single manager | ~L276-295 | Routes to `orchestrator.pauseWorkflow()` / etc. (defaults to active workflow) |
+| `flightpath.runFromContext` calls `executePromptFile()` (replaces workflow) | ~L454 | Calls `orchestrator.createWorkflow(filePath)` then `executeWorkflow()` on new instance |
+| `flightpath.loadFromContext` calls `loadPromptFile()` (replaces workflow) | ~L475 | Calls `orchestrator.createWorkflow(filePath)` — adds to registry, switches active view |
+
+### Frontend — Message Protocol (useMessageHandler.ts + DashboardConstants.ts)
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| ALL message handlers write directly to global `workflowStore` — no `workflowId` routing | all handlers | Strategy: **webview displays active workflow**. Active-workflow messages replace store contents as before. Inactive workflows' messages are handled by the backend buffering approach (not sent to webview until user switches). No per-message workflowId routing needed in the webview. |
+| `FILE_SELECTED` handler calls `workflowStore.loadWorkflow()` (destructive) | ~L136 | Replaced by `SESSION_RESTORED` / `ACTIVE_WORKFLOW_CHANGED` messages that do the same full-state replace |
+| `SESSION_RESTORED` replaces entire store | ~L161 | Behavior preserved — this is now also the switch mechanism |
+| `PROMPTS_EXTENDED` mutates single prompt list | ~L182 | Active-workflow-only message; behavior unchanged |
+| `EXECUTION_STATE_CHANGED` targets single store | ~L285 | Active-workflow-only; behavior unchanged |
+| `PROGRESS_UPDATE` targets single store | ~L293 | Active-workflow-only; behavior unchanged |
+
+**Key design decision**: The webview always shows ONE workflow (the active one). Messages from background running workflows are held by the backend and only flushed when the user switches to that workflow. This means **no workflowId routing is needed in the webview message handlers**. This is the simplest approach and avoids restructuring the entire store.
+
+### Frontend — Zustand Stores
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| `workflowStore` holds single workflow state | workflowStore.ts | Structure unchanged. `loadWorkflow()` is the switch mechanism. Background workflows don't update this store. |
+| `workflowStore.resetWorkflow()` clears everything | workflowStore.ts | Used only when the active workflow is dismissed. |
+| `uiStore` has no concept of multiple loaded workflows | uiStore.ts | Add `loadedWorkflows: WorkflowSummary[]` and `activeWorkflowId` fields |
+
+### Frontend — UI Component Restrictions
+
+| Component | Constraint | Resolution |
+|---|---|---|
+| `WorkflowControls.tsx` | `isExecuting` guard on all handlers + `disabled={isExecuting}` on all buttons | Remove all `isExecuting` guards and `disabled` props. Buttons always active. |
+| `WorkflowStatus.tsx` | `if (isRunning) return` in `toggleDropdown`; `disabled={isRunning}` on chevron button | Remove both. Dropdown always openable. |
+| `Header.tsx` | `canRun` / `canPause` / `canStop` logic all correct | **No change needed** — these already scope to the active workflow's own state |
+| `EditorSection.tsx` | "New Prompt" button `disabled={isRunning}` | Remove — editing prompts in the active workflow while it's running (to add to the queue) should be allowed |
+| `EditorFooter.tsx` | All editor action buttons `disabled={isRunning}` | Review per-button: "Send" (add prompt) should work while running; "Save" should always work. Remove blanket disable. |
+| `PromptsPanel.tsx` | No blocking, reads from single store | No change needed — reads from active workflow store correctly |
+| `OutputSection.tsx` | No blocking, reads from single store | No change needed |
+
+### Persistence / Session Management
+
+| Constraint | Location | Resolution |
+|---|---|---|
+| Single working file path per queue | PromptQueue.ts `state.workingFilePath` | Filenames include workflow instance ID (UUID segment) to prevent collision |
+| `OutputHistoryManager` tracks history for single workflow | (OutputHistoryManager) | Instantiated per `WorkflowInstance`; history directory namespaced by workflow (e.g. `.flightpath/.history/{workflowName}-{id}/`) |
+| `WorkspaceSessionManager` restores single session | (WorkspaceSessionManager) | Instantiated per `WorkflowInstance`; session keys namespaced by workflow ID |
+| Auto-load loads single last session on extension start | FlightPathManager.initialize() | `WorkflowOrchestrator.restoreState()` reads persisted `WorkflowSummary[]` from `context.workspaceState`, creates instances for all, all forced `PAUSED` |
 
 ---
 
 ## Migration Strategy
 
-### Phase 1: Backend Refactoring (No UI Changes)
+### Phase 1: Backend — WorkflowInstance Extraction
 
-**Goal**: Refactor backend to support multiple workflows without changing UI.
-
-**Steps**:
-
-1. Create `WorkflowInstance` class (extract from FlightPathManager)
-2. Create `WorkflowOrchestrator` class (manages instances)
-3. Refactor FlightPathManager to use orchestrator (but keep single-workflow facade)
-4. Add workflowId to internal state (not exposed to UI yet)
-5. Update all command handlers to route through orchestrator
-
-**Validation**: Existing single-workflow UX still works, no regressions.
-
-### Phase 2: Message Protocol Updates
-
-**Goal**: Add workflowId to all messages without breaking existing UI.
+**Goal**: Extract `WorkflowInstance` from `FlightPathManager` with zero behavior change. The orchestrator manages exactly one instance. No UI changes.
 
 **Steps**:
+1. Create `WorkflowInstance` class — move all per-workflow state and methods from `FlightPathManager`
+2. Create `WorkflowOrchestrator` with `Map<string, WorkflowInstance>` but initially always contains ≤ 1 instance
+3. Create `IntegrationFactory` — extract harness creation from `FlightPathManager`
+4. Refactor `FlightPathManager` to delegate all execution to `WorkflowOrchestrator`
+5. All tests pass, behavior identical
 
-1. Update all message types to include optional `workflowId` field
-2. Dashboard provider appends workflowId to all outgoing messages
-3. Update backend message handlers to extract workflowId (fallback to active workflow if missing)
-4. Frontend ignores workflowId for now (backward compatible)
+**Validation**: Full regression test — single workflow load/run/pause/resume/stop/complete unchanged.
 
-**Validation**: Messages flow correctly, workflowId routing works.
+### Phase 2: Backend — Multi-Instance Registry
 
-### Phase 3: Dashboard UI Refactoring
-
-**Goal**: Implement tab-based multi-workflow UI.
-
-**Steps**:
-
-1. Add tab bar to dashboard.html
-2. Update state-manager.js for multi-workflow state
-3. Implement tab rendering and switching
-4. Update all UI components to use active workflow state
-5. Add "New Workflow" button and tab close functionality
-
-**Validation**: Can create, switch between, and close workflow tabs.
-
-### Phase 4: Parallel Execution Support
-
-**Goal**: Enable concurrent workflow execution.
+**Goal**: Allow `WorkflowOrchestrator` to hold multiple `WorkflowInstance` objects and execute them concurrently. Backend fully supports parallel execution; UI not yet updated.
 
 **Steps**:
+1. `createWorkflow()` no longer replaces existing instance — adds to registry
+2. Add `activeWorkflowId` tracking — all dashboard messages route from active instance
+3. Implement `setActiveWorkflow()` with full state sync to dashboard
+4. Implement background buffering in `WorkflowInstance` when not active
+5. Add `dismissWorkflow()` with cleanup (working file, process, file watcher)
+6. Add `saveState()` / `restoreState()` for persistence across VS Code restart
+7. Each `WorkflowInstance` can call `execute()` independently — no coordination needed between instances
 
-1. Remove single-workflow constraints in orchestrator
-2. Add resource limit checks (max concurrent workflows)
-3. Implement Chat integration serialization (if Chat workflow running, block new Chat workflows)
-4. Test concurrent execution with CLI integrations
-5. Add execution queue for workflows that exceed limits
+**Validation**: Load two workflow files, run both simultaneously, verify both progress independently with isolated working files.
 
-**Validation**: Can run 5-10 workflows simultaneously without conflicts.
+### Phase 3: Message Protocol Updates
+
+**Goal**: Add new message types for multi-workflow coordination. No UI changes yet.
+
+**Steps**:
+1. Add new `MESSAGE_TYPES` constants to `DashboardConstants.ts`
+2. Add `workflowId` to outgoing messages from active instance
+3. Implement `WORKFLOWS_LIST` / `WORKFLOW_ADDED` / `WORKFLOW_DISMISSED` dispatch from orchestrator
+4. Implement `SWITCH_WORKFLOW` / `DISMISS_WORKFLOW` handlers in `FlightPathWebviewProvider`
+5. Add `GET_WORKFLOWS_LIST` handler
+
+**Validation**: New message types flow correctly; webview ignores unknown messages gracefully.
+
+### Phase 4: Frontend — Dropdown Selector
+
+**Goal**: Extend `WorkflowStatus` dropdown to show loaded workflows and enable switching.
+
+**Steps**:
+1. Add `loadedWorkflows`, `activeWorkflowId` to `uiStore`
+2. Handle `WORKFLOWS_LIST`, `WORKFLOW_ADDED`, `WORKFLOW_DISMISSED`, `WORKFLOW_SUMMARY_UPDATED` in message handler — update `uiStore`
+3. Handle `SESSION_RESTORED` / `ACTIVE_WORKFLOW_CHANGED` — replace `workflowStore` state
+4. Rename/extend `RecentWorkflows.tsx` → `WorkflowSelector.tsx` with two sections
+5. Create `WorkflowSelectorItem` component (with dismiss button)
+6. Update `WorkflowStatus.tsx`:
+   - Remove `if (isRunning) return` from `toggleDropdown` — always openable
+   - Request `GET_WORKFLOWS_LIST` on dropdown open
+   - Render `WorkflowSelector` in dropdown
+7. Update `WorkflowControls.tsx` — **remove all `disabled={isExecuting}` guards** (parallel is the goal)
+8. Update `Header.tsx` run/pause/stop — scoped to active workflow's own state only
+
+**Validation**: Load two workflows, switch between them, verify output is preserved.
 
 ### Phase 5: Polish & Edge Cases
 
 **Goal**: Handle all edge cases and improve UX.
 
 **Steps**:
-
-1. Add workflow persistence (restore tabs on reload)
-2. Implement keyboard shortcuts for tab navigation (Ctrl+Tab, Ctrl+1-9)
-3. Add context menu for tabs (right-click: Pause, Stop, Close, Rename)
-4. Handle working file cleanup (delete on tab close)
-5. Add workflow history (recent workflows dropdown)
-6. Add resource monitoring (show warning if approaching limits)
-
-**Validation**: Production-ready, all edge cases handled.
+1. Workflow persistence (restore loaded workflows on VS Code reload)
+2. Dismiss confirmation when paused mid-run: "Workflow is paused. Dismiss anyway?"
+3. Running workflow badge on dropdown trigger (small pulsing indicator when background workflow runs)
+4. Auto-dismiss completed workflows (opt-in setting, default: false)
+5. Working file cleanup on dismiss (move to history or delete based on setting)
+6. Handle `LOAD_WORKFLOW` when max instances reached (configurable, default: 20)
 
 ---
 
-## Command Updates
+## UI/UX Design
 
-### Context-Aware Commands (Use Active Workflow)
-
-These commands apply to the **active workflow** (visible tab):
-
-| Command                    | Current Behavior  | New Behavior            |
-| -------------------------- | ----------------- | ----------------------- |
-| `flightpath.run`           | Runs current file | Runs active workflow    |
-| `flightpath.pause`         | Pauses execution  | Pauses active workflow  |
-| `flightpath.resume`        | Resumes execution | Resumes active workflow |
-| `flightpath.stop`          | Stops execution   | Stops active workflow   |
-| `flightpath.clearWorkflow` | Clears workflow   | Clears active workflow  |
-
-**Implementation**:
-
-```typescript
-// OLD: Direct call to FlightPathManager
-vscode.commands.registerCommand("flightpath.pause", () => {
-  manager.pause(); // No workflow ID needed (only one workflow)
-});
-
-// NEW: Route through orchestrator (uses activeWorkflowId)
-vscode.commands.registerCommand("flightpath.pause", (workflowId?: string) => {
-  if (workflowId) {
-    // Explicit workflow ID (from command palette with input)
-    orchestrator.pauseWorkflow(workflowId);
-  } else {
-    // No ID specified - use active workflow
-    orchestrator.pauseActive();
-  }
-});
-```
-
-### NEW: Multi-Workflow Commands
-
-Add commands for explicit workflow management:
-
-| Command                       | Description              | Parameters           |
-| ----------------------------- | ------------------------ | -------------------- |
-| `flightpath.createWorkflow`   | Create new workflow      | `filePath: string`   |
-| `flightpath.closeWorkflow`    | Close workflow tab       | `workflowId: string` |
-| `flightpath.switchToWorkflow` | Switch active workflow   | `workflowId: string` |
-| `flightpath.listWorkflows`    | Show workflow picker     | None                 |
-| `flightpath.pauseWorkflow`    | Pause specific workflow  | `workflowId: string` |
-| `flightpath.resumeWorkflow`   | Resume specific workflow | `workflowId: string` |
-| `flightpath.stopWorkflow`     | Stop specific workflow   | `workflowId: string` |
-
-**Workflow Picker** (Command Palette):
+### Header Layout (Unchanged Structure)
 
 ```
-> FlightPath: Switch to Workflow
-  [Running] Workflow 1: Feature Implementation (3/5 prompts)
-  [Paused]  Workflow 2: Bug Fix (2/3 prompts)
-  [Done]    Workflow 3: Documentation Update (5/5 prompts)
-
-  → Press Enter to switch
-  → Press Delete to close
+┌────────────────────────────────────────────────────────────────────┐
+│  [New ▾]  │  [Workflow Name ● RUNNING  ▾]  │  [▶] [⏸] [⏹]       │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+- **`WorkflowControls` (left)**: Unchanged — "New" button disabled when any workflow executing
+- **`WorkflowStatus` (center)**: Dropdown now shows active workflows, always openable
+- **Run/Pause/Stop (right)**: Context-aware to active workflow; Run disabled if another is running
+
+### WorkflowStatus Dropdown (Extended)
+
+```
+┌─────────────────────────────────────┐
+│ LOADED WORKFLOWS                    │
+│ ──────────────────────────────────  │
+│ [●] Feature Work       3/5  [×]     │  ← running (● = pulsing)
+│ [●] Code Review        1/4  [×]     │  ← also running in parallel
+│ [⏸] Bug Fix            2/3  [×]     │  ← paused
+│ [✓] Docs Update        5/5  [×]     │  ← completed
+│ ──────────────────────────────────  │
+│ LOAD ANOTHER                        │
+│ ──────────────────────────────────  │
+│  Old Workflow 1         idle        │  ← always enabled (parallel!)
+│  Old Workflow 2         completed   │
+│ ──────────────────────────────────  │
+│  [Clear History]                    │
+└─────────────────────────────────────┘
+```
+
+**Interaction rules**:
+- Click any "Loaded Workflow" row → switch view (always enabled)
+- Click [×] on a workflow → dismiss (confirm if running or paused)
+- Click "Load Another" row → loads file as new instance (always enabled)
+- Dropdown trigger always opens
+
+### Status Badge on Dropdown Trigger
+
+When a background workflow is running (not the viewed one), a small pulsing badge appears on the dropdown arrow:
+
+```
+[My Current Workflow (PAUSED) ●▾]
+                              ^^ badge = another workflow is running
+```
+
+This gives the user peripheral awareness without cluttering the header.
+
+### Running Workflow Scope
+
+Controls in the header apply exclusively to the **active/viewed** workflow. Other workflows running in background have no bearing on button state:
+
+| Active Workflow State | Run Button | Pause Button | Stop Button |
+|---|---|---|---|
+| IDLE (no file) | Disabled (no file loaded) | Disabled | Disabled |
+| IDLE (file loaded) | Enabled — starts execution | Disabled | Disabled |
+| RUNNING | Disabled (already running) | Enabled | Enabled |
+| PAUSED | Enabled (Restart) | Enabled (Resume) | Enabled |
+| STOPPED | Enabled (Restart) | Enabled (Resume) | Disabled |
+| COMPLETED | Enabled (Restart) | Disabled | Disabled |
+| CANCELLING | Disabled | Disabled | Enabled (re-press to check) |
+
+Note that **other workflows running in parallel do not affect these buttons**. If the viewed workflow is IDLE and another is RUNNING, the Run button is still enabled for the viewed one.
 
 ---
 
 ## Edge Cases & Solutions
 
-### 1. Chat Integration Conflicts
+### 1. Switching While Running
 
-**Problem**: Multiple workflows try to use Copilot Chat simultaneously.
+**Problem**: User switches to another workflow while one is running. Dashboard updates for the running workflow continue arriving.
 
 **Solution**:
+- `WorkflowInstance.setActive(false)` → instance buffers subsequent events in memory
+- Running workflow's working file still updates on disk (no change to persistence)
+- When user switches back: `setActive(true)` flushes buffer, sends `SESSION_RESTORED` for full sync
+- Buffer capped at last N events per step (e.g., last 1000 streaming chunks) to prevent memory growth
 
-- Detect Chat integration in active workflows
-- Block new Chat workflows if one is already running
-- Show error: "Cannot run multiple Chat workflows. Use CLI mode or wait for current workflow to finish."
-- Allow queueing: "Add to queue?" → Starts when current Chat workflow completes
+### 2. Dismiss While Paused
 
-**Implementation**:
+**Problem**: User dismisses a workflow that's paused mid-execution.
+
+**Solution**:
+- Show confirmation: "Workflow is paused at step 2/5. Dismiss? Progress will be lost."
+- If confirmed: call `workflow.stop()` then `orchestrator.dismissWorkflow(id)`
+- Working file preserved in `.flightpath/.queue/` for manual recovery
+- If the working file setting is "keep history," move to `.flightpath/.history/`
+
+### 3. Loading Duplicate File
+
+**Problem**: User loads the same `.flightpath.yaml` twice.
+
+**Solution**:
+- `WorkflowOrchestrator.createWorkflow(filePath)` checks for existing instance with same `filePath`
+- If found and **idle**: switch to that instance, show toast "Switched to existing workflow"
+- If found and **running/paused**: offer choice — "This workflow is already loaded and running. Switch to it, or create a new instance from the same file?" (new instance gets a copy of the file path)
+- Default: switch to existing (avoids accidental duplicates)
+
+### 4. VS Code Restart / Reload
+
+**Problem**: All loaded workflow instances are lost on extension reload.
+
+**Solution**:
+- `WorkflowOrchestrator.saveState()` called on relevant lifecycle events (pausing, stopping, switching)
+- Persists `WorkflowSummary[]` to `context.workspaceState`
+- On activation: `restoreState()` creates `WorkflowInstance` for each persisted summary, restores from working file
+- All restored instances are forced to `PAUSED` state (no auto-resume)
+- Notification: "Restored 3 workflows from previous session"
+
+### 5. Max Loaded Workflows
+
+**Problem**: User accumulates many loaded workflows (memory growth).
+
+**Solution**:
+- Setting: `flightpath.maxLoadedWorkflows` (default: 20, range: 1–50)
+- On create: if at limit, offer to dismiss oldest completed workflow automatically
+- If all are non-completed and at limit, show error with list of workflows to dismiss
+
+### 6. Chat Integration
+
+**Problem**: `CopilotChatIntegration` drives a single VS Code Chat window — two Chat-harness workflows would both try to send messages to the same Chat UI, causing conflicts.
+
+**Solution**: Warn but don't block. CLI harnesses (copilot-cli, claude-cli, codex-cli) run in independent terminals — fully parallel with no conflict. Chat is the edge case:
 
 ```typescript
-// WorkflowOrchestrator.canCreateWorkflow()
-const runningChatWorkflows = Array.from(this.workflows.values()).filter(
-  (w) =>
-    w.integration instanceof CopilotChatIntegration && w.status === "RUNNING"
-);
-
-if (runningChatWorkflows.length > 0 && newWorkflow.usesChat) {
-  return {
-    allowed: false,
-    reason: "Chat integration already in use",
-    suggestQueue: true,
-  };
+// In WorkflowOrchestrator.executeWorkflow()
+if (usesChat && chatAlreadyRunning) {
+  const choice = await vscode.window.showWarningMessage(
+    'A Chat workflow is already running. Starting another Chat workflow may cause conflicts.',
+    'Start Anyway', 'Cancel'
+  );
+  if (choice !== 'Start Anyway') return;
 }
 ```
 
-### 2. Terminal Overload
+**Recommendation**: Users mixing Chat + CLI workflows is fine (CLI runs independently). Two Chat workflows simultaneously is unsupported but not hard-blocked. The typical parallel use case is all CLI harnesses.
 
-**Problem**: 20 workflows = 20 terminals → VS Code UI becomes cluttered.
+### 7. Editor Buttons While Another Workflow Runs
+
+**Problem**: `EditorSection` and `EditorFooter` use `disabled={isRunning}` to block editing. With parallel workflows, "the running workflow" is no longer a global concept.
+
+**Solution**: Change the disable logic from "any running workflow" to "this step is currently executing":
+- "Send" button (add prompt to queue): Always enabled — user can queue prompts for a running workflow
+- "Save" (update existing prompt): Disabled only if that specific prompt's status is `SENT` or `RUNNING`
+- "Cancel Edit": Always enabled
+- "Delete": Disabled only if the prompt is currently `SENT` or `RUNNING`
+
+This removes the blanket `isRunning` guard in favor of per-prompt status checks.
+
+### 8. Background Workflow Output (Memory)
+
+**Problem**: Background running workflow accumulates buffered events. User never switches back. Memory grows.
 
 **Solution**:
+- Buffer cap: keep last 500 streaming chunks + all CLI output events per step
+- For completed steps: keep full output (low size), streaming chunks cleared
+- Dashboard can request a full reload from working file at any time (disk-based fallback)
 
-- Default to **headless mode** for CLI integrations (background process, no terminal)
-- Setting: `flightpath.cliExecutionMode` per workflow (interactive vs headless)
-- Show terminal count warning: "12 terminals open. Consider using headless mode."
-- Auto-cleanup: Close terminals for completed workflows
+---
 
-**Implementation**:
+## New Settings
 
-```typescript
-// WorkflowInstance.getDefaultCliMode()
-private getDefaultCliMode(): 'interactive' | 'headless' {
-  const runningCount = this.orchestrator.getRunningWorkflowCount();
-
-  // Auto-switch to headless if many workflows running
-  if (runningCount > 5) {
-    return 'headless';
+```json
+{
+  "flightpath.maxLoadedWorkflows": {
+    "type": "number",
+    "default": 20,
+    "minimum": 1,
+    "maximum": 50,
+    "description": "Maximum number of workflow instances that can be loaded simultaneously"
+  },
+  "flightpath.autoSwitchToNewWorkflow": {
+    "type": "boolean",
+    "default": true,
+    "description": "Automatically switch the active view to newly loaded workflows"
+  },
+  "flightpath.autoDismissCompleted": {
+    "type": "boolean",
+    "default": false,
+    "description": "Automatically dismiss workflow instances when execution completes"
+  },
+  "flightpath.keepDismissedWorkflows": {
+    "type": "boolean",
+    "default": true,
+    "description": "Move working files to .flightpath/.history/ when workflow is dismissed (instead of deleting)"
   }
-
-  return ConfigurationUtils.getCliExecutionMode();
 }
 ```
 
-### 3. Working File Cleanup
+---
 
-**Problem**: .queue directory fills up with working files from closed workflows.
+## Command Updates
 
-**Solution**:
+### Context-Aware Commands (Apply to Active Workflow)
 
-- Delete working file when workflow tab is closed
-- Setting: `flightpath.keepWorkflowHistory` (default: true)
-  - true: Move to `.flightpath/.history/` instead of deleting
-  - false: Delete immediately
-- Auto-cleanup: Delete history files older than 30 days
-- Command: "FlightPath: Clear Workflow History"
+| Command | Current Behavior | New Behavior |
+|---|---|---|
+| `flightpath.takeOff` | Runs current file | Runs active workflow (if none running) |
+| `flightpath.pause` | Pauses execution | Pauses active workflow |
+| `flightpath.resume` | Resumes execution | Resumes active workflow |
+| `flightpath.stop` | Stops execution | Stops active workflow |
+| `flightpath.clearWorkflow` | Clears workflow | Clears/dismisses active workflow |
 
-**Implementation**:
+### New Commands
 
-```typescript
-// WorkflowOrchestrator.destroyWorkflow()
-async destroyWorkflow(workflowId: string): Promise<void> {
-  const workflow = this.workflows.get(workflowId);
-  if (!workflow) return;
+| Command | Description |
+|---|---|
+| `flightpath.switchWorkflow` | Show workflow selector quick-pick |
+| `flightpath.dismissWorkflow` | Dismiss active workflow instance |
+| `flightpath.dismissAllWorkflows` | Dismiss all completed/idle workflows |
 
-  // Stop if running
-  if (workflow.status === 'RUNNING') {
-    await workflow.stop();
-  }
-
-  // Clean up working file
-  const keepHistory = ConfigurationUtils.shouldKeepWorkflowHistory();
-  if (workflow.workingFilePath) {
-    if (keepHistory) {
-      await this.moveToHistory(workflow.workingFilePath);
-    } else {
-      await fs.unlink(workflow.workingFilePath);
-    }
-  }
-
-  // Remove from registry
-  this.workflows.delete(workflowId);
-}
-```
-
-### 4. Tab Overflow (Too Many Workflows)
-
-**Problem**: 15 workflow tabs → Horizontal scrolling, hard to see all tabs.
-
-**Solution**:
-
-- Scrollable tab bar (horizontal scroll with mouse wheel)
-- Tab overflow menu: "..." button shows dropdown with all workflows
-- Keyboard shortcuts: Ctrl+1-9 switches to tabs 1-9, Ctrl+0 shows overflow menu
-- Auto-close completed workflows (if setting enabled)
-
-**UI Design**:
+**Workflow Switcher Quick-Pick** (for command palette):
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ [Wkflow 1] [Wkflow 2] [Wkflow 3] [...] [+]             │
-│           ◄────────────────────────────►                │
-│           Scrollable Tab Bar                            │
-└─────────────────────────────────────────────────────────┘
+> FlightPath: Switch Workflow
+  [●] Feature Work (3/5) — Running
+  [⏸] Bug Fix (2/3) — Paused
+  [✓] Docs Update (5/5) — Completed
+  [ ] New Workflow (empty) — Idle
+
+  → Press Enter to switch view
+  → Press Delete to dismiss
 ```
-
-### 5. Resource Limit Reached
-
-**Problem**: User tries to create 11th workflow (max is 10).
-
-**Solution**:
-
-- Show error with actionable options:
-
-  ```
-  Maximum concurrent workflows reached (10/10).
-
-  What would you like to do?
-  [ Pause a workflow ]  [ Stop a workflow ]  [ Increase limit ]  [ Cancel ]
-  ```
-
-- "Pause a workflow" → Quick pick of running workflows
-- "Stop a workflow" → Quick pick of running workflows
-- "Increase limit" → Opens settings
-- Setting: `flightpath.maxConcurrentWorkflows` (default: 10, range: 1-50)
-
-### 6. Workflow ID Conflicts (UUID Collisions)
-
-**Problem**: Two workflows get same UUID (extremely rare but possible).
-
-**Solution**:
-
-- Use crypto.randomUUID() for strong uniqueness
-- Fallback: If collision detected, regenerate UUID and retry
-- Collision detection: Check workflows.has(uuid) before creating
-
-**Implementation**:
-
-```typescript
-// WorkflowOrchestrator.generateWorkflowId()
-private generateWorkflowId(): string {
-  let attempts = 0;
-  while (attempts < 10) {
-    const id = crypto.randomUUID();
-    if (!this.workflows.has(id)) {
-      return id;
-    }
-    attempts++;
-  }
-  throw new Error('Failed to generate unique workflow ID after 10 attempts');
-}
-```
-
-### 7. Session Restoration (Reload Extension)
-
-**Problem**: User reloads VS Code → All workflow tabs disappear.
-
-**Solution**:
-
-- Persist workflow registry to workspace state
-- On activation, restore all workflows from working files
-- Preserve active workflow ID and tab order
-- Show notification: "Restored 3 workflows from previous session"
-
-**Implementation**:
-
-```typescript
-// WorkflowOrchestrator.saveState()
-async saveState(): Promise<void> {
-  const state = {
-    activeWorkflowId: this.activeWorkflowId,
-    workflows: Array.from(this.workflows.values()).map(w => w.toJSON())
-  };
-  await this.context.workspaceState.update('flightpath.workflows', state);
-}
-
-// WorkflowOrchestrator.restoreState()
-async restoreState(): Promise<void> {
-  const state = this.context.workspaceState.get<{ workflows: WorkflowInstanceState[] }>('flightpath.workflows');
-  if (!state) return;
-
-  for (const workflowState of state.workflows) {
-    const workflow = await WorkflowInstance.fromJSON(workflowState, this.context);
-    this.workflows.set(workflow.id, workflow);
-  }
-
-  this.activeWorkflowId = state.activeWorkflowId;
-}
-```
-
-### 8. Context Menu Confusion (Which Workflow?)
-
-**Problem**: User right-clicks file → "Run with FlightPath" → Which workflow should it use?
-
-**Solution**:
-
-- If no workflows exist: Create new workflow
-- If one workflow exists and idle: Load into that workflow
-- If multiple workflows exist: Show quick pick:
-  ```
-  Run "feature.flightpath.yaml" in:
-  → [New Workflow]
-  → [Existing] Workflow 1 (IDLE)
-  → [Existing] Workflow 2 (PAUSED)
-  ```
-- Default: Create new workflow (safest)
-
-### 9. Dashboard State Sync (Webview Reload)
-
-**Problem**: Dashboard webview reloads → All state lost.
-
-**Solution**:
-
-- On webview ready (MESSAGE_TYPES.READY), send full state sync:
-  ```typescript
-  {
-    type: 'WORKFLOWS_LIST',
-    workflows: [
-      { workflowId: 'abc', workflowName: 'Wkflow 1', status: 'RUNNING', ... },
-      { workflowId: 'def', workflowName: 'Wkflow 2', status: 'PAUSED', ... }
-    ],
-    activeWorkflowId: 'abc'
-  }
-  ```
-- Frontend rebuilds all tabs and state from this message
-- Works same as current INIT message (just extended for multiple workflows)
-
-### 10. API Rate Limits
-
-**Problem**: 10 workflows running → Hit Copilot/Claude API rate limits.
-
-**Solution**:
-
-- Implement exponential backoff in integrations (already exists for CLI)
-- Show warning when approaching rate limits: "8 workflows running. May encounter rate limits."
-- Queue workflows instead of failing: "Rate limit reached. Workflow queued."
-- Setting: `flightpath.maxApiRequestsPerMinute` (default: 0 = unlimited)
-- If set, orchestrator delays workflow starts to stay under limit
 
 ---
 
@@ -1121,451 +989,72 @@ async restoreState(): Promise<void> {
 
 ### Unit Tests
 
-**New Test Files**:
-
 1. `WorkflowOrchestrator.test.ts`
-   - createWorkflow() / destroyWorkflow()
-   - Resource limit enforcement
-   - Active workflow tracking
-   - Command routing
+   - `createWorkflow()` — creates instance, adds to registry without clearing existing
+   - `executeWorkflow()` — runs specified instance; both A and B can run simultaneously
+   - `setActiveWorkflow()` — updates `activeWorkflowId`, triggers state sync
+   - `dismissWorkflow()` — removes from registry, cleans up; other instances unaffected
+   - Duplicate file detection (offers switch or new instance)
+   - `getRunningWorkflows()` — returns all instances with status RUNNING (can be > 1)
+   - Chat conflict warning — two Chat-harness workflows: warns but proceeds
 
 2. `WorkflowInstance.test.ts`
-   - Lifecycle (load, execute, pause, resume, stop)
-   - State serialization / deserialization
-   - Integration with PromptQueue
-
-3. `Dashboard.test.ts` (Frontend)
-   - Tab rendering
-   - Tab switching
-   - State management for multiple workflows
-   - Message routing
+   - Lifecycle: load → execute → pause → resume → stop
+   - `setActive(false)` → events buffered
+   - `setActive(true)` → buffer flushed
+   - `getSummary()` returns current state
+   - `execute()` while another instance is also executing — both proceed independently
 
 ### Integration Tests
 
-**Test Scenarios**:
-
-1. **Parallel Execution**: Run 3 workflows simultaneously (all CLI mode)
-   - Verify each workflow executes independently
-   - Verify no cross-talk between workflows
-   - Verify working files are separate
-
-2. **Chat Serialization**: Try running 2 Chat workflows
-   - Verify second workflow is blocked or queued
-   - Verify first workflow completes before second starts
-
-3. **Resource Limits**: Create 11 workflows (max is 10)
-   - Verify 11th workflow is rejected with error
-   - Verify can create 11th after closing one workflow
-
-4. **Tab Management**: Create, switch, close workflows
-   - Verify active workflow updates correctly
-   - Verify tab states (running, paused, completed) update
-   - Verify working files are cleaned up on close
-
-5. **Session Restoration**: Create workflows, reload extension
-   - Verify all workflows restored
-   - Verify active workflow restored
-   - Verify tab order preserved
+1. **Multi-workflow switching**: Load 3 workflows, switch between them, verify state isolated
+2. **Parallel execution**: Run A and B simultaneously, verify both progress, independent working files, independent terminals
+3. **Background buffering**: Start workflow A, switch to B, verify A's output buffered correctly, switch back and verify flush
+4. **Session restoration**: Load 3 workflows (2 running), reload extension, verify all 3 restored (running ones forced to paused)
+5. **Working file isolation**: 3 workflows → 3 separate working files, no cross-contamination
+6. **Load while running**: Load new workflow while A is running; A continues, new workflow added to registry
 
 ### Manual Testing Checklist
 
-- [ ] Create new workflow via dashboard button
-- [ ] Create new workflow via context menu (right-click .flightpath.yaml)
-- [ ] Run multiple CLI workflows simultaneously
-- [ ] Switch between workflow tabs
-- [ ] Pause/resume specific workflows
-- [ ] Stop specific workflows
-- [ ] Close workflow tabs (with/without confirmation)
-- [ ] Rename workflow
-- [ ] Keyboard shortcuts (Ctrl+1-9 for tab switching)
-- [ ] Tab overflow menu (>10 workflows)
-- [ ] Resource limit warning
-- [ ] Chat workflow serialization
-- [ ] Session restoration (reload extension)
-- [ ] Working file cleanup
-- [ ] Status indicators in tabs (running, paused, completed, error)
+- [ ] Load two workflows, run both simultaneously — each progresses independently in its own terminal
+- [ ] Switch between running workflows via dropdown — both show live progress
+- [ ] Switch to a background running workflow, see buffered output on switch-back
+- [ ] Click "New" while a workflow is running — creates new instance, running one continues uninterrupted
+- [ ] Load from File while a workflow is running — loads successfully, running one continues
+- [ ] Dismiss a running workflow — confirmation shown, process killed, workflow cleaned up
+- [ ] Dismiss a completed workflow — dropdown updates
+- [ ] Load same file twice — offers switch vs new instance
+- [ ] Reload VS Code with 3 loaded workflows — all restored
+- [ ] Multiple pulsing status badges in dropdown when 2+ workflows running
 
 ---
 
-## Performance Considerations
+## What Does NOT Change
 
-### Memory Usage
+To be explicit about scope boundaries:
 
-**Current** (Single Workflow):
-
-- ~5 MB per workflow instance (queue state, prompts, results)
-- Total: ~5 MB
-
-**Parallel** (10 Workflows):
-
-- ~5 MB × 10 = ~50 MB
-- Dashboard state: ~5 MB (all workflow metadata)
-- Total: ~55 MB
-
-**Optimization**:
-
-- Lazy load completed workflows (don't keep in memory)
-- Stream large responses to disk instead of keeping in memory
-- Limit result history (keep last 100 prompts per workflow)
-
-### CPU Usage
-
-**Bottlenecks**:
-
-- CLI processes (each workflow spawns 1-2 processes)
-- End condition scripts (each validation spawns a process)
-- Response parsing (JSON/markdown parsing for each workflow)
-
-**Optimization**:
-
-- Process pooling for end condition scripts (reuse instead of spawn)
-- Throttle UI updates (batch dashboard updates every 100ms)
-- Background thread for response parsing (Worker threads)
-
-### Disk I/O
-
-**Working Files**:
-
-- Each workflow writes working file on every prompt completion
-- 10 workflows × 10 prompts × 100KB = ~10 MB disk writes
-
-**Optimization**:
-
-- Debounce working file writes (write at most once per second)
-- Batch writes (combine multiple updates into single write)
-- Compress working files (gzip for storage, uncompress on read)
+- **Execution semantics** — `PromptQueue`, `WorkflowExecutor`, `EndConditionHandler`, all harness integrations: **untouched**
+- **Working file format** — `.flightpath/.queue/` structure: **untouched**
+- **File formats** — `.flightpath.yaml`, `.flightpath.json`, `.prompt.md`: **untouched**
+- **Settings** — all existing settings: **untouched** (new settings added alongside)
+- **Single-workflow UX** — if user never loads a second workflow, experience is identical
+- **Header layout** — `[New ▾] | [WorkflowStatus ▾] | [Run/Pause/Stop]`: **untouched**
+- **Panel layout** — resizable Prompts / Output / Editor / Settings: **untouched**
+- **Tab-based UI** — explicitly **not implemented** (dropdown is the chosen pattern, not tabs)
 
 ---
 
-## Implementation Timeline
+## Success Criteria
 
-**Phase 1: Backend Refactoring** (2-3 weeks)
-
-- Week 1: Create WorkflowInstance and WorkflowOrchestrator
-- Week 2: Refactor FlightPathManager to use orchestrator
-- Week 3: Add tests, validate single-workflow behavior unchanged
-
-**Phase 2: Message Protocol** (1 week)
-
-- Add workflowId to all messages
-- Update backend message handlers
-- Validate message routing
-
-**Phase 3: Dashboard UI** (2-3 weeks)
-
-- Week 1: Implement tab bar and switching
-- Week 2: Update state manager for multi-workflow
-- Week 3: Add tab actions (close, rename, context menu)
-
-**Phase 4: Parallel Execution** (1-2 weeks)
-
-- Week 1: Remove single-workflow constraints, add resource limits
-- Week 2: Test concurrent execution, fix edge cases
-
-**Phase 5: Polish** (1-2 weeks)
-
-- Week 1: Session restoration, keyboard shortcuts
-- Week 2: Working file cleanup, overflow menu
-
-**Total: 7-11 weeks** (depending on complexity and testing)
-
----
-
-## Future Enhancements
-
-### 1. Workflow Groups
-
-- Organize workflows into projects or categories
-- Collapse/expand groups in dashboard
-- Run all workflows in a group
-
-### 2. Workflow Templates
-
-- Save workflow configurations as templates
-- Quick start: "Create workflow from template"
-- Share templates across teams
-
-### 3. Workflow Dependencies
-
-- Workflow B waits for Workflow A to complete
-- DAG (Directed Acyclic Graph) execution
-- Parallel branches with merge points
-
-### 4. Remote Workflows
-
-- Run workflows on remote machines (SSH)
-- Distribute load across multiple machines
-- Enterprise feature for scaling
-
-### 5. Workflow Monitoring Dashboard
-
-- Real-time metrics (CPU, memory, API calls)
-- Historical execution data
-- Performance analytics
-
-### 6. Workflow Marketplace
-
-- Share workflows with community
-- Download popular workflow templates
-- Rate and review workflows
-
----
-
-## Open Questions
-
-### 1. Should we support workflow nesting?
-
-- **Scenario**: Workflow A triggers Workflow B as a sub-workflow
-- **Pros**: Modular workflows, reusable components
-- **Cons**: Increased complexity, harder to debug
-- **Decision**: Defer to v2 (not critical for initial release)
-
-### 2. Should workflows persist across VS Code restarts?
-
-- **Scenario**: User closes VS Code with 5 workflows running
-- **Options**:
-  - A) Persist and restore on next start (complex)
-  - B) Prompt user: "5 workflows running. Save state?" (simpler)
-  - C) Always discard (simplest, may lose work)
-- **Decision**: Option B (prompt user) for v1, Option A for v2
-
-### 3. How to handle global rate limits?
-
-- **Scenario**: 10 workflows × 10 API calls/min = 100 calls/min (might exceed limits)
-- **Options**:
-  - A) Let API fail, show error (simple)
-  - B) Global queue with rate limiting (complex)
-  - C) User-configurable concurrency limits (middle ground)
-- **Decision**: Option C (user sets max concurrent workflows)
-
-### 4. Should dashboard show all workflows or just active?
-
-- **Scenario**: 20 workflows created over time (5 running, 15 completed)
-- **Options**:
-  - A) Show all (cluttered but complete)
-  - B) Show only running/paused (clean but incomplete)
-  - C) Show running + recent completed (balanced)
-- **Decision**: Option C (running + recent 5 completed)
-
-### 5. Should we support workflow pause/resume all?
-
-- **Scenario**: User wants to pause all 10 workflows at once
-- **Pros**: Convenient for batch control
-- **Cons**: May not be clear which workflows are affected
-- **Decision**: Add in v1 as toolbar action "Pause All" / "Resume All"
-
----
-
-## Conclusion
-
-This plan outlines a comprehensive architecture for supporting parallel workflows in FlightPath. The key design decisions are:
-
-1. **WorkflowOrchestrator pattern**: Central manager for multiple WorkflowInstance objects
-2. **Tab-based dashboard**: Clear visual separation, familiar UX pattern
-3. **Resource limits**: Protect against overload (terminal count, API rate limits)
-4. **Chat serialization**: Only one Chat workflow at a time (technical constraint)
-5. **Context-aware commands**: Commands apply to active workflow (visible tab)
-6. **Phased migration**: Backward-compatible refactoring ensures smooth transition
-
-**Next Steps**:
-
-1. Review this plan with team
-2. Create GitHub issues for each phase
-3. Start Phase 1: Backend refactoring
-4. Prototype dashboard UI in parallel
-5. Iterate based on feedback
-
-**Success Criteria**:
-
-- [ ] Can run 5+ CLI workflows simultaneously without conflicts
-- [ ] Dashboard clearly shows status of all workflows
+- [ ] Can load 3+ workflows, each with independent state (prompts, outputs, step progress)
+- [ ] Multiple workflows can run **simultaneously** in parallel (each in its own terminal)
+- [ ] Switching between workflows via dropdown is instant (< 100ms UI response)
+- [ ] Background running workflow continues executing while user views another
+- [ ] `WorkflowControls` buttons (New, Load, Queue) work while other workflows are running
+- [ ] Run/Pause/Stop apply to the currently viewed workflow only
+- [ ] Working files properly isolated (no cross-workflow state)
+- [ ] Session restoration works after VS Code reload
 - [ ] No regressions in single-workflow UX
-- [ ] Working files properly managed (no leaks)
-- [ ] Resource limits prevent overload
-- [ ] Session restoration works reliably
-
----
-
-## Appendix: Code Snippets
-
-### A. WorkflowOrchestrator.createWorkflow()
-
-```typescript
-/**
- * Create a new workflow instance from a prompt file
- * @param filePath Path to prompt file (.flightpath.yaml, .json, .prompt.md)
- * @param options Optional configuration overrides
- * @returns Newly created workflow instance
- */
-async createWorkflow(
-  filePath: string,
-  options?: WorkflowOptions
-): Promise<WorkflowInstance> {
-  // 1. Check resource limits
-  const canCreate = this.canCreateWorkflow();
-  if (!canCreate.allowed) {
-    throw new Error(canCreate.reason);
-  }
-
-  // 2. Generate unique workflow ID
-  const workflowId = this.generateWorkflowId();
-
-  // 3. Create workflow instance
-  const workflow = new WorkflowInstance(workflowId, this.context, {
-    dashboardProvider: this.dashboardProvider,
-    integrationFactory: this.createIntegrationForMode.bind(this),
-    ...options
-  });
-
-  // 4. Load prompt file
-  await workflow.loadPromptFile(filePath);
-
-  // 5. Register workflow
-  this.workflows.set(workflowId, workflow);
-
-  // 6. Set as active workflow (if setting enabled)
-  if (ConfigurationUtils.shouldAutoSwitchToNewWorkflow()) {
-    this.activeWorkflowId = workflowId;
-  }
-
-  // 7. Notify dashboard
-  if (this.dashboardProvider) {
-    this.dashboardProvider.postMessage({
-      type: MESSAGE_TYPES.WORKFLOW_CREATED,
-      workflowId,
-      workflow: workflow.getMetadata()
-    });
-  }
-
-  // 8. Listen for workflow state changes
-  workflow.onStateChange((state) => {
-    this.handleWorkflowStateChange(workflowId, state);
-  });
-
-  Log.info(`Created workflow ${workflowId}: ${workflow.workflowName}`);
-
-  return workflow;
-}
-```
-
-### B. Dashboard Tab Switching (Frontend)
-
-```javascript
-/**
- * Switch to a different workflow tab
- * Updates UI to show selected workflow's prompts, output, and controls
- */
-function switchToWorkflow(workflowId) {
-  // 1. Update state manager
-  const previousWorkflowId = stateManager.activeWorkflowId;
-  stateManager.activeWorkflowId = workflowId;
-
-  // 2. Re-render tabs (highlight active tab)
-  renderWorkflowTabs();
-
-  // 3. Update main content area
-  renderActiveWorkflowContent();
-
-  // 4. Update execution controls (enable/disable based on workflow state)
-  updateExecutionControls();
-
-  // 5. Clear editor (don't carry over prompt from previous workflow)
-  editorManager.clearEditor();
-
-  // 6. Scroll to current prompt in prompts list
-  promptsManager.scrollToCurrentPrompt();
-
-  // 7. Notify extension (update activeWorkflowId in backend)
-  vscode.postMessage({
-    type: MESSAGE_TYPES.SET_ACTIVE_WORKFLOW,
-    workflowId,
-    previousWorkflowId,
-  });
-
-  // 8. Save preference (restore active workflow on reload)
-  try {
-    localStorage.setItem("flightpath.activeWorkflowId", workflowId);
-  } catch (error) {
-    console.warn("Failed to save active workflow preference:", error);
-  }
-}
-
-/**
- * Render content for the currently active workflow
- * Populates prompts list, output, and workflow header
- */
-function renderActiveWorkflowContent() {
-  const workflow = stateManager.getActiveWorkflow();
-
-  if (!workflow) {
-    // No workflows - show empty state
-    showEmptyState();
-    return;
-  }
-
-  // Update workflow header
-  workflowManager.updateWorkflowHeader(
-    workflow.workflowName,
-    workflow.executionState
-  );
-
-  // Render prompts list
-  promptsManager.renderPrompts(workflow.prompts, workflow.currentStep);
-
-  // Render output
-  outputManager.renderOutput(workflow.outputHistory);
-
-  // Update progress bar
-  workflowManager.updateProgress(workflow.currentStep, workflow.totalSteps);
-}
-```
-
-### C. Resource Limit Check (Backend)
-
-```typescript
-/**
- * Check if a new workflow can be created without exceeding resource limits
- * @returns { allowed: true } if OK, { allowed: false, reason: string } if blocked
- */
-canCreateWorkflow(): { allowed: boolean; reason?: string; suggestQueue?: boolean } {
-  // 1. Check max concurrent workflows
-  const runningCount = this.getRunningWorkflowCount();
-  const maxConcurrent = ConfigurationUtils.getMaxConcurrentWorkflows();
-
-  if (runningCount >= maxConcurrent) {
-    return {
-      allowed: false,
-      reason: `Maximum concurrent workflows reached (${runningCount}/${maxConcurrent}). ` +
-              `Pause or stop a workflow first, or increase the limit in settings.`
-    };
-  }
-
-  // 2. Check Chat integration conflicts
-  const runningChatWorkflows = Array.from(this.workflows.values()).filter(
-    w => w.usesProvider(Provider.CopilotChat) && w.isRunning()
-  );
-
-  if (runningChatWorkflows.length > 0) {
-    return {
-      allowed: false,
-      reason: 'A Chat workflow is already running. FlightPath can only run one Chat workflow at a time. ' +
-              'Use CLI mode (Copilot CLI, Claude CLI, or Codex CLI) for parallel execution.',
-      suggestQueue: true // Suggest adding to queue
-    };
-  }
-
-  // 3. Check system resources (optional, may defer to v2)
-  // const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024; // MB
-  // if (memoryUsage > 500) { // More than 500 MB
-  //   return {
-  //     allowed: false,
-  //     reason: 'System memory usage is high. Close some workflows before creating new ones.'
-  //   };
-  // }
-
-  return { allowed: true };
-}
-```
 
 ---
 

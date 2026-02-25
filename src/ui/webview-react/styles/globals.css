@@ -386,6 +386,28 @@ button .codicon {
 }
 
 /* ============================================================================
+   Panel Collapse/Expand Animation
+   ============================================================================
+   Animates the flex-grow property when panels are collapsed or expanded via
+   the imperative collapse()/expand() API.
+
+   The library sizes panels via flex-grow on the outer [data-panel] div.
+   (className/style props go to the inner wrapper, not where flex-grow lives,
+   so Tailwind transition utilities on Panel cannot animate collapse/expand.)
+
+   Disable transition while any separator in the group is actively dragged —
+   [data-separator] is set to "active" by the library during pointer drag —
+   so resize-by-drag remains instant and cursor-accurate.
+   ============================================================================ */
+[data-panel] {
+  transition: flex-grow 200ms ease-in-out;
+}
+
+[data-group]:has([data-separator="active"]) [data-panel] {
+  transition: none;
+}
+
+/* ============================================================================
    Utility Classes
    ============================================================================ */
 @layer utilities {
