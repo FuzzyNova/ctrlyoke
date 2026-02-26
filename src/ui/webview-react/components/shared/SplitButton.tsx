@@ -59,6 +59,9 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Track whether the dropdown was opened via keyboard so we only
+  // auto-focus the first item for keyboard navigation (not mouse clicks).
+  const openedWithKeyboardRef = useRef(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -79,13 +82,14 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
     }
   }, [isOpen]);
 
-  // Focus management when dropdown opens
+  // Focus management when dropdown opens - only auto-highlight first item
+  // when opened via keyboard (arrow/enter), not on mouse click.
   useEffect(() => {
-    if (isOpen && dropdownRef.current) {
+    if (isOpen && dropdownRef.current && openedWithKeyboardRef.current) {
       const firstEnabled = options.findIndex(
         (opt) => !opt.disabled && !opt.divider
       );
-      setFocusedIndex(firstEnabled >= 0 ? firstEnabled : 0);
+      setFocusedIndex(firstEnabled >= 0 ? firstEnabled : -1);
     }
   }, [isOpen, options]);
 
@@ -94,6 +98,7 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
       if (!isOpen) {
         if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
           e.preventDefault();
+          openedWithKeyboardRef.current = true;
           setIsOpen(true);
         }
         return;
@@ -163,6 +168,10 @@ export const SplitButton: React.FC<SplitButtonProps> = ({
 
   const toggleDropdown = (e: React.MouseEvent) => {
     e.stopPropagation();
+    openedWithKeyboardRef.current = false;
+    if (!isOpen) {
+      setFocusedIndex(-1);
+    }
     setIsOpen(!isOpen);
   };
 
