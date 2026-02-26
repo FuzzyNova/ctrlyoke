@@ -140,7 +140,7 @@ export const Header: React.FC = () => {
       <div className="header-right justify-self-end flex items-center gap-1">
         {/* Run/Restart Button (icon-only) */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-1 py-0.5 text-sm rounded border border-btn-border transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             isRerun ? "text-base font-bold" : ""
           } ${
             canRun
@@ -159,13 +159,13 @@ export const Header: React.FC = () => {
           aria-label={isRerun ? "Restart from beginning" : "Run"}
         >
           <i
-            className={`codicon codicon-lg ${isRerun ? "codicon-debug-restart" : "codicon-debug-start"}`}
+            className={`codicon ${isRerun ? "codicon-debug-restart" : "codicon-debug-start"}`}
           />
         </button>
 
         {/* Pause/Resume Button */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-1 py-0.5 text-sm rounded border border-btn-border transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             canPause || canResume
               ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -182,13 +182,13 @@ export const Header: React.FC = () => {
           aria-label={isPaused || isStopped ? "Resume" : "Pause"}
         >
           <i
-            className={`codicon codicon-lg ${isPaused || isStopped ? "codicon-debug-continue" : "codicon-debug-pause"}`}
+            className={`codicon ${isPaused || isStopped ? "codicon-debug-continue" : "codicon-debug-pause"}`}
           />
         </button>
 
         {/* Stop Button */}
         <button
-          className={`control-button flex items-center justify-center min-w-[28px] px-1 py-0.5 text-sm rounded border border-btn-border transition-colors ${
+          className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
             canStop
               ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
               : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
@@ -198,7 +198,7 @@ export const Header: React.FC = () => {
           title="Stop execution"
           aria-label="Stop"
         >
-          <i className="codicon codicon-lg codicon-debug-stop" />
+          <i className="codicon codicon-debug-stop" />
         </button>
       </div>
     </header>
