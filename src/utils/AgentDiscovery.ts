@@ -16,9 +16,9 @@ export interface AgentInfo {
   path: string;
   /** Source location of the agent */
   source: "user" | "workspace-github" | "workspace-claude";
-  /** Whether this agent is compatible with Copilot CLI */
+  /** Whether this agent is compatible with Copilot CLI (always true; agents use prompt prepending) */
   supportsCopilotCli: boolean;
-  /** Whether this agent is compatible with Claude CLI */
+  /** Whether this agent is compatible with Claude CLI (always true; agents use prompt prepending) */
   supportsClaudeCli: boolean;
 }
 
@@ -29,24 +29,17 @@ export interface AgentInfo {
  *
  * Agent discovery locations:
  * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows) or ~/.config/Code/User/prompts/ (Linux/Mac)
- * 2. Workspace .github/agents/ (for Copilot CLI)
- * 3. Workspace .claude/agents/ (for future Claude CLI support - currently broken)
+ * 2. Workspace .github/agents/ (Copilot-style agents)
+ * 3. Workspace .claude/agents/ (Claude-style agents)
  *
- * IMPORTANT - CLI COMPATIBILITY STATUS:
+ * AGENT COMPATIBILITY: ✅ ALL PROVIDERS SUPPORTED
+ * - Agents now work with ALL harnesses (Copilot CLI, Claude CLI, Codex CLI, Chat)
+ * - AgentExpander reads the .agent.md file and prepends <agentInstructions> into each prompt
+ * - This resolves the previously broken Claude CLI --agent flag (GitHub issue #9930)
+ * - No provider-specific CLI flags are needed; prompt prepending is universal
  *
- * COPILOT CLI: ✅ WORKING
- * - Only accepts agent NAMES (not paths)
- * - Loads from: .github/agents/ and user prompts directory
- * - Agents use .agent.md extension
- * - Example: copilot --agent test-agent-alpha
- *
- * CLAUDE CLI: ❌ BROKEN (as of v2.1.7)
- * - GitHub Issue: https://github.com/anthropics/claude-code/issues/9930
- * - Agents in .claude/agents/ are NOT automatically loaded
- * - The --agent flag does NOT work with file-based agents
- * - The --agents JSON flag is for "subagents" (different feature)
- * - Agents use .md extension (not .agent.md)
- * - No current workaround for FlightPath automation
+ * The `supportsCopilotCli` and `supportsClaudeCli` flags on AgentInfo are retained
+ * for backward compatibility (UI filtering) but are always true.
  *
  * See: https://code.visualstudio.com/docs/copilot/customization/custom-agents
  */
@@ -60,16 +53,6 @@ export class AgentDiscovery {
     workspaceFolder?: vscode.WorkspaceFolder
   ): Promise<AgentInfo[]> {
     const agents: AgentInfo[] = [];
-
-    // Add "None" option as first item
-    agents.push({
-      name: "",
-      displayName: "None (default behavior)",
-      path: "",
-      source: "user",
-      supportsCopilotCli: true,
-      supportsClaudeCli: true,
-    });
 
     try {
       // 1. Discover from user prompts directory
@@ -94,7 +77,7 @@ export class AgentDiscovery {
         agents.push(...claudeAgents);
       }
 
-      Log.info(`Discovered ${agents.length - 1} custom agents`); // -1 for "None" option
+      Log.info(`Discovered ${agents.length} custom agents`);
     } catch (error) {
       Log.error("Error discovering agents:", error);
     }
@@ -167,14 +150,11 @@ export class AgentDiscovery {
         // Extract agent name (remove .agent.md extension)
         const name = file.replace(/\.agent\.md$/, "");
 
-        // Determine CLI support based on source location
-        // GitHub agents (.github/agents/) support Copilot CLI
-        // Claude agents (.claude/agents/) support Claude CLI
-        // User agents (AppData) support both
-        const supportsCopilotCli =
-          source === "user" || source === "workspace-github";
-        const supportsClaudeCli =
-          source === "user" || source === "workspace-claude";
+        // All agents now work with all providers via prompt prepending (AgentExpander).
+        // The supportsCopilotCli/supportsClaudeCli flags are retained for backward
+        // compatibility but are always true regardless of source location.
+        const supportsCopilotCli = true;
+        const supportsClaudeCli = true;
 
         agents.push({
           name,

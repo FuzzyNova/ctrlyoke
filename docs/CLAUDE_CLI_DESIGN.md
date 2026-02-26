@@ -52,20 +52,20 @@ FlightPath uses Claude's **Stop hook** for reliable completion detection in inte
 
 ## Key Differences from Copilot CLI
 
-| Aspect               | Copilot CLI                         | Claude CLI                                   |
-| -------------------- | ----------------------------------- | -------------------------------------------- |
-| Command              | `copilot`                           | `claude`                                     |
-| Tool permission flag | `--allow-all-tools`                 | `--dangerously-skip-permissions`             |
-| Shell tool name      | `shell`                             | `Bash`                                       |
-| Write tool name      | `write`                             | `Write` (create) + `Edit` (modify)           |
-| Model flag           | `--model claude-sonnet-4.5`         | `--model claude-sonnet-4-5-20250929`         |
-| Session resume       | `--resume <id>`                     | `-r <id>` or `-c` (most recent)              |
-| Output format        | Mixed text + stats                  | `--output-format json/text/stream-json`      |
-| Prompt input         | `-p "<prompt>"` or `--agent` + `-p` | `-p` (stdin) or `--print` (non-interactive)  |
-| File attachment      | `@path` (no auto-content)           | `@path` (auto-attaches content)              |
-| Thinking mode        | Not applicable                      | **NOT AVAILABLE** via CLI (model-controlled) |
-| Structured output    | Not available                       | `--json-schema` (validates response format)  |
-| Completion detection | Log file monitoring (notify hook)   | Stop hook → notification file                |
+| Aspect               | Copilot CLI                                                         | Claude CLI                                   |
+| -------------------- | ------------------------------------------------------------------- | -------------------------------------------- |
+| Command              | `copilot`                                                           | `claude`                                     |
+| Tool permission flag | `--allow-all-tools`                                                 | `--dangerously-skip-permissions`             |
+| Shell tool name      | `shell`                                                             | `Bash`                                       |
+| Write tool name      | `write`                                                             | `Write` (create) + `Edit` (modify)           |
+| Model flag           | `--model claude-sonnet-4.5`                                         | `--model claude-sonnet-4-5-20250929`         |
+| Session resume       | `--resume <id>`                                                     | `-r <id>` or `-c` (most recent)              |
+| Output format        | Mixed text + stats                                                  | `--output-format json/text/stream-json`      |
+| Prompt input         | `-p "<prompt>"` (agent content prepended via `<agentInstructions>`) | `-p` (stdin) or `--print` (non-interactive)  |
+| File attachment      | `@path` (no auto-content)                                           | `@path` (auto-attaches content)              |
+| Thinking mode        | Not applicable                                                      | **NOT AVAILABLE** via CLI (model-controlled) |
+| Structured output    | Not available                                                       | `--json-schema` (validates response format)  |
+| Completion detection | Log file monitoring (notify hook)                                   | Stop hook → notification file                |
 
 ## Current Implementation Status
 
@@ -698,15 +698,15 @@ const result = await this.withInteractiveTuiExecution(args, promptText, workflow
 
 ## Future Enhancements
 
-| Enhancement                  | Priority   | CLI Flag                 | Notes                                                 |
-| ---------------------------- | ---------- | ------------------------ | ----------------------------------------------------- |
-| Structured output validation | **HIGH**   | `--json-schema`          | Critical for reliable automation and response parsing |
-| System prompt customization  | **MEDIUM** | `--append-system-prompt` | Workflow-specific instructions                        |
-| Model fallback               | **MEDIUM** | `--fallback-model`       | Handle overload situations gracefully                 |
-| Session forking              | MEDIUM     | `--fork-session`         | Branch conversation trees                             |
-| Agent support                | MEDIUM     | `--agents`               | Custom agent definitions via JSON                     |
-| Tool specification           | LOW        | `--tools`                | Limit to specific built-in tools                      |
-| Debug mode                   | LOW        | `-d, --debug`            | Category filtering for troubleshooting                |
+| Enhancement                  | Priority   | CLI Flag                 | Notes                                                                                                                  |
+| ---------------------------- | ---------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Structured output validation | **HIGH**   | `--json-schema`          | Critical for reliable automation and response parsing                                                                  |
+| System prompt customization  | **MEDIUM** | `--append-system-prompt` | Workflow-specific instructions                                                                                         |
+| Model fallback               | **MEDIUM** | `--fallback-model`       | Handle overload situations gracefully                                                                                  |
+| Session forking              | MEDIUM     | `--fork-session`         | Branch conversation trees                                                                                              |
+| Agent support                | ~~MEDIUM~~ | ~~`--agents`~~           | **Implemented via prompt prepending** - agent content embedded in `<agentInstructions>` tags; works with all providers |
+| Tool specification           | LOW        | `--tools`                | Limit to specific built-in tools                                                                                       |
+| Debug mode                   | LOW        | `-d, --debug`            | Category filtering for troubleshooting                                                                                 |
 
 **Note:** `--permission-mode` and `--mcp-config` are now implemented (see Implemented Flags section above).
 

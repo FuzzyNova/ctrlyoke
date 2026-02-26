@@ -77,7 +77,6 @@ export class CopilotCliProvider implements ICliProvider {
    * - Logging configuration (--log-dir, --log-level)
    * - Workspace directories (--add-dir)
    * - Model selection (--model)
-   * - Agent handling (--agent)
    * - Session management (--resume)
    * - sessionEnd hook (interactive mode only)
    *
@@ -107,7 +106,6 @@ export class CopilotCliProvider implements ICliProvider {
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     // This ensures workflow-level defaults are respected
     const resolvedModel = workflowContext?.resolvedProperties?.model;
-    const resolvedAgent = workflowContext?.resolvedProperties?.agent;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
 
@@ -186,14 +184,9 @@ export class CopilotCliProvider implements ICliProvider {
       args.push("--model", model);
     }
 
-    // Agent handling - use resolved property if available
-    if (resolvedAgent) {
-      const agentName = resolvedAgent.endsWith(".agent")
-        ? resolvedAgent
-        : `${resolvedAgent}.agent`;
-      args.push("--agent", agentName);
-      Log.info(`🤖 Using agent: ${agentName}`);
-    }
+    // Agent handling is now done via prompt prepending in HarnessIntegration.buildPromptText()
+    // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
+    // No --agent CLI flag needed; this works with all providers (Copilot, Claude, Codex).
 
     // Session resumption - use resolved property if available
     const shouldStartNewSession = !(resolvedResumeSession ?? false);

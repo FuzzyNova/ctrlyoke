@@ -4,7 +4,6 @@ import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
-import { SaveWorkflowButton } from "../workflow/SaveWorkflowButton";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
 
 /**
@@ -127,7 +126,6 @@ export const Header: React.FC = () => {
       {/* Left Section: Workflow Controls + Save button */}
       <div className="header-left flex items-center gap-2">
         <WorkflowControls />
-        <SaveWorkflowButton />
       </div>
 
       {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}

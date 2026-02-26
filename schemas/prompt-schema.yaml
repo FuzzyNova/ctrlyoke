@@ -85,12 +85,11 @@ definitions:
       agent:
         type: string
         description: >-
-          Custom agent to use for this prompt (CLI mode only). Specify ONLY the agent name without
-          file extensions (e.g., 'flightpath-orchestrator' for file
-          'flightpath-orchestrator.agent.md'). The '.agent' suffix is automatically added. Agents
-          are discovered from .github/agents/ or ~/.copilot/agents/. Chat mode cannot
-          programmatically select agents - users must manually select from dropdown. See
-          docs/CHAT_MODE_LIMITATIONS.md for details.
+          Custom agent to use for this prompt. Specify ONLY the agent name without file extensions
+          (e.g., 'flightpath-orchestrator' for file 'flightpath-orchestrator.agent.md'). The agent's
+          instructions will be prepended to your prompt using <agentInstructions> tags. Agents are
+          discovered from .github/agents/, .claude/agents/, or user prompts directory. Works with
+          all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat).
         pattern: ^[a-zA-Z0-9-_]+$
       resumeSession:
         type: boolean

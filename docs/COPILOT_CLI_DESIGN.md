@@ -12,18 +12,18 @@ FlightPath uses the GitHub Copilot CLI (`copilot`) as the default integration mo
 
 ### ✅ Implemented Flags
 
-| CLI Flag                | FlightPath Setting/Schema                    | Implementation                                                   |
-| ----------------------- | -------------------------------------------- | ---------------------------------------------------------------- |
-| `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models            |
-| `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included                   |
-| `--allow-all-tools`     | `flightpath.cliToolPermissions`              | Full support - "dangerouslyAllowAll", "allowAll", "custom" modes |
-| `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions                    |
-| `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                  |
-| `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                     |
-| `--log-level <level>`   | _(hardcoded to `debug`)_                     | Always `debug` level (required for session ID extraction)        |
-| `--resume [sessionId]`  | `prompt.resumeSession`                       | Full support                                                     |
-| `-p, --prompt <text>`   | Prompt text                                  | Full support (always uses `--prompt` flag)                       |
-| `--agent <agent>`       | `prompt.agent`                               | Full support                                                     |
+| CLI Flag                | FlightPath Setting/Schema                    | Implementation                                                                          |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `--model <model>`       | `flightpath.copilotCliModel`, `prompt.model` | Full support - validates against CLI-supported models                                   |
+| `--add-dir <directory>` | `flightpath.copilotCliAllowedDirs`           | Full support - workspace folders auto-included                                          |
+| `--allow-all-tools`     | `flightpath.cliToolPermissions`              | Full support - "dangerouslyAllowAll", "allowAll", "custom" modes                        |
+| `--allow-tool`          | `flightpath.cliAllowedTools`                 | Full support - pattern-based tool permissions                                           |
+| `--deny-tool`           | `flightpath.cliDeniedTools`                  | Full support - deny patterns (takes precedence)                                         |
+| `--allow-all-paths`     | `flightpath.copilotCliAllowAllPaths`         | Full support                                                                            |
+| `--log-level <level>`   | _(hardcoded to `debug`)_                     | Always `debug` level (required for session ID extraction)                               |
+| `--resume [sessionId]`  | `prompt.resumeSession`                       | Full support                                                                            |
+| `-p, --prompt <text>`   | Prompt text                                  | Full support (always uses `--prompt` flag)                                              |
+| `--agent <agent>`       | `prompt.agent`                               | **No longer used** - agent content prepended into prompt via `<agentInstructions>` tags |
 
 ### ❌ Not Implemented Flags
 
@@ -132,15 +132,12 @@ write                 # Match file creation/modification tools
 
 ### Agent Selection
 
-```bash
---agent <agent>    # Use custom agent (only in prompt mode with -p)
-```
-
 **Current behavior:**
 
-- Full support via `prompt.agent` field
-- Automatically adds `.agent` suffix if missing
-- Enhanced error messages for agent discovery failures
+- Agent content is prepended directly into the prompt using `<agentInstructions>` XML tags
+- The `--agent` CLI flag is **no longer used**
+- Works with all providers (Copilot CLI, Claude CLI, Codex CLI, Copilot Chat)
+- Agents discovered from `.github/agents/`, `.claude/agents/`, or user prompts directory
 
 ### MCP Configuration
 
@@ -421,14 +418,8 @@ if (options.model) {
   args.push("--model", options.model);
 }
 
-// Agent (requires -p flag)
-if (options.agent) {
-  const agentName = options.agent.endsWith(".agent")
-    ? options.agent
-    : `${options.agent}.agent`;
-  args.push("--agent", agentName);
-  args.push("-p", JSON.stringify(promptText));
-}
+// Agent: content is prepended into the prompt via <agentInstructions> tags
+// The --agent CLI flag is no longer used; agent handling is done in buildPromptWithInstructions()
 
 // Session resume
 if (options.resumeSession) {

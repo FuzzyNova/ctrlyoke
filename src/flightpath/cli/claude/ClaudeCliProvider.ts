@@ -95,7 +95,6 @@ export class ClaudeCliProvider implements ICliProvider {
 
     // Use resolved properties if available (from PropertyResolver three-tier precedence)
     const resolvedModel = workflowContext?.resolvedProperties?.model;
-    const resolvedAgent = workflowContext?.resolvedProperties?.agent;
     const resolvedResumeSession =
       workflowContext?.resolvedProperties?.resumeSession;
 
@@ -145,20 +144,9 @@ export class ClaudeCliProvider implements ICliProvider {
     const model = this.validateAndGetModel(resolvedModel);
     args.push("--model", model);
 
-    // Agent handling - use resolved property if available
-    // NOTE: Claude CLI agent support is currently BROKEN (as of v2.1.7):
-    // - Agents in .claude/agents/ are NOT automatically loaded (GitHub issue #9930)
-    // - The --agent flag does not load agents from .claude/agents/
-    // - The --agents JSON flag is intended for "subagents" (different concept)
-    // - Workaround requires reading agent file and using --append-system-prompt
-    //
-    // Keeping minimal code for future when this is fixed
-    if (resolvedAgent) {
-      Log.warn(
-        `⚠️ Claude CLI agent support is currently non-functional (known bug #9930). Agent "${resolvedAgent}" will be ignored.`
-      );
-      Log.warn(`   See: https://github.com/anthropics/claude-code/issues/9930`);
-    }
+    // Agent handling is now done via prompt prepending in HarnessIntegration.buildPromptText()
+    // AgentExpander reads the agent file and injects <agentInstructions> into the prompt.
+    // This fixes the previously broken Claude CLI --agent flag (GitHub issue #9930).
 
     // Add workspace directories
     if (workspaceRoot) {

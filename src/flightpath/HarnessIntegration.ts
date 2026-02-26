@@ -6,6 +6,7 @@ import {
   UniversalCliOutput,
   CliEvent,
 } from "../types/CliOutputTypes";
+import { AgentExpander } from "../utils/AgentExpander";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
@@ -122,9 +123,16 @@ export abstract class HarnessIntegration {
 
   /**
    * Build prompt text from prompt item
-   * Common logic for extracting prompt text and expanding context references
+   * Common logic for extracting prompt text, expanding context references,
+   * and prepending agent instructions when a resolved agent is specified.
+   *
+   * @param prompt The prompt item to build text for
+   * @param resolvedAgent Optional resolved agent name to prepend instructions for
    */
-  protected async buildPromptText(prompt: PromptItem): Promise<string> {
+  protected async buildPromptText(
+    prompt: PromptItem,
+    resolvedAgent?: string
+  ): Promise<string> {
     // Check if auto-attachment is enabled
     const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
 
@@ -132,18 +140,71 @@ export abstract class HarnessIntegration {
     const promptText = prompt.prompt.trim();
 
     // Expand context references if enabled
+    let expandedText: string;
     if (autoAttach) {
       const workspaceRoot = this.getWorkspaceRoot();
       if (!workspaceRoot) {
         Log.warn("No workspace root, skipping context expansion");
-        return promptText;
+        expandedText = promptText;
+      } else {
+        const expander = new ContextExpander(workspaceRoot);
+        expandedText = await expander.expandContext(promptText);
       }
-
-      const expander = new ContextExpander(workspaceRoot);
-      return await expander.expandContext(promptText);
+    } else {
+      expandedText = promptText;
     }
 
-    return promptText;
+    // Agent expansion - prepend agent instructions if specified
+    if (resolvedAgent) {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const agentContent = await AgentExpander.expandAgent(
+        resolvedAgent,
+        workspaceRoot
+      );
+      if (agentContent) {
+        expandedText = this.insertAgentInstructions(expandedText, agentContent);
+        Log.info(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
+      } else {
+        Log.warn(
+          `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
+        );
+      }
+    }
+
+    return expandedText;
+  }
+
+  /**
+   * Insert agent instructions between attachment blocks and user prompt.
+   *
+   * Final structure:
+   *   [<attachment> blocks] → <agentInstructions> → [user prompt]
+   *
+   * Positioning rationale:
+   * - Attachments FIRST: provide context/files the agent may reference
+   * - Agent instructions SECOND: defines role and how to use the context
+   * - User prompt LAST: gets maximum LLM attention (positioned last)
+   *
+   * This matches GitHub Copilot's <modeInstructions> pattern.
+   */
+  private insertAgentInstructions(
+    expandedPrompt: string,
+    agentContent: string
+  ): string {
+    const ATTACHMENT_CLOSE_TAG = "</attachment>";
+    const lastAttachmentEnd = expandedPrompt.lastIndexOf(ATTACHMENT_CLOSE_TAG);
+
+    if (lastAttachmentEnd === -1) {
+      // No attachments - prepend agent before entire prompt
+      return `<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${expandedPrompt}`;
+    }
+
+    // Split at end of last attachment and insert agent between attachments and user prompt
+    const afterAttachmentTag = lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
+    const attachmentSection = expandedPrompt.substring(0, afterAttachmentTag);
+    const userPromptSection = expandedPrompt.substring(afterAttachmentTag);
+
+    return `${attachmentSection}\n\n<agentInstructions>\n${agentContent}\n</agentInstructions>\n\n${userPromptSection.trim()}`;
   }
 
   /**
@@ -159,10 +220,11 @@ export abstract class HarnessIntegration {
     promptIndex: number,
     allPrompts: PromptItem[],
     filePath?: string,
-    allowDynamicExtension?: boolean
+    allowDynamicExtension?: boolean,
+    resolvedAgent?: string
   ): Promise<string> {
-    // Build base prompt text (with attachments)
-    let promptText = await this.buildPromptText(prompt);
+    // Build base prompt text (with attachments and agent instructions)
+    let promptText = await this.buildPromptText(prompt, resolvedAgent);
 
     // Check if we should inject dynamic queue instructions
     const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
