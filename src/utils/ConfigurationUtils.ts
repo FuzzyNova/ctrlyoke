@@ -430,11 +430,19 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Get the custom agent filename (without .agent.md extension)
-   * Returns empty string if no custom agent is selected
+   * Get the default agent name for new workflows
+   * Returns empty string if no default agent is selected
    */
-  getCustomAgent(): string {
-    return getConfig().get<string>("customAgent", "");
+  getDefaultAgent(): string {
+    return getConfig().get<string>("defaultAgent", "");
+  },
+
+  /**
+   * Get the default skills for new workflows
+   * Returns empty array if no default skills are selected
+   */
+  getDefaultSkills(): string[] {
+    return getConfig().get<string[]>("defaultSkills", []) ?? [];
   },
 
   /**
@@ -502,10 +510,17 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Set the custom agent
+   * Set the default agent for new workflows
    */
-  async setCustomAgent(agent: string): Promise<void> {
-    await this.updateSetting("customAgent", agent);
+  async setDefaultAgent(agent: string): Promise<void> {
+    await this.updateSetting("defaultAgent", agent);
+  },
+
+  /**
+   * Set the default skills for new workflows
+   */
+  async setDefaultSkills(skills: string[]): Promise<void> {
+    await this.updateSetting("defaultSkills", skills);
   },
 
   /**

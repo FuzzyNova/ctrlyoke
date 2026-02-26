@@ -651,12 +651,22 @@
           "description": "[Chat Mode] Force chat to switch to default agent mode before sending prompts",
           "markdownDescription": "**Chat Mode Only.** When enabled, FlightPath automatically switches chat to the default **Agent** mode before sending prompts. This prevents issues with **Ask** and **Plan** modes (which don't edit files), but overrides custom agent selections. **Disabled by default** to preserve your custom agent choices."
         },
-        "flightpath.customAgent": {
+        "flightpath.defaultAgent": {
           "order": 103,
           "type": "string",
           "default": "",
-          "description": "[All Modes] Custom agent to use (discovered from .agent.md files)",
-          "markdownDescription": "Select a custom agent (`.agent.md` file) to use for prompts. Agents are discovered from:\n- User prompts: `%APPDATA%\\Code\\User\\prompts\\` (Windows) or `~/.config/Code/User/prompts/` (Linux/Mac)\n- Workspace GitHub: `.github/agents/`\n- Workspace Claude: `.claude/agents/`\n\nLeave empty for default behavior. See [Custom Agents documentation](https://code.visualstudio.com/docs/copilot/customization/custom-agents) for more info."
+          "description": "[All Modes] Default agent for new workflows (discovered from .agent.md files)",
+          "markdownDescription": "Default agent (`.agent.md` file) applied to new workflows. Agents are discovered from:\n- User prompts: `%APPDATA%\\Code\\User\\prompts\\` (Windows) or `~/.config/Code/User/prompts/` (Linux/Mac)\n- Workspace GitHub: `.github/agents/`\n- Workspace Claude: `.claude/agents/`\n\nLeave empty for default behavior. Set via the **Set as Default** button in the Settings panel. See [Custom Agents documentation](https://code.visualstudio.com/docs/copilot/customization/custom-agents) for more info."
+        },
+        "flightpath.defaultSkills": {
+          "order": 103.5,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "[All Modes] Default skills for new workflows",
+          "markdownDescription": "Default skills applied to new workflows. Skills are discovered from `.flightpath/skills/` and `.claude/skills/` directories. Set via the **Set as Default** button in the Settings panel."
         },
         "flightpath.chatInactivityTimeout": {
           "order": 104,

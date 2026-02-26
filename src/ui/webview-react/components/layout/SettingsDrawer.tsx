@@ -322,10 +322,11 @@ export const SettingsPanel: React.FC<{
           globalSettings.harnessDefaultModels[effectiveHarness]
         );
       }
-      // Array comparison for skills
+      // Array comparison for skills — compare against global default skills
       if (property === "skills") {
         return (
-          JSON.stringify(workflowValue) !== JSON.stringify([])
+          JSON.stringify(workflowValue) !==
+          JSON.stringify(globalSettings.skills ?? [])
         );
       }
       const globalValue =
@@ -397,14 +398,16 @@ export const SettingsPanel: React.FC<{
 
   const handleAgentChange = useCallback(
     (agent: string) => {
-      // Optimistic update
+      // Optimistic update — store raw value (including "" for explicit "None")
+      // so that getEffectiveAgent() can distinguish "no override" (undefined)
+      // from "explicitly set to None" (""), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty("agent", agent || undefined);
+      settingsStore.updateWorkflowProperty("agent", agent);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "agent",
-        value: agent || undefined,
+        value: agent,
       });
     },
     [vscode]
@@ -412,17 +415,16 @@ export const SettingsPanel: React.FC<{
 
   const handleSkillsChange = useCallback(
     (skills: string[]) => {
-      // Optimistic update
+      // Optimistic update — store raw array (including [] for explicit "None")
+      // so that getEffectiveSkills() can distinguish "no override" (undefined)
+      // from "explicitly cleared" ([]), which allows clearing a global default.
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty(
-        "skills",
-        skills.length > 0 ? skills : undefined
-      );
+      settingsStore.updateWorkflowProperty("skills", skills);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "skills",
-        value: skills.length > 0 ? skills : undefined,
+        value: skills,
       });
     },
     [vscode]

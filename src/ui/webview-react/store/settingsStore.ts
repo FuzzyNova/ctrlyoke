@@ -49,6 +49,7 @@ export interface GlobalSettings {
   model: string;
   harnessDefaultModels: Record<string, string>;
   agent: string;
+  skills: string[];
   executionMode: "interactive" | "headless";
   resumeSession: boolean;
   allowDynamicExtension: boolean;
@@ -175,6 +176,7 @@ const initialGlobalSettings: GlobalSettings = {
   model: "claude-sonnet-4.5",
   harnessDefaultModels: {},
   agent: "",
+  skills: [],
   executionMode: "interactive",
   resumeSession: false,
   allowDynamicExtension: false,
@@ -249,8 +251,8 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     setAvailableSkills: (skills) => set({ availableSkills: skills }),
 
     getEffectiveSkills: () => {
-      const { workflowProperties } = get();
-      return workflowProperties.skills ?? [];
+      const { workflowProperties, globalSettings } = get();
+      return workflowProperties.skills ?? globalSettings.skills ?? [];
     },
 
     // ============================================================================

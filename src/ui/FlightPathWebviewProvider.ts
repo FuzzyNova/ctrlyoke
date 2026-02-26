@@ -876,7 +876,8 @@ window.vscodeApi = acquireVsCodeApi();
     // Get global settings
     const harness = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForHarness(harness);
-    const agent = ConfigurationUtils.getCustomAgent();
+    const agent = ConfigurationUtils.getDefaultAgent();
+    const skills = ConfigurationUtils.getDefaultSkills();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
       ConfigurationUtils.shouldResumeExistingSession();
@@ -897,6 +898,7 @@ window.vscodeApi = acquireVsCodeApi();
       model,
       harnessDefaultModels,
       agent,
+      skills,
       executionMode,
       resumeSession: resumeExistingSession,
       allowDynamicExtension: dynamicQueueEnabled,
@@ -931,7 +933,8 @@ window.vscodeApi = acquireVsCodeApi();
 
     const harness = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForHarness(harness);
-    const agent = ConfigurationUtils.getCustomAgent();
+    const agent = ConfigurationUtils.getDefaultAgent();
+    const skills = ConfigurationUtils.getDefaultSkills();
     const executionMode = ConfigurationUtils.getCliExecutionMode();
     const resumeExistingSession =
       ConfigurationUtils.shouldResumeExistingSession();
@@ -954,6 +957,7 @@ window.vscodeApi = acquireVsCodeApi();
         model,
         harnessDefaultModels,
         agent,
+        skills,
         executionMode,
         resumeSession: resumeExistingSession,
         allowDynamicExtension: dynamicQueueEnabled,
@@ -1101,6 +1105,7 @@ window.vscodeApi = acquireVsCodeApi();
         harness: workingFile.harness,
         model: workingFile.model,
         agent: workingFile.agent,
+        skills: workingFile.skills,
         resumeSession: workingFile.resumeSession,
         sessionId: workingFile.sessionId,
         allowDynamicExtension: workingFile.allowDynamicExtension,
@@ -1792,7 +1797,7 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   private async handleAgentChange(agent: string): Promise<void> {
-    await ConfigurationUtils.setCustomAgent(agent);
+    await ConfigurationUtils.setDefaultAgent(agent);
   }
 
   private async handleExecutionModeChange(mode: string): Promise<void> {
@@ -1865,6 +1870,10 @@ window.vscodeApi = acquireVsCodeApi();
   ): Promise<void> {
     if (property === "model" && harness) {
       await ConfigurationUtils.setModelForHarness(harness as Harness, value);
+    } else if (property === "agent") {
+      await ConfigurationUtils.setDefaultAgent(value || "");
+    } else if (property === "skills") {
+      await ConfigurationUtils.setDefaultSkills(value || []);
     } else {
       await ConfigurationUtils.updateSetting(property, value);
     }

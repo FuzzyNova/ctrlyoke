@@ -154,7 +154,7 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.agent)
    * 2. Workflow-level default (workflow.agent)
-   * 3. VS Code setting (flightpath.customAgent)
+   * 3. VS Code setting (flightpath.defaultAgent)
    *
    * Note: Returns undefined if no agent is specified at any level.
    *
@@ -177,20 +177,19 @@ export class PropertyResolver {
     }
 
     // 3. VS Code setting fallback
-    const globalAgent = ConfigurationUtils.getCustomAgent();
+    const globalAgent = ConfigurationUtils.getDefaultAgent();
     return globalAgent || undefined; // Convert empty string to undefined
   }
 
   /**
-   * Resolve skills with two-tier precedence.
+   * Resolve skills with three-tier precedence.
    *
    * Precedence order:
    * 1. Prompt-level override (prompt.skills) - takes precedence, no merging
    * 2. Workflow-level default (workflow.skills)
-   * 3. No fallback - returns undefined if not specified at either level
+   * 3. VS Code setting (flightpath.defaultSkills)
    *
-   * Note: Skills are NOT inherited from VS Code settings.
-   * Prompt-level skills REPLACE workflow-level skills (prompt wins entirely).
+   * Note: Prompt-level skills REPLACE workflow-level skills (prompt wins entirely).
    *
    * @param prompt The prompt to resolve skills for
    * @param workflow The parent workflow file
@@ -210,8 +209,9 @@ export class PropertyResolver {
       return workflow.skills;
     }
 
-    // 3. No fallback
-    return undefined;
+    // 3. VS Code setting fallback
+    const globalSkills = ConfigurationUtils.getDefaultSkills();
+    return globalSkills.length > 0 ? globalSkills : undefined;
   }
 
   /**
