@@ -1608,8 +1608,15 @@ export class PromptQueue {
       throw new Error(`Invalid prompt index: ${index}`);
     }
 
-    // Don't allow deleting the currently executing prompt
-    if (index === this.state.currentIndex) {
+    // Don't allow deleting the prompt that is actively being processed.
+    // When the workflow is idle, stopped, or completed nothing is executing, so
+    // any non-completed prompt may be deleted freely.
+    const isActivelyExecuting =
+      this.state.status === EXECUTION_STATES.RUNNING ||
+      this.state.status === EXECUTION_STATES.PAUSED ||
+      this.state.status === EXECUTION_STATES.CANCELLING;
+
+    if (isActivelyExecuting && index === this.state.currentIndex) {
       throw new Error("Cannot delete the currently executing prompt");
     }
 

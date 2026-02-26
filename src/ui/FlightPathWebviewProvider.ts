@@ -380,6 +380,10 @@ window.vscodeApi = acquireVsCodeApi();
           this.handleDeletePrompt(message);
           break;
 
+        case MESSAGE_TYPES.RESET_WORKFLOW_STATE:
+          await this.handleResetWorkflowState();
+          break;
+
         // ============================================================================
         // Dashboard Messages - CodeMirror Editor
         // ============================================================================
@@ -699,6 +703,18 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
+      prompts,
+    });
+  }
+
+  /**
+   * Notify webview that workflow execution state was reset.
+   * Only resets prompt statuses and execution state — does not touch CLI outputs
+   * or run history so the output panel and run dropdown are preserved.
+   */
+  public notifyWorkflowStateReset(prompts: any[]): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.RESET_WORKFLOW_STATE,
       prompts,
     });
   }
@@ -1236,6 +1252,22 @@ window.vscodeApi = acquireVsCodeApi();
       type: MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT,
       index: message.index,
     });
+  }
+
+  private async handleResetWorkflowState(): Promise<void> {
+    if (!this.flightPathManager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    try {
+      await this.flightPathManager.resetWorkflowState();
+    } catch (error) {
+      Log.error("Failed to reset workflow state:", error);
+      vscode.window.showErrorMessage(
+        `Failed to reset workflow state: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
   private async handleDeletePrompt(message: any): Promise<void> {

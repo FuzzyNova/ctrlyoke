@@ -219,6 +219,21 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // RESET_WORKFLOW_STATE - Extension confirms state reset (response to button click)
+  // Resets prompt statuses and execution state without touching output history.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.RESET_WORKFLOW_STATE] = (message) => {
+    const workflowStore = useWorkflowStore.getState();
+    workflowStore.resetExecutionState(message.prompts || []);
+
+    // Cancel any active edit — the selected prompt's status has changed
+    const editorStore = useEditorStore.getState();
+    if (editorStore.selectedPromptIndex !== null) {
+      editorStore.cancelEdit();
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // PROMPT_DELETED - Prompt was deleted from queue
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPT_DELETED] = (message) => {

@@ -9,10 +9,12 @@ import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
 import {
+  MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
   type StepStatus,
 } from "../../types/messages";
+import { sendMessage } from "../../hooks/useMessageHandler";
 
 /**
  * PromptsPanel - Left panel showing the list of prompts in the workflow
@@ -89,6 +91,20 @@ export const PromptsPanel: React.FC<{
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
 
+  // Show eraser button when the workflow has run but is not actively executing.
+  // Allows resetting completion state so all prompts become editable before re-running.
+  const canClearState =
+    prompts.length > 0 &&
+    !isRunning &&
+    executionState !== EXECUTION_STATES.CANCELLING &&
+    executionState !== EXECUTION_STATES.IDLE &&
+    executionState !== null;
+
+  const handleClearState = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't collapse the panel
+    sendMessage(MESSAGE_TYPES.RESET_WORKFLOW_STATE);
+  }, []);
+
   // Get the status for a prompt based on workflow state
   const getPromptStatus = (
     promptData: (typeof prompts)[0],
@@ -162,8 +178,18 @@ export const PromptsPanel: React.FC<{
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
           Prompts
         </span>
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1">
           <PromptCounter narrow={isHeaderNarrow} />
+          {canClearState && (
+            <button
+              className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              onClick={handleClearState}
+              title="Clear workflow state — reset all prompts to pending so you can edit them before re-running"
+              aria-label="Clear workflow state"
+            >
+              <i className="codicon codicon-discard text-[12px]" />
+            </button>
+          )}
         </span>
       </div>
 

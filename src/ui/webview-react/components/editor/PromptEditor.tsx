@@ -69,6 +69,9 @@ export const PromptEditor: React.FC = () => {
 
   const isEditMode = selectedPromptIndex !== null;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
+  const isPromptCompleted =
+    selectedPromptIndex !== null &&
+    prompts[selectedPromptIndex]?.status === STEP_STATUS.COMPLETED;
 
   // Dictionary URIs from document attributes
   const affUri = document.body.getAttribute("data-aff-uri") || "./en_US.aff";
@@ -400,6 +403,7 @@ export const PromptEditor: React.FC = () => {
       <EditorFooter
         isEditMode={isEditMode}
         isRunning={isRunning}
+        isPromptCompleted={isPromptCompleted}
         hasContent={promptText.trim().length > 0}
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}

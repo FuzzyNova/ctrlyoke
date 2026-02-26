@@ -1873,6 +1873,26 @@ export class FlightPathManager {
   }
 
   /**
+   * Reset workflow execution state without running.
+   * Clears completion tracking, resets currentIndex to 0, and sets all prompts
+   * back to PENDING — identical to "restart from beginning" but without starting
+   * execution. The prompts and workflow settings are preserved unchanged.
+   */
+  async resetWorkflowState(): Promise<void> {
+    Log.info("FlightPathManager.resetWorkflowState: Resetting workflow state");
+    await this.promptQueue.restart();
+
+    // Notify dashboard with a targeted message that only resets prompt statuses
+    // and execution state — CLI outputs and run history are intentionally preserved.
+    if (this.dashboardProvider) {
+      const currentState = this.promptQueue.getState();
+      this.dashboardProvider.notifyWorkflowStateReset(currentState.prompts);
+    }
+
+    Log.info("FlightPathManager.resetWorkflowState: Complete");
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {

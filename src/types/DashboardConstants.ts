@@ -55,6 +55,7 @@ export const MESSAGE_TYPES = {
   CANCEL_EDIT: "cancelEdit", // Exit edit mode
   SELECT_PROMPT_FOR_EDIT: "selectPromptForEdit", // Load prompt into editor
   DELETE_PROMPT: "deletePrompt", // Delete prompt from queue
+  RESET_WORKFLOW_STATE: "resetWorkflowState", // Bidirectional: Webview->Extension request reset; Extension->Webview confirms with updated prompts (preserves output history)
 
   // Workflow Status - Webview <-> Extension
   UPDATE_WORKFLOW_NAME: "updateWorkflowName", // Webview -> Extension: Save new workflow name

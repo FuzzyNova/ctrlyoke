@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -156,7 +156,16 @@ const HarnessDropdown: React.FC<{
   >;
 }> = ({ id, value, onChange, harnessStatus }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
+  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
+  // Separate ref for click-outside detection (callback refs don't expose .current).
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mergedRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerRef.current = node;
+      narrowRef(node);
+    },
+    [narrowRef]
+  );
 
   const handleSelect = (harnessId: string) => {
     onChange(harnessId);
@@ -167,8 +176,8 @@ const HarnessDropdown: React.FC<{
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
       }
@@ -179,11 +188,10 @@ const HarnessDropdown: React.FC<{
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]); // dropdownRef is a stable ref — intentionally omitted
+  }, [isOpen]);
 
   return (
-    <div className="relative inline-block w-full" ref={dropdownRef}>
+    <div className="relative inline-block w-full" ref={mergedRef}>
       <button
         id={id}
         onClick={() => setIsOpen(!isOpen)}

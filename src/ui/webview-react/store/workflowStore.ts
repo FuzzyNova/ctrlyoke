@@ -97,6 +97,11 @@ interface WorkflowActions {
   ) => void;
   clearHistoryOutputs: () => void;
 
+  // Reset execution state only — preserves all CLI outputs and run history.
+  // Resets executionState→IDLE, currentStep→0, and all prompt statuses→PENDING.
+  // Used by "Clear workflow state" so users can edit prompts without losing output.
+  resetExecutionState: (prompts: PromptItem[]) => void;
+
   // Partial runtime state clear (for append-continuation runs)
   clearRuntimeStateFromStep: (startStep: number) => void;
 
@@ -486,6 +491,16 @@ export const useWorkflowStore = create<
     }),
 
   clearHistoryOutputs: () => set(() => ({ historyOutputs: null })),
+
+  resetExecutionState: (prompts) =>
+    set(() => ({
+      prompts: prompts.map((p) => ({ ...p, status: STEP_STATUS.PENDING })),
+      totalSteps: prompts.length,
+      executionState: EXECUTION_STATES.IDLE,
+      currentStep: 0,
+      // cliOutputs, retryStates, statusMessages, streamingChunks, historyOutputs
+      // are intentionally preserved so the run history and output panel are unaffected.
+    })),
 
   clearRuntimeStateFromStep: (startStep) =>
     set((state) => {

@@ -6,6 +6,7 @@ import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 interface EditorFooterProps {
   isEditMode: boolean;
   isRunning: boolean;
+  isPromptCompleted: boolean;
   hasContent: boolean;
   hasPendingPrompts: boolean;
   runButtonText: string;
@@ -34,6 +35,7 @@ interface EditorFooterProps {
 export const EditorFooter: React.FC<EditorFooterProps> = ({
   isEditMode,
   isRunning,
+  isPromptCompleted,
   hasContent,
   hasPendingPrompts: _hasPendingPrompts, // Reserved for future use
   runButtonText,
@@ -105,8 +107,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={!hasContent || isRunning}
-              title="Update prompt in queue"
+              disabled={!hasContent || isRunning || isPromptCompleted}
+              title={
+                isPromptCompleted
+                  ? "Cannot edit a completed prompt — use Clear workflow state to reset"
+                  : "Update prompt in queue"
+              }
             >
               <i className="codicon codicon-check" />
               {!isNarrow && <span className="btn-text">Update</span>}
@@ -115,8 +121,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isRunning}
-              title="Delete prompt from queue"
+              disabled={isRunning || isPromptCompleted}
+              title={
+                isPromptCompleted
+                  ? "Cannot delete a completed prompt — use Clear workflow state to reset"
+                  : "Delete prompt from queue"
+              }
             >
               <i className="codicon codicon-trash" />
               {!isNarrow && <span className="btn-text">Delete</span>}
