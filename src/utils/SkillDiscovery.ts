@@ -5,6 +5,7 @@ import * as os from "os";
 import * as yaml from "js-yaml";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 
 /**
  * Represents a discovered skill
@@ -35,11 +36,12 @@ export interface SkillInfo {
  *   3. ~/.agents/skills/<skill-name>/SKILL.md       (Codex $HOME user skills)
  *
  * Workspace-level (relative to current workspace folder):
- *   4. .claude/skills/<skill-name>/SKILL.md         (Claude Code workspace skills)
- *   5. .github/skills/<skill-name>/SKILL.md         (Copilot workspace skills)
- *   6. .agents/skills/<skill-name>/SKILL.md         (Codex $CWD workspace skills)
- *   7. ../.agents/skills/<skill-name>/SKILL.md      (Codex $CWD/../ parent folder skills)
- *   8. <git-root>/.agents/skills/<skill-name>/SKILL.md  (Codex $REPO_ROOT skills, if different from workspace)
+ *   4. .flightpath/skills/<skill-name>/SKILL.md     (FlightPath-exclusive skills — not scraped by any harness)
+ *   5. .claude/skills/<skill-name>/SKILL.md         (Claude Code workspace skills)
+ *   6. .github/skills/<skill-name>/SKILL.md         (Copilot workspace skills)
+ *   7. .agents/skills/<skill-name>/SKILL.md         (Codex $CWD workspace skills)
+ *   8. ../.agents/skills/<skill-name>/SKILL.md      (Codex $CWD/../ parent folder skills)
+ *   9. <git-root>/.agents/skills/<skill-name>/SKILL.md  (Codex $REPO_ROOT skills, if different from workspace)
  *
  * Path deduplication prevents scanning the same directory twice (e.g., when
  * the workspace folder IS the git repository root).
@@ -93,7 +95,22 @@ export class SkillDiscovery {
       if (workspaceFolder) {
         const workspaceRoot = workspaceFolder.uri.fsPath;
 
-        // 4. <workspace>/.claude/skills/
+        // 4. <workspace>/.flightpath/skills/ (FlightPath-exclusive skills)
+        // Skills placed here are only discovered by FlightPath — no harness scrapes this
+        // directory, preventing duplicate context injection when using harness-native dirs.
+        skills.push(
+          ...(await this.discoverInPath(
+            path.join(
+              workspaceRoot,
+              PATH_CONSTANTS.FLIGHTPATH_DIR,
+              PATH_CONSTANTS.SKILLS_DIR
+            ),
+            "workspace",
+            scannedPaths
+          ))
+        );
+
+        // 5. <workspace>/.claude/skills/
         skills.push(
           ...(await this.discoverInPath(
             path.join(workspaceRoot, ".claude", "skills"),
@@ -102,7 +119,7 @@ export class SkillDiscovery {
           ))
         );
 
-        // 5. <workspace>/.github/skills/
+        // 6. <workspace>/.github/skills/
         skills.push(
           ...(await this.discoverInPath(
             path.join(workspaceRoot, ".github", "skills"),
@@ -111,7 +128,7 @@ export class SkillDiscovery {
           ))
         );
 
-        // 6. <workspace>/.agents/skills/  (Codex $CWD)
+        // 7. <workspace>/.agents/skills/  (Codex $CWD)
         skills.push(
           ...(await this.discoverInPath(
             path.join(workspaceRoot, ".agents", "skills"),
@@ -120,7 +137,7 @@ export class SkillDiscovery {
           ))
         );
 
-        // 7. <workspace-parent>/.agents/skills/  (Codex $CWD/../)
+        // 8. <workspace-parent>/.agents/skills/  (Codex $CWD/../)
         const parentDir = path.dirname(workspaceRoot);
         skills.push(
           ...(await this.discoverInPath(
@@ -130,7 +147,7 @@ export class SkillDiscovery {
           ))
         );
 
-        // 8. <git-root>/.agents/skills/  (Codex $REPO_ROOT, only if different from workspace)
+        // 9. <git-root>/.agents/skills/  (Codex $REPO_ROOT, only if different from workspace)
         const gitRoot = await this.findGitRoot(workspaceRoot);
         if (gitRoot) {
           skills.push(

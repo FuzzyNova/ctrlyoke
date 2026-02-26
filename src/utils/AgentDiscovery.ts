@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import { Log } from "./Log";
 import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
+import { PATH_CONSTANTS } from "./ConfigurationUtils";
 
 /**
  * Represents a discovered agent file
@@ -16,7 +17,7 @@ export interface AgentInfo {
   /** Full path to the agent file */
   path: string;
   /** Source location of the agent */
-  source: "user" | "workspace-github" | "workspace-claude";
+  source: "user" | "workspace-github" | "workspace-claude" | "workspace-flightpath";
   /** Whether this agent is compatible with Copilot CLI (always true; agents use prompt prepending) */
   supportsCopilotCli: boolean;
   /** Whether this agent is compatible with Claude CLI (always true; agents use prompt prepending) */
@@ -32,6 +33,7 @@ export interface AgentInfo {
  * 1. User prompts directory: %APPDATA%\Code\User\prompts\ (Windows) or ~/.config/Code/User/prompts/ (Linux/Mac)
  * 2. Workspace .github/agents/ (Copilot-style agents)
  * 3. Workspace .claude/agents/ (Claude-style agents)
+ * 4. Workspace .flightpath/agents/ (FlightPath-exclusive agents — not scraped by any harness)
  *
  * AGENT COMPATIBILITY: ✅ ALL PROVIDERS SUPPORTED
  * - Agents now work with ALL harnesses (Copilot CLI, Claude CLI, Codex CLI, Chat)
@@ -78,6 +80,17 @@ export class AgentDiscovery {
         agents.push(...claudeAgents);
       }
 
+      // 4. Discover from workspace .flightpath/agents/ (FlightPath-exclusive agents)
+      // Agents placed here are only discovered by FlightPath — no harness scrapes this
+      // directory, preventing duplicate context injection when using harness-native dirs.
+      if (workspaceFolder) {
+        const flightpathAgents = await this.discoverWorkspaceAgents(
+          workspaceFolder,
+          `${PATH_CONSTANTS.FLIGHTPATH_DIR}/${PATH_CONSTANTS.AGENTS_DIR}`
+        );
+        agents.push(...flightpathAgents);
+      }
+
       Log.info(`Discovered ${agents.length} custom agents`);
     } catch (error) {
       Log.error("Error discovering agents:", error);
@@ -112,7 +125,10 @@ export class AgentDiscovery {
     const source =
       relativePath === ".github/agents"
         ? "workspace-github"
-        : "workspace-claude";
+        : relativePath ===
+            `${PATH_CONSTANTS.FLIGHTPATH_DIR}/${PATH_CONSTANTS.AGENTS_DIR}`
+          ? "workspace-flightpath"
+          : "workspace-claude";
 
     return this.discoverAgentsInDirectory(agentsDir, source);
   }

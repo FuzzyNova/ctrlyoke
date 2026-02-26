@@ -36,6 +36,12 @@ export const PATH_CONSTANTS = {
 
   /** History directory name (subdirectory of FLIGHTPATH_DIR) */
   HISTORY_DIR: ".history",
+
+  /** Agents directory name (subdirectory of FLIGHTPATH_DIR) */
+  AGENTS_DIR: "agents",
+
+  /** Skills directory name (subdirectory of FLIGHTPATH_DIR) */
+  SKILLS_DIR: "skills",
 } as const;
 
 /**
