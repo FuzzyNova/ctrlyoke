@@ -35,6 +35,8 @@ export interface RecentWorkflow {
  * UI state - Layout, visibility, and modal states
  */
 interface UiState {
+  // Dropdown hide feature — persisted to localStorage
+  hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
   promptsCollapsed: boolean;
   outputCollapsed: boolean;
@@ -147,11 +149,17 @@ interface UiActions {
   setRunStates: (states: (string | undefined)[]) => void;
   clearHistoryView: () => void;
 
+  // Dropdown hide feature
+  hideDropdownOption: (namespace: string, value: string) => void;
+  unhideDropdownOption: (namespace: string, value: string) => void;
+  clearHiddenDropdownOptions: (namespace: string) => void;
+
   // Reset UI to defaults
   resetUi: () => void;
 }
 
 const initialState: UiState = {
+  hiddenDropdownOptions: {},
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   promptsCollapsed: false,
@@ -184,6 +192,7 @@ const persistedFields = [
   "editorCollapsed",
   "settingsCollapsed",
   "defaultTemplateId",
+  "hiddenDropdownOptions",
 ] as const;
 
 export const useUiStore = create<UiState & UiActions>()(
@@ -326,6 +335,41 @@ export const useUiStore = create<UiState & UiActions>()(
 
       clearHistoryView: () =>
         set({ isViewingHistory: false, viewingRunIndex: 0 }),
+
+      // ============================================================================
+      // DROPDOWN HIDE FEATURE
+      // ============================================================================
+
+      hideDropdownOption: (namespace, value) =>
+        set((state) => ({
+          hiddenDropdownOptions: {
+            ...state.hiddenDropdownOptions,
+            [namespace]: [
+              ...(state.hiddenDropdownOptions[namespace] ?? []).filter(
+                (v) => v !== value
+              ),
+              value,
+            ],
+          },
+        })),
+
+      unhideDropdownOption: (namespace, value) =>
+        set((state) => ({
+          hiddenDropdownOptions: {
+            ...state.hiddenDropdownOptions,
+            [namespace]: (state.hiddenDropdownOptions[namespace] ?? []).filter(
+              (v) => v !== value
+            ),
+          },
+        })),
+
+      clearHiddenDropdownOptions: (namespace) =>
+        set((state) => ({
+          hiddenDropdownOptions: {
+            ...state.hiddenDropdownOptions,
+            [namespace]: [],
+          },
+        })),
 
       // ============================================================================
       // RESET

@@ -53,14 +53,15 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
   </coreComponents>
 
 <providerStructure>
-Each provider is self-contained in its own directory with 4 required files:
+Each provider is self-contained in its own directory with 5 required files:
 
 ```
 src/flightpath/cli/copilot/
 ├── CopilotCliProvider.ts          # Main provider descriptor (implements ICliProvider)
 ├── CopilotResponseParser.ts       # Implements IResponseParser (parse output, extract tokens)
 ├── CopilotNotificationMonitor.ts  # Implements INotificationMonitor (completion detection)
-└── CopilotToolPermissionMapper.ts # Implements IToolPermissionMapper (permission args)
+├── CopilotToolPermissionMapper.ts # Implements IToolPermissionMapper (permission args)
+└── CopilotLogParser.ts            # Implements ILogParser (log file monitoring/session ID)
 ```
 
 **CopilotCliProvider.ts** (main provider class):
@@ -91,17 +92,23 @@ src/flightpath/cli/copilot/
 - Implements dangerouslyAllowAll, allowAll, and custom modes
 - Handles allow/deny pattern translation
 - Determines if full permissions granted (no prompts)
+
+**CopilotLogParser.ts** (extends BaseLogParser):
+
+- Monitors provider-specific log files for session IDs and events
+- Implements ILogParser interface
+- Provider-specific log format parsing
   </providerStructure>
 
 <executionModes>
-CliIntegration supports two execution modes (delegated to CliProcessManager):
+CliIntegration supports two execution modes:
 
 **Interactive TUI Mode**:
 
 - Creates fresh terminal for each prompt
 - Injects command via `terminal.sendText()`
 - User sees real-time TUI output with spinner, status updates
-- Completion detected via TuiStreamProcessor (escape indicator disappears)
+- Completion detected via hook/notification file (CliNotificationMonitor)
 - Session continuity via `--resume` flags (NOT terminal reuse)
 - User can abort with Ctrl+C
 - Best for development and debugging
@@ -170,23 +177,20 @@ FlightPath uses **adaptive prompt passing** based on prompt complexity:
 <cancellation>
 **User Cancellation** (CliIntegration.cancel() method):
 
-Delegates to CliProcessManager for platform-agnostic cancellation:
-
 **Interactive Mode**:
 
-- Sends Ctrl+C (`\x03`) to terminal via processManager.sendCtrlC()
+- Sends Ctrl+C (`\x03`) to terminal
 - Graceful termination (CLI handles cleanup)
 - User sees cancellation in terminal output
 
 **Headless Mode**:
 
-- Kills process via processManager.killProcess()
-- SIGTERM on Unix, TerminateProcess on Windows
+- Kills background process (SIGTERM on Unix, TerminateProcess on Windows)
 - Immediate termination
 
 **Cleanup**:
 
-- Aborts completion detection (TuiStreamProcessor or file monitoring)
+- Aborts completion detection (CliNotificationMonitor polling / file monitoring)
 - Clears currentProcess/currentExecution references
 - Updates status to idle
 - Called by FlightPathManager.stop() when user presses stop button
@@ -222,7 +226,7 @@ Key settings (see package.json for full list):
 
 **Execution Mode**:
 
-- `flightpath.provider`: "copilot-cli" | "claude-cli" | "codex-cli" | "copilot-chat"
+- `flightpath.harness`: "copilot-cli" | "claude-cli" | "codex-cli" | "copilot-chat"
 - `flightpath.cliExecutionMode`: "interactive" | "headless" (default: interactive)
 
 **Models** (per provider):
@@ -254,44 +258,34 @@ Key settings (see package.json for full list):
   </configuration>
 
 <factoryPattern>
-**FlightPathManager** uses factory pattern to instantiate the correct integration:
+**FlightPathManager** instantiates ALL integrations eagerly at startup, then routes execution to the active harness:
 
 ```typescript
-// FlightPathManager.ts
-private async initializeCopilotIntegration(): Promise<void> {
-    const provider = vscode.workspace.getConfiguration("flightpath").get<string>("provider");
+// FlightPathManager.ts — all integrations created upfront
+this.copilotCliIntegration = new CliIntegration(
+  new CopilotCliProvider(),
+  this.context
+);
+this.claudeCliIntegration = new CliIntegration(
+  new ClaudeCliProvider(),
+  this.context
+);
+this.codexCliIntegration = new CliIntegration(
+  new CodexCliProvider(),
+  this.context
+);
+this.chatIntegration = new CopilotChatIntegration(this.context);
 
-    switch (provider) {
-        case "copilot-cli":
-            this.copilotIntegration = new CliIntegration(
-                new CopilotCliProvider(),
-                this.context
-            );
-            break;
-        case "claude-cli":
-            this.copilotIntegration = new CliIntegration(
-                new ClaudeCliProvider(),
-                this.context
-            );
-            break;
-        case "codex-cli":
-            this.copilotIntegration = new CliIntegration(
-                new CodexCliProvider(),
-                this.context
-            );
-            break;
-        case "copilot-chat":
-            this.copilotIntegration = new CopilotChatIntegration(this.context);
-            break;
-    }
-}
+// Harness availability checked for all integrations; active one selected via
+// flightpath.harness setting using HARNESS_IDS constants.
 ```
 
 **Key benefit**: Adding new provider only requires:
 
 1. Creating provider class (e.g., GeminiCliProvider)
-2. Adding case to switch statement
-3. NO other code changes needed
+2. Instantiating `new CliIntegration(new GeminiCliProvider(), ...)` alongside the others
+3. Adding HARNESS_IDS entry and package.json enum value
+4. NO modifications to CliIntegration or shared utilities
 
 See: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide
 </factoryPattern>
@@ -300,19 +294,20 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide
 **To add a new CLI provider** (e.g., Gemini, OpenCode):
 
 1. Create provider directory: `src/flightpath/cli/gemini/`
-2. Implement 4 required classes:
+2. Implement 5 required classes:
    - GeminiCliProvider.ts (implements ICliProvider)
    - GeminiResponseParser.ts (implements IResponseParser)
    - GeminiNotificationMonitor.ts (implements INotificationMonitor)
    - GeminiToolPermissionMapper.ts (implements IToolPermissionMapper)
-3. Add provider to FlightPathManager factory
-4. Add settings to package.json (model, provider enum value)
+   - GeminiLogParser.ts (extends BaseLogParser, implements ILogParser)
+3. Instantiate alongside other integrations in FlightPathManager
+4. Add HARNESS_IDS entry and settings to package.json (model, harness enum value)
 5. Test with manual-test workflows
 
 **No modifications needed to**:
 
 - CliIntegration.ts (generic class)
-- Shared utilities (CliProcessManager, TuiStreamProcessor, etc.)
+- Shared utilities (CliNotificationMonitor, CliResponseParser, CliToolPermissionMapper, etc.)
 - Other provider directories (copilot/, claude/, codex/)
 - Core interfaces (ICliProvider, IResponseParser, etc.)
 
@@ -420,19 +415,35 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 <sharedUtilities>
 **Truly shared utilities** (provider-agnostic, no CLI-specific logic):
 
-**CliProcessManager** (src/flightpath/cli/shared/CliProcessManager.ts):
+**BaseLogParser** (src/flightpath/cli/shared/BaseLogParser.ts):
 
-- Process spawning (child_process.spawn)
-- Terminal creation and management
-- Cancellation (killProcess, sendCtrlC)
-- Platform-agnostic (Windows/Unix)
+- Abstract base class implementing ILogParser
+- Common log file monitoring (polling, line tracking)
+- Provider subclasses extend this for format-specific parsing
 
-**TuiStreamProcessor** (src/flightpath/cli/shared/TuiStreamProcessor.ts):
+**CliNotificationMonitor** (src/flightpath/cli/shared/CliNotificationMonitor.ts):
 
-- TUI output streaming via execution.read()
-- Chrome filtering (removes UI elements)
-- Completion detection (escape indicator disappearing)
-- Line-by-line processing with screen end detection
+- Shared notification/hook file monitoring
+- Supports both specific-file and wildcard polling modes
+- Extracts completion events and session IDs from hook output
+
+**CliOutputFormatter** (src/flightpath/cli/shared/CliOutputFormatter.ts):
+
+- Formats CLI responses for the Output panel and dashboard
+- Structures `DashboardOutput` (text, tokens, statistics)
+- Provider-agnostic display formatting
+
+**CliResponseParser** (src/flightpath/cli/shared/CliResponseParser.ts):
+
+- Shared parsing utilities (`CliJsonResponse`, `CliUsage` interfaces)
+- Common JSON/JSONL response extraction helpers
+- Base parsing logic used by provider-specific parsers
+
+**CliToolPermissionMapper** (src/flightpath/cli/shared/CliToolPermissionMapper.ts):
+
+- Core tool permission logic shared across providers
+- Handles dangerouslyAllowAll, allowAll, and custom modes
+- `ToolPermissionConfig` interface defines the mapping contract
 
 **CliMcpConfigGenerator** (src/flightpath/cli/shared/CliMcpConfigGenerator.ts):
 
@@ -440,18 +451,14 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 - Template-based config creation
 - Provider-agnostic (caller specifies provider-specific fields)
 
-**TempFileManager** (src/flightpath/cli/shared/TempFileManager.ts):
-
-- Temp file creation for complex prompts
-- Cleanup utilities
-- Path resolution
-
 **Interfaces** (src/flightpath/cli/shared/interfaces/):
 
 - ICliProvider.ts: Main provider contract
 - IResponseParser.ts: Output parsing interface
 - INotificationMonitor.ts: Completion detection interface
 - IToolPermissionMapper.ts: Permission mapping interface
+- ILogParser.ts: Log file monitoring interface
+- index.ts: Barrel export for all interfaces
 
 **Note**: These utilities contain NO provider-specific logic. All CLI-specific behavior lives in provider directories.
 </sharedUtilities>
@@ -463,12 +470,13 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 4. **Session continuity via flags**: --resume flag for session continuity, NOT terminal reuse
 5. **Adaptive prompt passing**: Simple prompts (<300 chars) passed directly, complex prompts via file
 6. **TUI completion uses execution.read()**: Stable API, not proposed onDidWriteTerminalData
-7. **Tool permissions are shared**: Single source of truth in settings, mapped per-CLI via provider's IToolPermissionMapper
+7. **Tool permissions are shared**: Single source of truth in settings, mapped per-CLI via provider's IToolPermissionMapper and CliToolPermissionMapper base
 8. **MCP for dynamic queue**: Optional feature, only enabled when flightpath.enableDynamicQueue is true
-9. **Cancellation delegated**: Process/terminal cancellation handled by CliProcessManager (shared)
+9. **Log parsing is provider-specific**: Each provider has a `*LogParser.ts` extending `BaseLogParser` for format-specific log monitoring
 10. **Streaming is provider-specific**: Provider.config.shouldStreamHeadlessOutput controls buffering vs streaming
 11. **Chrome filtering varies**: Each provider defines unique TUI patterns in config.chromePatterns
 12. **Provider isolation**: Each provider directory is self-contained - no cross-provider dependencies
-13. **Interface contracts**: TypeScript interfaces (ICliProvider, IResponseParser, etc.) prevent implementation mistakes
+13. **Interface contracts**: TypeScript interfaces (ICliProvider, IResponseParser, ILogParser, etc.) prevent implementation mistakes
 14. **Testable components**: Provider components testable in isolation without mocking
+15. **All integrations instantiated eagerly**: FlightPathManager creates all 4 integrations at startup (not lazy/on-demand)
 </importantNotes>

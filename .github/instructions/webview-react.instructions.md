@@ -35,34 +35,81 @@ src/ui/webview-react/
 ├── main.tsx                 # React entry point
 ├── index.html               # Vite HTML template
 ├── constants.ts             # Panel sizing constants
+├── vite.config.ts           # Vite build configuration
+├── tailwind.config.js       # Tailwind + VS Code token mapping
+├── postcss.config.js        # PostCSS configuration
+├── tsconfig.json            # TypeScript config for webview
+├── tsconfig.node.json       # TypeScript config for Vite/Node tooling
+├── MIGRATION_MAP.md         # Vanilla JS → React migration reference
+├── MIGRATION_STATUS.md      # Migration completion status
+├── static/                  # Static assets (custom-icons.css, dictionaries)
 ├── components/              # React components
 │   ├── layout/              # Main layout sections
-│   │   ├── Header.tsx       # Workflow controls, execution badge
-│   │   ├── PromptsPanel.tsx # Prompt list with drag-and-drop
-│   │   ├── OutputSection.tsx # CLI output rendering
-│   │   ├── EditorSection.tsx # Prompt editor container
-│   │   └── SettingsDrawer.tsx # Harness/model settings
+│   │   ├── CenterContentArea.tsx # Center panel container
+│   │   ├── EditorSection.tsx     # Prompt editor container
+│   │   ├── Header.tsx            # Workflow controls, execution badge
+│   │   ├── OutputSection.tsx     # CLI output rendering
+│   │   ├── PromptsPanel.tsx      # Prompt list with drag-and-drop
+│   │   └── SettingsDrawer.tsx    # Harness/model settings
 │   ├── editor/              # Editor components
-│   │   ├── CodeMirrorEditor.tsx # CodeMirror 6 instance
-│   │   ├── PromptEditor.tsx # Editor with toolbar
-│   │   └── PropertiesDrawer.tsx # Prompt properties panel
+│   │   ├── CodeMirrorEditor.tsx  # CodeMirror 6 instance
+│   │   ├── EditorFooter.tsx      # Token count / status bar below editor
+│   │   ├── PromptEditor.tsx      # Editor with toolbar
+│   │   └── PropertiesDrawer.tsx  # Prompt properties panel
 │   ├── prompts/             # Prompt list components
+│   │   ├── PromptCounter.tsx     # Step count badge
+│   │   ├── PromptItem.tsx        # Single prompt row
+│   │   └── StatusIcon.tsx        # Execution status icon
 │   ├── output/              # Output rendering components
-│   ├── workflow/            # Workflow management (modals, buttons)
+│   │   ├── BashOutput.tsx        # Shell command output block
+│   │   ├── CliOutput.tsx         # Main CLI output container
+│   │   ├── MarkdownText.tsx      # Markdown renderer
+│   │   ├── outputStyles.ts       # Shared output style constants
+│   │   ├── StatusMessage.tsx     # Status/info message block
+│   │   └── ToolCallOutput.tsx    # Tool invocation display
+│   ├── workflow/            # Workflow management
+│   │   ├── RecentWorkflows.tsx   # Recent files dropdown
+│   │   ├── SaveWorkflowButton.tsx # Save trigger button
+│   │   ├── SaveWorkflowDialog.tsx # Save-as dialog with path/format
+│   │   ├── TemplateModal.tsx     # New workflow from template
+│   │   ├── WorkflowControls.tsx  # Run/Pause/Stop/Load buttons
+│   │   └── WorkflowStatus.tsx    # Execution state badge
 │   └── shared/              # Reusable UI components
+│       ├── Button.tsx            # Base button component
+│       ├── Collapsible.tsx       # Expand/collapse wrapper
+│       ├── CustomSelect.tsx      # Styled select dropdown
+│       ├── IconToggleButton.tsx  # Icon-only toggle button
+│       ├── Modal.tsx             # Base modal wrapper
+│       ├── MultiCheckboxDropdown.tsx # Multi-select checkbox dropdown
+│       ├── PanelBar.tsx          # Collapsible panel header bar
+│       ├── RunSelector.tsx       # Run history selector
+│       └── SplitButton.tsx       # Button with dropdown arrow
 ├── hooks/                   # React hooks
-│   ├── useVsCodeApi.ts      # VS Code API singleton
-│   ├── useMessageHandler.ts # Message routing from extension
-│   └── useMediaQuery.ts     # Responsive layout detection
+│   ├── useAttachmentTokenCount.ts # Token counting with attachment caching
+│   ├── useElementNarrow.ts      # ResizeObserver-based width threshold
+│   ├── useMediaQuery.ts         # Responsive layout detection
+│   ├── useMessageHandler.ts     # Message routing from extension
+│   └── useVsCodeApi.ts          # VS Code API singleton
 ├── store/                   # Zustand state stores
-│   ├── workflowStore.ts     # Core workflow data
-│   ├── uiStore.ts           # Layout and UI state
+│   ├── workflowStore.ts     # Core workflow data + run history
+│   ├── uiStore.ts           # Layout, modals, history browsing
 │   ├── editorStore.ts       # Prompt editor state
-│   └── settingsStore.ts     # Harness/model configuration
+│   └── settingsStore.ts     # Harness/model/skills configuration
 ├── types/                   # TypeScript types
+│   ├── cliEvents.ts         # CLI event type definitions
+│   ├── dropdownNamespaces.ts # Dropdown namespace constants
 │   ├── messages.ts          # Re-exports from src/types/
 │   └── vscode.ts            # VS Code API types
 ├── utils/                   # Utility functions
+│   ├── diff.ts              # Diff/patch utilities
+│   ├── endCondition.ts      # End condition helpers
+│   ├── logger.ts            # Webview logging utilities
+│   ├── outputUtils.ts       # Output formatting helpers
+│   ├── prompt.ts            # Prompt text utilities
+│   ├── status.ts            # Status/state helpers
+│   ├── string.ts            # String utilities
+│   ├── time.ts              # Time/duration formatting
+│   └── tokenizer.ts         # Token counting
 └── styles/                  # CSS and Tailwind config
 ```
 
@@ -88,43 +135,76 @@ interface WorkflowState {
   retryStates: Record<number, RetryState>;
   statusMessages: Record<number, StatusMessage[]>;
   streamingChunks: Record<number, string>;
+  // Historical run snapshot for browsing (null = live mode)
+  historyOutputs: HistoryOutputSnapshot | null;
 }
 ```
 
-**Use cases**: Workflow execution, prompt list, CLI outputs, step progress
+**Use cases**: Workflow execution, prompt list, CLI outputs, step progress, run history browsing
+
+**Run history**: When `uiStore.isViewingHistory=true`, `OutputSection` renders from `historyOutputs` instead of `cliOutputs`. Live `cliOutputs` continue updating normally — history browsing has zero impact on live capture.
 
 ### uiStore - Layout and UI State
 
 ```typescript
 interface UiState {
-  settingsCollapsed: boolean;
+  // Dropdown hide feature (persisted to localStorage)
+  hiddenDropdownOptions: Record<string, string[]>;
+  // Panel collapse
   promptsCollapsed: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
-  showNewWorkflowModal: boolean;
-  recentWorkflows: RecentWorkflow[];
+  settingsCollapsed: boolean;
+  propertiesDrawerOpen: boolean;
+  // Output panel
+  selectedOutputStep: number | null; // null = current step
+  // Run history browsing
+  isViewingHistory: boolean;
+  viewingRunIndex: number; // 0 = most recent
+  availableRuns: number;
+  runTimestamps: (number | undefined)[];
+  runStates: (string | undefined)[];
+  // Save workflow dialog
+  saveWorkflowDialogOpen: boolean;
+  saveWorkflowDialogData: SaveWorkflowDialogData | null;
+  // New workflow modal
+  newWorkflowModalOpen: boolean;
   templates: TemplateInfo[];
-  savedPanelSizes: PanelSizes;
+  currentTemplate: TemplateInfo | null;
+  workflowsDir: string;
+  defaultTemplateId: string;
+  // Recent workflows
+  recentWorkflows: RecentWorkflow[];
+  recentWorkflowsDropdownOpen: boolean;
+  // Loading states
+  isLoading: boolean;
+  loadingMessage: string | null;
 }
 ```
 
-**Use cases**: Panel collapse state, modals, recent files, layout persistence
+**Use cases**: Panel collapse, modals, recent files, run history browsing, layout persistence
 
-**Persistence**: Synced to localStorage via middleware
+**Persistence**: Synced to localStorage via Zustand `persist` middleware
 
 ### editorStore - Prompt Editor State
 
 ```typescript
 interface EditorState {
-  selectedPromptIndex: number | null;
-  mode: "view" | "edit" | "new";
-  content: string;
+  selectedPromptIndex: number | null; // null = new prompt mode
+  originalPromptData: PromptItem | null; // for Cancel/revert
+  savedNewPromptState: SavedNewPromptState | null; // saved when switching to edit mode
+  hasActiveQueue: boolean;
+  promptText: string;
+  promptName: string;
+  properties: PropertyValues; // harness, model, agent, skills, resumeSession, sessionId, etc.
   isDirty: boolean;
-  propertyValues: PropertyValues;
-  endCondition: EndConditionConfig | null;
-  savedNewPromptState: SavedNewPromptState | null;
+  validationErrors: Record<string, string>;
 }
 ```
+
+**Mode determination**: `selectedPromptIndex === null` → new prompt mode; `number` → editing existing
+
+**endCondition** is part of `PropertyValues` (not a top-level field)
 
 **Use cases**: Editor content, prompt properties, save/revert operations
 
@@ -136,13 +216,15 @@ interface EditorState {
 interface SettingsState {
   modelOptions: Record<HarnessId, ModelOption[]>;
   availableAgents: AgentOption[];
+  availableSkills: SkillOption[]; // workspace + user skill options
   harnessStatus: Record<HarnessId, HarnessStatus>;
   globalSettings: GlobalSettings;
   workflowProperties: WorkflowProperties;
+  workflowLoaded: boolean; // enables settings panel
 }
 ```
 
-**Use cases**: Harness/model selection, workflow properties, global defaults
+**Use cases**: Harness/model/skills selection, workflow properties, global defaults
 
 ## Store Access Patterns
 

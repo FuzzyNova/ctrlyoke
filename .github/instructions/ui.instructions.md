@@ -12,22 +12,32 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 - Implements vscode.WebviewViewProvider for sidebar panel
 - Loads React app from out/ui/webview-react/
 - Handles message routing between extension and React UI
-- Manages harness availability checks
-- Discovers available agents
-- Injects webview resource URIs into Vite-built HTML
+- Harness availability driven by FlightPathManager via `notifyHarnessAvailability()` (not polled in constructor)
+- Discovers available agents (`AgentDiscovery`) and skills (`SkillDiscovery`) in background on construction
+- Injects webview resource URIs into Vite-built HTML (assets, typo.js, codicons, custom-icons.css, spell-check dictionaries, logo)
+- `localResourceRoots`: webview-react dir + images dir
 
 **StatusBarManager:** Status bar item manager
 
 - Updates based on queue state and harness status
-- Icons: $(compass) idle, $(compass-dot) running, $(debug-pause) paused, $(check) success, $(error) error
+- **Queue execution states:**
+  - `$(compass)` idle (default)
+  - `$(compass-dot) N/M` running (progress counter)
+  - `$(debug-pause)` paused
+  - `$(check)` completed — auto-hides after 5s
+  - `$(error)` error — requires acknowledgment
+- **Harness/Copilot status states:**
+  - `$(compass)` Initializing — checking availability
+  - `$(compass)` Waiting — polling for Copilot (N/M attempts)
+  - `$(compass-active)` Ready
+  - `$(warning)` Setup Required
 - Colors: ThemeColor for automatic theme adaptation
-- Progress: Current = completed (not sent), displays "N/M" counter
-- Auto-hide: Success hides after 5s, errors require acknowledgment
+- Progress: Current = completed prompts, displays "N/M" counter
 
 **Icons:** Custom icon system in src/ui/icons/
 
-- SVG source files (not copied to output)
-- Auto-converted to CSS via npm run generate-icons
+- SVG source files (not copied to output): append.svg, append-next.svg, from-template.svg, load-from-file.svg, queue-from-file.svg
+- Auto-converted to CSS via `npm run generate-icons` (runs as part of precompile)
 - Output: src/ui/webview-react/custom-icons.css
 - Usage: `<i class="custom-icon icon-{name}"></i>`
   </architecture>
@@ -97,10 +107,11 @@ UI provider layer that bridges extension and React webview. Manages status bar, 
 
 <relatedFiles>
 - src/ui/webview-react/ - React UI implementation (separate instructions file)
-- FlightPathManager.ts - Orchestration, calls webview update methods
+- FlightPathManager.ts - Orchestration, calls webview update methods and notifyHarnessAvailability()
 - DashboardConstants.ts - MESSAGE_TYPES, EXECUTION_STATES, HARNESS_IDS
 - ModelRegistry.ts - Runtime model discovery
 - ModelConstants.ts - Model display names and mappings
 - TemplateManager.ts - Workflow template discovery
-- AgentDiscovery.ts - Agent file discovery
+- AgentDiscovery.ts - Agent file discovery (src/utils/)
+- SkillDiscovery.ts - Skill file discovery (src/utils/)
 </relatedFiles>

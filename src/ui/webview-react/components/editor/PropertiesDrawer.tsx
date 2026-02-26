@@ -4,7 +4,12 @@ import {
   END_CONDITION_DEFAULTS,
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
+import { useUiStore } from "../../store/uiStore";
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
+import {
+  DROPDOWN_NAMESPACES,
+  modelNamespaceForHarness,
+} from "../../types/dropdownNamespaces";
 import { CustomSelect, MultiCheckboxDropdown } from "../shared";
 
 interface PropertiesDrawerProps {
@@ -42,6 +47,11 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
     globalSettings,
     getModelsForHarness: getModelsForHarness,
   } = useSettingsStore();
+  const {
+    hiddenDropdownOptions,
+    hideDropdownOption,
+    unhideDropdownOption,
+  } = useUiStore();
 
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
@@ -59,6 +69,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
       ? globalSettings.harness
       : (properties.harness as HarnessId);
   const models = getModelsForHarness(currentHarness);
+  const modelNamespace = modelNamespaceForHarness(currentHarness);
 
   // Handle harness change - also reset model to default
   const handleHarnessChange = (newHarness: string) => {
@@ -124,6 +135,17 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                     { value: HARNESS_IDS.CLAUDE_CLI, label: "Claude CLI" },
                     { value: HARNESS_IDS.CODEX_CLI, label: "Codex CLI" },
                   ]}
+                  namespace={DROPDOWN_NAMESPACES.HARNESS}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
+                  }
+                  nonHideableValues={["default", ""]}
                 />
               </div>
 
@@ -154,6 +176,13 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                           label: m.label,
                         }))),
                   ]}
+                  namespace={modelNamespace}
+                  hiddenValues={hiddenDropdownOptions[modelNamespace] ?? []}
+                  onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(modelNamespace, v)
+                  }
+                  nonHideableValues={["default", ""]}
                 />
               </div>
             </div>
@@ -179,6 +208,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                       label: agent.name,
                     })),
                   ]}
+                  namespace={DROPDOWN_NAMESPACES.AGENT}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.AGENT] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
+                  }
                 />
               </div>
 
@@ -224,6 +263,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   description: s.description || undefined,
                 }))}
                 placeholder="None (inherit from workflow)"
+                namespace={DROPDOWN_NAMESPACES.SKILLS}
+                hiddenValues={
+                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
+                }
+                onHideOption={(v) =>
+                  hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                }
+                onUnhideOption={(v) =>
+                  unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                }
               />
               {properties.skills.length > 0 && (
                 <p className="text-[10px] text-description-fg">
