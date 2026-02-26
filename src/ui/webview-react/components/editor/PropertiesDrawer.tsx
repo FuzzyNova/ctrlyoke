@@ -5,12 +5,12 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
-import { HARNESS_IDS, type HarnessId } from "../../types/messages";
+import { type HarnessId } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
 } from "../../types/dropdownNamespaces";
-import { CustomSelect, MultiCheckboxDropdown } from "../shared";
+import { CustomSelect, MultiCheckboxDropdown, HarnessDropdown, harnessCategory } from "../shared";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -122,20 +122,14 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   htmlFor="prop-harness"
                   className="text-xs font-medium text-foreground"
                 >
-                  Harness
+                  {`Harness${harnessCategory(properties.harness) === "cli" ? " (CLI)" : harnessCategory(properties.harness) === "chat" ? " (Chat)" : ""}`}
                 </label>
-                <CustomSelect
+                <HarnessDropdown
                   id="prop-harness"
                   value={properties.harness}
                   onChange={handleHarnessChange}
-                  options={[
-                    { value: "default", label: "Default" },
-                    { value: HARNESS_IDS.COPILOT_CLI, label: "Copilot CLI" },
-                    { value: HARNESS_IDS.COPILOT_CHAT, label: "Copilot Chat" },
-                    { value: HARNESS_IDS.CLAUDE_CLI, label: "Claude CLI" },
-                    { value: HARNESS_IDS.CODEX_CLI, label: "Codex CLI" },
-                  ]}
-                  namespace={DROPDOWN_NAMESPACES.HARNESS}
+                  showDefault={true}
+                  showStatus={false}
                   hiddenValues={
                     hiddenDropdownOptions[DROPDOWN_NAMESPACES.HARNESS] ?? []
                   }
@@ -145,7 +139,6 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   onUnhideOption={(v) =>
                     unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                   }
-                  nonHideableValues={["default", ""]}
                 />
               </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   useSettingsStore,
   type WorkflowProperties,
@@ -7,13 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import {
-  MESSAGE_TYPES,
-  HARNESS_IDS,
-  HARNESS_STATUS_STRINGS,
-  type HarnessId,
-  type HarnessStatusString,
-} from "../../types/messages";
+import { MESSAGE_TYPES } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -23,69 +17,9 @@ import {
   IconToggleButton,
   CustomSelect,
   MultiCheckboxDropdown,
+  HarnessDropdown,
+  harnessCategory,
 } from "../shared";
-
-/**
- * Harness display information
- */
-const HARNESS_INFO: Record<HarnessId, { name: string; description: string }> = {
-  [HARNESS_IDS.COPILOT_CLI]: {
-    name: "Copilot CLI",
-    description: "GitHub Copilot CLI (recommended)",
-  },
-  [HARNESS_IDS.COPILOT_CHAT]: {
-    name: "Copilot Chat",
-    description: "VS Code Chat window (fallback)",
-  },
-  [HARNESS_IDS.CLAUDE_CLI]: {
-    name: "Claude CLI",
-    description: "Anthropic Claude Code CLI",
-  },
-  [HARNESS_IDS.CODEX_CLI]: {
-    name: "Codex CLI",
-    description: "OpenAI Codex CLI",
-  },
-};
-
-/**
- * Status indicator component
- */
-const StatusIndicator: React.FC<{
-  status: HarnessStatusString;
-  narrow?: boolean;
-}> = ({ status, narrow = false }) => {
-  const statusConfig: Record<
-    HarnessStatusString,
-    { color: string; text: string; animate: boolean }
-  > = {
-    [HARNESS_STATUS_STRINGS.CHECKING]: {
-      color: "bg-yellow-400",
-      text: "Checking...",
-      animate: true,
-    },
-    [HARNESS_STATUS_STRINGS.AVAILABLE]: {
-      color: "bg-green-500",
-      text: "Available",
-      animate: false,
-    },
-    [HARNESS_STATUS_STRINGS.UNAVAILABLE]: {
-      color: "bg-red-400",
-      text: "Not Available",
-      animate: false,
-    },
-  };
-
-  const config = statusConfig[status];
-
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-description-fg">
-      <span
-        className={`w-2 h-2 rounded-full flex-shrink-0 ${config.color} ${config.animate ? "animate-pulse" : ""}`}
-      />
-      {!narrow && config.text}
-    </span>
-  );
-};
 
 /**
  * Set as Default link with animation
@@ -147,215 +81,6 @@ const FormField: React.FC<{
   </div>
 );
 
-/**
- * Custom styled harness dropdown with status indicators.
- * Supports the hide feature via optional hiddenValues / onHideOption / onUnhideOption props.
- */
-const HarnessDropdown: React.FC<{
-  id: string;
-  value: string;
-  onChange: (value: string) => void;
-  harnessStatus: Record<
-    string,
-    { status: HarnessStatusString; available?: boolean }
-  >;
-  hiddenValues?: string[];
-  onHideOption?: (value: string) => void;
-  onUnhideOption?: (value: string) => void;
-}> = ({
-  id,
-  value,
-  onChange,
-  harnessStatus,
-  hiddenValues = [],
-  onHideOption,
-  onUnhideOption,
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [showHidden, setShowHidden] = useState(false);
-  const [narrowRef, isNarrow] = useElementNarrow<HTMLDivElement>(160);
-  // Separate ref for click-outside detection (callback refs don't expose .current).
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mergedRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      containerRef.current = node;
-      narrowRef(node);
-    },
-    [narrowRef]
-  );
-
-  const handleSelect = (harnessId: string) => {
-    onChange(harnessId);
-    setIsOpen(false);
-    setShowHidden(false);
-  };
-
-  const handleSelectHidden = (harnessId: string) => {
-    onUnhideOption?.(harnessId);
-    onChange(harnessId);
-    setIsOpen(false);
-    setShowHidden(false);
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-        setShowHidden(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [isOpen]);
-
-  const allHarnesses = Object.values(HARNESS_IDS);
-  const visibleHarnesses = allHarnesses.filter(
-    (h) => !hiddenValues.includes(h)
-  );
-  const hiddenHarnesses = allHarnesses.filter((h) => hiddenValues.includes(h));
-
-  return (
-    <div className="relative inline-block w-full" ref={mergedRef}>
-      <button
-        id={id}
-        onClick={() =>
-          setIsOpen((prev) => {
-            if (prev) setShowHidden(false);
-            return !prev;
-          })
-        }
-        className="w-full px-2 py-1 text-xs bg-dropdown-bg text-dropdown-fg border border-dropdown-border rounded focus:outline-none focus:border-focus-border text-left flex items-center justify-between h-7"
-      >
-        <span>{HARNESS_INFO[value as HarnessId]?.name || value}</span>
-        <div className="flex items-center gap-1">
-          <StatusIndicator
-            status={harnessStatus[value as HarnessId]?.status || "checking"}
-            narrow={isNarrow}
-          />
-          <i
-            className={`codicon codicon-chevron-${isOpen ? "up" : "down"} text-[10px]`}
-          />
-        </div>
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg">
-          {/* Visible harness rows */}
-          {visibleHarnesses.map((harness) => {
-            const status = harnessStatus[harness as HarnessId];
-            const isAvailable = status?.available !== false;
-            const isChecking = status?.status === "checking";
-            const isSelected = value === harness;
-            const canHide = harness !== value; // never hide the selected harness
-
-            return (
-              <div
-                key={harness}
-                className={`group flex items-center pr-2 gap-1 ${
-                  isSelected
-                    ? "bg-dropdown-selected-bg text-list-active-fg"
-                    : !isAvailable && !isChecking
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-                }`}
-              >
-                {/* Name — flex-1, click = select */}
-                <button
-                  onClick={() =>
-                    isAvailable || isChecking ? handleSelect(harness) : null
-                  }
-                  disabled={!isAvailable && !isChecking}
-                  className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit"
-                >
-                  {HARNESS_INFO[harness as HarnessId]?.name || harness}
-                </button>
-                {/* Eye-closed — hover-only, just left of the status dot */}
-                {canHide && (
-                  <button
-                    type="button"
-                    title="Hide this harness"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onHideOption?.(harness);
-                    }}
-                    className="flex-shrink-0 p-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent transition-opacity"
-                  >
-                    <i className="codicon codicon-eye-closed text-[11px]" />
-                  </button>
-                )}
-                {/* Status — always at far right */}
-                <StatusIndicator
-                  status={
-                    harnessStatus[harness as HarnessId]?.status || "checking"
-                  }
-                  narrow={isNarrow}
-                />
-              </div>
-            );
-          })}
-
-          {/* Hidden harness section */}
-          {showHidden && hiddenHarnesses.length > 0 && (
-            <>
-              <div className="border-t border-dropdown-border my-0" />
-              {hiddenHarnesses.map((harness) => (
-                <div
-                  key={harness}
-                  className="group flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
-                >
-                  <button
-                    type="button"
-                    title="Unhide this harness"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUnhideOption?.(harness);
-                    }}
-                    className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
-                  >
-                    <i className="codicon codicon-eye text-[11px]" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectHidden(harness)}
-                    className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-center justify-between text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
-                  >
-                    <span>
-                      {HARNESS_INFO[harness as HarnessId]?.name || harness}
-                    </span>
-                  </button>
-                </div>
-              ))}
-            </>
-          )}
-
-          {/* Footer bar — always visible, distinct bg to signal meta-action */}
-          <div className="border-t border-dropdown-border bg-editor-bg">
-            <button
-              type="button"
-              disabled={hiddenHarnesses.length === 0}
-              onClick={() => setShowHidden((s) => !s)}
-              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-            >
-              {showHidden
-                ? "Hide hidden"
-                : hiddenHarnesses.length > 0
-                  ? `Show hidden (${hiddenHarnesses.length})`
-                  : "Show hidden"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 /**
  * SettingsPanel Component
@@ -720,7 +445,7 @@ export const SettingsPanel: React.FC<{
       <PanelBar
         orientation={panelBarOrientation}
         icon="settings-gear"
-        title="Settings"
+        title="Workflow Properties"
         onClick={toggleSettingsCollapse}
       />
     );
@@ -735,7 +460,7 @@ export const SettingsPanel: React.FC<{
         className="flex items-center justify-between h-[30px] px-2 border-b border-panel-border cursor-pointer select-none"
         onClick={toggleSettingsCollapse}
         role="button"
-        aria-label="Collapse settings"
+        aria-label="Collapse workflow properties"
         tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && toggleSettingsCollapse()}
       >
@@ -743,7 +468,7 @@ export const SettingsPanel: React.FC<{
           <i className="codicon codicon-chevron-right text-[12px] rotate-90 transition-transform duration-150" />
           <i className="codicon codicon-settings-gear text-[14px]" />
           <span className="text-[11px] font-semibold uppercase tracking-wide ml-0.5">
-            Settings
+            Workflow Properties
           </span>
         </div>
         <button
@@ -754,7 +479,7 @@ export const SettingsPanel: React.FC<{
           className="text-[11px] text-link-fg hover:underline hover:bg-list-hover-bg px-1 py-0.5 rounded"
           title="Open VS Code settings"
         >
-          More...
+          Settings...
         </button>
       </div>
 
@@ -763,7 +488,7 @@ export const SettingsPanel: React.FC<{
         <div className="px-4 py-3 space-y-4">
           {/* Harness */}
           <FormField
-            label="Harness"
+            label={`Harness${harnessCategory(effectiveHarness) === "cli" ? " (CLI)" : harnessCategory(effectiveHarness) === "chat" ? " (Chat)" : ""}`}
             htmlFor="settings-harness"
             description="AI harness for execution"
             setAsDefaultButton={

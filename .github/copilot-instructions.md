@@ -23,12 +23,12 @@ Automate AI coding assistants (GitHub Copilot, Claude Code, Codex) through struc
 
 FlightPath supports four **harnesses** (execution strategies for AI interactions):
 
-| Harness ID | Description |
-|---|---|
-| `copilot-cli` | GitHub Copilot CLI (default) — log file monitoring, session resumption |
-| `claude-cli` | Anthropic Claude Code CLI — JSON streaming, hook-based completion |
-| `codex-cli` | OpenAI Codex CLI — JSONL events, notify hook |
-| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback |
+| Harness ID     | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| `copilot-cli`  | GitHub Copilot CLI (default) — log file monitoring, session resumption |
+| `claude-cli`   | Anthropic Claude Code CLI — JSON streaming, hook-based completion      |
+| `codex-cli`    | OpenAI Codex CLI — JSONL events, notify hook                           |
+| `copilot-chat` | Copilot Chat window — session file monitoring, UI automation fallback  |
 
 > **Critical terminology:** Always say **harness** (not "provider"). The term "provider" is reserved for VS Code API class names (`CompletionItemProvider`, `WebviewViewProvider`).
 
@@ -79,41 +79,24 @@ Adding a new harness requires creating a new directory only — zero changes to 
 
 ## How to Navigate This Codebase
 
-Read the relevant instruction file **before** editing files in those directories. Each file contains patterns, conventions, architecture details, and critical rules specific to that area.
-
-| Files You're Editing | Instruction File to Read |
-|---|---|
-| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md` |
-| `src/flightpath/chat/**` | `.github/instructions/flightpath-chat.instructions.md` |
-| `src/flightpath/cli/**` | `.github/instructions/flightpath-cli.instructions.md` |
-| `src/ui/**` (excluding webview-react) | `.github/instructions/ui.instructions.md` |
-| `src/ui/webview-react/**` | `.github/instructions/webview-react.instructions.md` |
-| `src/types/**` | `.github/instructions/types.instructions.md` |
-| `src/utils/**` | `.github/instructions/utils.instructions.md` |
-| `src/completions/**` | `.github/instructions/completions.instructions.md` |
-| `src/templates/**` | `.github/instructions/templates.instructions.md` |
-| `src/scripts/**` | `.github/instructions/scripts.instructions.md` |
-| `src/test/**` | `.github/instructions/test.instructions.md` |
-| `src/dev/**` | `.github/instructions/dev.instructions.md` |
-
 ### Key Source Files (Quick Reference)
 
-| File | Role |
-|---|---|
-| `src/extension.ts` | Entry point — activates harnesses, registers commands, LM tools, and providers |
-| `src/mcp-server.ts` | Standalone MCP server binary (`flightpath-mcp`) |
-| `src/flightpath/FlightPathManager.ts` | Top-level orchestrator |
-| `src/flightpath/HarnessIntegration.ts` | Abstract base class for all harnesses |
-| `src/flightpath/PromptQueue.ts` | State machine for prompt execution |
-| `src/flightpath/WorkflowExecutor.ts` | Sequential execution loop |
-| `src/flightpath/PromptFileParser.ts` | YAML/JSON parsing with AJV validation |
-| `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process |
-| `src/types/DashboardConstants.ts` | **Single source of truth** for all shared constants |
-| `src/types/FlightPathTypes.ts` | Core workflow types (PromptItem, Harness enum, etc.) |
-| `src/utils/ConfigurationUtils.ts` | All VS Code settings access centralized here |
-| `src/utils/ModelConstants.ts` | Single source of truth for model lists |
-| `src/ui/FlightPathWebviewProvider.ts` | React webview lifecycle and message routing |
-| `/schemas/prompt-schema.json` | JSON Schema for prompt files (source — never edit `out/schemas/`) |
+| File                                      | Role                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `src/extension.ts`                        | Entry point — activates harnesses, registers commands, LM tools, and providers |
+| `src/mcp-server.ts`                       | Standalone MCP server binary (`flightpath-mcp`)                                |
+| `src/flightpath/FlightPathManager.ts`     | Top-level orchestrator                                                         |
+| `src/flightpath/HarnessIntegration.ts`    | Abstract base class for all harnesses                                          |
+| `src/flightpath/PromptQueue.ts`           | State machine for prompt execution                                             |
+| `src/flightpath/WorkflowExecutor.ts`      | Sequential execution loop                                                      |
+| `src/flightpath/PromptFileParser.ts`      | YAML/JSON parsing with AJV validation                                          |
+| `src/flightpath/EndConditionEvaluator.ts` | Script validation in isolated child process                                    |
+| `src/types/DashboardConstants.ts`         | **Single source of truth** for all shared constants                            |
+| `src/types/FlightPathTypes.ts`            | Core workflow types (PromptItem, Harness enum, etc.)                           |
+| `src/utils/ConfigurationUtils.ts`         | All VS Code settings access centralized here                                   |
+| `src/utils/ModelConstants.ts`             | Single source of truth for model lists                                         |
+| `src/ui/FlightPathWebviewProvider.ts`     | React webview lifecycle and message routing                                    |
+| `/schemas/prompt-schema.json`             | JSON Schema for prompt files (source — never edit `out/schemas/`)              |
 
 </navigationGuide>
 
@@ -122,11 +105,13 @@ Read the relevant instruction file **before** editing files in those directories
 ## Principles That Apply Everywhere
 
 ### SOLID + DRY
+
 - **Single Responsibility:** Each class has one job. FlightPathManager orchestrates; WorkflowExecutor runs the loop; EndConditionHandler retries.
 - **Open/Closed:** Add new harnesses without touching `CliIntegration` (composition pattern).
 - **DRY:** If a string, constant, or logic appears in more than one _file_, it **must** be extracted to a single source of truth.
 
 ### No Hardcoded Strings
+
 All shared string literals (message types, execution states, harness IDs, step statuses) **must** be defined in `src/types/DashboardConstants.ts`. Never duplicate across files.
 
 ```typescript
@@ -141,15 +126,18 @@ if (state.status === "running") { ... }
 The single source of truth for **inline strings that are acceptable**: CSS class names or UI labels used in only one file, HTML attributes, one-off display text.
 
 ### TypeScript Strict Mode
+
 Use `ExecutionState`, `StepStatus`, `HarnessId`, `MessageType` type helpers from `DashboardConstants`. Use the `Harness` enum from `FlightPathTypes`. Avoid `any` except in boundary code (VS Code API surfaces).
 
 ### Harness Terminology
+
 - ✅ **harness** — the AI execution framework (copilot-cli, claude-cli, codex-cli, copilot-chat)
 - ✅ **integration** — a `HarnessIntegration` subclass implementing harness behavior
 - ✅ **model** — the AI model within a harness (claude-sonnet-4.5, gpt-5, etc.)
 - ❌ ~~provider~~ — deprecated, only valid for VS Code API class names
 
 ### Security
+
 - Scripts: workspace-only paths, process isolation, configurable timeout
 - File system: workspace-scoped operations only
 - Validation: strict JSON schema enforcement via AJV
@@ -222,11 +210,11 @@ The extension creates and manages `.flightpath/` in each workspace:
 
 All three formats use the same unified JSON Schema (`/schemas/prompt-schema.json`).
 
-| Format | Extension | Best For |
-|---|---|---|
-| YAML | `.flightpath.yaml` / `.flightpath.yml` | Multi-step workflows, human editing (default) |
-| JSON | `.flightpath.json` | Programmatic generation, CI/CD |
-| Markdown | `.prompt.md` | Single prompts (simplest, no schema fields) |
+| Format   | Extension                              | Best For                                      |
+| -------- | -------------------------------------- | --------------------------------------------- |
+| YAML     | `.flightpath.yaml` / `.flightpath.yml` | Multi-step workflows, human editing (default) |
+| JSON     | `.flightpath.json`                     | Programmatic generation, CI/CD                |
+| Markdown | `.prompt.md`                           | Single prompts (simplest, no schema fields)   |
 
 ### YAML Multi-Step Workflow (Recommended)
 
@@ -246,7 +234,7 @@ prompts:
   - id: implement
     prompt: |
       Implement the suggested improvements.
-    resumeSession: true          # Continue conversation from previous prompt
+    resumeSession: true # Continue conversation from previous prompt
     endCondition:
       script: verify_changes.py
       returns: "true"
@@ -279,23 +267,23 @@ prompts:
 
 All settings accessed via `src/utils/ConfigurationUtils.ts`. Prefix: `flightpath`.
 
-| Setting | Default | Description |
-|---|---|---|
-| `harness` | `copilot-cli` | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli` |
-| `cliExecutionMode` | `interactive` | `interactive` (terminal) or `headless` (background process) |
-| `copilotCliModel` | `claude-sonnet-4.5` | Default model for Copilot CLI |
-| `claudeCliModel` | `sonnet` | Default model for Claude CLI |
-| `codexCliModel` | `gpt-5.1-codex` | Default model for Codex CLI |
-| `cliToolPermissions` | `allowAll` | `dangerouslyAllowAll`, `allowAll`, or `custom` |
-| `cliAllowedTools` | `[]` | Tool allow patterns (Copilot format, auto-converted for Claude/Codex) |
-| `cliDeniedTools` | `[]` | Tool deny patterns (takes precedence over allow) |
-| `promptsDirectory` | `.flightpath` | Base directory for workflows and scripts |
-| `scriptTimeout` | `30` | End condition script timeout in seconds |
-| `autoAttachFiles` | `true` | Auto-expand `#file:` references to inline content |
-| `enableDynamicQueue` | `false` | Allow AI to extend the workflow queue |
-| `showCliOutput` | `true` | Show CLI output in the Output panel |
-| `chatInactivityTimeout` | `300` | Seconds before chat timeout (Chat harness only) |
-| `treatChatTimeoutAsSuccess` | `true` | Treat chat inactivity timeout as completion |
+| Setting                     | Default             | Description                                                              |
+| --------------------------- | ------------------- | ------------------------------------------------------------------------ |
+| `harness`                   | `copilot-cli`       | Active harness: `copilot-cli`, `copilot-chat`, `claude-cli`, `codex-cli` |
+| `cliExecutionMode`          | `interactive`       | `interactive` (terminal) or `headless` (background process)              |
+| `copilotCliModel`           | `claude-sonnet-4.5` | Default model for Copilot CLI                                            |
+| `claudeCliModel`            | `sonnet`            | Default model for Claude CLI                                             |
+| `codexCliModel`             | `gpt-5.1-codex`     | Default model for Codex CLI                                              |
+| `cliToolPermissions`        | `allowAll`          | `dangerouslyAllowAll`, `allowAll`, or `custom`                           |
+| `cliAllowedTools`           | `[]`                | Tool allow patterns (Copilot format, auto-converted for Claude/Codex)    |
+| `cliDeniedTools`            | `[]`                | Tool deny patterns (takes precedence over allow)                         |
+| `promptsDirectory`          | `.flightpath`       | Base directory for workflows and scripts                                 |
+| `scriptTimeout`             | `30`                | End condition script timeout in seconds                                  |
+| `autoAttachFiles`           | `true`              | Auto-expand `#file:` references to inline content                        |
+| `enableDynamicQueue`        | `false`             | Allow AI to extend the workflow queue                                    |
+| `showCliOutput`             | `true`              | Show CLI output in the Output panel                                      |
+| `chatInactivityTimeout`     | `300`               | Seconds before chat timeout (Chat harness only)                          |
+| `treatChatTimeoutAsSuccess` | `true`              | Treat chat inactivity timeout as completion                              |
 
 **Adding new settings:** Add to `package.json` → `contributes.configuration.properties`, then read via `ConfigurationUtils.get<T>("settingName", defaultValue)`. Use `enum` + `enumDescriptions` for dropdowns.
 
@@ -320,7 +308,7 @@ npm test                 # Run Mocha test suite
 
 ### Dev Mode
 
-`src/utils/BuildConfig.ts` exports `IS_DEV_MODE` (replaced at build time by esbuild). Dev-only commands in `src/dev/DevCommands.ts` are registered only when `IS_DEV_MODE = true`, never declared in `package.json`, and stripped entirely in production. See `.github/instructions/dev.instructions.md`.
+`src/utils/BuildConfig.ts` exports `IS_DEV_MODE` (replaced at build time by esbuild). Dev-only commands in `src/dev/DevCommands.ts` are registered only when `IS_DEV_MODE = true`, never declared in `package.json`, and stripped entirely in production.
 
 ### Updating AI Models
 
@@ -351,7 +339,6 @@ See `docs/ADDING_NEW_CLI_PROVIDER.md`. Create 5 files in `src/flightpath/cli/<na
 - `npm test` → `@vscode/test-electron` → Mocha discovers `**/**.test.js` (TDD style)
 - ~7,700 lines across 19 test files covering parsing, validation, state machines, CLI parsers, session management
 - AI-dependent features (real workflows) require manual testing only
-- See `.github/instructions/test.instructions.md` for patterns and conventions
 
 </developmentGuidelines>
 
@@ -359,15 +346,15 @@ See `docs/ADDING_NEW_CLI_PROVIDER.md`. Create 5 files in `src/flightpath/cli/<na
 
 ## Where Things Live (Single Sources of Truth)
 
-| What | Location |
-|---|---|
-| All shared string constants (message types, states, harness IDs) | `src/types/DashboardConstants.ts` |
-| Core workflow types (`PromptItem`, `Harness` enum, `WorkingFile`) | `src/types/FlightPathTypes.ts` |
-| Universal CLI output types | `src/types/CliOutputTypes.ts` |
-| Extension ↔ webview message contracts | `src/types/WebviewMessageTypes.ts` |
-| Model lists and display names | `src/utils/ModelConstants.ts` |
-| All VS Code settings access | `src/utils/ConfigurationUtils.ts` |
-| Prompt file JSON schema | `schemas/prompt-schema.json` |
-| Directory path name constants | `ConfigurationUtils.PATH_CONSTANTS` |
+| What                                                              | Location                            |
+| ----------------------------------------------------------------- | ----------------------------------- |
+| All shared string constants (message types, states, harness IDs)  | `src/types/DashboardConstants.ts`   |
+| Core workflow types (`PromptItem`, `Harness` enum, `WorkingFile`) | `src/types/FlightPathTypes.ts`      |
+| Universal CLI output types                                        | `src/types/CliOutputTypes.ts`       |
+| Extension ↔ webview message contracts                             | `src/types/WebviewMessageTypes.ts`  |
+| Model lists and display names                                     | `src/utils/ModelConstants.ts`       |
+| All VS Code settings access                                       | `src/utils/ConfigurationUtils.ts`   |
+| Prompt file JSON schema                                           | `schemas/prompt-schema.json`        |
+| Directory path name constants                                     | `ConfigurationUtils.PATH_CONSTANTS` |
 
 </singleSourcesOfTruth>

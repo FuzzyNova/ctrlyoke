@@ -14,3 +14,9 @@ export {
   MultiCheckboxDropdown,
   type MultiCheckboxDropdownProps,
 } from "./MultiCheckboxDropdown";
+export {
+  HarnessDropdown,
+  HARNESS_DISPLAY_NAMES,
+  harnessCategory,
+  type HarnessDropdownProps,
+} from "./HarnessDropdown";
