@@ -125,7 +125,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         <span className="flex-shrink-0 mt-0.5">
           <StatusIcon status={status} />
         </span>
-        <span className="flex-1 min-w-0 text-xs leading-relaxed text-foreground">
+        <span className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}>
           <span className="font-medium">{index + 1}.</span>{" "}
           {name ? name : truncate(text, 60)}
         </span>
@@ -133,7 +133,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
       {/* Harness / model metadata */}
       {(harnessLabel || modelLabel) && (
-        <div className="mt-0.5 pl-5 flex items-center gap-1 text-[10px] text-description-fg opacity-75">
+        <div className={`mt-0.5 pl-5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}>
           {harnessLabel && (
             <span>
               {harnessLabel}
@@ -168,14 +168,14 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
       {/* Duration */}
       {durationSeconds !== undefined && status === "completed" && (
-        <div className="mt-1 pl-5 text-[11px] text-description-fg">
+        <div className={`mt-1 pl-5 text-[11px] ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}>
           Duration: {durationSeconds.toFixed(1)}s
         </div>
       )}
 
       {/* End condition result */}
       {details?.endConditionResult && (
-        <div className="mt-1 pl-5 flex items-center gap-1.5 text-[11px] text-description-fg">
+        <div className={`mt-1 pl-5 flex items-center gap-1.5 text-[11px] ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}>
           <span>End condition:</span>
           {details.endConditionResult.passed ? (
             <i className="codicon codicon-pass text-bash-status-success" />
@@ -192,7 +192,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
 
       {/* Status message */}
       {details?.message && (
-        <div className="mt-1 pl-5 text-[11px] italic text-description-fg">
+        <div className={`mt-1 pl-5 text-[11px] italic ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}>
           {details.message}
         </div>
       )}
