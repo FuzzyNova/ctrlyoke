@@ -54,7 +54,8 @@
       "WebFetch(domain:venturebeat.com)",
       "WebFetch(domain:paddo.dev)",
       "Bash(curl:*)",
-      "WebFetch(domain:streamdown.ai)"
+      "WebFetch(domain:streamdown.ai)",
+      "WebFetch(domain:docs.claude.ai)"
     ],
     "deny": [],
     "ask": []

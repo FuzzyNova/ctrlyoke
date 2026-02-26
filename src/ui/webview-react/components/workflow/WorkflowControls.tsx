@@ -68,7 +68,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
   // Build dropdown options
   const dropdownOptions: SplitButtonOption[] = [
     {
-      label: "From Template...",
+      label: "New From Template...",
       value: "from-template",
       icon: <i className="custom-icon icon-from-template" />,
       onClick: handleFromTemplate,
@@ -82,7 +82,7 @@ export const WorkflowControls: React.FC<WorkflowControlsProps> = ({
       disabled: isExecuting,
     },
     {
-      label: "Queue File...",
+      label: "Queue from File...",
       value: "queue-file",
       icon: <i className="custom-icon icon-queue-from-file" />,
       onClick: handleQueueFile,
