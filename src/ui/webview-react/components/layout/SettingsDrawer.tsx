@@ -495,18 +495,15 @@ export const SettingsPanel: React.FC<{
   );
 
   const handleDynamicExtensionChange = useCallback(
-    (value: string) => {
+    (checked: boolean) => {
       // Optimistic update
       const settingsStore = useSettingsStore.getState();
-      settingsStore.updateWorkflowProperty(
-        "allowDynamicExtension",
-        value === "true"
-      );
+      settingsStore.updateWorkflowProperty("allowDynamicExtension", checked);
 
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "allowDynamicExtension",
-        value: value === "true",
+        value: checked,
       });
     },
     [vscode]
@@ -764,11 +761,22 @@ export const SettingsPanel: React.FC<{
           </FormField>
 
           {/* Allow Dynamic Extension */}
-          <FormField
-            label="Allow Dynamic Extension"
-            htmlFor="settings-dynamic-ext"
-            description="Allow prompts to extend the workflow queue"
-            setAsDefaultButton={
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="settings-dynamic-ext"
+                checked={effectiveAllowDynamicExtension}
+                onChange={(e) => handleDynamicExtensionChange(e.target.checked)}
+                className="w-4 h-4 accent-focus-border cursor-pointer"
+              />
+              <label
+                htmlFor="settings-dynamic-ext"
+                className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
+                title="Allow prompts to extend the workflow queue"
+              >
+                Allow Dynamic Extension
+              </label>
               <SetAsDefaultButton
                 property="allowDynamicExtension"
                 show={isDifferentFromGlobal("allowDynamicExtension")}
@@ -779,18 +787,8 @@ export const SettingsPanel: React.FC<{
                   )
                 }
               />
-            }
-          >
-            <CustomSelect
-              id="settings-dynamic-ext"
-              value={String(effectiveAllowDynamicExtension)}
-              onChange={handleDynamicExtensionChange}
-              options={[
-                { value: "true", label: "Yes" },
-                { value: "false", label: "No" },
-              ]}
-            />
-          </FormField>
+            </div>
+          </div>
 
           {/* Resume Session & Session ID */}
           <div className="flex flex-col gap-1">

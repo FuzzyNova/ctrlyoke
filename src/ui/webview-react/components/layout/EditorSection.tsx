@@ -18,8 +18,7 @@ import { EXECUTION_STATES } from "../../types/messages";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectedPromptIndex, promptName, setPromptName, cancelEdit } =
-    useEditorStore();
+  const { selectedPromptIndex, promptName, setPromptName } = useEditorStore();
   const { editorCollapsed, toggleEditorCollapse } = useUiStore();
   const { prompts, executionState } = useWorkflowStore();
 
@@ -85,19 +84,6 @@ export const EditorSection: React.FC = () => {
             value={promptName}
             onChange={(e) => setPromptName(e.target.value)}
           />
-        )}
-
-        {/* Right: New Prompt button (only in edit mode) */}
-        {isEditMode && (
-          <button
-            className="btn-new-prompt px-2 py-1 text-xs bg-btn-secondary-bg text-btn-secondary-fg border border-btn-border rounded hover:bg-btn-secondary-hover transition-colors flex items-center gap-1 flex-shrink-0"
-            onClick={cancelEdit}
-            disabled={isRunning}
-            title="Cancel editing and return to new prompt mode"
-          >
-            <i className="codicon codicon-add" />
-            {!isNarrow && <span>New Prompt</span>}
-          </button>
         )}
       </div>
 
