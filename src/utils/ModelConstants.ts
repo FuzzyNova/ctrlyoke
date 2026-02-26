@@ -32,9 +32,12 @@
  * Some of these may NOT be available via Copilot CLI.
  */
 export const COPILOT_MODELS: Record<string, string> = {
+  "claude-opus-4.6": "Claude Opus 4.6",
+  "claude-sonnet-4.6": "Claude Sonnet 4.6",
+  "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
   "gpt-5.2-codex": "Gpt 5.2 Codex",
+  "gpt-5.3-codex": "GPT 5.3 Codex",
   "gpt-5-mini": "GPT-5 Mini",
-  "gpt-5": "GPT-5",
   "gpt-4o-mini": "GPT-4o Mini",
   "copilot-fast": "Copilot Fast",
   "gpt-4o": "GPT-4o",
@@ -43,7 +46,6 @@ export const COPILOT_MODELS: Record<string, string> = {
   "gpt-5.1-codex": "GPT-5.1 Codex",
   "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
   "gpt-5.1-codex-max": "Gpt 5.1 Codex Max",
-  "gpt-5-codex": "GPT-5 Codex",
   "claude-sonnet-4": "Claude Sonnet 4",
   "claude-sonnet-4.5": "Claude Sonnet 4.5",
   "claude-opus-4.5": "Claude Opus 4.5",
@@ -67,20 +69,23 @@ export const COPILOT_MODELS: Record<string, string> = {
  * Command: copilot help config
  */
 export const COPILOT_CLI_MODEL_IDS = [
+  "claude-sonnet-4.6",
   "claude-sonnet-4.5",
   "claude-haiku-4.5",
+  "claude-opus-4.6",
+  "claude-opus-4.6-fast",
   "claude-opus-4.5",
   "claude-sonnet-4",
+  "gemini-3-pro-preview",
+  "gpt-5.3-codex",
   "gpt-5.2-codex",
+  "gpt-5.2",
   "gpt-5.1-codex-max",
   "gpt-5.1-codex",
-  "gpt-5.2",
   "gpt-5.1",
-  "gpt-5",
   "gpt-5.1-codex-mini",
   "gpt-5-mini",
   "gpt-4.1",
-  "gemini-3-pro-preview",
 ] as const;
 
 /**
@@ -95,6 +100,7 @@ export const CLAUDE_CLI_MODELS = [
   "sonnet",
   "sonnet[1m]",
   "opus",
+  "opus[1m]",
   "haiku",
 ] as const;
 
@@ -115,6 +121,7 @@ export const CLAUDE_CLI_MODEL_LABELS: Record<string, string> = {
   sonnet: "Sonnet",
   "sonnet[1m]": "Sonnet 1M Context",
   opus: "Opus",
+  "opus[1m]": "Opus 1M Context",
   haiku: "Haiku",
 };
 

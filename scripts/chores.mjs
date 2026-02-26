@@ -159,9 +159,69 @@ async function checkCliUpdates() {
   }
 
   console.log();
-  logInfo("To update CLIs, see CHORES.md section 1");
-  logWarning(
-    "CLI updates must be done manually (requires different package managers)"
+  console.log();
+  logInfo("To update CLIs:");
+  logInfo("  - Copilot CLI:  copilot update");
+  logInfo("  - Claude CLI:   claude upgrade");
+  logInfo("  - Codex CLI:    npm install -g @openai/codex");
+  logWarning("Copilot and Claude use native installers, not npm");
+}
+
+/**
+ * Task: Update CLI tools
+ * Runs the native update commands for each installed CLI.
+ */
+async function updateClis() {
+  logHeader("Updating CLI Tools");
+
+  // Copilot CLI - native updater
+  const copilotInstalled = await checkCliInstalled(
+    "copilot",
+    "GitHub Copilot CLI"
+  );
+  if (copilotInstalled) {
+    logInfo("Updating Copilot CLI...");
+    try {
+      await runCommand("copilot", ["update"]);
+      logSuccess("Copilot CLI updated");
+    } catch {
+      logWarning(
+        "Copilot CLI update may have failed (non-zero exit is sometimes normal)"
+      );
+    }
+  }
+
+  console.log();
+
+  // Claude Code - native updater
+  const claudeInstalled = await checkCliInstalled("claude", "Claude Code CLI");
+  if (claudeInstalled) {
+    logInfo("Updating Claude Code CLI...");
+    try {
+      await runCommand("claude", ["upgrade"]);
+      logSuccess("Claude Code CLI updated");
+    } catch {
+      logWarning("Claude CLI upgrade may have failed");
+    }
+  }
+
+  console.log();
+
+  // Codex CLI - still npm
+  const codexInstalled = await checkCliInstalled("codex", "Codex CLI");
+  if (codexInstalled) {
+    logInfo("Updating Codex CLI via npm...");
+    try {
+      await runCommand("npm", ["install", "-g", "@openai/codex"]);
+      logSuccess("Codex CLI updated");
+    } catch {
+      logWarning("Codex CLI update failed");
+    }
+  }
+
+  console.log();
+  logInfo(
+    "Run 'npm run chores -- --task check-clis' to verify versions after update"
   );
 }
 
@@ -256,6 +316,7 @@ ${colors.cyan}Usage:${colors.reset}
 
 ${colors.cyan}Available Tasks:${colors.reset}
   ${colors.green}update-deps${colors.reset}     Update dependencies and run npm audit
+  ${colors.green}update-clis${colors.reset}     Update CLI tools (copilot, claude, codex)
   ${colors.green}check-clis${colors.reset}      Check installed CLI tool versions
   ${colors.green}sync-models${colors.reset}     Sync model registry (requires exported models)
   ${colors.green}check-all${colors.reset}       Run all checks (lint, format, tests)
@@ -263,12 +324,12 @@ ${colors.cyan}Available Tasks:${colors.reset}
 
 ${colors.cyan}Examples:${colors.reset}
   npm run chores -- --task update-deps
+  npm run chores -- --task update-clis
   npm run chores -- --task sync-models
   npm run chores -- --task all
 
 ${colors.cyan}Manual Tasks:${colors.reset}
   Some tasks require manual steps. See ${colors.blue}CHORES.md${colors.reset} for details:
-  - Updating CLI tools (section 1)
   - Exporting discovered models (section 2)
   - Updating VS Code commands (section 3)
 
@@ -304,6 +365,10 @@ async function main() {
         await updateDependencies();
         break;
 
+      case "update-clis":
+        await updateClis();
+        break;
+
       case "check-clis":
         await checkCliUpdates();
         break;
@@ -318,13 +383,15 @@ async function main() {
 
       case "all":
         logHeader("Running All Automated Chores");
-        await checkCliUpdates();
+        await updateClis();
+        await updateDependencies();
         await runAllChecks();
         logHeader("All Automated Chores Complete");
-        logInfo("Manual tasks remaining:");
-        logInfo("  1. Update CLI tools (see CHORES.md section 1)");
-        logInfo("  2. Update models (see CHORES.md section 2)");
-        logInfo("  3. Update VS Code commands (see CHORES.md section 3)");
+        logInfo("Remaining manual steps:");
+        logInfo(
+          "  1. Export discovered models in VS Code, then run: npm run chores -- --task sync-models"
+        );
+        logInfo("  2. Update VS Code commands (see CHORES.md section 3)");
         break;
 
       default:

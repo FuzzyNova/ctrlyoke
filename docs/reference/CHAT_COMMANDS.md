@@ -1,7 +1,7 @@
 # Available Chat Commands
 
-**Generated:** 2026-02-13T04:37:55.160Z  
-**Total Commands:** 315
+**Generated:** 2026-02-26T18:16:03.523Z  
+**Total Commands:** 330
 
 ---
 
@@ -29,6 +29,10 @@
 - `github.copilot.chat.completions.disable`
 - `github.copilot.chat.completions.enable`
 - `github.copilot.chat.completions.toggle`
+- `github.copilot.chat.copilotCLI.acceptDiff`
+- `github.copilot.chat.copilotCLI.addFileReference`
+- `github.copilot.chat.copilotCLI.addSelection`
+- `github.copilot.chat.copilotCLI.rejectDiff`
 - `github.copilot.chat.debug.exportAllPromptLogsAsJson`
 - `github.copilot.chat.debug.exportLogItem`
 - `github.copilot.chat.debug.exportPromptArchive`
@@ -88,10 +92,13 @@
 - `github.copilot.chat.toggleStatusMenu`
 - `github.copilot.chat.tools.memory.openFolder`
 - `github.copilot.chat.triggerPermissiveSignIn`
+- `github.copilot.cli.newSession`
+- `github.copilot.cli.newSessionToSide`
 - `github.copilot.cli.sessions.delete`
 - `github.copilot.cli.sessions.openRepository`
 - `github.copilot.cli.sessions.openWorktreeInNewWindow`
 - `github.copilot.cli.sessions.openWorktreeInTerminal`
+- `github.copilot.cli.sessions.rename`
 - `github.copilot.cli.sessions.resumeInTerminal`
 - `github.copilot.cloud.resetWorkspaceConfirmations`
 - `github.copilot.cloud.sessions.installPRExtension`
@@ -175,6 +182,7 @@
 - `workbench.action.chat.clearInputHistory`
 - `workbench.action.chat.configure.customagents`
 - `workbench.action.chat.configure.customagents.disabled`
+- `workbench.action.chat.configure.hooks`
 - `workbench.action.chat.configure.instructions`
 - `workbench.action.chat.configure.prompts`
 - `workbench.action.chat.configure.skills`
@@ -257,8 +265,10 @@
 - `workbench.action.chat.opencode-reviewer`
 - `workbench.action.chat.opencopilot-beast`
 - `workbench.action.chat.opencopilot-prompt`
+- `workbench.action.chat.opendeep-research`
 - `workbench.action.chat.openedit`
 - `workbench.action.chat.openflightpath-orchestrator`
+- `workbench.action.chat.opentest-agent`
 - `workbench.action.chat.opentest-agent-alpha`
 - `workbench.action.chat.opentest-agent-beta`
 - `workbench.action.chat.pickAgentSession`
@@ -267,10 +277,13 @@
 - `workbench.action.chat.previousCodeBlock`
 - `workbench.action.chat.previousFileTree`
 - `workbench.action.chat.previousUserPrompt`
+- `workbench.action.chat.queueMessage`
 - `workbench.action.chat.quickVoiceChat`
 - `workbench.action.chat.readChatResponseAloud`
 - `workbench.action.chat.redoEdit`
 - `workbench.action.chat.redoEdit2`
+- `workbench.action.chat.removeAllPendingRequests`
+- `workbench.action.chat.removePendingRequest`
 - `workbench.action.chat.reportIssueForBug`
 - `workbench.action.chat.resetTrustedTools`
 - `workbench.action.chat.restoreCheckpoint`
@@ -284,6 +297,7 @@
 - `workbench.action.chat.save-as-agent`
 - `workbench.action.chat.save-as-instructions`
 - `workbench.action.chat.save-as-prompt`
+- `workbench.action.chat.sendPendingImmediately`
 - `workbench.action.chat.sendToNewChat`
 - `workbench.action.chat.setAgentSessionsOrientationSideBySide`
 - `workbench.action.chat.setAgentSessionsOrientationStacked`
@@ -291,6 +305,7 @@
 - `workbench.action.chat.skipTool`
 - `workbench.action.chat.startParameterizedPrompt`
 - `workbench.action.chat.startVoiceChat`
+- `workbench.action.chat.steerWithMessage`
 - `workbench.action.chat.stopListening`
 - `workbench.action.chat.stopListeningAndSubmit`
 - `workbench.action.chat.stopReadChatItemAloud`

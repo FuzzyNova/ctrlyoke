@@ -379,11 +379,15 @@ function updateSchema(
     ...new Set([...chatModels, ...cliModels, ...claudeModels, ...codexModels]),
   ].sort();
 
-  // Find the model property in promptItem definition
-  const modelProperty = schema.definitions?.promptItem?.properties?.model;
+  // Find the model property - it lives in executionProperties (shared mixin)
+  const modelProperty =
+    schema.definitions?.executionProperties?.properties?.model ||
+    schema.definitions?.promptItem?.properties?.model;
 
   if (!modelProperty) {
-    console.warn("Warning: model property not found in schema");
+    console.warn(
+      "Warning: model property not found in schema (checked executionProperties and promptItem)"
+    );
     return;
   }
 

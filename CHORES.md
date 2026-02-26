@@ -8,13 +8,13 @@ Run the automated chore script:
 
 ```bash
 # Run all chores
-npm run chores
+npm run chores -- --task all
 
 # Run specific chore
 npm run chores -- --task update-clis
-npm run chores -- --task update-models
-npm run chores -- --task update-commands
+npm run chores -- --task sync-models
 npm run chores -- --task update-deps
+npm run chores -- --task check-all
 ```
 
 ## Manual Chore Checklist
@@ -27,25 +27,31 @@ Update to the latest versions of the CLI tools FlightPath integrates with:
 
 #### Copilot CLI
 
+Copilot CLI uses a native installer (not npm). Use the built-in update command:
+
 ```bash
 # Check current version
 copilot --version
 
 # Update to latest
-npm install -g @github/copilot
+copilot update
 ```
 
 #### Claude Code CLI
+
+Claude Code uses a native installer (not npm). Use the built-in upgrade command:
 
 ```bash
 # Check current version
 claude --version
 
 # Update to latest
-npm install -g @anthropic-ai/claude-code
+claude upgrade
 ```
 
 #### Codex CLI
+
+Codex CLI is an npm package:
 
 ```bash
 # Check current version
