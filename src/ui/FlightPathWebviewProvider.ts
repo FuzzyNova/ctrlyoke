@@ -40,6 +40,7 @@ import { FlightPathManager } from "../flightpath/FlightPathManager";
 import { Harness } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
+import { SkillDiscovery, SkillInfo } from "../utils/SkillDiscovery";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import { ContextExpander } from "../utils/ContextExpander";
 import { encode } from "gpt-tokenizer";
@@ -71,6 +72,9 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
   // Discovered agents
   private availableAgents: AgentInfo[] = [];
+
+  // Discovered skills
+  private availableSkills: SkillInfo[] = [];
 
   // Current workflow name (cached from queue)
   private currentWorkflowName: string | undefined;
@@ -150,6 +154,9 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
 
     // Discover available agents in background
     this.discoverAgents();
+
+    // Discover available skills in background
+    this.discoverSkills();
 
     // Harness availability is driven by FlightPathManager via notifyHarnessAvailability()
     // (subscribes to onDidChangeStatus on all integrations — single source of truth).
@@ -908,6 +915,7 @@ window.vscodeApi = acquireVsCodeApi();
         modelOptions,
         harnessStatus: this.harnessStatus,
         availableAgents: this.availableAgents,
+        availableSkills: this.availableSkills,
       },
     });
   }
@@ -1058,6 +1066,17 @@ window.vscodeApi = acquireVsCodeApi();
     this.view.webview.postMessage({
       type: MESSAGE_TYPES.AGENTS_UPDATE,
       data: { availableAgents: this.availableAgents },
+    });
+  }
+
+  private sendSkillsUpdate(): void {
+    if (!this.view) {
+      return;
+    }
+
+    this.view.webview.postMessage({
+      type: MESSAGE_TYPES.SKILLS_UPDATE,
+      data: { availableSkills: this.availableSkills },
     });
   }
 
@@ -2140,6 +2159,24 @@ window.vscodeApi = acquireVsCodeApi();
       this.sendAgentsUpdate();
     } catch (error) {
       Log.error("Failed to discover agents:", error);
+    }
+  }
+
+  private async discoverSkills(): Promise<void> {
+    try {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const workspaceFolder =
+        workspaceFolders && workspaceFolders.length > 0
+          ? workspaceFolders[0]
+          : undefined;
+
+      this.availableSkills = await SkillDiscovery.discoverSkills(
+        workspaceFolder
+      );
+
+      this.sendSkillsUpdate();
+    } catch (error) {
+      Log.error("Failed to discover skills:", error);
     }
   }
 }

@@ -1,7 +1,7 @@
 import * as fs from "fs";
-import * as vscode from "vscode";
 import { AgentDiscovery } from "./AgentDiscovery";
 import { Log } from "./Log";
+import { resolveWorkspaceFolder } from "./DiscoveryUtils";
 
 /**
  * AgentExpander
@@ -31,20 +31,7 @@ export class AgentExpander {
     agentName: string,
     workspaceRoot?: string
   ): Promise<string | null> {
-    // Resolve workspace folder from workspace root path
-    let workspaceFolder: vscode.WorkspaceFolder | undefined;
-    if (workspaceRoot) {
-      workspaceFolder = vscode.workspace.workspaceFolders?.find(
-        (folder) => folder.uri.fsPath === workspaceRoot
-      );
-
-      // Fall back to first workspace folder if exact match not found
-      if (!workspaceFolder) {
-        workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      }
-    } else {
-      workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    }
+    const workspaceFolder = resolveWorkspaceFolder(workspaceRoot);
 
     // Discover all available agents
     const agents = await AgentDiscovery.discoverAgents(workspaceFolder);

@@ -49,6 +49,7 @@ export {
   type ModelOptionsUpdateMessage,
   type HarnessStatusUpdateMessage,
   type AgentsUpdateMessage,
+  type SkillsUpdateMessage,
   type WorkflowPropertiesUpdateMessage,
   type OpenNewWorkflowModalMessage,
   type RecentWorkflowsMessage,

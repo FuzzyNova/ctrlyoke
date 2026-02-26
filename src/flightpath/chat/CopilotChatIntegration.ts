@@ -675,7 +675,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
           workflowContext.allPrompts,
           workflowContext.filePath,
           workflowContext.resolvedProperties?.allowDynamicExtension,
-          workflowContext.resolvedProperties?.agent // Pass resolved agent for prompt prepending
+          workflowContext.resolvedProperties?.agent, // Pass resolved agent for prompt prepending
+          workflowContext.resolvedProperties?.skills // Pass resolved skills for frontmatter injection
         )
       : await this.buildPromptText(prompt);
 

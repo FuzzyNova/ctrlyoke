@@ -24,6 +24,15 @@ export interface AgentOption {
 }
 
 /**
+ * Skill option for multi-select dropdowns
+ */
+export interface SkillOption {
+  name: string;
+  path: string;
+  description?: string;
+}
+
+/**
  * Harness status information
  */
 export interface HarnessStatus {
@@ -53,6 +62,7 @@ export interface WorkflowProperties {
   harness?: string;
   model?: string;
   agent?: string;
+  skills?: string[];
   resumeSession?: boolean;
   sessionId?: string | number; // UUID string or prompt number reference
   allowDynamicExtension?: boolean;
@@ -74,6 +84,9 @@ interface SettingsState {
 
   // Available agents (from workspace discovery)
   availableAgents: AgentOption[];
+
+  // Available skills (from workspace and user discovery)
+  availableSkills: SkillOption[];
 
   // Harness status (checking/available/unavailable)
   harnessStatus: Record<HarnessId, HarnessStatus>;
@@ -98,6 +111,10 @@ interface SettingsActions {
 
   // Agents
   setAvailableAgents: (agents: AgentOption[]) => void;
+
+  // Skills
+  setAvailableSkills: (skills: SkillOption[]) => void;
+  getEffectiveSkills: () => string[];
 
   // Harness status
   setHarnessStatus: (harness: HarnessId, status: HarnessStatus) => void;
@@ -191,6 +208,7 @@ const initialState: SettingsState = {
     [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
   },
   availableAgents: [],
+  availableSkills: [],
   harnessStatus: initialHarnessStatus,
   globalSettings: initialGlobalSettings,
   workflowProperties: {},
@@ -223,6 +241,17 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
     // ============================================================================
 
     setAvailableAgents: (agents) => set({ availableAgents: agents }),
+
+    // ============================================================================
+    // SKILLS
+    // ============================================================================
+
+    setAvailableSkills: (skills) => set({ availableSkills: skills }),
+
+    getEffectiveSkills: () => {
+      const { workflowProperties } = get();
+      return workflowProperties.skills ?? [];
+    },
 
     // ============================================================================
     // HARNESS STATUS

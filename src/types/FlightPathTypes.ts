@@ -40,6 +40,9 @@ export interface ExecutionProperties {
   /** Custom agent file (.agent.md) */
   agent?: string;
 
+  /** Skills to attach (frontmatter-only progressive disclosure via <skillInstructions>) */
+  skills?: string[];
+
   /** Resume existing chat session (default: false, start new session) */
   resumeSession?: boolean;
 

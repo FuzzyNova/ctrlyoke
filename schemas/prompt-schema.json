@@ -103,6 +103,14 @@
           "type": ["string", "number"],
           "description": "Session ID for resuming CLI conversations. Can be a string (exact CLI session ID to resume) or number (prompt reference: 1 = use session from first prompt). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9-_]+$"
+          },
+          "description": "List of skill names to attach to this prompt. Only the skill frontmatter is attached (progressive disclosure) — the harness reads the full SKILL.md when using the skill. Skills are discovered from .claude/skills/ directories (workspace and user home). Prompt-level skills replace workflow-level skills (no merging)."
+        },
         "endCondition": {
           "$ref": "#/definitions/endCondition"
         }

@@ -238,6 +238,7 @@ export interface PromptItem {
   harness?: string;
   model?: string;
   agent?: string;
+  skills?: string[];
   resumeSession?: boolean;
   sessionId?: string | number;
   allowDynamicExtension?: boolean;
@@ -474,6 +475,20 @@ export interface AgentsUpdateMessage {
 }
 
 /**
+ * Skills update message (extension -> webview)
+ */
+export interface SkillsUpdateMessage {
+  type: typeof MESSAGE_TYPES.SKILLS_UPDATE;
+  data: {
+    availableSkills: Array<{
+      name: string;
+      path: string;
+      description?: string;
+    }>;
+  };
+}
+
+/**
  * Workflow properties update message (extension -> webview)
  */
 export interface WorkflowPropertiesUpdateMessage {
@@ -555,6 +570,7 @@ export type IncomingMessage =
   | ModelOptionsUpdateMessage
   | HarnessStatusUpdateMessage
   | AgentsUpdateMessage
+  | SkillsUpdateMessage
   | WorkflowPropertiesUpdateMessage
   | { type: typeof MESSAGE_TYPES.WORKFLOW_LOADED }
   | { type: typeof MESSAGE_TYPES.WORKFLOW_UNLOADED }

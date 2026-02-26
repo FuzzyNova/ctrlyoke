@@ -61,15 +61,28 @@ export function sendMessage(
  * Reset all cross-cutting state when the active workflow changes.
  * Called by FILE_SELECTED and SESSION_RESTORED after loadWorkflow().
  *
- * Clears history view, run counters, editor state, and enables the queue UI
- * so each handler doesn't have to duplicate these six lines.
+ * Clears history view, run counters, and enables the queue UI.
+ * Preserves the user's in-progress ephemeral prompt:
+ * - If editing an existing prompt (edit mode), cancels the edit and restores
+ *   the saved new-prompt state so typed content is not lost.
+ * - If already in new-prompt mode, leaves the editor content untouched.
  */
 function applyWorkflowChange(): void {
   useWorkflowStore.getState().clearHistoryOutputs();
   useUiStore.getState().clearHistoryView();
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
-  useEditorStore.getState().resetEditor();
-  useEditorStore.getState().setHasActiveQueue(true);
+
+  const editorStore = useEditorStore.getState();
+  if (editorStore.selectedPromptIndex !== null) {
+    // Was editing an existing prompt from the old workflow — cancel the edit so
+    // the savedNewPromptState (what the user had typed before clicking edit) is
+    // restored instead of being discarded.
+    editorStore.cancelEdit();
+  }
+  // Already in new-prompt mode: leave the editor content as-is so the user
+  // doesn't lose whatever they've typed.
+
+  editorStore.setHasActiveQueue(true);
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 
@@ -121,6 +134,11 @@ function createMessageHandlers(): MessageHandlerMap {
     // Update available agents
     if (data.availableAgents) {
       settingsStore.setAvailableAgents(data.availableAgents);
+    }
+
+    // Update available skills
+    if (data.availableSkills) {
+      settingsStore.setAvailableSkills(data.availableSkills);
     }
 
     // Load workflow if data includes prompts
@@ -481,6 +499,17 @@ function createMessageHandlers(): MessageHandlerMap {
     const data = message.data || message;
     if (data.availableAgents) {
       settingsStore.setAvailableAgents(data.availableAgents);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // SKILLS_UPDATE - Update available skills list
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.SKILLS_UPDATE] = (message) => {
+    const settingsStore = useSettingsStore.getState();
+    const data = message.data || message;
+    if (data.availableSkills) {
+      settingsStore.setAvailableSkills(data.availableSkills);
     }
   };
 

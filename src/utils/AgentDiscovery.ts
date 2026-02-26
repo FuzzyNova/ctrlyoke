@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { Log } from "./Log";
+import { formatDisplayName, isAccessibleDirectory } from "./DiscoveryUtils";
 
 /**
  * Represents a discovered agent file
@@ -128,13 +129,7 @@ export class AgentDiscovery {
     const agents: AgentInfo[] = [];
 
     try {
-      // Check if directory exists
-      if (!fs.existsSync(directoryPath)) {
-        return [];
-      }
-
-      const stat = await fs.promises.stat(directoryPath);
-      if (!stat.isDirectory()) {
+      if (!(await isAccessibleDirectory(directoryPath))) {
         return [];
       }
 
@@ -158,7 +153,7 @@ export class AgentDiscovery {
 
         agents.push({
           name,
-          displayName: this.formatDisplayName(name),
+          displayName: formatDisplayName(name),
           path: filePath,
           source,
           supportsCopilotCli,
@@ -208,22 +203,6 @@ export class AgentDiscovery {
       Log.error("Error getting user prompts directory:", error);
       return null;
     }
-  }
-
-  /**
-   * Format agent name for display in UI
-   * Converts kebab-case or snake_case to Title Case
-   * @param name Agent filename (without extension)
-   */
-  private static formatDisplayName(name: string): string {
-    // Replace hyphens and underscores with spaces
-    const withSpaces = name.replace(/[-_]/g, " ");
-
-    // Title case each word
-    return withSpaces
-      .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ");
   }
 
   /**

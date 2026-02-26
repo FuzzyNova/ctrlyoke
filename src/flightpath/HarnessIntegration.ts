@@ -7,6 +7,7 @@ import {
   CliEvent,
 } from "../types/CliOutputTypes";
 import { AgentExpander } from "../utils/AgentExpander";
+import { SkillExpander } from "../utils/SkillExpander";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { ContextExpander } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
@@ -124,14 +125,16 @@ export abstract class HarnessIntegration {
   /**
    * Build prompt text from prompt item
    * Common logic for extracting prompt text, expanding context references,
-   * and prepending agent instructions when a resolved agent is specified.
+   * prepending agent instructions, and inserting skill instructions.
    *
    * @param prompt The prompt item to build text for
    * @param resolvedAgent Optional resolved agent name to prepend instructions for
+   * @param resolvedSkills Optional resolved skill names to insert as <skillInstructions>
    */
   protected async buildPromptText(
     prompt: PromptItem,
-    resolvedAgent?: string
+    resolvedAgent?: string,
+    resolvedSkills?: string[]
   ): Promise<string> {
     // Check if auto-attachment is enabled
     const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
@@ -167,6 +170,25 @@ export abstract class HarnessIntegration {
       } else {
         Log.warn(
           `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
+        );
+      }
+    }
+
+    // Skill expansion - insert skill frontmatter if specified
+    if (resolvedSkills && resolvedSkills.length > 0) {
+      const workspaceRoot = this.getWorkspaceRoot();
+      const skillContent = await SkillExpander.expandSkills(
+        resolvedSkills,
+        workspaceRoot
+      );
+      if (skillContent) {
+        expandedText = this.insertSkillInstructions(expandedText, skillContent);
+        Log.info(
+          `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
+        );
+      } else {
+        Log.warn(
+          `⚠️ No skills resolved from [${resolvedSkills.join(", ")}], continuing without skills`
         );
       }
     }
@@ -208,6 +230,47 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Insert skill instructions after agent instructions (or after attachments if no agent).
+   *
+   * Final structure:
+   *   [<attachment> blocks] → <agentInstructions> (if agent) → <skillInstructions> → [user prompt]
+   *
+   * Positioning logic:
+   * 1. If agentInstructions present: insert after </agentInstructions>
+   * 2. Else if attachment blocks present: insert after last </attachment>
+   * 3. Else: prepend before entire prompt
+   */
+  private insertSkillInstructions(
+    expandedPrompt: string,
+    skillContent: string
+  ): string {
+    const AGENT_CLOSE_TAG = "</agentInstructions>";
+    const ATTACHMENT_CLOSE_TAG = "</attachment>";
+
+    // 1. Try to insert after agent instructions
+    const agentEnd = expandedPrompt.lastIndexOf(AGENT_CLOSE_TAG);
+    if (agentEnd !== -1) {
+      const afterAgent = agentEnd + AGENT_CLOSE_TAG.length;
+      const before = expandedPrompt.substring(0, afterAgent);
+      const after = expandedPrompt.substring(afterAgent).trimStart();
+      return `${before}\n\n${skillContent}\n\n${after}`;
+    }
+
+    // 2. Try to insert after last attachment
+    const lastAttachmentEnd = expandedPrompt.lastIndexOf(ATTACHMENT_CLOSE_TAG);
+    if (lastAttachmentEnd !== -1) {
+      const afterAttachment =
+        lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
+      const before = expandedPrompt.substring(0, afterAttachment);
+      const after = expandedPrompt.substring(afterAttachment).trimStart();
+      return `${before}\n\n${skillContent}\n\n${after}`;
+    }
+
+    // 3. Prepend before entire prompt
+    return `${skillContent}\n\n${expandedPrompt}`;
+  }
+
+  /**
    * Build prompt with dynamic queue instructions if needed
    * @param prompt The prompt item
    * @param promptIndex Current prompt index
@@ -221,10 +284,15 @@ export abstract class HarnessIntegration {
     allPrompts: PromptItem[],
     filePath?: string,
     allowDynamicExtension?: boolean,
-    resolvedAgent?: string
+    resolvedAgent?: string,
+    resolvedSkills?: string[]
   ): Promise<string> {
-    // Build base prompt text (with attachments and agent instructions)
-    let promptText = await this.buildPromptText(prompt, resolvedAgent);
+    // Build base prompt text (with attachments, agent, and skill instructions)
+    let promptText = await this.buildPromptText(
+      prompt,
+      resolvedAgent,
+      resolvedSkills
+    );
 
     // Check if we should inject dynamic queue instructions
     const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();

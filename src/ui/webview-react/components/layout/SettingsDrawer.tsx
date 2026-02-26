@@ -14,7 +14,12 @@ import {
   type HarnessId,
   type HarnessStatusString,
 } from "../../types/messages";
-import { PanelBar, IconToggleButton, CustomSelect } from "../shared";
+import {
+  PanelBar,
+  IconToggleButton,
+  CustomSelect,
+  MultiCheckboxDropdown,
+} from "../shared";
 
 /**
  * Harness display information
@@ -253,6 +258,7 @@ export const SettingsPanel: React.FC<{
   const { settingsCollapsed, toggleSettingsCollapse } = useUiStore();
   const {
     availableAgents,
+    availableSkills,
     harnessStatus: harnessStatus,
     globalSettings,
     workflowProperties,
@@ -260,6 +266,7 @@ export const SettingsPanel: React.FC<{
     getEffectiveHarness: getEffectiveHarness,
     getEffectiveModel,
     getEffectiveAgent,
+    getEffectiveSkills,
     getEffectiveResumeSession,
     getEffectiveAllowDynamicExtension,
   } = useSettingsStore();
@@ -295,6 +302,7 @@ export const SettingsPanel: React.FC<{
   const effectiveHarness = getEffectiveHarness();
   const effectiveModel = getEffectiveModel();
   const effectiveAgent = getEffectiveAgent();
+  const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
   const effectiveAllowDynamicExtension = getEffectiveAllowDynamicExtension();
 
@@ -312,6 +320,12 @@ export const SettingsPanel: React.FC<{
         return (
           workflowValue !==
           globalSettings.harnessDefaultModels[effectiveHarness]
+        );
+      }
+      // Array comparison for skills
+      if (property === "skills") {
+        return (
+          JSON.stringify(workflowValue) !== JSON.stringify([])
         );
       }
       const globalValue =
@@ -391,6 +405,24 @@ export const SettingsPanel: React.FC<{
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "agent",
         value: agent || undefined,
+      });
+    },
+    [vscode]
+  );
+
+  const handleSkillsChange = useCallback(
+    (skills: string[]) => {
+      // Optimistic update
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty(
+        "skills",
+        skills.length > 0 ? skills : undefined
+      );
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "skills",
+        value: skills.length > 0 ? skills : undefined,
       });
     },
     [vscode]
@@ -686,6 +718,39 @@ export const SettingsPanel: React.FC<{
                 })),
               ]}
             />
+          </FormField>
+
+          {/* Skills */}
+          <FormField
+            label="Skills"
+            htmlFor="settings-skills"
+            description="Attach skills (frontmatter only, progressive disclosure)"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="skills"
+                show={isDifferentFromGlobal("skills")}
+                onSetDefault={() =>
+                  handleSetAsDefault("skills", workflowProperties.skills)
+                }
+              />
+            }
+          >
+            <MultiCheckboxDropdown
+              id="settings-skills"
+              selectedValues={effectiveSkills}
+              onChange={handleSkillsChange}
+              options={availableSkills.map((s) => ({
+                value: s.name,
+                label: s.name,
+                description: s.description || undefined,
+              }))}
+              placeholder="No skills selected"
+            />
+            {effectiveSkills.length > 0 && (
+              <p className="text-[10px] text-description-fg mt-0.5">
+                Active: {effectiveSkills.join(", ")}
+              </p>
+            )}
           </FormField>
 
           {/* Allow Dynamic Extension */}

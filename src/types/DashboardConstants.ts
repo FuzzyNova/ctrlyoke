@@ -74,6 +74,7 @@ export const MESSAGE_TYPES = {
   MODEL_OPTIONS_UPDATE: "modelOptionsUpdate", // Refresh model lists after registry loads
   HARNESS_STATUS_UPDATE: "harnessStatusUpdate", // Update harness availability
   AGENTS_UPDATE: "agentsUpdate", // Update available agents list
+  SKILLS_UPDATE: "skillsUpdate", // Update available skills list
   GLOBAL_SETTINGS_UPDATED: "globalSettingsUpdated", // Extension -> Webview: Config changed, update settings only (no workflow reset)
   GET_CONFIG: "getConfig", // Webview -> Extension: Request config value
   UPDATE_CONFIG: "updateConfig", // Webview -> Extension: Update config value
@@ -279,6 +280,7 @@ export const PROMPT_PROPERTIES = {
   HARNESS: "harness",
   MODEL: "model",
   AGENT: "agent",
+  SKILLS: "skills",
 
   // Session properties
   RESUME_SESSION: "resumeSession",

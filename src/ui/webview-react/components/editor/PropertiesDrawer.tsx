@@ -5,7 +5,7 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { HARNESS_IDS, type HarnessId } from "../../types/messages";
-import { CustomSelect } from "../shared";
+import { CustomSelect, MultiCheckboxDropdown } from "../shared";
 
 interface PropertiesDrawerProps {
   isOpen: boolean;
@@ -38,6 +38,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   } = useEditorStore();
   const {
     availableAgents,
+    availableSkills,
     globalSettings,
     getModelsForHarness: getModelsForHarness,
   } = useSettingsStore();
@@ -205,7 +206,33 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </div>
             </div>
 
-            {/* Row 3: Resume Session + Session ID */}
+            {/* Row 3: Skills (full-width multi-select) */}
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="prop-skills"
+                className="text-xs font-medium text-foreground"
+              >
+                Skills
+              </label>
+              <MultiCheckboxDropdown
+                id="prop-skills"
+                selectedValues={properties.skills}
+                onChange={(v) => setProperty("skills", v)}
+                options={availableSkills.map((s) => ({
+                  value: s.name,
+                  label: s.name,
+                  description: s.description || undefined,
+                }))}
+                placeholder="None (inherit from workflow)"
+              />
+              {properties.skills.length > 0 && (
+                <p className="text-[10px] text-description-fg">
+                  Active: {properties.skills.join(", ")}
+                </p>
+              )}
+            </div>
+
+            {/* Row 4: Resume Session + Session ID */}
             <div className="grid grid-cols-2 gap-4">
               {/* Resume Session */}
               <div className="flex flex-col gap-1">

@@ -68,6 +68,11 @@ export class ValidationUtils {
         type: "string",
         nullable: true,
       },
+      skills: {
+        type: "array",
+        items: { type: "string" },
+        nullable: true,
+      },
       resumeSession: {
         type: "boolean",
         nullable: true,
@@ -112,6 +117,7 @@ export class ValidationUtils {
           },
           model: { type: "string", nullable: true },
           agent: { type: "string", nullable: true },
+          skills: { type: "array", items: { type: "string" }, nullable: true },
           resumeSession: { type: "boolean", nullable: true },
           allowDynamicExtension: { type: "boolean", nullable: true },
           endCondition: {

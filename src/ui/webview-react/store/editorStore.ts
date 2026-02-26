@@ -23,6 +23,7 @@ export interface PropertyValues {
   harness: string; // "default" | harness ID
   model: string; // "default" | model ID
   agent: string; // "" or path to agent file
+  skills: string[]; // [] or array of skill names
   resumeSession: string; // "default" | "yes" | "no"
   sessionId: string; // "" or session ID or prompt number reference
   allowDynamicExtension: string; // "default" | "yes" | "no"
@@ -37,6 +38,7 @@ export const PROPERTY_DEFAULTS: PropertyValues = {
   harness: "default",
   model: "default",
   agent: "",
+  skills: [],
   resumeSession: "default",
   sessionId: "",
   allowDynamicExtension: "default",
@@ -252,6 +254,7 @@ export const useEditorStore = create<
       harness: promptData.harness ?? "default",
       model: promptData.model ?? "default",
       agent: promptData.agent ?? "",
+      skills: promptData.skills ?? [],
       resumeSession:
         promptData.resumeSession === undefined
           ? "default"
@@ -474,7 +477,7 @@ export const useEditorStore = create<
     set({
       promptText: persistedState.editorText ?? "",
       promptName: persistedState.promptName ?? "",
-      properties: persistedState.properties ?? { ...PROPERTY_DEFAULTS },
+      properties: { ...PROPERTY_DEFAULTS, ...(persistedState.properties ?? {}) },
       isDirty: (persistedState.editorText ?? "").length > 0,
     });
 
@@ -539,6 +542,11 @@ export const useEditorStore = create<
     // Add agent if provided
     if (properties.agent) {
       result.agent = properties.agent;
+    }
+
+    // Add skills if non-empty
+    if (properties.skills && properties.skills.length > 0) {
+      result.skills = properties.skills;
     }
 
     // Add resumeSession if not default

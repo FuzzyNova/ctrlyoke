@@ -20,6 +20,9 @@ export interface ResolvedProperties {
   /** Custom agent file (.agent.md) - undefined if not specified */
   agent?: string;
 
+  /** Skills to attach - undefined if not specified */
+  skills?: string[];
+
   /** Resume existing chat session (always resolved, defaults to setting) */
   resumeSession: boolean;
 
@@ -72,6 +75,7 @@ export class PropertyResolver {
       harness,
       model,
       agent: this.resolveAgent(prompt, workflow),
+      skills: this.resolveSkills(prompt, workflow),
       resumeSession: this.resolveResumeSession(prompt, workflow),
       allowDynamicExtension: this.resolveAllowDynamicExtension(
         prompt,
@@ -175,6 +179,39 @@ export class PropertyResolver {
     // 3. VS Code setting fallback
     const globalAgent = ConfigurationUtils.getCustomAgent();
     return globalAgent || undefined; // Convert empty string to undefined
+  }
+
+  /**
+   * Resolve skills with two-tier precedence.
+   *
+   * Precedence order:
+   * 1. Prompt-level override (prompt.skills) - takes precedence, no merging
+   * 2. Workflow-level default (workflow.skills)
+   * 3. No fallback - returns undefined if not specified at either level
+   *
+   * Note: Skills are NOT inherited from VS Code settings.
+   * Prompt-level skills REPLACE workflow-level skills (prompt wins entirely).
+   *
+   * @param prompt The prompt to resolve skills for
+   * @param workflow The parent workflow file
+   * @returns Resolved skills array or undefined
+   */
+  private static resolveSkills(
+    prompt: PromptItem,
+    workflow: PromptFile
+  ): string[] | undefined {
+    // 1. Prompt-level override (highest priority)
+    if (prompt.skills !== undefined) {
+      return prompt.skills.length > 0 ? prompt.skills : undefined;
+    }
+
+    // 2. Workflow-level default
+    if (workflow.skills !== undefined && workflow.skills.length > 0) {
+      return workflow.skills;
+    }
+
+    // 3. No fallback
+    return undefined;
   }
 
   /**

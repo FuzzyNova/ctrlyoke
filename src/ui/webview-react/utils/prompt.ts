@@ -10,6 +10,7 @@ export const PROMPT_PROPERTIES = {
   HARNESS: "harness",
   MODEL: "model",
   AGENT: "agent",
+  SKILLS: "skills",
   RESUME_SESSION: "resumeSession",
   SESSION_ID: "sessionId",
   ALLOW_DYNAMIC_EXTENSION: "allowDynamicExtension",
@@ -49,6 +50,7 @@ export interface RawPrompt {
   harness?: string;
   model?: string;
   agent?: string;
+  skills?: string[];
   resumeSession?: boolean;
   sessionId?: string | number;
   allowDynamicExtension?: boolean;
@@ -87,6 +89,8 @@ export interface PromptItem {
   model?: string;
   /** Agent file path */
   agent?: string;
+  /** Skill names to attach (progressive disclosure) */
+  skills?: string[];
   /** Whether to resume previous session */
   resumeSession?: boolean;
   /** Specific session ID to use */
