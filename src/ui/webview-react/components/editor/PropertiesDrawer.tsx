@@ -180,7 +180,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
               </div>
             </div>
 
-            {/* Row 2: Agent + Allow Dynamic Extension (full width) */}
+            {/* Row 2: Agent + Skills */}
             <div className="grid grid-cols-2 gap-4">
               {/* Agent */}
               <div className="flex flex-col gap-1">
@@ -214,6 +214,45 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 />
               </div>
 
+              {/* Skills */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="prop-skills"
+                  className="text-xs font-medium text-foreground"
+                >
+                  Skills
+                </label>
+                <MultiCheckboxDropdown
+                  id="prop-skills"
+                  selectedValues={properties.skills}
+                  onChange={(v) => setProperty("skills", v)}
+                  options={availableSkills.map((s) => ({
+                    value: s.name,
+                    label: s.name,
+                    description: s.description || undefined,
+                  }))}
+                  placeholder="None (inherit from workflow)"
+                  namespace={DROPDOWN_NAMESPACES.SKILLS}
+                  hiddenValues={
+                    hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
+                  }
+                  onHideOption={(v) =>
+                    hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                  }
+                  onUnhideOption={(v) =>
+                    unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
+                  }
+                />
+                {properties.skills.length > 0 && (
+                  <p className="text-[10px] text-description-fg">
+                    Active: {properties.skills.join(", ")}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: Allow Dynamic Extension + Resume Session */}
+            <div className="grid grid-cols-2 gap-4">
               {/* Allow Dynamic Extension */}
               <div className="flex flex-col gap-1">
                 <label
@@ -236,46 +275,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                 />
               </div>
-            </div>
 
-            {/* Row 3: Skills (full-width multi-select) */}
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="prop-skills"
-                className="text-xs font-medium text-foreground"
-              >
-                Skills
-              </label>
-              <MultiCheckboxDropdown
-                id="prop-skills"
-                selectedValues={properties.skills}
-                onChange={(v) => setProperty("skills", v)}
-                options={availableSkills.map((s) => ({
-                  value: s.name,
-                  label: s.name,
-                  description: s.description || undefined,
-                }))}
-                placeholder="None (inherit from workflow)"
-                namespace={DROPDOWN_NAMESPACES.SKILLS}
-                hiddenValues={
-                  hiddenDropdownOptions[DROPDOWN_NAMESPACES.SKILLS] ?? []
-                }
-                onHideOption={(v) =>
-                  hideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                }
-                onUnhideOption={(v) =>
-                  unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
-                }
-              />
-              {properties.skills.length > 0 && (
-                <p className="text-[10px] text-description-fg">
-                  Active: {properties.skills.join(", ")}
-                </p>
-              )}
-            </div>
-
-            {/* Row 4: Resume Session + Session ID */}
-            <div className="grid grid-cols-2 gap-4">
               {/* Resume Session */}
               <div className="flex flex-col gap-1">
                 <label
@@ -295,8 +295,16 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   ]}
                 />
               </div>
+            </div>
 
-              {/* Session ID (enabled only when resume session is "yes") */}
+            {/* Row 4: Session ID (full width, animated, visible only when resume session is "yes") */}
+            <div
+              className={`transition-all duration-300 ${
+                properties.resumeSession === "yes"
+                  ? "max-h-[60px] opacity-100"
+                  : "max-h-0 opacity-0 overflow-hidden"
+              }`}
+            >
               <div className="flex flex-col gap-1">
                 <label
                   htmlFor="prop-session-id"
@@ -309,13 +317,8 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   id="prop-session-id"
                   value={properties.sessionId}
                   onChange={(e) => setProperty("sessionId", e.target.value)}
-                  disabled={properties.resumeSession !== "yes"}
-                  placeholder={
-                    properties.resumeSession !== "yes"
-                      ? "Enable Resume Session to input session ID"
-                      : "Enter session ID or prompt number (e.g., 1, 2)"
-                  }
-                  className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border disabled:opacity-50"
+                  placeholder="Enter session ID or prompt number (e.g., 1, 2)"
+                  className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
                 />
               </div>
             </div>

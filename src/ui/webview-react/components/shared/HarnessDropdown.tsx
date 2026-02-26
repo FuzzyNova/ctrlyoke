@@ -227,14 +227,6 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     setShowHidden(false);
   };
 
-  // Selecting a hidden item also unhides it
-  const handleSelectHidden = (harnessId: HarnessId) => {
-    onUnhideOption?.(harnessId);
-    onChange(harnessId);
-    setIsOpen(false);
-    setShowHidden(false);
-  };
-
   // ── Derived display label for the trigger button ──────────────────────────
   const triggerLabel =
     value === "default"
@@ -255,6 +247,11 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     !isHiddenValue(h);
 
   const totalHidden = [...CLI_HARNESSES, ...CHAT_HARNESSES].filter(isHiddenValue).length;
+
+  // Hide a group header when every item in that group is hidden and we're not
+  // in "show hidden" mode — an empty section is visually confusing.
+  const showCliGroup = !CLI_HARNESSES.every(isHiddenValue) || showHidden;
+  const showChatGroup = !CHAT_HARNESSES.every(isHiddenValue) || showHidden;
 
   // ── Group renderer ────────────────────────────────────────────────────────
   const renderGroup = (harnesses: HarnessId[]) =>
@@ -327,13 +324,21 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           )}
 
           {/* ── CLI group ── */}
-          <GroupHeader label="CLI" />
-          {renderGroup(CLI_HARNESSES)}
+          {showCliGroup && (
+            <>
+              <GroupHeader label="CLI" />
+              {renderGroup(CLI_HARNESSES)}
+            </>
+          )}
 
           {/* ── VS Code Chat group ── */}
-          <div className="border-t border-dropdown-border" />
-          <GroupHeader label="VS Code Chat" />
-          {renderGroup(CHAT_HARNESSES)}
+          {showChatGroup && (
+            <>
+              {showCliGroup && <div className="border-t border-dropdown-border" />}
+              <GroupHeader label="VS Code Chat" />
+              {renderGroup(CHAT_HARNESSES)}
+            </>
+          )}
 
           {/* ── Footer ── */}
           <div className="border-t border-dropdown-border bg-editor-bg">
