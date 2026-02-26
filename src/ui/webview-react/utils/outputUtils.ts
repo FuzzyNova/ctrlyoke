@@ -19,6 +19,7 @@ import type {
   ThinkingEventData,
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
+import { HARNESS_INFO } from "../types/messages";
 import { escapeHtml, truncate } from "./string";
 import { formatTime, getTimestamp } from "./time";
 
@@ -552,7 +553,13 @@ export function generateMarkdownExport(
           contextWindowSize?: number;
         };
         elapsed?: number;
-        structured?: { events: Array<{ type: string; data: unknown }> };
+        structured?: {
+          events: Array<{ type: string; data: unknown }>;
+          metadata?: {
+            sessionId?: string;
+            harness?: string;
+          };
+        };
       };
       const attemptLabel =
         item.attemptIndex === 0
@@ -600,6 +607,14 @@ export function generateMarkdownExport(
 
       // Stats section
       const stats: string[] = [];
+
+      const sessionId = output.structured?.metadata?.sessionId;
+      const harnessId = output.structured?.metadata?.harness;
+      const harnessName = harnessId
+        ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ??
+          harnessId)
+        : undefined;
+
       if (output.tokens) {
         const {
           prompt,
@@ -620,6 +635,11 @@ export function generateMarkdownExport(
         const cachedSuffix = cached ? ` / ${cached} cached` : "";
         stats.push(
           `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
+        );
+      }
+      if (sessionId) {
+        stats.push(
+          `Session${harnessName ? ` (${harnessName})` : ""}: ${sessionId}`
         );
       }
       if (output.elapsed !== undefined) {

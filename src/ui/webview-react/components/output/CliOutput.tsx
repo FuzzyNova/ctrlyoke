@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { formatTime } from "@utils/outputUtils";
 import { BashOutput } from "./BashOutput";
 import { MarkdownText } from "./MarkdownText";
@@ -29,6 +29,7 @@ import type {
   ToolResultEventData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
+import { HARNESS_INFO } from "../../types/messages";
 
 // ============================================================================
 // Text Output Component
@@ -304,8 +305,42 @@ export const CliOutput: React.FC<CliOutputProps> = ({
   streamingChunk = "",
   className = "",
 }) => {
+  const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
   const attemptLabel =
     attemptIndex === 0 ? "Initial Attempt" : `Retry ${attemptIndex}`;
+
+  const structuredMetadata = output.structured?.metadata;
+  const sessionId = structuredMetadata?.sessionId;
+  const harnessId = structuredMetadata?.harness;
+  const harnessName = harnessId
+    ? (HARNESS_INFO[harnessId as keyof typeof HARNESS_INFO]?.name ?? harnessId)
+    : undefined;
+
+  const handleCopySessionId = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sessionId);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = sessionId;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopiedSessionId(sessionId);
+      window.setTimeout(() => {
+        setCopiedSessionId((current) =>
+          current === sessionId ? null : current
+        );
+      }, 1200);
+    } catch {
+      setCopiedSessionId(null);
+    }
+  }, [sessionId]);
 
   // Check if streaming
   const streamingIndicator = output.isStreaming ? (
@@ -372,44 +407,79 @@ export const CliOutput: React.FC<CliOutputProps> = ({
 
   // Token stats
   const renderStats = () => {
-    if (!output.tokens && output.elapsed === undefined) return null;
+    if (!output.tokens && output.elapsed === undefined && !sessionId) {
+      return null;
+    }
 
-    const parts: string[] = [];
+    const parts: React.ReactNode[] = [];
 
     if (output.tokens) {
       const {
         prompt,
         completion,
         cached,
+        cacheCreated,
         contextWindowUsed,
         contextWindowSize,
       } = output.tokens;
 
-      // Context window usage (most useful: shows how full the window is)
+      const total = prompt + completion;
+      const tokenDetails: string[] = [
+        `Tokens: ${prompt} in / ${completion} out / ${total} total`,
+      ];
+      if (cached) {
+        tokenDetails.push(`${cached} cached`);
+      }
+      if (cacheCreated) {
+        tokenDetails.push(`${cacheCreated} cache-created`);
+      }
+
+      // Context window usage (shown inline) with token details in hover tooltip
       if (contextWindowUsed !== undefined && contextWindowSize) {
         const fmt = (n: number) =>
           n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
         const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
         parts.push(
-          `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)`
+          <span key="context" title={tokenDetails.join(" | ")}>
+            Context: {fmt(contextWindowUsed)}/{fmt(contextWindowSize)} ({pct}%)
+          </span>
         );
+      } else {
+        parts.push(<span key="tokens">{tokenDetails.join(" | ")}</span>);
       }
+    }
 
-      // Billing tokens
-      const total = prompt + completion;
-      const cachedSuffix = cached ? ` / ${cached} cached` : "";
+    if (sessionId) {
       parts.push(
-        `Tokens: ${prompt} in / ${completion} out / ${total} total${cachedSuffix}`
+        <span key="session" className="inline-flex items-center gap-1">
+          Session{harnessName ? ` (${harnessName})` : ""}: {sessionId}
+          <button
+            type="button"
+            className="icon-btn py-0 px-1"
+            onClick={handleCopySessionId}
+            title="Copy session ID"
+            aria-label="Copy session ID"
+          >
+            <i
+              className={`codicon ${copiedSessionId === sessionId ? "codicon-check" : "codicon-copy"}`}
+            />
+          </button>
+        </span>
       );
     }
 
     if (!output.isStreaming && output.elapsed !== undefined) {
-      parts.push(`${output.elapsed}s`);
+      parts.push(<span key="elapsed">{output.elapsed}s</span>);
     }
 
     return (
       <div className="text-[10px] text-[var(--fg-secondary)] mt-[var(--spacing-xs)]">
-        {parts.join(" | ")}
+        {parts.map((part, index) => (
+          <React.Fragment key={`stats-${index}`}>
+            {index > 0 && <span aria-hidden="true"> | </span>}
+            {part}
+          </React.Fragment>
+        ))}
       </div>
     );
   };
