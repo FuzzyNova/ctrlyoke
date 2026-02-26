@@ -1624,6 +1624,11 @@ export class FlightPathManager {
     if (workingFilePath) {
       // Reload working file to get complete PromptFile with workflow properties
       promptFile = await this.promptQueue.readWorkingFile(workingFilePath);
+      // If the working file has no prompts (e.g. all were deleted before re-initializing),
+      // use the provided prompts so they are not silently dropped.
+      if (!promptFile.prompts || promptFile.prompts.length === 0) {
+        promptFile = { ...promptFile, prompts };
+      }
     } else {
       // No working file - use minimal PromptFile
       promptFile = { prompts };
@@ -1732,7 +1737,10 @@ export class FlightPathManager {
 
     // Get current queue state to determine behavior
     const currentState = this.promptQueue.getState();
-    const hasWorkflow = currentState.prompts.length > 0;
+    // Consider an existing working file as "has workflow" even when all prompts were deleted.
+    // This ensures we reuse the existing working file instead of creating a new one.
+    const hasWorkflow =
+      currentState.prompts.length > 0 || !!currentState.workingFilePath;
     const isIdle = currentState.status === EXECUTION_STATES.IDLE;
     const isCompleted = currentState.status === EXECUTION_STATES.COMPLETED;
 
