@@ -251,14 +251,6 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function registerCommands(context: vscode.ExtensionContext) {
-  // Take Off command - main execution command
-  const takeOffCommand = vscode.commands.registerCommand(
-    "flightpath.takeOff",
-    async () => {
-      await flightPathManager.takeOff();
-    }
-  );
-
   // Open Panel command
   const openPanelCommand = vscode.commands.registerCommand(
     "flightpath.openPanel",
@@ -565,7 +557,6 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // Add all production commands to subscriptions
   context.subscriptions.push(
-    takeOffCommand,
     openPanelCommand,
     createPromptFileCommand,
     pauseCommand,

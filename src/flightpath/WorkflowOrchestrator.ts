@@ -606,25 +606,15 @@ export class WorkflowOrchestrator {
     }
   }
 
-  async takeOff(): Promise<void> {
-    await this.workflowCommandHandler.takeOff(async (filePath: string) => {
-      await this.getActiveInstance().executePromptFile(filePath);
-    });
-  }
-
   async createPromptFile(): Promise<void> {
     await this.workflowCommandHandler.createPromptFile();
   }
 
   async openPanel(): Promise<void> {
-    try {
-      await this.workflowCommandHandler.openPanel(
-        () => this.getDefaultIntegration().getDetailedStatus(),
-        async () => await this.retryHarnessDetection()
-      );
-    } catch (error) {
-      await this.takeOff();
-    }
+    await this.workflowCommandHandler.openPanel(
+      () => this.getDefaultIntegration().getDetailedStatus(),
+      async () => await this.retryHarnessDetection()
+    );
   }
 
   async openCurrentPromptFile(): Promise<void> {

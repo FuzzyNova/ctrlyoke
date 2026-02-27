@@ -35,12 +35,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "flightpath.takeOff",
-        "title": "Take Off",
-        "category": "FlightPath",
-        "icon": "$(compass)"
-      },
-      {
         "command": "flightpath.openPanel",
         "title": "Open FlightPath Panel",
         "category": "FlightPath"
@@ -199,9 +193,6 @@
     ],
     "menus": {
       "commandPalette": [
-        {
-          "command": "flightpath.takeOff"
-        },
         {
           "command": "flightpath.openPanel"
         },

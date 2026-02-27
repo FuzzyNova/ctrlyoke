@@ -15,7 +15,6 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
  * - Creating draft prompts with timestamps
  * - Creating end condition scripts
  * - Opening files and panels
- * - File picker (Take Off command)
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
@@ -299,60 +298,6 @@ export class WorkflowCommandHandler {
     } catch (error) {
       console.error("Failed to focus FlightPath dashboard:", error);
       throw error; // Let caller handle fallback
-    }
-  }
-
-  /**
-   * Take off - show file picker and execute selected prompt file
-   *
-   * @param onExecute Callback to execute the selected file
-   */
-  async takeOff(onExecute: (filePath: string) => Promise<void>): Promise<void> {
-    try {
-      if (!this.currentWorkspaceFolder) {
-        vscode.window.showErrorMessage("FlightPath: No workspace folder found");
-        return;
-      }
-
-      // Discover available prompt files
-      const promptFiles = await this.promptFileParser.discoverPromptFiles(
-        this.currentWorkspaceFolder
-      );
-
-      if (promptFiles.length === 0) {
-        const createAction = await vscode.window.showInformationMessage(
-          "No prompt files found. Would you like to create one?",
-          "Create Prompt File",
-          "Cancel"
-        );
-
-        if (createAction === "Create Prompt File") {
-          await this.createPromptFile();
-        }
-        return;
-      }
-
-      // Show quick pick for file selection
-      const items = promptFiles.map((filePath) => ({
-        label: path.basename(filePath),
-        description: path.relative(
-          this.currentWorkspaceFolder!.uri.fsPath,
-          filePath
-        ),
-        filePath,
-      }));
-
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: "Select a prompt file to execute",
-        ignoreFocusOut: true,
-      });
-
-      if (selected) {
-        await onExecute(selected.filePath);
-      }
-    } catch (error) {
-      console.error("FlightPath: Take off failed:", error);
-      vscode.window.showErrorMessage(`FlightPath: Take off failed: ${error}`);
     }
   }
 

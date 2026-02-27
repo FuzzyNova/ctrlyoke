@@ -98,10 +98,6 @@ export class FlightPathManager {
     return this.orchestrator.appendFromFile(filePath, position);
   }
 
-  async takeOff(): Promise<void> {
-    return this.orchestrator.takeOff();
-  }
-
   async pause(): Promise<void> {
     return this.orchestrator.pause();
   }

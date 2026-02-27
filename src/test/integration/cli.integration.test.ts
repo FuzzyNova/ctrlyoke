@@ -41,7 +41,7 @@ suite("CLI Integration Tests", () => {
     const commands = await vscode.commands.getCommands();
 
     const flightPathCommands = [
-      "flightpath.takeOff",
+      "flightpath.openPanel",
       "flightpath.pause",
       "flightpath.resume",
       "flightpath.stop",
@@ -61,7 +61,7 @@ suite("CLI Integration Tests", () => {
     // Verify extension activated by checking a core command is registered
     const commands = await vscode.commands.getCommands();
     assert.ok(
-      commands.includes("flightpath.takeOff"),
+      commands.includes("flightpath.openPanel"),
       "Core command should be registered"
     );
   });
