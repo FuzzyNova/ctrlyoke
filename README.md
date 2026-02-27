@@ -417,3 +417,5 @@ No silent fallbacks - you always know the system state!
 ---
 
 **Enjoy!**
+
+say goodbye
