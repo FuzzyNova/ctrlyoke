@@ -25,7 +25,8 @@ export class PromptFileLoader {
   constructor(
     private promptFileParser: PromptFileParser,
     private promptQueue: PromptQueue,
-    private dashboardProvider?: FlightPathWebviewProvider
+    private getDashboard: () => FlightPathWebviewProvider | undefined = () =>
+      undefined
   ) {}
 
   /**
@@ -124,9 +125,10 @@ export class PromptFileLoader {
       this.promptQueue.loadPrompts(promptFile, workingFilePath);
 
       // Notify dashboard about file selection
-      if (this.dashboardProvider) {
+      const dashboard = this.getDashboard();
+      if (dashboard) {
         // Send full prompt objects with all properties
-        this.dashboardProvider.updateFileSelected(fileName, promptFile.prompts);
+        dashboard.updateFileSelected(fileName, promptFile.prompts);
       }
 
       Log.info(
@@ -231,14 +233,15 @@ export class PromptFileLoader {
           isAutoLoad
         );
 
-        if (this.dashboardProvider) {
+        const dashboard = this.getDashboard();
+        if (dashboard) {
           // Use original file basename when available; fall back to workflow name for ephemeral workflows
           const fileName = workingFile.originalFile
             ? path.basename(workingFile.originalFile)
             : workingFile.workflowName || path.basename(workingFilePath);
           // Get the restored state to send accurate prompt info with runtime state
           const restoredState = this.promptQueue.getState();
-          this.dashboardProvider.updateSessionRestored(
+          dashboard.updateSessionRestored(
             fileName,
             restoredState.prompts,
             restoredState.results,
@@ -248,9 +251,7 @@ export class PromptFileLoader {
           );
 
           // Load output history if available (auto-loads most recent run from disk)
-          await this.dashboardProvider.loadOutputHistoryForWorkflow(
-            workingFilePath
-          );
+          await dashboard.loadOutputHistoryForWorkflow(workingFilePath);
         }
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
@@ -260,7 +261,8 @@ export class PromptFileLoader {
         );
         const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
 
-        if (newPromptsCount > 0 && this.dashboardProvider) {
+        const mergeDashboard = this.getDashboard();
+        if (newPromptsCount > 0 && mergeDashboard) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
           Log.info(
@@ -268,7 +270,7 @@ export class PromptFileLoader {
           );
 
           // Send PROMPTS_EXTENDED message with updated prompt list
-          this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+          mergeDashboard.updatePromptsExtended(updatedState.prompts);
         } else if (newPromptsCount === 0) {
           Log.info("Working file changed but no new prompts detected");
         }

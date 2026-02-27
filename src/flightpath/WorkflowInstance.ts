@@ -173,7 +173,7 @@ export class WorkflowInstance {
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,
-      this.dashboardProvider
+      () => this.activeDashboard
     );
     this.workflowExecutor = new WorkflowExecutor(
       this.promptQueue,
@@ -184,11 +184,11 @@ export class WorkflowInstance {
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
       this.promptQueue,
-      this.dashboardProvider
+      () => this.activeDashboard
     );
     this.promptFileWatcher = new PromptFileWatcher(
       this.promptQueue,
-      this.dashboardProvider
+      () => this.activeDashboard
     );
 
     // Subscribe to queue state changes

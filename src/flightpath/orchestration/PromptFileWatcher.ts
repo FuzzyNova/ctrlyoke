@@ -21,7 +21,8 @@ export class PromptFileWatcher {
 
   constructor(
     private promptQueue: PromptQueue,
-    private dashboardProvider?: FlightPathWebviewProvider
+    private getDashboard: () => FlightPathWebviewProvider | undefined = () =>
+      undefined
   ) {}
 
   /**
@@ -109,8 +110,9 @@ export class PromptFileWatcher {
     this.dispose();
 
     // Update dashboard to show no file selected
-    if (this.dashboardProvider) {
-      this.dashboardProvider.updateFileSelected("No file selected", []);
+    const dashboard = this.getDashboard();
+    if (dashboard) {
+      dashboard.updateFileSelected("No file selected", []);
     }
   }
 

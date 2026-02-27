@@ -60,7 +60,9 @@ export class EndConditionHandler {
   constructor(
     private readonly endConditionEvaluator: EndConditionEvaluator,
     private readonly promptQueue: PromptQueue,
-    private readonly dashboardProvider?: FlightPathWebviewProvider
+    private readonly getDashboard: () =>
+      | FlightPathWebviewProvider
+      | undefined = () => undefined
   ) {}
 
   /**
@@ -189,13 +191,10 @@ export class EndConditionHandler {
       );
 
       // Update dashboard with retry state
-      if (this.dashboardProvider) {
-        this.dashboardProvider.updateRetryAttempt(
-          currentIndex,
-          currentRetry,
-          maxRetries
-        );
-        this.dashboardProvider.updateStepStatus(currentIndex, {
+      const dashboard = this.getDashboard();
+      if (dashboard) {
+        dashboard.updateRetryAttempt(currentIndex, currentRetry, maxRetries);
+        dashboard.updateStepStatus(currentIndex, {
           state: STEP_STATUS.RUNNING,
         });
       }
@@ -204,12 +203,13 @@ export class EndConditionHandler {
       const retryPromptText = this.buildRetryPrompt(prompt, evaluationResult);
 
       // Send status message: Retrying prompt (after building retryPrompt)
-      if (this.dashboardProvider) {
+      const retryDashboard = this.getDashboard();
+      if (retryDashboard) {
         const retryPromptPreview = retryPromptText
           .split("\n")[0]
           .substring(0, 60);
         const ellipsis = retryPromptText.length > 60 ? "..." : "";
-        this.dashboardProvider.updateStatusMessage(
+        retryDashboard.updateStatusMessage(
           currentIndex,
           `Retrying Prompt ${currentIndex + 1} (Attempt ${currentRetry}/${maxRetries}): ${retryPromptPreview}${ellipsis}`,
           STATUS_MESSAGE_SEVERITY.WARNING
