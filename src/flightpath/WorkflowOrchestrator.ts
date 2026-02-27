@@ -234,7 +234,9 @@ export class WorkflowOrchestrator {
   private retireWorkflow(workflowId: string): void {
     const instance = this.workflows.get(workflowId);
     if (!instance) {
-      Log.info(`retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`);
+      Log.info(
+        `retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
+      );
       return;
     }
 
@@ -283,7 +285,9 @@ export class WorkflowOrchestrator {
   setActiveWorkflow(workflowId: string): void {
     const instance = this.workflows.get(workflowId);
     if (!instance) {
-      Log.warn(`setActiveWorkflow: inst:${workflowId.slice(0, 8)} not found in running/paused registry`);
+      Log.warn(
+        `setActiveWorkflow: inst:${workflowId.slice(0, 8)} not found in running/paused registry`
+      );
       throw new Error(
         `Workflow ${workflowId} not found in running/paused registry`
       );
@@ -311,12 +315,24 @@ export class WorkflowOrchestrator {
     Log.info(
       `setActiveWorkflow: switch complete — inst:${workflowId.slice(0, 8)} is now active`
     );
+    // Restore run history counter so the RunSelector appears in the output header.
+    // Fire-and-forget: sendRunHistoryToDashboard is async (disk I/O) but non-critical.
+    instance
+      .sendRunHistoryToDashboard()
+      .catch((err) =>
+        Log.warn(
+          `setActiveWorkflow: failed to send run history for inst:${workflowId.slice(0, 8)}:`,
+          err
+        )
+      );
   }
 
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
     const summaries = [...this.workflows.values()].map((w) => w.getSummary());
-    Log.info(`[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances, viewed=${this.viewedInstance?.id.slice(0,8) ?? "null"}: ${summaries.map(s => `inst:${s.id.slice(0,8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`);
+    Log.info(
+      `[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances, viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+    );
     return summaries;
   }
 
@@ -761,7 +777,8 @@ export class WorkflowOrchestrator {
       this.context,
       this.dashboardProvider,
       this.integrationFactory,
-      (harnessOverride?: Harness) => this.resolveDetectorIntegration(harnessOverride),
+      (harnessOverride?: Harness) =>
+        this.resolveDetectorIntegration(harnessOverride),
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
@@ -814,7 +831,9 @@ export class WorkflowOrchestrator {
    * Used for pre-flight status checks and harness availability UI only.
    * Never used for execution — execution integrations are created per-run via IntegrationFactory.
    */
-  private resolveDetectorIntegration(harnessOverride?: Harness): HarnessIntegration {
+  private resolveDetectorIntegration(
+    harnessOverride?: Harness
+  ): HarnessIntegration {
     if (harnessOverride) {
       switch (harnessOverride) {
         case Harness.CopilotChat:

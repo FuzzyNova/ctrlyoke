@@ -79,6 +79,11 @@ export interface WorkflowContext {
    * Used to buffer output for replay when switching back to this workflow.
    */
   captureChunk?: (stepIndex: number, chunk: string) => void;
+  /**
+   * Always-on callback to capture the final completed output for a step (called even when inactive).
+   * Used to replay completed-step outputs when switching back to this workflow.
+   */
+  captureCompletedOutput?: (stepIndex: number, output: any) => void;
 }
 
 /**
@@ -969,6 +974,8 @@ export class WorkflowExecutor {
     if (context.dashboardProvider) {
       context.dashboardProvider.updateCliOutput(currentIndex, cliOutputObj);
     }
+    // Always capture the completed output so it can be replayed when switching back
+    context.captureCompletedOutput?.(currentIndex, cliOutputObj);
 
     // Save to history (same data, same moment)
     Log.info(

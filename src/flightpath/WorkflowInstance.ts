@@ -113,6 +113,14 @@ export class WorkflowInstance {
     }
   >();
 
+  /**
+   * Stores the final completed output for each step, indexed by stepIndex.
+   * Captured via captureCompletedOutput even when the instance is inactive.
+   * Replayed in sendFullStateToDashboard so completed prompts' outputs are
+   * visible when switching back to a running workflow.
+   */
+  private readonly completedStepOutputs = new Map<number, any>();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
   // ─────────────────────────────────────────────────────────────────────────
@@ -260,6 +268,17 @@ export class WorkflowInstance {
       state.workflowName || undefined
     );
 
+    // Replay completed step outputs so the user sees prior-prompt results
+    // when switching back to a workflow that is already partway through.
+    if (this.completedStepOutputs.size > 0) {
+      for (const [stepIndex, output] of this.completedStepOutputs) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying completed step ${stepIndex} output`
+        );
+        this.dashboardProvider.updateCliOutput(stepIndex, output);
+      }
+    }
+
     // Replay buffered streaming output for the currently-running step so the user
     // sees in-progress output when switching back to this workflow mid-execution.
     if (
@@ -292,6 +311,42 @@ export class WorkflowInstance {
           );
         }
       }
+    }
+  }
+
+  /**
+   * Asynchronously read this workflow's run history from disk and send
+   * RUN_HISTORY_UPDATED to the dashboard so the RunSelector appears after
+   * switching back to a running/paused workflow.
+   * Must NOT put the UI into history-view mode — only updates the counter.
+   */
+  async sendRunHistoryToDashboard(): Promise<void> {
+    const workingFilePath = this.promptQueue.getState().workingFilePath;
+    if (!workingFilePath) {
+      return;
+    }
+    try {
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      const [runs, runTimestamps, runStates] = await Promise.all([
+        this.outputHistoryManager.getRunsForWorkflow(workflowId),
+        this.outputHistoryManager.getRunTimestamps(workflowId),
+        this.outputHistoryManager.getRunStates(workflowId),
+      ]);
+      if (runs.length > 0) {
+        // activeDashboard returns undefined if the instance was deactivated
+        // between the start of the async op and now — preventing stale updates.
+        this.activeDashboard?.notifyRunHistoryUpdated(
+          runs.length,
+          runTimestamps,
+          runStates
+        );
+      }
+    } catch (err) {
+      Log.warn(
+        `[inst:${this.id.slice(0, 8)}] sendRunHistoryToDashboard failed:`,
+        err
+      );
     }
   }
 
@@ -674,6 +729,7 @@ export class WorkflowInstance {
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
           );
           this.stepOutputBuffer.clear();
+          this.completedStepOutputs.clear();
           this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
         }
       }
@@ -1217,6 +1273,12 @@ export class WorkflowInstance {
           if (existing) {
             existing.accumulatedText += chunk;
           }
+        },
+        captureCompletedOutput: (stepIndex, output) => {
+          // Store the final output for replay when switching back to this workflow
+          self.completedStepOutputs.set(stepIndex, output);
+          // The step is no longer streaming; remove from streaming buffer
+          self.stepOutputBuffer.delete(stepIndex);
         },
       };
 
