@@ -733,13 +733,16 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
-  // WORKFLOW_ADDED - New workflow instance was loaded
-  // Only add to loadedWorkflows if the workflow is RUNNING or PAUSED.
+  // WORKFLOW_ADDED - New workflow instance entered RUNNING or PAUSED state.
+  // The orchestrator now only sends this message once the queue has actually
+  // transitioned to RUNNING/PAUSED (via onDidChangeState), so the summary is
+  // always in an active state.  The RUNNING/PAUSED guard below is kept as
+  // defensive code.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_ADDED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;
     WebviewLog.debug(
-      `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} state=${summary?.executionState} — will add to loadedWorkflows: ${!!(summary && (summary.executionState === EXECUTION_STATES.RUNNING || summary.executionState === EXECUTION_STATES.PAUSED))}`
+      `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} state=${summary?.executionState}`
     );
     if (
       summary &&
@@ -763,11 +766,6 @@ function createMessageHandlers(): MessageHandlerMap {
   // WORKFLOW_SUMMARY_UPDATED - Workflow execution state changed
   // If now RUNNING or PAUSED: upsert into loadedWorkflows.
   // If now COMPLETED/ERROR/STOPPED: remove from loadedWorkflows.
-  //
-  // NOTE: WORKFLOW_ADDED fires before the queue state transitions to RUNNING
-  // (timing gap in the orchestrator), so the frontend filter in WORKFLOW_ADDED
-  // drops the entry. When state=RUNNING arrives here, we must upsert (not just
-  // update) so the workflow appears in the "Running Workflows" section.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;

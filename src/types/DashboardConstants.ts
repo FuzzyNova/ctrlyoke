@@ -135,6 +135,17 @@ export const MESSAGE_TYPES = {
   // Multi-workflow coordination — Webview → Extension
   GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
   SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
+
+  // Per-workflow targeted controls — Webview → Extension
+  PAUSE_WORKFLOW: "pauseWorkflow", // Pause specific workflow: { workflowId }
+  RESUME_WORKFLOW: "resumeWorkflow", // Resume specific workflow: { workflowId }
+  STOP_WORKFLOW: "stopWorkflow", // Stop specific workflow: { workflowId }
+
+  // Recent workflow management — Webview → Extension
+  REMOVE_WORKFLOW_HISTORY: "removeWorkflowHistory", // Remove single history entry: { filePath }
+
+  // Settings — Webview → Extension
+  UPDATE_CONFIRM_DELETE: "updateConfirmDelete", // Update confirmDeleteOperations setting: { value: boolean }
 } as const;
 
 // ============================================================================

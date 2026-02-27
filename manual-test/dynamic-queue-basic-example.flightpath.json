@@ -2,18 +2,13 @@
   "prompts": [
     {
       "id": "extend-queue",
-      "prompt": "We are testing FlightPath queue-append via VS Code Chat Language Model Tools or MCP, which ever is available to you.\n\nCall the tool \"flightpath_append_queue\" to append TWO simple prompts:\n1) Append a prompt at the NEXT position (position=\"next\").\n2) Append another prompt at the END (position=\"end\").\n\nUse parameters shaped like:\n{\n  \"position\": \"next\" | \"end\",\n  \"prompts\": [ { \"prompt\": \"...\" } ],\n  \"source\": \"manual-test\",\n  \"reason\": \"manual test of append tool\"\n}\n\nMake the two appended prompt texts very simple, e.g. \"APPENDED NEXT: say hello\" and \"APPENDED END: say goodbye\".\n\nAfter appending, do not edit any files; just proceed.",
+      "prompt": "We are testing FlightPath queue-append via VS Code Chat Language Model Tools or MCP, which ever is available to you.\n\nCall the tool \"flightpath_append_queue\" to append TWO simple prompts:\n1) Append a prompt at the NEXT position (position=\"next\").\n2) Append another prompt at the END (position=\"end\").\n\nUse parameters shaped like:\n{\n  \"position\": \"next\" | \"end\",\n  \"prompts\": [ { \"prompt\": \"...\" } ],\n  \"source\": \"manual-test\",\n  \"reason\": \"manual test of append tool\"\n}\n\nMake the two appended prompt texts very simple, e.g. \"this is a test, just say hello\" and \"this is a test, just say goodbye\".\n\nAfter appending, do not edit any files; just proceed.",
       "allowDynamicExtension": true
     },
     {
       "id": "status",
       "prompt": "Now call the tool \"flightpath_queue_status\" (no parameters needed) and output the returned JSON status.",
       "allowDynamicExtension": true
-    },
-    {
-      "id": "appended-end-say-goodbye",
-      "prompt": "APPENDED END: say goodbye",
-      "allowDynamicExtension": false
     }
   ]
 }

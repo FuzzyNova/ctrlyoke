@@ -54,6 +54,7 @@ export interface GlobalSettings {
   resumeSession: boolean;
   allowDynamicExtension: boolean;
   respectGitignore: boolean;
+  confirmDeleteOperations: boolean;
 }
 
 /**
@@ -181,6 +182,7 @@ const initialGlobalSettings: GlobalSettings = {
   resumeSession: false,
   allowDynamicExtension: false,
   respectGitignore: true,
+  confirmDeleteOperations: true,
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {

@@ -461,14 +461,10 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    // Add to the workflows Map (running/paused registry) if not already there
-    if (!this.workflows.has(instance.id)) {
-      this.workflows.set(instance.id, instance);
-      Log.info(
-        `executeWorkflow: registered inst:${instance.id.slice(0, 8)} in running registry (total: ${this.workflows.size})`
-      );
-      this.dashboardProvider?.notifyWorkflowAdded(instance.getSummary());
-    }
+    // Note: the instance is registered in this.workflows when its promptQueue
+    // transitions to RUNNING or PAUSED via the onDidChangeState listener wired
+    // in buildWorkflowInstance(). Registering there (not here) guarantees
+    // getWorkflowSummaries() only ever returns truly running/paused workflows.
 
     // Warn (but don't block) if trying to run a second Chat-harness workflow
     const effectiveHarness =
@@ -544,6 +540,51 @@ export class WorkflowOrchestrator {
 
   async stop(): Promise<void> {
     return this.getActiveInstance().stop();
+  }
+
+  /**
+   * Pause a specific workflow by ID.
+   * Used by per-workflow controls in the dropdown; allows pausing non-active instances.
+   */
+  async pauseWorkflow(workflowId: string): Promise<void> {
+    const instance = this.workflows.get(workflowId);
+    if (!instance) {
+      Log.warn(
+        `pauseWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+      );
+      return;
+    }
+    return instance.pause();
+  }
+
+  /**
+   * Resume a specific workflow by ID.
+   * Used by per-workflow controls in the dropdown; allows resuming non-active instances.
+   */
+  async resumeWorkflow(workflowId: string): Promise<void> {
+    const instance = this.workflows.get(workflowId);
+    if (!instance) {
+      Log.warn(
+        `resumeWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+      );
+      return;
+    }
+    return instance.resume();
+  }
+
+  /**
+   * Stop a specific workflow by ID.
+   * Used by per-workflow controls in the dropdown; allows stopping non-active instances.
+   */
+  async stopWorkflow(workflowId: string): Promise<void> {
+    const instance = this.workflows.get(workflowId);
+    if (!instance) {
+      Log.warn(
+        `stopWorkflow: inst:${workflowId.slice(0, 8)} not found in registry`
+      );
+      return;
+    }
+    return instance.stop();
   }
 
   clearWorkflow(): void {
@@ -813,9 +854,29 @@ export class WorkflowOrchestrator {
     // This covers both active and inactive workflows so the multi-workflow list
     // stays in sync regardless of which workflow is currently displayed.
     instance.promptQueue.onDidChangeState((state) => {
-      this.dashboardProvider?.notifyWorkflowSummaryUpdated(
-        instance.getSummary()
-      );
+      const summary = instance.getSummary();
+
+      // Register in the running/paused registry the first time this instance
+      // becomes RUNNING or PAUSED.  Doing this here (rather than eagerly in
+      // executeWorkflow) guarantees that getWorkflowSummaries() never returns
+      // an IDLE workflow and that notifyWorkflowAdded() always fires with an
+      // accurate RUNNING/PAUSED state — eliminating the race condition where a
+      // GET_WORKFLOWS_LIST request processed before promptQueue.start() would
+      // return an IDLE summary that the webview filter drops, incorrectly
+      // clearing loadedWorkflows.
+      if (
+        (state.status === EXECUTION_STATES.RUNNING ||
+          state.status === EXECUTION_STATES.PAUSED) &&
+        !this.workflows.has(instance.id)
+      ) {
+        this.workflows.set(instance.id, instance);
+        Log.info(
+          `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} (total: ${this.workflows.size})`
+        );
+        this.dashboardProvider?.notifyWorkflowAdded(summary);
+      }
+
+      this.dashboardProvider?.notifyWorkflowSummaryUpdated(summary);
 
       // Auto-retire when a workflow completes, errors, or stops.
       // Small delay lets final dashboard messages flush first.

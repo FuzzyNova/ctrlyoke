@@ -7,8 +7,7 @@ import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { CodeMirrorEditor } from "./CodeMirrorEditor";
 import { PropertiesDrawer } from "./PropertiesDrawer";
 import { EditorFooter } from "./EditorFooter";
-import { Modal } from "../shared/Modal";
-import { Button } from "../shared";
+import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
@@ -58,6 +57,7 @@ export const PromptEditor: React.FC = () => {
     closePropertiesDrawer,
   } = useUiStore();
   useSettingsStore(); // Keep store initialized for reactive updates
+  const { globalSettings } = useSettingsStore();
 
   const vscode = getVsCodeApi();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -322,11 +322,25 @@ export const PromptEditor: React.FC = () => {
     cancelEdit();
   }, [selectedPromptIndex, promptText, getPropertyValues, vscode, cancelEdit]);
 
-  // Delete prompt - shows confirmation modal
+  // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)
   const handleDeleteClick = useCallback(() => {
     if (selectedPromptIndex === null) return;
+    if (!globalSettings.confirmDeleteOperations) {
+      // Skip modal — user opted out of delete confirmation
+      vscode.postMessage({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        index: selectedPromptIndex,
+      });
+      cancelEdit();
+      return;
+    }
     setShowDeleteModal(true);
-  }, [selectedPromptIndex]);
+  }, [
+    selectedPromptIndex,
+    globalSettings.confirmDeleteOperations,
+    vscode,
+    cancelEdit,
+  ]);
 
   // Confirm delete action
   const handleDeleteConfirm = useCallback(() => {
@@ -426,30 +440,14 @@ export const PromptEditor: React.FC = () => {
       />
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <DeleteConfirmModal
         isOpen={showDeleteModal}
-        onClose={handleDeleteCancel}
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
         title="Delete Prompt"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" size="md" onClick={handleDeleteCancel}>
-              Cancel
-            </Button>
-            <Button variant="danger" size="md" onClick={handleDeleteConfirm}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        <p className="text-foreground">
-          Are you sure you want to delete prompt{" "}
-          {(selectedPromptIndex ?? 0) + 1}?
-        </p>
-        <p className="mt-2 text-sm text-description-fg">
-          This action cannot be undone.
-        </p>
-      </Modal>
+        message={`Are you sure you want to delete prompt ${(selectedPromptIndex ?? 0) + 1}?`}
+        detail="This action cannot be undone."
+      />
     </div>
   );
 };

@@ -933,6 +933,12 @@
           "default": -1,
           "minimum": -1,
           "description": "[Output History] Maximum number of runs to keep per workflow. Older runs are automatically deleted. Use -1 or 0 to keep all runs (default)."
+        },
+        "flightpath.confirmDeleteOperations": {
+          "order": 850,
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When enabled (default), FlightPath shows a confirmation dialog before deleting prompts or workflow history. Uncheck **\"Don't ask me again\"** in any delete dialog to disable. Re-enable here to restore confirmation prompts."
         }
       }
     },

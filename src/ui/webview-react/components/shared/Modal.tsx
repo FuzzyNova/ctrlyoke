@@ -48,7 +48,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50"
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black bg-opacity-50"
       onClick={onClose}
     >
       <div
@@ -59,9 +59,7 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-panel-border">
-          <h2 className="text-xl font-semibold text-foreground">
-            {title}
-          </h2>
+          <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
             className="text-description-fg hover:text-foreground transition-colors"
@@ -84,7 +82,9 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto text-foreground">{children}</div>
+        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto text-foreground">
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (

@@ -32,30 +32,22 @@ When editing or analyzing files, read the corresponding instruction file:
 **Before editing files in a specific directory:**
 
 1. Identify which pattern matches the files you're working on
-2. Read the corresponding instruction file using `@.github/instructions/[filename]`
+2. Read the corresponding instruction file in `.github/instructions/[filename]`
 3. Apply the patterns and conventions described in that file
 
 **Examples:**
 
 - Working on `src/flightpath/FlightPathManager.ts`?
-  - Read: `@.github/instructions/flightpath-core.instructions.md`
+  - Read: `.github/instructions/flightpath-core.instructions.md`
 
 - Working on `src/ui/FlightPathDashboardProvider.ts`?
-  - Read: `@.github/instructions/ui.instructions.md`
+  - Read: `.github/instructions/ui.instructions.md`
 
 - Working on `src/flightpath/cli/CopilotCommandLineIntegration.ts`?
-  - Read: `@.github/instructions/flightpath-cli.instructions.md`
+  - Read: `.github/instructions/flightpath-cli.instructions.md`
 
 - Working on multiple files across different directories?
   - Read all relevant instruction files for those directories
-
-## Claude Code-Specific Guidance
-
-### Context Inclusion Strategy
-
-- **Always available**: Main instructions (`.github/copilot-instructions.md`) are imported at the top of this file
-- **On-demand**: Specific instruction files should be read when working with files in their scope
-- **Dynamic**: Use `@` syntax to import instruction files as needed during the conversation
 
 ### Example Workflow
 

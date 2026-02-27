@@ -15,6 +15,7 @@ interface RecentWorkflowsProps {
   currentFilePath: string | null;
   onSelect: (filePath: string) => void;
   onClearHistory: () => void;
+  onRemove?: (filePath: string) => void;
   className?: string;
 }
 
@@ -32,6 +33,7 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
   currentFilePath,
   onSelect,
   onClearHistory,
+  onRemove,
   className = "",
 }) => {
   return (
@@ -55,12 +57,16 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
             );
 
             return (
-              <button
+              <div
                 key={workflow.filePath}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(workflow.filePath)}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && onSelect(workflow.filePath)
+                }
                 title={workflow.filePath}
-                className={`workflow-menu-item w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors border-none bg-transparent cursor-pointer gap-2 ${
+                className={`workflow-menu-item group w-full flex items-center justify-between px-3 py-2 text-left text-sm transition-colors cursor-pointer gap-2 ${
                   isCurrent
                     ? "bg-list-active-bg text-list-active-fg font-semibold"
                     : "text-dropdown-fg hover:bg-list-hover-bg hover:text-list-hover-fg"
@@ -80,11 +86,26 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
 
                 {/* Time */}
                 {timeAgo && (
-                  <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0 ml-auto">
+                  <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0">
                     {timeAgo}
                   </span>
                 )}
-              </button>
+
+                {/* Delete button — visible only on row hover */}
+                {onRemove && (
+                  <button
+                    type="button"
+                    title="Remove from history"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemove(workflow.filePath);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0 p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+                  >
+                    <i className="codicon codicon-trash" />
+                  </button>
+                )}
+              </div>
             );
           })
         )}

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useUiStore } from "../../store/uiStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
+import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { getExecutionStateBadgeClass } from "../../utils/status";
 
 interface WorkflowStatusProps {
@@ -34,12 +36,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const vscode = useVsCodeApi();
   const { fileName, workflowName, executionState } = useWorkflowStore();
   const { loadedWorkflows, activeWorkflowId } = useUiStore();
+  const { globalSettings } = useSettingsStore();
 
   // Local state
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [recentWorkflows, setRecentWorkflows] = useState<RecentWorkflow[]>([]);
+  // Pending workflow path waiting for delete confirmation
+  const [pendingDeletePath, setPendingDeletePath] = useState<string | null>(
+    null
+  );
 
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +173,67 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     setIsDropdownOpen(false);
   }, [vscode]);
 
+  // Remove a single entry from recent workflow history — shows confirm modal or deletes directly
+  const handleRemoveWorkflow = useCallback(
+    (filePath: string) => {
+      if (!globalSettings.confirmDeleteOperations) {
+        // Skip modal — user opted out of delete confirmation
+        vscode.postMessage({
+          type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+          filePath,
+        });
+        setRecentWorkflows((prev) =>
+          prev.filter((w) => w.filePath !== filePath)
+        );
+        return;
+      }
+      // Show confirmation modal
+      setPendingDeletePath(filePath);
+    },
+    [globalSettings.confirmDeleteOperations, vscode]
+  );
+
+  // Confirmed: actually remove the workflow history entry
+  const handleRemoveWorkflowConfirm = useCallback(() => {
+    if (!pendingDeletePath) return;
+    vscode.postMessage({
+      type: MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY,
+      filePath: pendingDeletePath,
+    });
+    setRecentWorkflows((prev) =>
+      prev.filter((w) => w.filePath !== pendingDeletePath)
+    );
+    setPendingDeletePath(null);
+  }, [pendingDeletePath, vscode]);
+
+  const handleRemoveWorkflowCancel = useCallback(() => {
+    setPendingDeletePath(null);
+  }, []);
+
+  // Pause a specific workflow by ID
+  const handlePauseWorkflow = useCallback(
+    (workflowId: string) => {
+      vscode.postMessage({ type: MESSAGE_TYPES.PAUSE_WORKFLOW, workflowId });
+    },
+    [vscode]
+  );
+
+  // Resume a specific workflow by ID
+  const handleResumeWorkflow = useCallback(
+    (workflowId: string) => {
+      vscode.postMessage({ type: MESSAGE_TYPES.RESUME_WORKFLOW, workflowId });
+    },
+    [vscode]
+  );
+
+  // Stop a specific workflow by ID
+  const handleStopWorkflow = useCallback(
+    (workflowId: string) => {
+      vscode.postMessage({ type: MESSAGE_TYPES.STOP_WORKFLOW, workflowId });
+    },
+    [vscode]
+  );
+
   // No workflow loaded - show empty state
   if (!fileName) {
     return (
@@ -276,7 +344,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       {isDropdownOpen && !isEditing && (
         <div
           ref={dropdownRef}
-          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[9999] overflow-hidden flex flex-col"
+          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col"
           style={{
             top: containerRef.current
               ? containerRef.current.getBoundingClientRect().bottom + 4
@@ -300,6 +368,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                     workflow={workflow}
                     isCurrent={workflow.id === activeWorkflowId}
                     onClick={() => handleSwitchWorkflow(workflow.id)}
+                    onPause={() => handlePauseWorkflow(workflow.id)}
+                    onResume={() => handleResumeWorkflow(workflow.id)}
+                    onStop={() => handleStopWorkflow(workflow.id)}
                   />
                 ))}
               </div>
@@ -311,15 +382,29 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <RecentWorkflows
               workflows={recentWorkflows.filter(
-                (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
+                (rw) =>
+                  !loadedWorkflows.some(
+                    (lw) => lw.workingFilePath === rw.filePath
+                  )
               )}
               currentFilePath={fileName}
               onSelect={handleSelectWorkflow}
               onClearHistory={handleClearHistory}
+              onRemove={handleRemoveWorkflow}
             />
           </div>
         </div>
       )}
+
+      {/* Delete workflow history confirmation modal */}
+      <DeleteConfirmModal
+        isOpen={pendingDeletePath !== null}
+        onCancel={handleRemoveWorkflowCancel}
+        onConfirm={handleRemoveWorkflowConfirm}
+        title="Delete Workflow History"
+        message={`Remove "${pendingDeletePath ? getWorkflowNameFromPath(pendingDeletePath) : ""}" from history?`}
+        detail="This will permanently delete the workflow's queue files and all run history. This action cannot be undone."
+      />
     </div>
   );
 };

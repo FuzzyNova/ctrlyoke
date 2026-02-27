@@ -6,6 +6,9 @@ interface RunningWorkflowItemProps {
   workflow: WorkflowSummary;
   isCurrent: boolean;
   onClick: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
 }
 
 /**
@@ -35,8 +38,12 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
   workflow,
   isCurrent,
   onClick,
+  onPause,
+  onResume,
+  onStop,
 }) => {
   const isRunning = workflow.executionState === EXECUTION_STATES.RUNNING;
+  const isPaused = workflow.executionState === EXECUTION_STATES.PAUSED;
 
   const [elapsed, setElapsed] = useState(() =>
     formatElapsed(workflow.startedAt)
@@ -97,6 +104,43 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       <span className="text-[11px] text-description-fg flex-shrink-0 font-mono min-w-[32px] text-right">
         {elapsed}
       </span>
+
+      {/* Action buttons — only for active states */}
+      {(isRunning || isPaused) && (
+        <div
+          className="flex items-center gap-1 flex-shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isRunning ? (
+            <button
+              type="button"
+              title="Pause"
+              onClick={onPause}
+              className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+            >
+              <i className="codicon codicon-debug-pause" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              title="Resume"
+              onClick={onResume}
+              className="p-0.5 rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+            >
+              <i className="codicon codicon-play" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            title="Stop"
+            onClick={onStop}
+            className="p-0.5 rounded text-description-fg hover:text-error-fg hover:bg-toolbar-hover-bg transition-colors"
+          >
+            <i className="codicon codicon-debug-stop" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

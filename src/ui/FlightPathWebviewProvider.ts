@@ -549,6 +549,49 @@ window.vscodeApi = acquireVsCodeApi();
           break;
         }
 
+        // ============================================================================
+        // Per-workflow targeted controls
+        // ============================================================================
+        case MESSAGE_TYPES.PAUSE_WORKFLOW: {
+          const { workflowId } = message;
+          if (workflowId) {
+            await this.flightPathManager?.pauseWorkflow(workflowId);
+          }
+          break;
+        }
+
+        case MESSAGE_TYPES.RESUME_WORKFLOW: {
+          const { workflowId } = message;
+          if (workflowId) {
+            await this.flightPathManager?.resumeWorkflow(workflowId);
+          }
+          break;
+        }
+
+        case MESSAGE_TYPES.STOP_WORKFLOW: {
+          const { workflowId } = message;
+          if (workflowId) {
+            await this.flightPathManager?.stopWorkflow(workflowId);
+          }
+          break;
+        }
+
+        case MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY: {
+          const { filePath } = message;
+          if (filePath) {
+            await this.handleRemoveWorkflowHistory(filePath);
+          }
+          break;
+        }
+
+        case MESSAGE_TYPES.UPDATE_CONFIRM_DELETE: {
+          const { value } = message;
+          if (typeof value === "boolean") {
+            await ConfigurationUtils.setConfirmDeleteOperations(value);
+          }
+          break;
+        }
+
         default:
           Log.warn(`Unknown message type: ${message.type}`);
       }
@@ -970,6 +1013,8 @@ window.vscodeApi = acquireVsCodeApi();
       resumeSession: resumeExistingSession,
       allowDynamicExtension: dynamicQueueEnabled,
       respectGitignore,
+      confirmDeleteOperations:
+        ConfigurationUtils.shouldConfirmDeleteOperations(),
     };
 
     // Build dynamic model options from ModelRegistry
@@ -1029,6 +1074,8 @@ window.vscodeApi = acquireVsCodeApi();
         resumeSession: resumeExistingSession,
         allowDynamicExtension: dynamicQueueEnabled,
         respectGitignore,
+        confirmDeleteOperations:
+          ConfigurationUtils.shouldConfirmDeleteOperations(),
       },
       modelOptions: this.buildModelOptions(),
     });
@@ -1744,6 +1791,73 @@ window.vscodeApi = acquireVsCodeApi();
       }
     } catch (error) {
       Log.error("Failed to clear workflow history:", error);
+    }
+  }
+
+  /**
+   * Handle REMOVE_WORKFLOW_HISTORY: delete the .flightpath.json working file and associated
+   * .history/<workflowId>/ directory for a single entry.
+   * The webview has already optimistically removed it from local state.
+   */
+  private async handleRemoveWorkflowHistory(filePath: string): Promise<void> {
+    try {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        return;
+      }
+
+      const queueDir = path.join(workspaceRoot, ".flightpath", ".queue");
+      const historyBaseDir = path.join(
+        workspaceRoot,
+        ".flightpath",
+        ".history"
+      );
+
+      // Derive the working file name from the original prompt file path
+      // Working files are named with the stem of the original file: <stem>.flightpath.json
+      const stem = path
+        .basename(filePath)
+        .replace(/\.working\.(yaml|yml|json)$/i, "")
+        .replace(/\.flightpath\.(yaml|yml|json)$/i, "")
+        .replace(/\.(yaml|yml|json)$/i, "");
+
+      // Scan queue dir for any .flightpath.json file whose name starts with this stem
+      const files = await fs.readdir(queueDir).catch(() => [] as string[]);
+      const candidates = files.filter(
+        (f) => f.startsWith(stem) && f.endsWith(".flightpath.json")
+      );
+
+      for (const candidate of candidates) {
+        // Delete the working file
+        await fs
+          .unlink(path.join(queueDir, candidate))
+          .catch((err) =>
+            Log.warn(
+              `handleRemoveWorkflowHistory: failed to delete ${candidate}:`,
+              err
+            )
+          );
+
+        // Also delete the corresponding .history/<workflowId>/ directory
+        const workflowId = candidate
+          .replace(/\.flightpath\.json$/, "")
+          .replace(/\.flightpath\.yaml$/, "");
+        const historyDir = path.join(historyBaseDir, workflowId);
+        await fs
+          .rm(historyDir, { recursive: true, force: true })
+          .catch((err) =>
+            Log.warn(
+              `handleRemoveWorkflowHistory: failed to delete history dir ${workflowId}:`,
+              err
+            )
+          );
+      }
+
+      Log.info(
+        `handleRemoveWorkflowHistory: removed ${candidates.length} working file(s) and history for "${stem}"`
+      );
+    } catch (error) {
+      Log.error("Failed to remove workflow history entry:", error);
     }
   }
 

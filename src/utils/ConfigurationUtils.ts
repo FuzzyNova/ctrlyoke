@@ -568,4 +568,19 @@ export const ConfigurationUtils = {
   getMaxHistoryRuns(): number {
     return getConfig().get<number>("maxHistoryRuns", -1)!;
   },
+
+  /**
+   * Check if delete confirmation dialogs should be shown
+   * When true (default), shows a modal before destructive delete operations.
+   */
+  shouldConfirmDeleteOperations(): boolean {
+    return getConfig().get<boolean>("confirmDeleteOperations", true);
+  },
+
+  /**
+   * Set whether to show confirmation dialogs before delete operations
+   */
+  async setConfirmDeleteOperations(enabled: boolean): Promise<void> {
+    await this.updateSetting("confirmDeleteOperations", enabled);
+  },
 };
