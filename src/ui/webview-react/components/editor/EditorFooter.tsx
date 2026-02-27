@@ -5,8 +5,11 @@ import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 
 interface EditorFooterProps {
   isEditMode: boolean;
-  isRunning: boolean;
   isPromptCompleted: boolean;
+  /** True when the selected prompt's status is SENT or RUNNING (prevents Update) */
+  isPromptBeingSent: boolean;
+  /** True when the selected prompt's status is RUNNING specifically (prevents Delete) */
+  isPromptActivelyRunning: boolean;
   hasContent: boolean;
   hasPendingPrompts: boolean;
   runButtonText: string;
@@ -34,8 +37,9 @@ interface EditorFooterProps {
  */
 export const EditorFooter: React.FC<EditorFooterProps> = ({
   isEditMode,
-  isRunning,
   isPromptCompleted,
+  isPromptBeingSent,
+  isPromptActivelyRunning,
   hasContent,
   hasPendingPrompts: _hasPendingPrompts, // Reserved for future use
   runButtonText,
@@ -97,7 +101,6 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
-              disabled={isRunning}
               title="Cancel editing and return to new prompt mode"
             >
               <i className="codicon codicon-close" />
@@ -107,11 +110,13 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={!hasContent || isRunning || isPromptCompleted}
+              disabled={!hasContent || isPromptBeingSent || isPromptCompleted}
               title={
                 isPromptCompleted
                   ? "Cannot edit a completed prompt — use Clear workflow state to reset"
-                  : "Update prompt in queue"
+                  : isPromptBeingSent
+                    ? "Cannot update a prompt that is currently being sent"
+                    : "Update prompt in queue"
               }
             >
               <i className="codicon codicon-check" />
@@ -121,11 +126,13 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isRunning || isPromptCompleted}
+              disabled={isPromptActivelyRunning || isPromptCompleted}
               title={
                 isPromptCompleted
                   ? "Cannot delete a completed prompt — use Clear workflow state to reset"
-                  : "Delete prompt from queue"
+                  : isPromptActivelyRunning
+                    ? "Cannot delete a prompt that is currently running"
+                    : "Delete prompt from queue"
               }
             >
               <i className="codicon codicon-trash" />
@@ -138,7 +145,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
-              disabled={!hasContent || isRunning}
+              disabled={!hasContent}
               title={queueButtonTooltip}
             >
               <i className="codicon codicon-add" />
@@ -148,7 +155,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
-              disabled={!hasContent || isRunning}
+              disabled={!hasContent}
               title={runButtonTooltip}
             >
               <i className="codicon codicon-send" />

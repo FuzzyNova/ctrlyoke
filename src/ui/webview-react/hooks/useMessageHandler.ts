@@ -22,6 +22,7 @@ import {
   type ExecutionState,
   type StepStatus,
   type HarnessId,
+  type WorkflowSummary,
 } from "../types/messages";
 import { WebviewLog } from "@utils/logger";
 
@@ -714,6 +715,75 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     uiStore.closeSaveWorkflowDialog();
     uiStore.showToast(`Save failed: ${message.error}`, "error");
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOWS_LIST - Full list of loaded workflow summaries
+  // Only track RUNNING/PAUSED in the frontend loadedWorkflows array;
+  // COMPLETED/ERROR/STOPPED appear in the output history section instead.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOWS_LIST] = (message) => {
+    const active = ((message.workflows ?? []) as WorkflowSummary[]).filter(
+      (w) =>
+        w.executionState === EXECUTION_STATES.RUNNING ||
+        w.executionState === EXECUTION_STATES.PAUSED
+    );
+    useUiStore.getState().setLoadedWorkflows(active);
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_ADDED - New workflow instance was loaded
+  // Only add to loadedWorkflows if the workflow is RUNNING or PAUSED.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_ADDED] = (message) => {
+    const summary: WorkflowSummary | undefined = message.summary;
+    if (
+      summary &&
+      (summary.executionState === EXECUTION_STATES.RUNNING ||
+        summary.executionState === EXECUTION_STATES.PAUSED)
+    ) {
+      useUiStore.getState().addLoadedWorkflow(summary);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_DISMISSED - Workflow instance was removed
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_DISMISSED] = (message) => {
+    if (message.workflowId) {
+      useUiStore.getState().removeLoadedWorkflow(message.workflowId);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // WORKFLOW_SUMMARY_UPDATED - Workflow execution state changed
+  // If now RUNNING or PAUSED: update or add to loadedWorkflows.
+  // If now COMPLETED/ERROR/STOPPED: remove from loadedWorkflows
+  //   (it will appear in the output history section instead).
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED] = (message) => {
+    const summary: WorkflowSummary | undefined = message.summary;
+    if (!summary) return;
+    const uiStore = useUiStore.getState();
+    if (
+      summary.executionState === EXECUTION_STATES.RUNNING ||
+      summary.executionState === EXECUTION_STATES.PAUSED
+    ) {
+      uiStore.updateLoadedWorkflow(summary);
+    } else {
+      // Workflow retired — remove from the running section
+      uiStore.removeLoadedWorkflow(summary.id);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // ACTIVE_WORKFLOW_CHANGED - Active workflow selection changed
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED] = (message) => {
+    if (message.workflowId) {
+      useUiStore.getState().setActiveWorkflowId(message.workflowId);
+    }
+    // Full state sync comes via SESSION_RESTORED which is already handled
   };
 
   return handlers;

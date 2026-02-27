@@ -87,3 +87,6 @@ export {
   type ToolResult,
   type DiffHunk,
 } from "@root/types/WebviewMessageTypes";
+
+// Re-export WorkflowSummary from FlightPathTypes for multi-workflow support
+export type { WorkflowSummary } from "@root/types/FlightPathTypes";

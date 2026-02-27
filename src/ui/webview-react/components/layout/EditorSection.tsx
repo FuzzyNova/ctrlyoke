@@ -5,7 +5,6 @@ import { useWorkflowStore } from "../../store/workflowStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { PromptEditor } from "../editor/PromptEditor";
 import { PanelBar } from "../shared";
-import { EXECUTION_STATES } from "../../types/messages";
 
 /**
  * EditorSection - Collapsible section containing the prompt editor
@@ -20,11 +19,10 @@ import { EXECUTION_STATES } from "../../types/messages";
 export const EditorSection: React.FC = () => {
   const { selectedPromptIndex, promptName, setPromptName } = useEditorStore();
   const { editorCollapsed, toggleEditorCollapse } = useUiStore();
-  const { prompts, executionState } = useWorkflowStore();
+  const { prompts } = useWorkflowStore();
 
   const isEditMode = selectedPromptIndex !== null;
   const totalPrompts = prompts.length;
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>();
 
   // Generate mode indicator text
@@ -76,15 +74,13 @@ export const EditorSection: React.FC = () => {
         </span>
 
         {/* Right: Prompt name input (shown in both new and edit modes) */}
-        {!isRunning && (
-          <input
-            type="text"
-            className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0"
-            placeholder="Prompt name (optional)"
-            value={promptName}
-            onChange={(e) => setPromptName(e.target.value)}
-          />
-        )}
+        <input
+          type="text"
+          className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0"
+          placeholder="Prompt name (optional)"
+          value={promptName}
+          onChange={(e) => setPromptName(e.target.value)}
+        />
       </div>
 
       {/* Content area */}

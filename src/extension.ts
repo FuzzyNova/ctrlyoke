@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { FlightPathManager } from "./flightpath/FlightPathManager";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";

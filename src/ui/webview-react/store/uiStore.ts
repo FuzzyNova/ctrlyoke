@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { WorkflowSummary } from "../types/messages";
 
 /**
  * Template information for new workflow modal
@@ -73,6 +74,10 @@ interface UiState {
   recentWorkflows: RecentWorkflow[];
   recentWorkflowsDropdownOpen: boolean;
 
+  // Multi-workflow support
+  loadedWorkflows: WorkflowSummary[];
+  activeWorkflowId: string | null;
+
   // Loading states
   isLoading: boolean;
   loadingMessage: string | null;
@@ -128,6 +133,13 @@ interface UiActions {
   toggleRecentWorkflowsDropdown: () => void;
   closeRecentWorkflowsDropdown: () => void;
 
+  // Multi-workflow support
+  setLoadedWorkflows: (workflows: WorkflowSummary[]) => void;
+  addLoadedWorkflow: (workflow: WorkflowSummary) => void;
+  removeLoadedWorkflow: (workflowId: string) => void;
+  updateLoadedWorkflow: (workflow: WorkflowSummary) => void;
+  setActiveWorkflowId: (id: string | null) => void;
+
   // Loading state
   setLoading: (loading: boolean, message?: string) => void;
 
@@ -175,6 +187,8 @@ const initialState: UiState = {
   defaultTemplateId: "blank",
   recentWorkflows: [],
   recentWorkflowsDropdownOpen: false,
+  loadedWorkflows: [],
+  activeWorkflowId: null,
   isLoading: false,
   loadingMessage: null,
   toast: null,
@@ -294,6 +308,36 @@ export const useUiStore = create<UiState & UiActions>()(
 
       closeRecentWorkflowsDropdown: () =>
         set({ recentWorkflowsDropdownOpen: false }),
+
+      // ============================================================================
+      // MULTI-WORKFLOW SUPPORT
+      // ============================================================================
+
+      setLoadedWorkflows: (workflows) => set({ loadedWorkflows: workflows }),
+
+      addLoadedWorkflow: (workflow) =>
+        set((state) => ({
+          loadedWorkflows: [
+            ...state.loadedWorkflows.filter((w) => w.id !== workflow.id),
+            workflow,
+          ],
+        })),
+
+      removeLoadedWorkflow: (workflowId) =>
+        set((state) => ({
+          loadedWorkflows: state.loadedWorkflows.filter(
+            (w) => w.id !== workflowId
+          ),
+        })),
+
+      updateLoadedWorkflow: (workflow) =>
+        set((state) => ({
+          loadedWorkflows: state.loadedWorkflows.map((w) =>
+            w.id === workflow.id ? workflow : w
+          ),
+        })),
+
+      setActiveWorkflowId: (id) => set({ activeWorkflowId: id }),
 
       // ============================================================================
       // LOADING STATE

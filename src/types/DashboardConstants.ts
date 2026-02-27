@@ -124,6 +124,17 @@ export const MESSAGE_TYPES = {
   SAVE_WORKFLOW: "saveWorkflow", // Webview -> Extension: { filePath, format } confirmed by user
   WORKFLOW_SAVED: "workflowSaved", // Extension -> Webview: { filePath } success
   WORKFLOW_SAVE_FAILED: "workflowSaveFailed", // Extension -> Webview: { error } failure
+
+  // Multi-workflow coordination — Extension → Webview
+  WORKFLOWS_LIST: "workflowsList", // Full list of loaded WorkflowSummary[]
+  WORKFLOW_ADDED: "workflowAdded", // New workflow loaded: { summary: WorkflowSummary }
+  WORKFLOW_DISMISSED: "workflowDismissed", // Workflow removed: { workflowId }
+  WORKFLOW_SUMMARY_UPDATED: "workflowSummaryUpdated", // Execution state changed: { summary: WorkflowSummary }
+  ACTIVE_WORKFLOW_CHANGED: "activeWorkflowChanged", // Active selection changed: { workflowId }
+
+  // Multi-workflow coordination — Webview → Extension
+  GET_WORKFLOWS_LIST: "getWorkflowsList", // Request all loaded WorkflowSummary[]
+  SWITCH_WORKFLOW: "switchWorkflow", // Switch active workflow: { workflowId }
 } as const;
 
 // ============================================================================

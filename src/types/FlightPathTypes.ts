@@ -168,5 +168,20 @@ export interface PromptResult {
   scriptOutput?: string; // Capture last script output for debugging
 }
 
+/**
+ * Summary of a workflow instance — used by WorkflowOrchestrator to expose
+ * lightweight status information without leaking the full WorkflowInstance.
+ */
+export interface WorkflowSummary {
+  id: string;
+  workflowName: string;
+  filePath: string;
+  executionState: ExecutionState;
+  currentStep: number;
+  totalSteps: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+
 // Re-export constants for convenience
 export { EXECUTION_STATES, STEP_STATUS };

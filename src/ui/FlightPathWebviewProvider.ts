@@ -37,7 +37,7 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { FlightPathManager } from "../flightpath/FlightPathManager";
-import { Harness } from "../types/FlightPathTypes";
+import { Harness, WorkflowSummary } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery, SkillInfo } from "../utils/SkillDiscovery";
@@ -525,6 +525,26 @@ window.vscodeApi = acquireVsCodeApi();
           await this.handleSaveWorkflow(message.filePath, message.format);
           break;
 
+        // ============================================================================
+        // Multi-workflow coordination
+        // ============================================================================
+        case MESSAGE_TYPES.GET_WORKFLOWS_LIST: {
+          const summaries = this.flightPathManager?.getWorkflowsList() ?? [];
+          this.postMessage({
+            type: MESSAGE_TYPES.WORKFLOWS_LIST,
+            workflows: summaries,
+          });
+          break;
+        }
+
+        case MESSAGE_TYPES.SWITCH_WORKFLOW: {
+          const { workflowId } = message;
+          if (workflowId) {
+            this.flightPathManager?.switchWorkflow(workflowId);
+          }
+          break;
+        }
+
         default:
           Log.warn(`Unknown message type: ${message.type}`);
       }
@@ -758,6 +778,33 @@ window.vscodeApi = acquireVsCodeApi();
       type: MESSAGE_TYPES.WORKFLOW_NAME_UPDATED,
       workflowName,
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Multi-workflow coordination notifications (called by WorkflowOrchestrator)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Notify webview that a new workflow was loaded into the registry. */
+  public notifyWorkflowAdded(summary: WorkflowSummary): void {
+    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
+  }
+
+  /** Notify webview that a workflow was dismissed from the registry. */
+  public notifyWorkflowDismissed(workflowId: string): void {
+    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
+  }
+
+  /** Notify webview that the active (displayed) workflow changed. */
+  public notifyActiveWorkflowChanged(workflowId: string): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
+      workflowId,
+    });
+  }
+
+  /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
+  public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }
 
   /**
@@ -2211,9 +2258,8 @@ window.vscodeApi = acquireVsCodeApi();
           ? workspaceFolders[0]
           : undefined;
 
-      this.availableSkills = await SkillDiscovery.discoverSkills(
-        workspaceFolder
-      );
+      this.availableSkills =
+        await SkillDiscovery.discoverSkills(workspaceFolder);
 
       this.sendSkillsUpdate();
     } catch (error) {

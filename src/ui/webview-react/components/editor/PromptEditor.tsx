@@ -69,9 +69,15 @@ export const PromptEditor: React.FC = () => {
 
   const isEditMode = selectedPromptIndex !== null;
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
-  const isPromptCompleted =
-    selectedPromptIndex !== null &&
-    prompts[selectedPromptIndex]?.status === STEP_STATUS.COMPLETED;
+  const selectedPromptStatus =
+    selectedPromptIndex !== null ? prompts[selectedPromptIndex]?.status : null;
+  const isPromptCompleted = selectedPromptStatus === STEP_STATUS.COMPLETED;
+  // Update button: disabled when prompt is currently being sent (SENT or RUNNING)
+  const isPromptBeingSent =
+    selectedPromptStatus === STEP_STATUS.SENT ||
+    selectedPromptStatus === STEP_STATUS.RUNNING;
+  // Delete button: disabled only when prompt is actively running
+  const isPromptActivelyRunning = selectedPromptStatus === STEP_STATUS.RUNNING;
 
   // Dictionary URIs from document attributes
   const affUri = document.body.getAttribute("data-aff-uri") || "./en_US.aff";
@@ -402,8 +408,9 @@ export const PromptEditor: React.FC = () => {
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
-        isRunning={isRunning}
         isPromptCompleted={isPromptCompleted}
+        isPromptBeingSent={isPromptBeingSent}
+        isPromptActivelyRunning={isPromptActivelyRunning}
         hasContent={promptText.trim().length > 0}
         hasPendingPrompts={hasPendingPrompts()}
         runButtonText={getRunButtonText()}

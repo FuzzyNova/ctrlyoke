@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useWorkflowStore } from "../../store/workflowStore";
+import { useUiStore } from "../../store/uiStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { RecentWorkflows } from "./RecentWorkflows";
+import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { getExecutionStateBadgeClass } from "../../utils/status";
 
 interface WorkflowStatusProps {
@@ -31,6 +33,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 }) => {
   const vscode = useVsCodeApi();
   const { fileName, workflowName, executionState } = useWorkflowStore();
+  const { loadedWorkflows, activeWorkflowId } = useUiStore();
 
   // Local state
   const [isEditing, setIsEditing] = useState(false);
@@ -42,8 +45,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const isRunning = executionState === EXECUTION_STATES.RUNNING;
 
   // Handle message from extension with recent workflows
   useEffect(() => {
@@ -126,14 +127,25 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
 
   // Toggle dropdown
   const toggleDropdown = useCallback(() => {
-    if (isRunning) return;
-
     if (!isDropdownOpen) {
-      // Request recent workflows from extension
+      // Request recent workflows and full loaded-workflows list from extension
       vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
+      vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
     }
     setIsDropdownOpen(!isDropdownOpen);
-  }, [isDropdownOpen, isRunning, vscode]);
+  }, [isDropdownOpen, vscode]);
+
+  // Switch to a loaded workflow
+  const handleSwitchWorkflow = useCallback(
+    (workflowId: string) => {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.SWITCH_WORKFLOW,
+        workflowId,
+      });
+      setIsDropdownOpen(false);
+    },
+    [vscode]
+  );
 
   // Load workflow from recent list
   const handleSelectWorkflow = useCallback(
@@ -221,21 +233,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <button
             type="button"
             onClick={toggleDropdown}
-            disabled={isRunning}
             aria-label="Show recent workflows"
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
-            title={
-              isRunning
-                ? "Cannot switch workflows while running"
-                : "Show recent workflows"
-            }
-            className={`workflow-button-dropdown px-2 py-1 bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors ${
-              isRunning
-                ? "opacity-50 cursor-not-allowed"
-                : "hover:bg-cmd-active-bg hover:text-cmd-active-fg"
-            } ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
+            title="Show recent workflows"
+            className={`workflow-button-dropdown px-2 py-1 bg-cmd-bg text-cmd-fg flex items-center justify-center gap-1 transition-colors hover:bg-cmd-active-bg hover:text-cmd-active-fg ${isDropdownOpen ? "bg-cmd-active-bg text-cmd-active-fg" : ""}`}
           >
+            {/* Pulsing dot: another loaded workflow is running */}
+            {loadedWorkflows.some(
+              (w) =>
+                w.executionState === EXECUTION_STATES.RUNNING &&
+                w.id !== activeWorkflowId
+            ) && (
+              <span
+                className="inline-block w-2 h-2 rounded-full bg-badge-bg animate-pulse"
+                title="Another workflow is running"
+              />
+            )}
             {recentWorkflows.length > 0 && (
               <span className="workflow-count-badge text-[10px] font-semibold bg-badge-bg text-badge-fg rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
                 {recentWorkflows.length}
@@ -273,12 +287,35 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             height: "min(400px, 70vh)",
           }}
         >
-          <RecentWorkflows
-            workflows={recentWorkflows}
-            currentFilePath={fileName}
-            onSelect={handleSelectWorkflow}
-            onClearHistory={handleClearHistory}
-          />
+          {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}
+          {loadedWorkflows.length > 0 && (
+            <div className="running-workflows-section flex-shrink-0">
+              <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg">
+                Running Workflows
+              </div>
+              <div className="py-1">
+                {loadedWorkflows.map((workflow) => (
+                  <RunningWorkflowItem
+                    key={workflow.id}
+                    workflow={workflow}
+                    isCurrent={workflow.id === activeWorkflowId}
+                    onClick={() => handleSwitchWorkflow(workflow.id)}
+                  />
+                ))}
+              </div>
+              <div className="border-t border-dropdown-border" />
+            </div>
+          )}
+
+          {/* Recent workflows list */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            <RecentWorkflows
+              workflows={recentWorkflows}
+              currentFilePath={fileName}
+              onSelect={handleSelectWorkflow}
+              onClearHistory={handleClearHistory}
+            />
+          </div>
         </div>
       )}
     </div>
