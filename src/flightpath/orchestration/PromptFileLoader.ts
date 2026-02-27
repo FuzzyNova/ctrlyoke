@@ -146,38 +146,6 @@ export class PromptFileLoader {
   }
 
   /**
-   * Save the file if it's open in an editor with unsaved changes, then trigger reload callback
-   * This ensures we always execute the latest user edits
-   *
-   * @param filePath Path to the file to check and save
-   * @param onReload Callback to trigger after save (e.g., reload prompt file)
-   */
-  async saveAndReloadIfDirty(
-    filePath: string,
-    onReload: () => Promise<void>
-  ): Promise<void> {
-    // Find if this file is open in any editor
-    const openDocument = vscode.workspace.textDocuments.find(
-      (doc) => doc.uri.fsPath === filePath
-    );
-
-    if (openDocument && openDocument.isDirty) {
-      Log.info(`Auto-saving dirty file before execution: ${filePath}`);
-      try {
-        await openDocument.save();
-        // Reload the prompt file to pick up saved changes
-        await onReload();
-      } catch (error) {
-        Log.error("Failed to auto-save file:", error);
-        // Continue anyway - user may have unsaved changes but we'll use disk version
-        vscode.window.showWarningMessage(
-          "FlightPath: Could not auto-save file. Running with last saved version."
-        );
-      }
-    }
-  }
-
-  /**
    * Reload queue from working file
    * Handles three scenarios:
    * - 'replace': Loading a different session (resume/auto-load) → Clear queue and restore state

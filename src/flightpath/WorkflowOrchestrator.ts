@@ -502,7 +502,32 @@ export class WorkflowOrchestrator {
     filePath: string,
     modeOverride?: Harness
   ): Promise<void> {
-    return this.getActiveInstance().executePromptFile(filePath, modeOverride);
+    // Phase 2: load into a new instance (same as loadPromptFile), then execute.
+    // This keeps the two operations DRY — executePromptFile = loadPromptFile + executeWorkflow.
+    // Previously this called getActiveInstance().executePromptFile() which would
+    // clear the active instance's queue (even if it was a running workflow) and
+    // load the new file into it — stomping on parallel workflows.
+    Log.info(
+      `executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
+        `(${this.workflows.size} workflow(s) currently in registry)`
+    );
+    const instance = await this.createWorkflow(filePath);
+    if (!instance) {
+      return;
+    }
+    // Guard: if createWorkflow switched to an already-running/paused duplicate,
+    // don't re-execute it — the user just wanted to view it.
+    const status = instance.getQueueState().status;
+    if (
+      status === EXECUTION_STATES.RUNNING ||
+      status === EXECUTION_STATES.PAUSED
+    ) {
+      Log.info(
+        `executePromptFile: switched to existing ${status} workflow inst:${instance.id.slice(0, 8)}, skipping re-execution`
+      );
+      return;
+    }
+    return this.executeWorkflow(undefined, modeOverride);
   }
 
   async appendFromFile(

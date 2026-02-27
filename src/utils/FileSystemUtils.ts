@@ -370,6 +370,29 @@ export class FileSystemUtils {
   }
 
   /**
+   * Save a file if it is open in a VS Code editor with unsaved changes.
+   * No-op if the file is not open or is already saved.
+   *
+   * @param filePath Absolute path to the file
+   */
+  static async saveIfDirty(filePath: string): Promise<void> {
+    const openDocument = vscode.workspace.textDocuments.find(
+      (doc) => doc.uri.fsPath === filePath
+    );
+    if (openDocument?.isDirty) {
+      Log.info(`Auto-saving dirty file: ${filePath}`);
+      try {
+        await openDocument.save();
+      } catch (error) {
+        Log.error("Failed to auto-save file:", error);
+        vscode.window.showWarningMessage(
+          "FlightPath: Could not auto-save file. Running with last saved version."
+        );
+      }
+    }
+  }
+
+  /**
    * Delete a file
    *
    * @param filePath Absolute path to file

@@ -10,6 +10,7 @@ import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log, LogLevel } from "./utils/Log";
+import { FileSystemUtils } from "./utils/FileSystemUtils";
 
 let flightPathManager: FlightPathManager;
 let webviewProvider: FlightPathWebviewProvider;
@@ -342,6 +343,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
+      await FileSystemUtils.saveIfDirty(uri.fsPath);
       await flightPathManager.appendFromFile(uri.fsPath, "end");
     }
   );
@@ -354,6 +356,7 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
+      await FileSystemUtils.saveIfDirty(uri.fsPath);
       await flightPathManager.appendFromFile(uri.fsPath, "next");
     }
   );
@@ -370,7 +373,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        // executePromptFile without harness override uses the current settings provider
+        await FileSystemUtils.saveIfDirty(uri.fsPath);
         await flightPathManager.executePromptFile(uri.fsPath);
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -392,6 +395,7 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
+        await FileSystemUtils.saveIfDirty(uri.fsPath);
         await flightPathManager.loadPromptFile(uri.fsPath);
         // Open the FlightPath panel to show the loaded file
         await vscode.commands.executeCommand("flightpath.dashboard.focus");

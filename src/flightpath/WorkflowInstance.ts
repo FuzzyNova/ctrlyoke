@@ -535,12 +535,6 @@ export class WorkflowInstance {
           ? prevCurrentIndex
           : 0;
 
-    await this.saveAndReloadIfDirty(filePath);
-
-    if (!this.currentPromptFile) {
-      return;
-    }
-
     const { promptFile } = this.currentPromptFile;
     const fileName = path.basename(filePath);
 
@@ -751,18 +745,6 @@ export class WorkflowInstance {
       await this.promptQueue.markErrored();
       vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
     }
-  }
-
-  /**
-   * Execute a prompt file (legacy: loads and executes immediately).
-   */
-  async executePromptFile(
-    filePath: string,
-    modeOverride?: Harness
-  ): Promise<void> {
-    await this.saveAndReloadIfDirty(filePath);
-    await this.loadPromptFile(filePath);
-    await this.executeLoadedPromptFile(modeOverride);
   }
 
   /**
@@ -1158,43 +1140,6 @@ export class WorkflowInstance {
     integration.setWorkflowName(this.workflowName || undefined);
     this.executionIntegrations.add(integration);
     return integration;
-  }
-
-  private async saveAndReloadIfDirty(filePath: string): Promise<void> {
-    await this.promptFileLoader.saveAndReloadIfDirty(filePath, async () => {
-      if (this.currentPromptFile) {
-        const fileName = path.basename(this.currentPromptFile.filePath);
-        const promptFile = await this.promptFileParser.parsePromptFile(
-          this.currentPromptFile.filePath
-        );
-
-        if (promptFile?.prompts) {
-          const validation = this.promptFileParser.validatePromptItems(
-            promptFile.prompts
-          );
-          if (validation.valid) {
-            this.currentPromptFile = {
-              filePath: this.currentPromptFile.filePath,
-              promptFile,
-            };
-            this.promptQueue.loadPrompts(promptFile);
-
-            if (this.dashboardProvider) {
-              const queueState = this.promptQueue.getState();
-              this.dashboardProvider.updateFileSelected(
-                fileName,
-                promptFile.prompts,
-                queueState.workflowName || undefined
-              );
-            }
-
-            Log.info(
-              `FlightPath: Reloaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
-            );
-          }
-        }
-      }
-    });
   }
 
   private async startWorkflowExecution(
