@@ -52,24 +52,31 @@ export class CliMcpConfigGenerator {
    * @param serverPath Path to MCP server script
    * @param workspaceRoot Workspace root directory
    * @param serverConfig Optional server configuration fields (type, tools, etc.)
+   * @param workingFilePath Active working file path (sets FLIGHTPATH_WORKING_FILE for precise targeting)
    * @returns JSON config string
    */
   static generateJsonConfig(
     serverPath: string,
     workspaceRoot: string,
-    serverConfig?: McpServerConfig
+    serverConfig?: McpServerConfig,
+    workingFilePath?: string
   ): string {
     // Normalize paths (forward slashes work on Windows and Unix)
     const normalizedServerPath = serverPath.replace(/\\/g, "/");
     const normalizedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
+    const env: Record<string, string> = {
+      FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
+    };
+    if (workingFilePath) {
+      env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+    }
+
     const mcpServers: any = {
       flightpath: {
         command: "node",
         args: [normalizedServerPath],
-        env: {
-          FLIGHTPATH_WORKSPACE: normalizedWorkspaceRoot,
-        },
+        env,
       },
     };
 
@@ -98,22 +105,29 @@ export class CliMcpConfigGenerator {
    * @param serverName MCP server name (e.g., "flightpath")
    * @param serverPath Path to MCP server script
    * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Active working file path (sets FLIGHTPATH_WORKING_FILE for precise targeting)
    * @returns TOML config string
    */
   static generateInlineTomlConfig(
     serverName: string,
     serverPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    workingFilePath?: string
   ): string {
     // Normalize paths (forward slashes)
     const escapedServerPath = serverPath.replace(/\\/g, "/");
     const escapedWorkspaceRoot = workspaceRoot.replace(/\\/g, "/");
 
     // Build inline TOML config
+    let envPart = `FLIGHTPATH_WORKSPACE='${escapedWorkspaceRoot}'`;
+    if (workingFilePath) {
+      const escapedWorkingFile = workingFilePath.replace(/\\/g, "/");
+      envPart += `,FLIGHTPATH_WORKING_FILE='${escapedWorkingFile}'`;
+    }
     return (
       `mcp_servers.${serverName}={command='node',` +
       `args=['${escapedServerPath}'],` +
-      `env={FLIGHTPATH_WORKSPACE='${escapedWorkspaceRoot}'}}`
+      `env={${envPart}}}`
     );
   }
 }

@@ -131,11 +131,13 @@ export interface ICliProvider {
    * Generate MCP server configuration arguments (optional)
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
    * @returns CLI arguments array, or null if MCP not supported
    */
   getMcpConfigArgs?(
     mcpServerPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    workingFilePath?: string
   ): Promise<string[] | null>;
 
   /**

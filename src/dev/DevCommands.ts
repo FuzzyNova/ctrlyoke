@@ -11,17 +11,10 @@
  * In production builds, this module is not imported and the code is eliminated
  * by esbuild's dead code elimination.
  *
- * Commands registered here:
- * - flightpath.test.copilotAutomation - Test chat automation
- * - flightpath.test.fileAttachment - Test file attachment
- * - flightpath.test.chatModelSelection - Test model switching
- * - flightpath.test.chatAgentSelection - Test agent selection
- * - flightpath.listChatCommands - List all chat-related commands
- * - flightpath.listAllCommands - List all VS Code commands
- * - flightpath.investigateChatLogs - Debug chat logs
- * - flightpath.showLanguageId - Debug language detection
- * - flightpath.exportDiscoveredModels - Export models to JSON for sync-models.mjs
- * - flightpath.dumpCssVars - Dump all --vscode-* CSS variables to docs/reference/vscode-css-vars.json
+ * Entry point: a single `flightpath.devMenu` command declared in package.json
+ * that shows a QuickPick menu listing all dev tools. Individual commands are
+ * registered programmatically (no package.json entries) and are accessible
+ * from the menu or via executeCommand in tests.
  */
 
 import * as vscode from "vscode";
@@ -724,6 +717,13 @@ async function dumpVsCodeCssVariables(
 export function registerDevCommands(context: vscode.ExtensionContext): void {
   Log.info("🔧 FlightPath: Registering development commands...");
 
+  // Set context key so the devMenu command is visible in the command palette
+  vscode.commands.executeCommand("setContext", "flightpath.devMode", true);
+
+  // ── Individual dev commands ──────────────────────────────────────────────
+  // These are registered programmatically (no package.json entries required).
+  // They are accessible via the devMenu QuickPick or executeCommand in tests.
+
   // Test Copilot Automation command - feasibility test (legacy POC)
   context.subscriptions.push(
     vscode.commands.registerCommand(
@@ -835,6 +835,82 @@ export function registerDevCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("flightpath.dumpCssVars", async () => {
       await dumpVsCodeCssVariables(context);
+    })
+  );
+
+  // ── Dev menu (single palette-visible entry) ─────────────────────────────
+  // Shows a QuickPick that dispatches to any of the individual dev commands.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("flightpath.devMenu", async () => {
+      const items: Array<{
+        label: string;
+        description: string;
+        command: string;
+      }> = [
+        {
+          label: "$(beaker) Test Copilot Automation",
+          description: "Feasibility test for chat automation (legacy POC)",
+          command: "flightpath.test.copilotAutomation",
+        },
+        {
+          label: "$(paperclip) Test File Attachment",
+          description: "Test github.copilot.chat.attachFile command",
+          command: "flightpath.test.fileAttachment",
+        },
+        {
+          label: "$(symbol-enum) Test Chat Model Selection",
+          description: "Test workbench.action.chat.changeModel",
+          command: "flightpath.test.chatModelSelection",
+        },
+        {
+          label: "$(hubot) Test Chat Agent Selection",
+          description: "Test programmatic agent selection",
+          command: "flightpath.test.chatAgentSelection",
+        },
+        {
+          label: "$(list-filter) List Chat Commands",
+          description:
+            "Dump Copilot/chat commands → docs/reference/CHAT_COMMANDS.md",
+          command: "flightpath.listChatCommands",
+        },
+        {
+          label: "$(list-unordered) List All VS Code Commands",
+          description: "Dump all commands → docs/reference/VSCODE_COMMANDS.md",
+          command: "flightpath.listAllCommands",
+        },
+        {
+          label: "$(search) Investigate Chat Logs",
+          description: "Run chat log access diagnostics",
+          command: "flightpath.investigateChatLogs",
+        },
+        {
+          label: "$(symbol-text) Show Language ID",
+          description: "Show language ID of the active editor document",
+          command: "flightpath.showLanguageId",
+        },
+        {
+          label: "$(export) Export Discovered Models",
+          description:
+            "Write discovered models to scripts/discovered-models.json",
+          command: "flightpath.exportDiscoveredModels",
+        },
+        {
+          label: "$(symbol-color) Dump CSS Variables",
+          description:
+            "Write all --vscode-* CSS vars → docs/reference/vscode-css-vars.json",
+          command: "flightpath.dumpCssVars",
+        },
+      ];
+
+      const picked = await vscode.window.showQuickPick(items, {
+        title: "FlightPath Developer Tools",
+        placeHolder: "Select a dev tool to run…",
+        matchOnDescription: true,
+      });
+
+      if (picked) {
+        await vscode.commands.executeCommand(picked.command);
+      }
     })
   );
 

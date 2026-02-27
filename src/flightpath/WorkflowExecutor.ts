@@ -55,6 +55,8 @@ export interface WorkflowContext {
   ) => HarnessIntegration;
   /** Path to current run's history file (empty string if history disabled) */
   historyFilePath: string;
+  /** Path to the active working file for this workflow instance (used by MCP server targeting) */
+  workingFilePath?: string;
   /** OutputHistoryManager for saving step outputs */
   outputHistoryManager?: OutputHistoryManager;
 }

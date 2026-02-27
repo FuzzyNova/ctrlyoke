@@ -99,6 +99,7 @@ export class CopilotCliProvider implements ICliProvider {
       allPrompts: any[];
       filePath?: string;
       resolvedProperties?: any; // ResolvedProperties from PropertyResolver
+      workingFilePath?: string;
     }
   ): Promise<string[]> {
     const args: string[] = [];
@@ -132,7 +133,8 @@ export class CopilotCliProvider implements ICliProvider {
           const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
           const mcpArgs = await this.getMcpConfigArgs(
             mcpServerPath,
-            workspaceRoot
+            workspaceRoot,
+            workflowContext?.workingFilePath
           );
           if (mcpArgs) {
             args.push(...mcpArgs);
@@ -375,11 +377,13 @@ export class CopilotCliProvider implements ICliProvider {
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
    * @returns CLI arguments array with --additional-mcp-config, or null if MCP not supported
    */
   async getMcpConfigArgs(
     mcpServerPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    workingFilePath?: string
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility
@@ -387,7 +391,8 @@ export class CopilotCliProvider implements ICliProvider {
       const configJson = CliMcpConfigGenerator.generateJsonConfig(
         mcpServerPath,
         workspaceRoot,
-        { type: "local", tools: ["*"] }
+        { type: "local", tools: ["*"] },
+        workingFilePath
       );
 
       // Write to temp directory

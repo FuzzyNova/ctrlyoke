@@ -186,31 +186,15 @@ export class FlightPathManager {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Copilot / integration status
+  // Harness / integration status
   // ─────────────────────────────────────────────────────────────────────────
 
-  getCopilotStatus(): {
-    available: boolean;
-    message: string;
-    strategy: string;
-  } {
-    return this.orchestrator.getCopilotStatus();
+  async retryHarnessDetection(): Promise<void> {
+    return this.orchestrator.retryHarnessDetection();
   }
 
-  async testCopilotAutomation(): Promise<boolean> {
-    return this.orchestrator.testCopilotAutomation();
-  }
-
-  async retryCopilotDetection(): Promise<void> {
-    return this.orchestrator.retryCopilotDetection();
-  }
-
-  getCopilotCapabilities() {
-    return this.orchestrator.getCopilotCapabilities();
-  }
-
-  getCopilotDetailedStatus() {
-    return this.orchestrator.getCopilotDetailedStatus();
+  getHarnessDetailedStatus() {
+    return this.orchestrator.getHarnessDetailedStatus();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

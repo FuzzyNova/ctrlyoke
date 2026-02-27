@@ -45,7 +45,6 @@ suite("CLI Integration Tests", () => {
       "flightpath.pause",
       "flightpath.resume",
       "flightpath.stop",
-      "flightpath.showCopilotStatus",
       "flightpath.createPromptFile",
       "flightpath.runFromContext",
       "flightpath.loadFromContext",
@@ -56,15 +55,15 @@ suite("CLI Integration Tests", () => {
     }
   });
 
-  test("Should detect Copilot CLI status", async function () {
+  test("Should detect harness status", async function () {
     this.timeout(10000);
 
-    // Execute status command
-    await vscode.commands.executeCommand("flightpath.showCopilotStatus");
-
-    // The command should execute without error
-    // Actual CLI availability depends on system configuration
-    assert.ok(true, "Status command executed");
+    // Verify extension activated by checking a core command is registered
+    const commands = await vscode.commands.getCommands();
+    assert.ok(
+      commands.includes("flightpath.takeOff"),
+      "Core command should be registered"
+    );
   });
 
   test("Configuration settings should be accessible", () => {

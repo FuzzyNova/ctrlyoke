@@ -96,6 +96,7 @@ export class CodexCliProvider implements ICliProvider {
       allPrompts: any[];
       filePath?: string;
       resolvedProperties?: any; // ResolvedProperties from PropertyResolver
+      workingFilePath?: string;
     }
   ): Promise<string[]> {
     const args: string[] = [];
@@ -130,7 +131,8 @@ export class CodexCliProvider implements ICliProvider {
           const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
           const mcpArgs = await this.getMcpConfigArgs(
             mcpServerPath,
-            workspaceRoot
+            workspaceRoot,
+            workflowContext?.workingFilePath
           );
           if (mcpArgs) {
             args.push(...mcpArgs);
@@ -335,17 +337,20 @@ export class CodexCliProvider implements ICliProvider {
    *
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
+   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
    * @returns CLI arguments array with -c flag, or null if MCP not supported
    */
   async getMcpConfigArgs(
     mcpServerPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    workingFilePath?: string
   ): Promise<string[] | null> {
     try {
       const tomlConfig = CliMcpConfigGenerator.generateInlineTomlConfig(
         "flightpath",
         mcpServerPath,
-        workspaceRoot
+        workspaceRoot,
+        workingFilePath
       );
       return ["-c", tomlConfig];
     } catch (error) {

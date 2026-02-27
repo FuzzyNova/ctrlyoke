@@ -545,9 +545,28 @@ class FlightPathMCPServer {
   }
 
   /**
-   * Find the most recently modified working file in .flightpath/.queue/
+   * Find the active working file for this workflow execution.
+   *
+   * Lookup order:
+   * 1. FLIGHTPATH_WORKING_FILE env var — set per-workflow by the MCP config generator
+   *    so each AI session targets exactly its own queue file (multi-workflow safe).
+   * 2. Fallback: scan .flightpath/.queue/ and prefer files with executionState=running,
+   *    then most recently modified (single-workflow backward compat).
    */
   private async findActiveWorkingFile(): Promise<string | null> {
+    // 1. Prefer the pinned file from the per-workflow MCP config
+    const pinnedFile = process.env.FLIGHTPATH_WORKING_FILE;
+    if (pinnedFile) {
+      log("Using pinned working file:", pinnedFile);
+      try {
+        await fs.access(pinnedFile);
+        return pinnedFile;
+      } catch (error: any) {
+        log("Pinned working file not accessible, falling back to scan:", error.message);
+      }
+    }
+
+    // 2. Scan the queue directory
     const queueDir = path.join(this.workspaceRoot, FLIGHTPATH_DIR, QUEUE_DIR);
     log("Searching for working files in:", queueDir);
 
@@ -562,21 +581,44 @@ class FlightPathMCPServer {
         return null;
       }
 
-      // Get most recently modified file
-      const fileStats = await Promise.all(
+      // Read each file's executionState so we can prefer RUNNING ones
+      const fileInfos = await Promise.all(
         queueFiles.map(async (f) => {
           const filePath = path.join(queueDir, f);
-          const stats = await fs.stat(filePath);
-          return {
-            path: filePath,
-            mtime: stats.mtime,
-          };
+          try {
+            const [content, stats] = await Promise.all([
+              fs.readFile(filePath, "utf8"),
+              fs.stat(filePath),
+            ]);
+            const data = JSON.parse(content);
+            return {
+              path: filePath,
+              mtime: stats.mtime,
+              executionState: (data._runtime?.executionState as string) ?? "idle",
+            };
+          } catch {
+            return null;
+          }
         })
       );
 
-      fileStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-      log("Selected most recent file:", fileStats[0].path);
-      return fileStats[0].path;
+      const validFiles = fileInfos.filter(
+        (f): f is { path: string; mtime: Date; executionState: string } => f !== null
+      );
+
+      if (validFiles.length === 0) {
+        return null;
+      }
+
+      // Prefer RUNNING files over all others; fall back to most-recently-modified
+      const runningFiles = validFiles.filter(
+        (f) => f.executionState === EXECUTION_STATES.RUNNING
+      );
+      const candidates = runningFiles.length > 0 ? runningFiles : validFiles;
+      candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+      log("Selected working file:", candidates[0].path, `(state=${candidates[0].executionState})`);
+      return candidates[0].path;
     } catch (error: any) {
       log("ERROR finding active working file:", error.message);
       log("Error stack:", error.stack);

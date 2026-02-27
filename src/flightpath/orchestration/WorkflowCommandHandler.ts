@@ -268,31 +268,27 @@ export class WorkflowCommandHandler {
 
   /**
    * Open FlightPath panel/dashboard
-   * Shows warning and retry if Copilot is unavailable
+   * Shows warning and retry if harness is unavailable
    *
-   * @param onRetry Callback to retry Copilot detection
-   * @param getCopilotStatus Callback to get current Copilot status
+   * @param getHarnessStatus Callback to get current harness status
+   * @param onRetry Callback to retry harness detection
    */
   async openPanel(
-    getCopilotStatus: () => { initializationStatus: string },
+    getHarnessStatus: () => { initializationStatus: string },
     onRetry: () => Promise<void>
   ): Promise<void> {
-    // Check if Copilot is unavailable and offer retry
-    const copilotStatus = getCopilotStatus();
+    // Check if harness is unavailable and offer retry
+    const harnessStatus = getHarnessStatus();
 
-    if (copilotStatus.initializationStatus === "unavailable") {
+    if (harnessStatus.initializationStatus === "unavailable") {
       const action = await vscode.window.showWarningMessage(
-        "FlightPath: Copilot automation is unavailable. Would you like to retry detection?",
+        "FlightPath: Harness automation is unavailable. Would you like to retry detection?",
         "Retry Detection",
-        "View Status",
         "Continue Anyway"
       );
 
       if (action === "Retry Detection") {
         await onRetry();
-        return;
-      } else if (action === "View Status") {
-        vscode.commands.executeCommand("flightpath.showCopilotStatus");
         return;
       }
     }

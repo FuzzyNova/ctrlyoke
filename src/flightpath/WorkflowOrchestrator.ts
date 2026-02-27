@@ -620,7 +620,7 @@ export class WorkflowOrchestrator {
     try {
       await this.workflowCommandHandler.openPanel(
         () => this.getDefaultIntegration().getDetailedStatus(),
-        async () => await this.retryCopilotDetection()
+        async () => await this.retryHarnessDetection()
       );
     } catch (error) {
       await this.takeOff();
@@ -675,30 +675,14 @@ export class WorkflowOrchestrator {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Copilot / integration status
+  // Harness / integration status
   // ─────────────────────────────────────────────────────────────────────────
 
-  getCopilotStatus(): {
-    available: boolean;
-    message: string;
-    strategy: string;
-  } {
-    return this.getDefaultIntegration().getStatus();
-  }
-
-  async testCopilotAutomation(): Promise<boolean> {
-    return this.getDefaultIntegration().testAutomation();
-  }
-
-  async retryCopilotDetection(): Promise<void> {
+  async retryHarnessDetection(): Promise<void> {
     await this.getDefaultIntegration().retryDetection();
   }
 
-  getCopilotCapabilities() {
-    return this.getDefaultIntegration().getCapabilities();
-  }
-
-  getCopilotDetailedStatus() {
+  getHarnessDetailedStatus() {
     return this.getDefaultIntegration().getDetailedStatus();
   }
 
@@ -821,7 +805,7 @@ export class WorkflowOrchestrator {
   private updateStatusBar(): void {
     const activeInstance = this.getActiveInstance();
     const state = activeInstance.getQueueState();
-    const copilotStatus = this.getDefaultIntegration().getDetailedStatus();
-    this.statusBarManager.updateStatusBar(state, copilotStatus);
+    const harnessStatus = this.getDefaultIntegration().getDetailedStatus();
+    this.statusBarManager.updateStatusBar(state, harnessStatus);
   }
 }

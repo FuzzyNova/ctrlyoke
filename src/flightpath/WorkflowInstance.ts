@@ -593,7 +593,7 @@ export class WorkflowInstance {
       Log.info(
         `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
       );
-      await this.startWorkflowExecution(integration, historyFilePath);
+      await this.startWorkflowExecution(integration, historyFilePath, workingFilePath || undefined);
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
       await this.promptQueue.markErrored();
@@ -1039,7 +1039,8 @@ export class WorkflowInstance {
 
   private async startWorkflowExecution(
     integration?: HarnessIntegration,
-    historyFilePath = ""
+    historyFilePath = "",
+    workingFilePath?: string
   ): Promise<void> {
     if (this.startPending) {
       Log.info(
@@ -1066,6 +1067,7 @@ export class WorkflowInstance {
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         historyFilePath,
+        workingFilePath: workingFilePath || undefined,
         outputHistoryManager: this.outputHistoryManager,
         getIntegrationForPrompt: (
           prompt: PromptItem,
@@ -1179,7 +1181,7 @@ export class WorkflowInstance {
       Log.info(
         `Auto-starting workflow: State=RUNNING, activeIntegration=null, currentIndex=${state.currentIndex}, totalPrompts=${state.prompts.length}`
       );
-      this.startWorkflowExecution().catch((error) => {
+      this.startWorkflowExecution(undefined, "", state.workingFilePath || undefined).catch((error) => {
         Log.error("Auto-start failed:", error);
         vscode.window.showErrorMessage(
           `FlightPath: Failed to auto-start workflow: ${error}`

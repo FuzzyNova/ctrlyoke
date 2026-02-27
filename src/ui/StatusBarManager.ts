@@ -3,9 +3,9 @@ import { QueueState, EXECUTION_STATES } from "../types/FlightPathTypes";
 import { HarnessStatus } from "../flightpath/HarnessIntegration";
 
 /**
- * Detailed status from Copilot integration
+ * Detailed status from harness integration
  */
-export interface CopilotDetailedStatus {
+export interface HarnessDetailedStatus {
   initializationStatus: HarnessStatus;
   isReady: boolean;
   message: string;
@@ -33,7 +33,7 @@ export class StatusBarManager {
    */
   updateStatusBar(
     state?: QueueState,
-    copilotStatus?: CopilotDetailedStatus
+    copilotStatus?: HarnessDetailedStatus
   ): void {
     let text = "$(compass) FlightPath";
     let tooltip = "FlightPath - Click to open";
@@ -82,17 +82,17 @@ export class StatusBarManager {
 
         case EXECUTION_STATES.IDLE:
         default:
-          // When idle, show Copilot initialization status if provided
+          // When idle, show harness initialization status if provided
           if (copilotStatus) {
-            const copilotDisplay = this.getCopilotStatusDisplay(copilotStatus);
+            const copilotDisplay = this.getHarnessStatusDisplay(copilotStatus);
             text = copilotDisplay.text;
             tooltip = copilotDisplay.tooltip;
           }
           break;
       }
     } else if (copilotStatus) {
-      // No queue state but have copilot status - show copilot status
-      const copilotDisplay = this.getCopilotStatusDisplay(copilotStatus);
+      // No queue state but have harness status - show harness status
+      const copilotDisplay = this.getHarnessStatusDisplay(copilotStatus);
       text = copilotDisplay.text;
       tooltip = copilotDisplay.tooltip;
     }
@@ -104,9 +104,9 @@ export class StatusBarManager {
   }
 
   /**
-   * Get display text and tooltip for Copilot initialization status
+   * Get display text and tooltip for harness initialization status
    */
-  private getCopilotStatusDisplay(copilotStatus: CopilotDetailedStatus): {
+  private getHarnessStatusDisplay(copilotStatus: HarnessDetailedStatus): {
     text: string;
     tooltip: string;
   } {

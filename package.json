@@ -69,27 +69,10 @@
         "icon": "$(debug-stop)"
       },
       {
-        "command": "flightpath.debugState",
-        "title": "Show Debug State",
-        "category": "FlightPath"
-      },
-      {
-        "command": "flightpath.showCopilotStatus",
-        "title": "Show Copilot Integration Status",
+        "command": "flightpath.devMenu",
+        "title": "Developer Tools",
         "category": "FlightPath",
-        "icon": "$(info)"
-      },
-      {
-        "command": "flightpath.testAutomation",
-        "title": "Test Automation",
-        "category": "FlightPath",
-        "icon": "$(pulse)"
-      },
-      {
-        "command": "flightpath.retryCopilotDetection",
-        "title": "Retry Copilot Detection",
-        "category": "FlightPath",
-        "icon": "$(refresh)"
+        "icon": "$(beaker)"
       },
       {
         "command": "flightpath.createEndConditionScript",
@@ -176,66 +159,6 @@
         "icon": "$(insert)"
       },
       {
-        "command": "flightpath.test.copilotAutomation",
-        "title": "Test Copilot Automation",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.test.fileAttachment",
-        "title": "Test File Attachment",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.test.chatModelSelection",
-        "title": "Test Chat Model Selection",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.test.chatAgentSelection",
-        "title": "Test Chat Agent Selection",
-        "category": "FlightPath Test",
-        "icon": "$(beaker)"
-      },
-      {
-        "command": "flightpath.listChatCommands",
-        "title": "List Chat Commands",
-        "category": "FlightPath Test",
-        "icon": "$(list-unordered)"
-      },
-      {
-        "command": "flightpath.listAllCommands",
-        "title": "List All Commands",
-        "category": "FlightPath Test",
-        "icon": "$(list-unordered)"
-      },
-      {
-        "command": "flightpath.investigateChatLogs",
-        "title": "Investigate Chat Logs",
-        "category": "FlightPath Test",
-        "icon": "$(search)"
-      },
-      {
-        "command": "flightpath.showLanguageId",
-        "title": "Show Language ID",
-        "category": "FlightPath Test",
-        "icon": "$(symbol-text)"
-      },
-      {
-        "command": "flightpath.exportDiscoveredModels",
-        "title": "Export Discovered Models",
-        "category": "FlightPath Test",
-        "icon": "$(export)"
-      },
-      {
-        "command": "flightpath.dumpCssVars",
-        "title": "Dump CSS Variables",
-        "category": "FlightPath Test",
-        "icon": "$(symbol-color)"
-      },
-      {
         "command": "flightpath.clearWorkflow",
         "title": "New Blank Workflow",
         "category": "FlightPath",
@@ -298,16 +221,8 @@
           "command": "flightpath.stop"
         },
         {
-          "command": "flightpath.debugState"
-        },
-        {
-          "command": "flightpath.showCopilotStatus"
-        },
-        {
-          "command": "flightpath.testAutomation"
-        },
-        {
-          "command": "flightpath.retryCopilotDetection"
+          "command": "flightpath.devMenu",
+          "when": "flightpath.devMode"
         },
         {
           "command": "flightpath.createEndConditionScript"

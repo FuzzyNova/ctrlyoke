@@ -312,17 +312,19 @@ export class CliIntegration extends HarnessIntegration {
    *
    * @param mcpServerPath Absolute path to the MCP server executable
    * @param workspaceRoot Workspace root directory (for FLIGHTPATH_WORKSPACE env var)
+   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
    * @returns Array of arguments to append to CLI command, or null if not supported
    */
   protected async getMcpConfigArgs(
     mcpServerPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    workingFilePath?: string
   ): Promise<string[] | null> {
     if (!this.provider.getMcpConfigArgs) {
       return null;
     }
 
-    return await this.provider.getMcpConfigArgs(mcpServerPath, workspaceRoot);
+    return await this.provider.getMcpConfigArgs(mcpServerPath, workspaceRoot, workingFilePath);
   }
 
   // ============================================================

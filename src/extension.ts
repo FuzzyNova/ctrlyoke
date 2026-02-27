@@ -299,81 +299,6 @@ function registerCommands(context: vscode.ExtensionContext) {
     }
   );
 
-  // Debug command to show current state
-  const debugStateCommand = vscode.commands.registerCommand(
-    "flightpath.debugState",
-    () => {
-      const state = flightPathManager.getQueueState();
-      const stateInfo = `FlightPath Debug State:
-                            Status: ${state.status}
-                            Current Index: ${state.currentIndex}
-                            Total Prompts: ${state.prompts.length}
-                            Results: ${state.results.length}`;
-
-      vscode.window.showInformationMessage(stateInfo, { modal: true });
-    }
-  );
-
-  // Show Copilot Status command
-  const showCopilotStatusCommand = vscode.commands.registerCommand(
-    "flightpath.showCopilotStatus",
-    () => {
-      const status = flightPathManager.getCopilotStatus();
-      const capabilities = flightPathManager.getCopilotCapabilities();
-
-      const statusMessage = `FlightPath Copilot Integration Status:
-
-${status.message}
-
-Capabilities:
-• Direct Automation (PROVEN): ${capabilities.hasDirectAutomation ? "✅" : "❌"}
-• Zero-Interaction Support: ${capabilities.supportsZeroInteraction ? "✅" : "❌"}
-
-Current Strategy: ${status.strategy}
-
-Note: FlightPath uses a single proven strategy. When direct automation 
-is unavailable, you'll receive clear error messages with troubleshooting steps.`;
-
-      vscode.window
-        .showInformationMessage(
-          statusMessage,
-          { modal: true },
-          "Test Automation",
-          "Close"
-        )
-        .then((action) => {
-          if (action === "Test Automation") {
-            vscode.commands.executeCommand("flightpath.testAutomation");
-          }
-        });
-    }
-  );
-
-  // Test Automation command (integrated version)
-  const testAutomationCommand = vscode.commands.registerCommand(
-    "flightpath.testAutomation",
-    async () => {
-      const result = await flightPathManager.testCopilotAutomation();
-      if (result) {
-        vscode.window.showInformationMessage(
-          "✅ FlightPath: Automation test passed!"
-        );
-      } else {
-        vscode.window.showWarningMessage(
-          "⚠️ FlightPath: Automation test failed. Check Copilot Chat availability."
-        );
-      }
-    }
-  );
-
-  // Retry Copilot Detection command
-  const retryCopilotDetectionCommand = vscode.commands.registerCommand(
-    "flightpath.retryCopilotDetection",
-    async () => {
-      await flightPathManager.retryCopilotDetection();
-    }
-  );
-
   // Create End Condition Script command
   const createEndConditionScriptCommand = vscode.commands.registerCommand(
     "flightpath.createEndConditionScript",
@@ -646,10 +571,6 @@ is unavailable, you'll receive clear error messages with troubleshooting steps.`
     pauseCommand,
     resumeCommand,
     stopCommand,
-    debugStateCommand,
-    showCopilotStatusCommand,
-    testAutomationCommand,
-    retryCopilotDetectionCommand,
     createEndConditionScriptCommand,
     importAgentsCommand,
     importWorkflowTemplatesCommand,

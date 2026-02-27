@@ -757,9 +757,13 @@ function createMessageHandlers(): MessageHandlerMap {
 
   // --------------------------------------------------------------------------
   // WORKFLOW_SUMMARY_UPDATED - Workflow execution state changed
-  // If now RUNNING or PAUSED: update or add to loadedWorkflows.
-  // If now COMPLETED/ERROR/STOPPED: remove from loadedWorkflows
-  //   (it will appear in the output history section instead).
+  // If now RUNNING or PAUSED: upsert into loadedWorkflows.
+  // If now COMPLETED/ERROR/STOPPED: remove from loadedWorkflows.
+  //
+  // NOTE: WORKFLOW_ADDED fires before the queue state transitions to RUNNING
+  // (timing gap in the orchestrator), so the frontend filter in WORKFLOW_ADDED
+  // drops the entry. When state=RUNNING arrives here, we must upsert (not just
+  // update) so the workflow appears in the "Running Workflows" section.
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;
@@ -769,7 +773,12 @@ function createMessageHandlers(): MessageHandlerMap {
       summary.executionState === EXECUTION_STATES.RUNNING ||
       summary.executionState === EXECUTION_STATES.PAUSED
     ) {
-      uiStore.updateLoadedWorkflow(summary);
+      const exists = uiStore.loadedWorkflows.some((w) => w.id === summary.id);
+      if (exists) {
+        uiStore.updateLoadedWorkflow(summary);
+      } else {
+        uiStore.addLoadedWorkflow(summary);
+      }
     } else {
       // Workflow retired — remove from the running section
       uiStore.removeLoadedWorkflow(summary.id);
