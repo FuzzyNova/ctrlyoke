@@ -11,9 +11,9 @@
       "allowDynamicExtension": true
     },
     {
-      "id": "appended-end",
+      "id": "appended-end-say-goodbye",
       "prompt": "APPENDED END: say goodbye",
-      "allowDynamicExtension": true
+      "allowDynamicExtension": false
     }
   ]
 }
