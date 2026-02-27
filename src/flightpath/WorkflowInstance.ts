@@ -29,6 +29,7 @@ import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
 import { PromptFileWatcher } from "./orchestration/PromptFileWatcher";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
+import { IntegrationFactory } from "./IntegrationFactory";
 
 /**
  * WorkflowInstance
@@ -46,8 +47,8 @@ import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
  *
  * Dependencies that span multiple workflows (integrations, status bar, template
  * importing) remain in WorkflowOrchestrator and are injected as callbacks:
- *   - getIntegration(harnessOverride?)  → resolve integration by harness
- *   - getDefaultIntegration()           → resolve per-settings default
+ *   - integrationFactory                → creates per-run execution integrations
+ *   - getDetectorIntegration(harness?)  → returns detector singleton for pre-flight checks
  *   - onWorkflowNameChange(name)        → propagate name to CLI tabs
  *   - onStatusBarUpdate()               → trigger orchestrator status bar refresh
  *
@@ -103,21 +104,27 @@ export class WorkflowInstance {
   private readonly promptFileWatcher: PromptFileWatcher;
   readonly outputHistoryManager: OutputHistoryManager;
 
+  /** Execution integrations created for the current/most-recent run — disposed in finally block */
+  private readonly executionIntegrations = new Set<HarnessIntegration>();
+
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly dashboardProvider: FlightPathWebviewProvider | undefined,
     /**
-     * Resolve an integration by optional harness override.
-     * Provided by WorkflowOrchestrator so WorkflowInstance never hard-references
-     * the shared integration instances.
+     * Factory for creating per-run execution integrations.
+     * Each call to createIntegrationForMode() produces a fresh, isolated integration.
      */
-    private readonly getIntegration: (
+    private readonly integrationFactory: IntegrationFactory,
+    /**
+     * Resolve a DETECTOR integration (singleton) by optional harness override.
+     * Used only for pre-flight status checks (Initializing / Waiting / Unavailable).
+     * Never used for execution — execution always goes through integrationFactory.createForExecution().
+     */
+    private readonly getDetectorIntegration: (
       harnessOverride?: Harness
     ) => HarnessIntegration,
-    /** Resolve the default integration based on current VS Code settings */
-    private readonly getDefaultIntegration: () => HarnessIntegration,
     /**
-     * Callback to propagate workflow name to CLI integration terminal tabs.
+     * Callback to propagate workflow name to CLI detector singleton terminal tabs.
      * Called whenever workflowName changes or is cleared.
      */
     private readonly onWorkflowNameChange: (name: string | undefined) => void,
@@ -169,11 +176,24 @@ export class WorkflowInstance {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Returns the dashboard provider only when this instance is the active
+   * (viewed) workflow. Background instances return undefined so their
+   * output is not routed to the UI.
+   */
+  private get activeDashboard(): FlightPathWebviewProvider | undefined {
+    return this.isActive ? this.dashboardProvider : undefined;
+  }
+
+  /**
    * Mark this instance as the active/visible workflow.
    * Phase 2: flushes buffered events and sends a full state sync to the dashboard.
    */
   setActive(value: boolean): void {
+    const prev = this.isActive;
     this.isActive = value;
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] setActive: ${prev} → ${value} (workflow: ${this.workflowName || "unnamed"})`
+    );
     if (value) {
       this.flushBufferedEvents();
     }
@@ -185,8 +205,13 @@ export class WorkflowInstance {
    */
   private flushBufferedEvents(): void {
     if (this.bufferedEvents.length === 0) {
+      Log.info(`[inst:${this.id.slice(0, 8)}] flushBufferedEvents: no buffered events, sending full state`);
+      this.sendFullStateToDashboard();
       return;
     }
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] flushBufferedEvents: replaying ${this.bufferedEvents.length} buffered events via full state sync`
+    );
     // Replay the current state to cover all buffered changes in one shot
     this.sendFullStateToDashboard();
     this.bufferedEvents = [];
@@ -205,6 +230,9 @@ export class WorkflowInstance {
     const fileName = this.currentPromptFile
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}`
+    );
     this.dashboardProvider.updateSessionRestored(
       fileName,
       state.prompts,
@@ -418,8 +446,6 @@ export class WorkflowInstance {
     try {
       Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
 
-      const integration = this.createIntegrationForMode(modeOverride);
-
       if (this.dashboardProvider && !this.isDashboardReady()) {
         const action = await vscode.window.showWarningMessage(
           `FlightPath dashboard is still initializing. Please wait a moment and try again.`,
@@ -436,7 +462,13 @@ export class WorkflowInstance {
         return;
       }
 
-      const detailedStatus = integration.getDetailedStatus();
+      // Pre-flight check uses the DETECTOR singleton (already initialized at startup).
+      // The execution integration created later will have markAsReady() called and
+      // should not be used for this check.
+      const detailedStatus = this.getDetectorIntegration(modeOverride).getDetailedStatus();
+
+      // Create the execution integration only after passing all pre-flight checks.
+      const integration = this.createIntegrationForMode(modeOverride);
 
       if (detailedStatus.initializationStatus === HarnessStatus.Initializing) {
         const action = await vscode.window.showWarningMessage(
@@ -478,14 +510,14 @@ export class WorkflowInstance {
           "Cancel"
         );
         if (action === "Retry Detection") {
-          await integration.retryDetection();
+          await this.getDetectorIntegration(modeOverride).retryDetection();
           setTimeout(
             () =>
               this.executeLoadedPromptFile(modeOverride, continueFromCurrent),
             2000
           );
         } else if (action === "View Requirements") {
-          await integration.testAutomation();
+          await this.getDetectorIntegration(modeOverride).testAutomation();
         }
         return;
       }
@@ -649,7 +681,7 @@ export class WorkflowInstance {
    * Stop current execution.
    */
   async stop(): Promise<void> {
-    const integration = this.activeIntegration || this.getDefaultIntegration();
+    const integration = this.activeIntegration || this.getDetectorIntegration();
 
     Log.info(`⏹️ WorkflowInstance.stop() - stopping active integration`);
 
@@ -994,10 +1026,14 @@ export class WorkflowInstance {
   private createIntegrationForMode(
     harnessOverride?: Harness
   ): HarnessIntegration {
+    const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
     if (harnessOverride) {
       Log.info(`🔀 Using harness override: ${harnessOverride}`);
     }
-    return this.getIntegration(harnessOverride);
+    const integration = this.integrationFactory.createForExecution(harness);
+    integration.setWorkflowName(this.workflowName || undefined);
+    this.executionIntegrations.add(integration);
+    return integration;
   }
 
   private async saveAndReloadIfDirty(filePath: string): Promise<void> {
@@ -1044,7 +1080,7 @@ export class WorkflowInstance {
   ): Promise<void> {
     if (this.startPending) {
       Log.info(
-        "⚠️ Workflow start already pending, skipping duplicate start request"
+        `[inst:${this.id.slice(0, 8)}] ⚠️ Workflow start already pending, skipping duplicate start request`
       );
       return;
     }
@@ -1053,16 +1089,23 @@ export class WorkflowInstance {
     this.startedAt = Date.now();
 
     try {
-      const activeIntegration = integration || this.getDefaultIntegration();
+      const activeIntegration = integration || this.createIntegrationForMode();
       this.activeIntegration = activeIntegration;
 
       Log.info(
-        `🟢 [APPEND-DEBUG] Creating WorkflowContext with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: isActive=${this.isActive}, historyFilePath="${historyFilePath}"`
       );
+      // Use a getter so dashboardProvider is evaluated lazily each time
+      // WorkflowExecutor accesses it. When this instance is deactivated
+      // (user switches to another workflow), activeDashboard returns
+      // undefined and background output stops flowing to the UI.
+      const self = this;
       const workflowContext: WorkflowContext = {
         workspaceFolderPath: this.workspaceFolder?.uri.fsPath,
         currentPromptFilePath: this.currentPromptFile?.filePath,
-        dashboardProvider: this.dashboardProvider,
+        get dashboardProvider() {
+          return self.activeDashboard;
+        },
         shouldShowCliCommand: this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
@@ -1091,6 +1134,14 @@ export class WorkflowInstance {
 
       this.activeIntegration = undefined;
     } finally {
+      // Dispose all execution integrations created for this run.
+      // They are short-lived (one run), not registered with context.subscriptions,
+      // so must be disposed manually to release their EventEmitter resources.
+      for (const execIntegration of this.executionIntegrations) {
+        execIntegration.dispose();
+      }
+      this.executionIntegrations.clear();
+
       if (historyFilePath) {
         const finalState = this.promptQueue.getState();
         const runStepCount = this.promptQueue.getProgress().total;
@@ -1142,7 +1193,7 @@ export class WorkflowInstance {
 
   private onQueueStateChanged(state: QueueState): void {
     Log.info(
-      `FlightPath: Queue state changed to ${state.status} (currentIndex: ${state.currentIndex}, total: ${state.prompts.length}, completed: ${state.completedIds.size})`
+      `[inst:${this.id.slice(0, 8)}] Queue state → ${state.status} (step ${state.currentIndex}/${state.prompts.length}, isActive=${this.isActive})`
     );
     this.onStatusBarUpdate();
 

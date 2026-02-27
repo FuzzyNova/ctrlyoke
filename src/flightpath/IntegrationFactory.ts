@@ -25,40 +25,58 @@ export class IntegrationFactory {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   /** Create a new Copilot CLI integration */
-  createCopilotCli(): CliIntegration {
+  createCopilotCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CopilotCliProvider();
-    return new CliIntegration(provider, this.context);
+    return new CliIntegration(provider, this.context, registerWithContext);
   }
 
   /** Create a new Claude Code CLI integration */
-  createClaudeCli(): CliIntegration {
+  createClaudeCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new ClaudeCliProvider();
-    return new CliIntegration(provider, this.context);
+    return new CliIntegration(provider, this.context, registerWithContext);
   }
 
   /** Create a new Codex CLI integration */
-  createCodexCli(): CliIntegration {
+  createCodexCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CodexCliProvider();
-    return new CliIntegration(provider, this.context);
+    return new CliIntegration(provider, this.context, registerWithContext);
   }
 
   /** Create a new Copilot Chat integration */
-  createCopilotChat(): CopilotChatIntegration {
-    return new CopilotChatIntegration(this.context);
+  createCopilotChat(registerWithContext: boolean = true): CopilotChatIntegration {
+    return new CopilotChatIntegration(this.context, registerWithContext);
   }
 
   /** Create a new integration for the given harness */
-  createForHarness(harness: Harness): HarnessIntegration {
+  createForHarness(harness: Harness, registerWithContext: boolean = true): HarnessIntegration {
     switch (harness) {
       case Harness.CopilotChat:
-        return this.createCopilotChat();
+        return this.createCopilotChat(registerWithContext);
       case Harness.ClaudeCli:
-        return this.createClaudeCli();
+        return this.createClaudeCli(registerWithContext);
       case Harness.CodexCli:
-        return this.createCodexCli();
+        return this.createCodexCli(registerWithContext);
       case Harness.CopilotCli:
       default:
-        return this.createCopilotCli();
+        return this.createCopilotCli(registerWithContext);
     }
+  }
+
+  /**
+   * Create a fresh execution integration for a single workflow run.
+   *
+   * Unlike detector singletons (created once at startup via createForHarness),
+   * execution integrations are per-run: isolated event emitters, isolated process
+   * state, no shared fields between parallel workflows.
+   *
+   * - Does NOT register emitters with context.subscriptions (avoids accumulation leak).
+   * - Calls markAsReady() instead of initialize() — the detector singleton has already
+   *   confirmed the harness is available, so the PATH/version check is redundant.
+   * - Must be disposed by the caller (WorkflowInstance.startWorkflowExecution finally block).
+   */
+  createForExecution(harness: Harness): HarnessIntegration {
+    const integration = this.createForHarness(harness, false);
+    integration.markAsReady();
+    return integration;
   }
 }

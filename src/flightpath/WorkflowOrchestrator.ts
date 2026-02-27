@@ -165,6 +165,9 @@ export class WorkflowOrchestrator {
   async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
+    Log.info(
+      `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}, running=${this.workflows.size}`
+    );
     // ── Duplicate detection: only running/paused instances are in the Map ──
     if (_filePath) {
       const existing = [...this.workflows.values()].find(
@@ -176,6 +179,9 @@ export class WorkflowOrchestrator {
           existingStatus === EXECUTION_STATES.RUNNING ||
           existingStatus === EXECUTION_STATES.PAUSED
         ) {
+          Log.info(
+            `createWorkflow: duplicate detected — existing inst:${existing.id.slice(0, 8)} is ${existingStatus}`
+          );
           const choice = await vscode.window.showInformationMessage(
             `This workflow is already running and ${existingStatus}. Switch to it or create a new instance?`,
             "Switch to Existing",
@@ -192,9 +198,15 @@ export class WorkflowOrchestrator {
 
     // Dispose current viewedInstance if it is idle (not in the execution registry)
     if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
+      Log.info(
+        `createWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
+      );
       this.viewedInstance.dispose();
     } else if (this.viewedInstance) {
       // It is running/paused — just deactivate it visually
+      Log.info(
+        `createWorkflow: deactivating running viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
+      );
       this.viewedInstance.setActive(false);
     }
 
@@ -220,9 +232,14 @@ export class WorkflowOrchestrator {
   private retireWorkflow(workflowId: string): void {
     const instance = this.workflows.get(workflowId);
     if (!instance) {
+      Log.info(`retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`);
       return;
     }
 
+    const isViewed = this.viewedInstance === instance;
+    Log.info(
+      `retireWorkflow: inst:${workflowId.slice(0, 8)} status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.workflows.size - 1}`
+    );
     this.workflows.delete(workflowId);
 
     if (this.viewedInstance === instance) {
@@ -264,13 +281,21 @@ export class WorkflowOrchestrator {
   setActiveWorkflow(workflowId: string): void {
     const instance = this.workflows.get(workflowId);
     if (!instance) {
+      Log.warn(`setActiveWorkflow: inst:${workflowId.slice(0, 8)} not found in running/paused registry`);
       throw new Error(
         `Workflow ${workflowId} not found in running/paused registry`
       );
     }
 
+    Log.info(
+      `setActiveWorkflow: switching from inst:${this.viewedInstance?.id.slice(0, 8) ?? "null"} → inst:${workflowId.slice(0, 8)} (${instance.workflowName || "unnamed"})`
+    );
+
     // Dispose current viewedInstance if it is idle (not executing)
     if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
+      Log.info(
+        `setActiveWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
+      );
       this.viewedInstance.dispose();
     } else if (this.viewedInstance && this.viewedInstance !== instance) {
       this.viewedInstance.setActive(false);
@@ -282,6 +307,9 @@ export class WorkflowOrchestrator {
     instance.sendFullStateToDashboard();
     // Notify the dashboard that the active workflow selection changed.
     this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
+    Log.info(
+      `setActiveWorkflow: switch complete — inst:${workflowId.slice(0, 8)} is now active`
+    );
   }
 
   /** Return summaries without exposing WorkflowInstance internals */
@@ -420,6 +448,9 @@ export class WorkflowOrchestrator {
     // Add to the workflows Map (running/paused registry) if not already there
     if (!this.workflows.has(instance.id)) {
       this.workflows.set(instance.id, instance);
+      Log.info(
+        `executeWorkflow: registered inst:${instance.id.slice(0, 8)} in running registry (total: ${this.workflows.size})`
+      );
       this.dashboardProvider?.notifyWorkflowAdded(instance.getSummary());
     }
 
@@ -722,13 +753,15 @@ export class WorkflowOrchestrator {
     const instance = new WorkflowInstance(
       this.context,
       this.dashboardProvider,
-      (harnessOverride?: Harness) => this.resolveIntegration(harnessOverride),
-      () => this.getDefaultIntegration(),
+      this.integrationFactory,
+      (harnessOverride?: Harness) => this.resolveDetectorIntegration(harnessOverride),
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
       this.currentWorkspaceFolder
     );
+
+    Log.info(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
 
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
@@ -769,7 +802,12 @@ export class WorkflowOrchestrator {
     }
   }
 
-  private resolveIntegration(harnessOverride?: Harness): HarnessIntegration {
+  /**
+   * Return the DETECTOR singleton for the given harness (or the default harness if none).
+   * Used for pre-flight status checks and harness availability UI only.
+   * Never used for execution — execution integrations are created per-run via IntegrationFactory.
+   */
+  private resolveDetectorIntegration(harnessOverride?: Harness): HarnessIntegration {
     if (harnessOverride) {
       switch (harnessOverride) {
         case Harness.CopilotChat:

@@ -61,15 +61,55 @@ export abstract class HarnessIntegration {
   }>();
   public readonly onPromptReady = this.promptReadyEmitter.event;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(
+    context: vscode.ExtensionContext,
+    registerWithContext: boolean = true
+  ) {
     this.context = context;
 
-    // Register disposal of event emitters
-    context.subscriptions.push(this.statusChangeEmitter);
-    context.subscriptions.push(this.responseCompleteEmitter);
-    context.subscriptions.push(this.streamingChunkEmitter);
-    context.subscriptions.push(this.streamingEventsEmitter);
-    context.subscriptions.push(this.promptReadyEmitter);
+    // Detector singletons register with context so VS Code disposes them on deactivation.
+    // Execution integrations (per-run, short-lived) skip registration and are disposed
+    // manually in startWorkflowExecution's finally block to avoid leaking into subscriptions.
+    if (registerWithContext) {
+      context.subscriptions.push(this.statusChangeEmitter);
+      context.subscriptions.push(this.responseCompleteEmitter);
+      context.subscriptions.push(this.streamingChunkEmitter);
+      context.subscriptions.push(this.streamingEventsEmitter);
+      context.subscriptions.push(this.promptReadyEmitter);
+    }
+  }
+
+  /**
+   * Dispose all event emitters owned by this integration.
+   * Called automatically by VS Code for detector singletons (via context.subscriptions).
+   * Called manually for execution integrations after each workflow run.
+   */
+  dispose(): void {
+    this.statusChangeEmitter.dispose();
+    this.responseCompleteEmitter.dispose();
+    this.streamingChunkEmitter.dispose();
+    this.streamingEventsEmitter.dispose();
+    this.promptReadyEmitter.dispose();
+  }
+
+  /**
+   * Mark this integration as ready without running initialize().
+   * Called by IntegrationFactory.createForExecution() on per-run execution integrations:
+   * the detector singleton has already confirmed harness availability, so we skip the
+   * PATH/version check and go straight to Ready.
+   * Subclasses that track additional initialization state (e.g. CliIntegration)
+   * should override this to also update their local status field.
+   */
+  markAsReady(): void {
+    this.isAvailable = true;
+  }
+
+  /**
+   * Set the workflow display name (used for terminal tab naming in CLI integrations).
+   * Default is a no-op; CliIntegration overrides with the real implementation.
+   */
+  setWorkflowName(_name: string | undefined): void {
+    // no-op in base class; CliIntegration overrides
   }
 
   /**

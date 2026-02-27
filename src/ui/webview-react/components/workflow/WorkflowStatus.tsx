@@ -307,10 +307,12 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             </div>
           )}
 
-          {/* Recent workflows list */}
+          {/* Recent workflows list — exclude any already shown in Running Workflows */}
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <RecentWorkflows
-              workflows={recentWorkflows}
+              workflows={recentWorkflows.filter(
+                (rw) => !loadedWorkflows.some((lw) => lw.filePath === rw.filePath)
+              )}
               currentFilePath={fileName}
               onSelect={handleSelectWorkflow}
               onClearHistory={handleClearHistory}

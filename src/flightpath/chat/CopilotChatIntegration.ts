@@ -39,8 +39,8 @@ export class CopilotChatIntegration extends HarnessIntegration {
   // Last parsed structured output (populated after each completed response)
   private lastParsedOutput?: UniversalCliOutput;
 
-  constructor(context: vscode.ExtensionContext) {
-    super(context);
+  constructor(context: vscode.ExtensionContext, registerWithContext: boolean = true) {
+    super(context, registerWithContext);
     this.sessionMonitor = new ChatSessionMonitor(context);
     this.sessionParser = new ChatSessionParser();
     this.attachmentHandler = new NativeAttachmentHandler((path) =>
@@ -142,6 +142,15 @@ export class CopilotChatIntegration extends HarnessIntegration {
           `Using current model instead. You can change the default in Settings.`
       );
     }
+  }
+
+  /** Dispose event emitters and cancel any in-flight polling timer */
+  override dispose(): void {
+    if (this.pollingTimer) {
+      clearTimeout(this.pollingTimer);
+      this.pollingTimer = undefined;
+    }
+    super.dispose();
   }
 
   /** Initialize with background polling (5s intervals, 30s max) */

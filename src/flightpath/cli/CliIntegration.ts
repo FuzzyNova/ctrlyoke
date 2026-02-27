@@ -135,8 +135,12 @@ export class CliIntegration extends HarnessIntegration {
    * @param cliProvider The CLI provider instance (encapsulates all CLI-specific logic)
    * @param context VS Code extension context
    */
-  constructor(cliProvider: ICliProvider, context: vscode.ExtensionContext) {
-    super(context);
+  constructor(
+    cliProvider: ICliProvider,
+    context: vscode.ExtensionContext,
+    registerWithContext: boolean = true
+  ) {
+    super(context, registerWithContext);
     this.provider = cliProvider;
     this.processManager = new CliProcessManager(
       this.getWorkspaceRoot() || "",
@@ -1559,8 +1563,19 @@ export class CliIntegration extends HarnessIntegration {
    * Dispose of resources
    */
   dispose(): void {
+    super.dispose();
     this.processManager.dispose();
     this.currentExecution = undefined;
+  }
+
+  /**
+   * Mark this execution integration as ready without running initialize().
+   * The detector singleton has already confirmed availability; we set the
+   * local initializationStatus so getDetailedStatus() returns Ready immediately.
+   */
+  override markAsReady(): void {
+    super.markAsReady();
+    this.initializationStatus = HarnessStatus.Ready;
   }
 
   // ============================================================
