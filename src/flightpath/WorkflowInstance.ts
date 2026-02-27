@@ -101,14 +101,17 @@ export class WorkflowInstance {
    * Per-step streaming output buffer — captures chunks even when this instance is inactive.
    * Replayed in sendFullStateToDashboard so the user sees in-progress output when switching back.
    */
-  private readonly stepOutputBuffer = new Map<number, {
-    prompt: string;
-    cliCommand: string | undefined;
-    workingDirectory: string | undefined;
-    timestampMs: number;
-    attemptIndex: number;
-    accumulatedText: string;
-  }>();
+  private readonly stepOutputBuffer = new Map<
+    number,
+    {
+      prompt: string;
+      cliCommand: string | undefined;
+      workingDirectory: string | undefined;
+      timestampMs: number;
+      attemptIndex: number;
+      accumulatedText: string;
+    }
+  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -218,7 +221,9 @@ export class WorkflowInstance {
    */
   private flushBufferedEvents(): void {
     if (this.bufferedEvents.length === 0) {
-      Log.info(`[inst:${this.id.slice(0, 8)}] flushBufferedEvents: no buffered events, sending full state`);
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] flushBufferedEvents: no buffered events, sending full state`
+      );
       this.sendFullStateToDashboard();
       return;
     }
@@ -257,7 +262,10 @@ export class WorkflowInstance {
 
     // Replay buffered streaming output for the currently-running step so the user
     // sees in-progress output when switching back to this workflow mid-execution.
-    if (state.status === EXECUTION_STATES.RUNNING && this.stepOutputBuffer.size > 0) {
+    if (
+      state.status === EXECUTION_STATES.RUNNING &&
+      this.stepOutputBuffer.size > 0
+    ) {
       const runningStep = state.currentIndex;
       const buffer = this.stepOutputBuffer.get(runningStep);
       if (buffer) {
@@ -515,7 +523,8 @@ export class WorkflowInstance {
       // Pre-flight check uses the DETECTOR singleton (already initialized at startup).
       // The execution integration created later will have markAsReady() called and
       // should not be used for this check.
-      const detailedStatus = this.getDetectorIntegration(modeOverride).getDetailedStatus();
+      const detailedStatus =
+        this.getDetectorIntegration(modeOverride).getDetailedStatus();
 
       // Create the execution integration only after passing all pre-flight checks.
       const integration = this.createIntegrationForMode(modeOverride);
@@ -676,7 +685,11 @@ export class WorkflowInstance {
       Log.info(
         `🟢 [APPEND-DEBUG] Starting workflow execution with historyFilePath: "${historyFilePath}" (empty=${!historyFilePath})`
       );
-      await this.startWorkflowExecution(integration, historyFilePath, workingFilePath || undefined);
+      await this.startWorkflowExecution(
+        integration,
+        historyFilePath,
+        workingFilePath || undefined
+      );
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
       await this.promptQueue.markErrored();
@@ -1162,6 +1175,7 @@ export class WorkflowInstance {
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         historyFilePath,
         workingFilePath: workingFilePath || undefined,
+        instanceTag: `[inst:${this.id.slice(0, 8)}]`,
         outputHistoryManager: this.outputHistoryManager,
         getIntegrationForPrompt: (
           prompt: PromptItem,
@@ -1179,7 +1193,14 @@ export class WorkflowInstance {
           }
           return activeIntegration;
         },
-        captureOutputInit: (stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex) => {
+        captureOutputInit: (
+          stepIndex,
+          prompt,
+          cliCommand,
+          workingDirectory,
+          timestampMs,
+          attemptIndex
+        ) => {
           // Always buffer the init state so we can replay it when switching back
           self.stepOutputBuffer.set(stepIndex, {
             prompt,
@@ -1187,7 +1208,8 @@ export class WorkflowInstance {
             workingDirectory,
             timestampMs,
             attemptIndex,
-            accumulatedText: self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
+            accumulatedText:
+              self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
           });
         },
         captureChunk: (stepIndex, chunk) => {
@@ -1300,7 +1322,11 @@ export class WorkflowInstance {
       Log.info(
         `Auto-starting workflow: State=RUNNING, activeIntegration=null, currentIndex=${state.currentIndex}, totalPrompts=${state.prompts.length}`
       );
-      this.startWorkflowExecution(undefined, "", state.workingFilePath || undefined).catch((error) => {
+      this.startWorkflowExecution(
+        undefined,
+        "",
+        state.workingFilePath || undefined
+      ).catch((error) => {
         Log.error("Auto-start failed:", error);
         vscode.window.showErrorMessage(
           `FlightPath: Failed to auto-start workflow: ${error}`

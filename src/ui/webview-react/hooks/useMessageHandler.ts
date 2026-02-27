@@ -389,9 +389,6 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_STREAMING_CHUNK] = (message) => {
     const workflowStore = useWorkflowStore.getState();
-    WebviewLog.debug(
-      `[CLI_STREAMING_CHUNK] stepIndex=${message.stepIndex}, chunk length=${message.chunk?.length}`
-    );
     workflowStore.appendStreamingChunk(message.stepIndex, message.chunk || "");
   };
 
@@ -729,7 +726,9 @@ function createMessageHandlers(): MessageHandlerMap {
         w.executionState === EXECUTION_STATES.RUNNING ||
         w.executionState === EXECUTION_STATES.PAUSED
     );
-    WebviewLog.debug(`[WORKFLOWS_LIST] received ${all.length} total, ${active.length} active: ${active.map(w => `inst:${w.id.slice(0,8)}(${w.executionState})`).join(", ") || "(none)"}`);
+    WebviewLog.debug(
+      `[WORKFLOWS_LIST] received ${all.length} total, ${active.length} active: ${active.map((w) => `inst:${w.id.slice(0, 8)}(${w.executionState})`).join(", ") || "(none)"}`
+    );
     useUiStore.getState().setLoadedWorkflows(active);
   };
 
@@ -739,7 +738,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_ADDED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;
-    WebviewLog.debug(`[WORKFLOW_ADDED] inst:${summary?.id.slice(0,8)} state=${summary?.executionState} — will add to loadedWorkflows: ${!!(summary && (summary.executionState === EXECUTION_STATES.RUNNING || summary.executionState === EXECUTION_STATES.PAUSED))}`);
+    WebviewLog.debug(
+      `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} state=${summary?.executionState} — will add to loadedWorkflows: ${!!(summary && (summary.executionState === EXECUTION_STATES.RUNNING || summary.executionState === EXECUTION_STATES.PAUSED))}`
+    );
     if (
       summary &&
       (summary.executionState === EXECUTION_STATES.RUNNING ||
@@ -772,7 +773,9 @@ function createMessageHandlers(): MessageHandlerMap {
     const summary: WorkflowSummary | undefined = message.summary;
     if (!summary) return;
     const uiStore = useUiStore.getState();
-    WebviewLog.debug(`[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0,8)} state=${summary.executionState} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} — loadedWorkflows: [${uiStore.loadedWorkflows.map(w => `inst:${w.id.slice(0,8)}`).join(", ")}]`);
+    WebviewLog.debug(
+      `[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0, 8)} state=${summary.executionState} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} — loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}`).join(", ")}]`
+    );
     if (
       summary.executionState === EXECUTION_STATES.RUNNING ||
       summary.executionState === EXECUTION_STATES.PAUSED
@@ -793,7 +796,9 @@ function createMessageHandlers(): MessageHandlerMap {
   // ACTIVE_WORKFLOW_CHANGED - Active workflow selection changed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED] = (message) => {
-    WebviewLog.debug(`[ACTIVE_WORKFLOW_CHANGED] workflowId=inst:${message.workflowId?.slice(0,8)}`);
+    WebviewLog.debug(
+      `[ACTIVE_WORKFLOW_CHANGED] workflowId=inst:${message.workflowId?.slice(0, 8)}`
+    );
     if (message.workflowId) {
       useUiStore.getState().setActiveWorkflowId(message.workflowId);
     }

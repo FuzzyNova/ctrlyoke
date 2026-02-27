@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import {
   PromptItem,
   PromptFile,
@@ -57,6 +58,8 @@ export interface WorkflowContext {
   historyFilePath: string;
   /** Path to the active working file for this workflow instance (used by MCP server targeting) */
   workingFilePath?: string;
+  /** Short instance tag for log prefixing, e.g. "[inst:abc12345] " */
+  instanceTag?: string;
   /** OutputHistoryManager for saving step outputs */
   outputHistoryManager?: OutputHistoryManager;
   /**
@@ -566,7 +569,9 @@ export class WorkflowExecutor {
 
     if (context.dashboardProvider) {
       promptReadyDisposable = integration.onPromptReady((data) => {
-        const cliCommand = context.shouldShowCliCommand ? data.cliCommand : undefined;
+        const cliCommand = context.shouldShowCliCommand
+          ? data.cliCommand
+          : undefined;
         context.dashboardProvider?.updateCliOutput(stepIndex, {
           prompt: promptItem.prompt,
           response: "",
@@ -592,9 +597,6 @@ export class WorkflowExecutor {
 
     // Always register the chunk listener — routes to dashboard when active, always buffers
     streamingDisposable = integration.onStreamingChunk((chunk) => {
-      Log.info(
-        `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
-      );
       Log.append(chunk);
       context.captureChunk?.(stepIndex, chunk);
       context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
@@ -603,9 +605,6 @@ export class WorkflowExecutor {
     if (context.dashboardProvider) {
       structuredStreamingDisposable = integration.onStreamingEvents(
         (events) => {
-          Log.info(
-            `🔍 WorkflowExecutor: Received ${events.length} structured streaming events`
-          );
           context.dashboardProvider?.updateCliStreamingEvents(
             stepIndex,
             events
@@ -752,23 +751,13 @@ export class WorkflowExecutor {
       return;
     }
 
-    Log.getOutputChannel().clear();
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
+    const tag = context.instanceTag ? `${context.instanceTag} ` : "";
+    const workflowName = path.basename(
+      context.currentPromptFilePath ?? "unknown"
     );
-    Log.appendLine("        FLIGHTPATH WORKFLOW STARTED");
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
+    Log.info(
+      `${tag}Workflow started — ${workflowName}, ${totalPrompts} prompt(s), harness: ${integration.getStatus().strategy}`
     );
-    Log.appendLine(`Started: ${new Date().toLocaleString()}`);
-    Log.appendLine(`Total prompts: ${totalPrompts}`);
-    Log.appendLine(
-      `Integration: ${integration.getStatus().strategy.toUpperCase()}`
-    );
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
-    );
-    Log.appendLine("");
   }
 
   /**
@@ -783,18 +772,12 @@ export class WorkflowExecutor {
       return;
     }
 
-    Log.appendLine("");
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
+    const tag = context.instanceTag ? `${context.instanceTag} ` : "";
+    const workflowName = path.basename(
+      context.currentPromptFilePath ?? "unknown"
     );
-    Log.appendLine("        WORKFLOW COMPLETE ✓");
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
-    );
-    Log.appendLine(`Completed: ${new Date().toLocaleString()}`);
-    Log.appendLine(`Prompts completed: ${totalPrompts}/${totalPrompts}`);
-    Log.appendLine(
-      "═══════════════════════════════════════════════════════════"
+    Log.info(
+      `${tag}Workflow complete ✓ — ${workflowName}, ${totalPrompts}/${totalPrompts} prompts completed`
     );
   }
 

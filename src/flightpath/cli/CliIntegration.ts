@@ -328,7 +328,11 @@ export class CliIntegration extends HarnessIntegration {
       return null;
     }
 
-    return await this.provider.getMcpConfigArgs(mcpServerPath, workspaceRoot, workingFilePath);
+    return await this.provider.getMcpConfigArgs(
+      mcpServerPath,
+      workspaceRoot,
+      workingFilePath
+    );
   }
 
   // ============================================================
@@ -1315,19 +1319,13 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected logPrompt(promptText: string): void {
     if (this.shouldShowOutput()) {
-      Log.appendLine("");
+      const preview =
+        promptText.length > 120
+          ? `${promptText.substring(0, 120)}…`
+          : promptText;
       Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
+        `\n[PROMPT ${new Date().toLocaleTimeString()}] ${preview}`
       );
-      Log.appendLine(`[PROMPT] ${new Date().toLocaleTimeString()}`);
-      Log.appendLine(
-        "───────────────────────────────────────────────────────────"
-      );
-      Log.appendLine(promptText);
-      Log.appendLine(
-        "───────────────────────────────────────────────────────────"
-      );
-      Log.appendLine("");
     }
   }
 
@@ -1354,20 +1352,9 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected logResponse(response: string, statistics?: string): void {
     if (this.shouldShowOutput()) {
-      Log.appendLine(`[RESPONSE] ${new Date().toLocaleTimeString()}`);
-      Log.appendLine(
-        "───────────────────────────────────────────────────────────"
-      );
-      Log.appendLine(response);
       if (statistics) {
-        Log.appendLine("");
-        Log.appendLine("[STATISTICS]");
-        Log.appendLine(statistics);
+        Log.appendLine(`\n[STATISTICS] ${statistics}`);
       }
-      Log.appendLine(
-        "═══════════════════════════════════════════════════════════"
-      );
-      Log.appendLine("");
     }
   }
 
