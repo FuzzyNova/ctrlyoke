@@ -8,6 +8,7 @@ import { RecentWorkflows } from "./RecentWorkflows";
 import { RunningWorkflowItem } from "./RunningWorkflowItem";
 import { DeleteConfirmModal } from "../shared/DeleteConfirmModal";
 import { getExecutionStateBadgeClass } from "../../utils/status";
+import { WebviewLog } from "@utils/logger";
 
 interface WorkflowStatusProps {
   className?: string;
@@ -58,7 +59,11 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       if (message.type === MESSAGE_TYPES.RECENT_WORKFLOWS) {
-        setRecentWorkflows(message.workflows || []);
+        const workflows = message.workflows || [];
+        WebviewLog.debug(
+          `[WorkflowStatus:RECENT_WORKFLOWS] received ${workflows.length} recent workflows: ${workflows.map((w: RecentWorkflow) => `"${w.workflowName || "(empty)"}" state=${w.executionState} path=${w.filePath.split(/[\\/]/).pop()}`).join(", ") || "(none)"}`
+        );
+        setRecentWorkflows(workflows);
       }
     };
 
@@ -135,12 +140,25 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   // Toggle dropdown
   const toggleDropdown = useCallback(() => {
     if (!isDropdownOpen) {
+      WebviewLog.debug(
+        `[WorkflowStatus:toggleDropdown] opening dropdown — requesting workflows list. ` +
+          `Current loadedWorkflows: [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}], ` +
+          `activeWorkflowId=inst:${activeWorkflowId?.slice(0, 8) ?? "null"}, ` +
+          `current fileName="${fileName || "(none)"}", workflowName="${workflowName || "(none)"}"`
+      );
       // Request recent workflows and full loaded-workflows list from extension
       vscode.postMessage({ type: MESSAGE_TYPES.GET_RECENT_WORKFLOWS });
       vscode.postMessage({ type: MESSAGE_TYPES.GET_WORKFLOWS_LIST });
     }
     setIsDropdownOpen(!isDropdownOpen);
-  }, [isDropdownOpen, vscode]);
+  }, [
+    isDropdownOpen,
+    vscode,
+    loadedWorkflows,
+    activeWorkflowId,
+    fileName,
+    workflowName,
+  ]);
 
   // Switch to a loaded workflow
   const handleSwitchWorkflow = useCallback(
@@ -246,6 +264,17 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   }
 
   const displayName = workflowName || getWorkflowNameFromPath(fileName);
+
+  // Log the running section and recent section contents whenever loadedWorkflows or recentWorkflows change
+  // (This runs on every render but is cheap — just string formatting)
+  const filteredRecent = recentWorkflows.filter(
+    (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
+  );
+  WebviewLog.debug(
+    `[WorkflowStatus:render] displayName="${displayName}", executionState=${executionState || "(none)"}, ` +
+      `RUNNING SECTION (${loadedWorkflows.length}): [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"}, wfp=${w.workingFilePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}], ` +
+      `RECENT SECTION (${filteredRecent.length} after filtering): [${filteredRecent.map((rw) => `"${rw.workflowName || "(empty)"}"(state=${rw.executionState}, fp=${rw.filePath.split(/[\\/]/).pop()})`).join(", ") || "(none)"}]`
+  );
 
   return (
     <div ref={containerRef} className={`workflow-status relative ${className}`}>

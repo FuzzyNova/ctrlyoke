@@ -128,7 +128,9 @@ export class OutputHistoryManager {
 
   /**
    * Save CLI outputs for a step (called after each prompt completes or retries).
-   * Replaces the entire step entry (handles both initial + retry case).
+   * Merges incoming CLI outputs with existing ones by attemptIndex so all retry
+   * attempts are preserved. StatusMessages are always replaced with the full
+   * accumulated set passed in.
    */
   async saveStepOutput(
     historyFilePath: string,
@@ -151,7 +153,11 @@ export class OutputHistoryManager {
       Log.info(
         `🟢 [APPEND-DEBUG] saveStepOutput: Current history has ${Object.keys(history.promptOutputs).length} steps, adding/updating step ${stepIndex}`
       );
-      history.promptOutputs[stepIndex] = { cliOutputs, statusMessages };
+      const existing = history.promptOutputs[stepIndex]?.cliOutputs ?? [];
+      history.promptOutputs[stepIndex] = {
+        cliOutputs: this.mergeCliOutputs(existing, cliOutputs),
+        statusMessages,
+      };
       await this.writeHistory(historyFilePath, history);
       Log.info(
         `🟢 [APPEND-DEBUG] saveStepOutput: Successfully saved step ${stepIndex} to ${historyFilePath}`
@@ -159,6 +165,30 @@ export class OutputHistoryManager {
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
     }
+  }
+
+  /**
+   * Merge incoming CLI outputs with existing ones by attemptIndex.
+   * Replaces an existing entry if the same attemptIndex is already present;
+   * otherwise appends. Result is sorted by attemptIndex (chronological order).
+   */
+  private mergeCliOutputs(
+    existing: CliOutput[],
+    incoming: CliOutput[]
+  ): CliOutput[] {
+    const merged = [...existing];
+    for (const output of incoming) {
+      const attemptIndex = output.attemptIndex ?? 0;
+      const existingIdx = merged.findIndex(
+        (o) => (o.attemptIndex ?? 0) === attemptIndex
+      );
+      if (existingIdx >= 0) {
+        merged[existingIdx] = output;
+      } else {
+        merged.push(output);
+      }
+    }
+    return merged.sort((a, b) => (a.attemptIndex ?? 0) - (b.attemptIndex ?? 0));
   }
 
   /**

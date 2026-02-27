@@ -1070,12 +1070,17 @@ export class PromptQueue {
    *   - QUEUE_POSITION.NEXT: After current prompt (paused/running)
    *   - QUEUE_POSITION.BEFORE_CURRENT: Before current prompt (stopped/idle)
    *   - QUEUE_POSITION.END: At end of queue (default)
+   * @param willRunImmediately - When true, skip the COMPLETED→STOPPED
+   *   transition because the caller will immediately start execution.
+   *   This avoids a race where the transient STOPPED state triggers
+   *   retirement before the RUNNING state is reached.
    * @throws Error if queue is in invalid state for appending
    */
   public async appendPrompts(
     prompts: PromptItem[],
     source: string = "User append",
-    position: QueuePosition = QUEUE_POSITION.END
+    position: QueuePosition = QUEUE_POSITION.END,
+    willRunImmediately: boolean = false
   ): Promise<void> {
     if (!this.canAppend()) {
       throw new Error("Cannot append: Queue is in cancelled or error state");
@@ -1110,12 +1115,16 @@ export class PromptQueue {
       this.state.results.splice(insertIndex, 0, ...newResults);
 
       // Auto-start behavior based on current state:
+      // - COMPLETED + willRunImmediately: Stay COMPLETED (caller will start execution)
       // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
       // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
       // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
       // - RUNNING: Already running, no change needed
       const previousStatus = this.state.status;
-      if (this.state.status === EXECUTION_STATES.COMPLETED) {
+      if (
+        this.state.status === EXECUTION_STATES.COMPLETED &&
+        !willRunImmediately
+      ) {
         Log.info(
           `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIds.size} prompts previously completed, user can Resume)`
         );
@@ -1124,7 +1133,7 @@ export class PromptQueue {
         this.state.stopped = true; // Mark as stopped so Resume will work
       } else {
         Log.info(
-          `appendPrompts: NOT auto-starting (current state: ${previousStatus}, completed count: ${this.state.completedIds.size})`
+          `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIds.size})`
         );
       }
 
@@ -1224,11 +1233,14 @@ export class PromptQueue {
       workspaceFolder
     );
 
+    // Compute workflow name and store back into state so loadPrompts preserves it
+    const computedWorkflowName =
+      this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile);
+    this.state.workflowName = computedWorkflowName;
+
     const workingFile: WorkingFile = {
       ...(originalFilePath ? { originalFile: originalFilePath } : {}),
-      // Use existing workflow name from state if set, otherwise derive from the name/path
-      workflowName:
-        this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile),
+      workflowName: computedWorkflowName,
       startedAt: Date.now(),
       lastModifiedAt: Date.now(),
       prompts: prompts,

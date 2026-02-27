@@ -23,7 +23,7 @@ export const EditorSection: React.FC = () => {
 
   const isEditMode = selectedPromptIndex !== null;
   const totalPrompts = prompts.length;
-  const [sectionRef, isNarrow] = useElementNarrow<HTMLElement>();
+  const [sectionRef] = useElementNarrow<HTMLElement>();
 
   // Generate mode indicator text
   const getModeText = () => {

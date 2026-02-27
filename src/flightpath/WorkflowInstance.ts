@@ -1065,6 +1065,9 @@ export class WorkflowInstance {
 
     if (!hasWorkflow) {
       const workflowName = currentState.workflowName || generatedWorkflowName;
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: no existing workflow — initializing new with name="${workflowName}", shouldRun=${shouldRun}, action=${action}`
+      );
       await this.initializeNewWorkflow([promptItem], workflowName);
 
       if (shouldRun) {
@@ -1078,10 +1081,15 @@ export class WorkflowInstance {
         );
       }
     } else {
+      Log.info(
+        `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: appending to existing workflow ` +
+          `(status=${currentState.status}, prompts=${currentState.prompts.length}, shouldRun=${shouldRun}, action=${action})`
+      );
       await this.promptQueue.appendPrompts(
         [promptItem],
         "Dashboard editor",
-        position
+        position,
+        shouldRun
       );
 
       if (this.dashboardProvider) {
@@ -1091,6 +1099,11 @@ export class WorkflowInstance {
 
       if (shouldRun) {
         const isStopped = currentState.status === EXECUTION_STATES.STOPPED;
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] executeEphemeralPrompt: post-append shouldRun=true, ` +
+            `isIdle=${isIdle}, isCompleted=${isCompleted}, isStopped=${isStopped}, ` +
+            `queueStatusNow=${this.promptQueue.getState().status}`
+        );
         if (isIdle || isCompleted || isStopped) {
           await this.executeLoadedPromptFile(undefined, true);
         }
@@ -1358,6 +1371,16 @@ export class WorkflowInstance {
     reuseExistingWorkingFile: boolean = false,
     notificationMessage?: string
   ): Promise<string | undefined> {
+    // Set instance-level name so getSummary() returns it immediately
+    this.workflowName = displayName;
+
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] initializeNewWorkflow: displayName="${displayName}" ` +
+        `originalFile=${originalFilePath ? path.basename(originalFilePath) : "(none)"} ` +
+        `reuseExisting=${reuseExistingWorkingFile} ` +
+        `instance.workflowName="${this.workflowName}" instance.filePath="${this.filePath}" ` +
+        `queue.workflowName="${this.promptQueue.getState().workflowName || "(unset)"}"`
+    );
     let workingFilePath: string | undefined;
     if (reuseExistingWorkingFile) {
       const queueState = this.promptQueue.getState();
@@ -1401,6 +1424,15 @@ export class WorkflowInstance {
       promptFile = { prompts };
     }
     this.promptQueue.loadPrompts(promptFile, workingFilePath);
+
+    // Log the final state of name resolution after loadPrompts
+    const postLoadState = this.promptQueue.getState();
+    Log.info(
+      `[inst:${this.id.slice(0, 8)}] initializeNewWorkflow: post-load state — ` +
+        `queue.workflowName="${postLoadState.workflowName || '(unset)"'}` +
+        `, instance.workflowName="${this.workflowName}", instance.filePath="${this.filePath}"` +
+        `, getSummary().workflowName="${this.getSummary().workflowName || "(empty)"}"`
+    );
 
     if (this.dashboardProvider) {
       const queueState = this.promptQueue.getState();

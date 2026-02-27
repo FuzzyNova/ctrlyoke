@@ -833,16 +833,23 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a new workflow was loaded into the registry. */
   public notifyWorkflowAdded(summary: WorkflowSummary): void {
+    Log.info(
+      `[notifyWorkflowAdded] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
+        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"} ` +
+        `wfp=${summary.workingFilePath ? path.basename(summary.workingFilePath) : "?"}`
+    );
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
   }
 
   /** Notify webview that a workflow was dismissed from the registry. */
   public notifyWorkflowDismissed(workflowId: string): void {
+    Log.info(`[notifyWorkflowDismissed] inst:${workflowId.slice(0, 8)}`);
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
   /** Notify webview that the active (displayed) workflow changed. */
   public notifyActiveWorkflowChanged(workflowId: string): void {
+    Log.info(`[notifyActiveWorkflowChanged] inst:${workflowId.slice(0, 8)}`);
     this.postMessage({
       type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
       workflowId,
@@ -851,6 +858,10 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
   public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
+    Log.info(
+      `[notifyWorkflowSummaryUpdated] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
+        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"}`
+    );
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }
 

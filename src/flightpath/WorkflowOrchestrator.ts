@@ -239,7 +239,8 @@ export class WorkflowOrchestrator {
 
     const isViewed = this.viewedInstance === instance;
     Log.info(
-      `retireWorkflow: inst:${workflowId.slice(0, 8)} status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.workflows.size - 1}`
+      `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
+        `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.workflows.size - 1}`
     );
     this.workflows.delete(workflowId);
 
@@ -856,6 +857,12 @@ export class WorkflowOrchestrator {
     instance.promptQueue.onDidChangeState((state) => {
       const summary = instance.getSummary();
 
+      Log.info(
+        `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
+          `inRegistry=${this.workflows.has(instance.id)} registrySize=${this.workflows.size} ` +
+          `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${summary.currentStep}/${summary.totalSteps}`
+      );
+
       // Register in the running/paused registry the first time this instance
       // becomes RUNNING or PAUSED.  Doing this here (rather than eagerly in
       // executeWorkflow) guarantees that getWorkflowSummaries() never returns
@@ -871,7 +878,8 @@ export class WorkflowOrchestrator {
       ) {
         this.workflows.set(instance.id, instance);
         Log.info(
-          `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} (total: ${this.workflows.size})`
+          `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
+            `name="${summary.workflowName || "(empty)"}" (total: ${this.workflows.size})`
         );
         this.dashboardProvider?.notifyWorkflowAdded(summary);
       }
@@ -879,15 +887,17 @@ export class WorkflowOrchestrator {
       this.dashboardProvider?.notifyWorkflowSummaryUpdated(summary);
 
       // Auto-retire when a workflow completes, errors, or stops.
-      // Small delay lets final dashboard messages flush first.
+      // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
+      // sent synchronously above, so there's nothing to wait for.
       if (
         state.status === EXECUTION_STATES.COMPLETED ||
         state.status === EXECUTION_STATES.ERROR ||
         state.status === EXECUTION_STATES.STOPPED
       ) {
-        setTimeout(() => {
-          this.retireWorkflow(instance.id);
-        }, 500);
+        Log.info(
+          `onDidChangeState: inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
+        );
+        this.retireWorkflow(instance.id);
       }
     });
 

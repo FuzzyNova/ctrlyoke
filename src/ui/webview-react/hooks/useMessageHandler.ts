@@ -727,7 +727,17 @@ function createMessageHandlers(): MessageHandlerMap {
         w.executionState === EXECUTION_STATES.PAUSED
     );
     WebviewLog.debug(
-      `[WORKFLOWS_LIST] received ${all.length} total, ${active.length} active: ${active.map((w) => `inst:${w.id.slice(0, 8)}(${w.executionState})`).join(", ") || "(none)"}`
+      `[WORKFLOWS_LIST] received ${all.length} total, ${active.length} active: ${active.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}` +
+        (all.length > active.length
+          ? ` | filtered out ${all.length - active.length} non-active: ${all
+              .filter(
+                (w) =>
+                  w.executionState !== EXECUTION_STATES.RUNNING &&
+                  w.executionState !== EXECUTION_STATES.PAUSED
+              )
+              .map((w) => `inst:${w.id.slice(0, 8)}(state=${w.executionState})`)
+              .join(", ")}`
+          : "")
     );
     useUiStore.getState().setLoadedWorkflows(active);
   };
@@ -741,8 +751,11 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_ADDED] = (message) => {
     const summary: WorkflowSummary | undefined = message.summary;
+    const uiStore = useUiStore.getState();
     WebviewLog.debug(
-      `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} state=${summary?.executionState}`
+      `[WORKFLOW_ADDED] inst:${summary?.id.slice(0, 8)} name="${summary?.workflowName || "(empty)"}" state=${summary?.executionState} ` +
+        `fp=${summary?.filePath?.split(/[\\/]/).pop() || "?"} wfp=${summary?.workingFilePath?.split(/[\\/]/).pop() || "?"} ` +
+        `— current loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
     );
     if (
       summary &&
@@ -757,8 +770,17 @@ function createMessageHandlers(): MessageHandlerMap {
   // WORKFLOW_DISMISSED - Workflow instance was removed
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_DISMISSED] = (message) => {
+    const uiStore = useUiStore.getState();
+    const dismissed = uiStore.loadedWorkflows.find(
+      (w) => w.id === message.workflowId
+    );
+    WebviewLog.debug(
+      `[WORKFLOW_DISMISSED] inst:${message.workflowId?.slice(0, 8)} ` +
+        `(was: name="${dismissed?.workflowName || "(not found)"}" state=${dismissed?.executionState || "?"}) ` +
+        `— loadedWorkflows before: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}`).join(", ") || "(none)"}]`
+    );
     if (message.workflowId) {
-      useUiStore.getState().removeLoadedWorkflow(message.workflowId);
+      uiStore.removeLoadedWorkflow(message.workflowId);
     }
   };
 
@@ -772,7 +794,9 @@ function createMessageHandlers(): MessageHandlerMap {
     if (!summary) return;
     const uiStore = useUiStore.getState();
     WebviewLog.debug(
-      `[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0, 8)} state=${summary.executionState} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} — loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}`).join(", ")}]`
+      `[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
+        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} ` +
+        `— loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
     );
     if (
       summary.executionState === EXECUTION_STATES.RUNNING ||
