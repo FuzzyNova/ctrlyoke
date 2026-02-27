@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FlightPathManager } from "./flightpath/FlightPathManager";
+import { WorkflowOrchestrator } from "./flightpath/WorkflowOrchestrator";
 import { PromptCompletionProvider } from "./completions/PromptCompletionProvider";
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
@@ -12,7 +12,7 @@ import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log, LogLevel } from "./utils/Log";
 import { FileSystemUtils } from "./utils/FileSystemUtils";
 
-let flightPathManager: FlightPathManager;
+let flightPathManager: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
 
 /**
@@ -170,8 +170,8 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     Log.info("FlightPath: React webview provider registered");
 
-    // Initialize FlightPath manager with React webview provider
-    flightPathManager = new FlightPathManager(context, webviewProvider);
+    // Initialize FlightPath orchestrator with React webview provider
+    flightPathManager = new WorkflowOrchestrator(context, webviewProvider);
 
     // Set manager reference in webview provider (for getting current state)
     webviewProvider.setFlightPathManager(flightPathManager);
@@ -184,7 +184,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Fire-and-forget: don't block activate() on initialization.
     // This lets VS Code call resolveWebviewView() immediately so the
     // dashboard renders in <1s instead of waiting ~8s for CLI checks.
-    // FlightPathManager.setDashboardReady() handles the race: if READY
+    // WorkflowOrchestrator.setDashboardReady() handles the race: if READY
     // arrives before init completes, auto-load is deferred until init finishes.
     flightPathManager.initialize().catch((err) => {
       Log.error("Manager initialization failed:", err);

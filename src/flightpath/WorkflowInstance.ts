@@ -11,6 +11,7 @@ import {
   PromptItem,
   QueueState,
   Harness,
+  EndCondition,
   EXECUTION_STATES,
   WorkingFile,
   WorkflowSummary,
@@ -37,7 +38,7 @@ import { IntegrationFactory } from "./IntegrationFactory";
  * RESPONSIBILITY: Single Workflow Execution Lifecycle
  *
  * Encapsulates all per-workflow state that was previously scattered across
- * FlightPathManager:
+ * the original monolithic manager:
  *   - PromptQueue (state machine)
  *   - WorkflowExecutor (execution loop)
  *   - EndConditionHandler / EndConditionEvaluator
@@ -1462,45 +1463,28 @@ export class WorkflowInstance {
 
   private buildPromptItemProperties(properties: unknown): Partial<PromptItem> {
     const props = properties as Record<string, unknown>;
-    const updates: Partial<PromptItem> = {};
+    // null means "delete the property" (set to undefined); absent key means "leave unchanged"
+    const coerce = <T>(v: unknown): T | undefined =>
+      v === null ? undefined : (v as T);
 
-    if (props?.harness !== undefined) {
-      updates.harness =
-        props.harness === null ? undefined : (props.harness as Harness);
-    }
-    if (props?.model !== undefined) {
-      updates.model =
-        props.model === null ? undefined : (props.model as string);
-    }
-    if (props?.agent !== undefined) {
-      updates.agent =
-        props.agent === null ? undefined : (props.agent as string);
-    }
-    if (props?.resumeSession !== undefined) {
-      updates.resumeSession =
-        props.resumeSession === null
-          ? undefined
-          : (props.resumeSession as boolean);
-    }
-    if (props?.sessionId !== undefined) {
-      updates.sessionId =
-        props.sessionId === null
-          ? undefined
-          : (props.sessionId as string | number);
-    }
-    if (props?.allowDynamicExtension !== undefined) {
-      updates.allowDynamicExtension =
-        props.allowDynamicExtension === null
-          ? undefined
-          : (props.allowDynamicExtension as boolean);
-    }
-    if (props?.endCondition !== undefined) {
-      updates.endCondition =
-        props.endCondition === null
-          ? undefined
-          : (props.endCondition as PromptItem["endCondition"]);
-    }
-
-    return updates;
+    return {
+      ...(props?.harness !== undefined && {
+        harness: coerce<Harness>(props.harness),
+      }),
+      ...(props?.model !== undefined && { model: coerce<string>(props.model) }),
+      ...(props?.agent !== undefined && { agent: coerce<string>(props.agent) }),
+      ...(props?.resumeSession !== undefined && {
+        resumeSession: coerce<boolean>(props.resumeSession),
+      }),
+      ...(props?.sessionId !== undefined && {
+        sessionId: coerce<string | number>(props.sessionId),
+      }),
+      ...(props?.allowDynamicExtension !== undefined && {
+        allowDynamicExtension: coerce<boolean>(props.allowDynamicExtension),
+      }),
+      ...(props?.endCondition !== undefined && {
+        endCondition: coerce<EndCondition>(props.endCondition),
+      }),
+    };
   }
 }

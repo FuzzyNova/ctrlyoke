@@ -46,9 +46,6 @@ import { PromptFileParser } from "./PromptFileParser";
  * Phase 1: Always holds exactly one WorkflowInstance (the active one).
  * Phase 2: Will hold many instances in parallel; `activeWorkflowId` decides
  *          which one is displayed in the dashboard.
- *
- * The public API mirrors FlightPathManager so FlightPathManager can simply
- * delegate every call here without changing any call-sites.
  */
 export class WorkflowOrchestrator {
   // ─────────────────────────────────────────────────────────────────────────

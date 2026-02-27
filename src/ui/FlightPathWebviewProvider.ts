@@ -36,7 +36,7 @@ import {
   CLAUDE_CLI_MODEL_LABELS,
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
-import { FlightPathManager } from "../flightpath/FlightPathManager";
+import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import { Harness, WorkflowSummary } from "../types/FlightPathTypes";
 import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
@@ -64,7 +64,7 @@ interface HarnessStatus {
  */
 export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-  private flightPathManager?: FlightPathManager;
+  private flightPathManager?: WorkflowOrchestrator;
   private outputHistoryManager?: OutputHistoryManager;
   private templateManager: TemplateManager;
   private configChangeDisposable?: vscode.Disposable;
@@ -158,7 +158,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     // Discover available skills in background
     this.discoverSkills();
 
-    // Harness availability is driven by FlightPathManager via notifyHarnessAvailability()
+    // Harness availability is driven by WorkflowOrchestrator via notifyHarnessAvailability()
     // (subscribes to onDidChangeStatus on all integrations — single source of truth).
   }
 
@@ -529,8 +529,11 @@ window.vscodeApi = acquireVsCodeApi();
         // Multi-workflow coordination
         // ============================================================================
         case MESSAGE_TYPES.GET_WORKFLOWS_LIST: {
-          const summaries = this.flightPathManager?.getWorkflowsList() ?? [];
-          Log.info(`[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map(s => `inst:${s.id.slice(0,8)}(${s.executionState})`).join(", ") || "(none)"}`);
+          const summaries =
+            this.flightPathManager?.getWorkflowSummaries() ?? [];
+          Log.info(
+            `[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState})`).join(", ") || "(none)"}`
+          );
           this.postMessage({
             type: MESSAGE_TYPES.WORKFLOWS_LIST,
             workflows: summaries,
@@ -541,7 +544,7 @@ window.vscodeApi = acquireVsCodeApi();
         case MESSAGE_TYPES.SWITCH_WORKFLOW: {
           const { workflowId } = message;
           if (workflowId) {
-            this.flightPathManager?.switchWorkflow(workflowId);
+            this.flightPathManager?.setActiveWorkflow(workflowId);
           }
           break;
         }
@@ -556,7 +559,7 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   // ============================================================================
-  // Public API - FlightPathManager -> Webview Updates
+  // Public API - WorkflowOrchestrator -> Webview Updates
   // ============================================================================
 
   /**
@@ -809,9 +812,9 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   /**
-   * Set FlightPathManager reference (called after construction to avoid circular dependency)
+   * Set WorkflowOrchestrator reference (called after construction to avoid circular dependency)
    */
-  public setFlightPathManager(manager: any): void {
+  public setFlightPathManager(manager: WorkflowOrchestrator): void {
     this.flightPathManager = manager;
   }
 
@@ -879,7 +882,7 @@ window.vscodeApi = acquireVsCodeApi();
 
   /**
    * Update a single harness availability status and push the change to the UI.
-   * Called by FlightPathManager after initialization completes so that the
+   * Called by WorkflowOrchestrator after initialization completes so that the
    * authoritative retry-based check overrides the quick no-retry check that
    * runs during construction.
    */
@@ -934,7 +937,7 @@ window.vscodeApi = acquireVsCodeApi();
       `sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
     );
 
-    // Get current workflow state from FlightPathManager
+    // Get current workflow state from WorkflowOrchestrator
     const workflowState = this.getCurrentState();
 
     // Get global settings
@@ -1032,11 +1035,11 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   private getCurrentState(): any {
-    // Get actual state from FlightPathManager if available
+    // Get actual state from WorkflowOrchestrator if available
     if (this.flightPathManager) {
       const queueState = this.flightPathManager.getQueueState();
       const currentFile = this.flightPathManager.getCurrentPromptFile();
-      // Get workflow name from queue state (not from FlightPathManager which doesn't have getWorkflowName)
+      // Get workflow name from queue state
       const workflowName = queueState.workflowName;
       // Update cached workflow name
       this.currentWorkflowName = workflowName;
