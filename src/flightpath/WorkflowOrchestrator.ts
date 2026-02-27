@@ -588,8 +588,22 @@ export class WorkflowOrchestrator {
     return instance.stop();
   }
 
-  clearWorkflow(): void {
-    this.getActiveInstance().clearWorkflow();
+  async clearWorkflow(): Promise<void> {
+    const active = this.getActiveInstance();
+    const state = active.getQueueState().status;
+    if (
+      state === EXECUTION_STATES.RUNNING ||
+      state === EXECUTION_STATES.PAUSED
+    ) {
+      // Running/paused workflow stays alive in the background;
+      // create a fresh empty instance as the new active view.
+      Log.info(
+        `clearWorkflow: active inst:${active.id.slice(0, 8)} is ${state} — creating new empty instance`
+      );
+      await this.createWorkflow();
+    } else {
+      active.clearWorkflow();
+    }
   }
 
   getQueueState(): QueueState {

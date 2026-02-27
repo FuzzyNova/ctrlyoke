@@ -252,6 +252,23 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     [vscode]
   );
 
+  const displayName = fileName
+    ? workflowName || getWorkflowNameFromPath(fileName)
+    : "";
+
+  // Log only when data actually changes (not on every render)
+  useEffect(() => {
+    if (!fileName) return;
+    const filteredRecent = recentWorkflows.filter(
+      (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
+    );
+    WebviewLog.debug(
+      `[WorkflowStatus] displayName="${displayName}", executionState=${executionState || "(none)"}, ` +
+        `RUNNING (${loadedWorkflows.length}): [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"}, wfp=${w.workingFilePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}], ` +
+        `RECENT (${filteredRecent.length}): [${filteredRecent.map((rw) => `"${rw.workflowName || "(empty)"}"(state=${rw.executionState}, fp=${rw.filePath.split(/[\\/]/).pop()})`).join(", ") || "(none)"}]`
+    );
+  }, [fileName, displayName, executionState, loadedWorkflows, recentWorkflows]);
+
   // No workflow loaded - show empty state
   if (!fileName) {
     return (
@@ -262,19 +279,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       </div>
     );
   }
-
-  const displayName = workflowName || getWorkflowNameFromPath(fileName);
-
-  // Log the running section and recent section contents whenever loadedWorkflows or recentWorkflows change
-  // (This runs on every render but is cheap — just string formatting)
-  const filteredRecent = recentWorkflows.filter(
-    (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
-  );
-  WebviewLog.debug(
-    `[WorkflowStatus:render] displayName="${displayName}", executionState=${executionState || "(none)"}, ` +
-      `RUNNING SECTION (${loadedWorkflows.length}): [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"}, wfp=${w.workingFilePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}], ` +
-      `RECENT SECTION (${filteredRecent.length} after filtering): [${filteredRecent.map((rw) => `"${rw.workflowName || "(empty)"}"(state=${rw.executionState}, fp=${rw.filePath.split(/[\\/]/).pop()})`).join(", ") || "(none)"}]`
-  );
 
   return (
     <div ref={containerRef} className={`workflow-status relative ${className}`}>

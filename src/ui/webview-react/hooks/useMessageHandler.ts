@@ -84,6 +84,13 @@ function applyWorkflowChange(): void {
   // doesn't lose whatever they've typed.
 
   editorStore.setHasActiveQueue(true);
+
+  // Reset workflow properties so stale values from the previous workflow don't
+  // persist. The extension sends WORKFLOW_PROPERTIES_UPDATE immediately after
+  // FILE_SELECTED / SESSION_RESTORED with the new workflow's values (populated
+  // with VS Code defaults for any unset properties), so the SettingsDrawer
+  // will be updated to reflect the new workflow's actual configuration.
+  useSettingsStore.getState().clearWorkflowProperties();
   useSettingsStore.getState().setWorkflowLoaded(true);
 }
 
@@ -808,10 +815,15 @@ function createMessageHandlers(): MessageHandlerMap {
       } else {
         uiStore.addLoadedWorkflow(summary);
       }
-    } else {
-      // Workflow retired — remove from the running section
+    } else if (
+      summary.executionState === EXECUTION_STATES.COMPLETED ||
+      summary.executionState === EXECUTION_STATES.ERROR ||
+      summary.executionState === EXECUTION_STATES.STOPPED
+    ) {
+      // Workflow reached a terminal state — remove from the running section
       uiStore.removeLoadedWorkflow(summary.id);
     }
+    // IDLE: do nothing — transient state during load/clear, not a terminal state
   };
 
   // --------------------------------------------------------------------------

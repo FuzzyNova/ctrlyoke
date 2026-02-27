@@ -115,12 +115,18 @@ export class WorkflowInstance {
   >();
 
   /**
-   * Stores the final completed output for each step, indexed by stepIndex.
+   * Stores the final completed output(s) for each step, indexed by stepIndex.
    * Captured via captureCompletedOutput even when the instance is inactive.
    * Replayed in sendFullStateToDashboard so completed prompts' outputs are
    * visible when switching back to a running workflow.
+   *
+   * Each entry holds an array of outputs (one per attempt) plus optional retry
+   * state so the webview store accepts attemptIndex > 0 outputs on replay.
    */
-  private readonly completedStepOutputs = new Map<number, any>();
+  private readonly completedStepOutputs = new Map<
+    number,
+    { outputs: any[]; retryState?: { currentRetry: number; maxRetries: number } }
+  >();
 
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
@@ -272,11 +278,22 @@ export class WorkflowInstance {
     // Replay completed step outputs so the user sees prior-prompt results
     // when switching back to a workflow that is already partway through.
     if (this.completedStepOutputs.size > 0) {
-      for (const [stepIndex, output] of this.completedStepOutputs) {
+      for (const [stepIndex, entry] of this.completedStepOutputs) {
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying completed step ${stepIndex} output`
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying completed step ${stepIndex} (${entry.outputs.length} attempt(s))`
         );
-        this.dashboardProvider.updateCliOutput(stepIndex, output);
+        // If this step had retries, send retry state BEFORE the outputs so
+        // the webview store's addCliOutput guard accepts attemptIndex > 0.
+        if (entry.retryState) {
+          this.dashboardProvider.updateRetryAttempt(
+            stepIndex,
+            entry.retryState.currentRetry,
+            entry.retryState.maxRetries
+          );
+        }
+        for (const output of entry.outputs) {
+          this.dashboardProvider.updateCliOutput(stepIndex, output);
+        }
       }
     }
 
@@ -831,6 +848,17 @@ export class WorkflowInstance {
    * Clear current workflow state.
    */
   clearWorkflow(): void {
+    const state = this.promptQueue.getState();
+    if (
+      state.status === EXECUTION_STATES.RUNNING ||
+      state.status === EXECUTION_STATES.PAUSED
+    ) {
+      Log.warn(
+        `clearWorkflow called on running/paused instance inst:${this.id.slice(0, 8)} — ignoring`
+      );
+      return;
+    }
+
     this.currentPromptFile = undefined;
     this.promptQueue.clearQueue();
     this.lastKnownPromptCount = 0;
@@ -1238,8 +1266,25 @@ export class WorkflowInstance {
           }
         },
         captureCompletedOutput: (stepIndex, output) => {
-          // Store the final output for replay when switching back to this workflow
-          self.completedStepOutputs.set(stepIndex, output);
+          // Store the final output for replay when switching back to this workflow.
+          // Multiple outputs per step accumulate when retries occur.
+          const existing = self.completedStepOutputs.get(stepIndex);
+          if (existing) {
+            existing.outputs.push(output);
+            // Update retry state to reflect the latest attempt
+            const attemptIndex = output.attemptIndex ?? 0;
+            if (attemptIndex > 0) {
+              const prompt = self.promptQueue.getState().prompts[stepIndex];
+              const maxRetries =
+                prompt?.endCondition?.maxRetries ?? attemptIndex;
+              existing.retryState = {
+                currentRetry: attemptIndex,
+                maxRetries,
+              };
+            }
+          } else {
+            self.completedStepOutputs.set(stepIndex, { outputs: [output] });
+          }
           // The step is no longer streaming; remove from streaming buffer
           self.stepOutputBuffer.delete(stepIndex);
         },

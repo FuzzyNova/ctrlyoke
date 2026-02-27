@@ -334,7 +334,7 @@ window.vscodeApi = acquireVsCodeApi();
           break;
 
         case MESSAGE_TYPES.CLEAR_WORKFLOW:
-          this.handleClearWorkflow();
+          await this.handleClearWorkflow();
           break;
 
         case MESSAGE_TYPES.RUN:
@@ -1261,14 +1261,14 @@ window.vscodeApi = acquireVsCodeApi();
   // Private Methods - Message Handlers (Dashboard)
   // ============================================================================
 
-  public handleClearWorkflow(): void {
+  public async handleClearWorkflow(): Promise<void> {
     if (!this.flightPathManager) {
       Log.error("FlightPathManager not initialized");
       return;
     }
 
     this.sendWorkflowUnloadedToSettings();
-    this.flightPathManager.clearWorkflow();
+    await this.flightPathManager.clearWorkflow();
     this.updateFileSelected("New Workflow", [], undefined);
     Log.info("Workflow cleared, ready for new prompts");
   }
@@ -1402,16 +1402,12 @@ window.vscodeApi = acquireVsCodeApi();
     prefix: string,
     position: number
   ): Promise<void> {
-    Log.info(
-      `[Dashboard] handleCompletionRequest: trigger="${trigger}", prefix="${prefix}", position=${position}`
-    );
-
     try {
       // Get completion items based on trigger (@file or #file)
       const items = await this.getCompletionItems(trigger, prefix);
 
-      Log.info(
-        `[Dashboard] Sending ${items.length} completion items for trigger="${trigger}"`
+      Log.debug(
+        `[Dashboard] Completion: trigger="${trigger}", prefix="${prefix}", position=${position} → ${items.length} items`
       );
 
       this.postMessage({
@@ -1447,26 +1443,12 @@ window.vscodeApi = acquireVsCodeApi();
     // Remove trigger character from prefix to get filter text
     const filterText = prefix.substring(1); // Remove @ or #
 
-    Log.info(
-      `[Dashboard] getCompletionItems: trigger="${trigger}", filterText="${filterText}"`
-    );
-
     if (trigger === "@") {
       // Get file and directory completions
-      Log.info("[Dashboard] Calling getFileCompletions...");
-      const completions = await getFileCompletions(filterText);
-      Log.info(
-        `[Dashboard] getFileCompletions returned ${completions.length} items`
-      );
-      return completions;
+      return await getFileCompletions(filterText);
     } else if (trigger === "#") {
       // Get selection and symbol completions
-      Log.info("[Dashboard] Calling getHashCompletions...");
-      const completions = await getHashCompletions(filterText);
-      Log.info(
-        `[Dashboard] getHashCompletions returned ${completions.length} items`
-      );
-      return completions;
+      return await getHashCompletions(filterText);
     }
 
     Log.warn(`[Dashboard] Unknown trigger: "${trigger}"`);

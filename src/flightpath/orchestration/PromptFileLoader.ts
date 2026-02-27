@@ -3,6 +3,7 @@ import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PromptQueue } from "../PromptQueue";
 import { Log } from "../../utils/Log";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import {
   PromptFile,
   PromptItem,
@@ -80,11 +81,12 @@ export class PromptFileLoader {
           // Copy workflow-level properties from loaded file to working file
           // This ensures file properties take precedence over pending/global settings
           if (workingFilePath) {
-            // Copy workflow-level properties (if defined in loaded file)
+            // Step 1: Copy workflow-level properties explicitly defined in the loaded file
             const propertiesToCopy = [
               "harness",
               "model",
               "agent",
+              "skills",
               "resumeSession",
               "allowDynamicExtension",
               "endCondition",
@@ -111,6 +113,44 @@ export class PromptFileLoader {
                   "Persisted workflow-level properties from loaded file to working file"
                 );
               }
+            }
+
+            // Step 2: Populate defaults from VS Code settings for any properties
+            // not explicitly specified in the source file. This ensures the working
+            // file always has explicit values so the SettingsDrawer stays in sync
+            // with the actual configuration (no implicit fallback to global settings).
+            const effectiveHarness =
+              (updates.harness as string | undefined) ??
+              ConfigurationUtils.getIntegrationMode();
+            const defaults: Record<string, unknown> = {};
+            if (updates.harness === undefined) {
+              defaults.harness = effectiveHarness;
+            }
+            if (updates.model === undefined) {
+              defaults.model = ConfigurationUtils.getModelForHarness(
+                effectiveHarness as any
+              );
+            }
+            if (updates.agent === undefined) {
+              defaults.agent = ConfigurationUtils.getDefaultAgent();
+            }
+            if (updates.skills === undefined) {
+              defaults.skills = ConfigurationUtils.getDefaultSkills();
+            }
+            if (updates.resumeSession === undefined) {
+              defaults.resumeSession =
+                ConfigurationUtils.shouldResumeExistingSession();
+            }
+            if (updates.allowDynamicExtension === undefined) {
+              defaults.allowDynamicExtension =
+                ConfigurationUtils.getDynamicQueueConfig().enabled;
+            }
+
+            if (Object.keys(defaults).length > 0) {
+              await this.promptQueue.updateWorkingFileProperties(defaults);
+              Log.info(
+                `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
+              );
             }
           }
         } catch (error) {
