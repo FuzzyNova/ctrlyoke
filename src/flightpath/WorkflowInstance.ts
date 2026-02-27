@@ -930,7 +930,11 @@ export class WorkflowInstance {
       if (!this.currentPromptFile) {
         Log.info("No prompt file loaded, updating context (append mode)");
         this.currentPromptFile = { filePath, promptFile: parsed };
-        this.setupPromptFileWatcher(filePath);
+        const appendWorkingFilePath =
+          this.promptQueue.getState().workingFilePath;
+        if (appendWorkingFilePath) {
+          this.setupPromptFileWatcher(appendWorkingFilePath);
+        }
       }
 
       const positionText =
@@ -1466,12 +1470,15 @@ export class WorkflowInstance {
         filePath: originalFilePath,
         promptFile: { prompts },
       };
-      this.setupPromptFileWatcher(originalFilePath);
     } else {
       this.currentPromptFile = {
         filePath: displayName,
         promptFile: { prompts },
       };
+    }
+
+    if (workingFilePath) {
+      this.setupPromptFileWatcher(workingFilePath);
     }
 
     if (notificationMessage) {
