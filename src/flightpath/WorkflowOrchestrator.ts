@@ -221,6 +221,8 @@ export class WorkflowOrchestrator {
 
     // Send full state sync so the dashboard reflects the new (or file-loaded) state
     instance.sendFullStateToDashboard();
+    // Notify the dashboard that the active workflow changed (new instance is now viewed)
+    this.dashboardProvider?.notifyActiveWorkflowChanged(instance.id);
 
     return instance;
   }
@@ -302,9 +304,8 @@ export class WorkflowOrchestrator {
     }
 
     this.viewedInstance = instance;
+    // setActive(true) calls flushBufferedEvents → sendFullStateToDashboard internally
     instance.setActive(true);
-    // Send full state sync so the dashboard reflects the newly active workflow
-    instance.sendFullStateToDashboard();
     // Notify the dashboard that the active workflow selection changed.
     this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
     Log.info(
@@ -314,7 +315,9 @@ export class WorkflowOrchestrator {
 
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
-    return [...this.workflows.values()].map((w) => w.getSummary());
+    const summaries = [...this.workflows.values()].map((w) => w.getSummary());
+    Log.info(`[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances, viewed=${this.viewedInstance?.id.slice(0,8) ?? "null"}: ${summaries.map(s => `inst:${s.id.slice(0,8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`);
+    return summaries;
   }
 
   /**
@@ -518,6 +521,8 @@ export class WorkflowOrchestrator {
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
+    // Phase 2: loading a working file creates a new instance alongside any running ones
+    await this.createWorkflow();
     return this.getActiveInstance().loadWorkingFile(filePath);
   }
 
@@ -617,6 +622,8 @@ export class WorkflowOrchestrator {
 
       if (selected) {
         try {
+          // Create a fresh instance so the resumed workflow is parallel to any running ones
+          await this.createWorkflow();
           await this.getActiveInstance().restoreWorkflowFromWorkingFile(
             selected.filePath
           );

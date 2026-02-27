@@ -59,6 +59,23 @@ export interface WorkflowContext {
   workingFilePath?: string;
   /** OutputHistoryManager for saving step outputs */
   outputHistoryManager?: OutputHistoryManager;
+  /**
+   * Always-on callback to capture the init state for a step's output (called even when inactive).
+   * Used to buffer output for replay when switching back to this workflow.
+   */
+  captureOutputInit?: (
+    stepIndex: number,
+    prompt: string,
+    cliCommand: string | undefined,
+    workingDirectory: string | undefined,
+    timestampMs: number,
+    attemptIndex: number
+  ) => void;
+  /**
+   * Always-on callback to capture streaming chunks (called even when inactive).
+   * Used to buffer output for replay when switching back to this workflow.
+   */
+  captureChunk?: (stepIndex: number, chunk: string) => void;
 }
 
 /**
@@ -198,6 +215,7 @@ export class WorkflowExecutor {
           promptIndex: i,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          workingFilePath: context.workingFilePath,
           resolvedProperties,
           workflowFile,
           promptQueue: this.promptQueue,
@@ -498,6 +516,7 @@ export class WorkflowExecutor {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      workingFilePath?: string;
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;
       promptQueue?: PromptQueue;
@@ -507,6 +526,7 @@ export class WorkflowExecutor {
     const startTime = Date.now();
 
     // Initialize dashboard streaming state
+    const initTimestampMs = Date.now();
     if (context.dashboardProvider) {
       context.dashboardProvider.updateCliStreamingChunk(stepIndex, "");
       context.dashboardProvider.updateCliOutput(stepIndex, {
@@ -517,10 +537,19 @@ export class WorkflowExecutor {
         isStreaming: true,
         cliCommand: undefined,
         workingDirectory: context.workspaceFolderPath,
-        timestampMs: Date.now(),
+        timestampMs: initTimestampMs,
         attemptIndex,
       });
     }
+    // Always capture init state for replay when switching workflows
+    context.captureOutputInit?.(
+      stepIndex,
+      promptItem.prompt,
+      undefined,
+      context.workspaceFolderPath,
+      initTimestampMs,
+      attemptIndex
+    );
 
     // Set up response listener BEFORE sending to avoid race condition
     const responsePromise = this.waitForResponseComplete(
@@ -528,35 +557,50 @@ export class WorkflowExecutor {
       integration
     );
 
-    // Set up streaming listeners (no-op if no dashboard)
+    // Set up streaming listeners.
+    // streamingDisposable is always registered (not gated on dashboardProvider) so background
+    // workflows can buffer their output for replay when the user switches back to them.
     let streamingDisposable: vscode.Disposable | undefined;
     let structuredStreamingDisposable: vscode.Disposable | undefined;
     let promptReadyDisposable: vscode.Disposable | undefined;
+
     if (context.dashboardProvider) {
       promptReadyDisposable = integration.onPromptReady((data) => {
+        const cliCommand = context.shouldShowCliCommand ? data.cliCommand : undefined;
         context.dashboardProvider?.updateCliOutput(stepIndex, {
           prompt: promptItem.prompt,
           response: "",
           elapsed: 0,
           tokens: undefined,
           isStreaming: true,
-          cliCommand: context.shouldShowCliCommand
-            ? data.cliCommand
-            : undefined,
+          cliCommand,
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
           attemptIndex,
         });
-      });
-
-      streamingDisposable = integration.onStreamingChunk((chunk) => {
-        Log.info(
-          `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
+        // Update the captured init state with the actual cliCommand once known
+        context.captureOutputInit?.(
+          stepIndex,
+          promptItem.prompt,
+          cliCommand,
+          context.workspaceFolderPath,
+          Date.now(),
+          attemptIndex
         );
-        Log.append(chunk);
-        context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
       });
+    }
 
+    // Always register the chunk listener — routes to dashboard when active, always buffers
+    streamingDisposable = integration.onStreamingChunk((chunk) => {
+      Log.info(
+        `🔍 WorkflowExecutor: Received streaming chunk, length=${chunk.length}, content (first 100 chars): ${JSON.stringify(chunk.substring(0, 100))}`
+      );
+      Log.append(chunk);
+      context.captureChunk?.(stepIndex, chunk);
+      context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
+    });
+
+    if (context.dashboardProvider) {
       structuredStreamingDisposable = integration.onStreamingEvents(
         (events) => {
           Log.info(
@@ -626,6 +670,7 @@ export class WorkflowExecutor {
           promptIndex: currentIndex,
           allPrompts: state.prompts,
           filePath: context.currentPromptFilePath,
+          workingFilePath: context.workingFilePath,
           resolvedProperties: { ...resolvedProperties, resumeSession: true },
           workflowFile,
           promptQueue: this.promptQueue,

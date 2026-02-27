@@ -395,11 +395,14 @@ export class CopilotCliProvider implements ICliProvider {
         workingFilePath
       );
 
-      // Write to temp directory
+      // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
       const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
       await fs.mkdir(tempDir, { recursive: true });
 
-      const configPath = path.join(tempDir, "mcp-config.json");
+      const configSuffix = workingFilePath
+        ? path.basename(workingFilePath, ".flightpath.json")
+        : "default";
+      const configPath = path.join(tempDir, `mcp-config-${configSuffix}.json`);
       await fs.writeFile(configPath, configJson, "utf-8");
 
       // Return --additional-mcp-config @file argument

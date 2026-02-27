@@ -133,6 +133,7 @@ export abstract class HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      workingFilePath?: string; // Path to .flightpath.json working file (sets FLIGHTPATH_WORKING_FILE for MCP)
       resolvedProperties?: ResolvedProperties; // Resolved properties from PropertyResolver
       workflowFile?: PromptFile; // For session resolution
       promptQueue?: PromptQueue; // For runtime metadata persistence

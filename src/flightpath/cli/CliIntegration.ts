@@ -1603,6 +1603,7 @@ export class CliIntegration extends HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
+      workingFilePath?: string;
       resolvedProperties?: ResolvedProperties;
       workflowFile?: PromptFile;
       promptQueue?: PromptQueue;

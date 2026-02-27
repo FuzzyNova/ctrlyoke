@@ -311,7 +311,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <RecentWorkflows
               workflows={recentWorkflows.filter(
-                (rw) => !loadedWorkflows.some((lw) => lw.filePath === rw.filePath)
+                (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
               )}
               currentFilePath={fileName}
               onSelect={handleSelectWorkflow}

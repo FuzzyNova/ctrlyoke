@@ -97,6 +97,19 @@ export class WorkflowInstance {
   }> = [];
   private static readonly MAX_BUFFER_SIZE = 500;
 
+  /**
+   * Per-step streaming output buffer — captures chunks even when this instance is inactive.
+   * Replayed in sendFullStateToDashboard so the user sees in-progress output when switching back.
+   */
+  private readonly stepOutputBuffer = new Map<number, {
+    prompt: string;
+    cliCommand: string | undefined;
+    workingDirectory: string | undefined;
+    timestampMs: number;
+    attemptIndex: number;
+    accumulatedText: string;
+  }>();
+
   // ─────────────────────────────────────────────────────────────────────────
   // Orchestration helpers
   // ─────────────────────────────────────────────────────────────────────────
@@ -231,7 +244,7 @@ export class WorkflowInstance {
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.info(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.stepOutputBuffer.size}`
     );
     this.dashboardProvider.updateSessionRestored(
       fileName,
@@ -241,6 +254,37 @@ export class WorkflowInstance {
       state.currentIndex,
       state.workflowName || undefined
     );
+
+    // Replay buffered streaming output for the currently-running step so the user
+    // sees in-progress output when switching back to this workflow mid-execution.
+    if (state.status === EXECUTION_STATES.RUNNING && this.stepOutputBuffer.size > 0) {
+      const runningStep = state.currentIndex;
+      const buffer = this.stepOutputBuffer.get(runningStep);
+      if (buffer) {
+        Log.info(
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying step ${runningStep} buffer (${buffer.accumulatedText.length} chars)`
+        );
+        // Re-initialize the step as streaming (so the output panel shows it correctly)
+        this.dashboardProvider.updateCliOutput(runningStep, {
+          prompt: buffer.prompt,
+          response: "",
+          elapsed: 0,
+          tokens: undefined,
+          isStreaming: true,
+          cliCommand: buffer.cliCommand,
+          workingDirectory: buffer.workingDirectory,
+          timestampMs: buffer.timestampMs,
+          attemptIndex: buffer.attemptIndex,
+        });
+        // Replay the accumulated text as a single chunk
+        if (buffer.accumulatedText) {
+          this.dashboardProvider.updateCliStreamingChunk(
+            runningStep,
+            buffer.accumulatedText
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -270,6 +314,7 @@ export class WorkflowInstance {
       id: this.id,
       workflowName: this.workflowName || state.workflowName || "",
       filePath: this.filePath,
+      workingFilePath: state.workingFilePath || undefined,
       executionState: state.status,
       currentStep: state.currentIndex,
       totalSteps: state.prompts.length,
@@ -336,19 +381,22 @@ export class WorkflowInstance {
    * Shared helper used by resumeWorkflow and loadWorkingFile.
    */
   async restoreWorkflowFromWorkingFile(workingFilePath: string): Promise<void> {
-    await this.promptFileLoader.reloadFromWorkingFile(
-      workingFilePath,
-      "replace"
-    );
-
+    // Read working file FIRST so this.filePath is correct when queue state fires
+    // (onDidChangeState → getSummary() → filePath must already be set)
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
     if (workingFile?.prompts) {
       const filePath = workingFile.originalFile || workingFilePath;
+      this.filePath = filePath;
       this.currentPromptFile = {
         filePath,
         promptFile: { prompts: workingFile.prompts },
       };
     }
+
+    await this.promptFileLoader.reloadFromWorkingFile(
+      workingFilePath,
+      "replace"
+    );
 
     this.setupPromptFileWatcher(workingFilePath);
     this.propagateWorkflowNameToIntegrations();
@@ -375,20 +423,22 @@ export class WorkflowInstance {
    * (called by triggerAutoLoad in orchestrator).
    */
   async autoLoadFromWorkingFile(workingFilePath: string): Promise<void> {
-    await this.promptFileLoader.reloadFromWorkingFile(
-      workingFilePath,
-      "replace",
-      true // isAutoLoad — prevents auto-starting RUNNING workflows
-    );
-
+    // Read working file FIRST so this.filePath is correct when queue state fires
     const workingFile = await this.promptQueue.readWorkingFile(workingFilePath);
     if (workingFile?.prompts) {
       const filePath = workingFile.originalFile || workingFilePath;
+      this.filePath = filePath;
       this.currentPromptFile = {
         filePath,
         promptFile: { prompts: workingFile.prompts },
       };
     }
+
+    await this.promptFileLoader.reloadFromWorkingFile(
+      workingFilePath,
+      "replace",
+      true // isAutoLoad — prevents auto-starting RUNNING workflows
+    );
 
     this.setupPromptFileWatcher(workingFilePath);
   }
@@ -614,6 +664,7 @@ export class WorkflowInstance {
           Log.info(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED fresh start, totalSteps=${totalPrompts}`
           );
+          this.stepOutputBuffer.clear();
           this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
         }
       }
@@ -1127,6 +1178,23 @@ export class WorkflowInstance {
             return overrideIntegration;
           }
           return activeIntegration;
+        },
+        captureOutputInit: (stepIndex, prompt, cliCommand, workingDirectory, timestampMs, attemptIndex) => {
+          // Always buffer the init state so we can replay it when switching back
+          self.stepOutputBuffer.set(stepIndex, {
+            prompt,
+            cliCommand,
+            workingDirectory,
+            timestampMs,
+            attemptIndex,
+            accumulatedText: self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
+          });
+        },
+        captureChunk: (stepIndex, chunk) => {
+          const existing = self.stepOutputBuffer.get(stepIndex);
+          if (existing) {
+            existing.accumulatedText += chunk;
+          }
         },
       };
 

@@ -176,6 +176,7 @@ export interface WorkflowSummary {
   id: string;
   workflowName: string;
   filePath: string;
+  workingFilePath?: string; // Path to .flightpath.json working file (for dedup with recent workflows list)
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;

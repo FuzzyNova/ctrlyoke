@@ -530,6 +530,7 @@ window.vscodeApi = acquireVsCodeApi();
         // ============================================================================
         case MESSAGE_TYPES.GET_WORKFLOWS_LIST: {
           const summaries = this.flightPathManager?.getWorkflowsList() ?? [];
+          Log.info(`[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map(s => `inst:${s.id.slice(0,8)}(${s.executionState})`).join(", ") || "(none)"}`);
           this.postMessage({
             type: MESSAGE_TYPES.WORKFLOWS_LIST,
             workflows: summaries,

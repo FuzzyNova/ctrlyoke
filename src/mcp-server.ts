@@ -87,6 +87,7 @@ class FlightPathMCPServer {
     log("Workspace root:", this.workspaceRoot);
     log("Environment variables:", {
       FLIGHTPATH_WORKSPACE: process.env.FLIGHTPATH_WORKSPACE,
+      FLIGHTPATH_WORKING_FILE: process.env.FLIGHTPATH_WORKING_FILE || "(not set — will scan queue dir)",
       NODE_ENV: process.env.NODE_ENV,
     });
 
