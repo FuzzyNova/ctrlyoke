@@ -72,7 +72,8 @@ export interface WorkflowContext {
     cliCommand: string | undefined,
     workingDirectory: string | undefined,
     timestampMs: number,
-    attemptIndex: number
+    attemptIndex: number,
+    rawTextOutput?: boolean
   ) => void;
   /**
    * Always-on callback to capture streaming chunks (called even when inactive).
@@ -540,6 +541,7 @@ export class WorkflowExecutor {
 
     // Initialize dashboard streaming state
     const initTimestampMs = Date.now();
+    const rawTextOutput = integration.rawTextOutput || undefined;
     if (context.dashboardProvider) {
       context.dashboardProvider.updateCliStreamingChunk(stepIndex, "");
       context.dashboardProvider.updateCliOutput(stepIndex, {
@@ -552,6 +554,7 @@ export class WorkflowExecutor {
         workingDirectory: context.workspaceFolderPath,
         timestampMs: initTimestampMs,
         attemptIndex,
+        rawTextOutput,
       });
     }
     // Always capture init state for replay when switching workflows
@@ -561,7 +564,8 @@ export class WorkflowExecutor {
       undefined,
       context.workspaceFolderPath,
       initTimestampMs,
-      attemptIndex
+      attemptIndex,
+      rawTextOutput
     );
 
     // Set up response listener BEFORE sending to avoid race condition
@@ -592,6 +596,7 @@ export class WorkflowExecutor {
           workingDirectory: context.workspaceFolderPath,
           timestampMs: Date.now(),
           attemptIndex,
+          rawTextOutput,
         });
         // Update the captured init state with the actual cliCommand once known
         context.captureOutputInit?.(
@@ -600,7 +605,8 @@ export class WorkflowExecutor {
           cliCommand,
           context.workspaceFolderPath,
           Date.now(),
-          attemptIndex
+          attemptIndex,
+          rawTextOutput
         );
       });
     }
@@ -974,6 +980,7 @@ export class WorkflowExecutor {
       workingDirectory: context.workspaceFolderPath,
       timestampMs: Date.now(),
       attemptIndex,
+      rawTextOutput: integration.rawTextOutput || undefined,
     };
 
     // Use unexpanded prompt to avoid flooding output with large attachments

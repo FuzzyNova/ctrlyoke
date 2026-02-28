@@ -111,6 +111,12 @@ export interface CliOutput {
    * @default 0
    */
   attemptIndex?: number;
+  /**
+   * When true, the harness emits pre-formatted plain text (no markdown).
+   * Set from provider config; carried on every CliOutput (streaming and final) so
+   * the UI can skip the Streamdown pipeline even before the final parse completes.
+   */
+  rawTextOutput?: boolean;
 }
 
 // ============================================================================

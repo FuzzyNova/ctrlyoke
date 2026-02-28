@@ -37,13 +37,23 @@ import { HARNESS_INFO } from "../../types/messages";
 
 interface TextOutputProps {
   text: string;
+  /** When true, render as pre-formatted plain text instead of through the markdown pipeline */
+  raw?: boolean;
   className?: string;
 }
 
-const TextOutput: React.FC<TextOutputProps> = ({ text, className = "" }) => {
+const TextOutput: React.FC<TextOutputProps> = ({
+  text,
+  raw = false,
+  className = "",
+}) => {
   return (
     <div className={`my-2 ${className}`}>
-      <MarkdownText>{text}</MarkdownText>
+      {raw ? (
+        <div className="whitespace-pre-wrap">{text}</div>
+      ) : (
+        <MarkdownText>{text}</MarkdownText>
+      )}
     </div>
   );
 };
@@ -133,6 +143,8 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
 interface StructuredOutputProps {
   events: CliEvent[];
+  /** When true, text events are rendered as pre-formatted plain text (no markdown pipeline) */
+  rawTextOutput?: boolean;
   className?: string;
 }
 
@@ -141,6 +153,7 @@ interface StructuredOutputProps {
  */
 const StructuredOutput: React.FC<StructuredOutputProps> = ({
   events,
+  rawTextOutput = false,
   className = "",
 }) => {
   if (!events || events.length === 0) return null;
@@ -154,7 +167,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           case CLI_EVENT_TYPES.TEXT: {
             const data = event.data as TextData;
             if (!data.text) return null;
-            return <TextOutput key={key} text={data.text} />;
+            return <TextOutput key={key} text={data.text} raw={rawTextOutput} />;
           }
 
           case CLI_EVENT_TYPES.THINKING: {
@@ -356,6 +369,11 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     const hasStreamingText =
       output.isStreaming && streamingChunk && streamingChunk.length > 0;
     const hasFinalResponse = !output.isStreaming && output.response;
+    // When the harness pre-formats its output, skip the markdown pipeline entirely.
+    // Check output.rawTextOutput first (set on streaming CliOutput before parse completes),
+    // then fall back to the final parsed metadata (set by the response parser).
+    const rawTextOutput =
+      !!output.rawTextOutput || !!output.structured?.metadata?.rawTextOutput;
 
     // Case 1: Streaming with BOTH text chunks and structured events
     // Show text first (initial response), then structured events (tool calls/results)
@@ -365,9 +383,16 @@ export const CliOutput: React.FC<CliOutputProps> = ({
           <div
             className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}
           >
-            <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
+            {rawTextOutput ? (
+              <div className="whitespace-pre-wrap">{streamingChunk}</div>
+            ) : (
+              <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
+            )}
           </div>
-          <StructuredOutput events={output.structured?.events as CliEvent[]} />
+          <StructuredOutput
+            events={output.structured?.events as CliEvent[]}
+            rawTextOutput={rawTextOutput}
+          />
         </>
       );
     }
@@ -375,7 +400,10 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 2: Streaming with ONLY structured events (no text yet)
     if (hasStructuredEvents) {
       return (
-        <StructuredOutput events={output.structured?.events as CliEvent[]} />
+        <StructuredOutput
+          events={output.structured?.events as CliEvent[]}
+          rawTextOutput={rawTextOutput}
+        />
       );
     }
 
@@ -383,7 +411,11 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasStreamingText) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
+          {rawTextOutput ? (
+            <div className="whitespace-pre-wrap">{streamingChunk}</div>
+          ) : (
+            <MarkdownText animated={true}>{streamingChunk}</MarkdownText>
+          )}
         </div>
       );
     }
@@ -397,7 +429,11 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasFinalResponse) {
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
-          <MarkdownText>{output.response as string}</MarkdownText>
+          {rawTextOutput ? (
+            <div className="whitespace-pre-wrap">{output.response as string}</div>
+          ) : (
+            <MarkdownText>{output.response as string}</MarkdownText>
+          )}
         </div>
       );
     }

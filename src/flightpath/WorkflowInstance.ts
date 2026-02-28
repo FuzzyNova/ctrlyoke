@@ -111,6 +111,7 @@ export class WorkflowInstance {
       timestampMs: number;
       attemptIndex: number;
       accumulatedText: string;
+      rawTextOutput?: boolean;
     }
   >();
 
@@ -355,6 +356,7 @@ export class WorkflowInstance {
           workingDirectory: buffer.workingDirectory,
           timestampMs: buffer.timestampMs,
           attemptIndex: buffer.attemptIndex,
+          rawTextOutput: buffer.rawTextOutput,
         });
         // Replay the accumulated text as a single chunk
         if (buffer.accumulatedText) {
@@ -1290,7 +1292,8 @@ export class WorkflowInstance {
           cliCommand,
           workingDirectory,
           timestampMs,
-          attemptIndex
+          attemptIndex,
+          rawTextOutput
         ) => {
           // Always buffer the init state so we can replay it when switching back
           self.stepOutputBuffer.set(stepIndex, {
@@ -1301,6 +1304,7 @@ export class WorkflowInstance {
             attemptIndex,
             accumulatedText:
               self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
+            rawTextOutput,
           });
 
           // When a retry starts streaming, eagerly set retryState in

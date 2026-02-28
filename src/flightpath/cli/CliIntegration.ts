@@ -95,6 +95,11 @@ export class CliIntegration extends HarnessIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
   private readonly provider: ICliProvider;
 
+  /** Delegates rawTextOutput from provider config (used by WorkflowExecutor for streaming CliOutput) */
+  override get rawTextOutput(): boolean {
+    return this.provider.config.rawTextOutput ?? false;
+  }
+
   /** Initialization status */
   protected initializationStatus: HarnessStatus = HarnessStatus.Initializing;
 

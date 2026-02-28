@@ -133,6 +133,16 @@ export interface OutputMetadata {
   elapsed?: number;
   /** Harness identifier (e.g., 'copilot-cli', 'claude-cli', 'codex-cli') */
   harness?: string;
+  /**
+   * When true, text events contain pre-formatted output that should NOT be
+   * processed by markdown renderers (e.g., Streamdown). The harness already
+   * emits fully-rendered text (tables, headings, chrome), so running a
+   * markdown pipeline on it again causes double-rendering artifacts.
+   *
+   * Set this in the harness response parser when the CLI has no --json mode
+   * and pre-formats its own output (currently: copilot-cli).
+   */
+  rawTextOutput?: boolean;
 }
 
 /**

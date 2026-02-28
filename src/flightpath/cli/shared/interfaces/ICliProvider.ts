@@ -34,6 +34,16 @@ export interface HarnessConfig {
    * - Codex: true (monitors JSONL log files for turn.completed events)
    */
   usesInteractiveNotificationMonitor?: boolean;
+
+  /**
+   * When true, the harness emits pre-formatted plain text rather than markdown.
+   * The UI must skip the markdown rendering pipeline to avoid double-rendering
+   * artifacts (e.g., garbled table syntax, double-escaped symbols).
+   *
+   * Set to true for harnesses with no --json/structured-output mode that
+   * pre-render headings, tables, and chrome themselves (currently: copilot-cli).
+   */
+  rawTextOutput?: boolean;
 }
 
 /**

@@ -46,6 +46,15 @@ export abstract class HarnessIntegration {
   protected responseCompleteEmitter = new vscode.EventEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
+  /**
+   * When true, this harness emits pre-formatted plain text rather than markdown.
+   * The UI skips the Streamdown pipeline to avoid double-rendering artifacts.
+   * Override in subclasses (CliIntegration reads from provider config).
+   */
+  get rawTextOutput(): boolean {
+    return false;
+  }
+
   // Event emitter for streaming response chunks (plain text - for Copilot CLI backward compatibility)
   protected streamingChunkEmitter = new vscode.EventEmitter<string>();
   public readonly onStreamingChunk = this.streamingChunkEmitter.event;

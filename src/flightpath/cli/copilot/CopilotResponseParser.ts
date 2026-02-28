@@ -78,6 +78,10 @@ export class CopilotResponseParser
             }
           : undefined,
         harness: "copilot-cli",
+        // Copilot CLI has no --json mode; it pre-formats its output with full
+        // markdown rendering (tables, headings, chrome). Skip the markdown
+        // pipeline in the UI to avoid double-rendering artifacts.
+        rawTextOutput: true,
       },
     };
   }

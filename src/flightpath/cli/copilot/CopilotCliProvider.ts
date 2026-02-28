@@ -57,6 +57,10 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
+
+    // Copilot has no --json mode; its output is pre-formatted plain text.
+    // The UI must skip the markdown pipeline to avoid double-rendering artifacts.
+    rawTextOutput: true,
   };
 
   readonly responseParser: IResponseParser = new CopilotResponseParser();
