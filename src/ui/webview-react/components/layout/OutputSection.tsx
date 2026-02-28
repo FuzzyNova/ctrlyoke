@@ -5,7 +5,10 @@ import { getVsCodeApi } from "@hooks/useVsCodeApi";
 import { CliOutput, StatusMessage } from "../output";
 import { PanelBar, RunSelector } from "../shared";
 import { generateMarkdownExport, formatTime } from "@utils/outputUtils";
-import type { CliOutputItem, OutputStatusMessage } from "../../types/cliEvents";
+import type {
+  CliOutput as CliOutputType,
+  OutputStatusMessage,
+} from "../../types/cliEvents";
 import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 
 const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
@@ -17,7 +20,7 @@ interface OutputMessage {
   type: "status" | "cli";
   stepIndex: number;
   timestamp: number;
-  data: OutputStatusMessage | CliOutputItem;
+  data: OutputStatusMessage | CliOutputType;
   attemptIndex?: number;
 }
 
@@ -124,7 +127,7 @@ export const OutputSection: React.FC = () => {
       // Add CLI outputs - use explicit attemptIndex from data, not array position
       const stepOutputs = step.cliOutputs || [];
       stepOutputs.forEach((output) => {
-        const cliOutput = output as CliOutputItem & {
+        const cliOutput = output as CliOutputType & {
           timestampMs?: number;
           attemptIndex?: number;
         };
@@ -137,7 +140,7 @@ export const OutputSection: React.FC = () => {
             stepIndex * 10000 +
               stepStatusMessages.length +
               explicitAttemptIndex,
-          data: output as unknown as CliOutputItem,
+          data: output as unknown as CliOutputType,
           attemptIndex: explicitAttemptIndex,
         });
       });
@@ -323,7 +326,7 @@ export const OutputSection: React.FC = () => {
                 />
               );
             } else {
-              const cliData = item.data as CliOutputItem;
+              const cliData = item.data as CliOutputType;
               const streamingChunk = streamingChunks[item.stepIndex] || "";
               return (
                 <CliOutput

@@ -28,9 +28,9 @@ export function harnessCategory(value: string): "cli" | "chat" | null {
   return null;
 }
 
-// copilot-chat is the only item in its section — hiding it would leave the
-// VS Code Chat group empty, so we never show an eye icon for it.
-const NON_HIDEABLE: HarnessId[] = [HARNESS_IDS.COPILOT_CHAT];
+// The selected harness can never be hidden (canHide enforces this).
+// showChatGroup already suppresses the empty Chat section when all items are hidden.
+const NON_HIDEABLE: HarnessId[] = [];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -58,8 +58,11 @@ const StatusIndicator: React.FC<{
 };
 
 const GroupHeader: React.FC<{ label: string }> = ({ label }) => (
-  <div className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-description-fg bg-editor-bg border-b border-dropdown-border select-none">
-    {label}
+  <div className="flex items-center gap-1.5 px-2 py-0.5 select-none">
+    <span className="text-[9px] font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
+      {label}
+    </span>
+    <div className="flex-1 h-px bg-dropdown-border" />
   </div>
 );
 
@@ -334,7 +337,6 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
           {/* ── VS Code Chat group ── */}
           {showChatGroup && (
             <>
-              {showCliGroup && <div className="border-t border-dropdown-border" />}
               <GroupHeader label="VS Code Chat" />
               {renderGroup(CHAT_HARNESSES)}
             </>

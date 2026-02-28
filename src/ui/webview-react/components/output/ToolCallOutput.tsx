@@ -14,8 +14,8 @@ import {
 import type {
   CliEvent,
   FileOperationStatus,
-  FileEditEventData,
-  ToolCallEventData,
+  FileEditData,
+  ToolCall,
   ToolResult,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
@@ -340,15 +340,14 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   const params = extractKeyParameters(name, parameters);
   const toolLine = `● ${name}(${params})`;
 
-  const formatResult = (result: ToolResult): string => {
-    const prefix = "  ⎿  ";
+  const getResultText = (result: ToolResult): string => {
     if (!result.success && result.error) {
-      return prefix + truncate(result.error, 200);
+      return truncate(result.error, 200);
     }
     if (result.output) {
-      return prefix + truncate(result.output, 100);
+      return truncate(result.output, 100);
     }
-    return prefix + (result.success ? "Success" : "Failed");
+    return result.success ? "Success" : "Failed";
   };
 
   return (
@@ -356,13 +355,10 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
       <div className={TOOL_CALL_LINE}>{toolLine}</div>
       {result && (
         <div
-          className={
-            result.success
-              ? TOOL_RESULT_LINE
-              : "text-vscode-error-fg pl-4 ml-2 text-[11px] whitespace-pre-wrap break-words"
-          }
+          className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px]"} flex items-start gap-1`}
         >
-          {formatResult(result)}
+          <span className="shrink-0">⎿</span>
+          <span className="whitespace-pre-wrap break-words min-w-0">{getResultText(result)}</span>
         </div>
       )}
     </div>
@@ -392,7 +388,7 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
 
   switch (type) {
     case CLI_EVENT_TYPES.FILE_EDIT: {
-      const editData = data as FileEditEventData;
+      const editData = data as FileEditData;
       return (
         <FileEditOutput
           path={editData.path}
@@ -462,7 +458,7 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     }
 
     case CLI_EVENT_TYPES.TOOL_CALL: {
-      const toolData = data as ToolCallEventData;
+      const toolData = data as ToolCall;
       return (
         <GenericToolCallOutput
           name={toolData.name}

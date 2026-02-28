@@ -4,19 +4,19 @@
  */
 import * as Diff from "diff";
 import type {
-  DiffHunk,
+  UnifiedDiffHunk,
   CliEvent,
-  BashCommandEventData,
-  FileEditEventData,
-  FileWriteEventData,
-  FileReadEventData,
-  FileDeleteEventData,
-  McpToolCallEventData,
-  WebSearchEventData,
-  ToolCallEventData,
-  ToolResultEventData,
-  TextEventData,
-  ThinkingEventData,
+  BashCommandData,
+  FileEditData,
+  FileWriteData,
+  FileReadData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
+  ToolCall,
+  ToolResultData,
+  TextData,
+  ThinkingBlock,
 } from "../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/cliEvents";
 import { HARNESS_INFO } from "../types/messages";
@@ -128,7 +128,7 @@ export interface DiffLine {
 /**
  * Parse unified diff hunks into DiffLine array
  */
-export function parseUnifiedDiff(hunks: DiffHunk[]): DiffLine[] {
+export function parseUnifiedDiff(hunks: UnifiedDiffHunk[]): DiffLine[] {
   const lines: DiffLine[] = [];
 
   hunks.forEach((hunk) => {
@@ -255,7 +255,7 @@ function formatToolResultForMarkdown(result: {
 /**
  * Format structured patch hunks as markdown diff lines
  */
-function formatStructuredPatchForMarkdown(hunks: DiffHunk[]): string[] {
+function formatStructuredPatchForMarkdown(hunks: UnifiedDiffHunk[]): string[] {
   const diffLines: string[] = [];
 
   hunks.forEach((hunk) => {
@@ -289,7 +289,7 @@ function formatStructuredPatchForMarkdown(hunks: DiffHunk[]): string[] {
 function formatDiffForMarkdown(
   oldContent: string,
   newContent: string,
-  structuredPatch?: DiffHunk[]
+  structuredPatch?: UnifiedDiffHunk[]
 ): string[] {
   // Prefer structured patch with accurate line numbers
   if (structuredPatch && structuredPatch.length > 0) {
@@ -319,7 +319,7 @@ function renderStructuredEventsToMarkdown(
   for (const event of events) {
     switch (event.type) {
       case CLI_EVENT_TYPES.TEXT: {
-        const data = event.data as TextEventData;
+        const data = event.data as TextData;
         if (data.text) {
           lines.push(data.text);
           lines.push("");
@@ -328,7 +328,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.BASH_COMMAND: {
-        const data = event.data as BashCommandEventData;
+        const data = event.data as BashCommandData;
         lines.push(`● ${data.command}`);
 
         if (data.status !== OPERATION_STATUS.INITIATED) {
@@ -363,7 +363,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.FILE_EDIT: {
-        const data = event.data as FileEditEventData;
+        const data = event.data as FileEditData;
         if (data.path) {
           if (data.status === OPERATION_STATUS.INITIATED) {
             lines.push(`● Editing ${data.path}`);
@@ -397,7 +397,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.FILE_WRITE: {
-        const data = event.data as FileWriteEventData;
+        const data = event.data as FileWriteData;
         if (data.status === OPERATION_STATUS.INITIATED) {
           lines.push(`● Writing ${data.path} (starting...)`);
         } else if (data.status === OPERATION_STATUS.FAILED) {
@@ -416,7 +416,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.FILE_READ: {
-        const data = event.data as FileReadEventData;
+        const data = event.data as FileReadData;
         if (data.status === OPERATION_STATUS.INITIATED) {
           lines.push(`● Reading ${data.path} (starting...)`);
         } else if (data.status === OPERATION_STATUS.FAILED) {
@@ -432,28 +432,28 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.FILE_DELETE: {
-        const data = event.data as FileDeleteEventData;
+        const data = event.data as FileDeleteData;
         lines.push(`● Delete file: ${data.path}`);
         lines.push("");
         break;
       }
 
       case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-        const data = event.data as McpToolCallEventData;
+        const data = event.data as McpToolCallData;
         lines.push(`● MCP: ${data.server}.${data.tool}`);
         lines.push("");
         break;
       }
 
       case CLI_EVENT_TYPES.WEB_SEARCH: {
-        const data = event.data as WebSearchEventData;
+        const data = event.data as WebSearchData;
         lines.push(`● Web search: "${data.query}"`);
         lines.push("");
         break;
       }
 
       case CLI_EVENT_TYPES.TOOL_CALL: {
-        const data = event.data as ToolCallEventData;
+        const data = event.data as ToolCall;
         const toolLine = formatToolCallForMarkdown(data.name, data.parameters);
         lines.push(toolLine);
 
@@ -466,7 +466,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.THINKING: {
-        const data = event.data as ThinkingEventData;
+        const data = event.data as ThinkingBlock;
         if (data.text) {
           const label =
             data.label && data.label !== "Thinking" ? data.label : "Thinking";
@@ -477,7 +477,7 @@ function renderStructuredEventsToMarkdown(
       }
 
       case CLI_EVENT_TYPES.TOOL_RESULT: {
-        const data = event.data as ToolResultEventData;
+        const data = event.data as ToolResultData;
         if (data.result) {
           const resultLine = formatToolResultForMarkdown(data.result);
           lines.push(resultLine);

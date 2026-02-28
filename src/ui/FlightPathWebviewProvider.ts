@@ -7,7 +7,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   type StepStatus,
 } from "../types/DashboardConstants";
-import type { CliEvent, CliOutputData } from "../types/WebviewMessageTypes";
+import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
 import { TemplateManager } from "../flightpath/TemplateManager";
 import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
@@ -19,8 +19,8 @@ import { WebviewSettingsSync } from "./WebviewSettingsSync";
 import { WorkflowSerializer } from "./WorkflowSerializer";
 import { WebviewMessageRouter } from "./WebviewMessageRouter";
 
-// Re-export CliOutputData for external use
-export type { CliOutputData } from "../types/WebviewMessageTypes";
+// Re-export CliOutput for external use
+export type { CliOutput } from "../types/WebviewMessageTypes";
 
 // Re-export HarnessStatus for external consumers
 export type { HarnessStatus } from "./WebviewSettingsSync";
@@ -367,7 +367,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updateCliOutput(stepIndex: number, output: CliOutputData): void {
+  public updateCliOutput(stepIndex: number, output: CliOutput): void {
     this.postMessage({ type: MESSAGE_TYPES.CLI_OUTPUT, stepIndex, output });
   }
 

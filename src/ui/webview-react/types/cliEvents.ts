@@ -36,22 +36,9 @@ export {
   type UnifiedDiffHunk,
   type UniversalCliOutput,
 
-  // Webview-specific aliases (for backward compatibility)
-  type DiffHunk,
-  type BaseEventData,
-  type TextEventData,
-  type ThinkingEventData,
-  type BashCommandEventData,
-  type FileReadEventData,
-  type FileWriteEventData,
-  type FileEditEventData,
-  type FileDeleteEventData,
-  type McpToolCallEventData,
-  type WebSearchEventData,
-  type ToolCallEventData,
-  type ToolResultEventData,
+  // Structured output and display types
   type StructuredOutput,
   type TokenStats,
-  type CliOutputItem,
+  type CliOutput,
   type OutputStatusMessage,
 } from "@root/types/WebviewMessageTypes";

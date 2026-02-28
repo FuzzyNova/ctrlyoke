@@ -63,8 +63,6 @@ export {
 
   // CLI output types
   type CliOutput,
-  type CliOutputData,
-  type CliOutputItem,
   type TokenStats,
 
   // CLI event types
@@ -72,20 +70,19 @@ export {
   type StructuredOutput,
   type OutputStatusMessage,
   type CliEventData,
-  type BaseEventData,
-  type TextEventData,
-  type ThinkingEventData,
-  type BashCommandEventData,
-  type FileReadEventData,
-  type FileWriteEventData,
-  type FileEditEventData,
-  type FileDeleteEventData,
-  type ToolCallEventData,
-  type ToolResultEventData,
-  type McpToolCallEventData,
-  type WebSearchEventData,
+  type TextData,
+  type ThinkingBlock,
+  type BashCommandData,
+  type FileReadData,
+  type FileWriteData,
+  type FileEditData,
+  type FileDeleteData,
+  type ToolCall,
+  type ToolResultData,
+  type McpToolCallData,
+  type WebSearchData,
   type ToolResult,
-  type DiffHunk,
+  type UnifiedDiffHunk,
 } from "@root/types/WebviewMessageTypes";
 
 // Re-export WorkflowSummary from FlightPathTypes for multi-workflow support

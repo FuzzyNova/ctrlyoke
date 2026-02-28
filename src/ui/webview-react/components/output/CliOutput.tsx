@@ -14,19 +14,19 @@ import {
 import { OUTPUT_BLOCK_BASE, TOOL_RESULT_LINE } from "./outputStyles";
 import { WebviewLog } from "../../utils/logger";
 import type {
-  CliOutputItem,
+  CliOutput as CliOutputType,
   CliEvent,
-  BashCommandEventData,
-  TextEventData,
-  ThinkingEventData,
-  FileEditEventData,
-  FileWriteEventData,
-  FileReadEventData,
-  FileDeleteEventData,
-  McpToolCallEventData,
-  WebSearchEventData,
-  ToolCallEventData,
-  ToolResultEventData,
+  BashCommandData,
+  TextData,
+  ThinkingBlock,
+  FileEditData,
+  FileWriteData,
+  FileReadData,
+  FileDeleteData,
+  McpToolCallData,
+  WebSearchData,
+  ToolCall,
+  ToolResultData,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES } from "../../types/cliEvents";
 import { HARNESS_INFO } from "../../types/messages";
@@ -87,8 +87,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   result,
   className = "",
 }) => {
-  const prefix = "  ⎿  ";
-  let content: string;
+  let contentText: string;
 
   let outputStr: string | undefined;
   if (typeof result.output === "string") {
@@ -111,18 +110,19 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
   }
 
   if (!result.success && errorStr) {
-    content = prefix + errorStr.substring(0, 200);
+    contentText = errorStr.substring(0, 200);
   } else if (outputStr) {
-    content = prefix + outputStr.substring(0, 100);
+    contentText = outputStr.substring(0, 100);
   } else {
-    content = prefix + (result.success ? "Success" : "Failed");
+    contentText = result.success ? "Success" : "Failed";
   }
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px] whitespace-pre-wrap break-words"} ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px]"} flex items-start gap-1 ${className}`}
     >
-      {content}
+      <span className="shrink-0">⎿</span>
+      <span className="whitespace-pre-wrap break-words min-w-0">{contentText}</span>
     </div>
   );
 };
@@ -152,13 +152,13 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
 
         switch (event.type) {
           case CLI_EVENT_TYPES.TEXT: {
-            const data = event.data as TextEventData;
+            const data = event.data as TextData;
             if (!data.text) return null;
             return <TextOutput key={key} text={data.text} />;
           }
 
           case CLI_EVENT_TYPES.THINKING: {
-            const data = event.data as ThinkingEventData;
+            const data = event.data as ThinkingBlock;
             if (!data.text) return null;
             return (
               <ThinkingOutput key={key} text={data.text} label={data.label} />
@@ -166,7 +166,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.BASH_COMMAND: {
-            const data = event.data as BashCommandEventData;
+            const data = event.data as BashCommandData;
             return (
               <BashOutput
                 key={key}
@@ -180,7 +180,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.FILE_EDIT: {
-            const data = event.data as FileEditEventData;
+            const data = event.data as FileEditData;
             if (!data.path) return null;
             return (
               <FileEditOutput
@@ -196,7 +196,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.FILE_WRITE: {
-            const data = event.data as FileWriteEventData;
+            const data = event.data as FileWriteData;
             if (!data.path) return null;
             return (
               <FileWriteOutput
@@ -210,7 +210,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.FILE_READ: {
-            const data = event.data as FileReadEventData;
+            const data = event.data as FileReadData;
             if (!data.path) return null;
             return (
               <FileReadOutput
@@ -223,13 +223,13 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.FILE_DELETE: {
-            const data = event.data as FileDeleteEventData;
+            const data = event.data as FileDeleteData;
             if (!data.path) return null;
             return <FileDeleteOutput key={key} path={data.path} />;
           }
 
           case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-            const data = event.data as McpToolCallEventData;
+            const data = event.data as McpToolCallData;
             if (!data.server || !data.tool) return null;
             return (
               <McpToolCallOutput
@@ -241,13 +241,13 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.WEB_SEARCH: {
-            const data = event.data as WebSearchEventData;
+            const data = event.data as WebSearchData;
             if (!data.query) return null;
             return <WebSearchOutput key={key} query={data.query} />;
           }
 
           case CLI_EVENT_TYPES.TOOL_CALL: {
-            const data = event.data as ToolCallEventData;
+            const data = event.data as ToolCall;
             if (!data.name) return null;
             return (
               <GenericToolCallOutput
@@ -260,7 +260,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           }
 
           case CLI_EVENT_TYPES.TOOL_RESULT: {
-            const data = event.data as ToolResultEventData;
+            const data = event.data as ToolResultData;
             if (!data.result) return null;
             return <ToolResultOutput key={key} result={data.result} />;
           }
@@ -278,7 +278,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
 // ============================================================================
 
 interface CliOutputProps {
-  output: CliOutputItem;
+  output: CliOutputType;
   stepIndex: number;
   attemptIndex: number;
   streamingChunk?: string;

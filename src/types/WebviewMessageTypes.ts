@@ -3,7 +3,7 @@
  * SINGLE SOURCE OF TRUTH for all types shared between extension and React webview
  *
  * This file consolidates:
- * - CLI output data types (CliOutputData, CliOutput, CliOutputItem)
+ * - CLI output data types (CliOutput)
  * - Prompt item types (PromptItem, ExecutionProperties)
  * - Message payload interfaces (InitMessageData, FileSelectedMessage, etc.)
  * - CLI event data interfaces (re-exported from CliOutputTypes for consistency)
@@ -28,18 +28,6 @@ import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
   ToolResult,
-  TextData,
-  BashCommandData,
-  FileReadData,
-  FileWriteData,
-  FileEditData,
-  FileDeleteData,
-  McpToolCallData,
-  WebSearchData,
-  ThinkingBlock,
-  ToolCall,
-  ToolResultData,
-  UnifiedDiffHunk,
 } from "./CliOutputTypes";
 
 // ============================================================================
@@ -125,16 +113,6 @@ export interface CliOutput {
   attemptIndex?: number;
 }
 
-/**
- * @deprecated Use {@link CliOutput} instead. Kept for backward compatibility.
- */
-export type CliOutputData = CliOutput;
-
-/**
- * @deprecated Use {@link CliOutput} instead. Kept for backward compatibility.
- */
-export type CliOutputItem = CliOutput;
-
 // ============================================================================
 // CLI EVENT DATA TYPES (Re-exported from CliOutputTypes for consistency)
 // ============================================================================
@@ -165,11 +143,6 @@ export type {
 // Alias for the detailed CliEvent type from CliOutputTypes
 export type CliEvent = CliOutputEvent;
 
-/**
- * @deprecated Use {@link UnifiedDiffHunk} instead. Kept for backward compatibility.
- */
-export type DiffHunk = UnifiedDiffHunk;
-
 // Alias for tool result (from CliOutputTypes)
 export type { ToolResult };
 
@@ -187,20 +160,6 @@ export interface OutputStatusMessage {
   timestamp: string;
   timestampMs: number;
 }
-
-// For backward compatibility with older event type definitions
-export type BaseEventData = Record<string, unknown>;
-export type TextEventData = TextData;
-export type ThinkingEventData = ThinkingBlock;
-export type BashCommandEventData = BashCommandData;
-export type FileReadEventData = FileReadData;
-export type FileWriteEventData = FileWriteData;
-export type FileEditEventData = FileEditData;
-export type FileDeleteEventData = FileDeleteData;
-export type McpToolCallEventData = McpToolCallData;
-export type WebSearchEventData = WebSearchData;
-export type ToolCallEventData = ToolCall;
-export type ToolResultEventData = ToolResultData;
 
 // ============================================================================
 // PROMPT & WORKFLOW TYPES
