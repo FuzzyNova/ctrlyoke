@@ -9,15 +9,14 @@ import {
   WorkflowContext,
 } from "../../types/FlightPathTypes";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
-import { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
+import { CliLogMonitor } from "./CliLogMonitor";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import {
   ResolvedProperties,
@@ -747,11 +746,8 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Monitor log file for completion using harness's log parser.
    *
-   * For harnesses with notification monitors (Claude, Codex), monitors both:
-   * - Log file for streaming content
-   * - Notification file for completion signal
-   *
-   * For harnesses without notification monitors (Copilot), relies on log file completion detection.
+   * Delegates to CliLogMonitor for the actual monitoring logic.
+   * Stores parsed output and CLI result on this instance for callers.
    *
    * @param logPath Absolute path to log file
    * @param sessionId Session ID (if already extracted)
@@ -763,222 +759,28 @@ export class CliIntegration extends HarnessIntegration {
     sessionId: string | null,
     startTime: Date
   ): Promise<{ success: boolean; sessionId?: string }> {
-    const parser = this.provider.logParser!;
-    const events: BaseCliEvent[] = [];
-    const timeoutMs =
-      ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000;
-
-    return new Promise(async (resolve, reject) => {
-      let completed = false;
-      let draining = false;
-      let timeoutHandle: NodeJS.Timeout | undefined;
-      let cancellationInterval: NodeJS.Timeout | undefined;
-      // Use BaseLogParser's extractTimestamp via the parser instance
-      const getEntryTimestamp = (entry: BaseCliEvent): Date | null =>
-        (parser as any).extractTimestamp?.(entry) ?? null;
-
-      // Completion handler - single source of truth
-      const handleCompletion = async (source: string) => {
-        if (completed) {
-          return; // Already completed
-        }
-        completed = true;
-
-        Log.info(`✅ Completion detected via ${source}`);
-
-        // Drain any remaining log entries before final extraction (race-safe for fast prompts)
-        await drainLogEvents();
-
-        // Extract final response from accumulated events
-        const response = parser.extractResponse(events);
-
-        // Store the full parsed output for structured data access
-        this.lastParsedOutput = response;
-
-        // Extract text from events for legacy response field
-        const responseText = this.extractTextFromEvents(response);
-
-        // Store the result
-        const cliResult: CliResult = {
-          success: true,
-          response: responseText,
-          statistics: parser.formatStatistics(
-            response.metadata as unknown as BaseCliEvent
-          ),
-          exitCode: 0,
-          sessionId: response.metadata.sessionId || sessionId || undefined,
-        };
-        this.lastResult = cliResult;
-        this.logResponse(cliResult.response, cliResult.statistics);
-
-        // Cleanup
-        watcher.close();
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-        if (cancellationInterval) {
-          clearInterval(cancellationInterval);
-        }
-        this.responseCompleteEmitter.fire("Response complete");
-
-        resolve({
-          success: true,
-          sessionId: cliResult.sessionId,
-        });
-      };
-
-      const processEvent = (event: BaseCliEvent, source: string) => {
-        events.push(event);
-
-        // Stream content to output window (delegates to harness's log parser)
-        const content = parser.extractContentFromEvent(event);
-        if (content) {
-          this.streamingChunkEmitter.fire(content);
-        }
-
-        // Check completion via log file (fallback for harnesses without notification monitor)
-        if (!completed && parser.isComplete(event)) {
-          void handleCompletion(source);
-        }
-      };
-
-      const drainLogEvents = async (): Promise<void> => {
-        if (draining) {
-          return;
-        }
-        draining = true;
-
-        const deadline = Date.now() + 2000;
-        while (Date.now() < deadline) {
-          const newEntries = await parser.readNewLines(logPath);
-          if (newEntries.length === 0) {
-            await new Promise((r) => setTimeout(r, 150));
-            continue;
-          }
-
-          for (const entry of newEntries) {
-            const entryTime = getEntryTimestamp(entry);
-            if (entryTime && entryTime < startTime) {
-              continue;
-            }
-            processEvent(entry, "log file (drain)");
-          }
-        }
-      };
-
-      // Start log file watcher for streaming content
-      const watcher = parser.watchLogFile(
-        logPath,
-        (event) => {
-          processEvent(event, "log file");
-        },
-        startTime
-      );
-
-      // Initial read to capture events written before watcher setup (fast prompts)
-      try {
-        const initialEntries = await parser.readNewLines(logPath);
-        for (const entry of initialEntries) {
-          const entryTime = getEntryTimestamp(entry);
-          if (entryTime && entryTime < startTime) {
-            continue;
-          }
-          processEvent(entry, "log file (initial)");
-        }
-      } catch (error) {
-        Log.warn(`⚠️ Failed initial log read: ${error}`);
-      }
-
-      // If harness has notification monitor, also monitor for Stop/completion hook in parallel
-      if (this.provider.notificationMonitor) {
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const notifyDir =
-            this.provider.notificationMonitor.getNotificationDirectory(
-              workspaceRoot
-            );
-
-          Log.debug(
-            `🔔 Starting notification monitor for completion detection`
-          );
-
-          // Determine monitoring mode:
-          // - If harness supports session IDs in notification filenames, use specific session monitoring
-          // - Otherwise (like Copilot), use wildcard mode (undefined sessionId)
-          const monitoringSessionId = this.provider.notificationMonitor
-            .supportsSessionIdInFilename
-            ? (sessionId ?? undefined)
-            : undefined;
-
-          if (monitoringSessionId) {
-            Log.debug(
-              `📋 Monitoring notification file for session: ${monitoringSessionId}`
-            );
-          } else {
-            Log.debug(
-              `📋 Monitoring notification directory for any new completion file`
-            );
-          }
-
-          // Launch harness-specific notification monitoring in parallel
-          // (each harness knows its own file naming conventions)
-          void (async () => {
-            try {
-              const result =
-                await this.provider.notificationMonitor!.monitorForCompletion(
-                  {
-                    directory: notifyDir,
-                    timeoutMs: timeoutMs,
-                    pollMs: 100,
-                  },
-                  monitoringSessionId,
-                  startTime,
-                  () => this.isCancelling || completed
-                );
-
-              if (result.completed && !completed) {
-                // Cleanup any remaining notification files (provider-specific)
-                if (
-                  this.provider.notificationMonitor!.cleanupNotificationFiles &&
-                  sessionId
-                ) {
-                  await this.provider.notificationMonitor!.cleanupNotificationFiles(
-                    sessionId,
-                    notifyDir
-                  );
-                }
-
-                void handleCompletion("Stop hook");
-              }
-            } catch (error) {
-              Log.debug(`Notification monitoring error: ${error}`);
-            }
-          })();
-        }
-      }
-
-      // Timeout handling
-      timeoutHandle = setTimeout(() => {
-        Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
-        watcher.close();
-        reject(new Error("Log monitoring timeout"));
-      }, timeoutMs);
-
-      // Cancel handling
-      cancellationInterval = setInterval(() => {
-        if (this.isCancelling) {
-          Log.info("⏹️ Log monitoring cancelled by user");
-          if (cancellationInterval) {
-            clearInterval(cancellationInterval);
-          }
-          if (timeoutHandle) {
-            clearTimeout(timeoutHandle);
-          }
-          watcher.close();
-          resolve({ success: false });
-        }
-      }, 100);
+    const monitor = new CliLogMonitor({
+      logParser: this.provider.logParser!,
+      notificationMonitor: this.provider.notificationMonitor,
+      getWorkspaceRoot: () => this.getWorkspaceRoot(),
+      isCancelling: () => this.isCancelling,
+      onStreamingChunk: (chunk) => this.streamingChunkEmitter.fire(chunk),
+      onResponseComplete: (msg) => this.responseCompleteEmitter.fire(msg),
+      logResponse: (response, statistics) =>
+        this.logResponse(response, statistics),
     });
+
+    const result = await monitor.monitor(logPath, sessionId, startTime);
+
+    // Store structured output and legacy result on this instance
+    if (result.parsedOutput) {
+      this.lastParsedOutput = result.parsedOutput;
+    }
+    if (result.cliResult) {
+      this.lastResult = result.cliResult;
+    }
+
+    return { success: result.success, sessionId: result.sessionId };
   }
 
   /**
@@ -1218,21 +1020,11 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
-   * Extract text content from events array
-   * Concatenates all text events to form the complete response text
+   * Extract text content from events array.
+   * Delegates to CliLogMonitor.extractTextFromEvents (single source of truth).
    */
   private extractTextFromEvents(output: UniversalCliOutput): string {
-    const textParts: string[] = [];
-    for (const event of output.events) {
-      if (
-        event.type === CLI_EVENT_TYPES.TEXT &&
-        event.data &&
-        "text" in event.data
-      ) {
-        textParts.push(event.data.text);
-      }
-    }
-    return textParts.join("");
+    return CliLogMonitor.extractTextFromEvents(output);
   }
 
   /**

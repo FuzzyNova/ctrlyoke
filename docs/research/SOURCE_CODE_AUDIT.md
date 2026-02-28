@@ -969,7 +969,7 @@ Three template/schema synchronization risks were identified:
 
 ## 9. Prioritized Recommendations
 
-> **Last updated:** February 28, 2026 — after completing all Priority 1, Priority 2, Priority B (CLI type safety), and partial Priority 3/4 items.
+> **Last updated:** February 28, 2026 — after completing all Priority 1, Priority 2, Priority A (god class decomposition), Priority B (CLI type safety), and partial Priority 3/4 items.
 > See [SOURCE_CODE_AUDIT_FIXES.md](SOURCE_CODE_AUDIT_FIXES.md) for the detailed fix log.
 
 ### Completion Summary
@@ -978,7 +978,7 @@ Three template/schema synchronization risks were identified:
 | -------------------- | ----- | --------- | --------- | -------------------------------------------------------------- |
 | P1: Quick Wins       | 19    | **19/19** | 0         | All done                                                       |
 | P2: Medium Effort    | 20    | **20/20** | 0         | All done (2 HIGH deferred to architecture; 12 MEDIUM deferred) |
-| P3: Larger Refactors | 7     | **4/7**   | 3         | God class decompositions remain                                |
+| P3: Larger Refactors | 7     | **7/7**   | 0         | All done (god class decompositions completed)                  |
 | P4: Nice to Have     | 15    | **10/15** | 5         | Most impactful items done; remaining are low-urgency polish    |
 
 **Total lines of dead code removed:** ~1,500+
@@ -986,6 +986,7 @@ Three template/schema synchronization risks were identified:
 **Bugs fixed:** 7 (3 from P1 + 4 from P2)
 **Security fixes:** 6 (CSP nonce, config allowlist, workspace-boundary validation, 3× hook path traversal)
 **Type safety improvements:** 42 `any` → typed replacements across 13 CLI files (Priority B)
+**God class decompositions:** 3 files reduced by ~2,400 lines total via extraction of 5 new focused classes (Priority A)
 
 ---
 
@@ -1026,17 +1027,15 @@ Several Priority 3 and 4 items were completed during the fix pass:
 
 ### Remaining Work — Updated Priorities
 
-#### Priority A: Architecture — God Class Decomposition (Highest remaining value)
+#### ~~Priority A: Architecture — God Class Decomposition~~ ✅ COMPLETED
 
-These are the three original P3 items that remain. They represent the largest maintainability improvements still available:
+All 3 god class decompositions completed. 5 new focused classes extracted, reducing the 3 largest files by ~2,400 lines combined.
 
-| #   | What to Fix                                         | Ref        | Effort   | Impact                                                                                      | Action                                                                                                                                                                                                       |
-| --- | --------------------------------------------------- | ---------- | -------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A.1 | **Decompose `FlightPathWebviewProvider`**           | §6.1, §8.7 | 2-3 days | Reduces ~2,300-line god class to 4-5 focused classes; dramatically improves maintainability | Extract `WebviewMessageRouter` (40+ message handlers → dispatch table), `WorkflowSerializer` (save/export/import), `SettingsSync` (config read/write/broadcast), keep provider as lifecycle + HTML shell     |
-| A.2 | **Decompose `CliIntegration`**                      | §3.1, §8.7 | 1-2 days | Reduces ~1,900-line class to ~1,400; cleaner separation of concerns                         | Extract `CliLogMonitor` (~300 lines: `monitorLogFile`, `processNewEvents`), delegate MCP config fully to existing utilities. Note: headless callback and MCP config already deduped in P2 fixes              |
-| A.3 | **Extract `WorkingFileManager` from `PromptQueue`** | §2.2, §8.7 | 1-2 days | Reduces ~1,600-line class; separates state machine from file persistence                    | Move `createWorkingFile`, `readWorkingFile`, `writeWorkingFileAtomic`, `updateWorkingFile`, `_updateWorkingFileInternal`, `updateWorkingFileProperties`, `generateWorkingFilePath` (~400 lines) to new class |
-
-**Recommended approach:** Tackle A.1 first — `FlightPathWebviewProvider` is the largest file and benefits most from decomposition. The message routing extraction alone would remove ~1,000 lines from the provider.
+| #   | What to Fix                                         | Ref        | Status      | Outcome                                                                                                                                              |
+| --- | --------------------------------------------------- | ---------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A.1 | **Decompose `FlightPathWebviewProvider`**           | §6.1, §8.7 | **✅ Done** | 2,416 → 590 lines (76% reduction). Extracted `WebviewMessageRouter` (510 lines), `WebviewSettingsSync` (510 lines), `WorkflowSerializer` (598 lines) |
+| A.2 | **Decompose `CliIntegration`**                      | §3.1, §8.7 | **✅ Done** | 1,595 → 1,411 lines. Extracted `CliLogMonitor` (319 lines) for log file monitoring and event processing                                              |
+| A.3 | **Extract `WorkingFileManager` from `PromptQueue`** | §2.2, §8.7 | **✅ Done** | 1,439 → 1,190 lines. Extracted `WorkingFileManager` (377 lines) for working file persistence, operation queue, and file locking                      |
 
 #### ~~Priority B: Type Safety — CLI `any` Pipeline~~ ✅ COMPLETED
 
@@ -1071,15 +1070,13 @@ All 3 items completed. 42 `any` → typed replacements across 13 files. The enti
 
 | Priority                    | Items | Estimated Effort | Impact                                                | Status          |
 | --------------------------- | ----- | ---------------- | ----------------------------------------------------- | --------------- |
-| A: God Class Decomposition  | 3     | ~5-7 days        | Addresses the 3 largest files (combined ~5,800 lines) | Not started     |
+| A: God Class Decomposition  | 3     | ~5-7 days        | Addresses the 3 largest files (combined ~5,800 lines) | **✅ Complete** |
 | B: CLI Type Safety          | 3     | ~4 hours         | Compile-time safety across ~3,000 lines of CLI code   | **✅ Complete** |
 | C: Webview Type Unification | 2     | ~1.5 days        | Eliminates cross-boundary type duplication            | Not started     |
 | D: Nice to Have             | 5     | ~4 hours         | Incremental quality polish                            | Not started     |
 
 **Recommended next steps:**
 
-1. **Priority A.1 (FlightPathWebviewProvider decomposition)** is the highest-impact single refactor remaining. The file is 2,300+ lines with 40+ message handlers — extracting a `WebviewMessageRouter` dispatch table alone would dramatically improve maintainability.
+1. **Priority C** can wait until the webview undergoes its next significant feature change — the type drift is real but slow-moving, and addressing it during a webview rewrite or feature addition is more efficient than a standalone effort.
 
-2. **Priority C** can wait until the webview undergoes its next significant feature change — the type drift is real but slow-moving, and addressing it during a webview rewrite or feature addition is more efficient than a standalone effort.
-
-3. **Priority D** items are opportunistic — address them when touching nearby code.
+2. **Priority D** items are opportunistic — address them when touching nearby code.

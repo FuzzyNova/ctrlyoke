@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs/promises";
 import * as path from "path";
 import {
   PromptItem,
@@ -8,20 +7,17 @@ import {
   PromptResult,
   EXECUTION_STATES,
   STEP_STATUS,
-  WorkingFile,
-  Harness,
 } from "../types/FlightPathTypes";
+import type { WorkingFile } from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { Log } from "../utils/Log";
 import { hashPromptContent } from "../utils/PromptIdentity";
-import {
-  ConfigurationUtils,
-  PATH_CONSTANTS,
-} from "../utils/ConfigurationUtils";
-import { withFileLock } from "../utils/FileLockUtils";
+import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { WorkingFileManager } from "./WorkingFileManager";
+import type { IWorkingFileQueueAccess } from "./WorkingFileManager";
 
 /**
  * Get effective maxRetries value with smart defaults
@@ -86,7 +82,7 @@ export class PromptQueue {
     new vscode.EventEmitter<QueueState>();
   private isPaused: boolean = false;
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
-  private operationQueue: Promise<void> = Promise.resolve(); // Serialize all file operations
+  private readonly workingFileManager: WorkingFileManager;
 
   // Public event for state changes
   public readonly onDidChangeState: vscode.Event<QueueState> =
@@ -104,6 +100,21 @@ export class PromptQueue {
       queueExtensions: 0,
       totalPausedDuration: 0,
     };
+
+    // Create WorkingFileManager with adapter that provides access to queue state
+    const queueAccess: IWorkingFileQueueAccess = {
+      getWorkingFilePath: () => this.state.workingFilePath,
+      getPrompts: () => this.state.prompts,
+      getCurrentIndex: () => this.state.currentIndex,
+      getStatus: () => this.state.status,
+      getWorkflowName: () => this.state.workflowName,
+      mergeDiskPrompts: (diskPrompts: PromptItem[]) =>
+        this.mergeDiskPrompts(diskPrompts),
+      emitStateChange: () => this.emitStateChange(),
+      updateWorkflowProperty: (key: string, value: unknown) =>
+        this.updateWorkflowProperty(key, value),
+    };
+    this.workingFileManager = new WorkingFileManager(queueAccess);
   }
 
   /**
@@ -1102,76 +1113,68 @@ export class PromptQueue {
       throw new Error("Cannot append: Queue is in cancelled or error state");
     }
 
-    // Serialize operation to prevent race conditions
-    this.operationQueue = this.operationQueue
-      .then(async () => {
-        // Calculate insert index based on position
-        let insertIndex: number;
-        if (position === QUEUE_POSITION.NEXT) {
-          // Insert after current prompt
-          insertIndex = this.state.currentIndex + 1;
-        } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
-          // Insert before current prompt (for stopped/idle states)
-          insertIndex = this.state.currentIndex;
-        } else {
-          // QUEUE_POSITION.END - append to end
-          insertIndex = this.state.prompts.length;
-        }
+    // Serialize state mutations + file write through WorkingFileManager's operation queue
+    await this.workingFileManager.runInQueue(async () => {
+      // Calculate insert index based on position
+      let insertIndex: number;
+      if (position === QUEUE_POSITION.NEXT) {
+        // Insert after current prompt
+        insertIndex = this.state.currentIndex + 1;
+      } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
+        // Insert before current prompt (for stopped/idle states)
+        insertIndex = this.state.currentIndex;
+      } else {
+        // QUEUE_POSITION.END - append to end
+        insertIndex = this.state.prompts.length;
+      }
 
-        // Insert prompts at the specified position
-        this.state.prompts.splice(insertIndex, 0, ...prompts);
+      // Insert prompts at the specified position
+      this.state.prompts.splice(insertIndex, 0, ...prompts);
 
-        // Create new results for the inserted prompts
-        const newResults: PromptResult[] = prompts.map((prompt) => ({
-          prompt: prompt.prompt,
-          status: STEP_STATUS.PENDING,
-          timestamp: new Date(),
-        }));
+      // Create new results for the inserted prompts
+      const newResults: PromptResult[] = prompts.map((prompt) => ({
+        prompt: prompt.prompt,
+        status: STEP_STATUS.PENDING,
+        timestamp: new Date(),
+      }));
 
-        // Insert results at the same position
-        this.state.results.splice(insertIndex, 0, ...newResults);
+      // Insert results at the same position
+      this.state.results.splice(insertIndex, 0, ...newResults);
 
-        // Auto-start behavior based on current state:
-        // - COMPLETED + willRunImmediately: Stay COMPLETED (caller will start execution)
-        // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
-        // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
-        // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
-        // - RUNNING: Already running, no change needed
-        const previousStatus = this.state.status;
-        if (
-          this.state.status === EXECUTION_STATES.COMPLETED &&
-          !willRunImmediately
-        ) {
-          Log.info(
-            `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
-          );
-          this.state.status = EXECUTION_STATES.STOPPED;
-          this.isPaused = false;
-          this.state.stopped = true; // Mark as stopped so Resume will work
-        } else {
-          Log.info(
-            `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`
-          );
-        }
-
-        this.emitStateChange();
-
-        // Update working file if it exists (call internal method to avoid nested operation queue)
+      // Auto-start behavior based on current state:
+      // - COMPLETED + willRunImmediately: Stay COMPLETED (caller will start execution)
+      // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
+      // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
+      // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
+      // - RUNNING: Already running, no change needed
+      const previousStatus = this.state.status;
+      if (
+        this.state.status === EXECUTION_STATES.COMPLETED &&
+        !willRunImmediately
+      ) {
         Log.info(
-          `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}, Insert position: ${position} (index: ${insertIndex})`
+          `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
         );
-        await this._updateWorkingFileInternal();
+        this.state.status = EXECUTION_STATES.STOPPED;
+        this.isPaused = false;
+        this.state.stopped = true; // Mark as stopped so Resume will work
+      } else {
         Log.info(
-          `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
+          `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`
         );
-      })
-      .catch((err) => {
-        Log.error(
-          `operationQueue: appendPrompts failed: ${err instanceof Error ? err.message : String(err)}`
-        );
-      });
+      }
 
-    await this.operationQueue;
+      this.emitStateChange();
+
+      // Update working file if it exists (direct call since we're already in the operation queue)
+      Log.info(
+        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}, Insert position: ${position} (index: ${insertIndex})`
+      );
+      await this.workingFileManager.updateWorkingFileDirect();
+      Log.info(
+        `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
+      );
+    });
   }
 
   /**
@@ -1186,43 +1189,7 @@ export class PromptQueue {
     return !invalidStates.includes(this.state.status);
   }
 
-  // ==================== Working File Operations ====================
-
-  /**
-   * Generate working file path in .flightpath/.queue/ directory
-   */
-  private async generateWorkingFilePath(
-    originalFilePath: string,
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<string> {
-    const fileName = path.basename(
-      originalFilePath,
-      path.extname(originalFilePath)
-    );
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .substring(0, 19);
-    const queueDir = path.join(
-      workspaceFolder.uri.fsPath,
-      PATH_CONSTANTS.FLIGHTPATH_DIR,
-      PATH_CONSTANTS.QUEUE_DIR
-    );
-
-    // Ensure directory exists
-    await fs.mkdir(queueDir, { recursive: true });
-
-    // Sanitize filename to avoid spaces/special chars in generated working file path
-    const sanitizedFileName =
-      (fileName || "workflow")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || "workflow";
-    return path.join(
-      queueDir,
-      `${sanitizedFileName}-${timestamp}.flightpath.json`
-    );
-  }
+  // ==================== Working File Operations (delegated to WorkingFileManager) ====================
 
   /**
    * Create working file from original prompt file
@@ -1239,36 +1206,23 @@ export class PromptQueue {
     workspaceFolder: vscode.WorkspaceFolder,
     originalFilePath?: string
   ): Promise<string> {
-    const workingFilePath = await this.generateWorkingFilePath(
-      nameForFile,
-      workspaceFolder
-    );
-
     // Compute workflow name and store back into state so loadPrompts preserves it
     const computedWorkflowName =
       this.state.workflowName || PromptQueue.extractWorkflowName(nameForFile);
     this.state.workflowName = computedWorkflowName;
 
-    const workingFile: WorkingFile = {
-      ...(originalFilePath ? { originalFile: originalFilePath } : {}),
-      workflowName: computedWorkflowName,
-      startedAt: Date.now(),
-      lastModifiedAt: Date.now(),
-      prompts: prompts,
-      _runtime: {
-        currentIndex: 0,
-        executionState: EXECUTION_STATES.IDLE,
-      },
-    };
-
-    // Write atomically (temp + rename)
-    await this.writeWorkingFileAtomic(workingFilePath, workingFile);
+    const workingFilePath = await this.workingFileManager.createWorkingFile(
+      nameForFile,
+      prompts,
+      workspaceFolder,
+      computedWorkflowName,
+      originalFilePath
+    );
 
     // Update queue state with working file path
     this.state.workingFilePath = workingFilePath;
     this.emitStateChange();
 
-    Log.info(` Created working file: ${workingFilePath}`);
     return workingFilePath;
   }
 
@@ -1278,54 +1232,7 @@ export class PromptQueue {
    * @returns Parsed working file
    */
   public async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
-    try {
-      const content = await fs.readFile(workingFilePath, "utf-8");
-      const parsed = JSON.parse(content) as WorkingFile;
-      return parsed;
-    } catch (error) {
-      throw new Error(
-        `Failed to read working file: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  }
-
-  /**
-   * Write working file atomically (temp + rename)
-   * @param workingFilePath Path to working file
-   * @param workingFile Working file data
-   */
-  private async writeWorkingFileAtomic(
-    workingFilePath: string,
-    workingFile: WorkingFile,
-    options: { skipLock?: boolean } = {}
-  ): Promise<void> {
-    const tempPath = `${workingFilePath}.tmp`;
-
-    const writeAction = async () => {
-      try {
-        // Write to temp file
-        await fs.writeFile(tempPath, JSON.stringify(workingFile, null, 2));
-
-        // Atomic rename
-        await fs.rename(tempPath, workingFilePath);
-      } catch (error) {
-        // Clean up temp file on error
-        try {
-          await fs.unlink(tempPath);
-        } catch {}
-
-        throw new Error(
-          `Failed to write working file: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
-    };
-
-    if (options.skipLock) {
-      await writeAction();
-      return;
-    }
-
-    await withFileLock(workingFilePath, writeAction);
+    return this.workingFileManager.readWorkingFile(workingFilePath);
   }
 
   /**
@@ -1334,105 +1241,7 @@ export class PromptQueue {
    * @param skipMerge If true, writes memory state directly without checking for MCP changes (used for deletes/updates)
    */
   public async updateWorkingFile(skipMerge: boolean = false): Promise<void> {
-    if (!this.state.workingFilePath) {
-      return; // No working file to update
-    }
-
-    // Serialize operation to prevent race conditions
-    this.operationQueue = this.operationQueue
-      .then(async () => {
-        await this._updateWorkingFileInternal(skipMerge);
-      })
-      .catch((err) => {
-        Log.error(
-          `operationQueue: updateWorkingFile failed: ${err instanceof Error ? err.message : String(err)}`
-        );
-      });
-
-    await this.operationQueue;
-  }
-
-  /**
-   * Internal method to update working file (does not use operation queue)
-   * This can be called from within an existing operation queue context
-   * @param skipMerge If true, writes memory state directly without checking for MCP changes
-   */
-  private async _updateWorkingFileInternal(
-    skipMerge: boolean = false
-  ): Promise<void> {
-    if (!this.state.workingFilePath) {
-      return; // No working file to update
-    }
-
-    try {
-      await withFileLock(this.state.workingFilePath!, async () => {
-        // Read current working file from disk
-        const workingFile = await this.readWorkingFile(
-          this.state.workingFilePath!
-        );
-
-        // CRITICAL FIX: Merge prompts from disk instead of blindly overwriting
-        // This preserves MCP-appended prompts that may have been added while we were running
-        // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
-        if (!skipMerge) {
-          const diskPrompts = workingFile.prompts || [];
-
-          const newPromptsFromDisk = this.mergeDiskPrompts(diskPrompts);
-
-          // If disk has new prompts, log and emit state change
-          if (newPromptsFromDisk.length > 0) {
-            Log.info(
-              `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
-            );
-
-            // Emit state change so dashboard updates
-            this.emitStateChange();
-          }
-        } // End skipMerge check
-
-        // Now write back the prompts array (merged or direct from memory)
-        // CRITICAL: Preserve _runtime metadata during save (Phase 4: Per-Prompt Session Management)
-        workingFile.prompts = this.state.prompts.map((prompt) => ({
-          ...prompt,
-        }));
-        // Count prompts with _runtime metadata (Phase 4: Session Management)
-        const promptsWithRuntime = workingFile.prompts.filter(
-          (p) => p._runtime
-        ).length;
-        Log.info(
-          `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${this.state.workingFilePath}, ` +
-            `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
-        );
-
-        // Update workflow name if set in state
-        if (this.state.workflowName) {
-          workingFile.workflowName = this.state.workflowName;
-        }
-
-        // Update last modified timestamp
-        workingFile.lastModifiedAt = Date.now();
-
-        // Update workflow-level runtime state
-        // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
-        workingFile._runtime = {
-          currentIndex: this.state.currentIndex,
-          executionState: this.state.status,
-        };
-
-        // Write atomically while holding lock
-        await this.writeWorkingFileAtomic(
-          this.state.workingFilePath!,
-          workingFile,
-          { skipLock: true }
-        );
-      });
-      Log.info(`updateWorkingFile - Successfully wrote working file`);
-    } catch (error) {
-      Log.error(
-        `FlightPath: Failed to update working file: ${error instanceof Error ? error.message : String(error)}`
-      );
-      // Don't throw - this is a background operation
-    }
+    return this.workingFileManager.updateWorkingFile(skipMerge);
   }
 
   /**
@@ -1446,105 +1255,10 @@ export class PromptQueue {
       allowDeletes?: boolean;
     } = {}
   ): Promise<{ workingFile: WorkingFile; appliedKeys: string[] } | null> {
-    if (!this.state.workingFilePath) {
-      return null;
-    }
-
-    let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
-      null;
-
-    this.operationQueue = this.operationQueue
-      .then(async () => {
-        const appliedKeys: string[] = [];
-
-        await withFileLock(this.state.workingFilePath!, async () => {
-          const workingFile = await this.readWorkingFile(
-            this.state.workingFilePath!
-          );
-
-          let modified = false;
-          for (const [key, value] of Object.entries(properties)) {
-            if (value === undefined) {
-              if (
-                options.allowDeletes &&
-                (workingFile as any)[key] !== undefined
-              ) {
-                delete (workingFile as any)[key];
-                modified = true;
-                appliedKeys.push(key);
-              }
-              continue;
-            }
-
-            if (
-              options.onlyIfUndefined &&
-              (workingFile as any)[key] !== undefined
-            ) {
-              continue;
-            }
-
-            if ((workingFile as any)[key] !== value) {
-              (workingFile as any)[key] = value;
-              modified = true;
-              appliedKeys.push(key);
-            }
-          }
-
-          if (options.ensureHarnessAndModel) {
-            if (!workingFile.harness) {
-              workingFile.harness = ConfigurationUtils.getIntegrationMode();
-              modified = true;
-              appliedKeys.push("harness");
-            }
-
-            if (!workingFile.model) {
-              workingFile.model = this.getDefaultModelForHarness(
-                workingFile.harness
-              );
-              modified = true;
-              appliedKeys.push("model");
-            }
-          }
-
-          if (modified) {
-            workingFile.lastModifiedAt = Date.now();
-            await this.writeWorkingFileAtomic(
-              this.state.workingFilePath!,
-              workingFile,
-              { skipLock: true }
-            );
-          }
-
-          for (const key of appliedKeys) {
-            this.updateWorkflowProperty(key, (workingFile as any)[key]);
-          }
-
-          result = { workingFile, appliedKeys };
-        });
-      })
-      .catch((err) => {
-        Log.error(
-          `operationQueue: updateWorkingFileProperties failed: ${err instanceof Error ? err.message : String(err)}`
-        );
-      });
-
-    await this.operationQueue;
-    return result;
-  }
-
-  private getDefaultModelForHarness(harness: Harness): string {
-    switch (harness) {
-      case Harness.CopilotCli:
-        return ConfigurationUtils.getCliModel();
-      case Harness.CopilotChat:
-        return ConfigurationUtils.getCopilotChatModel();
-      case Harness.ClaudeCli:
-        return ConfigurationUtils.getClaudeCliModel();
-      case Harness.CodexCli:
-        return ConfigurationUtils.getCodexCliModel();
-      default:
-        return ConfigurationUtils.getCliModel();
-    }
+    return this.workingFileManager.updateWorkingFileProperties(
+      properties,
+      options
+    );
   }
 
   /**
