@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { CliEventMapper } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
@@ -293,7 +294,7 @@ export class CopilotLogParser extends BaseLogParser {
    * }
    * ```
    */
-  extractResponse(events: any[]): UniversalCliOutput {
+  extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let model: string | undefined;
@@ -306,7 +307,7 @@ export class CopilotLogParser extends BaseLogParser {
       { toolName: string; args: Record<string, unknown>; timestamp: number }
     >();
 
-    for (const event of events) {
+    for (const event of events as any[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
@@ -600,7 +601,7 @@ export class CopilotLogParser extends BaseLogParser {
    * @see CopilotNotificationMonitor for interactive mode completion
    * @see CopilotCliProvider.executePrompt for headless mode completion
    */
-  isComplete(_event: any): boolean {
+  isComplete(_event: BaseCliEvent): boolean {
     // NEVER detect completion from log files for Copilot - use hooks instead!
     // Reason: assistant.turn_end fires after EACH tool call, not at final completion.
     //
@@ -717,7 +718,7 @@ export class CopilotLogParser extends BaseLogParser {
               const events = await this.readFirstNJsonlEvents(logPath, 10);
 
               // Look for user.message event containing prompt text
-              for (const event of events) {
+              for (const event of events as any[]) {
                 if (event.type === "user.message" && event.data?.content) {
                   const content = this.normalizePromptForMatching(
                     event.data.content
@@ -780,8 +781,8 @@ export class CopilotLogParser extends BaseLogParser {
    * - Return `event.data.sessionId`
    * - Returns null if no session.start event found
    */
-  extractSessionId(events: any[]): string | null {
-    for (const event of events) {
+  extractSessionId(events: BaseCliEvent[]): string | null {
+    for (const event of events as any[]) {
       if (event.type === "session.start" && event.data?.sessionId) {
         return event.data.sessionId;
       }
@@ -813,29 +814,29 @@ export class CopilotLogParser extends BaseLogParser {
    * { "type": "session.error", "data": { "message": "..." } }
    * ```
    */
-  extractContentFromEvent(event: any): string | undefined {
+  extractContentFromEvent(event: BaseCliEvent): string | undefined {
+    // Provider-specific nested property access
+    const data = (event as any).data;
+
     // Assistant message content (primary response text)
-    if (event.type === "assistant.message" && event.data?.content) {
-      return event.data.content;
+    if (event.type === "assistant.message" && data?.content) {
+      return data.content;
     }
 
     // Assistant reasoning content (prefixed for visibility)
-    if (event.type === "assistant.reasoning" && event.data?.content) {
-      return `[Reasoning] ${event.data.content}`;
+    if (event.type === "assistant.reasoning" && data?.content) {
+      return `[Reasoning] ${data.content}`;
     }
 
     // Tool execution result content
-    if (
-      event.type === "tool.execution_complete" &&
-      event.data?.result?.content
-    ) {
-      return event.data.result.content;
+    if (event.type === "tool.execution_complete" && data?.result?.content) {
+      return data.result.content;
     }
 
     // Session error content
-    if (event.type === "session.error" && event.data) {
-      const errorCode = event.data.errorType || "UNKNOWN";
-      const errorMessage = event.data.message || "Unknown error";
+    if (event.type === "session.error" && data) {
+      const errorCode = data.errorType || "UNKNOWN";
+      const errorMessage = data.message || "Unknown error";
       return `Error [${errorCode}]: ${errorMessage}`;
     }
 
@@ -862,26 +863,28 @@ export class CopilotLogParser extends BaseLogParser {
    * // "Session: 6e2ec013... | Model: gpt-5-mini | Tokens: 1500 in / 500 out"
    * ```
    */
-  formatStatistics(metadata: {
-    sessionId?: string;
-    model?: string;
-    usage?: { inputTokens?: number; outputTokens?: number };
-  }): string {
+  formatStatistics(metadata: BaseCliEvent): string {
+    // Cast for provider-specific metadata property access
+    const meta = metadata as {
+      sessionId?: string;
+      model?: string;
+      usage?: { inputTokens?: number; outputTokens?: number };
+    };
     const parts: string[] = [];
 
     // Session ID (truncated with ellipsis for readability)
-    if (metadata.sessionId) {
-      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}...`);
+    if (meta.sessionId) {
+      parts.push(`Session: ${meta.sessionId.substring(0, 8)}...`);
     }
 
     // Model name
-    if (metadata.model) {
-      parts.push(`Model: ${metadata.model}`);
+    if (meta.model) {
+      parts.push(`Model: ${meta.model}`);
     }
 
     // Token usage (if available - Copilot doesn't typically provide this in logs)
-    if (metadata.usage) {
-      const usage = metadata.usage;
+    if (meta.usage) {
+      const usage = meta.usage;
       if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
           `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`

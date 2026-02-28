@@ -20,6 +20,8 @@ import {
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
+import type { PromptItem } from "../../../types/FlightPathTypes";
+import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 const execAsync = promisify(exec);
 
@@ -90,16 +92,16 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   async buildCliArgs(
-    prompt: any,
+    prompt: PromptItem,
     isInteractive: boolean,
     context: vscode.ExtensionContext,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
-      allPrompts: any[];
+      allPrompts: PromptItem[];
       filePath?: string;
-      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
+      resolvedProperties?: ResolvedProperties;
       workingFilePath?: string;
     }
   ): Promise<string[]> {

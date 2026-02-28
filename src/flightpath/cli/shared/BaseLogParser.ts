@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { ILogParser } from "./interfaces/ILogParser";
+import { BaseCliEvent, ILogParser } from "./interfaces/ILogParser";
 import { UniversalCliOutput } from "../../../types/CliOutputTypes";
 
 /**
@@ -70,7 +70,7 @@ export abstract class BaseLogParser implements ILogParser {
    * @param events - Array of parsed log events
    * @returns UniversalCliOutput - Standardized response object
    */
-  abstract extractResponse(events: any[]): UniversalCliOutput;
+  abstract extractResponse(events: BaseCliEvent[]): UniversalCliOutput;
 
   /**
    * Check if log event indicates completion
@@ -82,7 +82,7 @@ export abstract class BaseLogParser implements ILogParser {
    * @param event - Single parsed log event
    * @returns True if event signals completion
    */
-  abstract isComplete(event: any): boolean;
+  abstract isComplete(event: BaseCliEvent): boolean;
 
   /**
    * Discover session log file for a prompt
@@ -116,7 +116,7 @@ export abstract class BaseLogParser implements ILogParser {
    * @param events - Array of parsed log events
    * @returns Session ID string, or null if not found
    */
-  abstract extractSessionId(events: any[]): string | null;
+  abstract extractSessionId(events: BaseCliEvent[]): string | null;
   /**
    * Extract text content from a single log event for streaming
    *
@@ -128,7 +128,7 @@ export abstract class BaseLogParser implements ILogParser {
    * @param event - Single parsed log event
    * @returns Text content to display, or undefined if no content
    */
-  abstract extractContentFromEvent(event: any): string | undefined;
+  abstract extractContentFromEvent(event: BaseCliEvent): string | undefined;
 
   /**
    * Format metadata into human-readable statistics string
@@ -141,7 +141,7 @@ export abstract class BaseLogParser implements ILogParser {
    * @param metadata - Metadata object from extractResponse()
    * @returns Formatted statistics string
    */
-  abstract formatStatistics(metadata: any): string;
+  abstract formatStatistics(metadata: BaseCliEvent): string;
   // ========================================================================
   // Shared Implementation (Used by All Harnesses)
   // ========================================================================
@@ -172,7 +172,7 @@ export abstract class BaseLogParser implements ILogParser {
    *
    * @throws Error if file read fails (permissions, I/O error, etc.)
    */
-  async readNewLines(filePath: string): Promise<any[]> {
+  async readNewLines(filePath: string): Promise<BaseCliEvent[]> {
     try {
       // Check if file exists
       if (!fs.existsSync(filePath)) {
@@ -209,7 +209,7 @@ export abstract class BaseLogParser implements ILogParser {
       const content = buffer.toString("utf8");
       const lines = content.split("\n");
 
-      const entries: any[] = [];
+      const entries: BaseCliEvent[] = [];
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) {
@@ -217,7 +217,7 @@ export abstract class BaseLogParser implements ILogParser {
         }
 
         try {
-          const entry = JSON.parse(trimmed);
+          const entry = JSON.parse(trimmed) as BaseCliEvent;
           entries.push(entry);
         } catch (error) {
           // Log parse errors but continue processing
@@ -277,7 +277,7 @@ export abstract class BaseLogParser implements ILogParser {
    */
   watchLogFile(
     filePath: string,
-    callback: (entry: any) => void,
+    callback: (entry: BaseCliEvent) => void,
     startTime: Date
   ): fs.FSWatcher {
     const watcher = fs.watch(filePath, async (eventType) => {
@@ -418,16 +418,16 @@ export abstract class BaseLogParser implements ILogParser {
    *
    * Harnesses can override to handle their specific format.
    */
-  protected extractTimestamp(entry: any): Date | null {
+  protected extractTimestamp(entry: BaseCliEvent): Date | null {
     // Check common timestamp fields
     if (entry.timestamp) {
       return new Date(entry.timestamp);
     }
     if (entry.time) {
-      return new Date(entry.time);
+      return new Date(entry.time as number);
     }
     if (entry.created_at) {
-      return new Date(entry.created_at);
+      return new Date(entry.created_at as string);
     }
 
     return null;
@@ -485,7 +485,7 @@ export abstract class BaseLogParser implements ILogParser {
   protected async readFirstNJsonlEvents(
     filePath: string,
     count: number
-  ): Promise<any[]> {
+  ): Promise<BaseCliEvent[]> {
     try {
       if (!fs.existsSync(filePath)) {
         return [];
@@ -493,7 +493,7 @@ export abstract class BaseLogParser implements ILogParser {
 
       const content = fs.readFileSync(filePath, "utf-8");
       const lines = content.split("\n");
-      const events: any[] = [];
+      const events: BaseCliEvent[] = [];
 
       for (const line of lines) {
         if (events.length >= count) {
@@ -506,7 +506,7 @@ export abstract class BaseLogParser implements ILogParser {
         }
 
         try {
-          const event = JSON.parse(trimmed);
+          const event = JSON.parse(trimmed) as BaseCliEvent;
           events.push(event);
         } catch {
           // Skip invalid JSON lines

@@ -15,7 +15,7 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
-import { ILogParser } from "./shared/interfaces/ILogParser";
+import { BaseCliEvent, ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
@@ -764,7 +764,7 @@ export class CliIntegration extends HarnessIntegration {
     startTime: Date
   ): Promise<{ success: boolean; sessionId?: string }> {
     const parser = this.provider.logParser!;
-    const events: any[] = [];
+    const events: BaseCliEvent[] = [];
     const timeoutMs =
       ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000;
 
@@ -774,7 +774,7 @@ export class CliIntegration extends HarnessIntegration {
       let timeoutHandle: NodeJS.Timeout | undefined;
       let cancellationInterval: NodeJS.Timeout | undefined;
       // Use BaseLogParser's extractTimestamp via the parser instance
-      const getEntryTimestamp = (entry: any): Date | null =>
+      const getEntryTimestamp = (entry: BaseCliEvent): Date | null =>
         (parser as any).extractTimestamp?.(entry) ?? null;
 
       // Completion handler - single source of truth
@@ -802,7 +802,9 @@ export class CliIntegration extends HarnessIntegration {
         const cliResult: CliResult = {
           success: true,
           response: responseText,
-          statistics: parser.formatStatistics(response.metadata),
+          statistics: parser.formatStatistics(
+            response.metadata as unknown as BaseCliEvent
+          ),
           exitCode: 0,
           sessionId: response.metadata.sessionId || sessionId || undefined,
         };
@@ -825,7 +827,7 @@ export class CliIntegration extends HarnessIntegration {
         });
       };
 
-      const processEvent = (event: any, source: string) => {
+      const processEvent = (event: BaseCliEvent, source: string) => {
         events.push(event);
 
         // Stream content to output window (delegates to harness's log parser)

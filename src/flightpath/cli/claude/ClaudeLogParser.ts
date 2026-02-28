@@ -3,7 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import * as vscode from "vscode";
 import { BaseLogParser } from "../shared/BaseLogParser";
-import { ILogParser } from "../shared/interfaces/ILogParser";
+import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import {
@@ -125,7 +125,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * // { events: [...], metadata: { sessionId, usage: {...}, cacheTokens: {...} } }
    * ```
    */
-  extractResponse(events: any[]): UniversalCliOutput {
+  extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     const outputEvents: CliEvent[] = [];
     let sessionId: string | undefined;
     let totalInputTokens = 0;
@@ -143,7 +143,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let model: string | undefined;
     let turnDurationMs: number | undefined;
 
-    for (const event of events) {
+    for (const event of events as any[]) {
       // Extract session ID from any event
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
@@ -490,13 +490,13 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * }
    * ```
    */
-  isComplete(event: any): boolean {
+  isComplete(event: BaseCliEvent): boolean {
     // Must be an assistant event with a stop_reason
     if (event.type !== "assistant") {
       return false;
     }
 
-    const stopReason = event.message?.stop_reason;
+    const stopReason = (event as any).message?.stop_reason;
 
     // Still streaming if stop_reason is null/undefined
     if (stopReason === null || stopReason === undefined) {
@@ -653,7 +653,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           const events = await this.readFirstNJsonlEvents(candidatePath, 10);
 
           // Look for user event with matching prompt text
-          for (const event of events) {
+          for (const event of events as any[]) {
             if (event.type === "user" && event.message?.content) {
               for (const contentBlock of event.message.content) {
                 if (contentBlock.type === "text" && contentBlock.text) {
@@ -716,10 +716,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * // Returns: "abc-123"
    * ```
    */
-  extractSessionId(events: any[]): string | null {
+  extractSessionId(events: BaseCliEvent[]): string | null {
     for (const event of events) {
       if (event.sessionId) {
-        return event.sessionId;
+        return event.sessionId as string;
       }
     }
     return null;
@@ -740,10 +740,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - Assistant: `{ type: "assistant", message: { content: [{ type: "text", text: "..." }] } }`
    * - Bash Progress: `{ type: "progress", data: { type: "bash_progress", output: "...", fullOutput: "..." } }`
    */
-  extractContentFromEvent(event: any): string | undefined {
+  extractContentFromEvent(event: BaseCliEvent): string | undefined {
     // Claude assistant: Extract text from content array
-    if (event.type === "assistant" && event.message?.content) {
-      const textContent = event.message.content
+    if (event.type === "assistant" && (event as any).message?.content) {
+      const textContent = (event as any).message.content
         .filter((c: any) => c.type === "text")
         .map((c: any) => c.text)
         .join("");
@@ -751,9 +751,16 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Bash progress: Extract output for streaming display
-    if (event.type === "progress" && event.data?.type === "bash_progress") {
+    if (
+      event.type === "progress" &&
+      (event as any).data?.type === "bash_progress"
+    ) {
       // Prefer incremental output over fullOutput for streaming
-      return event.data.output || event.data.fullOutput || undefined;
+      return (
+        (event as any).data.output ||
+        (event as any).data.fullOutput ||
+        undefined
+      );
     }
 
     return undefined;
@@ -786,22 +793,24 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * // "Session: abc-123 | Model: claude-sonnet-4.5 | Tokens: 100 in / 50 out | Cache: 1000 created, 500 read | Duration: 2.5s"
    * ```
    */
-  formatStatistics(metadata: any): string {
+  formatStatistics(metadata: BaseCliEvent): string {
+    // Cast for provider-specific metadata property access
+    const meta = metadata as any;
     const parts: string[] = [];
 
     // Session ID (truncated for readability)
-    if (metadata.sessionId) {
-      parts.push(`Session: ${metadata.sessionId.substring(0, 8)}`);
+    if (meta.sessionId) {
+      parts.push(`Session: ${meta.sessionId.substring(0, 8)}`);
     }
 
     // Model name
-    if (metadata.model) {
-      parts.push(`Model: ${metadata.model}`);
+    if (meta.model) {
+      parts.push(`Model: ${meta.model}`);
     }
 
     // Token usage
-    if (metadata.usage) {
-      const usage = metadata.usage;
+    if (meta.usage) {
+      const usage = meta.usage;
       if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
           `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
@@ -810,8 +819,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Cache tokens (important for cost calculation)
-    if (metadata.cacheTokens) {
-      const cache = metadata.cacheTokens;
+    if (meta.cacheTokens) {
+      const cache = meta.cacheTokens;
       const cacheParts: string[] = [];
       if (cache.created > 0) {
         cacheParts.push(`${cache.created} created`);
@@ -825,8 +834,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Turn duration
-    if (metadata.elapsed) {
-      const seconds = (metadata.elapsed / 1000).toFixed(1);
+    if (meta.elapsed) {
+      const seconds = (meta.elapsed / 1000).toFixed(1);
       parts.push(`Duration: ${seconds}s`);
     }
 

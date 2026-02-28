@@ -14,6 +14,7 @@ import {
   FileWriteData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { BaseCliEvent } from "../../../flightpath/cli/shared/interfaces/ILogParser";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -399,7 +400,7 @@ suite("ClaudeLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(events as BaseCliEvent[]);
 
       assert.strictEqual(
         response.metadata.elapsed,
@@ -583,8 +584,14 @@ suite("ClaudeLogParser", () => {
         // First read - should get all events
         const firstRead = await parser.readNewLines(filePath);
         assert.strictEqual(firstRead.length, 2);
-        assert.strictEqual(firstRead[0].message.content[0].text, "Line 1");
-        assert.strictEqual(firstRead[1].message.content[0].text, "Line 2");
+        assert.strictEqual(
+          (firstRead[0] as any).message.content[0].text,
+          "Line 1"
+        );
+        assert.strictEqual(
+          (firstRead[1] as any).message.content[0].text,
+          "Line 2"
+        );
 
         // Second read - should get no new events (incremental)
         const secondRead = await parser.readNewLines(filePath);
@@ -604,7 +611,10 @@ suite("ClaudeLogParser", () => {
         // Third read - should get only new event
         const thirdRead = await parser.readNewLines(filePath);
         assert.strictEqual(thirdRead.length, 1);
-        assert.strictEqual(thirdRead[0].message.content[0].text, "Line 3");
+        assert.strictEqual(
+          (thirdRead[0] as any).message.content[0].text,
+          "Line 3"
+        );
       } finally {
         cleanupTempFile(filePath);
       }
@@ -676,7 +686,9 @@ suite("CopilotLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
 
       assert.strictEqual(
         extractText(response),
@@ -706,7 +718,9 @@ suite("CopilotLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
 
       assert.strictEqual(extractText(response), "I'll create the file now.");
       // Tool calls are now converted to semantic events (FILE_WRITE)
@@ -737,7 +751,7 @@ suite("CopilotLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(events as BaseCliEvent[]);
 
       assert.strictEqual(response.metadata.sessionId, "session-abc");
       assert.strictEqual(response.metadata.model, "claude-sonnet-4.5");
@@ -829,7 +843,10 @@ suite("CopilotLogParser", () => {
       ];
 
       for (const event of malformedEvents) {
-        assert.strictEqual(parser.isComplete(event), false);
+        assert.strictEqual(
+          parser.isComplete(event as unknown as BaseCliEvent),
+          false
+        );
       }
     });
   });
@@ -964,7 +981,7 @@ suite("CodexLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(events as BaseCliEvent[]);
 
       assert.strictEqual(response.metadata.sessionId, "thread_abc123xyz789");
       assert.strictEqual(response.metadata.model, "gpt-5.1-codex");
@@ -986,7 +1003,9 @@ suite("CodexLogParser", () => {
         },
       ];
 
-      const response = parser.extractResponse(events);
+      const response = parser.extractResponse(
+        events as unknown as BaseCliEvent[]
+      );
 
       assert.strictEqual(
         extractText(response),
@@ -1471,7 +1490,7 @@ suite("Cross-Parser Compatibility", () => {
       {}, // Empty object
       { type: null },
       { type: "unknown" },
-    ];
+    ] as BaseCliEvent[];
 
     // Should not throw
     assert.doesNotThrow(() => claudeParser.extractResponse(malformedEvents));

@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
+import { BaseCliEvent } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import {
@@ -313,7 +314,7 @@ export class CodexLogParser extends BaseLogParser {
    * }
    * ```
    */
-  extractResponse(events: any[]): UniversalCliOutput {
+  extractResponse(events: BaseCliEvent[]): UniversalCliOutput {
     // Reset per-invocation state to prevent cross-run contamination
     // Note: sessionMeta is intentionally NOT reset — it caches session ID
     // across multiple extractResponse calls for the same session
@@ -333,7 +334,7 @@ export class CodexLogParser extends BaseLogParser {
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
 
-    for (const event of events) {
+    for (const event of events as any[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
@@ -1079,16 +1080,16 @@ export class CodexLogParser extends BaseLogParser {
    * }
    * ```
    */
-  isComplete(event: any): boolean {
+  isComplete(event: BaseCliEvent): boolean {
     // Check for nested payload type (standard format)
     if (
       event.type === "event_msg" &&
-      event.payload?.type === "turn.completed"
+      (event as any).payload?.type === "turn.completed"
     ) {
       return true;
     }
     // Legacy format check (payload.type at top level)
-    if (event.payload?.type === "turn.completed") {
+    if ((event as any).payload?.type === "turn.completed") {
       return true;
     }
     return false;
@@ -1228,7 +1229,7 @@ export class CodexLogParser extends BaseLogParser {
               );
 
               // Look for user message in turn_context or response_item events
-              for (const event of events) {
+              for (const event of events as any[]) {
                 let userMessage: string | null = null;
 
                 // Check turn_context for user message (if present)
@@ -1342,8 +1343,8 @@ export class CodexLogParser extends BaseLogParser {
    * **Fallback:** If no session_meta in current events, returns cached value
    * from this.sessionMeta (populated during extractResponse).
    */
-  extractSessionId(events: any[]): string | null {
-    for (const event of events) {
+  extractSessionId(events: BaseCliEvent[]): string | null {
+    for (const event of events as any[]) {
       if (event.type === "session_meta" && event.payload?.id) {
         return event.payload.id;
       }
@@ -1365,28 +1366,30 @@ export class CodexLogParser extends BaseLogParser {
    * - Nested payload: `{ payload: { type: "input_text" | "output_text", text: "..." } }`
    * - Response items: `{ type: "response_item", payload: { content: [...] } }`
    */
-  extractContentFromEvent(event: any): string | undefined {
+  extractContentFromEvent(event: BaseCliEvent): string | undefined {
+    // Provider-specific nested property access
+    const e = event as any;
+
     // Direct content field
-    if (event.type === "text" && event.content) {
-      return event.content;
+    if (e.type === "text" && e.content) {
+      return e.content;
     }
 
     // Nested payload with text
     if (
-      (event.payload?.type === "input_text" ||
-        event.payload?.type === "output_text") &&
-      event.payload.text
+      (e.payload?.type === "input_text" || e.payload?.type === "output_text") &&
+      e.payload.text
     ) {
-      return event.payload.text;
+      return e.payload.text;
     }
 
     // response_item with assistant role and content array
     if (
-      event.type === "response_item" &&
-      event.payload?.role === "assistant" &&
-      event.payload?.content
+      e.type === "response_item" &&
+      e.payload?.role === "assistant" &&
+      e.payload?.content
     ) {
-      const textParts = event.payload.content
+      const textParts = e.payload.content
         .filter(
           (c: any) =>
             (c.type === "input_text" || c.type === "output_text") && c.text
@@ -1397,11 +1400,11 @@ export class CodexLogParser extends BaseLogParser {
 
     // response_item with content array (no role check - for backwards compatibility)
     if (
-      event.type === "response_item" &&
-      event.payload?.content &&
-      Array.isArray(event.payload.content)
+      e.type === "response_item" &&
+      e.payload?.content &&
+      Array.isArray(e.payload.content)
     ) {
-      const textParts = event.payload.content
+      const textParts = e.payload.content
         .filter(
           (c: any) =>
             (c.type === "input_text" || c.type === "output_text") && c.text
@@ -1414,11 +1417,11 @@ export class CodexLogParser extends BaseLogParser {
 
     // event_msg:agent_message - Complete agent response
     if (
-      event.type === "event_msg" &&
-      event.payload?.type === "agent_message" &&
-      event.payload.message
+      e.type === "event_msg" &&
+      e.payload?.type === "agent_message" &&
+      e.payload.message
     ) {
-      return event.payload.message;
+      return e.payload.message;
     }
 
     return undefined;
@@ -1441,23 +1444,25 @@ export class CodexLogParser extends BaseLogParser {
    * // "Session: thread_abc | Model: gpt-5.1-codex | Tokens: 100 in / 50 out"
    * ```
    */
-  formatStatistics(metadata: any): string {
+  formatStatistics(metadata: BaseCliEvent): string {
+    // Cast for provider-specific metadata property access
+    const meta = metadata as any;
     const parts: string[] = [];
 
     // Session ID (truncate thread_ prefix for readability)
-    if (metadata.sessionId) {
-      const displayId = metadata.sessionId.replace(/^thread_/, "thread_");
+    if (meta.sessionId) {
+      const displayId = meta.sessionId.replace(/^thread_/, "thread_");
       parts.push(`Session: ${displayId.substring(0, 12)}`);
     }
 
     // Model name
-    if (metadata.model) {
-      parts.push(`Model: ${metadata.model}`);
+    if (meta.model) {
+      parts.push(`Model: ${meta.model}`);
     }
 
     // Token usage
-    if (metadata.usage) {
-      const usage = metadata.usage;
+    if (meta.usage) {
+      const usage = meta.usage;
       if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
         parts.push(
           `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`

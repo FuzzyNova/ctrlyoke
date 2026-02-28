@@ -2,6 +2,21 @@ import * as fs from "fs";
 import { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
+ * Minimal base type for CLI log events across all harnesses.
+ *
+ * Provides compile-time safety for the shared event pipeline while
+ * allowing provider-specific event properties via the index signature.
+ *
+ * All CLI events must have at least a `type` string. Providers can
+ * extend this with additional fields specific to their log formats.
+ */
+export interface BaseCliEvent {
+  type: string;
+  timestamp?: number;
+  [key: string]: unknown;
+}
+
+/**
  * Interface for CLI harness log parsers
  *
  * Defines the contract for parsing harness-specific log files to extract
@@ -41,7 +56,7 @@ export interface ILogParser {
    * // { text: "Here's the solution...", toolCalls: [...], thinkingBlocks: [], metadata: {...} }
    * ```
    */
-  extractResponse(events: any[]): UniversalCliOutput;
+  extractResponse(events: BaseCliEvent[]): UniversalCliOutput;
 
   /**
    * Check if a log event indicates completion
@@ -60,7 +75,7 @@ export interface ILogParser {
    * }
    * ```
    */
-  isComplete(event: any): boolean;
+  isComplete(event: BaseCliEvent): boolean;
 
   /**
    * Watch log file for new entries
@@ -91,7 +106,7 @@ export interface ILogParser {
    */
   watchLogFile(
     filePath: string,
-    callback: (entry: any) => void,
+    callback: (entry: BaseCliEvent) => void,
     startTime: Date
   ): fs.FSWatcher;
 
@@ -116,7 +131,7 @@ export interface ILogParser {
    * // [{ type: "text", content: "..." }, { type: "tool_call", ... }]
    * ```
    */
-  readNewLines(filePath: string): Promise<any[]>;
+  readNewLines(filePath: string): Promise<BaseCliEvent[]>;
 
   /**
    * Discover session log file for a prompt
@@ -194,7 +209,7 @@ export interface ILogParser {
    * // "abc-123"
    * ```
    */
-  extractSessionId(events: any[]): string | null;
+  extractSessionId(events: BaseCliEvent[]): string | null;
 
   /**
    * Extract text content from a single log event for streaming
@@ -219,7 +234,7 @@ export interface ILogParser {
    * // "Hello world"
    * ```
    */
-  extractContentFromEvent(event: any): string | undefined;
+  extractContentFromEvent(event: BaseCliEvent): string | undefined;
 
   /**
    * Format metadata into human-readable statistics string
@@ -247,5 +262,5 @@ export interface ILogParser {
    * // "Session: abc-123 | Model: gpt-4 | Tokens: 100 in / 50 out"
    * ```
    */
-  formatStatistics(metadata: any): string;
+  formatStatistics(metadata: BaseCliEvent): string;
 }

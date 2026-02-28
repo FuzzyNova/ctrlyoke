@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
+import type { ResolvedProperties } from "../../../utils/PropertyResolver";
 
 /**
  * Shared CLI provider utilities
@@ -73,10 +74,7 @@ export class CliProviderUtils {
           promptIndex: number;
           allPrompts: unknown[];
           filePath?: string;
-          resolvedProperties?: {
-            allowDynamicExtension?: boolean;
-            [key: string]: unknown;
-          };
+          resolvedProperties?: ResolvedProperties;
           workingFilePath?: string;
         }
       | undefined,

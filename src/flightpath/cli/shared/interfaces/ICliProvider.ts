@@ -1,7 +1,9 @@
+import type * as vscode from "vscode";
 import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
+import type { PromptItem } from "../../../../types/FlightPathTypes";
 
 /**
  * Harness configuration (static metadata)
@@ -91,14 +93,14 @@ export interface ICliProvider {
    * @returns Complete CLI arguments array (without prompt - that's handled separately)
    */
   buildCliArgs(
-    prompt: any,
+    prompt: PromptItem,
     isInteractive: boolean,
-    context: any,
+    context: vscode.ExtensionContext,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
       promptIndex: number;
-      allPrompts: any[];
+      allPrompts: PromptItem[];
       filePath?: string;
     }
   ): Promise<string[]>;
