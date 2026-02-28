@@ -252,9 +252,13 @@ export const useWorkflowStore = create<
           newOutputs = [...outputs, output];
         }
       } else if (attemptIndex > 0 && !retryState) {
-        // Bug: retry output without retry state — replace attempt 0 and warn
+        // Bug: retry output without retry state — replace attempt 0 and warn.
+        // This should no longer happen after the captureOutputInit fix, but
+        // keep the guard for safety and add verbose logging.
         WebviewLog.warn(
-          `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. Replacing initial output (likely a bug).`
+          `[WorkflowStore] Received attemptIndex=${attemptIndex} for step ${stepIndex} but no retry state exists. ` +
+            `Existing outputs: ${outputs.length} (attempts: ${outputs.map((o) => o.attemptIndex ?? 0).join(",")}). ` +
+            `Replacing initial output (likely a bug — retryState should have been sent first).`
         );
         newOutputs = [output];
       } else {
@@ -290,9 +294,15 @@ export const useWorkflowStore = create<
               ...outputs.slice(existingIdx + 1),
             ];
           }
+          WebviewLog.debug(
+            `[WorkflowStore] addCliOutput: replaced attempt ${attemptIndex} for step ${stepIndex} (${existingIdx}/${outputs.length})`
+          );
         } else {
           // New retry attempt — append
           newOutputs = [...outputs, output];
+          WebviewLog.debug(
+            `[WorkflowStore] addCliOutput: appended attempt ${attemptIndex} for step ${stepIndex} (total: ${newOutputs.length}, retryState: ${retryState?.currentRetry}/${retryState?.maxRetries})`
+          );
         }
       }
 

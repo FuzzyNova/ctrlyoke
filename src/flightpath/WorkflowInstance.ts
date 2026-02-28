@@ -125,7 +125,10 @@ export class WorkflowInstance {
    */
   private readonly completedStepOutputs = new Map<
     number,
-    { outputs: any[]; retryState?: { currentRetry: number; maxRetries: number } }
+    {
+      outputs: any[];
+      retryState?: { currentRetry: number; maxRetries: number };
+    }
   >();
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -307,8 +310,40 @@ export class WorkflowInstance {
       const buffer = this.stepOutputBuffer.get(runningStep);
       if (buffer) {
         Log.info(
-          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying step ${runningStep} buffer (${buffer.accumulatedText.length} chars)`
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying step ${runningStep} buffer (${buffer.accumulatedText.length} chars, attemptIndex=${buffer.attemptIndex})`
         );
+
+        // Belt-and-suspenders: if the streaming buffer is for a retry attempt
+        // and the completedStepOutputs replay didn't already send retryState
+        // (e.g. step hasn't completed its first attempt yet), send it now so
+        // the webview store accepts attemptIndex > 0.
+        if (buffer.attemptIndex > 0) {
+          const completedEntry = this.completedStepOutputs.get(runningStep);
+          const retryState = completedEntry?.retryState;
+          if (retryState) {
+            // retryState was already sent via the completedStepOutputs loop
+            // above, but log for traceability
+            Log.info(
+              `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: retryState already sent for step ${runningStep} (attempt ${retryState.currentRetry}/${retryState.maxRetries})`
+            );
+          } else {
+            // Edge case: retry streaming started but completedStepOutputs
+            // doesn't have retryState yet (should be set by captureOutputInit,
+            // but defend against timing gaps).
+            const promptItem = this.promptQueue.getState().prompts[runningStep];
+            const maxRetries =
+              promptItem?.endCondition?.maxRetries ?? buffer.attemptIndex;
+            Log.info(
+              `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: sending fallback retryState for step ${runningStep} (attempt ${buffer.attemptIndex}/${maxRetries})`
+            );
+            this.dashboardProvider.updateRetryAttempt(
+              runningStep,
+              buffer.attemptIndex,
+              maxRetries
+            );
+          }
+        }
+
         // Re-initialize the step as streaming (so the output panel shows it correctly)
         this.dashboardProvider.updateCliOutput(runningStep, {
           prompt: buffer.prompt,
@@ -1258,6 +1293,28 @@ export class WorkflowInstance {
             accumulatedText:
               self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
           });
+
+          // When a retry starts streaming, eagerly set retryState in
+          // completedStepOutputs so sendFullStateToDashboard can send
+          // RETRY_ATTEMPT_CHANGED *before* replaying outputs.  Without
+          // this, switching to a workflow mid-retry would cause the
+          // webview store to reject attemptIndex > 0 (no retryState yet)
+          // and replace attempt 0 instead of appending.
+          if (attemptIndex > 0) {
+            const existing = self.completedStepOutputs.get(stepIndex);
+            if (existing) {
+              const promptItem = self.promptQueue.getState().prompts[stepIndex];
+              const maxRetries =
+                promptItem?.endCondition?.maxRetries ?? attemptIndex;
+              existing.retryState = {
+                currentRetry: attemptIndex,
+                maxRetries,
+              };
+              Log.info(
+                `[inst:${self.id.slice(0, 8)}] captureOutputInit: set retryState for step ${stepIndex} (attempt ${attemptIndex}/${maxRetries})`
+              );
+            }
+          }
         },
         captureChunk: (stepIndex, chunk) => {
           const existing = self.stepOutputBuffer.get(stepIndex);
@@ -1269,10 +1326,10 @@ export class WorkflowInstance {
           // Store the final output for replay when switching back to this workflow.
           // Multiple outputs per step accumulate when retries occur.
           const existing = self.completedStepOutputs.get(stepIndex);
+          const attemptIndex = output.attemptIndex ?? 0;
           if (existing) {
             existing.outputs.push(output);
-            // Update retry state to reflect the latest attempt
-            const attemptIndex = output.attemptIndex ?? 0;
+            // Update retry state to reflect the latest completed attempt
             if (attemptIndex > 0) {
               const prompt = self.promptQueue.getState().prompts[stepIndex];
               const maxRetries =
@@ -1285,6 +1342,9 @@ export class WorkflowInstance {
           } else {
             self.completedStepOutputs.set(stepIndex, { outputs: [output] });
           }
+          Log.info(
+            `[inst:${self.id.slice(0, 8)}] captureCompletedOutput: step ${stepIndex} attempt ${attemptIndex}, total outputs=${self.completedStepOutputs.get(stepIndex)!.outputs.length}, retryState=${JSON.stringify(self.completedStepOutputs.get(stepIndex)!.retryState ?? null)}`
+          );
           // The step is no longer streaming; remove from streaming buffer
           self.stepOutputBuffer.delete(stepIndex);
         },
