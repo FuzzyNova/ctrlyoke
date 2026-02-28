@@ -16,7 +16,6 @@ import {
   ThinkingBlock,
   CliEvent,
   TextData,
-  ToolResultData,
   BashCommandData,
   FileReadData,
   FileWriteData,
@@ -30,6 +29,10 @@ import {
   OPERATION_STATUS,
 } from "../../../types/DashboardConstants";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import {
+  processToolResultContentBlocks,
+  processToolUseResultMetadata,
+} from "./ClaudeToolResultProcessor";
 
 /**
  * Claude CLI Log Parser
@@ -74,6 +77,23 @@ import { CliEventMapper } from "../shared/CliEventMapper";
  * }
  * ```
  */
+
+/**
+ * Provider-specific event type for internal loop bodies.
+ *
+ * Extends BaseCliEvent with typed properties for Claude's log event structure.
+ * This avoids `as any[]` casts while preserving flexible access to provider-specific fields.
+ * Top-level fields (`type`, `timestamp`) remain properly typed from BaseCliEvent.
+ */
+interface ClaudeProviderEvent extends BaseCliEvent {
+  message?: Record<string, any>;
+  sessionId?: string;
+  subtype?: string;
+  durationMs?: number;
+  toolUseResult?: Record<string, any>;
+  data?: Record<string, any>;
+}
+
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
   /**
    * Extract complete response from Claude log events
@@ -143,7 +163,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     let model: string | undefined;
     let turnDurationMs: number | undefined;
 
-    for (const event of events as any[]) {
+    for (const event of events as ClaudeProviderEvent[]) {
       // Extract session ID from any event
       if (event.sessionId && !sessionId) {
         sessionId = event.sessionId;
@@ -293,114 +313,22 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
         }
       }
 
-      // Process user events for TOOL_RESULT blocks
+      // Process user events for TOOL_RESULT blocks and structured metadata
       if (event.type === "user" && Array.isArray(event.message?.content)) {
-        for (const block of event.message.content) {
-          if (block.type === "tool_result") {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.TOOL_RESULT,
-              timestamp,
-              data: {
-                toolCallId: block.tool_use_id,
-                result: {
-                  success: !block.is_error,
-                  output:
-                    typeof block.content === "string"
-                      ? block.content
-                      : JSON.stringify(block.content),
-                  error: block.is_error
-                    ? typeof block.content === "string"
-                      ? block.content
-                      : JSON.stringify(block.content)
-                    : undefined,
-                },
-              } as ToolResultData,
-            });
-          }
-        }
+        processToolResultContentBlocks(
+          event.message.content,
+          timestamp,
+          outputEvents
+        );
 
         // Process structured tool_use_result metadata for rich diff data
         // This contains accurate line numbers and full file context for Edit operations
         if (event.toolUseResult) {
-          const toolUseResult = event.toolUseResult;
-
-          // File edit result (Edit tool) - check both camelCase and snake_case
-          // Headless mode uses camelCase (oldString/newString)
-          // Interactive terminal uses snake_case (old_string/new_string)
-          const oldString = toolUseResult.oldString || toolUseResult.old_string;
-          const newString = toolUseResult.newString || toolUseResult.new_string;
-
-          if (oldString && newString) {
-            Log.debug(
-              `[ClaudeLogParser] Edit operation - oldString=${oldString ? "present" : "missing"}, newString=${newString ? "present" : "missing"}, structuredPatch=${toolUseResult.structuredPatch ? `${toolUseResult.structuredPatch.length} hunks` : "missing"}`
-            );
-
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_EDIT,
-              timestamp,
-              data: {
-                path: toolUseResult.filePath || "unknown",
-                oldContent: oldString,
-                newContent: newString,
-                structuredPatch: toolUseResult.structuredPatch,
-                originalFile: toolUseResult.originalFile,
-                userModified: toolUseResult.userModified,
-                replaceAll: toolUseResult.replaceAll,
-                status: OPERATION_STATUS.COMPLETED,
-                success: true,
-              } as FileEditData,
-            });
-          }
-          // File write result (Write tool)
-          // Must have a file path to avoid matching Grep results (which also have a `content` field)
-          else if (
-            (toolUseResult.type === "create" || toolUseResult.content) &&
-            (toolUseResult.filePath || toolUseResult.path)
-          ) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_WRITE,
-              timestamp,
-              data: {
-                path: toolUseResult.filePath || toolUseResult.path || "unknown",
-                content: toolUseResult.content || "",
-                status: OPERATION_STATUS.COMPLETED,
-                success: true,
-              } as FileWriteData,
-            });
-          }
-          // File read result (Read tool)
-          else if (toolUseResult.type === "text" && toolUseResult.file) {
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.FILE_READ,
-              timestamp,
-              data: {
-                path: toolUseResult.file.filePath || "unknown",
-                content: toolUseResult.file.content || "",
-                status: OPERATION_STATUS.COMPLETED,
-                success: true,
-              } as FileReadData,
-            });
-          }
-          // Bash command result
-          else if (toolUseResult.command || toolUseResult.type === "bash") {
-            const exitCode =
-              toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
-            outputEvents.push({
-              type: CLI_EVENT_TYPES.BASH_COMMAND,
-              timestamp,
-              data: {
-                command: toolUseResult.command || "unknown",
-                workingDir: toolUseResult.workingDir || toolUseResult.cwd,
-                exitCode,
-                output: toolUseResult.output || toolUseResult.stdout,
-                error: toolUseResult.error || toolUseResult.stderr,
-                status:
-                  exitCode === 0
-                    ? OPERATION_STATUS.COMPLETED
-                    : OPERATION_STATUS.FAILED,
-              } as BashCommandData,
-            });
-          }
+          processToolUseResultMetadata(
+            event.toolUseResult,
+            timestamp,
+            outputEvents
+          );
         }
       }
 
@@ -496,7 +424,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       return false;
     }
 
-    const stopReason = (event as any).message?.stop_reason;
+    const stopReason = (event as ClaudeProviderEvent).message?.stop_reason;
 
     // Still streaming if stop_reason is null/undefined
     if (stopReason === null || stopReason === undefined) {
@@ -653,7 +581,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           const events = await this.readFirstNJsonlEvents(candidatePath, 10);
 
           // Look for user event with matching prompt text
-          for (const event of events as any[]) {
+          for (const event of events as ClaudeProviderEvent[]) {
             if (event.type === "user" && event.message?.content) {
               for (const contentBlock of event.message.content) {
                 if (contentBlock.type === "text" && contentBlock.text) {
@@ -742,8 +670,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    */
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     // Claude assistant: Extract text from content array
-    if (event.type === "assistant" && (event as any).message?.content) {
-      const textContent = (event as any).message.content
+    const e = event as ClaudeProviderEvent;
+    if (e.type === "assistant" && e.message?.content) {
+      const textContent = e.message.content
         .filter((c: any) => c.type === "text")
         .map((c: any) => c.text)
         .join("");
@@ -751,16 +680,9 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     }
 
     // Bash progress: Extract output for streaming display
-    if (
-      event.type === "progress" &&
-      (event as any).data?.type === "bash_progress"
-    ) {
+    if (e.type === "progress" && e.data?.type === "bash_progress") {
       // Prefer incremental output over fullOutput for streaming
-      return (
-        (event as any).data.output ||
-        (event as any).data.fullOutput ||
-        undefined
-      );
+      return e.data.output || e.data.fullOutput || undefined;
     }
 
     return undefined;
@@ -794,31 +716,10 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * ```
    */
   formatStatistics(metadata: BaseCliEvent): string {
-    // Cast for provider-specific metadata property access
-    const meta = metadata as any;
-    const parts: string[] = [];
+    const parts = this.buildCommonStatisticsParts(metadata);
+    const meta = metadata as Record<string, any>;
 
-    // Session ID (truncated for readability)
-    if (meta.sessionId) {
-      parts.push(`Session: ${meta.sessionId.substring(0, 8)}`);
-    }
-
-    // Model name
-    if (meta.model) {
-      parts.push(`Model: ${meta.model}`);
-    }
-
-    // Token usage
-    if (meta.usage) {
-      const usage = meta.usage;
-      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
-        parts.push(
-          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
-        );
-      }
-    }
-
-    // Cache tokens (important for cost calculation)
+    // Cache tokens (Claude-specific, important for cost calculation)
     if (meta.cacheTokens) {
       const cache = meta.cacheTokens;
       const cacheParts: string[] = [];
@@ -833,7 +734,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       }
     }
 
-    // Turn duration
+    // Turn duration (Claude-specific)
     if (meta.elapsed) {
       const seconds = (meta.elapsed / 1000).toFixed(1);
       parts.push(`Duration: ${seconds}s`);

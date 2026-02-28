@@ -699,7 +699,6 @@ export class CopilotChatIntegration extends HarnessIntegration {
           prompt,
           workflowContext.promptIndex,
           workflowContext.allPrompts,
-          workflowContext.filePath,
           workflowContext.resolvedProperties?.allowDynamicExtension,
           workflowContext.resolvedProperties?.agent, // Pass resolved agent for prompt prepending
           workflowContext.resolvedProperties?.skills // Pass resolved skills for frontmatter injection

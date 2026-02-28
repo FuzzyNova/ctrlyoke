@@ -273,12 +273,19 @@ export class EndConditionEvaluator {
 
     // Clean VS Code-specific environment variables that interfere with nested VS Code instances
     const cleanEnv = { ...process.env };
-    delete cleanEnv.VSCODE_INJECTION;
-    delete cleanEnv.VSCODE_HANDLES_UNCAUGHT_ERRORS;
-    delete cleanEnv.VSCODE_NLS_CONFIG;
-    delete cleanEnv.VSCODE_PID;
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    Log.info(`Cleaned ${5} VS Code env vars for isolated execution`);
+    const vsCodeEnvVars = [
+      "VSCODE_INJECTION",
+      "VSCODE_HANDLES_UNCAUGHT_ERRORS",
+      "VSCODE_NLS_CONFIG",
+      "VSCODE_PID",
+      "ELECTRON_RUN_AS_NODE",
+    ];
+    for (const key of vsCodeEnvVars) {
+      delete cleanEnv[key];
+    }
+    Log.info(
+      `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
+    );
 
     try {
       const result = await this.processManager.spawn(executable, args, {

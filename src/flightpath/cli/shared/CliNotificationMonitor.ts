@@ -205,60 +205,6 @@ export class CliNotificationMonitor {
   }
 
   /**
-   * Extract session ID from CLI output
-   *
-   * Tries various patterns:
-   * - JSON field: "session_id": "abc123"
-   * - Log format: session_id: abc123 or session-id: abc123
-   *
-   * @param output CLI output (stdout or terminal output)
-   * @returns Session ID if found
-   */
-  static extractSessionId(output: string): string | undefined {
-    // Try JSON format first
-    const sessionMatch = output.match(/"session_id"\s*:\s*"([^"]+)"/i);
-    if (sessionMatch) {
-      return sessionMatch[1];
-    }
-
-    // Try log format
-    const sessionLogMatch = output.match(/session[_\s-]id[:\s]+([a-f0-9-]+)/i);
-    if (sessionLogMatch) {
-      return sessionLogMatch[1];
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Extract thread ID from CLI output
-   *
-   * Tries various patterns:
-   * - JSON field: "thread_id": "abc123"
-   * - JSONL event: {"type":"thread.started","thread_id":"abc123"}
-   *
-   * @param output CLI output (stdout or terminal output)
-   * @returns Thread ID if found
-   */
-  static extractThreadId(output: string): string | undefined {
-    // Try JSONL thread.started event
-    const threadMatch = output.match(
-      /"type"\s*:\s*"thread\.started"[^}]*"thread_id"\s*:\s*"([^"]+)"/i
-    );
-    if (threadMatch) {
-      return threadMatch[1];
-    }
-
-    // Try simple JSON field
-    const simpleMatch = output.match(/"thread_id"\s*:\s*"([^"]+)"/i);
-    if (simpleMatch) {
-      return simpleMatch[1];
-    }
-
-    return undefined;
-  }
-
-  /**
    * Get workspace-specific notification directory
    *
    * Uses pattern: {workspace}/.flightpath/temp/{cli}-notifications/

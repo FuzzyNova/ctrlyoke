@@ -264,6 +264,18 @@ interface CodexAssistantContentPayload {
  * }
  * ```
  */
+
+/**
+ * Provider-specific event type for internal loop bodies.
+ *
+ * Extends BaseCliEvent with a typed `payload` property for Codex's nested event structure.
+ * This avoids `as any[]` casts while preserving flexible access to provider-specific data fields.
+ * Top-level fields (`type`, `timestamp`) remain properly typed from BaseCliEvent.
+ */
+interface CodexProviderEvent extends BaseCliEvent {
+  payload?: Record<string, any>;
+}
+
 export class CodexLogParser extends BaseLogParser {
   /**
    * Session metadata cache
@@ -271,7 +283,7 @@ export class CodexLogParser extends BaseLogParser {
    * Stores session_meta event data for later reference.
    * Used to extract session ID and model information.
    */
-  private sessionMeta: any = null;
+  private sessionMeta: CodexSessionMetaPayload | null = null;
 
   /**
    * Tool call tracking map
@@ -334,14 +346,14 @@ export class CodexLogParser extends BaseLogParser {
     let lastTurnContextWindowUsed: number | undefined;
     let modelContextWindow: number | undefined;
 
-    for (const event of events as any[]) {
+    for (const event of events as CodexProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
 
       // Track session metadata (session_meta)
       if (event.type === "session_meta" && event.payload) {
-        this.sessionMeta = event.payload;
+        this.sessionMeta = event.payload as CodexSessionMetaPayload;
         sessionId = event.payload.id;
         model = event.payload.model;
         cliVersion = event.payload.cli_version;
@@ -1082,14 +1094,12 @@ export class CodexLogParser extends BaseLogParser {
    */
   isComplete(event: BaseCliEvent): boolean {
     // Check for nested payload type (standard format)
-    if (
-      event.type === "event_msg" &&
-      (event as any).payload?.type === "turn.completed"
-    ) {
+    const payload = (event as CodexProviderEvent).payload;
+    if (event.type === "event_msg" && payload?.type === "turn.completed") {
       return true;
     }
     // Legacy format check (payload.type at top level)
-    if ((event as any).payload?.type === "turn.completed") {
+    if (payload?.type === "turn.completed") {
       return true;
     }
     return false;
@@ -1229,7 +1239,7 @@ export class CodexLogParser extends BaseLogParser {
               );
 
               // Look for user message in turn_context or response_item events
-              for (const event of events as any[]) {
+              for (const event of events as CodexProviderEvent[]) {
                 let userMessage: string | null = null;
 
                 // Check turn_context for user message (if present)
@@ -1344,7 +1354,7 @@ export class CodexLogParser extends BaseLogParser {
    * from this.sessionMeta (populated during extractResponse).
    */
   extractSessionId(events: BaseCliEvent[]): string | null {
-    for (const event of events as any[]) {
+    for (const event of events as CodexProviderEvent[]) {
       if (event.type === "session_meta" && event.payload?.id) {
         return event.payload.id;
       }
@@ -1368,11 +1378,11 @@ export class CodexLogParser extends BaseLogParser {
    */
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     // Provider-specific nested property access
-    const e = event as any;
+    const e = event as CodexProviderEvent;
 
     // Direct content field
     if (e.type === "text" && e.content) {
-      return e.content;
+      return e.content as string;
     }
 
     // Nested payload with text
@@ -1445,32 +1455,7 @@ export class CodexLogParser extends BaseLogParser {
    * ```
    */
   formatStatistics(metadata: BaseCliEvent): string {
-    // Cast for provider-specific metadata property access
-    const meta = metadata as any;
-    const parts: string[] = [];
-
-    // Session ID (truncate thread_ prefix for readability)
-    if (meta.sessionId) {
-      const displayId = meta.sessionId.replace(/^thread_/, "thread_");
-      parts.push(`Session: ${displayId.substring(0, 12)}`);
-    }
-
-    // Model name
-    if (meta.model) {
-      parts.push(`Model: ${meta.model}`);
-    }
-
-    // Token usage
-    if (meta.usage) {
-      const usage = meta.usage;
-      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
-        parts.push(
-          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
-        );
-      }
-    }
-
-    return parts.join(" | ");
+    return this.buildCommonStatisticsParts(metadata, 12).join(" | ");
   }
 
   /**

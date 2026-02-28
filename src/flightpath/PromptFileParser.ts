@@ -11,12 +11,7 @@ import { Log } from "../utils/Log";
  * Extensions that indicate a prompt value might be a file path
  * We try to resolve these as files first, falling back to literal text if not found
  */
-const PROMPT_FILE_EXTENSIONS = [
-  ".prompt.md",
-  ".md",
-  ".txt",
-  ".prompt",
-] as const;
+const PROMPT_FILE_EXTENSIONS = [".prompt.md", ".md", ".txt"] as const;
 
 export class PromptFileParser {
   private ajv = new Ajv();

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { PromptItem } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
@@ -12,6 +13,15 @@ import {
 import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration } from "./HarnessIntegration";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+
+/** Dialog action labels used in error/retry dialogs (single-sourced to prevent typo drift) */
+const DIALOG_ACTIONS = {
+  STOP_WORKFLOW: "Stop Workflow",
+  SKIP_CONDITION: "Skip Condition",
+  OPEN_SCRIPT: "Open Script",
+  CONTINUE_ANYWAY: "Continue Anyway",
+  RETRY_ONCE_MORE: "Retry Once More",
+} as const;
 
 /**
  * Context needed to handle retry prompts
@@ -41,6 +51,8 @@ export interface EndConditionHandlerResult {
   shouldContinue: boolean;
   /** Failure reason if shouldContinue is false (for dashboard/logging) */
   failureReason?: string;
+  /** Internal: user requested one more retry attempt despite max retries being exhausted */
+  retryOnceMore?: boolean;
 }
 
 /**
@@ -133,23 +145,32 @@ export class EndConditionHandler {
 
     const action = await vscode.window.showErrorMessage(
       `FlightPath: ${errorMessage}`,
-      "Stop Workflow",
-      "Skip Condition",
-      "Open Script"
+      DIALOG_ACTIONS.STOP_WORKFLOW,
+      DIALOG_ACTIONS.SKIP_CONDITION,
+      DIALOG_ACTIONS.OPEN_SCRIPT
     );
 
-    if (action === "Skip Condition") {
+    if (action === DIALOG_ACTIONS.SKIP_CONDITION) {
       Log.info("⏭️ Skipping end condition and continuing");
       return { shouldContinue: true };
-    } else if (action === "Open Script") {
-      // Try to open the script file
+    } else if (action === DIALOG_ACTIONS.OPEN_SCRIPT) {
+      // Try to open the script file (only if the script looks like a file path)
       if (prompt.endCondition?.script) {
-        try {
-          const scriptUri = vscode.Uri.file(prompt.endCondition.script);
-          const doc = await vscode.workspace.openTextDocument(scriptUri);
-          await vscode.window.showTextDocument(doc);
-        } catch {
-          vscode.window.showErrorMessage("Failed to open script file");
+        const script = prompt.endCondition.script.split(/\s+/)[0]; // Extract first token (path)
+        if (this.looksLikeFilePath(script)) {
+          try {
+            const scriptUri = vscode.Uri.file(script);
+            const doc = await vscode.workspace.openTextDocument(scriptUri);
+            await vscode.window.showTextDocument(doc);
+          } catch {
+            vscode.window.showErrorMessage(
+              `Could not open script file: ${script}`
+            );
+          }
+        } else {
+          vscode.window.showInformationMessage(
+            `"${prompt.endCondition.script}" appears to be a shell command, not a file path.`
+          );
         }
       }
       return { shouldContinue: false, failureReason: errorMessage };
@@ -171,6 +192,7 @@ export class EndConditionHandler {
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
     let evaluationResult = initialEvaluationResult;
+    let manualRetryRequested = false;
 
     while (true) {
       // Check if workflow was stopped by user
@@ -182,14 +204,28 @@ export class EndConditionHandler {
         };
       }
 
-      // Check if retry is possible
-      if (!this.promptQueue.canRetry(prompt)) {
-        // Max retries exhausted or no retry configured
-        return await this.handleMaxRetriesExhausted(prompt, evaluationResult);
-      }
+      if (!manualRetryRequested) {
+        // Check if retry is possible
+        if (!this.promptQueue.canRetry(prompt)) {
+          // Max retries exhausted or no retry configured
+          const exhaustedResult = await this.handleMaxRetriesExhausted(
+            prompt,
+            evaluationResult
+          );
+          if (exhaustedResult.retryOnceMore) {
+            // User requested one more retry — loop again without incrementing count
+            manualRetryRequested = true;
+            continue;
+          }
+          return exhaustedResult;
+        }
 
-      // Increment retry counter
-      this.promptQueue.incrementRetryCount();
+        // Increment retry counter
+        this.promptQueue.incrementRetryCount();
+      } else {
+        // Manual retry: don't increment counter, reset flag
+        manualRetryRequested = false;
+      }
 
       const currentRetry = this.promptQueue.getCurrentRetryCount();
       const maxRetries = this.promptQueue.getEffectiveMaxRetries(prompt);
@@ -323,21 +359,20 @@ export class EndConditionHandler {
 
     const action = await vscode.window.showErrorMessage(
       `FlightPath: ${message}`,
-      "Stop Workflow",
-      "Continue Anyway",
-      "Retry Once More"
+      DIALOG_ACTIONS.STOP_WORKFLOW,
+      DIALOG_ACTIONS.CONTINUE_ANYWAY,
+      DIALOG_ACTIONS.RETRY_ONCE_MORE
     );
 
-    if (action === "Continue Anyway") {
+    if (action === DIALOG_ACTIONS.CONTINUE_ANYWAY) {
       Log.info("⏭️ Continuing despite validation failure");
       this.promptQueue.resetRetryCount();
       return { shouldContinue: true };
-    } else if (action === "Retry Once More") {
-      // Allow one more retry even if max reached
+    } else if (action === DIALOG_ACTIONS.RETRY_ONCE_MORE) {
+      // Allow one more retry — signal the iterative loop to perform
+      // one additional attempt without incrementing the retry counter
       Log.info("🔄 Manual retry requested");
-      // Don't increment retry count, just return false to re-evaluate
-      // The calling code will handle this case
-      return { shouldContinue: false, failureReason: message };
+      return { shouldContinue: false, retryOnceMore: true };
     }
 
     // Default: stop workflow
@@ -369,6 +404,29 @@ export class EndConditionHandler {
       prompt.endCondition!.returns,
       this.promptQueue.getCurrentRetryCount(),
       maxRetries
+    );
+  }
+
+  /**
+   * Check if a string looks like a file path (vs. a bare shell command like "npm").
+   * Returns true if it contains path separators or has a known script extension.
+   */
+  private looksLikeFilePath(script: string): boolean {
+    const knownExtensions = [
+      ".js",
+      ".ts",
+      ".py",
+      ".sh",
+      ".bat",
+      ".ps1",
+      ".cmd",
+    ];
+    const ext = path.extname(script).toLowerCase();
+    return (
+      knownExtensions.includes(ext) ||
+      script.includes("/") ||
+      script.includes("\\") ||
+      script.startsWith(".")
     );
   }
 }

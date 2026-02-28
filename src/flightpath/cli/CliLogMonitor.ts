@@ -62,6 +62,13 @@ export interface LogMonitorDependencies {
  * The cancellation callback allows external abort.
  */
 export class CliLogMonitor {
+  /** Maximum time (ms) to spend draining remaining log entries after completion signal */
+  private static readonly DRAIN_DEADLINE_MS = 2000;
+  /** Polling interval (ms) between drain read attempts */
+  private static readonly DRAIN_POLL_INTERVAL_MS = 150;
+  /** Interval (ms) for checking user cancellation during monitoring */
+  private static readonly CANCELLATION_CHECK_INTERVAL_MS = 100;
+
   private readonly deps: LogMonitorDependencies;
 
   constructor(deps: LogMonitorDependencies) {
@@ -90,8 +97,8 @@ export class CliLogMonitor {
   ): Promise<LogMonitorResult> {
     const parser = this.deps.logParser;
     const events: BaseCliEvent[] = [];
-    const timeoutMs =
-      ConfigurationUtils.getMaxPromptExecutionTimeMs() || 12 * 60 * 60 * 1000;
+    // undefined means unlimited (-1 setting) — no timeout will be set
+    const timeoutMs = ConfigurationUtils.getMaxPromptExecutionTimeMs();
 
     return new Promise(async (resolve, reject) => {
       let completed = false;
@@ -184,11 +191,13 @@ export class CliLogMonitor {
         }
         draining = true;
 
-        const deadline = Date.now() + 2000;
+        const deadline = Date.now() + CliLogMonitor.DRAIN_DEADLINE_MS;
         while (Date.now() < deadline) {
           const newEntries = await parser.readNewLines(logPath);
           if (newEntries.length === 0) {
-            await new Promise((r) => setTimeout(r, 150));
+            await new Promise((r) =>
+              setTimeout(r, CliLogMonitor.DRAIN_POLL_INTERVAL_MS)
+            );
             continue;
           }
 
@@ -268,7 +277,7 @@ export class CliLogMonitor {
                 await this.deps.notificationMonitor!.monitorForCompletion(
                   {
                     directory: notifyDir,
-                    timeoutMs: timeoutMs,
+                    timeoutMs: timeoutMs ?? Number.MAX_SAFE_INTEGER,
                     pollMs: 100,
                   },
                   monitoringSessionId,
@@ -298,13 +307,15 @@ export class CliLogMonitor {
       }
 
       // ──────────────────────────────────────────────────────
-      // Timeout handling
+      // Timeout handling (skipped when user sets unlimited / -1)
       // ──────────────────────────────────────────────────────
-      timeoutHandle = setTimeout(() => {
-        Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
-        watcher.close();
-        reject(new Error("Log monitoring timeout"));
-      }, timeoutMs);
+      if (timeoutMs !== undefined) {
+        timeoutHandle = setTimeout(() => {
+          Log.warn(`⚠️ Log monitoring timeout after ${timeoutMs}ms`);
+          watcher.close();
+          reject(new Error("Log monitoring timeout"));
+        }, timeoutMs);
+      }
 
       // ──────────────────────────────────────────────────────
       // Cancellation handling
@@ -321,7 +332,7 @@ export class CliLogMonitor {
           watcher.close();
           resolve({ success: false });
         }
-      }, 100);
+      }, CliLogMonitor.CANCELLATION_CHECK_INTERVAL_MS);
     });
   }
 

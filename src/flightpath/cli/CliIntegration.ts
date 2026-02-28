@@ -26,6 +26,10 @@ import { SessionResolver } from "../../utils/SessionResolver";
 import { SessionValidator } from "../../utils/SessionValidator";
 import type { PromptQueue } from "../PromptQueue";
 
+/** Timeout (ms) for waiting for SessionStart hook from CLI harness */
+const SESSION_START_TIMEOUT_MS = 60_000;
+/** Polling interval (ms) when waiting for SessionStart hook */
+const SESSION_START_POLL_MS = 100;
 /**
  * Execution mode for CLI integrations
  */
@@ -587,13 +591,13 @@ export class CliIntegration extends HarnessIntegration {
             workspaceRoot
           );
 
-        // Wait for SessionStart notification (60 second timeout)
+        // Wait for SessionStart notification
         const startResultNotify =
           await this.provider.notificationMonitor.waitForSessionStart(
             {
               directory: notifyDir,
-              timeoutMs: 60000,
-              pollMs: 100,
+              timeoutMs: SESSION_START_TIMEOUT_MS,
+              pollMs: SESSION_START_POLL_MS,
             },
             startTime,
             () => this.isCancelling
@@ -690,9 +694,11 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Start CLI process in terminal and return execution details.
    *
-   * **Adaptive prompt passing strategy:**
-   * - Simple prompts (≤300 chars, no XML): Pass directly on command line (fast!)
-   * - Complex prompts: Create temp file(s) and pass file reference (avoids shell limits)
+   * **Security: Always uses temp file for prompt passing.**
+   * The prompt text is never embedded directly in the shell command string,
+   * eliminating shell injection risk entirely. A temp file is created and
+   * a file reference (e.g., "Follow instructions in @.flightpath/temp/prompt.md")
+   * is passed instead.
    *
    * @param args CLI arguments
    * @param promptText Prompt text
@@ -708,25 +714,17 @@ export class CliIntegration extends HarnessIntegration {
     execution: vscode.TerminalShellExecution;
     tempFilePaths: string[];
   }> {
-    // Adaptive prompt passing: check if prompt is simple enough for direct passing
-    let actualPromptText = promptText;
-    let tempFilePaths: string[] = [];
+    // Security: Always use temp file for interactive mode prompt passing.
+    // The prompt text is embedded in a shell command string by buildInteractiveTuiCommand(),
+    // so even with escaping, raw prompt text could contain shell metacharacters.
+    // Using temp files eliminates shell injection entirely — prompt never enters the command line.
+    const { tempFilePaths, promptWithInstruction } =
+      await this.createPromptFileWithReference(promptText, workflowContext);
+    const actualPromptText = promptWithInstruction; // "Follow instructions in @file1 "
 
-    if (!this.isSimplePrompt(promptText)) {
-      // Complex prompt: create file reference to avoid shell argument length limits
-      const { tempFilePaths: paths, promptWithInstruction } =
-        await this.createPromptFileWithReference(promptText, workflowContext);
-      tempFilePaths = paths;
-      actualPromptText = promptWithInstruction; // "Follow instructions in @file1 "
-
-      Log.info(
-        `📁 Interactive mode using ${paths.length} temp file(s) (prompt too large for direct passing)`
-      );
-    } else {
-      Log.info(
-        `🚀 Interactive mode with direct prompt (simple path, no temp files needed)`
-      );
-    }
+    Log.info(
+      `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
+    );
 
     const tuiCommand = this.provider.buildInteractiveTuiCommand(
       args,
@@ -906,9 +904,7 @@ export class CliIntegration extends HarnessIntegration {
         this.provider.config.name,
         headlessArgs,
         {
-          timeout:
-            ConfigurationUtils.getMaxPromptExecutionTimeMs() ||
-            12 * 60 * 60 * 1000,
+          timeout: ConfigurationUtils.getMaxPromptExecutionTimeMs(),
           onStdout: shouldStream
             ? (chunk) => {
                 // Debug logging: Log raw CLI output if enabled
@@ -1410,7 +1406,6 @@ export class CliIntegration extends HarnessIntegration {
         prompt,
         workflowContext?.promptIndex ?? 0,
         workflowContext?.allPrompts ?? [prompt],
-        workflowContext?.filePath,
         resolvedProperties?.allowDynamicExtension,
         resolvedProperties?.agent, // Pass resolved agent for prompt prepending
         resolvedProperties?.skills // Pass resolved skills for frontmatter injection

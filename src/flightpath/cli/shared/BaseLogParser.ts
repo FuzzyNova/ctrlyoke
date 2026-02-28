@@ -30,10 +30,10 @@ import { UniversalCliOutput } from "../../../types/CliOutputTypes";
  * @example
  * ```typescript
  * class CopilotLogParser extends BaseLogParser {
- *   extractResponse(events: any[]) {
+ *   extractResponse(events: BaseCliEvent[]) {
  *     // Combine Copilot-specific events into response
  *   }
- *   isComplete(event: any) {
+ *   isComplete(event: BaseCliEvent) {
  *     return event.type === "turn.completed";
  *   }
  *   // ... other abstract methods
@@ -142,6 +142,63 @@ export abstract class BaseLogParser implements ILogParser {
    * @returns Formatted statistics string
    */
   abstract formatStatistics(metadata: BaseCliEvent): string;
+
+  /**
+   * Build common statistics parts shared across all harnesses
+   *
+   * Extracts session ID, model, and token usage from metadata and returns
+   * an array of formatted string parts. Subclasses call this from their
+   * `formatStatistics()` implementation and can append provider-specific
+   * parts (e.g., cache tokens, duration) before joining.
+   *
+   * @param metadata - Metadata object from extractResponse()
+   * @param sessionIdLength - Characters to show from session ID (default: 8)
+   * @param sessionIdSuffix - Suffix after truncated session ID (default: '')
+   * @returns Array of formatted parts like ["Session: abc123", "Model: gpt-5", "Tokens: 100 in / 50 out"]
+   *
+   * @example
+   * ```typescript
+   * // In a subclass:
+   * formatStatistics(metadata: BaseCliEvent): string {
+   *   const parts = this.buildCommonStatisticsParts(metadata, 8, '...');
+   *   // Append provider-specific parts if needed
+   *   return parts.join(' | ');
+   * }
+   * ```
+   */
+  protected buildCommonStatisticsParts(
+    metadata: BaseCliEvent,
+    sessionIdLength = 8,
+    sessionIdSuffix = ""
+  ): string[] {
+    const meta = metadata as Record<string, any>;
+    const parts: string[] = [];
+
+    // Session ID (truncated for readability)
+    if (meta.sessionId) {
+      parts.push(
+        `Session: ${meta.sessionId.substring(0, sessionIdLength)}${sessionIdSuffix}`
+      );
+    }
+
+    // Model name
+    if (meta.model) {
+      parts.push(`Model: ${meta.model}`);
+    }
+
+    // Token usage
+    if (
+      meta.usage?.inputTokens !== undefined &&
+      meta.usage?.outputTokens !== undefined
+    ) {
+      parts.push(
+        `Tokens: ${meta.usage.inputTokens} in / ${meta.usage.outputTokens} out`
+      );
+    }
+
+    return parts;
+  }
+
   // ========================================================================
   // Shared Implementation (Used by All Harnesses)
   // ========================================================================

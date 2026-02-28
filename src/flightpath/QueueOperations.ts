@@ -86,7 +86,6 @@ export function getQueueStatus(
   const maxQueueSize = queueConfig.maxQueueSize;
   const unlimitedMode = queueConfig.unlimitedMode;
 
-  const effectiveMaxSize = unlimitedMode ? Infinity : maxQueueSize;
   const remainingSlots = unlimitedMode
     ? Infinity
     : Math.max(0, maxQueueSize - state.prompts.length);

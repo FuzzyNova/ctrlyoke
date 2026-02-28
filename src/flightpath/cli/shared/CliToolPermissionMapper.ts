@@ -144,13 +144,17 @@ export class CliToolPermissionMapper {
   // - CodexToolPermissionMapper.buildCodexArgs()
 
   /**
-   * Validate tool patterns for syntax errors
+   * Validate tool patterns for syntax errors.
    *
-   * @param patterns Tool patterns to validate
-   * @returns Array of validation errors (empty if valid)
+   * Checks for common pattern mistakes (unclosed parentheses, misplaced wildcards)
+   * and logs each warning via `Log.warn()`. Returns the same warnings as an array
+   * so callers can programmatically inspect them.
+   *
+   * @param patterns - Tool patterns to validate
+   * @returns Array of warning messages (empty if all patterns are valid)
    */
   static validatePatterns(patterns: string[]): string[] {
-    const errors: string[] = [];
+    const warnings: string[] = [];
 
     for (const pattern of patterns) {
       const parsed = this.parsePattern(pattern);
@@ -162,16 +166,20 @@ export class CliToolPermissionMapper {
 
       // Check for common mistakes
       if (pattern.includes("*") && !pattern.includes("(")) {
-        errors.push(
+        warnings.push(
           `Pattern "${pattern}" contains wildcard (*) but missing argument parentheses. Did you mean "${pattern.replace("*", "(*)")}?`
         );
       }
 
       if (pattern.includes("(") && !pattern.includes(")")) {
-        errors.push(`Pattern "${pattern}" has unclosed parentheses`);
+        warnings.push(`Pattern "${pattern}" has unclosed parentheses`);
       }
     }
 
-    return errors;
+    for (const warning of warnings) {
+      Log.warn(`[CliToolPermissionMapper] ${warning}`);
+    }
+
+    return warnings;
   }
 }

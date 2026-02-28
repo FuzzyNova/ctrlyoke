@@ -126,14 +126,12 @@ export interface CliOutput {
 }
 
 /**
- * Alias for backward compatibility
- * Use CliOutput instead in new code
+ * @deprecated Use {@link CliOutput} instead. Kept for backward compatibility.
  */
 export type CliOutputData = CliOutput;
 
 /**
- * Alias for backward compatibility
- * Use CliOutput instead in new code
+ * @deprecated Use {@link CliOutput} instead. Kept for backward compatibility.
  */
 export type CliOutputItem = CliOutput;
 
@@ -167,7 +165,9 @@ export type {
 // Alias for the detailed CliEvent type from CliOutputTypes
 export type CliEvent = CliOutputEvent;
 
-// Alias for unified diff hunk (from CliOutputTypes)
+/**
+ * @deprecated Use {@link UnifiedDiffHunk} instead. Kept for backward compatibility.
+ */
 export type DiffHunk = UnifiedDiffHunk;
 
 // Alias for tool result (from CliOutputTypes)

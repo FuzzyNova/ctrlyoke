@@ -265,6 +265,19 @@ export class CopilotCliProvider implements ICliProvider {
   ): Promise<void> {
     try {
       const hookDir = path.join(workspaceRoot, ".github", "hooks");
+
+      // Security: Validate that the resolved hook path stays within the workspace root.
+      // Defense-in-depth — workspaceRoot comes from VS Code's trusted workspace API,
+      // but path.join with crafted segments could theoretically escape the workspace.
+      const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+      const resolvedHookDir = path.resolve(hookDir);
+      if (!resolvedHookDir.startsWith(normalizedWorkspaceRoot)) {
+        Log.error(
+          `Security: Hook directory "${resolvedHookDir}" is outside workspace root "${normalizedWorkspaceRoot}"`
+        );
+        return;
+      }
+
       await fs.mkdir(hookDir, { recursive: true });
 
       const hookPath = path.join(hookDir, "flightpath.json");

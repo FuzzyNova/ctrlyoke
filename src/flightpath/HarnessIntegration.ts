@@ -315,14 +315,15 @@ export abstract class HarnessIntegration {
    * @param prompt The prompt item
    * @param promptIndex Current prompt index
    * @param allPrompts All prompts in the workflow
-   * @param filePath Path to the .flightpath.json file (unused, kept for compatibility)
+   * @param allowDynamicExtension Whether to enable dynamic queue extension
+   * @param resolvedAgent Resolved agent path for prompt prepending
+   * @param resolvedSkills Resolved skill paths for frontmatter injection
    * @returns Prompt text with optional MCP tool instructions
    */
   protected async buildPromptWithInstructions(
     prompt: PromptItem,
     promptIndex: number,
     allPrompts: PromptItem[],
-    filePath?: string,
     allowDynamicExtension?: boolean,
     resolvedAgent?: string,
     resolvedSkills?: string[]

@@ -714,6 +714,7 @@ export class PromptQueue {
 
   /**
    * Get failed prompts count
+   * @internal Test-only method — not used in production code paths.
    */
   getFailedCount(): number {
     return this.state.results.filter(
@@ -960,6 +961,7 @@ export class PromptQueue {
 
   /**
    * Get queue extension statistics
+   * @internal Test-only method — not used in production code paths.
    */
   getQueueExtensionStats(): {
     queueExtensions: number;

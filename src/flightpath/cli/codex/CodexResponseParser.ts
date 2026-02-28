@@ -614,8 +614,4 @@ export class CodexResponseParser
     }
     return undefined;
   }
-
-  /**
-   * Format command execution for display
-   */
 }

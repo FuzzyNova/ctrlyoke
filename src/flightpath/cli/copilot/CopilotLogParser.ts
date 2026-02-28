@@ -256,6 +256,18 @@ type CopilotLogEvent =
  *
  * @see docs/schemas/COPILOT_LOG_SCHEMA.md for complete event type documentation
  */
+
+/**
+ * Provider-specific event type for internal loop bodies.
+ *
+ * Extends BaseCliEvent with a typed `data` property for Copilot's nested event structure.
+ * This avoids `as any[]` casts while preserving flexible access to provider-specific data fields.
+ * Top-level fields (`type`, `timestamp`) remain properly typed from BaseCliEvent.
+ */
+interface CopilotProviderEvent extends BaseCliEvent {
+  data?: Record<string, any>;
+}
+
 export class CopilotLogParser extends BaseLogParser {
   /**
    * Event buffer for multi-event responses
@@ -307,7 +319,7 @@ export class CopilotLogParser extends BaseLogParser {
       { toolName: string; args: Record<string, unknown>; timestamp: number }
     >();
 
-    for (const event of events as any[]) {
+    for (const event of events as CopilotProviderEvent[]) {
       const timestamp = event.timestamp
         ? new Date(event.timestamp).getTime()
         : Date.now();
@@ -718,7 +730,7 @@ export class CopilotLogParser extends BaseLogParser {
               const events = await this.readFirstNJsonlEvents(logPath, 10);
 
               // Look for user.message event containing prompt text
-              for (const event of events as any[]) {
+              for (const event of events as CopilotProviderEvent[]) {
                 if (event.type === "user.message" && event.data?.content) {
                   const content = this.normalizePromptForMatching(
                     event.data.content
@@ -782,7 +794,7 @@ export class CopilotLogParser extends BaseLogParser {
    * - Returns null if no session.start event found
    */
   extractSessionId(events: BaseCliEvent[]): string | null {
-    for (const event of events as any[]) {
+    for (const event of events as CopilotProviderEvent[]) {
       if (event.type === "session.start" && event.data?.sessionId) {
         return event.data.sessionId;
       }
@@ -816,7 +828,7 @@ export class CopilotLogParser extends BaseLogParser {
    */
   extractContentFromEvent(event: BaseCliEvent): string | undefined {
     // Provider-specific nested property access
-    const data = (event as any).data;
+    const data = event.data as Record<string, any> | undefined;
 
     // Assistant message content (primary response text)
     if (event.type === "assistant.message" && data?.content) {
@@ -864,35 +876,7 @@ export class CopilotLogParser extends BaseLogParser {
    * ```
    */
   formatStatistics(metadata: BaseCliEvent): string {
-    // Cast for provider-specific metadata property access
-    const meta = metadata as {
-      sessionId?: string;
-      model?: string;
-      usage?: { inputTokens?: number; outputTokens?: number };
-    };
-    const parts: string[] = [];
-
-    // Session ID (truncated with ellipsis for readability)
-    if (meta.sessionId) {
-      parts.push(`Session: ${meta.sessionId.substring(0, 8)}...`);
-    }
-
-    // Model name
-    if (meta.model) {
-      parts.push(`Model: ${meta.model}`);
-    }
-
-    // Token usage (if available - Copilot doesn't typically provide this in logs)
-    if (meta.usage) {
-      const usage = meta.usage;
-      if (usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
-        parts.push(
-          `Tokens: ${usage.inputTokens} in / ${usage.outputTokens} out`
-        );
-      }
-    }
-
-    return parts.join(" | ");
+    return this.buildCommonStatisticsParts(metadata, 8, "...").join(" | ");
   }
 
   /**

@@ -6,7 +6,6 @@ import {
   UniversalCliOutput,
   CliEvent,
   TokenUsage,
-  BashCommandData,
 } from "../../../types/CliOutputTypes";
 import {
   CLI_EVENT_TYPES,
@@ -16,6 +15,10 @@ import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
 import { CliResponseParser } from "../shared/CliResponseParser";
 import { CliEventMapper } from "../shared/CliEventMapper";
+import {
+  processToolResultContentBlocks,
+  processToolUseResultMetadata,
+} from "./ClaudeToolResultProcessor";
 
 /**
  * Extended usage statistics from Claude CLI.
@@ -456,119 +459,11 @@ export class ClaudeResponseParser
     toolUseResult: any | undefined,
     events: CliEvent[]
   ): void {
-    for (const contentBlock of content) {
-      if (contentBlock.type === "tool_result") {
-        // contentBlock.content can be a string or an array of content blocks
-        // e.g. [{"type":"text","text":"..."}] — extract text for display
-        const rawContent = contentBlock.content;
-        let outputText: string;
-        if (typeof rawContent === "string") {
-          outputText = rawContent;
-        } else if (Array.isArray(rawContent)) {
-          outputText = rawContent
-            .filter((b: any) => b.type === "text" && typeof b.text === "string")
-            .map((b: any) => b.text)
-            .join("\n");
-        } else if (rawContent != null) {
-          outputText = JSON.stringify(rawContent);
-        } else {
-          outputText = "";
-        }
-        events.push({
-          type: CLI_EVENT_TYPES.TOOL_RESULT,
-          timestamp: Date.now(),
-          data: {
-            toolCallId: contentBlock.tool_use_id,
-            result: {
-              success: true, // Assume success if we got a result
-              output: outputText,
-            },
-          },
-        });
-      }
-    }
+    processToolResultContentBlocks(content, Date.now(), events);
 
     // Process structured tool_use_result metadata to create semantic events
     if (toolUseResult) {
-      Log.debug(
-        `[ClaudeParser] Tool result metadata: type=${toolUseResult.type}, filePath=${toolUseResult.filePath}`
-      );
-
-      // File edit result (Edit tool)
-      if (toolUseResult.oldString && toolUseResult.newString) {
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_EDIT,
-          timestamp: Date.now(),
-          data: {
-            path: toolUseResult.filePath || "unknown",
-            oldContent: toolUseResult.oldString,
-            newContent: toolUseResult.newString,
-            structuredPatch: toolUseResult.structuredPatch,
-            originalFile: toolUseResult.originalFile,
-            userModified: toolUseResult.userModified,
-            replaceAll: toolUseResult.replaceAll,
-            status: OPERATION_STATUS.COMPLETED,
-            success: true,
-          },
-        });
-        return;
-      }
-
-      // File write result (Write tool)
-      // Must have a file path to avoid matching Grep results (which also have a `content` field)
-      if (
-        (toolUseResult.type === "write" || toolUseResult.content) &&
-        (toolUseResult.filePath || toolUseResult.path)
-      ) {
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_WRITE,
-          timestamp: Date.now(),
-          data: {
-            path: toolUseResult.filePath || toolUseResult.path || "unknown",
-            content: toolUseResult.content || "",
-            status: OPERATION_STATUS.COMPLETED,
-            success: true,
-          },
-        });
-        return;
-      }
-
-      // File read result (Read tool)
-      if (toolUseResult.type === "text" && toolUseResult.file) {
-        events.push({
-          type: CLI_EVENT_TYPES.FILE_READ,
-          timestamp: Date.now(),
-          data: {
-            path: toolUseResult.file.filePath || "unknown",
-            content: toolUseResult.file.content || "",
-            status: OPERATION_STATUS.COMPLETED,
-            success: true,
-          },
-        });
-        return;
-      }
-      // Bash command result (COMPLETED event)
-      if (toolUseResult.command || toolUseResult.type === "bash") {
-        const exitCode =
-          toolUseResult.exitCode ?? (toolUseResult.error ? 1 : 0);
-        events.push({
-          type: CLI_EVENT_TYPES.BASH_COMMAND,
-          timestamp: Date.now(),
-          data: {
-            command: toolUseResult.command || "unknown",
-            workingDir: toolUseResult.workingDir || toolUseResult.cwd,
-            exitCode,
-            // Prefer stdout over output - stdout has full content while output may have <persisted-output> message
-            output: toolUseResult.stdout || toolUseResult.output,
-            error: toolUseResult.stderr || toolUseResult.error,
-            status:
-              exitCode === 0
-                ? OPERATION_STATUS.COMPLETED
-                : OPERATION_STATUS.FAILED,
-          } as BashCommandData,
-        });
-        return;
-      }
+      processToolUseResultMetadata(toolUseResult, Date.now(), events);
     }
   }
 
