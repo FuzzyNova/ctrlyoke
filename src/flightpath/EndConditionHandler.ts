@@ -103,7 +103,8 @@ export class EndConditionHandler {
       return await this.handleExecutionError(prompt, evaluationResult);
     } else {
       // Validation failure path - script ran but output doesn't match
-      return await this.handleValidationFailure(
+      // Use iterative retry loop instead of recursion to avoid stack overflow
+      return await this.handleValidationFailureIterative(
         prompt,
         evaluationResult,
         retryContext,
@@ -159,26 +160,34 @@ export class EndConditionHandler {
   }
 
   /**
-   * Handle validation failure (script succeeded but output doesn't match expected)
+   * Handle validation failure iteratively (script succeeded but output doesn't match expected).
+   * Uses an iterative loop instead of recursion to avoid stack overflow with many retries.
    * @returns Result object with shouldContinue and optional failureReason
    */
-  async handleValidationFailure(
+  async handleValidationFailureIterative(
     prompt: PromptItem,
-    evaluationResult: EvaluationResult,
+    initialEvaluationResult: EvaluationResult,
     retryContext: RetryContext,
     sendRetryPrompt: SendRetryPromptCallback
   ): Promise<EndConditionHandlerResult> {
-    // Check if workflow was stopped by user
-    if (this.promptQueue.getState().stopped) {
-      Log.info("⚠️ Workflow stopped, aborting retry");
-      return {
-        shouldContinue: false,
-        failureReason: "Workflow stopped by user",
-      };
-    }
+    let evaluationResult = initialEvaluationResult;
 
-    // Check if retry is possible
-    if (this.promptQueue.canRetry(prompt)) {
+    while (true) {
+      // Check if workflow was stopped by user
+      if (this.promptQueue.getState().stopped) {
+        Log.info("⚠️ Workflow stopped, aborting retry");
+        return {
+          shouldContinue: false,
+          failureReason: "Workflow stopped by user",
+        };
+      }
+
+      // Check if retry is possible
+      if (!this.promptQueue.canRetry(prompt)) {
+        // Max retries exhausted or no retry configured
+        return await this.handleMaxRetriesExhausted(prompt, evaluationResult);
+      }
+
       // Increment retry counter
       this.promptQueue.incrementRetryCount();
 
@@ -261,16 +270,34 @@ export class EndConditionHandler {
           retryContext.workspaceFolderPath
         );
 
-      // Recursively handle the result (will retry again if needed or max out)
-      return await this.handleEndConditionResult(
-        prompt,
-        retryEvaluation,
-        retryContext,
-        sendRetryPrompt
-      );
-    } else {
-      // Max retries exhausted or no retry configured
-      return await this.handleMaxRetriesExhausted(prompt, evaluationResult);
+      // Check if the retry succeeded
+      if (retryEvaluation.success) {
+        Log.info("✅ End condition passed after retry");
+        this.promptQueue.resetRetryCount();
+
+        const resultIndex = this.promptQueue.getState().currentIndex;
+        const result = this.promptQueue.getState().results[resultIndex];
+        if (result) {
+          result.endConditionResult = true;
+          result.scriptOutput = retryEvaluation.stdout;
+        }
+
+        return { shouldContinue: true };
+      }
+
+      // Check if this is an execution error (not a validation failure)
+      const isExecutionError =
+        retryEvaluation.timeout ||
+        (retryEvaluation.error && retryEvaluation.exitCode === undefined) ||
+        (retryEvaluation.exitCode !== undefined &&
+          retryEvaluation.exitCode !== 0);
+
+      if (isExecutionError) {
+        return await this.handleExecutionError(prompt, retryEvaluation);
+      }
+
+      // Validation failure — continue the loop for another retry attempt
+      evaluationResult = retryEvaluation;
     }
   }
 

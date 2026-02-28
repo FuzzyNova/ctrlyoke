@@ -5,10 +5,7 @@
  */
 
 import type { FileOperationStatus, CliEventType } from "./DashboardConstants";
-import { CLI_EVENT_TYPES } from "./DashboardConstants";
 
-// Re-export for backward compatibility (CLI parsers import from this file)
-export { CLI_EVENT_TYPES };
 export type { CliEventType };
 
 /**

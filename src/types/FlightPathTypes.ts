@@ -17,11 +17,6 @@ export enum Harness {
 }
 
 /**
- * Claude CLI status (separate from Copilot status for clarity)
- */
-export type ClaudeCliStatus = "Initializing" | "Ready" | "Unavailable";
-
-/**
  * Shared execution properties for prompts, workflows, and runtime metadata.
  * Using this interface ensures consistency across all levels of the execution hierarchy.
  *
@@ -103,7 +98,7 @@ export interface WorkflowContext {
   allPrompts: PromptItem[];
   filePath?: string;
   workflowFile?: PromptFile;
-  promptQueue?: any; // Avoid circular dependency with PromptQueue
+  promptQueue?: { getState(): QueueState }; // Minimal interface to avoid circular dependency with PromptQueue
 }
 
 /**
@@ -135,7 +130,7 @@ export interface QueueState {
   prompts: PromptItem[];
   results: PromptResult[];
   stopped: boolean; // True if stop() was called, reset on new execution
-  completedIds: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
+  completedIndices: Set<string>; // Fast-lookup cache of completed prompt indices (as strings: "0", "1", ...)
   totalExecutionTime: number; // Milliseconds of active execution time (pause-aware)
   queueExtensions: number; // How many times queue was extended
   lastReloadTime?: number; // Timestamp of last reload

@@ -137,7 +137,8 @@ export interface ICliProvider {
   getMcpConfigArgs?(
     mcpServerPath: string,
     workspaceRoot: string,
-    workingFilePath?: string
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
   ): Promise<string[] | null>;
 
   /**

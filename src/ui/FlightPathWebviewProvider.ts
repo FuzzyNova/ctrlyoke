@@ -16,6 +16,7 @@ import {
   QUEUE_POSITION,
   type HarnessStatusString,
   type WebviewLogLevel,
+  type StepStatus,
 } from "../types/DashboardConstants";
 import { CliEvent, CliOutputData } from "../types/WebviewMessageTypes";
 import { TemplateManager, TemplateInfo } from "../flightpath/TemplateManager";
@@ -29,7 +30,6 @@ import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
   onModelsLoaded,
-  isRegistryInitialized,
 } from "../utils/ModelRegistry";
 import {
   getModelDisplayName,
@@ -37,8 +37,11 @@ import {
   CODEX_CLI_MODEL_LABELS,
 } from "../utils/ModelConstants";
 import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
-import { Harness, WorkflowSummary } from "../types/FlightPathTypes";
-import { DashboardOutput } from "../flightpath/cli/shared/CliOutputFormatter";
+import {
+  Harness,
+  WorkflowSummary,
+  EndCondition,
+} from "../types/FlightPathTypes";
 import { AgentDiscovery, AgentInfo } from "../utils/AgentDiscovery";
 import { SkillDiscovery, SkillInfo } from "../utils/SkillDiscovery";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
@@ -76,9 +79,6 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
   // Discovered skills
   private availableSkills: SkillInfo[] = [];
 
-  // Current workflow name (cached from queue)
-  private currentWorkflowName: string | undefined;
-
   // Harness availability status
   private harnessStatus: Record<string, HarnessStatus> = {
     [HARNESS_IDS.COPILOT_CLI]: {
@@ -107,7 +107,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
     resumeSession?: boolean;
     sessionId?: string | number;
     allowDynamicExtension?: boolean;
-    endCondition?: any;
+    endCondition?: EndCondition | null;
   } = {};
 
   // Validation constants
@@ -255,26 +255,35 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
       `<body data-aff-uri="${affUri}" data-dic-uri="${dicUri}" data-logo-uri="${logoUri}">`
     );
 
+    // Generate a nonce for CSP script-src (replaces 'unsafe-inline')
+    const nonce = this.getNonce();
+
     // Inject VS Code API capture script BEFORE any other scripts
     // acquireVsCodeApi() can only be called once, so we capture it and make it globally available
     // This must run before the React module script loads
-    const vscodeApiScript = `<script>
+    const vscodeApiScript = `<script nonce="${nonce}">
 window.vscodeApi = acquireVsCodeApi();
 </script>`;
 
     // Inject AFTER typo.js script tag but BEFORE the module scripts
     html = html.replace(
       /<script type="module"/,
-      `${vscodeApiScript}\n    <script type="module"`
+      `${vscodeApiScript}\n    <script type="module" nonce="${nonce}"`
+    );
+
+    // Add nonce to any remaining script tags (e.g., typo.js)
+    html = html.replace(
+      /<script(?!\s+nonce=)([^>]*>)/g,
+      `<script nonce="${nonce}"$1`
     );
 
     // Replace CSP meta tag with correct policy for VS Code webview
-    // - script-src: Allow VS Code webview scripts (for acquireVsCodeApi)
+    // - script-src: Nonce-based (no 'unsafe-inline') for security
     // - style-src: Allow inline styles (Tailwind uses style tags)
     // - font-src: Allow webview fonts
     // - img-src: Allow webview images and data URIs
     // - connect-src: Allow source map loading in dev tools
-    const cspContent = `default-src 'none'; script-src ${webview.cspSource} 'unsafe-inline'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: https:; connect-src ${webview.cspSource};`;
+    const cspContent = `default-src 'none'; script-src ${webview.cspSource} 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: https:; connect-src ${webview.cspSource};`;
 
     // Replace existing CSP meta tag — regex handles multi-line tags and both /> and > closings
     const htmlBeforeCsp = html;
@@ -296,6 +305,7 @@ window.vscodeApi = acquireVsCodeApi();
   /**
    * Handle messages from webview (React UI)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Webview→Extension message type not yet defined
   private async handleWebviewMessage(message: any): Promise<void> {
     try {
       switch (message.type) {
@@ -624,20 +634,20 @@ window.vscodeApi = acquireVsCodeApi();
     await this.applyPendingWorkflowProperties();
 
     // Extract and send workflow properties to settings panel
-    this.sendWorkflowPropertiesToSettings();
+    await this.sendWorkflowPropertiesToSettings();
   }
 
   /**
    * Update dashboard when session is restored from working file
    */
-  public updateSessionRestored(
+  public async updateSessionRestored(
     fileName: string,
     prompts: any[],
     results: any[],
     executionState: string,
     currentIndex: number,
     workflowName?: string
-  ): void {
+  ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
       fileName,
@@ -649,7 +659,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
 
     // Extract and send workflow properties to settings panel
-    this.sendWorkflowPropertiesToSettings();
+    await this.sendWorkflowPropertiesToSettings();
   }
 
   public updateExecutionStarted(
@@ -687,7 +697,16 @@ window.vscodeApi = acquireVsCodeApi();
     this.postMessage({ type: MESSAGE_TYPES.EXECUTION_STATE_CHANGED, state });
   }
 
-  public updateStepStatus(stepIndex: number, status: any, details?: any): void {
+  public updateStepStatus(
+    stepIndex: number,
+    status: {
+      state: StepStatus;
+      duration?: number;
+      message?: string;
+      endConditionResult?: unknown;
+    },
+    details?: Record<string, unknown>
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.STEP_STATUS_CHANGED,
       stepIndex,
@@ -971,9 +990,25 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   // ============================================================================
+  // Private Methods - Utilities
+  // ============================================================================
+
+  /** Generate a random nonce string for CSP script-src */
+  private getNonce(): string {
+    const possible =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let nonce = "";
+    for (let i = 0; i < 32; i++) {
+      nonce += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return nonce;
+  }
+
+  // ============================================================================
   // Private Methods - Message Sending
   // ============================================================================
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Messages are a mix of IncomingMessage and ad-hoc objects
   private postMessage(message: any): void {
     this.view?.webview.postMessage(message);
   }
@@ -994,39 +1029,7 @@ window.vscodeApi = acquireVsCodeApi();
     // Get current workflow state from WorkflowOrchestrator
     const workflowState = this.getCurrentState();
 
-    // Get global settings
-    const harness = ConfigurationUtils.getIntegrationMode();
-    const model = this.getModelForHarness(harness);
-    const agent = ConfigurationUtils.getDefaultAgent();
-    const skills = ConfigurationUtils.getDefaultSkills();
-    const executionMode = ConfigurationUtils.getCliExecutionMode();
-    const resumeExistingSession =
-      ConfigurationUtils.shouldResumeExistingSession();
-    const dynamicQueueEnabled =
-      ConfigurationUtils.getDynamicQueueConfig().enabled;
-    const respectGitignore =
-      ConfigurationUtils.shouldRespectGitignoreForCompletions();
-
-    const harnessDefaultModels = {
-      [HARNESS_IDS.COPILOT_CLI]: this.getModelForHarness(Harness.CopilotCli),
-      [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(Harness.CopilotChat),
-      [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
-      [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
-    };
-
-    const globalSettings = {
-      harness,
-      model,
-      harnessDefaultModels,
-      agent,
-      skills,
-      executionMode,
-      resumeSession: resumeExistingSession,
-      allowDynamicExtension: dynamicQueueEnabled,
-      respectGitignore,
-      confirmDeleteOperations:
-        ConfigurationUtils.shouldConfirmDeleteOperations(),
-    };
+    const globalSettings = this.buildGlobalSettings();
 
     // Build dynamic model options from ModelRegistry
     const modelOptions = this.buildModelOptions();
@@ -1054,6 +1057,19 @@ window.vscodeApi = acquireVsCodeApi();
       return;
     }
 
+    this.postMessage({
+      type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
+      globalSettings: this.buildGlobalSettings(),
+      modelOptions: this.buildModelOptions(),
+    });
+  }
+
+  /**
+   * Build global settings object from current VS Code configuration.
+   * Single source of truth for global settings construction — used by
+   * both sendInitialState() and sendGlobalSettingsUpdate().
+   */
+  private buildGlobalSettings(): Record<string, unknown> {
     const harness = ConfigurationUtils.getIntegrationMode();
     const model = this.getModelForHarness(harness);
     const agent = ConfigurationUtils.getDefaultAgent();
@@ -1073,25 +1089,22 @@ window.vscodeApi = acquireVsCodeApi();
       [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
     };
 
-    this.postMessage({
-      type: MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED,
-      globalSettings: {
-        harness,
-        model,
-        harnessDefaultModels,
-        agent,
-        skills,
-        executionMode,
-        resumeSession: resumeExistingSession,
-        allowDynamicExtension: dynamicQueueEnabled,
-        respectGitignore,
-        confirmDeleteOperations:
-          ConfigurationUtils.shouldConfirmDeleteOperations(),
-      },
-      modelOptions: this.buildModelOptions(),
-    });
+    return {
+      harness,
+      model,
+      harnessDefaultModels,
+      agent,
+      skills,
+      executionMode,
+      resumeSession: resumeExistingSession,
+      allowDynamicExtension: dynamicQueueEnabled,
+      respectGitignore,
+      confirmDeleteOperations:
+        ConfigurationUtils.shouldConfirmDeleteOperations(),
+    };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return shape varies based on manager state
   private getCurrentState(): any {
     // Get actual state from WorkflowOrchestrator if available
     if (this.flightPathManager) {
@@ -1099,9 +1112,6 @@ window.vscodeApi = acquireVsCodeApi();
       const currentFile = this.flightPathManager.getCurrentPromptFile();
       // Get workflow name from queue state
       const workflowName = queueState.workflowName;
-      // Update cached workflow name
-      this.currentWorkflowName = workflowName;
-
       return {
         fileName: currentFile || "",
         workflowName: workflowName || "",
@@ -1209,7 +1219,7 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  private sendWorkflowPropertiesToSettings(): void {
+  private async sendWorkflowPropertiesToSettings(): Promise<void> {
     if (!this.flightPathManager) {
       return;
     }
@@ -1221,8 +1231,8 @@ window.vscodeApi = acquireVsCodeApi();
         return;
       }
 
-      // Read working file synchronously (we need properties immediately)
-      const workingFileContent = fsSync.readFileSync(workingFilePath, "utf-8");
+      // Read working file asynchronously
+      const workingFileContent = await fs.readFile(workingFilePath, "utf-8");
       const workingFile = JSON.parse(workingFileContent);
 
       // Extract workflow-level properties
@@ -1613,11 +1623,14 @@ window.vscodeApi = acquireVsCodeApi();
     }
   }
 
+  /**
+   * TODO: Implement createWorkflowFromTemplate in WorkflowCommandHandler.
+   * Currently a stub — redirects user to the Create Prompt File command.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Webview message type not yet defined
   private async handleCreateWorkflow(message: any): Promise<void> {
     try {
-      const { templateId, fileName, variables } = message;
-      // TODO: Implement createWorkflowFromTemplate in WorkflowCommandHandler
-      // For now, show not implemented message
+      // Stub: template-based workflow creation is not yet implemented
       vscode.window.showWarningMessage(
         "Creating workflows from templates is not yet implemented. Please use 'FlightPath: Create Prompt File' command."
       );
@@ -1631,6 +1644,7 @@ window.vscodeApi = acquireVsCodeApi();
     vscode.commands.executeCommand("flightpath.createPromptFile");
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Webview message type not yet defined
   private async handleUpdateWorkflowName(message: any): Promise<void> {
     if (!this.flightPathManager) {
       Log.error("FlightPathManager not initialized");
@@ -1806,18 +1820,26 @@ window.vscodeApi = acquireVsCodeApi();
         ".history"
       );
 
-      // Derive the working file name from the original prompt file path
-      // Working files are named with the stem of the original file: <stem>.flightpath.json
+      // Derive the working file name from the original prompt file path.
+      // Working files are named: <stem>.flightpath.json in the queue dir.
+      // Stem matching is necessary because the filePath from the webview may be
+      // the original prompt file path (e.g., "workflow.flightpath.yaml") while
+      // the queue uses a working copy with a different extension (.flightpath.json).
+      // The stem prefix + .flightpath.json suffix filter ensures we only match
+      // working files derived from this specific workflow.
       const stem = path
         .basename(filePath)
         .replace(/\.working\.(yaml|yml|json)$/i, "")
         .replace(/\.flightpath\.(yaml|yml|json)$/i, "")
         .replace(/\.(yaml|yml|json)$/i, "");
 
-      // Scan queue dir for any .flightpath.json file whose name starts with this stem
+      // Scan queue dir for matching .flightpath.json working files
       const files = await fs.readdir(queueDir).catch(() => [] as string[]);
+      // Use exact stem match with separator to avoid "foo" matching "foobar"
       const candidates = files.filter(
-        (f) => f.startsWith(stem) && f.endsWith(".flightpath.json")
+        (f) =>
+          (f === `${stem}.flightpath.json` || f.startsWith(`${stem}.`)) &&
+          f.endsWith(".flightpath.json")
       );
 
       for (const candidate of candidates) {
@@ -2028,9 +2050,12 @@ window.vscodeApi = acquireVsCodeApi();
     if (!hasWorkingFile) {
       // Store in pending properties until working file exists
       if (value === undefined) {
-        delete (this.pendingWorkflowProperties as any)[property];
+        delete (this.pendingWorkflowProperties as Record<string, unknown>)[
+          property
+        ];
       } else {
-        (this.pendingWorkflowProperties as any)[property] = value;
+        (this.pendingWorkflowProperties as Record<string, unknown>)[property] =
+          value;
       }
 
       // Send back confirmation with pending properties
@@ -2049,7 +2074,7 @@ window.vscodeApi = acquireVsCodeApi();
         { allowDeletes: value === undefined }
       );
 
-      this.sendWorkflowPropertiesToSettings();
+      await this.sendWorkflowPropertiesToSettings();
     }
   }
 
@@ -2070,6 +2095,11 @@ window.vscodeApi = acquireVsCodeApi();
   }
 
   private async handleGetConfig(key: string): Promise<void> {
+    if (!key.startsWith("flightpath.")) {
+      Log.warn(`Rejected config read for non-flightpath key: ${key}`);
+      return;
+    }
+
     const value = ConfigurationUtils.getConfigValue(key);
 
     this.postMessage({
@@ -2079,7 +2109,12 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  private async handleUpdateConfig(key: string, value: any): Promise<void> {
+  private async handleUpdateConfig(key: string, value: unknown): Promise<void> {
+    if (!key.startsWith("flightpath.")) {
+      Log.warn(`Rejected config write for non-flightpath key: ${key}`);
+      return;
+    }
+
     await ConfigurationUtils.updateSetting(key, value);
   }
 
@@ -2319,8 +2354,8 @@ window.vscodeApi = acquireVsCodeApi();
   private getModelForHarness(harness: string): string {
     return (
       ConfigurationUtils.getModelForHarness(harness as Harness) ||
-      (DEFAULT_MODELS as any)[harness] ||
-      "claude-sonnet-4.5"
+      (DEFAULT_MODELS as Record<string, string>)[harness] ||
+      DEFAULT_MODELS[HARNESS_IDS.COPILOT_CLI]
     );
   }
 
@@ -2340,7 +2375,7 @@ window.vscodeApi = acquireVsCodeApi();
     );
 
     this.pendingWorkflowProperties = {};
-    this.sendWorkflowPropertiesToSettings();
+    await this.sendWorkflowPropertiesToSettings();
   }
 
   private async discoverAgents(): Promise<void> {

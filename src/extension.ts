@@ -5,14 +5,19 @@ import { PromptCompletionProvider } from "./completions/PromptCompletionProvider
 import { PromptLinkProvider } from "./completions/PromptLinkProvider";
 import { initializeCompletionHelpers } from "./completions/CompletionHelpers";
 import { FlightPathWebviewProvider } from "./ui/FlightPathWebviewProvider";
-import { QUEUE_POSITION } from "./types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  QUEUE_POSITION,
+  type QueuePosition,
+} from "./types/DashboardConstants";
+import { getQueueStatus, appendToQueue } from "./flightpath/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
 import { Log, LogLevel } from "./utils/Log";
-import { FileSystemUtils } from "./utils/FileSystemUtils";
+import { saveIfDirty } from "./utils/FileSystemUtils";
 
-let flightPathManager: WorkflowOrchestrator;
+let workflowOrchestrator: WorkflowOrchestrator;
 let webviewProvider: FlightPathWebviewProvider;
 
 /**
@@ -21,12 +26,6 @@ let webviewProvider: FlightPathWebviewProvider;
  */
 function registerLanguageModelTools(context: vscode.ExtensionContext) {
   try {
-    // Import shared queue operations
-    const {
-      getQueueStatus,
-      appendToQueue,
-    } = require("./flightpath/QueueOperations");
-
     // Tool 1: flightpath_queue_status (read operation)
     const queueStatusTool = vscode.lm.registerTool("flightpath_queue_status", {
       prepareInvocation: async (
@@ -39,13 +38,13 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
       },
       invoke: async (_parameters: unknown, token: vscode.CancellationToken) => {
         try {
-          const queue = flightPathManager.getQueueState();
-          const promptQueue = (flightPathManager as any).promptQueue;
+          const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
           if (!promptQueue) {
             throw new Error("FlightPath queue not initialized");
           }
 
+          const queue = workflowOrchestrator.getQueueState();
           const status = getQueueStatus(promptQueue, queue.workingFilePath);
 
           return new vscode.LanguageModelToolResult([
@@ -71,19 +70,31 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           invocationMessage: "Appending prompts to FlightPath queue...",
         };
       },
-      invoke: async (parameters: any, token: vscode.CancellationToken) => {
+      invoke: async (parameters: unknown, token: vscode.CancellationToken) => {
         try {
-          const promptQueue = (flightPathManager as any).promptQueue;
+          const promptQueue = workflowOrchestrator.getActivePromptQueue();
 
           if (!promptQueue) {
             throw new Error("FlightPath queue not initialized");
           }
 
+          // Validate parameters shape
+          const params = parameters as Record<string, unknown> | null;
+          if (!params || typeof params !== "object") {
+            throw new Error("Invalid parameters: expected an object");
+          }
+
           const request = {
-            prompts: parameters.prompts || [],
-            position: parameters.position || QUEUE_POSITION.END,
-            source: parameters.source || "VS Code Chat",
-            reason: parameters.reason,
+            prompts: (Array.isArray(params.prompts)
+              ? params.prompts
+              : []) as Array<{ prompt: string; model?: string }>,
+            position: (typeof params.position === "string"
+              ? params.position
+              : QUEUE_POSITION.END) as QueuePosition,
+            source: (typeof params.source === "string"
+              ? params.source
+              : "VS Code Chat") as string,
+            reason: params.reason as string | undefined,
           };
 
           const result = await appendToQueue(promptQueue, request);
@@ -100,8 +111,8 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 
           // If queue was completed, resume execution
           const queueState = promptQueue.getState();
-          if (queueState.status === "completed") {
-            await flightPathManager.executeLoadedPromptFile(undefined, true);
+          if (queueState.status === EXECUTION_STATES.COMPLETED) {
+            await workflowOrchestrator.executeLoadedPromptFile(undefined, true);
           }
 
           return new vscode.LanguageModelToolResult([
@@ -171,14 +182,14 @@ export async function activate(context: vscode.ExtensionContext) {
     Log.info("FlightPath: React webview provider registered");
 
     // Initialize FlightPath orchestrator with React webview provider
-    flightPathManager = new WorkflowOrchestrator(context, webviewProvider);
+    workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
 
     // Set manager reference in webview provider (for getting current state)
-    webviewProvider.setFlightPathManager(flightPathManager);
+    webviewProvider.setFlightPathManager(workflowOrchestrator);
 
     // Share OutputHistoryManager with webview provider (single instance)
     webviewProvider.setOutputHistoryManager(
-      flightPathManager.getOutputHistoryManager()
+      workflowOrchestrator.getOutputHistoryManager()
     );
 
     // Fire-and-forget: don't block activate() on initialization.
@@ -186,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // dashboard renders in <1s instead of waiting ~8s for CLI checks.
     // WorkflowOrchestrator.setDashboardReady() handles the race: if READY
     // arrives before init completes, auto-load is deferred until init finishes.
-    flightPathManager.initialize().catch((err) => {
+    workflowOrchestrator.initialize().catch((err) => {
       Log.error("Manager initialization failed:", err);
       vscode.window.showErrorMessage(
         `FlightPath: Initialization failed: ${err}`
@@ -256,7 +267,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const openPanelCommand = vscode.commands.registerCommand(
     "flightpath.openPanel",
     async () => {
-      await flightPathManager.openPanel();
+      await workflowOrchestrator.openPanel();
     }
   );
 
@@ -264,7 +275,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const createPromptFileCommand = vscode.commands.registerCommand(
     "flightpath.createPromptFile",
     async () => {
-      await flightPathManager.createPromptFile();
+      await workflowOrchestrator.createPromptFile();
     }
   );
 
@@ -272,7 +283,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const pauseCommand = vscode.commands.registerCommand(
     "flightpath.pause",
     async () => {
-      await flightPathManager.pause();
+      await workflowOrchestrator.pause();
     }
   );
 
@@ -280,7 +291,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const resumeCommand = vscode.commands.registerCommand(
     "flightpath.resume",
     async () => {
-      await flightPathManager.resume();
+      await workflowOrchestrator.resume();
     }
   );
 
@@ -288,7 +299,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const stopCommand = vscode.commands.registerCommand(
     "flightpath.stop",
     async () => {
-      await flightPathManager.stop();
+      await workflowOrchestrator.stop();
     }
   );
 
@@ -296,7 +307,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const createEndConditionScriptCommand = vscode.commands.registerCommand(
     "flightpath.createEndConditionScript",
     async () => {
-      await flightPathManager.createEndConditionScript();
+      await workflowOrchestrator.createEndConditionScript();
     }
   );
 
@@ -304,7 +315,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const importAgentsCommand = vscode.commands.registerCommand(
     "flightpath.importAgents",
     async () => {
-      await flightPathManager.importAgents();
+      await workflowOrchestrator.importAgents();
     }
   );
 
@@ -312,7 +323,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const importWorkflowTemplatesCommand = vscode.commands.registerCommand(
     "flightpath.importWorkflowTemplates",
     async () => {
-      await flightPathManager.importWorkflowTemplates();
+      await workflowOrchestrator.importWorkflowTemplates();
     }
   );
 
@@ -331,7 +342,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const createNewTemplateCommand = vscode.commands.registerCommand(
     "flightpath.createNewTemplate",
     async () => {
-      await flightPathManager.createNewTemplate();
+      await workflowOrchestrator.createNewTemplate();
     }
   );
 
@@ -343,8 +354,8 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
-      await FileSystemUtils.saveIfDirty(uri.fsPath);
-      await flightPathManager.appendFromFile(uri.fsPath, "end");
+      await saveIfDirty(uri.fsPath);
+      await workflowOrchestrator.appendFromFile(uri.fsPath, "end");
     }
   );
 
@@ -356,8 +367,8 @@ function registerCommands(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("No file selected");
         return;
       }
-      await FileSystemUtils.saveIfDirty(uri.fsPath);
-      await flightPathManager.appendFromFile(uri.fsPath, "next");
+      await saveIfDirty(uri.fsPath);
+      await workflowOrchestrator.appendFromFile(uri.fsPath, "next");
     }
   );
 
@@ -373,8 +384,8 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await FileSystemUtils.saveIfDirty(uri.fsPath);
-        await flightPathManager.executePromptFile(uri.fsPath);
+        await saveIfDirty(uri.fsPath);
+        await workflowOrchestrator.executePromptFile(uri.fsPath);
       } catch (error) {
         vscode.window.showErrorMessage(
           `Failed to execute FlightPath workflow: ${error}`
@@ -395,8 +406,8 @@ function registerCommands(context: vscode.ExtensionContext) {
       }
 
       try {
-        await FileSystemUtils.saveIfDirty(uri.fsPath);
-        await flightPathManager.loadPromptFile(uri.fsPath);
+        await saveIfDirty(uri.fsPath);
+        await workflowOrchestrator.loadPromptFile(uri.fsPath);
         // Open the FlightPath panel to show the loaded file
         await vscode.commands.executeCommand("flightpath.dashboard.focus");
       } catch (error) {
@@ -419,7 +430,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       // Find all prompt files in the workspace
       const promptFiles = await vscode.workspace.findFiles(
-        "**/*.{prompt.json,flightpath.json,prompt.md}",
+        "**/*.{flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
         "**/node_modules/**"
       );
 
@@ -440,7 +451,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       if (selected) {
         // Load the file into the dashboard (don't execute)
-        await flightPathManager.loadPromptFile(selected.uri.fsPath);
+        await workflowOrchestrator.loadPromptFile(selected.uri.fsPath);
       }
     }
   );
@@ -457,7 +468,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       // Find all prompt files in the workspace
       const promptFiles = await vscode.workspace.findFiles(
-        "**/*.{prompt.json,flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
+        "**/*.{flightpath.json,flightpath.yaml,flightpath.yml,prompt.md}",
         "**/node_modules/**"
       );
 
@@ -478,7 +489,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
       if (selected) {
         // Append to end of queue (dashboard button always uses "end" position)
-        await flightPathManager.appendFromFile(selected.uri.fsPath, "end");
+        await workflowOrchestrator.appendFromFile(selected.uri.fsPath, "end");
       }
     }
   );
@@ -487,7 +498,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const resumeSessionCommand = vscode.commands.registerCommand(
     "flightpath.resumeSession",
     async () => {
-      await flightPathManager.resumeSession();
+      await workflowOrchestrator.resumeSession();
     }
   );
 
@@ -495,7 +506,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const editCurrentPromptFileCommand = vscode.commands.registerCommand(
     "flightpath.editCurrentPromptFile",
     async () => {
-      await flightPathManager.openCurrentPromptFile();
+      await workflowOrchestrator.openCurrentPromptFile();
     }
   );
 
@@ -504,7 +515,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     "flightpath.run",
     async () => {
       // Execute the currently loaded prompt file
-      await flightPathManager.executeLoadedPromptFile();
+      await workflowOrchestrator.executeLoadedPromptFile();
     }
   );
 
@@ -520,7 +531,7 @@ function registerCommands(context: vscode.ExtensionContext) {
   const createDraftPromptCommand = vscode.commands.registerCommand(
     "flightpath.createDraftPrompt",
     async () => {
-      await flightPathManager.createDraftPrompt();
+      await workflowOrchestrator.createDraftPrompt();
     }
   );
 
@@ -598,8 +609,8 @@ function registerCommands(context: vscode.ExtensionContext) {
 export function deactivate() {
   Log.info("FlightPath: Extension deactivating...");
 
-  if (flightPathManager) {
-    flightPathManager.dispose();
+  if (workflowOrchestrator) {
+    workflowOrchestrator.dispose();
   }
 
   Log.info("FlightPath: Extension deactivated");

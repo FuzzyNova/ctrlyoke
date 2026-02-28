@@ -238,26 +238,6 @@ export function getAvailableModelsSync(): CopilotModel[] {
 }
 
 /**
- * Get model IDs as a simple string array
- * Useful for validation and completion providers
- *
- * @returns Array of model ID strings
- */
-export async function getModelIds(): Promise<string[]> {
-  const models = await getAvailableModels();
-  return models.map((m) => m.id);
-}
-
-/**
- * Get model IDs synchronously (from cache)
- *
- * @returns Array of model ID strings from cache
- */
-export function getModelIdsSync(): string[] {
-  return cachedModels.map((m) => m.id);
-}
-
-/**
  * Get Copilot CLI-supported model IDs
  * Returns models that work with Copilot CLI
  *
@@ -273,16 +253,6 @@ export function getCliSupportedModelIds(): string[] {
  */
 export function getCliSupportedModelIdsSync(): string[] {
   return cachedCopilotCliModelIds;
-}
-
-/**
- * Get only CLI-supported models (with full model info)
- *
- * @returns Array of models supported by Copilot CLI
- */
-export async function getCliSupportedModels(): Promise<CopilotModel[]> {
-  const models = await getAvailableModels();
-  return models.filter((m) => m.cliSupported);
 }
 
 /**

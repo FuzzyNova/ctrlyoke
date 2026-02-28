@@ -132,16 +132,27 @@ export class EndConditionEvaluator {
   }
 
   /**
-   * Resolve script path relative to workspace or absolute
+   * Resolve script path relative to workspace or absolute.
+   * After resolution, validates the path is within the workspace root for security.
    */
   private async resolveScriptPath(
     scriptPath: string,
     workingDirectory?: string
   ): Promise<string | null> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath;
+
     // Try absolute path first
     if (path.isAbsolute(scriptPath)) {
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(scriptPath));
+        // Security: validate absolute path is within workspace
+        if (workspaceRoot && !scriptPath.startsWith(workspaceRoot)) {
+          Log.error(
+            `Security: Script path "${scriptPath}" is outside workspace root "${workspaceRoot}"`
+          );
+          return null;
+        }
         return scriptPath;
       } catch {
         return null;
@@ -153,6 +164,13 @@ export class EndConditionEvaluator {
       const fullPath = path.resolve(workingDirectory, scriptPath);
       try {
         await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+        // Security: validate resolved path is within workspace
+        if (workspaceRoot && !fullPath.startsWith(workspaceRoot)) {
+          Log.error(
+            `Security: Resolved script path "${fullPath}" is outside workspace root "${workspaceRoot}"`
+          );
+          return null;
+        }
         return fullPath;
       } catch {
         // Continue to workspace resolution
@@ -160,7 +178,6 @@ export class EndConditionEvaluator {
     }
 
     // Try relative to workspace root
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     if (workspaceFolder) {
       const workspacePath = path.resolve(
         workspaceFolder.uri.fsPath,
@@ -219,7 +236,7 @@ export class EndConditionEvaluator {
       case ".ps1":
         return process.platform === "win32"
           ? {
-              executable: "powershell",
+              executable: this.resolvePowerShellExecutable(),
               args: ["-ExecutionPolicy", "Bypass", "-File", scriptPath],
             }
           : null;
@@ -291,6 +308,19 @@ export class EndConditionEvaluator {
         error: error instanceof Error ? error.message : String(error),
         timeout: isTimeout,
       };
+    }
+  }
+
+  /**
+   * Resolve PowerShell executable — prefer `pwsh` (PowerShell 7+), fall back to `powershell`.
+   */
+  private resolvePowerShellExecutable(): string {
+    try {
+      const { execSync } = require("child_process");
+      execSync("pwsh -Version", { stdio: "ignore", timeout: 5000 });
+      return "pwsh";
+    } catch {
+      return "powershell";
     }
   }
 

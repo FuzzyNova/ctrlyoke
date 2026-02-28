@@ -11,8 +11,9 @@ import {
   ThinkingBlock,
   TextData,
   ToolResultData,
-  CLI_EVENT_TYPES,
+  FileWriteData,
 } from "../../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations
@@ -192,13 +193,19 @@ suite("ClaudeLogParser", () => {
         extractText(response),
         "Based on my analysis, the file has been updated."
       );
-      assert.strictEqual(extractToolCalls(response).length, 1);
-      assert.strictEqual(extractToolCalls(response)[0].name, "write_file");
-      assert.strictEqual(extractToolCalls(response)[0].id, "tool-1");
-      assert.deepStrictEqual(extractToolCalls(response)[0].parameters, {
-        path: "test.ts",
-        content: "console.log('test');",
-      });
+      // write_file is now classified as FILE_WRITE semantic event (not generic TOOL_CALL)
+      const fileWriteEvents = response.events.filter(
+        (e) => e.type === CLI_EVENT_TYPES.FILE_WRITE
+      );
+      assert.strictEqual(fileWriteEvents.length, 1);
+      assert.strictEqual(
+        (fileWriteEvents[0].data as FileWriteData).path,
+        "test.ts"
+      );
+      assert.strictEqual(
+        (fileWriteEvents[0].data as FileWriteData).content,
+        "console.log('test');"
+      );
       assert.ok(extractThinkingBlocks(response));
       assert.strictEqual(extractThinkingBlocks(response).length, 1);
       assert.strictEqual(

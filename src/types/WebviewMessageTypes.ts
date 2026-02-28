@@ -23,6 +23,7 @@ import {
   STATUS_MESSAGE_SEVERITY,
   EXECUTION_MODES,
 } from "./DashboardConstants";
+import type { WorkflowSummary } from "./FlightPathTypes";
 import type {
   CliEvent as CliOutputEvent,
   UniversalCliOutput,
@@ -59,6 +60,9 @@ export {
   type StatusMessageSeverity,
   type ActionType,
 } from "./DashboardConstants";
+
+// Re-export WorkflowSummary for multi-workflow coordination messages
+export type { WorkflowSummary } from "./FlightPathTypes";
 
 // ============================================================================
 // MESSAGE TYPE HELPERS - Extract literal types from MESSAGE_TYPES constants
@@ -144,6 +148,7 @@ export type CliOutputItem = CliOutput;
 
 // Re-export event data types
 export type {
+  CliEventData,
   TextData,
   BashCommandData,
   FileReadData,
@@ -167,22 +172,6 @@ export type DiffHunk = UnifiedDiffHunk;
 
 // Alias for tool result (from CliOutputTypes)
 export type { ToolResult };
-
-/**
- * Union type for all event data (same as CliOutputTypes.CliEventData)
- */
-export type CliEventData =
-  | TextData
-  | ThinkingBlock
-  | ToolCall
-  | ToolResultData
-  | BashCommandData
-  | FileReadData
-  | FileWriteData
-  | FileEditData
-  | FileDeleteData
-  | McpToolCallData
-  | WebSearchData;
 
 /**
  * Structured output with events (compatible with UniversalCliOutput)
@@ -549,6 +538,96 @@ export interface WorkflowSaveFailedMessage {
 }
 
 /**
+ * Workflows list message (extension -> webview, multi-workflow coordination)
+ */
+export interface WorkflowsListMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOWS_LIST;
+  workflows: WorkflowSummary[];
+}
+
+/**
+ * Workflow added message (extension -> webview, multi-workflow coordination)
+ */
+export interface WorkflowAddedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_ADDED;
+  summary: WorkflowSummary;
+}
+
+/**
+ * Workflow dismissed message (extension -> webview, multi-workflow coordination)
+ */
+export interface WorkflowDismissedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_DISMISSED;
+  workflowId: string;
+}
+
+/**
+ * Workflow summary updated message (extension -> webview, multi-workflow coordination)
+ */
+export interface WorkflowSummaryUpdatedMessage {
+  type: typeof MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED;
+  summary: WorkflowSummary;
+}
+
+/**
+ * Active workflow changed message (extension -> webview, multi-workflow coordination)
+ */
+export interface ActiveWorkflowChangedMessage {
+  type: typeof MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED;
+  workflowId: string;
+}
+
+/**
+ * Global settings updated message (extension -> webview)
+ */
+export interface GlobalSettingsUpdatedMessage {
+  type: typeof MESSAGE_TYPES.GLOBAL_SETTINGS_UPDATED;
+  globalSettings: {
+    harness: HarnessId;
+    model: string;
+    harnessDefaultModels?: Record<HarnessId, string>;
+    agent: string;
+    skills?: string[];
+    executionMode: ExecutionMode;
+    resumeSession: boolean;
+    allowDynamicExtension: boolean;
+    respectGitignore?: boolean;
+    confirmDeleteOperations?: boolean;
+  };
+}
+
+/**
+ * Reset workflow state message (extension -> webview, bidirectional)
+ */
+export interface ResetWorkflowStateMessage {
+  type: typeof MESSAGE_TYPES.RESET_WORKFLOW_STATE;
+  prompts: PromptItem[];
+}
+
+/**
+ * Run history updated message (extension -> webview)
+ */
+export interface RunHistoryUpdatedMessage {
+  type: typeof MESSAGE_TYPES.RUN_HISTORY_UPDATED;
+  runCount: number;
+  runTimestamps?: (number | undefined)[];
+  runStates?: (string | undefined)[];
+}
+
+/**
+ * Output history loaded message (extension -> webview)
+ * NOTE: Uses `any` for `history` to avoid circular dependency with OutputHistoryTypes.
+ */
+export interface OutputHistoryLoadedMessage {
+  type: typeof MESSAGE_TYPES.OUTPUT_HISTORY_LOADED;
+  history: unknown;
+  availableRuns: number;
+  currentRunIndex: number;
+  runTimestamps?: (number | undefined)[];
+  runStates?: (string | undefined)[];
+}
+
+/**
  * Union type for all incoming messages from extension to webview
  */
 export type IncomingMessage =
@@ -592,4 +671,13 @@ export type IncomingMessage =
     }
   | SaveWorkflowDialogDataMessage
   | WorkflowSavedMessage
-  | WorkflowSaveFailedMessage;
+  | WorkflowSaveFailedMessage
+  | WorkflowsListMessage
+  | WorkflowAddedMessage
+  | WorkflowDismissedMessage
+  | WorkflowSummaryUpdatedMessage
+  | ActiveWorkflowChangedMessage
+  | GlobalSettingsUpdatedMessage
+  | ResetWorkflowStateMessage
+  | RunHistoryUpdatedMessage
+  | OutputHistoryLoadedMessage;

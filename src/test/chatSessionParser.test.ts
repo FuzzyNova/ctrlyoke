@@ -3,7 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import { ChatSessionParser } from "../flightpath/chat/ChatSessionParser";
-import { CLI_EVENT_TYPES } from "../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 
 suite("ChatSessionParser Tests", () => {
   let parser: ChatSessionParser;
@@ -350,7 +350,10 @@ suite("ChatSessionParser Tests", () => {
         },
       ]);
 
-      assert.strictEqual(parser.isSessionComplete(sessionFile), true);
+      assert.strictEqual(
+        ChatSessionParser.isSessionComplete(sessionFile),
+        true
+      );
     });
 
     test("should return false for incomplete session", () => {
@@ -364,14 +367,17 @@ suite("ChatSessionParser Tests", () => {
         },
       ]);
 
-      assert.strictEqual(parser.isSessionComplete(sessionFile), false);
+      assert.strictEqual(
+        ChatSessionParser.isSessionComplete(sessionFile),
+        false
+      );
     });
 
     test("should handle malformed files", () => {
       const filePath = path.join(tempDir, "malformed-complete.json");
       fs.writeFileSync(filePath, "invalid json");
 
-      assert.strictEqual(parser.isSessionComplete(filePath), false);
+      assert.strictEqual(ChatSessionParser.isSessionComplete(filePath), false);
     });
   });
 
@@ -394,11 +400,14 @@ suite("ChatSessionParser Tests", () => {
         },
       ]);
 
-      assert.strictEqual(parser.getRequestCount(sessionFile), 2);
+      assert.strictEqual(ChatSessionParser.getRequestCount(sessionFile), 2);
     });
 
     test("should return 0 for non-existent file", () => {
-      assert.strictEqual(parser.getRequestCount("/nonexistent/file.json"), 0);
+      assert.strictEqual(
+        ChatSessionParser.getRequestCount("/nonexistent/file.json"),
+        0
+      );
     });
   });
 

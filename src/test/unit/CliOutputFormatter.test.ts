@@ -11,8 +11,8 @@ import {
   ToolResult,
   CliEvent,
   TextData,
-  CLI_EVENT_TYPES,
 } from "../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 
 suite("CliOutputFormatter Tests", () => {
   // Helper to create test output with defaults

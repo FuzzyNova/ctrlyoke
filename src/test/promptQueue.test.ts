@@ -74,10 +74,10 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.status, EXECUTION_STATES.IDLE);
     });
 
-    test("should clear completedIds on new load", () => {
+    test("should clear completedIndices on new load", () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       const state = queue.getState();
-      assert.strictEqual(state.completedIds.size, 0);
+      assert.strictEqual(state.completedIndices.size, 0);
     });
   });
 
@@ -205,7 +205,7 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       assert.strictEqual(queue.getState().currentIndex, 1);
-      assert.ok(queue.getState().completedIds.size > 0);
+      assert.ok(queue.getState().completedIndices.size > 0);
 
       queue.stop();
       // confirmedStopped() preserves state (STOP = abort current, preserve progress)
@@ -213,7 +213,7 @@ suite("PromptQueue State Machine Tests", () => {
 
       const state = queue.getState();
       assert.strictEqual(state.currentIndex, 1); // Preserved
-      assert.ok(state.completedIds.size > 0); // Preserved
+      assert.ok(state.completedIndices.size > 0); // Preserved
       // First prompt should still be completed
       assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
     });
@@ -272,14 +272,14 @@ suite("PromptQueue State Machine Tests", () => {
       });
     });
 
-    test("should clear completedIds", async () => {
+    test("should clear completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await queue.start();
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
-      assert.ok(queue.getState().completedIds.size > 0);
+      assert.ok(queue.getState().completedIndices.size > 0);
       await queue.restart();
-      assert.strictEqual(queue.getState().completedIds.size, 0);
+      assert.strictEqual(queue.getState().completedIndices.size, 0);
     });
 
     test("should reset execution time tracking", async () => {
@@ -325,12 +325,12 @@ suite("PromptQueue State Machine Tests", () => {
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
 
-      // Verify completedIds has entries
-      assert.ok(queue.getState().completedIds.size > 0);
+      // Verify completedIndices has entries
+      assert.ok(queue.getState().completedIndices.size > 0);
 
-      // Restart should clear completedIds AND update working file
+      // Restart should clear completedIndices AND update working file
       await queue.restart();
-      assert.strictEqual(queue.getState().completedIds.size, 0);
+      assert.strictEqual(queue.getState().completedIndices.size, 0);
 
       // Read working file to verify completedPrompts is not present (new format)
       const workingFile = await queue.readWorkingFile(workingFilePath);
@@ -452,13 +452,13 @@ suite("PromptQueue State Machine Tests", () => {
       assert.strictEqual(state.results[0].status, STEP_STATUS.COMPLETED);
     });
 
-    test("should add prompt identity to completedIds", async () => {
+    test("should add prompt identity to completedIndices", async () => {
       queue.loadPrompts(createPromptFile(samplePrompts));
       await queue.start();
       await queue.markCurrentAsSent();
       await queue.completeCurrentAndMoveNext();
       const state = queue.getState();
-      assert.ok(state.completedIds.size > 0);
+      assert.ok(state.completedIndices.size > 0);
     });
 
     test("should increment currentIndex", async () => {

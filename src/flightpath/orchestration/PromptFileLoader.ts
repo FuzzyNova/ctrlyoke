@@ -8,6 +8,7 @@ import {
   PromptFile,
   PromptItem,
   EXECUTION_STATES,
+  ExecutionProperties,
 } from "../../types/FlightPathTypes";
 import { FlightPathWebviewProvider } from "../../ui/FlightPathWebviewProvider";
 
@@ -81,23 +82,7 @@ export class PromptFileLoader {
           // Copy workflow-level properties from loaded file to working file
           // This ensures file properties take precedence over pending/global settings
           if (workingFilePath) {
-            // Step 1: Copy workflow-level properties explicitly defined in the loaded file
-            const propertiesToCopy = [
-              "harness",
-              "model",
-              "agent",
-              "skills",
-              "resumeSession",
-              "allowDynamicExtension",
-              "endCondition",
-            ] as const;
-
-            const updates: Record<string, unknown> = {};
-            for (const key of propertiesToCopy) {
-              if ((promptFile as any)[key] !== undefined) {
-                updates[key] = (promptFile as any)[key];
-              }
-            }
+            const updates = this.extractWorkflowProperties(promptFile);
 
             if (Object.keys(updates).length > 0) {
               const result =
@@ -106,7 +91,7 @@ export class PromptFileLoader {
               if (result?.appliedKeys.length) {
                 for (const key of result.appliedKeys) {
                   Log.info(
-                    `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify((promptFile as any)[key])}`
+                    `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
                   );
                 }
                 Log.info(
@@ -119,32 +104,7 @@ export class PromptFileLoader {
             // not explicitly specified in the source file. This ensures the working
             // file always has explicit values so the SettingsDrawer stays in sync
             // with the actual configuration (no implicit fallback to global settings).
-            const effectiveHarness =
-              (updates.harness as string | undefined) ??
-              ConfigurationUtils.getIntegrationMode();
-            const defaults: Record<string, unknown> = {};
-            if (updates.harness === undefined) {
-              defaults.harness = effectiveHarness;
-            }
-            if (updates.model === undefined) {
-              defaults.model = ConfigurationUtils.getModelForHarness(
-                effectiveHarness as any
-              );
-            }
-            if (updates.agent === undefined) {
-              defaults.agent = ConfigurationUtils.getDefaultAgent();
-            }
-            if (updates.skills === undefined) {
-              defaults.skills = ConfigurationUtils.getDefaultSkills();
-            }
-            if (updates.resumeSession === undefined) {
-              defaults.resumeSession =
-                ConfigurationUtils.shouldResumeExistingSession();
-            }
-            if (updates.allowDynamicExtension === undefined) {
-              defaults.allowDynamicExtension =
-                ConfigurationUtils.getDynamicQueueConfig().enabled;
-            }
+            const defaults = this.populateSettingsDefaults(updates);
 
             if (Object.keys(defaults).length > 0) {
               await this.promptQueue.updateWorkingFileProperties(defaults);
@@ -292,5 +252,81 @@ export class PromptFileLoader {
       // Re-throw so caller knows the operation failed
       throw error;
     }
+  }
+
+  /**
+   * Extract workflow-level ExecutionProperties from a parsed prompt file.
+   * Type-safe access without `as any` casts — uses the known keys from ExecutionProperties.
+   */
+  private extractWorkflowProperties(
+    promptFile: PromptFile
+  ): Record<string, unknown> {
+    const updates: Record<string, unknown> = {};
+
+    // Type-safe access: PromptFile extends ExecutionProperties,
+    // so these keys are statically known on the interface.
+    if (promptFile.harness !== undefined) {
+      updates.harness = promptFile.harness;
+    }
+    if (promptFile.model !== undefined) {
+      updates.model = promptFile.model;
+    }
+    if (promptFile.agent !== undefined) {
+      updates.agent = promptFile.agent;
+    }
+    if (promptFile.skills !== undefined) {
+      updates.skills = promptFile.skills;
+    }
+    if (promptFile.resumeSession !== undefined) {
+      updates.resumeSession = promptFile.resumeSession;
+    }
+    if (promptFile.allowDynamicExtension !== undefined) {
+      updates.allowDynamicExtension = promptFile.allowDynamicExtension;
+    }
+    if (promptFile.endCondition !== undefined) {
+      updates.endCondition = promptFile.endCondition;
+    }
+
+    return updates;
+  }
+
+  /**
+   * Build an object of default values from VS Code settings for any
+   * ExecutionProperties not already provided in `explicitValues`.
+   */
+  private populateSettingsDefaults(
+    explicitValues: Record<string, unknown>
+  ): Record<string, unknown> {
+    const effectiveHarness =
+      (explicitValues.harness as string | undefined) ??
+      ConfigurationUtils.getIntegrationMode();
+
+    const defaults: Record<string, unknown> = {};
+
+    if (explicitValues.harness === undefined) {
+      defaults.harness = effectiveHarness;
+    }
+    if (explicitValues.model === undefined) {
+      defaults.model = ConfigurationUtils.getModelForHarness(
+        effectiveHarness as Parameters<
+          typeof ConfigurationUtils.getModelForHarness
+        >[0]
+      );
+    }
+    if (explicitValues.agent === undefined) {
+      defaults.agent = ConfigurationUtils.getDefaultAgent();
+    }
+    if (explicitValues.skills === undefined) {
+      defaults.skills = ConfigurationUtils.getDefaultSkills();
+    }
+    if (explicitValues.resumeSession === undefined) {
+      defaults.resumeSession = ConfigurationUtils.shouldResumeExistingSession();
+    }
+    if (explicitValues.allowDynamicExtension === undefined) {
+      defaults.allowDynamicExtension =
+        ConfigurationUtils.getDynamicQueueConfig().enabled;
+    }
+
+    return defaults;
   }
 }

@@ -1,31 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Log } from "../../../utils/Log";
-import { FileSystemUtils } from "../../../utils/FileSystemUtils";
+import { readJsonFileAndDelete } from "../../../utils/FileSystemUtils";
+import {
+  NotificationConfig,
+  NotificationResult,
+} from "./interfaces/INotificationMonitor";
 
-/**
- * Notification monitoring configuration
- */
-export interface NotificationConfig {
-  /** Directory where notification files are written */
-  directory: string;
-  /** Poll interval in milliseconds (default: 500ms) */
-  pollMs?: number;
-  /** Timeout in milliseconds */
-  timeoutMs: number;
-}
-
-/**
- * Notification monitoring result
- */
-export interface NotificationResult {
-  /** Whether completion was detected */
-  completed: boolean;
-  /** Optional error message if completion failed */
-  error?: string;
-  /** Notification data if successful */
-  data?: any;
-}
+// Re-export for consumers that import from this file
+export type { NotificationConfig, NotificationResult };
 
 /**
  * Shared hook/notification file monitoring utilities
@@ -207,9 +190,9 @@ export class CliNotificationMonitor {
    */
   private static async readAndCleanupNotificationFile(
     notifyFile: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any | null> {
-    const fsUtils = new FileSystemUtils();
-    return await fsUtils.readJsonFileAndDelete(notifyFile);
+    return await readJsonFileAndDelete(notifyFile);
   }
 
   /**

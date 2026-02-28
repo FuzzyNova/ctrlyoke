@@ -300,8 +300,7 @@ export abstract class HarnessIntegration {
     // 2. Try to insert after last attachment
     const lastAttachmentEnd = expandedPrompt.lastIndexOf(ATTACHMENT_CLOSE_TAG);
     if (lastAttachmentEnd !== -1) {
-      const afterAttachment =
-        lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
+      const afterAttachment = lastAttachmentEnd + ATTACHMENT_CLOSE_TAG.length;
       const before = expandedPrompt.substring(0, afterAttachment);
       const after = expandedPrompt.substring(afterAttachment).trimStart();
       return `${before}\n\n${skillContent}\n\n${after}`;
@@ -536,14 +535,6 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   }
 
   /**
-   * Get the full prompt text sent (includes all context and instructions)
-   * Returns undefined if not tracked
-   */
-  getLastFullPrompt(): string | undefined {
-    return undefined;
-  }
-
-  /**
    * Parse token counts from statistics string
    * Returns undefined for non-CLI integrations or unparseable stats
    */
@@ -573,22 +564,6 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    */
   async retryDetection(): Promise<void> {
     await this.initialize();
-  }
-
-  /**
-   * Get capability information for this integration
-   */
-  getCapabilities(): {
-    hasDirectAutomation: boolean;
-    supportsZeroInteraction: boolean;
-    currentStrategy: string;
-  } {
-    const status = this.getStatus();
-    return {
-      hasDirectAutomation: this.isAvailable,
-      supportsZeroInteraction: this.isAvailable,
-      currentStrategy: status.strategy,
-    };
   }
 
   /**

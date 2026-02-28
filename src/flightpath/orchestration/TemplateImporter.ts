@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import { Log } from "../../utils/Log";
 
 /**
  * Manifest structure for agents
@@ -122,7 +123,7 @@ export class TemplateImporter {
         "agents"
       );
 
-      const { importedAgents, failedAgents } = await this.copyTemplateFiles(
+      const { importedItems, failedItems } = await this.copyTemplateFiles(
         selectedAgents.map((s) => s.agent),
         templatesPath,
         agentsDir
@@ -130,13 +131,13 @@ export class TemplateImporter {
 
       // Show result
       await this.showImportResult(
-        importedAgents,
-        failedAgents,
+        importedItems,
+        failedItems,
         agentsDir,
         selectedAgents[0]?.agent.file
       );
     } catch (error) {
-      console.error("FlightPath: Error importing agents:", error);
+      Log.error("FlightPath: Error importing agents:", error);
       vscode.window.showErrorMessage(`❌ Failed to import agents: ${error}`);
     }
   }
@@ -210,14 +211,12 @@ export class TemplateImporter {
         "workflows"
       );
 
-      const {
-        importedAgents: importedWorkflows,
-        failedAgents: failedWorkflows,
-      } = await this.copyTemplateFiles(
-        selectedWorkflows.map((s) => s.workflow),
-        templatesPath,
-        targetDir
-      );
+      const { importedItems: importedWorkflows, failedItems: failedWorkflows } =
+        await this.copyTemplateFiles(
+          selectedWorkflows.map((s) => s.workflow),
+          templatesPath,
+          targetDir
+        );
 
       // Show result
       await this.showImportResult(
@@ -227,7 +226,7 @@ export class TemplateImporter {
         selectedWorkflows[0]?.workflow.file
       );
     } catch (error) {
-      console.error("FlightPath: Error importing workflow templates:", error);
+      Log.error("FlightPath: Error importing workflow templates:", error);
       vscode.window.showErrorMessage(
         `❌ Failed to import workflow templates: ${error}`
       );
@@ -256,7 +255,7 @@ export class TemplateImporter {
       const manifestContent = await vscode.workspace.fs.readFile(manifestUri);
       return JSON.parse(Buffer.from(manifestContent).toString("utf-8"));
     } catch (error) {
-      console.error(`FlightPath: Failed to load ${type} manifest:`, error);
+      Log.error(`FlightPath: Failed to load ${type} manifest:`, error);
       vscode.window.showErrorMessage(
         `❌ Failed to load FlightPath ${type}. The extension may not be properly installed.`
       );
@@ -276,9 +275,9 @@ export class TemplateImporter {
     items: Array<{ id: string; label: string; file: string }>,
     srcDir: string,
     destDir: string
-  ): Promise<{ importedAgents: string[]; failedAgents: string[] }> {
-    const importedAgents: string[] = [];
-    const failedAgents: string[] = [];
+  ): Promise<{ importedItems: string[]; failedItems: string[] }> {
+    const importedItems: string[] = [];
+    const failedItems: string[] = [];
 
     for (const item of items) {
       const srcPath = path.join(srcDir, item.file);
@@ -306,14 +305,14 @@ export class TemplateImporter {
           vscode.Uri.file(srcPath)
         );
         await vscode.workspace.fs.writeFile(vscode.Uri.file(destPath), content);
-        importedAgents.push(item.label);
+        importedItems.push(item.label);
       } catch (error) {
-        console.error(`FlightPath: Failed to import ${item.id}:`, error);
-        failedAgents.push(item.label);
+        Log.error(`FlightPath: Failed to import ${item.id}:`, error);
+        failedItems.push(item.label);
       }
     }
 
-    return { importedAgents, failedAgents };
+    return { importedItems, failedItems };
   }
 
   /**

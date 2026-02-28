@@ -366,15 +366,7 @@ export class PromptFileParser {
       };
 
       // Copy workflow-level properties (if present)
-      if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
-      if (parsed.model !== undefined) promptFile.model = parsed.model;
-      if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
-      if (parsed.resumeSession !== undefined)
-        promptFile.resumeSession = parsed.resumeSession;
-      if (parsed.allowDynamicExtension !== undefined)
-        promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
-      if (parsed.endCondition !== undefined)
-        promptFile.endCondition = parsed.endCondition;
+      this.copyWorkflowLevelProperties(parsed, promptFile);
 
       return promptFile;
     }
@@ -397,20 +389,32 @@ export class PromptFileParser {
       };
 
       // Copy workflow-level properties (if present)
-      if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
-      if (parsed.model !== undefined) promptFile.model = parsed.model;
-      if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
-      if (parsed.resumeSession !== undefined)
-        promptFile.resumeSession = parsed.resumeSession;
-      if (parsed.allowDynamicExtension !== undefined)
-        promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
-      if (parsed.endCondition !== undefined)
-        promptFile.endCondition = parsed.endCondition;
+      this.copyWorkflowLevelProperties(parsed, promptFile);
 
       return promptFile;
     }
 
     throw new Error("Invalid prompt file format");
+  }
+
+  /**
+   * Copy workflow-level properties from parsed source to PromptFile.
+   * Centralizes the property copying to avoid duplication between
+   * single-prompt and multi-prompt normalization paths.
+   */
+  private copyWorkflowLevelProperties(
+    parsed: any,
+    promptFile: PromptFile
+  ): void {
+    if (parsed.harness !== undefined) promptFile.harness = parsed.harness;
+    if (parsed.model !== undefined) promptFile.model = parsed.model;
+    if (parsed.agent !== undefined) promptFile.agent = parsed.agent;
+    if (parsed.resumeSession !== undefined)
+      promptFile.resumeSession = parsed.resumeSession;
+    if (parsed.allowDynamicExtension !== undefined)
+      promptFile.allowDynamicExtension = parsed.allowDynamicExtension;
+    if (parsed.endCondition !== undefined)
+      promptFile.endCondition = parsed.endCondition;
   }
 
   /**

@@ -13,8 +13,8 @@ import {
   TextData,
   ThinkingBlock,
   ToolResultData,
-  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 
 /**
  * Dashboard-ready output format.

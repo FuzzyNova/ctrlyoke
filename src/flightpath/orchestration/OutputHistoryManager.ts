@@ -9,7 +9,10 @@ import {
   StepOutput,
 } from "../../types/OutputHistoryTypes";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
-import { ExecutionState } from "../../types/DashboardConstants";
+import {
+  EXECUTION_STATES,
+  type ExecutionState,
+} from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 
 /**
@@ -51,7 +54,8 @@ export class OutputHistoryManager {
     const basename = path.basename(workingFilePath);
     return basename
       .replace(/\.flightpath\.json$/, "")
-      .replace(/\.flightpath\.yaml$/, "");
+      .replace(/\.flightpath\.yaml$/, "")
+      .replace(/\.flightpath\.yml$/, "");
   }
 
   /** Get absolute path to a history file */
@@ -97,7 +101,7 @@ export class OutputHistoryManager {
         workflowId,
         runId: existingRuns.length + 1,
         startedAt,
-        executionState: "running" as ExecutionState,
+        executionState: EXECUTION_STATES.RUNNING,
         runStepCount: 0,
         promptOutputs: {},
       };
@@ -139,29 +143,17 @@ export class OutputHistoryManager {
     statusMessages: StatusMessage[]
   ): Promise<void> {
     if (!historyFilePath) {
-      Log.warn(
-        `🔴 [APPEND-DEBUG] saveStepOutput: historyFilePath is empty, skipping save for step ${stepIndex}`
-      );
       return;
     }
 
     try {
-      Log.info(
-        `🟢 [APPEND-DEBUG] saveStepOutput: Reading history file: ${historyFilePath}`
-      );
       const history = await this.readHistory(historyFilePath);
-      Log.info(
-        `🟢 [APPEND-DEBUG] saveStepOutput: Current history has ${Object.keys(history.promptOutputs).length} steps, adding/updating step ${stepIndex}`
-      );
       const existing = history.promptOutputs[stepIndex]?.cliOutputs ?? [];
       history.promptOutputs[stepIndex] = {
         cliOutputs: this.mergeCliOutputs(existing, cliOutputs),
         statusMessages,
       };
       await this.writeHistory(historyFilePath, history);
-      Log.info(
-        `🟢 [APPEND-DEBUG] saveStepOutput: Successfully saved step ${stepIndex} to ${historyFilePath}`
-      );
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
     }
@@ -259,29 +251,16 @@ export class OutputHistoryManager {
    */
   async getLatestHistoryFilePath(workflowId: string): Promise<string> {
     if (!this.isHistoryEnabled()) {
-      Log.warn(
-        `🔴 [APPEND-DEBUG] getLatestHistoryFilePath: History is disabled, returning empty path`
-      );
       return "";
     }
 
     const runs = await this.getRunsForWorkflow(workflowId);
-    Log.info(
-      `🟢 [APPEND-DEBUG] getLatestHistoryFilePath: Found ${runs.length} runs for workflowId="${workflowId}"`
-    );
     if (runs.length === 0) {
-      Log.warn(
-        `🔴 [APPEND-DEBUG] getLatestHistoryFilePath: No runs found, returning empty path`
-      );
       return "";
     }
 
     // runs[0] is the most recent (sorted newest first)
-    const latestPath = this.getHistoryFilePath(workflowId, runs[0]);
-    Log.info(
-      `🟢 [APPEND-DEBUG] getLatestHistoryFilePath: Returning latest path: ${latestPath}`
-    );
-    return latestPath;
+    return this.getHistoryFilePath(workflowId, runs[0]);
   }
 
   /**

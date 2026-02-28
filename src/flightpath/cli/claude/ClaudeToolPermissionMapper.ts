@@ -3,24 +3,8 @@ import {
   ToolPermissionConfig,
   ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
+import { COPILOT_TO_CLAUDE_MAP } from "../shared/CliToolPermissionMapper";
 import { Log } from "../../../utils/Log";
-
-/**
- * Maps Copilot permission patterns to Claude tool names
- */
-const COPILOT_TO_CLAUDE_MAP: Record<string, string> = {
-  shell: "Bash",
-  write: "Write",
-  bash: "Bash",
-  read: "Read",
-  edit: "Edit",
-  multiedit: "MultiEdit",
-  glob: "Glob",
-  grep: "Grep",
-  ls: "LS",
-  webfetch: "WebFetch",
-  todowrite: "TodoWrite",
-};
 
 /**
  * Claude CLI Tool Permission Mapper
@@ -107,16 +91,19 @@ export class ClaudeToolPermissionMapper
   /**
    * Check if full permissions are granted (no prompts will occur)
    *
-   * All modes now auto-grant permissions:
-   * - dangerouslyAllowAll: bypasses ALL checks including deny list
-   * - allowAll: uses bypassPermissions mode (respects deny list)
-   * - custom: uses bypassPermissions mode (respects deny list)
+   * Claude CLI auto-grants permissions in all modes via --permission-mode bypassPermissions.
+   * However, denied tools still restrict access, so hasFullPermissions returns false
+   * when deny patterns are present (unless dangerouslyAllowAll which ignores deny list).
    *
    * @param config Tool permission configuration
-   * @returns True (always - all modes auto-grant)
+   * @returns True if all permissions auto-granted with no restrictions
    */
   hasFullPermissions(config: ToolPermissionConfig): boolean {
-    return true;
+    if (config.mode === "dangerouslyAllowAll") {
+      return true; // Bypasses ALL checks including deny list
+    }
+    // Other modes respect deny list — if any denied tools, not truly "full"
+    return config.deniedTools.length === 0;
   }
 
   // ============================================================

@@ -33,7 +33,6 @@ import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "./types/DashboardConstants";
-import { hashPromptContent } from "./utils/PromptIdentity";
 import { withFileLock } from "./utils/FileLockUtils";
 
 // Path constants (must match ConfigurationUtils.PATH_CONSTANTS)
@@ -76,8 +75,27 @@ function log(...args: any[]) {
  * FlightPath MCP Server
  * Provides tools for AI agents to read and extend workflow queues
  */
+/**
+ * Read queue size limit from environment (set by the extension via MCP config env vars).
+ * Falls back to 100 if not set. A value of 0 or FLIGHTPATH_UNLIMITED_MODE=true means no limit.
+ */
+function getMaxQueueSize(): number {
+  const envValue = process.env.FLIGHTPATH_MAX_QUEUE_SIZE;
+  if (envValue) {
+    const parsed = parseInt(envValue, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return 100; // Default, matches package.json default
+}
+
+function isUnlimitedMode(): boolean {
+  return process.env.FLIGHTPATH_UNLIMITED_MODE === "true";
+}
+
 class FlightPathMCPServer {
-  private server: typeof Server;
+  private server: InstanceType<typeof Server>;
   private workspaceRoot: string;
   private operationQueue: Promise<any> = Promise.resolve();
 
@@ -87,7 +105,13 @@ class FlightPathMCPServer {
     log("Workspace root:", this.workspaceRoot);
     log("Environment variables:", {
       FLIGHTPATH_WORKSPACE: process.env.FLIGHTPATH_WORKSPACE,
-      FLIGHTPATH_WORKING_FILE: process.env.FLIGHTPATH_WORKING_FILE || "(not set — will scan queue dir)",
+      FLIGHTPATH_WORKING_FILE:
+        process.env.FLIGHTPATH_WORKING_FILE ||
+        "(not set — will scan queue dir)",
+      FLIGHTPATH_MAX_QUEUE_SIZE:
+        process.env.FLIGHTPATH_MAX_QUEUE_SIZE || "(not set — default 100)",
+      FLIGHTPATH_UNLIMITED_MODE:
+        process.env.FLIGHTPATH_UNLIMITED_MODE || "(not set — default false)",
       NODE_ENV: process.env.NODE_ENV,
     });
 
@@ -281,6 +305,9 @@ class FlightPathMCPServer {
       (p) => p._runtime?.completedAt !== undefined
     ).length;
 
+    const unlimited = isUnlimitedMode();
+    const maxSize = getMaxQueueSize();
+
     const response = {
       metadata: {
         workflowName: queueData.workflowName,
@@ -288,8 +315,8 @@ class FlightPathMCPServer {
         totalPrompts: prompts.length,
         completedPrompts: completedCount,
         executionState: runtime.executionState,
-        maxQueueSize: 100, // TODO: Read from config
-        remainingSlots: 100 - prompts.length,
+        maxQueueSize: unlimited ? "unlimited" : maxSize,
+        remainingSlots: unlimited ? "unlimited" : maxSize - prompts.length,
         workingFile: path.relative(this.workspaceRoot, workingFile),
       },
       prompts,
@@ -419,7 +446,8 @@ class FlightPathMCPServer {
       }
 
       // Validate queue size limit (only for prompts that will actually be added)
-      const maxQueueSize = 100; // TODO: Read from config
+      const unlimited = isUnlimitedMode();
+      const maxQueueSize = getMaxQueueSize();
       const newTotalSize =
         (queueData.prompts || []).length + validPrompts.length;
       log("Queue size check:", {
@@ -427,10 +455,10 @@ class FlightPathMCPServer {
         adding: validPrompts.length,
         rejected: rejectedPrompts.length,
         newTotal: newTotalSize,
-        max: maxQueueSize,
+        max: unlimited ? "unlimited" : maxQueueSize,
       });
 
-      if (newTotalSize > maxQueueSize) {
+      if (!unlimited && newTotalSize > maxQueueSize) {
         throw new Error(
           `Queue size limit exceeded. Current: ${(queueData.prompts || []).length}, Adding: ${validPrompts.length}, Max: ${maxQueueSize}`
         );
@@ -563,7 +591,10 @@ class FlightPathMCPServer {
         await fs.access(pinnedFile);
         return pinnedFile;
       } catch (error: any) {
-        log("Pinned working file not accessible, falling back to scan:", error.message);
+        log(
+          "Pinned working file not accessible, falling back to scan:",
+          error.message
+        );
       }
     }
 
@@ -595,7 +626,8 @@ class FlightPathMCPServer {
             return {
               path: filePath,
               mtime: stats.mtime,
-              executionState: (data._runtime?.executionState as string) ?? "idle",
+              executionState:
+                (data._runtime?.executionState as string) ?? "idle",
             };
           } catch {
             return null;
@@ -604,7 +636,8 @@ class FlightPathMCPServer {
       );
 
       const validFiles = fileInfos.filter(
-        (f): f is { path: string; mtime: Date; executionState: string } => f !== null
+        (f): f is { path: string; mtime: Date; executionState: string } =>
+          f !== null
       );
 
       if (validFiles.length === 0) {
@@ -618,7 +651,11 @@ class FlightPathMCPServer {
       const candidates = runningFiles.length > 0 ? runningFiles : validFiles;
       candidates.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
-      log("Selected working file:", candidates[0].path, `(state=${candidates[0].executionState})`);
+      log(
+        "Selected working file:",
+        candidates[0].path,
+        `(state=${candidates[0].executionState})`
+      );
       return candidates[0].path;
     } catch (error: any) {
       log("ERROR finding active working file:", error.message);
@@ -645,13 +682,6 @@ class FlightPathMCPServer {
       return "completed"; // Fallback for prompts before current
     }
     return "pending";
-  }
-
-  /**
-   * Generate a unique segment ID
-   */
-  private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substring(7)}`;
   }
 
   /**

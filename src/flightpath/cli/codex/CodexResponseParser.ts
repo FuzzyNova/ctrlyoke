@@ -3,13 +3,13 @@ import {
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
 import { CODEX_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
 import {
-  UniversalCliOutput,
-  CliEvent,
   CLI_EVENT_TYPES,
-} from "../../../types/CliOutputTypes";
-import { OPERATION_STATUS } from "../../../types/DashboardConstants";
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
+import { CliResponseParser } from "../shared/CliResponseParser";
 
 // ============================================================
 // CODEX CLI JSON EVENT TYPE DEFINITIONS
@@ -154,7 +154,9 @@ export class CodexResponseParser
     let isError = false;
     let errorMessage: string | undefined;
 
-    const objects = this.parseJsonLines(stdout);
+    const objects = CliResponseParser.parseJsonLines(
+      stdout
+    ) as CodexCliJsonEvent[];
 
     for (const json of objects) {
       // Extract session ID from thread.started
@@ -545,7 +547,9 @@ export class CodexResponseParser
    * @returns Session ID if found
    */
   extractSessionId(output: string): string | undefined {
-    const objects = this.parseJsonLines(output);
+    const objects = CliResponseParser.parseJsonLines(
+      output
+    ) as CodexCliJsonEvent[];
 
     for (const json of objects) {
       if (json.type === "thread.started" && json.thread_id) {
@@ -580,33 +584,6 @@ export class CodexResponseParser
   // ============================================================
   // PRIVATE HELPER METHODS
   // ============================================================
-
-  /**
-   * Parse JSONL (newline-delimited JSON) into array of objects
-   *
-   * @param jsonlText JSONL string
-   * @returns Array of parsed JSON objects
-   */
-  private parseJsonLines(jsonlText: string): CodexCliJsonEvent[] {
-    const objects: CodexCliJsonEvent[] = [];
-    const lines = jsonlText.split("\n");
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      try {
-        const json = JSON.parse(trimmed);
-        objects.push(json);
-      } catch (e) {
-        Log.debug(`Failed to parse JSONL line: ${e}`);
-      }
-    }
-
-    return objects;
-  }
 
   /**
    * Extract usage statistics from JSON event

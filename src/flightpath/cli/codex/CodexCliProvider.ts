@@ -14,6 +14,7 @@ import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { CODEX_CLI_MODELS } from "../../../utils/ModelConstants";
 import { Log } from "../../../utils/Log";
+import { CliProviderUtils } from "../shared/CliProviderUtils";
 
 const execAsync = promisify(exec);
 
@@ -109,37 +110,17 @@ export class CodexCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    if (workflowContext && workspaceRoot) {
-      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-      const allowDynamicExtension =
-        workflowContext?.resolvedProperties?.allowDynamicExtension ??
-        dynamicQueueConfig.enabled;
-
-      if (allowDynamicExtension) {
-        const {
-          shouldInjectExtensionInstructions,
-        } = require("../../../utils/PromptIdentity");
-        const shouldInject = shouldInjectExtensionInstructions(
-          prompt,
-          workflowContext.promptIndex,
-          workflowContext.allPrompts,
-          dynamicQueueConfig.dynamicExtensionOnLastPrompt,
-          allowDynamicExtension
-        );
-
-        if (shouldInject) {
-          const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
-          const mcpArgs = await this.getMcpConfigArgs(
-            mcpServerPath,
-            workspaceRoot,
-            workflowContext?.workingFilePath
-          );
-          if (mcpArgs) {
-            args.push(...mcpArgs);
-            Log.info("🔧 MCP server config added for dynamic queue extension");
-          }
-        }
-      }
+    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+      prompt,
+      workflowContext,
+      workspaceRoot,
+      context,
+      (serverPath, wsRoot, workingFile, additionalEnv) =>
+        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
+    );
+    if (mcpArgs.length > 0) {
+      args.push(...mcpArgs);
+      Log.info("🔧 MCP server config added for dynamic queue extension");
     }
 
     // Headless mode: add exec command and --json flag
@@ -154,7 +135,7 @@ export class CodexCliProvider implements ICliProvider {
 
     // Add workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = this.getWorkspaceDirs(workspaceRoot);
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });
@@ -232,22 +213,6 @@ export class CodexCliProvider implements ICliProvider {
     // handled by the execution methods (buildHeadlessArgs, etc.)
 
     return args;
-  }
-
-  /**
-   * Get workspace directories for --add-dir arguments
-   */
-  private getWorkspaceDirs(workspaceRoot: string): string[] {
-    const workspaceDirs: string[] = [];
-
-    // Add primary workspace folder
-    if (vscode.workspace.workspaceFolders) {
-      vscode.workspace.workspaceFolders.forEach((folder) => {
-        workspaceDirs.push(folder.uri.fsPath);
-      });
-    }
-
-    return workspaceDirs;
   }
 
   /**
@@ -343,14 +308,16 @@ export class CodexCliProvider implements ICliProvider {
   async getMcpConfigArgs(
     mcpServerPath: string,
     workspaceRoot: string,
-    workingFilePath?: string
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
   ): Promise<string[] | null> {
     try {
       const tomlConfig = CliMcpConfigGenerator.generateInlineTomlConfig(
         "flightpath",
         mcpServerPath,
         workspaceRoot,
-        workingFilePath
+        workingFilePath,
+        additionalEnv
       );
       return ["-c", tomlConfig];
     } catch (error) {

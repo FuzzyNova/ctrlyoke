@@ -63,6 +63,7 @@ export class CliProcessManager {
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
+      let settled = false;
 
       this.logger?.(`📤 Spawning: ${command} ${args.join(" ")}`);
 
@@ -91,6 +92,10 @@ export class CliProcessManager {
 
       // Handle errors
       child.on("error", (error: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         this.logger?.(`❌ Process error: ${error}`);
         this.currentProcess = undefined;
         this.clearKillTimeout();
@@ -99,10 +104,17 @@ export class CliProcessManager {
 
       // Handle completion
       child.on("close", (code: number | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         if (this.currentProcess === child) {
           this.currentProcess = undefined;
         }
         this.clearKillTimeout();
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         this.logger?.(`✅ Process exited with code: ${code}`);
 
         resolve({
@@ -113,9 +125,11 @@ export class CliProcessManager {
       });
 
       // Handle timeout
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
       if (options.timeout) {
-        setTimeout(() => {
-          if (this.currentProcess === child) {
+        timeoutId = setTimeout(() => {
+          if (!settled && this.currentProcess === child) {
+            settled = true;
             this.logger?.(
               "⏱️ Process timeout - sending SIGTERM, will escalate to SIGKILL if needed"
             );
@@ -138,6 +152,7 @@ export class CliProcessManager {
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
+      let settled = false;
 
       const child = spawn(command, args, {
         cwd: this.workspaceRoot,
@@ -147,14 +162,29 @@ export class CliProcessManager {
 
       child.stdout?.on("data", (data: Buffer) => (stdout += data.toString()));
       child.stderr?.on("data", (data: Buffer) => (stderr += data.toString()));
-      child.on("error", reject);
-      child.on("close", (code: number | null) =>
-        resolve({ stdout, stderr, exitCode: code ?? 1 })
-      );
+      child.on("error", (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+      child.on("close", (code: number | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve({ stdout, stderr, exitCode: code ?? 1 });
+      });
 
-      setTimeout(() => {
-        child.kill();
-        reject(new Error(`Command timeout after ${timeoutMs}ms`));
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          child.kill();
+          reject(new Error(`Command timeout after ${timeoutMs}ms`));
+        }
       }, timeoutMs);
     });
   }

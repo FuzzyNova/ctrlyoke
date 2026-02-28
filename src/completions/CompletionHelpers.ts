@@ -93,7 +93,7 @@ const CACHE_DURATION_MS = 5000; // 5 seconds
 /**
  * Get all workspace files (with caching)
  */
-export async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
+async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
   const now = Date.now();
 
   // Return cached results if still valid
@@ -313,8 +313,10 @@ export function initializeCompletionHelpers(
 
 /**
  * Dispose resources
+ * NOTE: Dead code — configWatcher is pushed to context.subscriptions and
+ * disposed automatically by VS Code. Kept as private for potential future use.
  */
-export function disposeCompletionHelpers(): void {
+function disposeCompletionHelpers(): void {
   configWatcher?.dispose();
 }
 

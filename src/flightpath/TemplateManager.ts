@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { Log } from "../utils/Log";
 
 /**
  * Template information structure for UI display
@@ -70,6 +71,18 @@ export class TemplateManager {
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+  }
+
+  /**
+   * Async check for path existence (replaces synchronous existsSync)
+   */
+  private async pathExists(p: string): Promise<boolean> {
+    try {
+      await fs.promises.access(p);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -148,7 +161,7 @@ export class TemplateManager {
       }
       const filename = templateId.substring(7); // Remove "custom:" prefix
       const templatePath = path.join(customPath, `${filename}.flightpath.json`);
-      return fs.readFileSync(templatePath, "utf-8");
+      return await fs.promises.readFile(templatePath, "utf-8");
     }
 
     // Built-in template
@@ -156,7 +169,7 @@ export class TemplateManager {
       this.getBuiltInTemplatesPath(),
       `${templateId}.flightpath.json`
     );
-    return fs.readFileSync(templatePath, "utf-8");
+    return await fs.promises.readFile(templatePath, "utf-8");
   }
 
   /**
@@ -241,17 +254,17 @@ export class TemplateManager {
     const fullPath = path.join(fullDir, `${filename}.flightpath.json`);
 
     // Ensure directory exists
-    if (!fs.existsSync(fullDir)) {
-      fs.mkdirSync(fullDir, { recursive: true });
+    if (!(await this.pathExists(fullDir))) {
+      await fs.promises.mkdir(fullDir, { recursive: true });
     }
 
     // Check if file already exists
-    if (fs.existsSync(fullPath)) {
+    if (await this.pathExists(fullPath)) {
       throw new Error(`File already exists: ${filename}.flightpath.json`);
     }
 
     // Write file
-    fs.writeFileSync(fullPath, workflowContent, "utf-8");
+    await fs.promises.writeFile(fullPath, workflowContent, "utf-8");
 
     return fullPath;
   }
@@ -272,8 +285,8 @@ export class TemplateManager {
     }
 
     // Ensure templates directory exists
-    if (!fs.existsSync(customPath)) {
-      fs.mkdirSync(customPath, { recursive: true });
+    if (!(await this.pathExists(customPath))) {
+      await fs.promises.mkdir(customPath, { recursive: true });
     }
 
     // Get template content
@@ -283,12 +296,12 @@ export class TemplateManager {
     const fullPath = path.join(customPath, `${templateName}.flightpath.json`);
 
     // Check if file already exists
-    if (fs.existsSync(fullPath)) {
+    if (await this.pathExists(fullPath)) {
       throw new Error(`Template already exists: ${templateName}`);
     }
 
     // Write file
-    fs.writeFileSync(fullPath, templateContent, "utf-8");
+    await fs.promises.writeFile(fullPath, templateContent, "utf-8");
 
     return fullPath;
   }
@@ -298,21 +311,21 @@ export class TemplateManager {
    */
   private async discoverCustomTemplates(): Promise<TemplateInfo[]> {
     const customPath = this.getCustomTemplatesPath();
-    if (!customPath || !fs.existsSync(customPath)) {
+    if (!customPath || !(await this.pathExists(customPath))) {
       return [];
     }
 
     const templates: TemplateInfo[] = [];
 
     try {
-      const files = fs.readdirSync(customPath);
+      const files = await fs.promises.readdir(customPath);
       for (const file of files) {
         if (file.endsWith(".flightpath.json")) {
           const fullPath = path.join(customPath, file);
           const name = file.replace(".flightpath.json", "");
 
           try {
-            const content = fs.readFileSync(fullPath, "utf-8");
+            const content = await fs.promises.readFile(fullPath, "utf-8");
             const variables = this.extractVariables(content);
 
             templates.push({
@@ -324,12 +337,12 @@ export class TemplateManager {
               isBuiltIn: false,
             });
           } catch (error) {
-            console.warn(`Failed to read custom template: ${file}`, error);
+            Log.warn(`Failed to read custom template: ${file}`, error);
           }
         }
       }
     } catch (error) {
-      console.warn("Failed to discover custom templates:", error);
+      Log.warn("Failed to discover custom templates:", error);
     }
 
     return templates;

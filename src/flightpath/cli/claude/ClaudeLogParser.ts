@@ -24,9 +24,12 @@ import {
   FileDeleteData,
   McpToolCallData,
   WebSearchData,
-  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
-import { OPERATION_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
+import { CliEventMapper } from "../shared/CliEventMapper";
 
 /**
  * Claude CLI Log Parser
@@ -182,95 +185,92 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
           if (contentBlock.type === "tool_use") {
             const toolName = contentBlock.name;
             const input = contentBlock.input || {};
+            const classification = CliEventMapper.classifyTool(toolName);
 
-            // Map Claude-specific tool names to semantic event types
-            if (toolName === "bash" || toolName === "shell") {
-              // Bash command execution (INITIATED event)
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.BASH_COMMAND,
-                timestamp,
-                data: {
-                  command: input.command || "unknown",
-                  workingDir: input.working_dir || input.cwd,
-                  status: OPERATION_STATUS.INITIATED,
-                } as BashCommandData,
-              });
-            } else if (toolName === "write") {
-              // File write (create new file)
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_WRITE,
-                timestamp,
-                data: {
-                  path: input.path || "unknown",
-                  content: input.content || "",
-                  status: OPERATION_STATUS.INITIATED,
-                } as FileWriteData,
-              });
-            } else if (toolName === "edit" || toolName === "apply_patch") {
-              // File edit (modify existing file)
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_EDIT,
-                timestamp,
-                data: {
-                  path: input.path || "unknown",
-                  oldContent: input.old_content || input.old_str,
-                  newContent: input.new_content || input.new_str,
-                  status: OPERATION_STATUS.INITIATED,
-                } as FileEditData,
-              });
-            } else if (toolName === "read" || toolName === "read_file") {
-              // File read
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_READ,
-                timestamp,
-                data: {
-                  path: input.path || "unknown",
-                  status: OPERATION_STATUS.INITIATED,
-                } as FileReadData,
-              });
-            } else if (toolName === "delete" || toolName === "delete_file") {
-              // File delete
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.FILE_DELETE,
-                timestamp,
-                data: {
-                  path: input.path || "unknown",
-                } as FileDeleteData,
-              });
-            } else if (
-              toolName.includes("search") ||
-              toolName === "web_search"
-            ) {
-              // Web search
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.WEB_SEARCH,
-                timestamp,
-                data: {
-                  query: input.query || "",
-                } as WebSearchData,
-              });
-            } else if (toolName.includes("mcp_") || input.server) {
-              // MCP tool call (has server field)
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-                timestamp,
-                data: {
-                  server: input.server || "unknown",
-                  tool: toolName,
-                  parameters: input,
-                } as McpToolCallData,
-              });
-            } else {
-              // Unknown tool - fallback to generic TOOL_CALL
-              outputEvents.push({
-                type: CLI_EVENT_TYPES.TOOL_CALL,
-                timestamp,
-                data: {
-                  name: toolName,
-                  parameters: input,
-                  id: contentBlock.id,
-                } as ToolCall,
-              });
+            switch (classification.type) {
+              case CLI_EVENT_TYPES.BASH_COMMAND:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.BASH_COMMAND,
+                  timestamp,
+                  data: {
+                    command: input.command || "unknown",
+                    workingDir: input.working_dir || input.cwd,
+                    status: OPERATION_STATUS.INITIATED,
+                  } as BashCommandData,
+                });
+                break;
+              case CLI_EVENT_TYPES.FILE_WRITE:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_WRITE,
+                  timestamp,
+                  data: {
+                    path: input.path || "unknown",
+                    content: input.content || "",
+                    status: OPERATION_STATUS.INITIATED,
+                  } as FileWriteData,
+                });
+                break;
+              case CLI_EVENT_TYPES.FILE_EDIT:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_EDIT,
+                  timestamp,
+                  data: {
+                    path: input.path || "unknown",
+                    oldContent: input.old_content || input.old_str,
+                    newContent: input.new_content || input.new_str,
+                    status: OPERATION_STATUS.INITIATED,
+                  } as FileEditData,
+                });
+                break;
+              case CLI_EVENT_TYPES.FILE_READ:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_READ,
+                  timestamp,
+                  data: {
+                    path: input.path || "unknown",
+                    status: OPERATION_STATUS.INITIATED,
+                  } as FileReadData,
+                });
+                break;
+              case CLI_EVENT_TYPES.FILE_DELETE:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.FILE_DELETE,
+                  timestamp,
+                  data: {
+                    path: input.path || "unknown",
+                  } as FileDeleteData,
+                });
+                break;
+              case CLI_EVENT_TYPES.WEB_SEARCH:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.WEB_SEARCH,
+                  timestamp,
+                  data: {
+                    query: input.query || "",
+                  } as WebSearchData,
+                });
+                break;
+              case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+                  timestamp,
+                  data: {
+                    server: (classification as { server: string }).server,
+                    tool: (classification as { tool: string }).tool,
+                    parameters: input,
+                  } as McpToolCallData,
+                });
+                break;
+              default:
+                outputEvents.push({
+                  type: CLI_EVENT_TYPES.TOOL_CALL,
+                  timestamp,
+                  data: {
+                    name: toolName,
+                    parameters: input,
+                    id: contentBlock.id,
+                  } as ToolCall,
+                });
             }
           }
         }
@@ -650,7 +650,7 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
       for (const candidatePath of candidates) {
         try {
           // Read first 10 events from log file
-          const events = await this.readFirstNEvents(candidatePath, 10);
+          const events = await this.readFirstNJsonlEvents(candidatePath, 10);
 
           // Look for user event with matching prompt text
           for (const event of events) {
@@ -908,67 +908,5 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
     normalized = normalized.replace(/[\\\/]/g, "-");
 
     return normalized;
-  }
-
-  /**
-   * Read first N events from JSONL log file
-   *
-   * Helper for session discovery. Reads only the first N lines to avoid
-   * parsing entire log file (efficiency optimization).
-   *
-   * @param filePath - Absolute path to log file
-   * @param count - Maximum number of events to read
-   * @returns Array of parsed events (up to count)
-   *
-   * @remarks
-   * **Efficiency:**
-   * - Only reads first N lines (not entire file)
-   * - Stops reading after N valid JSON objects
-   * - Skips empty lines
-   *
-   * **Error Handling:**
-   * - Returns empty array if file doesn't exist
-   * - Logs parse errors but continues processing
-   * - Stops on file read errors
-   */
-  private async readFirstNEvents(
-    filePath: string,
-    count: number
-  ): Promise<any[]> {
-    try {
-      if (!fs.existsSync(filePath)) {
-        return [];
-      }
-
-      const content = fs.readFileSync(filePath, "utf8");
-      const lines = content.split("\n");
-      const events: any[] = [];
-
-      for (const line of lines) {
-        if (events.length >= count) {
-          break;
-        }
-
-        const trimmed = line.trim();
-        if (!trimmed) {
-          continue; // Skip empty lines
-        }
-
-        try {
-          const event = JSON.parse(trimmed);
-          events.push(event);
-        } catch (error) {
-          // Log parse errors but continue
-          Log.debug(
-            `[ClaudeLogParser] Failed to parse JSON line: ${trimmed.substring(0, 100)}...`
-          );
-        }
-      }
-
-      return events;
-    } catch (error) {
-      Log.debug(`[ClaudeLogParser] Error reading file ${filePath}:`, error);
-      return [];
-    }
   }
 }

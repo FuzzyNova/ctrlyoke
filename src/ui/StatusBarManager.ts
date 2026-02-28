@@ -142,87 +142,6 @@ export class StatusBarManager {
   }
 
   /**
-   * Show progress in status bar
-   */
-  showProgress(
-    message: string,
-    progress?: { current: number; total: number }
-  ): void {
-    let text = `$(loading~spin) ${message}`;
-
-    if (progress && progress.total > 0) {
-      const percentage = Math.round((progress.current / progress.total) * 100);
-      text = `$(loading~spin) ${message} (${percentage}%)`;
-    }
-
-    this.statusBarItem.text = text;
-    this.statusBarItem.show();
-  }
-
-  /**
-   * Show success message
-   */
-  showSuccess(message: string, duration: number = 3000): void {
-    const originalText = this.statusBarItem.text;
-    const originalTooltip = this.statusBarItem.tooltip;
-    const originalBackground = this.statusBarItem.backgroundColor;
-
-    this.statusBarItem.text = `$(check) ${message}`;
-    this.statusBarItem.tooltip = message;
-    this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-      "statusBarItem.prominentBackground"
-    );
-
-    setTimeout(() => {
-      this.statusBarItem.text = originalText;
-      this.statusBarItem.tooltip = originalTooltip;
-      this.statusBarItem.backgroundColor = originalBackground;
-    }, duration);
-  }
-
-  /**
-   * Show error message
-   */
-  showError(message: string, duration: number = 5000): void {
-    const originalText = this.statusBarItem.text;
-    const originalTooltip = this.statusBarItem.tooltip;
-    const originalBackground = this.statusBarItem.backgroundColor;
-
-    this.statusBarItem.text = `$(error) ${message}`;
-    this.statusBarItem.tooltip = message;
-    this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-      "statusBarItem.errorBackground"
-    );
-
-    setTimeout(() => {
-      this.statusBarItem.text = originalText;
-      this.statusBarItem.tooltip = originalTooltip;
-      this.statusBarItem.backgroundColor = originalBackground;
-    }, duration);
-  }
-
-  /**
-   * Show warning message
-   */
-  showWarning(message: string, duration: number = 4000): void {
-    const originalText = this.statusBarItem.text;
-    const originalTooltip = this.statusBarItem.tooltip;
-    const originalBackground = this.statusBarItem.backgroundColor;
-
-    this.statusBarItem.text = `$(warning) ${message}`;
-    this.statusBarItem.tooltip = message;
-    this.statusBarItem.backgroundColor = new vscode.ThemeColor(
-      "statusBarItem.warningBackground"
-    );
-
-    setTimeout(() => {
-      this.statusBarItem.text = originalText;
-      this.statusBarItem.tooltip = originalTooltip;
-      this.statusBarItem.backgroundColor = originalBackground;
-    }, duration);
-  }
-
-  /**
    * Hide status bar item
    */
   hide(): void {
@@ -249,42 +168,6 @@ export class StatusBarManager {
     const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
 
     return { current, total, percentage };
-  }
-
-  /**
-   * Update command associated with the status bar item
-   */
-  updateCommand(command: string): void {
-    this.statusBarItem.command = command;
-  }
-
-  /**
-   * Get current status bar text
-   */
-  getText(): string {
-    return this.statusBarItem.text;
-  }
-
-  /**
-   * Set custom status bar content
-   */
-  setCustomStatus(
-    text: string,
-    tooltip?: string,
-    command?: string,
-    backgroundColor?: vscode.ThemeColor
-  ): void {
-    this.statusBarItem.text = text;
-    if (tooltip) {
-      this.statusBarItem.tooltip = tooltip;
-    }
-    if (command) {
-      this.statusBarItem.command = command;
-    }
-    if (backgroundColor) {
-      this.statusBarItem.backgroundColor = backgroundColor;
-    }
-    this.statusBarItem.show();
   }
 
   /**

@@ -1,6 +1,7 @@
 import {
   IToolPermissionMapper,
   ToolPermissionConfig,
+  ToolPermissionMapperBase,
 } from "../shared/interfaces/IToolPermissionMapper";
 import { Log } from "../../../utils/Log";
 
@@ -27,7 +28,10 @@ import { Log } from "../../../utils/Log";
  * Read-only tools (always allowed, no CLI args needed):
  * - grep, list_files, read, read_file, etc.
  */
-export class CopilotToolPermissionMapper implements IToolPermissionMapper {
+export class CopilotToolPermissionMapper
+  extends ToolPermissionMapperBase
+  implements IToolPermissionMapper
+{
   /**
    * Read-only tools that don't require explicit permission
    * (Copilot CLI auto-grants these)
@@ -147,24 +151,5 @@ export class CopilotToolPermissionMapper implements IToolPermissionMapper {
 
     // Copilot uses same pattern format as user config
     return pattern;
-  }
-
-  /**
-   * Parse a tool pattern into name and arguments
-   *
-   * @param pattern Tool pattern string (e.g., "shell(git:*)")
-   * @returns [toolName, args] or null if invalid
-   *
-   * @example
-   * parsePattern("shell(git:*)") → ["shell", "(git:*)"]
-   * parsePattern("write") → ["write", ""]
-   * parsePattern("invalid-pattern!") → null
-   */
-  private parsePattern(pattern: string): [string, string] | null {
-    const match = pattern.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)(\(.*\))?$/);
-    if (!match) {
-      return null;
-    }
-    return [match[1], match[2] || ""];
   }
 }

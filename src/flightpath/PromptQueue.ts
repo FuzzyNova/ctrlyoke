@@ -99,7 +99,7 @@ export class PromptQueue {
       prompts: [],
       results: [],
       stopped: false,
-      completedIds: new Set<string>(),
+      completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
@@ -135,7 +135,7 @@ export class PromptQueue {
       prompts: [],
       results: [],
       stopped: false,
-      completedIds: new Set<string>(),
+      completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
@@ -168,7 +168,7 @@ export class PromptQueue {
         timestamp: new Date(),
       })),
       stopped: false, // Reset stopped flag on new load
-      completedIds: new Set<string>(),
+      completedIndices: new Set<string>(),
       totalExecutionTime: 0,
       queueExtensions: 0,
       totalPausedDuration: 0,
@@ -202,18 +202,18 @@ export class PromptQueue {
 
       const runtime = workingFile._runtime;
 
-      // Build completedIds from per-prompt _runtime.completedAt (source of truth).
+      // Build completedIndices from per-prompt _runtime.completedAt (source of truth).
       // Fall back to currentIndex boundary for old working files that lack per-prompt _runtime.
       const hasPerPromptTracking = workingFile.prompts.some(
         (p) => p._runtime?.completedAt !== undefined
       );
 
-      const completedIds = new Set<string>();
+      const completedIndices = new Set<string>();
       if (hasPerPromptTracking) {
         // New format: use per-prompt completedAt
         workingFile.prompts.forEach((p, i) => {
           if (p._runtime?.completedAt !== undefined) {
-            completedIds.add(String(i));
+            completedIndices.add(String(i));
           }
         });
       } else if (runtime?.currentIndex && runtime.currentIndex > 0) {
@@ -222,7 +222,7 @@ export class PromptQueue {
           "Old working file format detected: using currentIndex for completion boundary"
         );
         for (let i = 0; i < runtime.currentIndex; i++) {
-          completedIds.add(String(i));
+          completedIndices.add(String(i));
           // Self-heal: write completedAt back so next save uses new format
           if (workingFile.prompts[i]) {
             workingFile.prompts[i]._runtime = {
@@ -262,7 +262,7 @@ export class PromptQueue {
         })),
         results: [],
         stopped: false,
-        completedIds,
+        completedIndices,
         totalExecutionTime: 0,
         queueExtensions: 0,
         totalPausedDuration: 0,
@@ -311,7 +311,7 @@ export class PromptQueue {
       Log.info(
         `Restored queue from working file: ${workingFile.prompts.length} prompts, ` +
           `currentIndex=${this.state.currentIndex}, ` +
-          `completed=${this.state.completedIds.size}, ` +
+          `completed=${this.state.completedIndices.size}, ` +
           `status=${this.state.status}, ` +
           `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
       );
@@ -445,7 +445,7 @@ export class PromptQueue {
    * STOP semantics: Abort current prompt but preserve workflow state
    * - Unlike PAUSE (which lets current prompt finish), STOP cancels immediately
    * - Unlike RESTART (which resets to beginning), STOP preserves all progress
-   * - Preserves currentIndex, completedIds, and all completed results
+   * - Preserves currentIndex, completedIndices, and all completed results
    * - Current prompt marked as CANCELLED (not completed)
    * - Can resume from STOPPED state to restart the cancelled prompt
    */
@@ -455,7 +455,7 @@ export class PromptQueue {
 
       // NOTE: Do NOT reset state - preserve everything:
       // - currentIndex stays on the cancelled prompt
-      // - completedIds preserves all past completions
+      // - completedIndices preserves all past completions
       // - results preserve all completed/failed statuses
       // - Current prompt already marked CANCELLED by stop()
 
@@ -489,7 +489,7 @@ export class PromptQueue {
     }));
 
     // Reset tracking state
-    this.state.completedIds = new Set<string>();
+    this.state.completedIndices = new Set<string>();
     this.state.totalExecutionTime = 0;
     this.state.queueExtensions = 0;
     this.state.totalPausedDuration = 0;
@@ -499,8 +499,9 @@ export class PromptQueue {
     // Stale session IDs from a previous run would cause log discovery and session
     // resumption to find the wrong session when re-running the same workflow.
     this.state.prompts = this.state.prompts.map((prompt) => {
-      const { _runtime: _, ...rest } = prompt as any;
-      return rest as PromptItem;
+      // Destructure to remove _runtime, preserving all other PromptItem fields
+      const { _runtime, ...rest } = prompt;
+      return rest;
     });
 
     this.emitStateChange();
@@ -532,7 +533,8 @@ export class PromptQueue {
   }
 
   /**
-   * Clear queue and results
+   * Clear queue and results.
+   * NOTE: Only called from tests (production code uses clearQueue() instead).
    */
   clear(): void {
     this.stop();
@@ -632,12 +634,11 @@ export class PromptQueue {
 
     // Update working file with failed status
     this.updateWorkingFile().catch((err) =>
-      console.error("Failed to update working file after error:", err)
+      Log.error("Failed to update working file after error:", err)
     );
 
-    console.error(
-      `FlightPath: Prompt ${this.state.currentIndex + 1} failed:`,
-      error
+    Log.error(
+      `FlightPath: Prompt ${this.state.currentIndex + 1} failed: ${error}`
     );
     vscode.window.showErrorMessage(
       `FlightPath: Execution failed at prompt ${this.state.currentIndex + 1}: ${error}`
@@ -825,7 +826,7 @@ export class PromptQueue {
       };
     }
     // Update in-memory fast-lookup cache (key = prompt index as string)
-    this.state.completedIds.add(String(index));
+    this.state.completedIndices.add(String(index));
   }
 
   /**
@@ -844,7 +845,7 @@ export class PromptQueue {
    */
   async reloadAndMergeQueue(
     filePath: string, // This is now ignored - we always use working file
-    parser: any, // PromptFileParser instance (kept for compatibility)
+    parser: { parsePromptFile(filePath: string): Promise<PromptFile | null> }, // PromptFileParser-compatible interface
     maxQueueSize: number = 0
   ): Promise<number> {
     // Use working file if available, otherwise fall back to provided filePath
@@ -875,7 +876,7 @@ export class PromptQueue {
 
     const reloadedPrompts = reloadedFile.prompts;
 
-    // 2. Identify new prompts (not in completedIds AND not already in current queue)
+    // 2. Identify new prompts (not in completedIndices AND not already in current queue)
     const newPrompts: PromptItem[] = [];
     const currentPromptHashes = new Set<string>();
 
@@ -962,6 +963,67 @@ export class PromptQueue {
   }
 
   /**
+   * Merge prompts from disk into the in-memory queue.
+   * Identifies new prompts by content hash, adopts disk ordering as source of truth,
+   * and preserves existing results for prompts already in memory.
+   *
+   * @param diskPrompts Prompts read from the working file on disk
+   * @returns Array of newly-discovered prompts (empty if none)
+   */
+  private mergeDiskPrompts(diskPrompts: PromptItem[]): PromptItem[] {
+    // Build map of prompts we have in memory (by content hash)
+    const memoryPromptMap = new Map<string, PromptItem>();
+    for (const prompt of this.state.prompts) {
+      const hash = hashPromptContent(prompt.prompt);
+      memoryPromptMap.set(hash, prompt);
+    }
+
+    // Find prompts on disk that don't exist in memory
+    const newPromptsFromDisk: PromptItem[] = [];
+    for (const diskPrompt of diskPrompts) {
+      const hash = hashPromptContent(diskPrompt.prompt);
+      if (!memoryPromptMap.has(hash)) {
+        newPromptsFromDisk.push(diskPrompt);
+      }
+    }
+
+    if (newPromptsFromDisk.length === 0) {
+      return [];
+    }
+
+    // CRITICAL: Use disk order as source of truth
+    // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
+    this.state.prompts = diskPrompts;
+
+    // Rebuild results array to match new prompt order
+    // Preserve existing results where we have them, add pending for new prompts
+    const newResults: PromptResult[] = diskPrompts.map((prompt) => {
+      const hash = hashPromptContent(prompt.prompt);
+
+      // Find existing result for this prompt
+      const existingResultIndex = this.state.results.findIndex((r) => {
+        const resultHash = hashPromptContent(r.prompt);
+        return resultHash === hash || r.prompt === prompt.prompt;
+      });
+
+      if (existingResultIndex >= 0) {
+        // Use existing result (preserves completion status)
+        return this.state.results[existingResultIndex];
+      } else {
+        // New prompt - create pending result
+        return {
+          prompt: prompt.prompt,
+          status: STEP_STATUS.PENDING,
+          timestamp: new Date(),
+        };
+      }
+    });
+
+    this.state.results = newResults;
+    return newPromptsFromDisk;
+  }
+
+  /**
    * Merge prompts from working file disk into current queue (for MCP appends during execution)
    * This preserves execution state (currentIndex, status, results) while adding new prompts
    * @returns Number of new prompts merged (-1 if error)
@@ -983,23 +1045,7 @@ export class PromptQueue {
         `mergePromptsFromDisk: Disk has ${diskPrompts.length} prompts, memory has ${this.state.prompts.length} prompts`
       );
 
-      // Build map of prompts we have in memory (by content hash)
-      const memoryPromptMap = new Map<string, PromptItem>();
-      for (const prompt of this.state.prompts) {
-        const hash = hashPromptContent(prompt.prompt);
-        memoryPromptMap.set(hash, prompt);
-      }
-
-      // Check if disk has prompts we don't have in memory
-      const newPromptsFromDisk: PromptItem[] = [];
-      for (const diskPrompt of diskPrompts) {
-        const hash = hashPromptContent(diskPrompt.prompt);
-        const existsInMemory = memoryPromptMap.has(hash);
-
-        if (!existsInMemory) {
-          newPromptsFromDisk.push(diskPrompt);
-        }
-      }
+      const newPromptsFromDisk = this.mergeDiskPrompts(diskPrompts);
 
       if (newPromptsFromDisk.length === 0) {
         Log.info("mergePromptsFromDisk: No new prompts found");
@@ -1009,36 +1055,6 @@ export class PromptQueue {
       Log.info(
         `mergePromptsFromDisk: Found ${newPromptsFromDisk.length} new prompts from disk (MCP append), merging into queue`
       );
-
-      // CRITICAL: Use disk order as source of truth
-      // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-      this.state.prompts = diskPrompts;
-
-      // Rebuild results array to match new prompt order
-      // Preserve existing results where we have them, add pending for new prompts
-      const newResults: PromptResult[] = diskPrompts.map((prompt, index) => {
-        const hash = hashPromptContent(prompt.prompt);
-
-        // Find existing result for this prompt
-        const existingResultIndex = this.state.results.findIndex((r) => {
-          const resultHash = hashPromptContent(r.prompt);
-          return resultHash === hash || r.prompt === prompt.prompt;
-        });
-
-        if (existingResultIndex >= 0) {
-          // Use existing result (preserves completion status)
-          return this.state.results[existingResultIndex];
-        } else {
-          // New prompt - create pending result
-          return {
-            prompt: prompt.prompt,
-            status: STEP_STATUS.PENDING,
-            timestamp: new Date(),
-          };
-        }
-      });
-
-      this.state.results = newResults;
 
       // Update queue extension tracking
       this.state.queueExtensions++;
@@ -1087,67 +1103,73 @@ export class PromptQueue {
     }
 
     // Serialize operation to prevent race conditions
-    this.operationQueue = this.operationQueue.then(async () => {
-      // Calculate insert index based on position
-      let insertIndex: number;
-      if (position === QUEUE_POSITION.NEXT) {
-        // Insert after current prompt
-        insertIndex = this.state.currentIndex + 1;
-      } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
-        // Insert before current prompt (for stopped/idle states)
-        insertIndex = this.state.currentIndex;
-      } else {
-        // QUEUE_POSITION.END - append to end
-        insertIndex = this.state.prompts.length;
-      }
+    this.operationQueue = this.operationQueue
+      .then(async () => {
+        // Calculate insert index based on position
+        let insertIndex: number;
+        if (position === QUEUE_POSITION.NEXT) {
+          // Insert after current prompt
+          insertIndex = this.state.currentIndex + 1;
+        } else if (position === QUEUE_POSITION.BEFORE_CURRENT) {
+          // Insert before current prompt (for stopped/idle states)
+          insertIndex = this.state.currentIndex;
+        } else {
+          // QUEUE_POSITION.END - append to end
+          insertIndex = this.state.prompts.length;
+        }
 
-      // Insert prompts at the specified position
-      this.state.prompts.splice(insertIndex, 0, ...prompts);
+        // Insert prompts at the specified position
+        this.state.prompts.splice(insertIndex, 0, ...prompts);
 
-      // Create new results for the inserted prompts
-      const newResults: PromptResult[] = prompts.map((prompt) => ({
-        prompt: prompt.prompt,
-        status: STEP_STATUS.PENDING,
-        timestamp: new Date(),
-      }));
+        // Create new results for the inserted prompts
+        const newResults: PromptResult[] = prompts.map((prompt) => ({
+          prompt: prompt.prompt,
+          status: STEP_STATUS.PENDING,
+          timestamp: new Date(),
+        }));
 
-      // Insert results at the same position
-      this.state.results.splice(insertIndex, 0, ...newResults);
+        // Insert results at the same position
+        this.state.results.splice(insertIndex, 0, ...newResults);
 
-      // Auto-start behavior based on current state:
-      // - COMPLETED + willRunImmediately: Stay COMPLETED (caller will start execution)
-      // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
-      // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
-      // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
-      // - RUNNING: Already running, no change needed
-      const previousStatus = this.state.status;
-      if (
-        this.state.status === EXECUTION_STATES.COMPLETED &&
-        !willRunImmediately
-      ) {
+        // Auto-start behavior based on current state:
+        // - COMPLETED + willRunImmediately: Stay COMPLETED (caller will start execution)
+        // - COMPLETED: Set to STOPPED (user can manually Resume to continue)
+        // - IDLE: Stay IDLE (user hasn't started yet, don't auto-start)
+        // - PAUSED: Stay PAUSED (user explicitly paused, don't auto-resume)
+        // - RUNNING: Already running, no change needed
+        const previousStatus = this.state.status;
+        if (
+          this.state.status === EXECUTION_STATES.COMPLETED &&
+          !willRunImmediately
+        ) {
+          Log.info(
+            `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIndices.size} prompts previously completed, user can Resume)`
+          );
+          this.state.status = EXECUTION_STATES.STOPPED;
+          this.isPaused = false;
+          this.state.stopped = true; // Mark as stopped so Resume will work
+        } else {
+          Log.info(
+            `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIndices.size})`
+          );
+        }
+
+        this.emitStateChange();
+
+        // Update working file if it exists (call internal method to avoid nested operation queue)
         Log.info(
-          `appendPrompts: Setting to STOPPED (appended to COMPLETED queue, ${this.state.completedIds.size} prompts previously completed, user can Resume)`
+          `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}, Insert position: ${position} (index: ${insertIndex})`
         );
-        this.state.status = EXECUTION_STATES.STOPPED;
-        this.isPaused = false;
-        this.state.stopped = true; // Mark as stopped so Resume will work
-      } else {
+        await this._updateWorkingFileInternal();
         Log.info(
-          `appendPrompts: NOT changing state (current: ${previousStatus}, willRunImmediately: ${willRunImmediately}, completed count: ${this.state.completedIds.size})`
+          `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
         );
-      }
-
-      this.emitStateChange();
-
-      // Update working file if it exists (call internal method to avoid nested operation queue)
-      Log.info(
-        `About to update working file. Path: ${this.state.workingFilePath}, Total prompts: ${this.state.prompts.length}, Insert position: ${position} (index: ${insertIndex})`
-      );
-      await this._updateWorkingFileInternal();
-      Log.info(
-        `Working file updated. Appended ${prompts.length} prompts from: ${source} at position: ${position}`
-      );
-    });
+      })
+      .catch((err) => {
+        Log.error(
+          `operationQueue: appendPrompts failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
 
     await this.operationQueue;
   }
@@ -1162,17 +1184,6 @@ export class PromptQueue {
       EXECUTION_STATES.ERROR,
     ];
     return !invalidStates.includes(this.state.status);
-  }
-
-  /**
-   * Check if queue has completed all prompts
-   * @returns true if all prompts completed
-   */
-  public isCompleted(): boolean {
-    return (
-      this.state.status === EXECUTION_STATES.COMPLETED ||
-      this.state.status === EXECUTION_STATES.IDLE
-    );
   }
 
   // ==================== Working File Operations ====================
@@ -1328,9 +1339,15 @@ export class PromptQueue {
     }
 
     // Serialize operation to prevent race conditions
-    this.operationQueue = this.operationQueue.then(async () => {
-      await this._updateWorkingFileInternal(skipMerge);
-    });
+    this.operationQueue = this.operationQueue
+      .then(async () => {
+        await this._updateWorkingFileInternal(skipMerge);
+      })
+      .catch((err) => {
+        Log.error(
+          `operationQueue: updateWorkingFile failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
 
     await this.operationQueue;
   }
@@ -1359,66 +1376,14 @@ export class PromptQueue {
         // BUT: Skip merge for intentional writes (delete/update) to avoid undoing changes
         if (!skipMerge) {
           const diskPrompts = workingFile.prompts || [];
-          const memoryPrompts = this.state.prompts;
 
-          // Build a map of prompts we have in memory (by content hash)
-          const memoryPromptMap = new Map<string, PromptItem>();
-          for (const prompt of memoryPrompts) {
-            const hash = hashPromptContent(prompt.prompt);
-            memoryPromptMap.set(hash, prompt);
-          }
+          const newPromptsFromDisk = this.mergeDiskPrompts(diskPrompts);
 
-          // Check if disk has prompts we don't have in memory
-          const newPromptsFromDisk: PromptItem[] = [];
-          for (const diskPrompt of diskPrompts) {
-            const hash = hashPromptContent(diskPrompt.prompt);
-            const existsInMemory = memoryPromptMap.has(hash);
-
-            if (!existsInMemory) {
-              // This prompt exists on disk but not in memory (MCP must have added it)
-              newPromptsFromDisk.push(diskPrompt);
-            }
-          }
-
-          // If disk has new prompts, merge them PRESERVING DISK ORDER
+          // If disk has new prompts, log and emit state change
           if (newPromptsFromDisk.length > 0) {
             Log.info(
               `updateWorkingFile - Detected ${newPromptsFromDisk.length} prompts added externally (likely via MCP), merging into queue`
             );
-
-            // CRITICAL: Use disk order as source of truth, not memory order
-            // This preserves the insertion positions chosen by MCP (e.g., "next" vs "end")
-            this.state.prompts = diskPrompts;
-
-            // Rebuild results array to match new prompt order
-            // Preserve existing results where we have them, add pending for new prompts
-            const newResults: PromptResult[] = diskPrompts.map(
-              (prompt, index) => {
-                const hash = hashPromptContent(prompt.prompt);
-
-                // Find existing result for this prompt
-                const existingResultIndex = this.state.results.findIndex(
-                  (r) => {
-                    const resultHash = hashPromptContent(r.prompt);
-                    return resultHash === hash || r.prompt === prompt.prompt;
-                  }
-                );
-
-                if (existingResultIndex >= 0) {
-                  // Use existing result (preserves completion status)
-                  return this.state.results[existingResultIndex];
-                } else {
-                  // New prompt - create pending result
-                  return {
-                    prompt: prompt.prompt,
-                    status: STEP_STATUS.PENDING,
-                    timestamp: new Date(),
-                  };
-                }
-              }
-            );
-
-            this.state.results = newResults;
 
             // Emit state change so dashboard updates
             this.emitStateChange();
@@ -1463,7 +1428,9 @@ export class PromptQueue {
       });
       Log.info(`updateWorkingFile - Successfully wrote working file`);
     } catch (error) {
-      console.error("FlightPath: Failed to update working file:", error);
+      Log.error(
+        `FlightPath: Failed to update working file: ${error instanceof Error ? error.message : String(error)}`
+      );
       // Don't throw - this is a background operation
     }
   }
@@ -1486,74 +1453,80 @@ export class PromptQueue {
     let result: { workingFile: WorkingFile; appliedKeys: string[] } | null =
       null;
 
-    this.operationQueue = this.operationQueue.then(async () => {
-      const appliedKeys: string[] = [];
+    this.operationQueue = this.operationQueue
+      .then(async () => {
+        const appliedKeys: string[] = [];
 
-      await withFileLock(this.state.workingFilePath!, async () => {
-        const workingFile = await this.readWorkingFile(
-          this.state.workingFilePath!
-        );
+        await withFileLock(this.state.workingFilePath!, async () => {
+          const workingFile = await this.readWorkingFile(
+            this.state.workingFilePath!
+          );
 
-        let modified = false;
-        for (const [key, value] of Object.entries(properties)) {
-          if (value === undefined) {
+          let modified = false;
+          for (const [key, value] of Object.entries(properties)) {
+            if (value === undefined) {
+              if (
+                options.allowDeletes &&
+                (workingFile as any)[key] !== undefined
+              ) {
+                delete (workingFile as any)[key];
+                modified = true;
+                appliedKeys.push(key);
+              }
+              continue;
+            }
+
             if (
-              options.allowDeletes &&
+              options.onlyIfUndefined &&
               (workingFile as any)[key] !== undefined
             ) {
-              delete (workingFile as any)[key];
+              continue;
+            }
+
+            if ((workingFile as any)[key] !== value) {
+              (workingFile as any)[key] = value;
               modified = true;
               appliedKeys.push(key);
             }
-            continue;
           }
 
-          if (
-            options.onlyIfUndefined &&
-            (workingFile as any)[key] !== undefined
-          ) {
-            continue;
+          if (options.ensureHarnessAndModel) {
+            if (!workingFile.harness) {
+              workingFile.harness = ConfigurationUtils.getIntegrationMode();
+              modified = true;
+              appliedKeys.push("harness");
+            }
+
+            if (!workingFile.model) {
+              workingFile.model = this.getDefaultModelForHarness(
+                workingFile.harness
+              );
+              modified = true;
+              appliedKeys.push("model");
+            }
           }
 
-          if ((workingFile as any)[key] !== value) {
-            (workingFile as any)[key] = value;
-            modified = true;
-            appliedKeys.push(key);
-          }
-        }
-
-        if (options.ensureHarnessAndModel) {
-          if (!workingFile.harness) {
-            workingFile.harness = ConfigurationUtils.getIntegrationMode();
-            modified = true;
-            appliedKeys.push("harness");
-          }
-
-          if (!workingFile.model) {
-            workingFile.model = this.getDefaultModelForHarness(
-              workingFile.harness
+          if (modified) {
+            workingFile.lastModifiedAt = Date.now();
+            await this.writeWorkingFileAtomic(
+              this.state.workingFilePath!,
+              workingFile,
+              { skipLock: true }
             );
-            modified = true;
-            appliedKeys.push("model");
           }
-        }
 
-        if (modified) {
-          workingFile.lastModifiedAt = Date.now();
-          await this.writeWorkingFileAtomic(
-            this.state.workingFilePath!,
-            workingFile,
-            { skipLock: true }
-          );
-        }
+          for (const key of appliedKeys) {
+            this.updateWorkflowProperty(key, (workingFile as any)[key]);
+          }
 
-        for (const key of appliedKeys) {
-          this.updateWorkflowProperty(key, (workingFile as any)[key]);
-        }
-
-        result = { workingFile, appliedKeys };
+          result = { workingFile, appliedKeys };
+        });
+      })
+      .catch((err) => {
+        Log.error(
+          `operationQueue: updateWorkingFileProperties failed: ${err instanceof Error ? err.message : String(err)}`
+        );
       });
-    });
 
     await this.operationQueue;
     return result;
@@ -1633,7 +1606,7 @@ export class PromptQueue {
     }
 
     // Don't allow deleting completed prompts
-    if (this.state.completedIds.has(String(index))) {
+    if (this.state.completedIndices.has(String(index))) {
       throw new Error("Cannot delete a completed prompt");
     }
 

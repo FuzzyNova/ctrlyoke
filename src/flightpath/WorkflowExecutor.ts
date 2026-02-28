@@ -472,8 +472,9 @@ export class WorkflowExecutor {
     prompt: PromptItem,
     integration: HarnessIntegration
   ): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<string>((resolve) => {
       let responseHandled = false;
+
       const disposable = integration.onResponseComplete(
         async (responseText: string) => {
           if (responseHandled) {
@@ -499,6 +500,10 @@ export class WorkflowExecutor {
           resolve(responseText);
         }
       );
+
+      // No per-prompt timeout: complex prompts (code audits, large refactors) can
+      // legitimately take hours. The workflow-level maxWorkflowExecutionTime setting
+      // covers runaway workflows, and users can stop manually if needed.
     });
   }
 
@@ -781,8 +786,9 @@ export class WorkflowExecutor {
     const workflowName = path.basename(
       context.currentPromptFilePath ?? "unknown"
     );
+    const completedCount = this.promptQueue.getCompletedCount();
     Log.info(
-      `${tag}Workflow complete ✓ — ${workflowName}, ${totalPrompts}/${totalPrompts} prompts completed`
+      `${tag}Workflow complete ✓ — ${workflowName}, ${completedCount}/${totalPrompts} prompts completed`
     );
   }
 

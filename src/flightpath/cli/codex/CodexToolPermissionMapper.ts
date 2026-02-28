@@ -38,39 +38,13 @@ export class CodexToolPermissionMapper
   /**
    * Build CLI arguments for tool permissions
    *
+   * Delegates to buildCodexSpecificArgs with no sandbox/approval overrides.
+   *
    * @param config Tool permission configuration
    * @returns CLI arguments array
    */
   buildArgs(config: ToolPermissionConfig): string[] {
-    // Warn if tool patterns are configured (unsupported by Codex)
-    if (config.allowedTools.length > 0 || config.deniedTools.length > 0) {
-      Log.warn(
-        "⚠️ Codex CLI does not support granular tool patterns (cliAllowedTools/cliDeniedTools). Use Codex-specific sandbox/approval settings for custom control."
-      );
-    }
-
-    switch (config.mode) {
-      case "dangerouslyAllowAll":
-        // Bypass ALL checks (dangerous!)
-        return ["--dangerously-bypass-approvals-and-sandbox"];
-
-      case "allowAll":
-        // Safe automation: auto-grant all but respect deny list
-        return ["--full-auto"];
-
-      case "custom":
-        // Use Codex-specific sandbox and approval settings
-        // Note: Custom mode requires additional configuration
-        // that's not available in the current config object.
-        // For now, fall back to --full-auto with a warning.
-        Log.warn(
-          "⚠️ Custom mode requires sandboxMode and approvalPolicy for Codex. Falling back to --full-auto."
-        );
-        return ["--full-auto"];
-
-      default:
-        return ["--full-auto"];
-    }
+    return this.buildCodexSpecificArgs(config);
   }
 
   /**

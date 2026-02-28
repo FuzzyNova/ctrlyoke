@@ -6,14 +6,23 @@ import {
   Harness,
 } from "../types/FlightPathTypes";
 import { Log } from "./Log";
+import {
+  COPILOT_CLI_MODEL_IDS,
+  CLAUDE_CLI_MODELS,
+  CODEX_CLI_MODELS,
+} from "./ModelConstants";
 
 /**
- * NOTE: The model enum below must be kept in sync with COPILOT_MODELS in ModelConstants.ts.
- * Run `npm run sync-models` to update package.json, but this file requires manual sync
- * due to AJV's strict typing requirements (enum must be a literal array).
- *
- * @see src/utils/ModelConstants.ts - Single source of truth for model definitions
+ * Build the model enum dynamically from ModelConstants (single source of truth).
+ * Combines all CLI model IDs and deduplicates.
  */
+const ALL_MODEL_IDS: string[] = [
+  ...new Set([
+    ...COPILOT_CLI_MODEL_IDS,
+    ...CLAUDE_CLI_MODELS,
+    ...CODEX_CLI_MODELS,
+  ]),
+];
 
 export class ValidationUtils {
   private static ajv = new Ajv({ allErrors: true });
@@ -29,29 +38,7 @@ export class ValidationUtils {
       prompt: { type: "string" },
       model: {
         type: "string",
-        enum: [
-          "claude-sonnet-4.5",
-          "claude-haiku-4.5",
-          "claude-opus-4.5",
-          "claude-sonnet-4",
-          "gpt-5",
-          "gpt-5.1",
-          "gpt-5.1-codex-mini",
-          "gpt-5.1-codex",
-          "gpt-5-codex",
-          "gpt-5-mini",
-          "gpt-4.1",
-          "gpt-4o",
-          "gpt-4o-mini",
-          "gpt-4",
-          "gpt-4-0125-preview",
-          "gpt-3.5-turbo",
-          "gemini-3-pro-preview",
-          "gemini-2.5-pro",
-          "oswe-vscode-prime",
-          "grok-code-fast-1",
-          "auto",
-        ],
+        enum: ALL_MODEL_IDS as unknown as readonly string[],
         nullable: true,
       },
       harness: {
@@ -287,6 +274,11 @@ export class ValidationUtils {
     return { valid: errors.length === 0, errors };
   }
 
+  /**
+   * Sanitize prompt text by removing control characters.
+   *
+   * @internal Only called from tests — not used in production code paths.
+   */
   static sanitizePromptText(prompt: string): string {
     if (typeof prompt !== "string") {
       return "";

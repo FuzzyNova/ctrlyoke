@@ -14,9 +14,14 @@ export type PathResolver = (relativePath: string) => string;
  * Uses VS Code commands to attach files/selections for clean chat UI.
  */
 export class NativeAttachmentHandler {
+  /** Delay (ms) after opening a document to allow focus to settle */
+  private static readonly DOCUMENT_FOCUS_DELAY_MS = 200;
+  /** Delay (ms) between consecutive attachment operations */
+  private static readonly INTER_ATTACHMENT_DELAY_MS = 200;
+
   constructor(private readonly resolvePath: PathResolver) {}
 
-  /** Open document, execute action, then close */
+  /** Open document, execute action, then close — uses try/finally for cleanup */
   private async withFocusedDocument(
     uri: vscode.Uri,
     action: (editor: vscode.TextEditor) => Promise<void>
@@ -29,9 +34,17 @@ export class NativeAttachmentHandler {
       viewColumn: vscode.ViewColumn.Beside,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    await action(editor);
-    await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+    try {
+      await new Promise((resolve) =>
+        setTimeout(resolve, NativeAttachmentHandler.DOCUMENT_FOCUS_DELAY_MS)
+      );
+      await action(editor);
+    } finally {
+      // Always close the document, even if the action threw
+      await vscode.commands.executeCommand(
+        "workbench.action.closeActiveEditor"
+      );
+    }
   }
 
   /** Attach files via native commands; returns prompt unchanged */
@@ -125,7 +138,9 @@ export class NativeAttachmentHandler {
         }
 
         // Small delay between attachments
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await new Promise((resolve) =>
+          setTimeout(resolve, NativeAttachmentHandler.INTER_ATTACHMENT_DELAY_MS)
+        );
       }
 
       // Keep #file: references in prompt for context

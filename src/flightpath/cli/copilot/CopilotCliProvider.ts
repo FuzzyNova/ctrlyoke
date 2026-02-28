@@ -19,6 +19,7 @@ import {
 } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
+import { CliProviderUtils } from "../shared/CliProviderUtils";
 
 const execAsync = promisify(exec);
 
@@ -111,41 +112,19 @@ export class CopilotCliProvider implements ICliProvider {
       workflowContext?.resolvedProperties?.resumeSession;
 
     // MCP configuration (when dynamic queue extension is enabled)
-    if (workflowContext && workspaceRoot) {
-      const dynamicQueueConfig = ConfigurationUtils.getDynamicQueueConfig();
-      const allowDynamicExtension =
-        workflowContext?.resolvedProperties?.allowDynamicExtension ??
-        dynamicQueueConfig.enabled;
-
-      if (allowDynamicExtension) {
-        const {
-          shouldInjectExtensionInstructions,
-        } = require("../../../utils/PromptIdentity");
-        const shouldInject = shouldInjectExtensionInstructions(
-          prompt,
-          workflowContext.promptIndex,
-          workflowContext.allPrompts,
-          dynamicQueueConfig.dynamicExtensionOnLastPrompt,
-          allowDynamicExtension
-        );
-
-        if (shouldInject) {
-          const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
-          const mcpArgs = await this.getMcpConfigArgs(
-            mcpServerPath,
-            workspaceRoot,
-            workflowContext?.workingFilePath
-          );
-          if (mcpArgs) {
-            args.push(...mcpArgs);
-            // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
-            args.push("--allow-tool", "flightpath");
-            Log.info(
-              "🔧 MCP server config added for dynamic queue extension (FlightPath tools auto-approved)"
-            );
-          }
-        }
-      }
+    const mcpArgs = await CliProviderUtils.buildMcpConfigBlock(
+      prompt,
+      workflowContext,
+      workspaceRoot,
+      context,
+      (serverPath, wsRoot, workingFile, additionalEnv) =>
+        this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
+    );
+    if (mcpArgs.length > 0) {
+      args.push(...mcpArgs);
+      // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
+      args.push("--allow-tool", "flightpath");
+      Log.info("🔧 FlightPath MCP tools auto-approved");
     }
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)
@@ -174,7 +153,7 @@ export class CopilotCliProvider implements ICliProvider {
 
     // Workspace directories
     if (workspaceRoot) {
-      const workspaceDirs = this.getWorkspaceDirs(workspaceRoot);
+      const workspaceDirs = CliProviderUtils.getWorkspaceDirs(workspaceRoot);
       workspaceDirs.forEach((dir) => {
         args.push("--add-dir", dir);
       });
@@ -207,33 +186,6 @@ export class CopilotCliProvider implements ICliProvider {
     Log.debug(`🔧 CLI arguments: ${JSON.stringify(args)}`);
 
     return args;
-  }
-
-  /**
-   * Get workspace directories for --add-dir arguments
-   */
-  private getWorkspaceDirs(workspaceRoot: string): string[] {
-    const workspaceDirs: string[] = [];
-
-    // Add primary workspace folder
-    if (vscode.workspace.workspaceFolders) {
-      vscode.workspace.workspaceFolders.forEach((folder) => {
-        workspaceDirs.push(folder.uri.fsPath);
-      });
-    }
-
-    // Add configured allowed directories
-    const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
-    allowedDirs.forEach((dir: string) => {
-      const absolutePath = path.isAbsolute(dir)
-        ? dir
-        : path.join(workspaceRoot, dir);
-      if (!workspaceDirs.includes(absolutePath)) {
-        workspaceDirs.push(absolutePath);
-      }
-    });
-
-    return workspaceDirs;
   }
 
   /**
@@ -383,7 +335,8 @@ export class CopilotCliProvider implements ICliProvider {
   async getMcpConfigArgs(
     mcpServerPath: string,
     workspaceRoot: string,
-    workingFilePath?: string
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
   ): Promise<string[] | null> {
     try {
       // Generate MCP config JSON using shared utility
@@ -392,7 +345,8 @@ export class CopilotCliProvider implements ICliProvider {
         mcpServerPath,
         workspaceRoot,
         { type: "local", tools: ["*"] },
-        workingFilePath
+        workingFilePath,
+        additionalEnv
       );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions

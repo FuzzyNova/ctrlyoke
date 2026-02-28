@@ -59,7 +59,8 @@ export class CliMcpConfigGenerator {
     serverPath: string,
     workspaceRoot: string,
     serverConfig?: McpServerConfig,
-    workingFilePath?: string
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
   ): string {
     // Normalize paths (forward slashes work on Windows and Unix)
     const normalizedServerPath = serverPath.replace(/\\/g, "/");
@@ -70,6 +71,9 @@ export class CliMcpConfigGenerator {
     };
     if (workingFilePath) {
       env["FLIGHTPATH_WORKING_FILE"] = workingFilePath.replace(/\\/g, "/");
+    }
+    if (additionalEnv) {
+      Object.assign(env, additionalEnv);
     }
 
     const mcpServers: any = {
@@ -112,7 +116,8 @@ export class CliMcpConfigGenerator {
     serverName: string,
     serverPath: string,
     workspaceRoot: string,
-    workingFilePath?: string
+    workingFilePath?: string,
+    additionalEnv?: Record<string, string>
   ): string {
     // Normalize paths (forward slashes)
     const escapedServerPath = serverPath.replace(/\\/g, "/");
@@ -123,6 +128,11 @@ export class CliMcpConfigGenerator {
     if (workingFilePath) {
       const escapedWorkingFile = workingFilePath.replace(/\\/g, "/");
       envPart += `,FLIGHTPATH_WORKING_FILE='${escapedWorkingFile}'`;
+    }
+    if (additionalEnv) {
+      for (const [key, value] of Object.entries(additionalEnv)) {
+        envPart += `,${key}='${value}'`;
+      }
     }
     return (
       `mcp_servers.${serverName}={command='node',` +

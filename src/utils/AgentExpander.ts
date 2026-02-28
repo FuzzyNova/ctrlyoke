@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { AgentDiscovery } from "./AgentDiscovery";
+import { AgentDiscovery, AgentInfo } from "./AgentDiscovery";
 import { Log } from "./Log";
 import { resolveWorkspaceFolder } from "./DiscoveryUtils";
 
@@ -14,12 +14,19 @@ import { resolveWorkspaceFolder } from "./DiscoveryUtils";
  * 3. Workspace .claude/agents/ directory
  *
  * DESIGN:
- * - Uses AgentDiscovery to locate agent files
+ * - Uses AgentDiscovery to locate agent files (with TTL-based caching)
  * - Returns raw file content (no wrapping) - caller is responsible for XML tags
  * - Handles missing agents gracefully (returns null)
- * - No caching (file reads are fast, prevents stale content during development)
+ * - File reads are NOT cached (prevents stale content during development)
  */
+
+/** Cache TTL in milliseconds for discovered agents list */
+const AGENT_CACHE_TTL_MS = 5000;
+
 export class AgentExpander {
+  /** Cached agent discovery results */
+  private static cachedAgents: AgentInfo[] = [];
+  private static cacheTimestamp = 0;
   /**
    * Expand an agent reference to its file content.
    *
@@ -33,8 +40,19 @@ export class AgentExpander {
   ): Promise<string | null> {
     const workspaceFolder = resolveWorkspaceFolder(workspaceRoot);
 
-    // Discover all available agents
-    const agents = await AgentDiscovery.discoverAgents(workspaceFolder);
+    // Use cached agent list if still fresh (avoids re-scanning filesystem on every prompt)
+    const now = Date.now();
+    let agents: AgentInfo[];
+    if (
+      AgentExpander.cachedAgents.length > 0 &&
+      now - AgentExpander.cacheTimestamp < AGENT_CACHE_TTL_MS
+    ) {
+      agents = AgentExpander.cachedAgents;
+    } else {
+      agents = await AgentDiscovery.discoverAgents(workspaceFolder);
+      AgentExpander.cachedAgents = agents;
+      AgentExpander.cacheTimestamp = now;
+    }
 
     // Find the requested agent by name
     const agent = AgentDiscovery.findAgentByName(agents, agentName);

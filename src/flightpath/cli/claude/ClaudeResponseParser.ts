@@ -5,13 +5,17 @@ import {
 import {
   UniversalCliOutput,
   CliEvent,
-  CLI_EVENT_TYPES,
   TokenUsage,
   BashCommandData,
 } from "../../../types/CliOutputTypes";
-import { OPERATION_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 import { getClaudeContextWindowSize } from "../../../utils/ModelConstants";
+import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliEventMapper } from "../shared/CliEventMapper";
 
 /**
  * Extended usage statistics from Claude CLI.
@@ -75,7 +79,7 @@ export class ClaudeResponseParser
     let errorMessage: string | undefined;
     let cliVersion: string | undefined;
 
-    const { objects } = this.extractJsonObjectsFromStream(stdout);
+    const { objects } = CliResponseParser.extractJsonObjectsFromStream(stdout);
 
     // Extract data from parsed objects and create structured events
     for (const json of objects) {
@@ -317,137 +321,123 @@ export class ClaudeResponseParser
   private mapToolToSemanticEvent(toolUse: any, events: CliEvent[]): void {
     const toolName = toolUse.name;
     const input = toolUse.input || {};
+    const classification = CliEventMapper.classifyTool(toolName);
+    const timestamp = Date.now();
 
-    // Bash/shell command execution (INITIATED event)
-    if (toolName === "bash" || toolName === "shell") {
-      events.push({
-        type: CLI_EVENT_TYPES.BASH_COMMAND,
-        timestamp: Date.now(),
-        data: {
-          command: input.command || input.cmd || "unknown",
-          workingDir: input.cwd || input.workingDir,
-          status: OPERATION_STATUS.INITIATED,
-        },
-      });
-      return;
+    switch (classification.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        events.push({
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp,
+          data: {
+            command: input.command || input.cmd || "unknown",
+            workingDir: input.cwd || input.workingDir,
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            content: input.content || input.file_text || "",
+            status: OPERATION_STATUS.INITIATED,
+            success: input.success,
+            error: input.error,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_EDIT: {
+        const oldContent =
+          input.oldString || input.old_string || input.oldContent;
+        const newContent =
+          input.newString || input.new_string || input.newContent;
+
+        Log.debug(
+          `[ClaudeParser] Edit operation - old_string=${oldContent ? "present" : "missing"}, new_string=${newContent ? "present" : "missing"}, input keys=${Object.keys(input).join(", ")}`
+        );
+
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            oldContent,
+            newContent,
+            status: OPERATION_STATUS.INITIATED,
+            success: input.success,
+            error: input.error,
+          },
+        });
+        return;
+      }
+
+      case CLI_EVENT_TYPES.FILE_READ:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            content: input.content,
+            status: OPERATION_STATUS.INITIATED,
+            success: input.success,
+            error: input.error,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_DELETE:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            success: input.success,
+            error: input.error,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.WEB_SEARCH:
+        events.push({
+          type: CLI_EVENT_TYPES.WEB_SEARCH,
+          timestamp,
+          data: {
+            query: input.query || "",
+            results: input.results,
+            success: input.success,
+            error: input.error,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+        events.push({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp,
+          data: {
+            server: (classification as { server: string }).server,
+            tool: (classification as { tool: string }).tool,
+            parameters: input,
+          },
+        });
+        return;
+
+      default:
+        events.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: input,
+            id: toolUse.id,
+          },
+        });
     }
-
-    // File write (create new file)
-    if (toolName === "write") {
-      events.push({
-        type: CLI_EVENT_TYPES.FILE_WRITE,
-        timestamp: Date.now(),
-        data: {
-          path: input.path || input.file_path || "unknown",
-          content: input.content || input.file_text || "",
-          status: OPERATION_STATUS.INITIATED,
-          success: input.success,
-          error: input.error,
-        },
-      });
-      return;
-    }
-
-    // File edit (modify existing file)
-    if (toolName === "edit" || toolName === "apply_patch") {
-      const oldContent =
-        input.oldString || input.old_string || input.oldContent;
-      const newContent =
-        input.newString || input.new_string || input.newContent;
-
-      Log.debug(
-        `[ClaudeParser] Edit operation - old_string=${oldContent ? "present" : "missing"}, new_string=${newContent ? "present" : "missing"}, input keys=${Object.keys(input).join(", ")}`
-      );
-
-      events.push({
-        type: CLI_EVENT_TYPES.FILE_EDIT,
-        timestamp: Date.now(),
-        data: {
-          path: input.path || input.file_path || "unknown",
-          oldContent,
-          newContent,
-          status: OPERATION_STATUS.INITIATED,
-          success: input.success,
-          error: input.error,
-        },
-      });
-      return;
-    }
-
-    // File read
-    if (toolName === "read") {
-      events.push({
-        type: CLI_EVENT_TYPES.FILE_READ,
-        timestamp: Date.now(),
-        data: {
-          path: input.path || input.file_path || "unknown",
-          content: input.content,
-          status: OPERATION_STATUS.INITIATED,
-          success: input.success,
-          error: input.error,
-        },
-      });
-      return;
-    }
-
-    // File delete
-    if (toolName === "delete" || toolName === "rm") {
-      events.push({
-        type: CLI_EVENT_TYPES.FILE_DELETE,
-        timestamp: Date.now(),
-        data: {
-          path: input.path || input.file_path || "unknown",
-          success: input.success,
-          error: input.error,
-        },
-      });
-      return;
-    }
-
-    // Web search
-    if (toolName === "web_search" || toolName === "search") {
-      events.push({
-        type: CLI_EVENT_TYPES.WEB_SEARCH,
-        timestamp: Date.now(),
-        data: {
-          query: input.query || "",
-          results: input.results,
-          success: input.success,
-          error: input.error,
-        },
-      });
-      return;
-    }
-
-    // MCP tool call (if tool name contains MCP server prefix)
-    // Format: "server_name.tool_name" or explicit MCP tools
-    if (toolName.includes(".") || toolName.startsWith("mcp_")) {
-      const [server, tool] = toolName.includes(".")
-        ? toolName.split(".", 2)
-        : ["unknown", toolName];
-
-      events.push({
-        type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
-        timestamp: Date.now(),
-        data: {
-          server,
-          tool,
-          parameters: input,
-        },
-      });
-      return;
-    }
-
-    // Unknown tool - fallback to generic TOOL_CALL
-    events.push({
-      type: CLI_EVENT_TYPES.TOOL_CALL,
-      timestamp: Date.now(),
-      data: {
-        name: toolName,
-        parameters: input,
-        id: toolUse.id,
-      },
-    });
   }
 
   /**
@@ -615,7 +605,7 @@ export class ClaudeResponseParser
     streamBuffer += chunk;
 
     const { objects, remainder } =
-      this.extractJsonObjectsFromStream(streamBuffer);
+      CliResponseParser.extractJsonObjectsFromStream(streamBuffer);
     streamState.set("streamBuffer", remainder);
 
     const events: CliEvent[] = [];
@@ -740,7 +730,7 @@ export class ClaudeResponseParser
    * @returns Session ID if found
    */
   extractSessionId(output: string): string | undefined {
-    const { objects } = this.extractJsonObjectsFromStream(output);
+    const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
 
     for (const json of objects) {
       if (json.type === "result" && json.session_id) {
@@ -770,109 +760,6 @@ export class ClaudeResponseParser
       };
     }
     return undefined;
-  }
-
-  // ============================================================
-  // PRIVATE HELPER METHODS
-  // ============================================================
-
-  /**
-   * Extract JSON objects from concatenated stream format
-   *
-   * Claude CLI outputs multiple JSON objects concatenated without separators.
-   * We parse them by finding balanced braces.
-   *
-   * @param data Raw stream data
-   * @returns Parsed objects and remaining unparsed data
-   */
-  private extractJsonObjectsFromStream(data: string): {
-    objects: any[];
-    remainder: string;
-  } {
-    const objects: any[] = [];
-    let cursor = 0;
-
-    while (cursor < data.length) {
-      // Skip whitespace
-      while (cursor < data.length && /\s/.test(data[cursor])) {
-        cursor++;
-      }
-
-      if (cursor >= data.length) break;
-
-      // Find the start of the next JSON object
-      const objStart = cursor;
-      if (data[cursor] !== "{") {
-        // Not a JSON object, skip this character
-        cursor++;
-        continue;
-      }
-
-      // Track brace depth to find the end of the object
-      let depth = 0;
-      let inString = false;
-      let escaped = false;
-
-      while (cursor < data.length) {
-        const char = data[cursor];
-
-        if (escaped) {
-          escaped = false;
-          cursor++;
-          continue;
-        }
-
-        if (char === "\\") {
-          escaped = true;
-          cursor++;
-          continue;
-        }
-
-        if (char === '"') {
-          inString = !inString;
-          cursor++;
-          continue;
-        }
-
-        if (!inString) {
-          if (char === "{") {
-            depth++;
-          } else if (char === "}") {
-            depth--;
-            if (depth === 0) {
-              cursor++; // Include closing brace
-              break;
-            }
-          }
-        }
-
-        cursor++;
-      }
-
-      // Try to parse if we found a complete object
-      if (depth === 0) {
-        const jsonStr = data.substring(objStart, cursor);
-        try {
-          const json = JSON.parse(jsonStr);
-          objects.push(json);
-        } catch (parseError) {
-          Log.debug(
-            `Failed to parse JSON object: ${jsonStr.substring(0, 100)}`
-          );
-          // Continue to next potential object
-        }
-        continue;
-      }
-
-      // Incomplete object - return what we have so far
-      cursor = objStart;
-      break;
-    }
-
-    return {
-      objects,
-      remainder: data.substring(cursor),
-    };
   }
 
   /**

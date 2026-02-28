@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { ChildProcess } from "child_process";
 import { CliResult } from "../../types/CliOutputTypes";
 import {
   PromptItem,
@@ -9,15 +8,12 @@ import {
   PromptFile,
   WorkflowContext,
 } from "../../types/FlightPathTypes";
-import {
-  UniversalCliOutput,
-  CLI_EVENT_TYPES,
-} from "../../types/CliOutputTypes";
+import { UniversalCliOutput } from "../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
-import { FileSystemUtils } from "../../utils/FileSystemUtils";
 import { Log } from "../../utils/Log";
 import { ILogParser } from "./shared/interfaces/ILogParser";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
@@ -114,17 +110,14 @@ export class CliIntegration extends HarnessIntegration {
   /** Actual prompt text sent to CLI (may be file reference if using temp files) */
   protected actualPromptSent?: string;
 
-  /** Current background process (headless mode) */
-  protected currentProcess?: ChildProcess;
+  // NOTE: currentProcess field removed — the child process lives in processManager,
+  // not on this class. See processManager.isActive() for process state.
 
   /** Process/terminal manager for CLI execution */
   protected processManager: CliProcessManager;
 
   // Interactive terminal mode properties
   protected currentExecution?: vscode.TerminalShellExecution;
-
-  // Cached MCP config file path (generated once per session, reused for all prompts)
-  private cachedMcpConfigPath?: string;
 
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
@@ -262,80 +255,6 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   // ============================================================
-  // MCP CONFIGURATION
-  // ============================================================
-
-  /**
-   * Generate MCP config file (shared implementation for JSON-based CLIs).
-   * Creates the file once and caches the path for reuse across all prompts.
-   * The config content is static per session (server path and workspace root don't change).
-   *
-   * @param mcpServerPath Absolute path to the MCP server executable
-   * @param workspaceRoot Absolute path to the workspace root
-   * @returns Absolute path to the generated config file, or null if provider doesn't support MCP
-   */
-  protected async generateMcpConfigFile(
-    mcpServerPath: string,
-    workspaceRoot: string
-  ): Promise<string | null> {
-    // Check if provider supports MCP
-    if (!this.provider.getMcpConfigArgs) {
-      return null;
-    }
-
-    // Return cached path if already generated
-    if (this.cachedMcpConfigPath) {
-      return this.cachedMcpConfigPath;
-    }
-
-    // Delegate to provider to get MCP config args
-    const args = await this.provider.getMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot
-    );
-
-    if (!args) {
-      return null; // Harness doesn't support MCP
-    }
-
-    // For providers that use config files (not inline args), generate the file
-    // This is determined by checking if the provider uses CliMcpConfigGenerator
-    // For now, we'll cache the args as the config path (simplified)
-    // In actual implementation, each provider would handle their own config format
-
-    return null; // Placeholder - actual implementation would generate config file
-  }
-
-  /**
-   * Generate MCP server configuration arguments for dynamic queue extension.
-   * Returns CLI-specific arguments to pass MCP server config.
-   *
-   * Only called when:
-   * 1. Dynamic queue is enabled (flightpath.enableDynamicQueue)
-   * 2. Current prompt has allowDynamicExtension enabled
-   *
-   * @param mcpServerPath Absolute path to the MCP server executable
-   * @param workspaceRoot Workspace root directory (for FLIGHTPATH_WORKSPACE env var)
-   * @param workingFilePath Active working file for this workflow (sets FLIGHTPATH_WORKING_FILE)
-   * @returns Array of arguments to append to CLI command, or null if not supported
-   */
-  protected async getMcpConfigArgs(
-    mcpServerPath: string,
-    workspaceRoot: string,
-    workingFilePath?: string
-  ): Promise<string[] | null> {
-    if (!this.provider.getMcpConfigArgs) {
-      return null;
-    }
-
-    return await this.provider.getMcpConfigArgs(
-      mcpServerPath,
-      workspaceRoot,
-      workingFilePath
-    );
-  }
-
-  // ============================================================
   // PROMPT FILE CREATION & MANAGEMENT
   // ============================================================
 
@@ -389,32 +308,8 @@ export class CliIntegration extends HarnessIntegration {
       return false;
     }
 
-    // Additional checks for specific dangerous patterns
-    // Double quotes - even escaped, could be problematic
-    if (finalPromptText.includes('"')) {
-      return false;
-    }
-
-    // Single quotes - shell escaping complexity
-    if (finalPromptText.includes("'")) {
-      return false;
-    }
-
-    // Backslashes - escape character issues
-    if (finalPromptText.includes("\\")) {
-      return false;
-    }
-
-    // Backticks - command substitution
-    if (finalPromptText.includes("`")) {
-      return false;
-    }
-
-    // Dollar signs - variable expansion
-    if (finalPromptText.includes("$")) {
-      return false;
-    }
-
+    // SAFE_CHARS_PATTERN above already excludes all dangerous chars (", ', \, `, $)
+    // No additional per-character checks needed.
     return true;
   }
 
@@ -878,18 +773,9 @@ export class CliIntegration extends HarnessIntegration {
       let draining = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
       let cancellationInterval: NodeJS.Timeout | undefined;
-      const getEntryTimestamp = (entry: any): Date | null => {
-        if (entry.timestamp) {
-          return new Date(entry.timestamp);
-        }
-        if (entry.time) {
-          return new Date(entry.time);
-        }
-        if (entry.created_at) {
-          return new Date(entry.created_at);
-        }
-        return null;
-      };
+      // Use BaseLogParser's extractTimestamp via the parser instance
+      const getEntryTimestamp = (entry: any): Date | null =>
+        (parser as any).extractTimestamp?.(entry) ?? null;
 
       // Completion handler - single source of truth
       const handleCompletion = async (source: string) => {
@@ -1399,13 +1285,6 @@ export class CliIntegration extends HarnessIntegration {
     return this.lastCliCommand;
   }
 
-  /**
-   * Get the full prompt text sent to CLI
-   */
-  getLastFullPrompt(): string | undefined {
-    return this.lastFullPrompt;
-  }
-
   // ============================================================
   // INITIALIZATION
   // ============================================================
@@ -1520,12 +1399,9 @@ export class CliIntegration extends HarnessIntegration {
     );
 
     // Check if we have an actively running process or execution.
-    // NOTE: In headless mode, this.currentProcess on CliIntegration is never set —
-    // the actual child process lives in processManager. Always check processManager.isActive().
+    // In headless mode, the child process lives in processManager.
     const hasActiveProcess =
-      this.currentProcess ||
-      this.currentExecution ||
-      this.processManager.isActive();
+      this.currentExecution || this.processManager.isActive();
 
     if (!hasActiveProcess) {
       // No active process anywhere - fire responseComplete immediately
@@ -1568,6 +1444,102 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
   // PROMPT SENDING (MAIN ENTRY POINT)
   // ============================================================
+
+  /**
+   * Build the headless response callback that parses results, stores output,
+   * extracts session IDs, and fires response events.
+   *
+   * Previously duplicated in both the primary headless execution and the
+   * session error retry path. Now extracted as a single source of truth.
+   *
+   * @param finalPromptText Original prompt text (for log-based session extraction)
+   * @param executionStartTime When execution started
+   * @param resolvedSessionId Session ID used for resume (null = new session)
+   * @param extractedSessionIdSetter Callback to store the extracted session ID
+   * @param label Label for debug logging (e.g., "" or " (retry)")
+   * @returns Callback compatible with executeHeadlessWithPromptFile
+   */
+  private buildHeadlessResponseCallback(
+    finalPromptText: string,
+    executionStartTime: Date,
+    resolvedSessionId: string | undefined,
+    extractedSessionIdSetter: (id: string) => void,
+    label: string = ""
+  ): (result: {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+  }) => Promise<boolean> {
+    return async (result) => {
+      // Debug logging: Log raw stdout/stderr if enabled
+      const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
+      if (logRawOutput) {
+        Log.info(
+          `[${this.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
+        );
+        if (result.stderr) {
+          Log.info(
+            `[${this.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
+          );
+        }
+      }
+
+      // Parse result using provider's response parser (returns UniversalCliOutput)
+      const parsedOutput = this.provider.responseParser.parse(
+        result.stdout,
+        result.stderr,
+        result.exitCode
+      );
+
+      // Store structured output for tool call/event access
+      this.lastParsedOutput = parsedOutput;
+
+      // Extract text from events for legacy CliResult
+      const responseText = this.extractTextFromEvents(parsedOutput);
+
+      // Format statistics for display
+      const statistics = CliOutputFormatter.formatStatistics(
+        parsedOutput.metadata
+      );
+
+      // Create legacy CliResult for backward compatibility
+      const cliResult: CliResult = {
+        success: result.exitCode === 0,
+        response: responseText,
+        statistics,
+        exitCode: result.exitCode,
+        error: result.exitCode !== 0 ? result.stderr : undefined,
+      };
+
+      // Store legacy result
+      this.lastResult = cliResult;
+
+      // Extract session ID if available from output or logs
+      if (parsedOutput.metadata.sessionId) {
+        extractedSessionIdSetter(parsedOutput.metadata.sessionId);
+        Log.debug(
+          `📝 Session ID from output${label}: ${parsedOutput.metadata.sessionId}`
+        );
+      } else if (!resolvedSessionId && this.provider.extractSessionIdFromLogs) {
+        const logSessionId = await this.provider.extractSessionIdFromLogs(
+          this.actualPromptSent || finalPromptText,
+          executionStartTime
+        );
+        if (logSessionId) {
+          extractedSessionIdSetter(logSessionId);
+          Log.debug(`📝 Session ID from logs${label}: ${logSessionId}`);
+        }
+      }
+
+      // Log response
+      this.logResponse(responseText, statistics);
+
+      // Fire response complete event
+      this.responseCompleteEmitter.fire(responseText);
+
+      return result.exitCode === 0;
+    };
+  }
 
   /**
    * Send a prompt to the CLI.
@@ -1697,6 +1669,16 @@ export class CliIntegration extends HarnessIntegration {
         // Headless mode
         this.warnIfHeadlessWithoutPermissions();
 
+        // Build the shared response callback (single source of truth)
+        const responseCallback = this.buildHeadlessResponseCallback(
+          finalPromptText,
+          executionStartTime,
+          resolvedSessionId,
+          (id) => {
+            extractedSessionId = id;
+          }
+        );
+
         // Claude CLI error recovery wrapper (Phase 5)
         const executeWithRecovery = async (
           args: string[],
@@ -1707,80 +1689,7 @@ export class CliIntegration extends HarnessIntegration {
               args,
               promptText,
               workflowContext,
-              async (result) => {
-                // Debug logging: Log raw stdout/stderr if enabled
-                const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
-                if (logRawOutput) {
-                  Log.info(
-                    `[${this.provider.config.displayName} FINAL STDOUT]:\n${result.stdout}`
-                  );
-                  if (result.stderr) {
-                    Log.info(
-                      `[${this.provider.config.displayName} FINAL STDERR]:\n${result.stderr}`
-                    );
-                  }
-                }
-
-                // Parse result using provider's response parser (now returns UniversalCliOutput)
-                const parsedOutput = this.provider.responseParser.parse(
-                  result.stdout,
-                  result.stderr,
-                  result.exitCode
-                );
-
-                // Store structured output for tool call/event access
-                this.lastParsedOutput = parsedOutput;
-
-                // Extract text from events for legacy CliResult
-                const responseText = this.extractTextFromEvents(parsedOutput);
-
-                // Format statistics for display
-                const statistics = CliOutputFormatter.formatStatistics(
-                  parsedOutput.metadata
-                );
-
-                // Create legacy CliResult for backward compatibility
-                const cliResult: CliResult = {
-                  success: result.exitCode === 0,
-                  response: responseText,
-                  statistics,
-                  exitCode: result.exitCode,
-                  error: result.exitCode !== 0 ? result.stderr : undefined,
-                };
-
-                // Store legacy result
-                this.lastResult = cliResult;
-
-                // Extract session ID if available from output or logs
-                if (parsedOutput.metadata.sessionId) {
-                  extractedSessionId = parsedOutput.metadata.sessionId;
-                  Log.debug(`📝 Session ID from output: ${extractedSessionId}`);
-                } else if (
-                  !resolvedSessionId &&
-                  this.provider.extractSessionIdFromLogs
-                ) {
-                  // For CLIs that store session ID in log files (e.g., Copilot)
-                  // Skip if resuming - the session ID hasn't changed and the new prompt
-                  // will be deep in the log (past the first 10 events searched).
-                  const logSessionId =
-                    await this.provider.extractSessionIdFromLogs(
-                      this.actualPromptSent || finalPromptText,
-                      executionStartTime
-                    );
-                  if (logSessionId) {
-                    extractedSessionId = logSessionId;
-                    Log.debug(`📝 Session ID from logs: ${extractedSessionId}`);
-                  }
-                }
-
-                // Log response
-                this.logResponse(responseText, statistics);
-
-                // Fire response complete event
-                this.responseCompleteEmitter.fire(responseText);
-
-                return result.exitCode === 0;
-              }
+              responseCallback
             );
           } catch (error) {
             // Check for recoverable session errors using provider's response parser (Phase 5)
@@ -1807,74 +1716,23 @@ export class CliIntegration extends HarnessIntegration {
                   workflowContext
                 );
 
+                // Build retry callback with label
+                const retryCallback = this.buildHeadlessResponseCallback(
+                  finalPromptText,
+                  executionStartTime,
+                  undefined, // no session ID on retry
+                  (id) => {
+                    extractedSessionId = id;
+                  },
+                  " (retry)"
+                );
+
                 // Retry with new args
                 return await this.executeHeadlessWithPromptFile(
                   argsWithoutResume,
                   promptText,
                   workflowContext,
-                  async (result) => {
-                    // Debug logging: Log raw stdout/stderr if enabled
-                    const logRawOutput = vscode.workspace
-                      .getConfiguration("flightpath")
-                      .get<boolean>("logRawCliOutput", false);
-                    if (logRawOutput) {
-                      Log.info(
-                        `[${this.provider.config.displayName} FINAL STDOUT (retry)]:\n${result.stdout}`
-                      );
-                      if (result.stderr) {
-                        Log.info(
-                          `[${this.provider.config.displayName} FINAL STDERR (retry)]:\n${result.stderr}`
-                        );
-                      }
-                    }
-
-                    // Parse result using provider's response parser (now returns UniversalCliOutput)
-                    const parsedOutput = this.provider.responseParser.parse(
-                      result.stdout,
-                      result.stderr,
-                      result.exitCode
-                    );
-
-                    // Store structured output
-                    this.lastParsedOutput = parsedOutput;
-
-                    // Extract text from events
-                    const responseText =
-                      this.extractTextFromEvents(parsedOutput);
-
-                    // Format statistics
-                    const statistics = CliOutputFormatter.formatStatistics(
-                      parsedOutput.metadata
-                    );
-
-                    // Create legacy CliResult
-                    const cliResult: CliResult = {
-                      success: result.exitCode === 0,
-                      response: responseText,
-                      statistics,
-                      exitCode: result.exitCode,
-                      error: result.exitCode !== 0 ? result.stderr : undefined,
-                    };
-
-                    // Store legacy result
-                    this.lastResult = cliResult;
-
-                    // Extract session ID
-                    if (parsedOutput.metadata.sessionId) {
-                      extractedSessionId = parsedOutput.metadata.sessionId;
-                      Log.debug(
-                        `📝 New session ID from retry: ${extractedSessionId}`
-                      );
-                    }
-
-                    // Log response
-                    this.logResponse(responseText, statistics);
-
-                    // Fire response complete event
-                    this.responseCompleteEmitter.fire(responseText);
-
-                    return result.exitCode === 0;
-                  }
+                  retryCallback
                 );
               }
             }

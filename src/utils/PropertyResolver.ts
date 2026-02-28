@@ -250,26 +250,28 @@ export class PropertyResolver {
    * Precedence order:
    * 1. Prompt-level override (prompt.allowDynamicExtension)
    * 2. Workflow-level default (workflow.allowDynamicExtension)
-   * 3. Default to false (no VS Code setting for this property)
-   *
-   * Note: Dynamic extension must be explicitly enabled at prompt or workflow level.
-   * Unlike other properties, there is no global VS Code setting fallback.
+   * 3. VS Code setting (flightpath.enableDynamicQueue)
    *
    * @param prompt The prompt to resolve allowDynamicExtension for
    * @param workflow The parent workflow file
-   * @returns Resolved allowDynamicExtension flag (defaults to false)
+   * @returns Resolved allowDynamicExtension flag (defaults to VS Code setting)
    */
   private static resolveAllowDynamicExtension(
     prompt: PromptItem,
     workflow: PromptFile
   ): boolean {
-    // Allow if ANY source enables it (prompt, workflow, or VS Code setting)
-    const globalEnabled = ConfigurationUtils.getDynamicQueueConfig().enabled;
-    return Boolean(
-      prompt.allowDynamicExtension ||
-      workflow.allowDynamicExtension ||
-      globalEnabled
-    );
+    // 1. Prompt-level override (highest priority)
+    if (prompt.allowDynamicExtension !== undefined) {
+      return prompt.allowDynamicExtension;
+    }
+
+    // 2. Workflow-level default
+    if (workflow.allowDynamicExtension !== undefined) {
+      return workflow.allowDynamicExtension;
+    }
+
+    // 3. VS Code setting fallback (lowest priority)
+    return ConfigurationUtils.getDynamicQueueConfig().enabled;
   }
 
   /**

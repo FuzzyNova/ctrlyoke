@@ -5,6 +5,7 @@ import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CliIntegration } from "./cli/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
+import { PromptQueue } from "./PromptQueue";
 import {
   Harness,
   QueueState,
@@ -335,9 +336,10 @@ export class WorkflowOrchestrator {
   }
 
   /**
-   * No-op: only running/paused workflows are in the Map, and live process state
-   * cannot be meaningfully restored after the extension host terminates.
-   * Clears any stale persisted state from the previous architecture.
+   * Clears persisted workflow state from the previous architecture.
+   * Running/paused workflows live only in the in-memory Map and cannot be
+   * meaningfully restored after the extension host terminates, so we write
+   * an empty array to clear any stale data left by earlier versions.
    */
   async saveState(): Promise<void> {
     await this.context.workspaceState.update("flightpath.loadedWorkflows", []);
@@ -610,6 +612,14 @@ export class WorkflowOrchestrator {
     return this.getActiveInstance().getQueueState();
   }
 
+  /**
+   * Get the PromptQueue of the currently active workflow instance.
+   * Returns null if no instance exists yet.
+   */
+  getActivePromptQueue(): PromptQueue | null {
+    return this.viewedInstance?.promptQueue ?? null;
+  }
+
   async updateWorkflowName(workflowName: string): Promise<void> {
     return this.getActiveInstance().updateWorkflowName(workflowName);
   }
@@ -758,17 +768,11 @@ export class WorkflowOrchestrator {
     const result = await this.workflowCommandHandler.createDraftPrompt();
 
     if (result) {
-      // Expose draft file into the active workflow instance via loadPromptFile
+      // Expose draft file into the active workflow instance via public accessors
       // so the instance owns currentPromptFile, watcher setup, etc.
-      // Use a lightweight path: just set up the tracker + watcher without parsing.
       const instance = this.getActiveInstance();
-      // Reuse the internal loadPromptFile pathway but the file is empty so
-      // we set up a placeholder currentPromptFile manually.
-      instance["currentPromptFile"] = {
-        filePath: result.filePath,
-        promptFile: { prompts: [] },
-      };
-      instance["setupPromptFileWatcher"](result.filePath);
+      instance.setCurrentPromptFile(result.filePath, { prompts: [] });
+      instance.initializeFileWatcher(result.filePath);
 
       if (this.dashboardProvider) {
         this.dashboardProvider.updateFileSelected(
@@ -919,18 +923,7 @@ export class WorkflowOrchestrator {
   }
 
   private getDefaultIntegration(): HarnessIntegration {
-    const integrationMode = ConfigurationUtils.getIntegrationMode();
-    switch (integrationMode) {
-      case Harness.CopilotChat:
-        return this.chatIntegration;
-      case Harness.ClaudeCli:
-        return this.claudeCliIntegration;
-      case Harness.CodexCli:
-        return this.codexCliIntegration;
-      case Harness.CopilotCli:
-      default:
-        return this.copilotCliIntegration;
-    }
+    return this.resolveDetectorIntegration(undefined);
   }
 
   /**
@@ -941,20 +934,18 @@ export class WorkflowOrchestrator {
   private resolveDetectorIntegration(
     harnessOverride?: Harness
   ): HarnessIntegration {
-    if (harnessOverride) {
-      switch (harnessOverride) {
-        case Harness.CopilotChat:
-          return this.chatIntegration;
-        case Harness.ClaudeCli:
-          return this.claudeCliIntegration;
-        case Harness.CodexCli:
-          return this.codexCliIntegration;
-        case Harness.CopilotCli:
-        default:
-          return this.copilotCliIntegration;
-      }
+    const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
+    switch (harness) {
+      case Harness.CopilotChat:
+        return this.chatIntegration;
+      case Harness.ClaudeCli:
+        return this.claudeCliIntegration;
+      case Harness.CodexCli:
+        return this.codexCliIntegration;
+      case Harness.CopilotCli:
+      default:
+        return this.copilotCliIntegration;
     }
-    return this.getDefaultIntegration();
   }
 
   private propagateWorkflowNameToIntegrations(name: string | undefined): void {

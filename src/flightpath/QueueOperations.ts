@@ -8,19 +8,17 @@
  */
 
 import { PromptQueue } from "./PromptQueue";
-import { PromptItem, EXECUTION_STATES } from "../types/FlightPathTypes";
+import {
+  PromptItem,
+  EndCondition,
+  EXECUTION_STATES,
+} from "../types/FlightPathTypes";
 import {
   QUEUE_POSITION,
   type QueuePosition,
 } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import * as vscode from "vscode";
-
-/**
- * Position where prompts should be inserted
- * @deprecated Use QueuePosition from DashboardConstants instead
- */
-export type AppendPosition = QueuePosition;
 
 /**
  * Queue status response (single source for both MCP and Language Model Tools)
@@ -52,7 +50,7 @@ export interface AppendPromptsRequest {
   prompts: Array<{
     prompt: string;
     model?: string;
-    endCondition?: any;
+    endCondition?: EndCondition;
   }>;
   position: QueuePosition;
   source: string;

@@ -11,6 +11,7 @@ import { Log } from "../../utils/Log";
 import { retryWithBackoff } from "../../utils/RetryUtils";
 import { CliOutputFormatter } from "../cli/shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
+import { ResolvedProperties } from "../../utils/PropertyResolver";
 
 /**
  * GitHub Copilot Chat Integration - UI automation with session file monitoring.
@@ -39,7 +40,10 @@ export class CopilotChatIntegration extends HarnessIntegration {
   // Last parsed structured output (populated after each completed response)
   private lastParsedOutput?: UniversalCliOutput;
 
-  constructor(context: vscode.ExtensionContext, registerWithContext: boolean = true) {
+  constructor(
+    context: vscode.ExtensionContext,
+    registerWithContext: boolean = true
+  ) {
     super(context, registerWithContext);
     this.sessionMonitor = new ChatSessionMonitor(context);
     this.sessionParser = new ChatSessionParser();
@@ -49,34 +53,47 @@ export class CopilotChatIntegration extends HarnessIntegration {
     this.initialize();
   }
 
-  /** Get the VS Code command for opening Copilot Chat based on user settings */
-  private getChatWindowCommand(): string {
+  /**
+   * Get the appropriate VS Code command for the configured chat window location.
+   * Single source of truth for chat location → VS Code command mapping.
+   *
+   * @param purpose 'focus' to open/focus existing chat, 'new' to start a new chat session
+   */
+  private getChatCommand(purpose: "focus" | "new"): string {
     const chatLocation = ConfigurationUtils.getChatWindowLocation();
 
-    const commandMap: Record<string, string> = {
-      chatPanel: "workbench.panel.chat.view.copilot.focus",
-      newTab: "workbench.action.chat.openInEditor",
-      newWindow: "workbench.action.chat.openInNewWindow",
+    const commandMap: Record<string, Record<string, string>> = {
+      focus: {
+        chatPanel: "workbench.panel.chat.view.copilot.focus",
+        newTab: "workbench.action.chat.openInEditor",
+        newWindow: "workbench.action.chat.openInNewWindow",
+      },
+      new: {
+        chatPanel: "workbench.action.chat.newLocalChat",
+        newTab: "workbench.action.chat.newChat",
+        newWindow: "workbench.action.chat.openInNewWindow",
+      },
     };
 
-    return commandMap[chatLocation] || commandMap["chatPanel"];
+    return (
+      commandMap[purpose][chatLocation] || commandMap[purpose]["chatPanel"]
+    );
+  }
+
+  /** Get the VS Code command for opening Copilot Chat based on user settings */
+  private getChatWindowCommand(): string {
+    return this.getChatCommand("focus");
   }
 
   /** Start a new chat session. Mode/agent inherited from previous session. */
   private async startNewChatSession(): Promise<void> {
-    const chatLocation = ConfigurationUtils.getChatWindowLocation();
-
-    const commandMap: Record<string, string> = {
-      chatPanel: "workbench.action.chat.newLocalChat",
-      newTab: "workbench.action.chat.newChat",
-      newWindow: "workbench.action.chat.openInNewWindow",
-    };
-
-    const command = commandMap[chatLocation] || commandMap["chatPanel"];
+    const command = this.getChatCommand("new");
 
     try {
       await vscode.commands.executeCommand(command);
-      Log.info(`✨ New chat session: ${chatLocation}`);
+      Log.info(
+        `✨ New chat session: ${ConfigurationUtils.getChatWindowLocation()}`
+      );
     } catch (error) {
       Log.error("❌ Failed to start new chat:", error);
       // Don't throw - we'll still try to send the prompt to existing chat
@@ -311,7 +328,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
-      resolvedProperties?: any; // ResolvedProperties from PropertyResolver
+      resolvedProperties?: ResolvedProperties;
     }
   ): Promise<boolean> {
     try {
@@ -674,7 +691,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       promptIndex: number;
       allPrompts: PromptItem[];
       filePath?: string;
-      resolvedProperties?: any;
+      resolvedProperties?: ResolvedProperties;
     }
   ): Promise<string> {
     const promptText = workflowContext
@@ -797,19 +814,6 @@ export class CopilotChatIntegration extends HarnessIntegration {
       );
       return false;
     }
-  }
-
-  /** Get detailed capability information */
-  getCapabilities(): {
-    hasDirectAutomation: boolean;
-    supportsZeroInteraction: boolean;
-    currentStrategy: string;
-  } {
-    return {
-      hasDirectAutomation: this.isAvailable,
-      supportsZeroInteraction: this.isAvailable,
-      currentStrategy: this.isAvailable ? "copilot-chat" : "unavailable",
-    };
   }
 
   /** Cancel current chat response */

@@ -36,7 +36,7 @@ export class PermanentFailureError extends Error {
 export interface RetryOptions {
   /**
    * Maximum number of attempts (including the initial attempt)
-   * @default 15
+   * @default 60
    */
   maxAttempts?: number;
 

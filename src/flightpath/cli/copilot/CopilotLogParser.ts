@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { BaseLogParser } from "../shared/BaseLogParser";
+import { CliEventMapper } from "../shared/CliEventMapper";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
@@ -20,9 +21,11 @@ import {
   McpToolCallData,
   WebSearchData,
   UnifiedDiffHunk,
-  CLI_EVENT_TYPES,
 } from "../../../types/CliOutputTypes";
-import { OPERATION_STATUS } from "../../../types/DashboardConstants";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 
 // ============================================================================
 // Copilot Log Event Type Definitions
@@ -257,9 +260,7 @@ export class CopilotLogParser extends BaseLogParser {
    * Event buffer for multi-event responses
    *
    * Copilot may send multiple assistant.message events for a single response.
-   * This buffer accumulates events until turn_end or timeout.
    */
-  private eventBuffer: any[] = [];
 
   /**
    * Extract complete response from Copilot log events
@@ -713,7 +714,7 @@ export class CopilotLogParser extends BaseLogParser {
               }
 
               // Read first 10 events
-              const events = await this.readFirstEvents(logPath, 10);
+              const events = await this.readFirstNJsonlEvents(logPath, 10);
 
               // Look for user.message event containing prompt text
               for (const event of events) {
@@ -955,126 +956,93 @@ export class CopilotLogParser extends BaseLogParser {
     toolCallId: string,
     timestamp: number
   ): CliEvent {
-    const lowerName = toolName.toLowerCase();
+    const classification = CliEventMapper.classifyTool(toolName);
 
-    // Bash/shell commands
-    if (
-      lowerName === "powershell" ||
-      lowerName === "bash" ||
-      lowerName === "shell"
-    ) {
-      return {
-        type: CLI_EVENT_TYPES.BASH_COMMAND,
-        timestamp,
-        data: {
-          command: (args.command as string) || (args.script as string) || "",
-          workingDir: args.cwd as string | undefined,
-          status: OPERATION_STATUS.INITIATED,
-        } as BashCommandData,
-      };
-    }
+    switch (classification.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        return {
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp,
+          data: {
+            command: (args.command as string) || (args.script as string) || "",
+            workingDir: args.cwd as string | undefined,
+            status: OPERATION_STATUS.INITIATED,
+          } as BashCommandData,
+        };
 
-    // File read operations
-    if (
-      lowerName === "view" ||
-      lowerName === "read" ||
-      lowerName === "read_file"
-    ) {
-      return {
-        type: CLI_EVENT_TYPES.FILE_READ,
-        timestamp,
-        data: {
-          path: (args.path as string) || (args.file_path as string) || "",
-          status: OPERATION_STATUS.INITIATED,
-        } as FileReadData,
-      };
-    }
+      case CLI_EVENT_TYPES.FILE_READ:
+        return {
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp,
+          data: {
+            path: (args.path as string) || (args.file_path as string) || "",
+            status: OPERATION_STATUS.INITIATED,
+          } as FileReadData,
+        };
 
-    // File write operations (create new file)
-    if (
-      lowerName === "write" ||
-      lowerName === "create_file" ||
-      lowerName === "write_file"
-    ) {
-      return {
-        type: CLI_EVENT_TYPES.FILE_WRITE,
-        timestamp,
-        data: {
-          path: (args.path as string) || (args.file_path as string) || "",
-          content: (args.content as string) || "",
-          status: OPERATION_STATUS.INITIATED,
-        } as FileWriteData,
-      };
-    }
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        return {
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp,
+          data: {
+            path: (args.path as string) || (args.file_path as string) || "",
+            content: (args.content as string) || "",
+            status: OPERATION_STATUS.INITIATED,
+          } as FileWriteData,
+        };
 
-    // File edit operations (modify existing file)
-    if (
-      lowerName === "edit" ||
-      lowerName === "modify_file" ||
-      lowerName === "replace_string_in_file" ||
-      lowerName === "multiedit"
-    ) {
-      return {
-        type: CLI_EVENT_TYPES.FILE_EDIT,
-        timestamp,
-        data: {
-          path: (args.path as string) || (args.file_path as string) || "",
-          status: OPERATION_STATUS.INITIATED,
-          // Don't include oldContent/newContent here - they'll be added via structuredPatch
-          // from tool.execution_complete (prevents client-side diff generation with wrong line numbers)
-        } as FileEditData,
-      };
-    }
+      case CLI_EVENT_TYPES.FILE_EDIT:
+        return {
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: (args.path as string) || (args.file_path as string) || "",
+            status: OPERATION_STATUS.INITIATED,
+            // Don't include oldContent/newContent here - they'll be added via structuredPatch
+            // from tool.execution_complete (prevents client-side diff generation with wrong line numbers)
+          } as FileEditData,
+        };
 
-    // File delete operations
-    if (lowerName === "delete" || lowerName === "delete_file") {
-      return {
-        type: CLI_EVENT_TYPES.FILE_DELETE,
-        timestamp,
-        data: {
-          path: (args.path as string) || (args.file_path as string) || "",
-        } as FileDeleteData,
-      };
-    }
+      case CLI_EVENT_TYPES.FILE_DELETE:
+        return {
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          timestamp,
+          data: {
+            path: (args.path as string) || (args.file_path as string) || "",
+          } as FileDeleteData,
+        };
 
-    // MCP tool calls (format: "server_name(tool_name)" or just MCP server tools)
-    if (toolName.includes("(") && toolName.includes(")")) {
-      // Format: "github(search_repositories)"
-      const match = toolName.match(/^([^(]+)\(([^)]+)\)$/);
-      if (match) {
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
         return {
           type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
           timestamp,
           data: {
-            server: match[1],
-            tool: match[2],
+            server: (classification as { server: string }).server,
+            tool: (classification as { tool: string }).tool,
             parameters: args,
           } as McpToolCallData,
         };
-      }
-    }
 
-    // Web search operations
-    if (lowerName === "web_search" || lowerName === "search") {
-      return {
-        type: CLI_EVENT_TYPES.WEB_SEARCH,
-        timestamp,
-        data: {
-          query: (args.query as string) || "",
-        } as WebSearchData,
-      };
-    }
+      case CLI_EVENT_TYPES.WEB_SEARCH:
+        return {
+          type: CLI_EVENT_TYPES.WEB_SEARCH,
+          timestamp,
+          data: {
+            query: (args.query as string) || "",
+          } as WebSearchData,
+        };
 
-    // Fallback: Generic tool call for unknown tools
-    return {
-      type: CLI_EVENT_TYPES.TOOL_CALL,
-      timestamp,
-      data: {
-        name: toolName,
-        parameters: args,
-        id: toolCallId,
-      } as ToolCall,
-    };
+      default:
+        return {
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: args,
+            id: toolCallId,
+          } as ToolCall,
+        };
+    }
   }
 
   /**
@@ -1189,7 +1157,7 @@ export class CopilotLogParser extends BaseLogParser {
    */
   async extractSessionIdFromLogPath(logPath: string): Promise<string | null> {
     try {
-      const events = await this.readFirstEvents(logPath, 1);
+      const events = await this.readFirstNJsonlEvents(logPath, 1);
       if (events.length === 0) {
         Log.debug(
           `[CopilotLogParser] No events found in ${path.basename(logPath)}`
@@ -1245,40 +1213,6 @@ export class CopilotLogParser extends BaseLogParser {
       return null;
     } catch {
       return null;
-    }
-  }
-
-  /**
-   * Read first N events from log file
-   *
-   * Optimized for quick sampling without reading entire file.
-   *
-   * @param filePath - Absolute path to log file
-   * @param count - Maximum number of events to read
-   * @returns Array of parsed events (up to count)
-   */
-  private async readFirstEvents(
-    filePath: string,
-    count: number
-  ): Promise<any[]> {
-    try {
-      const content = fs.readFileSync(filePath, "utf-8");
-      const lines = content.split("\n").filter((line) => line.trim());
-      const events: any[] = [];
-
-      for (let i = 0; i < Math.min(lines.length, count); i++) {
-        try {
-          const event = JSON.parse(lines[i]);
-          events.push(event);
-        } catch {
-          // Skip invalid JSON lines
-          continue;
-        }
-      }
-
-      return events;
-    } catch {
-      return [];
     }
   }
 }

@@ -3,7 +3,12 @@ import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { EndConditionEvaluator } from "../EndConditionEvaluator";
 import { TemplateManager } from "../TemplateManager";
-import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../../utils/ConfigurationUtils";
+import { HARNESS_STATUS_STRINGS } from "../../types/DashboardConstants";
+import { Log } from "../../utils/Log";
 
 /**
  * WorkflowCommandHandler
@@ -18,12 +23,16 @@ import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
  * - Opening current prompt file
  */
 export class WorkflowCommandHandler {
+  private templateManager: TemplateManager;
+
   constructor(
     private context: vscode.ExtensionContext,
     private promptFileParser: PromptFileParser,
     private endConditionEvaluator: EndConditionEvaluator,
     private currentWorkspaceFolder?: vscode.WorkspaceFolder
-  ) {}
+  ) {
+    this.templateManager = new TemplateManager(context);
+  }
 
   /**
    * Update workspace folder reference
@@ -119,7 +128,7 @@ export class WorkflowCommandHandler {
 
       vscode.window.showInformationMessage(`FlightPath: Created ${fileName}`);
     } catch (error) {
-      console.error("FlightPath: Failed to create prompt file:", error);
+      Log.error("FlightPath: Failed to create prompt file:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to create prompt file: ${error}`
       );
@@ -148,8 +157,8 @@ export class WorkflowCommandHandler {
       // Create prompts directory
       const promptsDir = path.join(
         this.currentWorkspaceFolder.uri.fsPath,
-        ".flightpath",
-        "prompts"
+        PATH_CONSTANTS.FLIGHTPATH_DIR,
+        PATH_CONSTANTS.PROMPTS_DIR
       );
 
       // Ensure directory exists
@@ -176,11 +185,11 @@ export class WorkflowCommandHandler {
         });
       }
 
-      console.log(`FlightPath: Created draft prompt: ${fileName}`);
+      Log.info(`FlightPath: Created draft prompt: ${fileName}`);
 
       return { filePath, fileName };
     } catch (error) {
-      console.error("FlightPath: Failed to create draft prompt:", error);
+      Log.error("FlightPath: Failed to create draft prompt:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to create draft prompt: ${error}`
       );
@@ -258,7 +267,7 @@ export class WorkflowCommandHandler {
         );
       }
     } catch (error) {
-      console.error("FlightPath: Error creating end condition script:", error);
+      Log.error("FlightPath: Error creating end condition script:", error);
       vscode.window.showErrorMessage(
         `❌ Failed to create end condition script: ${error}`
       );
@@ -279,7 +288,9 @@ export class WorkflowCommandHandler {
     // Check if harness is unavailable and offer retry
     const harnessStatus = getHarnessStatus();
 
-    if (harnessStatus.initializationStatus === "unavailable") {
+    if (
+      harnessStatus.initializationStatus === HARNESS_STATUS_STRINGS.UNAVAILABLE
+    ) {
       const action = await vscode.window.showWarningMessage(
         "FlightPath: Harness automation is unavailable. Would you like to retry detection?",
         "Retry Detection",
@@ -296,7 +307,7 @@ export class WorkflowCommandHandler {
     try {
       await vscode.commands.executeCommand("flightpath.dashboard.focus");
     } catch (error) {
-      console.error("Failed to focus FlightPath dashboard:", error);
+      Log.error("Failed to focus FlightPath dashboard:", error);
       throw error; // Let caller handle fallback
     }
   }
@@ -316,9 +327,9 @@ export class WorkflowCommandHandler {
 
     try {
       await this.openPromptFile(currentFilePath);
-      console.log(`FlightPath: Opened prompt file: ${currentFilePath}`);
+      Log.info(`FlightPath: Opened prompt file: ${currentFilePath}`);
     } catch (error) {
-      console.error("FlightPath: Failed to open prompt file:", error);
+      Log.error("FlightPath: Failed to open prompt file:", error);
       vscode.window.showErrorMessage(
         `FlightPath: Failed to open file: ${error}`
       );
@@ -384,9 +395,7 @@ export class WorkflowCommandHandler {
       }
 
       // Create the template using TemplateManager
-      const templateManager = new TemplateManager(this.context);
-
-      const templatePath = await templateManager.createCustomTemplate(
+      const templatePath = await this.templateManager.createCustomTemplate(
         selected.id,
         templateName.trim()
       );
@@ -426,7 +435,7 @@ export class WorkflowCommandHandler {
         await vscode.window.showTextDocument(document);
       }
     } catch (error) {
-      console.error("FlightPath: Failed to open prompt file:", error);
+      Log.error("FlightPath: Failed to open prompt file:", error);
     }
   }
 

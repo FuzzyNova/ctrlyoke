@@ -25,55 +25,14 @@
 
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
+const {
+  getDebugLogPath,
+  getTempLogPath,
+  createLogger,
+} = require("./flightpath-hook-utils");
 
-/**
- * Get debug log file path in .flightpath/logs/
- */
-function getDebugLogPath(workspaceDir) {
-  try {
-    const logsDir = path.join(workspaceDir, ".flightpath", "logs");
-
-    // Ensure logs directory exists
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
-    }
-
-    return path.join(logsDir, "flightpath-codex-notify-debug.log");
-  } catch (err) {
-    // If anything fails, use temp directory fallback
-    return getTempLogPath();
-  }
-}
-
-/**
- * Fallback: Get debug log file path in system temp directory
- */
-function getTempLogPath() {
-  return path.join(os.tmpdir(), "flightpath-codex-notify-debug.log");
-}
-
-let DEBUG_LOG_FILE = null; // Will be set after parsing notification
-
-/**
- * Debug logging helper
- */
-function debugLog(message, data = null) {
-  if (!DEBUG_LOG_FILE) {
-    return; // Skip logging if path not initialized yet
-  }
-  try {
-    const timestamp = new Date().toISOString();
-    let logEntry = `[${timestamp}] ${message}`;
-    if (data !== null) {
-      logEntry += "\n" + JSON.stringify(data, null, 2);
-    }
-    logEntry += "\n---\n";
-    fs.appendFileSync(DEBUG_LOG_FILE, logEntry);
-  } catch (err) {
-    // Silently ignore debug logging errors
-  }
-}
+const SCRIPT_NAME = "flightpath-codex-notify";
+let debugLog = createLogger(null); // Will be re-initialized after parsing notification
 
 /**
  * Main handler function
@@ -86,22 +45,22 @@ function main() {
     if (notificationJson) {
       const notification = JSON.parse(notificationJson);
       if (notification.cwd) {
-        DEBUG_LOG_FILE = getDebugLogPath(notification.cwd);
+        const logsDir = path.join(notification.cwd, ".flightpath", "logs");
+        debugLog = createLogger(getDebugLogPath(logsDir, SCRIPT_NAME));
       } else {
-        DEBUG_LOG_FILE = getTempLogPath();
+        debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
       }
     } else {
-      DEBUG_LOG_FILE = getTempLogPath();
+      debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
     }
     debugLog("🚀 Codex notify script invoked", {
       argv: process.argv,
       argvLength: process.argv.length,
       cwd: process.cwd(),
-      logLocation: DEBUG_LOG_FILE,
     });
   } catch (err) {
     // Last resort fallback (JSON parse failed)
-    DEBUG_LOG_FILE = getTempLogPath();
+    debugLog = createLogger(getTempLogPath(SCRIPT_NAME));
   }
 
   // Codex passes notification as first argument (JSON string)
@@ -119,21 +78,6 @@ function main() {
     // Parse notification
     const notification = JSON.parse(notificationJson);
 
-    // Initialize debug logging if not already done (fallback to temp if cwd missing)
-    if (!DEBUG_LOG_FILE) {
-      if (notification.cwd) {
-        DEBUG_LOG_FILE = getDebugLogPath(notification.cwd);
-      } else {
-        DEBUG_LOG_FILE = getTempLogPath();
-      }
-      debugLog("🚀 Codex notify script invoked (late init)", {
-        argv: process.argv,
-        cwd: process.cwd(),
-        logLocation: DEBUG_LOG_FILE,
-      });
-    }
-
-    debugLog("📝 Debug log file", { DEBUG_LOG_FILE });
     debugLog("📦 Raw notification JSON received", {
       length: notificationJson.length,
       raw: notificationJson,
@@ -188,7 +132,8 @@ function main() {
 
     debugLog("🔑 Thread ID extracted", { threadId });
 
-    const notifyFile = path.join(notifyDir, `${threadId}.json`);
+    const safeThreadId = path.basename(threadId); // strip any directory components
+    const notifyFile = path.join(notifyDir, `${safeThreadId}.json`);
 
     // Create notification data
     const notifyData = {

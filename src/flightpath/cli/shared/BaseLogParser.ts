@@ -466,4 +466,57 @@ export abstract class BaseLogParser implements ILogParser {
   protected normalizePromptForMatching(text: string): string {
     return text.toLowerCase().trim().replace(/\\/g, "/"); // Convert all backslashes to forward slashes
   }
+
+  /**
+   * Read the first N events from a JSONL log file
+   *
+   * Parses lines sequentially until reaching the requested count.
+   * Skips empty lines and invalid JSON lines.
+   *
+   * @param filePath - Absolute path to log file
+   * @param count - Maximum number of events to read
+   * @returns Array of parsed events (up to count)
+   *
+   * @remarks
+   * Previously duplicated across CopilotLogParser.readFirstEvents(),
+   * ClaudeLogParser.readFirstNEvents(), and CodexLogParser.readFirstEvents().
+   * All three implementations were functionally identical.
+   */
+  protected async readFirstNJsonlEvents(
+    filePath: string,
+    count: number
+  ): Promise<any[]> {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return [];
+      }
+
+      const content = fs.readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      const events: any[] = [];
+
+      for (const line of lines) {
+        if (events.length >= count) {
+          break;
+        }
+
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+
+        try {
+          const event = JSON.parse(trimmed);
+          events.push(event);
+        } catch {
+          // Skip invalid JSON lines
+          continue;
+        }
+      }
+
+      return events;
+    } catch {
+      return [];
+    }
+  }
 }

@@ -3,7 +3,6 @@ import * as path from "path";
 import {
   UniversalCliOutput,
   CliEvent,
-  CLI_EVENT_TYPES,
   ToolCall,
   FileWriteData,
   FileEditData,
@@ -11,6 +10,7 @@ import {
   BashCommandData,
   FileDeleteData,
 } from "../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 
 /**
@@ -163,6 +163,14 @@ export class ChatSessionParser {
         ChatSessionParser.jsonlAppendAtPath(state, patch.k, patch.v);
       }
     }
+
+    // Defensive: ensure requests is still an array after replay
+    // (malformed patches could overwrite it with a non-array value)
+    if (!Array.isArray(state.requests)) {
+      Log.warn("JSONL replay produced non-array requests, resetting to empty");
+      state.requests = [];
+    }
+
     return state as ChatSessionFile;
   }
 
@@ -549,7 +557,14 @@ export class ChatSessionParser {
   }
 
   /**
-   * Extract thinking text, filtering out encrypted content
+   * Extract thinking text, filtering out encrypted content.
+   *
+   * Encrypted thinking heuristic: VS Code encrypts thinking blocks from some
+   * models (e.g. Claude extended thinking). The encrypted output appears as a
+   * single long base64-encoded string with no spaces or punctuation typical of
+   * natural language. We detect this by checking for 100+ consecutive base64
+   * characters at the start of the text. This avoids displaying meaningless
+   * cipher text in the output panel.
    */
   private extractThinkingText(
     value: string | string[] | undefined
@@ -605,7 +620,7 @@ export class ChatSessionParser {
    * @param requestIndex Index of request (-1 = last request)
    * @returns True if request is complete
    */
-  isSessionComplete(
+  static isSessionComplete(
     sessionFilePath: string,
     requestIndex: number = -1
   ): boolean {
@@ -633,7 +648,7 @@ export class ChatSessionParser {
   /**
    * Get request count from session file
    */
-  getRequestCount(sessionFilePath: string): number {
+  static getRequestCount(sessionFilePath: string): number {
     try {
       const session = ChatSessionParser.parseSessionFile(sessionFilePath);
       return session?.requests?.length ?? 0;

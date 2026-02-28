@@ -3,11 +3,8 @@ import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
-import {
-  UniversalCliOutput,
-  CliEvent,
-  CLI_EVENT_TYPES,
-} from "../../../types/CliOutputTypes";
+import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
 
 /**

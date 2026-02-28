@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
+import { Log } from "../../utils/Log";
+import { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
 
 /**
  * WorkspaceSessionManager
@@ -58,7 +60,7 @@ export class WorkspaceSessionManager {
       // Extract workflow name from filename for logging
       const workflowName = this.extractWorkflowName(mostRecentFile);
 
-      console.log(
+      Log.info(
         `FlightPath: Auto-loaded recent session: ${workflowName} (${mostRecentFile})`
       );
 
@@ -67,7 +69,7 @@ export class WorkspaceSessionManager {
       //   `FlightPath: Resumed session: ${workflowName}`
       // );
     } catch (error) {
-      console.error("FlightPath: Failed to auto-load recent session:", error);
+      Log.error("FlightPath: Failed to auto-load recent session:", error);
       // Don't show error to user - just log and continue
     }
   }
@@ -84,10 +86,10 @@ export class WorkspaceSessionManager {
     try {
       const promptFiles =
         await this.promptFileParser.discoverPromptFiles(workspaceFolder);
-      console.log(`FlightPath: Discovered ${promptFiles.length} prompt files`);
+      Log.info(`FlightPath: Discovered ${promptFiles.length} prompt files`);
       return promptFiles;
     } catch (error) {
-      console.error("FlightPath: Failed to discover prompt files:", error);
+      Log.error("FlightPath: Failed to discover prompt files:", error);
       return [];
     }
   }
@@ -128,7 +130,7 @@ export class WorkspaceSessionManager {
             const content = await vscode.workspace.fs.readFile(
               vscode.Uri.file(filePath)
             );
-            const workingFile = JSON.parse(content.toString());
+            const workingFile = JSON.parse(content.toString()) as WorkingFile;
 
             // Use lastModifiedAt if available, fall back to startedAt
             const timestamp =
@@ -136,7 +138,7 @@ export class WorkspaceSessionManager {
 
             return { filename, timestamp };
           } catch (error) {
-            console.warn(`Failed to read ${filename}:`, error);
+            Log.warn(`Failed to read ${filename}:`, error);
             return { filename, timestamp: 0 };
           }
         })
@@ -147,10 +149,7 @@ export class WorkspaceSessionManager {
 
       return filesWithTimestamps[0]?.filename;
     } catch (error) {
-      console.error(
-        "FlightPath: Failed to find most recent working file:",
-        error
-      );
+      Log.error("FlightPath: Failed to find most recent working file:", error);
       return undefined;
     }
   }
@@ -225,17 +224,23 @@ export class WorkspaceSessionManager {
           const content = await vscode.workspace.fs.readFile(
             vscode.Uri.file(filePath)
           );
-          const workingFile = JSON.parse(content.toString());
+          const workingFile = JSON.parse(content.toString()) as WorkingFile;
 
           const runtime = workingFile._runtime;
-          const completedCount = runtime?.completedPrompts?.length || 0;
+          // completedPrompts is a legacy field (no longer on WorkingFileRuntime interface)
+          // but may exist in older working files on disk. Use prompts' _runtime.completedAt instead.
+          const completedCount =
+            workingFile.prompts?.filter(
+              (p: PromptItem) => p._runtime?.completedAt
+            ).length || 0;
           const totalCount = workingFile.prompts?.length || 0;
           const currentIndex = runtime?.currentIndex || 0;
 
           // Phase 4: Count prompts with session IDs (per-prompt _runtime metadata)
           const promptsWithSessions =
-            workingFile.prompts?.filter((p: any) => p._runtime?.sessionId)
-              .length || 0;
+            workingFile.prompts?.filter(
+              (p: PromptItem) => p._runtime?.sessionId
+            ).length || 0;
 
           // Format timestamp
           const timestamp = new Date(workingFile.startedAt).toLocaleString();
@@ -264,13 +269,13 @@ export class WorkspaceSessionManager {
           });
         } catch (error) {
           // Skip invalid files
-          console.warn(`Failed to read session file ${filename}:`, error);
+          Log.warn(`Failed to read session file ${filename}:`, error);
         }
       }
 
       return sessions;
     } catch (error) {
-      console.error("Failed to discover sessions:", error);
+      Log.error("Failed to discover sessions:", error);
       return [];
     }
   }

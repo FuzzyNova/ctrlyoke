@@ -17,7 +17,11 @@ export interface AgentInfo {
   /** Full path to the agent file */
   path: string;
   /** Source location of the agent */
-  source: "user" | "workspace-github" | "workspace-claude" | "workspace-flightpath";
+  source:
+    | "user"
+    | "workspace-github"
+    | "workspace-claude"
+    | "workspace-flightpath";
   /** Whether this agent is compatible with Copilot CLI (always true; agents use prompt prepending) */
   supportsCopilotCli: boolean;
   /** Whether this agent is compatible with Claude CLI (always true; agents use prompt prepending) */
@@ -219,24 +223,6 @@ export class AgentDiscovery {
       Log.error("Error getting user prompts directory:", error);
       return null;
     }
-  }
-
-  /**
-   * Filter agents by harness compatibility
-   * @param agents List of agents to filter
-   * @param harness Harness to filter for ("copilot-cli" or "claude-cli")
-   */
-  static filterAgentsByHarness(
-    agents: AgentInfo[],
-    harness: "copilot-cli" | "claude-cli"
-  ): AgentInfo[] {
-    return agents.filter((agent) => {
-      if (harness === "copilot-cli") {
-        return agent.supportsCopilotCli;
-      } else {
-        return agent.supportsClaudeCli;
-      }
-    });
   }
 
   /**

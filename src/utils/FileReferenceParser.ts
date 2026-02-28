@@ -208,22 +208,3 @@ export function parseAllFileReferences(prompt: string): FileReference[] {
 
   return allRefs;
 }
-
-/**
- * Convert workspace-relative path to @path syntax
- *
- * Both Copilot and Claude CLIs use identical @path format.
- * This is the single source of truth for path conversion.
- *
- * @param filePath Workspace-relative path (e.g., "src/extension.ts")
- * @returns @path syntax (e.g., "@src/extension.ts")
- */
-export function convertToAtSyntax(filePath: string): string {
-  // Remove leading slash/backslash if present
-  const normalized = filePath.replace(/^[/\\]/, "");
-
-  // Use forward slashes for consistency (both CLIs accept this)
-  const pathWithSlashes = normalized.replace(/\\/g, "/");
-
-  return `@${pathWithSlashes}`;
-}

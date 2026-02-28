@@ -22,6 +22,16 @@ interface SessionSnapshot {
 }
 
 /**
+ * Cache for directory listing results with mtime-based invalidation.
+ * Avoids re-scanning the same directories every 500ms during polling.
+ */
+interface DirectoryCache {
+  entries: SessionFile[];
+  parentMtimes: Map<string, number>; // dir path → mtime at scan time
+  timestamp: number; // when cache was built
+}
+
+/**
  * Monitors VS Code chat session JSON files for completion detection.
  * More reliable than log file monitoring (100% vs 70% reliability).
  *
@@ -49,6 +59,10 @@ export class ChatSessionMonitor {
   // Session cache: tracks completed request indices in each session file
   // PERSISTS across workflows for performance (only parse files once per VS Code session)
   private sessionCache: Map<string, SessionSnapshot> = new Map();
+
+  // Directory listing cache with mtime-based invalidation
+  private dirCache: DirectoryCache | null = null;
+  private static readonly DIR_CACHE_TTL_MS = 2000; // Re-scan directories every 2s max
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
@@ -136,20 +150,49 @@ export class ChatSessionMonitor {
   }
 
   /**
-   * Find all chat session files across all workspaces and VS Code variants
+   * Find all chat session files across all workspaces and VS Code variants.
+   * Uses directory mtime-based caching to avoid redundant re-scans during
+   * 500ms polling loops.
    */
-  private findAllSessionFiles(): SessionFile[] {
+  private async findAllSessionFiles(): Promise<SessionFile[]> {
+    // Check if cached results are still valid
+    if (this.dirCache) {
+      const age = Date.now() - this.dirCache.timestamp;
+      if (age < ChatSessionMonitor.DIR_CACHE_TTL_MS) {
+        // Cache is fresh enough — check if any parent directory mtimes changed
+        let cacheValid = true;
+        for (const [dirPath, cachedMtime] of this.dirCache.parentMtimes) {
+          try {
+            const stat = await fs.promises.stat(dirPath);
+            if (stat.mtimeMs !== cachedMtime) {
+              cacheValid = false;
+              break;
+            }
+          } catch {
+            cacheValid = false;
+            break;
+          }
+        }
+        if (cacheValid) {
+          return this.dirCache.entries;
+        }
+      }
+    }
+
+    // Rebuild cache
     const possibleRoots = this.getPossibleWorkspaceStorageRoots();
     const sessionFiles: SessionFile[] = [];
+    const parentMtimes = new Map<string, number>();
 
     for (const workspaceStorageRoot of possibleRoots) {
-      if (!fs.existsSync(workspaceStorageRoot)) {
+      try {
+        await fs.promises.access(workspaceStorageRoot);
+      } catch {
         continue;
       }
 
       try {
-        // Enumerate all workspace hashes
-        const workspaceHashes = fs.readdirSync(workspaceStorageRoot);
+        const workspaceHashes = await fs.promises.readdir(workspaceStorageRoot);
 
         for (const hash of workspaceHashes) {
           const chatSessionsDir = path.join(
@@ -158,11 +201,18 @@ export class ChatSessionMonitor {
             "chatSessions"
           );
 
-          if (!fs.existsSync(chatSessionsDir)) {
+          try {
+            const dirStat = await fs.promises.stat(chatSessionsDir);
+            if (!dirStat.isDirectory()) {
+              continue;
+            }
+            // Track directory mtime for cache invalidation
+            parentMtimes.set(chatSessionsDir, dirStat.mtimeMs);
+          } catch {
             continue;
           }
 
-          const files = fs.readdirSync(chatSessionsDir);
+          const files = await fs.promises.readdir(chatSessionsDir);
 
           for (const file of files) {
             if (!file.endsWith(".json") && !file.endsWith(".jsonl")) {
@@ -171,19 +221,17 @@ export class ChatSessionMonitor {
 
             const filePath = path.join(chatSessionsDir, file);
             try {
-              const stats = fs.statSync(filePath);
+              const stats = await fs.promises.stat(filePath);
               sessionFiles.push({
                 path: filePath,
                 mtime: stats.mtimeMs,
               });
-            } catch (err) {
-              // Skip files we can't stat
+            } catch {
               continue;
             }
           }
         }
-      } catch (err) {
-        // Skip roots we can't access
+      } catch {
         continue;
       }
     }
@@ -192,14 +240,80 @@ export class ChatSessionMonitor {
       Log.warn("⚠️ No chat session files found in any VS Code variant");
     }
 
+    // Store in cache
+    this.dirCache = {
+      entries: sessionFiles,
+      parentMtimes,
+      timestamp: Date.now(),
+    };
+
+    return sessionFiles;
+  }
+
+  /**
+   * Synchronous version of findAllSessionFiles for use in findSessionFileByPromptText.
+   * This method is called from submitWithRetry's sync callback context.
+   * Uses the directory cache if available to minimize blocking I/O.
+   */
+  private findAllSessionFilesSync(): SessionFile[] {
+    // Return cached entries if still fresh
+    if (this.dirCache) {
+      const age = Date.now() - this.dirCache.timestamp;
+      if (age < ChatSessionMonitor.DIR_CACHE_TTL_MS) {
+        // Refresh file mtimes only (lightweight sync stat calls)
+        const refreshed: SessionFile[] = [];
+        for (const entry of this.dirCache.entries) {
+          try {
+            const stats = fs.statSync(entry.path);
+            refreshed.push({ path: entry.path, mtime: stats.mtimeMs });
+          } catch {
+            // File may have been deleted
+          }
+        }
+        return refreshed;
+      }
+    }
+
+    // Fall back to full sync scan (only when no cache available)
+    const possibleRoots = this.getPossibleWorkspaceStorageRoots();
+    const sessionFiles: SessionFile[] = [];
+
+    for (const root of possibleRoots) {
+      if (!fs.existsSync(root)) {
+        continue;
+      }
+      try {
+        for (const hash of fs.readdirSync(root)) {
+          const dir = path.join(root, hash, "chatSessions");
+          if (!fs.existsSync(dir)) {
+            continue;
+          }
+          for (const file of fs.readdirSync(dir)) {
+            if (!file.endsWith(".json") && !file.endsWith(".jsonl")) {
+              continue;
+            }
+            try {
+              const filePath = path.join(dir, file);
+              const stats = fs.statSync(filePath);
+              sessionFiles.push({ path: filePath, mtime: stats.mtimeMs });
+            } catch {
+              /* skip */
+            }
+          }
+        }
+      } catch {
+        /* skip */
+      }
+    }
+
     return sessionFiles;
   }
 
   /**
    * Find the most recently modified session file
    */
-  private findMostRecentSessionFile(): string | null {
-    const allFiles = this.findAllSessionFiles();
+  private async findMostRecentSessionFile(): Promise<string | null> {
+    const allFiles = await this.findAllSessionFiles();
 
     if (allFiles.length === 0) {
       return null;
@@ -225,7 +339,10 @@ export class ChatSessionMonitor {
    */
   findSessionFileByPromptText(promptText: string): string | null {
     // Get fresh file list with current mtime values (updated on each search)
-    const allFiles = this.findAllSessionFiles();
+    // Note: Uses cached directory listing internally (invalidated by mtime)
+    // We call the sync-compatible version for this search since it's called
+    // from submitWithRetry which expects synchronous returns
+    const allFiles = this.findAllSessionFilesSync();
 
     // Sort by modification time (newest first) - CRITICAL for handling duplicate prompts
     // Recently updated files (including resumed old sessions) will be checked first
@@ -367,19 +484,17 @@ export class ChatSessionMonitor {
   }
 
   /**
-   * Read session file and get request count
+   * Read session file and get request count.
+   * Delegates to ChatSessionParser as the single source of truth.
    */
   private getRequestCount(sessionFilePath: string): number {
-    try {
-      const session = ChatSessionParser.parseSessionFile(sessionFilePath);
-      return session?.requests?.length ?? 0;
-    } catch (err) {
-      return 0;
-    }
+    return ChatSessionParser.getRequestCount(sessionFilePath);
   }
 
   /**
-   * Check if the last request in the session is complete
+   * Check if the last request in the session is complete.
+   * Delegates to ChatSessionParser.isSessionComplete() for core completion logic,
+   * and adds cancellation detection and optional debug logging on top.
    */
   private isLastRequestComplete(
     sessionFilePath: string,
@@ -408,7 +523,7 @@ export class ChatSessionMonitor {
         );
       }
 
-      // Check for cancellation first
+      // Check for cancellation first (not covered by isSessionComplete)
       if (
         typeof lastRequest.result?.errorDetails?.message === "string" &&
         lastRequest.result.errorDetails.message.includes("cancel")
@@ -416,16 +531,11 @@ export class ChatSessionMonitor {
         return { complete: true, cancelled: true };
       }
 
-      // Check for completion: result.timings.totalElapsed > 0
-      const isComplete =
-        lastRequest.result != null &&
-        lastRequest.result.timings != null &&
-        typeof lastRequest.result.timings.totalElapsed === "number" &&
-        lastRequest.result.timings.totalElapsed > 0;
+      // Delegate core completion check to ChatSessionParser
+      const isComplete = ChatSessionParser.isSessionComplete(sessionFilePath);
 
       return { complete: isComplete, cancelled: false };
     } catch (err) {
-      // File may be locked or corrupted
       if (debug) {
         Log.warn(`      ⚠️ Error reading session file: ${err}`);
       }
@@ -447,7 +557,7 @@ export class ChatSessionMonitor {
     this.promptText = promptText;
 
     // Get all current session files
-    const allFiles = this.findAllSessionFiles();
+    const allFiles = await this.findAllSessionFiles();
 
     // Update cache: parse NEW or MODIFIED files only
     let parsedCount = 0;
@@ -497,16 +607,17 @@ export class ChatSessionMonitor {
     // If resuming session, get current request count
     if (this.sessionFilePath) {
       // Validate file still exists
-      if (!fs.existsSync(this.sessionFilePath)) {
-        Log.warn("⚠️ Cached session file no longer exists, resetting");
-        this.resetSession();
-      } else {
+      try {
+        await fs.promises.access(this.sessionFilePath);
         this.requestCountBeforeSend = this.getRequestCount(
           this.sessionFilePath
         );
         Log.info(
           `📍 Resume session: ${path.basename(this.sessionFilePath)}, requests: ${this.requestCountBeforeSend}`
         );
+      } catch {
+        Log.warn("⚠️ Cached session file no longer exists, resetting");
+        this.resetSession();
       }
     }
 
@@ -550,7 +661,8 @@ export class ChatSessionMonitor {
       );
       // Seed initial mtime so first write resets the inactivity clock
       try {
-        lastKnownMtime = fs.statSync(this.sessionFilePath!).mtimeMs;
+        const stat = await fs.promises.stat(this.sessionFilePath!);
+        lastKnownMtime = stat.mtimeMs;
       } catch {
         // File may not exist yet; will be caught on first poll
       }
@@ -608,7 +720,8 @@ export class ChatSessionMonitor {
 
           // Seed inactivity tracking from actual file mtime
           try {
-            lastKnownMtime = fs.statSync(matchedFile).mtimeMs;
+            const matchStat = await fs.promises.stat(matchedFile);
+            lastKnownMtime = matchStat.mtimeMs;
           } catch {
             // ignore
           }
@@ -652,7 +765,8 @@ export class ChatSessionMonitor {
       // ── Check session file mtime for activity ─────────────────────────────
       // VS Code appends JSONL patches while streaming — mtime changes on each write
       try {
-        const currentMtime = fs.statSync(this.sessionFilePath!).mtimeMs;
+        const pollStat = await fs.promises.stat(this.sessionFilePath!);
+        const currentMtime = pollStat.mtimeMs;
         if (currentMtime !== lastKnownMtime) {
           if (lastKnownMtime !== null) {
             Log.debug(`📝 Session file updated — inactivity clock reset`);

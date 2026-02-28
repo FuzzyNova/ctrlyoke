@@ -290,7 +290,10 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     // We're inside the string if:
     // - We're after the opening quote
     // - Either no closing quote exists, or we're before it
-    return charIndex > openQuoteIndex;
+    return (
+      charIndex > openQuoteIndex &&
+      (closeQuoteIndex === -1 || charIndex <= closeQuoteIndex)
+    );
   }
 
   /**

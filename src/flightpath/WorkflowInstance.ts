@@ -455,6 +455,20 @@ export class WorkflowInstance {
     return this.currentPromptFile?.filePath;
   }
 
+  /**
+   * Set the current prompt file reference (for WorkflowOrchestrator draft prompt setup).
+   */
+  setCurrentPromptFile(filePath: string, promptFile: PromptFile): void {
+    this.currentPromptFile = { filePath, promptFile };
+  }
+
+  /**
+   * Set up a file watcher for the given file path (for WorkflowOrchestrator draft prompt setup).
+   */
+  initializeFileWatcher(filePath: string): void {
+    this.setupPromptFileWatcher(filePath);
+  }
+
   async readWorkingFile(workingFilePath: string): Promise<WorkingFile> {
     return this.promptQueue.readWorkingFile(workingFilePath);
   }
@@ -844,21 +858,6 @@ export class WorkflowInstance {
 
     let confirmedStoppedCalled = false;
 
-    const responseCompleteDisposable = integration.onResponseComplete(() => {
-      if (!confirmedStoppedCalled) {
-        confirmedStoppedCalled = true;
-        Log.info(
-          "🔔 Process confirmed exited - setting queue state to STOPPED"
-        );
-        this.promptQueue.confirmedStopped().catch((err) => {
-          Log.error("Failed to update working file after stop:", err);
-        });
-      }
-      responseCompleteDisposable.dispose();
-    });
-
-    await integration.cancel();
-
     const timeoutHandle = setTimeout(() => {
       if (!confirmedStoppedCalled) {
         confirmedStoppedCalled = true;
@@ -871,9 +870,22 @@ export class WorkflowInstance {
       }
     }, 10000);
 
-    integration.onResponseComplete(() => {
+    // Single listener handles both confirmedStopped and timeout cancellation
+    const responseCompleteDisposable = integration.onResponseComplete(() => {
+      if (!confirmedStoppedCalled) {
+        confirmedStoppedCalled = true;
+        Log.info(
+          "🔔 Process confirmed exited - setting queue state to STOPPED"
+        );
+        this.promptQueue.confirmedStopped().catch((err) => {
+          Log.error("Failed to update working file after stop:", err);
+        });
+      }
       clearTimeout(timeoutHandle);
+      responseCompleteDisposable.dispose();
     });
+
+    await integration.cancel();
 
     this.workflowExecutor.clearPendingState();
     this.startPending = false;
@@ -1039,7 +1051,7 @@ export class WorkflowInstance {
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
-    console.log(
+    Log.info(
       `🗑️ WorkflowInstance.deletePromptFromQueue: Deleting prompt at index ${index}`
     );
     await this.promptQueue.deletePrompt(index);
@@ -1187,14 +1199,11 @@ export class WorkflowInstance {
 
   /**
    * Guard: returns true when the dashboard webview is ready to receive messages.
-   * WorkflowOrchestrator sets the flag; for Phase 1 this is always true when
-   * executeLoadedPromptFile is called (dashboardReady is checked upstream).
-   * This helper exists so the logic is self-contained inside WorkflowInstance.
+   * TODO: In Phase 2 (multi-workflow), this should check actual dashboard readiness
+   * state. For Phase 1, the orchestrator's dashboardReady flag is already checked
+   * upstream before this method is reached via executeLoadedPromptFile.
    */
   private isDashboardReady(): boolean {
-    // In Phase 1 this delegate just reports whether a dashboard is registered at all.
-    // The orchestrator's dashboardReady flag is already checked before this method
-    // is reached via executeLoadedPromptFile → only called after setDashboardReady.
     return true;
   }
 

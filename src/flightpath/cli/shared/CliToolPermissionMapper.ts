@@ -1,14 +1,18 @@
 import { Log } from "../../../utils/Log";
+import {
+  ToolPermissionMode,
+  ToolPermissionConfig,
+} from "./interfaces/IToolPermissionMapper";
 
-/**
- * Tool permission mode
- */
-export type ToolPermissionMode = "dangerouslyAllowAll" | "allowAll" | "custom";
+// Re-export for consumers that import from this file
+export type { ToolPermissionMode, ToolPermissionConfig };
 
 /**
  * Maps Copilot permission patterns to Claude tool names
+ *
+ * Single source of truth: also used by ClaudeToolPermissionMapper
  */
-const COPILOT_TO_CLAUDE_MAP: Record<string, string> = {
+export const COPILOT_TO_CLAUDE_MAP: Record<string, string> = {
   shell: "Bash",
   write: "Write",
   bash: "Bash",
@@ -39,15 +43,6 @@ const CLAUDE_TO_COPILOT_MAP: Record<string, string | null> = {
   webfetch: null,
   todowrite: null,
 };
-
-/**
- * Tool permission configuration
- */
-export interface ToolPermissionConfig {
-  mode: ToolPermissionMode;
-  allowedTools: string[];
-  deniedTools: string[];
-}
 
 /**
  * Shared tool permission pattern conversion and argument generation
