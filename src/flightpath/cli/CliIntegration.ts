@@ -421,6 +421,50 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
+   * Discover the session log file and extract session ID.
+   *
+   * Consolidates the common pattern used in all 3 session discovery paths:
+   * resumed session, SessionStart hook, and fallback prompt matching.
+   *
+   * @param promptText The prompt text (for log discovery via matching)
+   * @param startTime Execution start time
+   * @param sessionId Known session ID (from resumption or hook), or null for prompt matching
+   * @param errorContext Human-readable failure reason set on `this.lastFailureReason`
+   * @returns Log path and session ID, or null if log file not found
+   */
+  private async discoverAndExtractSession(
+    promptText: string,
+    startTime: Date,
+    sessionId: string | null,
+    errorContext: string
+  ): Promise<{ logPath: string; sessionId: string | null } | null> {
+    const promptForDiscovery = this.actualPromptSent || promptText;
+
+    const logPath = await this.provider.logParser!.discoverSessionLog(
+      promptForDiscovery,
+      startTime,
+      sessionId || undefined
+    );
+
+    if (!logPath) {
+      this.lastFailureReason = errorContext;
+      return null;
+    }
+
+    // If no session ID was provided, try to extract it from the log events
+    if (!sessionId) {
+      const events = await this.provider.logParser!.readNewLines(logPath);
+      const extractedId = this.provider.logParser!.extractSessionId(events);
+      if (extractedId) {
+        Log.debug(`💾 Extracted session ID from log: ${extractedId}`);
+      }
+      return { logPath, sessionId: extractedId };
+    }
+
+    return { logPath, sessionId };
+  }
+
+  /**
    * Execute a CLI command in interactive mode with log file monitoring.
    *
    * Strategy:
@@ -509,25 +553,24 @@ export class CliIntegration extends HarnessIntegration {
           `🔄 Resuming session ${resolvedSessionId} - discovering log file directly...`
         );
 
-        // Use the actual prompt sent (may be file reference)
-        const promptForDiscovery = this.actualPromptSent || promptText;
-
-        logPath = await this.provider.logParser.discoverSessionLog(
-          promptForDiscovery,
+        const discovery = await this.discoverAndExtractSession(
+          promptText,
           startTime,
-          resolvedSessionId
+          resolvedSessionId,
+          "Log file not found for resumed session"
         );
 
-        if (!logPath) {
+        if (!discovery) {
           Log.error(
             `❌ Could not find log file for resumed session ${resolvedSessionId}\n` +
               `   The session may have been deleted or never existed.\n` +
               `   To fix: Remove the sessionId property to start a new session.`
           );
-          this.lastFailureReason = "Log file not found for resumed session";
           return { success: false };
         }
 
+        logPath = discovery.logPath;
+        sessionId = discovery.sessionId;
         Log.info(`✅ Found log file for resumed session: ${logPath}`);
       } else if (this.provider.notificationMonitor.waitForSessionStart) {
         // Harness supports SessionStart hook (Claude only currently)
@@ -566,94 +609,67 @@ export class CliIntegration extends HarnessIntegration {
         }
 
         // Extract session ID if provided (Claude provides it, Copilot doesn't)
-        sessionId = startResultNotify.data?.sessionId || null;
+        const hookSessionId = startResultNotify.data?.sessionId || null;
 
-        if (sessionId) {
-          Log.info(`✅ SessionStart hook provided session ID: ${sessionId}`);
-
-          // Use session ID to find log file directly
-          // Use the actual prompt sent (may be file reference)
-          const promptForDiscovery = this.actualPromptSent || promptText;
-
-          logPath = await this.provider.logParser.discoverSessionLog(
-            promptForDiscovery,
-            startTime,
-            sessionId
+        if (hookSessionId) {
+          Log.info(
+            `✅ SessionStart hook provided session ID: ${hookSessionId}`
           );
-
-          if (!logPath) {
-            Log.error(
-              `❌ Could not find log file for session ${sessionId} - this should not happen!`
-            );
-            this.lastFailureReason = "Log file not found after SessionStart";
-            return { success: false };
-          }
-
-          Log.info(`✅ Found session log: ${logPath}`);
         } else {
-          // No session ID provided - fall back to prompt text matching
           Log.info(
             "✅ SessionStart hook confirmed (session ID not provided by CLI)"
           );
           Log.info(
             "🔍 Discovering session log file via prompt text matching..."
           );
+        }
 
-          // Use the actual prompt sent (may be file reference)
-          const promptForDiscovery = this.actualPromptSent || promptText;
+        const discovery = await this.discoverAndExtractSession(
+          promptText,
+          startTime,
+          hookSessionId,
+          hookSessionId
+            ? "Log file not found after SessionStart"
+            : "Session log not found"
+        );
 
-          logPath = await this.provider.logParser.discoverSessionLog(
-            promptForDiscovery,
-            startTime
-          );
-
-          if (!logPath) {
+        if (!discovery) {
+          if (hookSessionId) {
+            Log.error(
+              `❌ Could not find log file for session ${hookSessionId} - this should not happen!`
+            );
+          } else {
             Log.error(
               "❌ Could not discover session log - no matching prompt found"
             );
-            this.lastFailureReason = "Session log not found";
-            return { success: false };
           }
-
-          Log.info(`✅ Found session log: ${logPath}`);
-
-          // Extract session ID from matched log
-          const events = await this.provider.logParser.readNewLines(logPath);
-          sessionId = this.provider.logParser.extractSessionId(events);
-
-          if (sessionId) {
-            Log.debug(`💾 Extracted session ID from log: ${sessionId}`);
-          }
+          return { success: false };
         }
+
+        logPath = discovery.logPath;
+        sessionId = discovery.sessionId;
+        Log.info(`✅ Found session log: ${logPath}`);
       } else {
         // Harness doesn't support SessionStart hook - use old method (Copilot, Codex)
         Log.info("🔍 Discovering session log file (no SessionStart hook)...");
 
-        // Use the actual prompt sent (may be file reference)
-        const promptForDiscovery = this.actualPromptSent || promptText;
-
-        logPath = await this.provider.logParser.discoverSessionLog(
-          promptForDiscovery,
-          startTime
+        const discovery = await this.discoverAndExtractSession(
+          promptText,
+          startTime,
+          null,
+          "Session log not found"
         );
 
-        if (!logPath) {
+        if (!discovery) {
           Log.error(
             "❌ Could not discover session log - no matching prompt found"
           );
-          this.lastFailureReason = "Session log not found";
           return { success: false };
         }
 
+        logPath = discovery.logPath;
+        sessionId = discovery.sessionId;
         Log.info(`✅ Found session log: ${logPath}`);
-
-        // Extract session ID from matched log
-        const events = await this.provider.logParser.readNewLines(logPath);
-        sessionId = this.provider.logParser.extractSessionId(events);
-
-        if (sessionId) {
-          Log.debug(`💾 Extracted session ID from log: ${sessionId}`);
-        }
       }
 
       // 4. Monitor log file for completion
