@@ -56,7 +56,11 @@
       "Bash(curl:*)",
       "WebFetch(domain:streamdown.ai)",
       "WebFetch(domain:docs.claude.ai)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:opencode.ai)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:jpcaparas.medium.com)"
     ],
     "deny": [],
     "ask": []
