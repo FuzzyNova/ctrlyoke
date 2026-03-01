@@ -173,7 +173,7 @@ export const PromptsPanel: React.FC<{
       {/* Header - clickable to collapse */}
       <div
         ref={headerRef}
-        className="relative flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
+        className="flex items-center h-[30px] px-2 border-b border-panel-border bg-sidebar-bg flex-shrink-0 cursor-pointer select-none text-description-fg hover:text-foreground transition-colors"
         onClick={togglePromptsCollapse}
         role="button"
         aria-label="Collapse prompts"
@@ -185,19 +185,21 @@ export const PromptsPanel: React.FC<{
         <span className="text-[11px] font-semibold uppercase tracking-wide ml-1.5">
           Prompts
         </span>
-        <span className="ml-auto">
+        <div className="flex-1 flex justify-center">
+          {canClearState && (
+            <button
+              className="flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
+              onClick={handleClearState}
+              title="Clear workflow state — reset all prompts to pending so you can edit them before re-running"
+              aria-label="Clear workflow state"
+            >
+              <i className="codicon codicon-eraser text-[12px]" />
+            </button>
+          )}
+        </div>
+        <span>
           <PromptCounter narrow={isHeaderNarrow} />
         </span>
-        {canClearState && (
-          <button
-            className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center w-[20px] h-[20px] rounded text-description-fg hover:text-foreground hover:bg-toolbar-hover-bg transition-colors"
-            onClick={handleClearState}
-            title="Clear workflow state — reset all prompts to pending so you can edit them before re-running"
-            aria-label="Clear workflow state"
-          >
-            <i className="codicon codicon-discard text-[12px]" />
-          </button>
-        )}
       </div>
 
       {/* Prompt list */}
