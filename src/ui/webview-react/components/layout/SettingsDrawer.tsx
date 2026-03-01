@@ -471,16 +471,6 @@ export const SettingsPanel: React.FC<{
             Workflow Properties
           </span>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleOpenSettings();
-          }}
-          className="text-[11px] text-link-fg hover:underline hover:bg-list-hover-bg px-1 py-0.5 rounded"
-          title="Open VS Code settings"
-        >
-          Settings...
-        </button>
       </div>
 
       {/* Body - Scrollable */}
@@ -884,6 +874,16 @@ export const SettingsPanel: React.FC<{
           inactiveLabel="Including all files"
           narrow={isFooterNarrow}
         />
+        <button
+          onClick={handleOpenSettings}
+          title="Open VS Code settings"
+          className="flex items-center gap-1 px-1 bg-transparent border-none cursor-pointer leading-none transition-colors text-description-fg hover:text-foreground ml-auto"
+        >
+          <i className="codicon codicon-lg codicon-settings-gear" />
+          {!isFooterNarrow && (
+            <span className="text-[10px] font-medium">Settings...</span>
+          )}
+        </button>
       </div>
     </div>
   );

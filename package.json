@@ -639,6 +639,13 @@
           "description": "[CLI Modes] Where CLI commands execute",
           "markdownDescription": "**CLI Modes Only.** Where CLI commands execute.\n\n- **Interactive** (default): Opens a VS Code terminal for visibility and immediate abort via Ctrl+C\n- **Headless**: Runs silently in background process\n\n**Note:** Headless mode without full permissions will auto-deny tool prompts, preventing the agent from acting."
         },
+        "flightpath.closeTerminalWhenPromptCompletes": {
+          "order": 200.5,
+          "type": "boolean",
+          "default": false,
+          "description": "[Interactive Mode] Close the terminal when each prompt completes",
+          "markdownDescription": "**Interactive Mode Only.** When enabled, automatically closes the VS Code terminal after each prompt finishes. When disabled (default), the terminal stays open so you can review the output before the next prompt starts."
+        },
         "flightpath.showCliOutput": {
           "order": 201,
           "type": "boolean",

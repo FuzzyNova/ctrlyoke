@@ -63,6 +63,7 @@ const StatusIndicator: React.FC<{
 
 const GroupHeader: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex items-center gap-1.5 px-2 py-1 select-none">
+    <div className="flex-1 h-[2px] bg-widget-border" />
     <span className="text-[9px] font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
       {label}
     </span>

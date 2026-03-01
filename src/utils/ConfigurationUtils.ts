@@ -286,6 +286,13 @@ export const ConfigurationUtils = {
   },
 
   /**
+   * Check if terminal should be closed when each interactive prompt completes
+   */
+  shouldCloseTerminalWhenPromptCompletes(): boolean {
+    return getConfig().get<boolean>("closeTerminalWhenPromptCompletes", false);
+  },
+
+  /**
    * Get maximum prompt execution timeout in milliseconds
    * User configures in seconds, this returns milliseconds
    * Returns undefined if set to -1 (unlimited)

@@ -1236,9 +1236,18 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Dispose of resources
    */
+  /**
+   * Dispose of resources.
+   * If closeTerminalWhenPromptCompletes is false (default), the terminal is kept open
+   * so the user can review output. The next prompt will close it via createFreshTerminal().
+   */
   dispose(): void {
     super.dispose();
-    this.processManager.dispose();
+    if (ConfigurationUtils.shouldCloseTerminalWhenPromptCompletes()) {
+      this.processManager.dispose();
+    } else {
+      this.processManager.disposeProcess();
+    }
     this.currentExecution = undefined;
   }
 

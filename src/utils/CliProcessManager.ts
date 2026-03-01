@@ -328,14 +328,22 @@ export class CliProcessManager {
   }
 
   /**
-   * Clean up all resources (terminal and process).
+   * Dispose only the process resources, leaving the terminal open.
+   * Used when closeTerminalWhenPromptCompletes is false.
    */
-  dispose(): void {
+  disposeProcess(): void {
     if (this.currentProcess) {
       this.currentProcess.kill();
       this.currentProcess = undefined;
     }
     this.clearKillTimeout();
+  }
+
+  /**
+   * Clean up all resources (terminal and process).
+   */
+  dispose(): void {
+    this.disposeProcess();
     this.disposeTerminal();
   }
 

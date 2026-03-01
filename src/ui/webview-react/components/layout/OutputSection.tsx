@@ -201,6 +201,18 @@ export const OutputSection: React.FC = () => {
     });
   }, [allMessages, fileName, executionState, currentStep, totalSteps]);
 
+  // Map of array index → stepIndex for the first message of each step.
+  // Used to insert step anchor divs so clicking a prompt can scroll to its output.
+  const firstIndexByStep = useMemo(() => {
+    const map = new Map<number, number>();
+    allMessages.forEach((msg, idx) => {
+      if (!map.has(msg.stepIndex)) {
+        map.set(msg.stepIndex, idx);
+      }
+    });
+    return map;
+  }, [allMessages]);
+
   // Check if there's any output
   const hasOutput = allMessages.length > 0;
 
@@ -314,28 +326,37 @@ export const OutputSection: React.FC = () => {
           </p>
         ) : (
           allMessages.map((item, index) => {
+            const isFirstForStep = firstIndexByStep.get(item.stepIndex) === index;
             if (item.type === "status") {
               const statusData = item.data as OutputStatusMessage;
               return (
-                <StatusMessage
-                  key={`status-${index}`}
-                  message={statusData.message}
-                  severity={statusData.severity}
-                  timestamp={statusData.timestamp}
-                  timestampMs={statusData.timestampMs}
-                />
+                <React.Fragment key={`status-${index}`}>
+                  {isFirstForStep && (
+                    <div id={`output-step-${item.stepIndex}`} />
+                  )}
+                  <StatusMessage
+                    message={statusData.message}
+                    severity={statusData.severity}
+                    timestamp={statusData.timestamp}
+                    timestampMs={statusData.timestampMs}
+                  />
+                </React.Fragment>
               );
             } else {
               const cliData = item.data as CliOutputType;
               const streamingChunk = streamingChunks[item.stepIndex] || "";
               return (
-                <CliOutput
-                  key={`cli-${index}`}
-                  output={cliData}
-                  stepIndex={item.stepIndex}
-                  attemptIndex={item.attemptIndex || 0}
-                  streamingChunk={streamingChunk}
-                />
+                <React.Fragment key={`cli-${index}`}>
+                  {isFirstForStep && (
+                    <div id={`output-step-${item.stepIndex}`} />
+                  )}
+                  <CliOutput
+                    output={cliData}
+                    stepIndex={item.stepIndex}
+                    attemptIndex={item.attemptIndex || 0}
+                    streamingChunk={streamingChunk}
+                  />
+                </React.Fragment>
               );
             }
           })

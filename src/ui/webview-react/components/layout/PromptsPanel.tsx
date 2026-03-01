@@ -78,14 +78,21 @@ export const PromptsPanel: React.FC<{
   // Handle clicking a prompt to edit it
   const handlePromptClick = useCallback(
     (index: number) => {
-      // Get the prompt data
       const prompt = prompts[index];
       if (prompt) {
-        // Select the prompt for editing
         selectPrompt(index, prompt);
+        // Scroll to this step's output if it exists
+        const hasOutput = (cliOutputs[index]?.length ?? 0) > 0;
+        if (hasOutput) {
+          requestAnimationFrame(() => {
+            document
+              .getElementById(`output-step-${index}`)
+              ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          });
+        }
       }
     },
-    [prompts, selectPrompt]
+    [prompts, selectPrompt, cliOutputs]
   );
 
   // Determine if workflow is running
