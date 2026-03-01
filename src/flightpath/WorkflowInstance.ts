@@ -19,6 +19,7 @@ import {
 import {
   ACTION_TYPES,
   QUEUE_POSITION,
+  STEP_STATUS,
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
@@ -596,13 +597,12 @@ export class WorkflowInstance {
     const { filePath } = this.currentPromptFile;
 
     const prevQueueState = this.promptQueue.getState();
-    const prevCurrentIndex = prevQueueState.currentIndex;
+    // Only COMPLETED workflows count as having "completed" steps for append-continuation.
+    // STOPPED workflows should restart from the beginning when Run is pressed (not continue).
     const prevCompletedCount =
       prevQueueState.status === EXECUTION_STATES.COMPLETED
         ? prevQueueState.prompts.length
-        : prevQueueState.status === EXECUTION_STATES.STOPPED
-          ? prevCurrentIndex
-          : 0;
+        : 0;
 
     const { promptFile } = this.currentPromptFile;
     const fileName = path.basename(filePath);
@@ -755,6 +755,43 @@ export class WorkflowInstance {
         Log.info(
           `🟢 [APPEND-DEBUG] Reusing existing history file for append continuation: ${historyFilePath}`
         );
+
+        // Cache historical step outputs in completedStepOutputs so they can be
+        // replayed by sendFullStateToDashboard() when the user switches away and
+        // back to this workflow mid-execution.  Without this, completedStepOutputs
+        // is empty for steps that ran in the previous VS Code session, and
+        // switching back shows only the currently-running step's output.
+        if (historyFilePath) {
+          try {
+            const history =
+              await this.outputHistoryManager.loadHistory(historyFilePath);
+            for (let i = 0; i < prevCompletedCount; i++) {
+              const stepData = history.promptOutputs[i];
+              if (stepData && stepData.cliOutputs.length > 0) {
+                const maxAttemptIndex = Math.max(
+                  ...stepData.cliOutputs.map((o) => o.attemptIndex ?? 0)
+                );
+                this.completedStepOutputs.set(i, {
+                  outputs: stepData.cliOutputs,
+                  retryState:
+                    maxAttemptIndex > 0
+                      ? {
+                          currentRetry: maxAttemptIndex,
+                          maxRetries: maxAttemptIndex,
+                        }
+                      : undefined,
+                });
+              }
+            }
+            Log.info(
+              `[inst:${this.id.slice(0, 8)}] Cached ${this.completedStepOutputs.size} historical step(s) in completedStepOutputs for replay on workflow switch`
+            );
+          } catch (error) {
+            Log.warn(
+              `[inst:${this.id.slice(0, 8)}] Failed to cache historical step outputs for replay: ${error}`
+            );
+          }
+        }
       } else if (continueFromCurrent && workingFilePath) {
         const workflowId =
           this.outputHistoryManager.extractWorkflowId(workingFilePath);
@@ -1433,6 +1470,19 @@ export class WorkflowInstance {
     if (this.isActive && this.dashboardProvider) {
       // Active workflow: forward state changes directly to the dashboard
       this.dashboardProvider.updateExecutionState(state.status);
+
+      // When cancelling, the currently-executing step must be marked CANCELLED.
+      // The queue updates its internal result record but WorkflowExecutor never
+      // sends a STEP_STATUS_CHANGED for the cancelled step (it already broke out
+      // of the loop), so we send it here from the authoritative state change.
+      if (state.status === EXECUTION_STATES.CANCELLING) {
+        const currentResult = state.results[state.currentIndex];
+        if (currentResult && currentResult.status === STEP_STATUS.CANCELLED) {
+          this.dashboardProvider.updateStepStatus(state.currentIndex, {
+            state: STEP_STATUS.CANCELLED,
+          });
+        }
+      }
 
       if (state.prompts.length > this.lastKnownPromptCount) {
         Log.info(

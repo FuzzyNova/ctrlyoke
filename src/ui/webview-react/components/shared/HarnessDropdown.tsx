@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { HARNESS_IDS, type HarnessId, type HarnessStatusString } from "../../types/messages";
+import {
+  HARNESS_IDS,
+  type HarnessId,
+  type HarnessStatusString,
+} from "../../types/messages";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 
 // ─── Display names (official product names) ──────────────────────────────────
@@ -58,11 +62,11 @@ const StatusIndicator: React.FC<{
 };
 
 const GroupHeader: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex items-center gap-1.5 px-2 py-0.5 select-none">
+  <div className="flex items-center gap-1.5 px-2 py-1 select-none">
     <span className="text-[9px] font-semibold uppercase tracking-wider text-description-fg whitespace-nowrap leading-none flex-shrink-0">
       {label}
     </span>
-    <div className="flex-1 h-px bg-dropdown-border" />
+    <div className="flex-1 h-[2px] bg-widget-border" />
   </div>
 );
 
@@ -74,7 +78,10 @@ interface HarnessRowProps {
   isHidden: boolean;
   showStatus: boolean;
   narrow: boolean;
-  harnessStatus?: Record<string, { status: HarnessStatusString; available?: boolean }>;
+  harnessStatus?: Record<
+    string,
+    { status: HarnessStatusString; available?: boolean }
+  >;
   canHideRow: boolean;
   onSelect: (h: HarnessId) => void;
   onHide?: (h: HarnessId) => void;
@@ -139,7 +146,9 @@ const HarnessRow: React.FC<HarnessRowProps> = ({
     >
       <button
         type="button"
-        onClick={() => (isAvailable || isChecking ? onSelect(harness) : undefined)}
+        onClick={() =>
+          isAvailable || isChecking ? onSelect(harness) : undefined
+        }
         disabled={!isAvailable && !isChecking}
         className="flex-1 min-w-0 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent disabled:cursor-not-allowed cursor-inherit"
       >
@@ -177,7 +186,10 @@ export interface HarnessDropdownProps {
   /** Show availability status dots. Default true. Pass false in PropertiesDrawer. */
   showStatus?: boolean;
   /** Required when showStatus is true. */
-  harnessStatus?: Record<string, { status: HarnessStatusString; available?: boolean }>;
+  harnessStatus?: Record<
+    string,
+    { status: HarnessStatusString; available?: boolean }
+  >;
   hiddenValues?: string[];
   onHideOption?: (value: string) => void;
   onUnhideOption?: (value: string) => void;
@@ -220,7 +232,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     };
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [isOpen]);
 
@@ -249,7 +262,9 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
     h !== (value as HarnessId) && // never hide the selected item
     !isHiddenValue(h);
 
-  const totalHidden = [...CLI_HARNESSES, ...CHAT_HARNESSES].filter(isHiddenValue).length;
+  const totalHidden = [...CLI_HARNESSES, ...CHAT_HARNESSES].filter(
+    isHiddenValue
+  ).length;
 
   // Hide a group header when every item in that group is hidden and we're not
   // in "show hidden" mode — an empty section is visually confusing.
@@ -306,7 +321,6 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       {/* Dropdown panel */}
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg">
-
           {/* "Default" sentinel (PropertiesDrawer only) */}
           {showDefault && (
             <div
