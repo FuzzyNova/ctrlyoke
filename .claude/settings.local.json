@@ -60,7 +60,13 @@
       "WebFetch(domain:opencode.ai)",
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:deepwiki.com)",
-      "WebFetch(domain:jpcaparas.medium.com)"
+      "WebFetch(domain:jpcaparas.medium.com)",
+      "mcp__cclsp__find_definition",
+      "mcp__cclsp__restart_server",
+      "mcp__cclsp__find_references",
+      "Bash(opencode:*)",
+      "Bash(opencode mcp:*)",
+      "Bash(codex mcp:*)"
     ],
     "deny": [],
     "ask": []
