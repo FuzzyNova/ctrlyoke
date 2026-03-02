@@ -347,7 +347,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
                 w.id !== activeWorkflowId
             ) && (
               <span
-                className="inline-block w-2 h-2 rounded-full bg-badge-bg animate-pulse"
+                className="inline-block w-2 h-2 rounded-full bg-bash-status-success animate-pulse"
                 title="Another workflow is running"
               />
             )}

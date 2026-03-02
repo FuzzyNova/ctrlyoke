@@ -82,7 +82,7 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
       {/* Status icon */}
       {isRunning ? (
         <span className="flex-shrink-0 w-4 flex items-center justify-center">
-          <span className="inline-block w-2 h-2 rounded-full bg-badge-bg animate-pulse" />
+          <span className="inline-block w-2 h-2 rounded-full bg-bash-status-success animate-pulse" />
         </span>
       ) : (
         <span className="flex-shrink-0 w-4 flex items-center justify-center text-description-fg">

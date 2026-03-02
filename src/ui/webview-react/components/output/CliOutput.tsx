@@ -295,6 +295,9 @@ interface CliOutputProps {
   stepIndex: number;
   attemptIndex: number;
   streamingChunk?: string;
+  /** When false, suppresses the streaming indicator even if output.isStreaming is true.
+   *  The partial streamed text is still shown so the user can see output captured before stop/error. */
+  isExecutionActive?: boolean;
   className?: string;
 }
 
@@ -316,6 +319,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
   stepIndex,
   attemptIndex,
   streamingChunk = "",
+  isExecutionActive = true,
   className = "",
 }) => {
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null);
@@ -355,8 +359,10 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     }
   }, [sessionId]);
 
-  // Check if streaming
-  const streamingIndicator = output.isStreaming ? (
+  // Show the streaming indicator only while execution is actively running.
+  // When stopped or errored, isStreaming may still be true on the stored output
+  // (no final CLI_OUTPUT is sent in those cases), so we gate on isExecutionActive.
+  const streamingIndicator = output.isStreaming && isExecutionActive ? (
     <span className="text-output-streaming font-normal animate-pulse-streaming">
       ⬤ Streaming...
     </span>

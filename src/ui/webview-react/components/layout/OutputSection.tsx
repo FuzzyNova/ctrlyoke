@@ -354,6 +354,9 @@ export const OutputSection: React.FC = () => {
             } else {
               const cliData = item.data as CliOutputType;
               const streamingChunk = streamingChunks[item.stepIndex] || "";
+              const isExecutionActive =
+                executionState === EXECUTION_STATES.RUNNING ||
+                executionState === EXECUTION_STATES.CANCELLING;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (
@@ -364,6 +367,7 @@ export const OutputSection: React.FC = () => {
                     stepIndex={item.stepIndex}
                     attemptIndex={item.attemptIndex || 0}
                     streamingChunk={streamingChunk}
+                    isExecutionActive={isExecutionActive}
                   />
                 </React.Fragment>
               );
