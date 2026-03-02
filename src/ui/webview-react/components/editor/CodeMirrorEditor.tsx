@@ -368,6 +368,10 @@ function createThemeExtension() {
       ".cm-tooltip-autocomplete li": {
         color: "var(--vscode-editorSuggestWidget-foreground)",
       },
+      ".cm-tooltip-autocomplete li:hover": {
+        backgroundColor: "var(--vscode-list-hoverBackground)",
+        color: "var(--vscode-list-hoverForeground)",
+      },
       ".cm-tooltip-autocomplete li[aria-selected]": {
         backgroundColor: "var(--vscode-editorSuggestWidget-selectedBackground)",
         color: "var(--vscode-editorSuggestWidget-selectedForeground)",

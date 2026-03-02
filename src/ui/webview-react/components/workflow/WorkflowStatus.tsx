@@ -374,16 +374,15 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       )}
 
       {/* Dropdown Menu */}
-      {isDropdownOpen && !isEditing && (
         <div
           ref={dropdownRef}
-          className="workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col"
+          className={`workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col transition-all duration-150 ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
           style={{
             top: containerRef.current
               ? containerRef.current.getBoundingClientRect().bottom + 4
               : "auto",
             left: "50%",
-            transform: "translateX(-50%)",
+            transform: `translateX(-50%) translateY(${isDropdownOpen && !isEditing ? "0" : "-4px"})`,
             maxHeight: "min(400px, 70vh)",
             height: "min(400px, 70vh)",
           }}
@@ -427,7 +426,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
             />
           </div>
         </div>
-      )}
 
       {/* Delete workflow history confirmation modal */}
       <DeleteConfirmModal

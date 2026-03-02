@@ -320,8 +320,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       </button>
 
       {/* Dropdown panel */}
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg">
+      <div className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}>
           {/* "Default" sentinel (PropertiesDrawer only) */}
           {showDefault && (
             <div
@@ -373,7 +372,6 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
             </button>
           </div>
         </div>
-      )}
     </div>
   );
 };
