@@ -274,6 +274,14 @@ export const OutputSection: React.FC = () => {
                 useWorkflowStore.getState().clearHistoryOutputs();
                 useUiStore.getState().clearHistoryView();
               }}
+              onClearHistory={() => {
+                const vscode = getVsCodeApi();
+                if (vscode) {
+                  vscode.postMessage({
+                    type: MESSAGE_TYPES.CLEAR_RUN_HISTORY,
+                  });
+                }
+              }}
             />
           )}
           <button
@@ -326,7 +334,8 @@ export const OutputSection: React.FC = () => {
           </p>
         ) : (
           allMessages.map((item, index) => {
-            const isFirstForStep = firstIndexByStep.get(item.stepIndex) === index;
+            const isFirstForStep =
+              firstIndexByStep.get(item.stepIndex) === index;
             if (item.type === "status") {
               const statusData = item.data as OutputStatusMessage;
               return (

@@ -3,6 +3,7 @@
 ## Problem Statement
 
 Users running long workflows (e.g. 100 prompts) need a way to:
+
 1. Rewind execution to a prior completed step (cascade-reset prompts N–end back to pending)
 2. Reorder pending prompts without starting over
 
@@ -65,6 +66,7 @@ Add `confirmResetOperations: boolean` to the `GlobalSettings` type so the webvie
 Create `src/ui/webview-react/components/shared/ResetConfirmModal.tsx`, mirroring the structure of `DeleteConfirmModal` but for reset operations.
 
 Key differences from `DeleteConfirmModal`:
+
 - Reads `globalSettings.confirmResetOperations` (not `confirmDeleteOperations`)
 - Posts `MESSAGE_TYPES.UPDATE_CONFIRM_RESET` (not `UPDATE_CONFIRM_DELETE`)
 - Checkbox label: `"Don't ask me again for reset operations"`
@@ -94,6 +96,7 @@ The `canClearState` eraser button in `PromptsPanel` currently fires `RESET_WORKF
 ### Changes
 
 **`PromptsPanel.tsx`:**
+
 - Add `useState<boolean>(false)` for `showClearConfirm`.
 - Change `handleClearState` to: check `globalSettings.confirmResetOperations`; if false, send immediately; otherwise set `showClearConfirm = true`.
 - Render `<ResetConfirmModal>` at the bottom of the component (outside the list, same pattern as `PromptEditor` rendering `<DeleteConfirmModal>`).
@@ -132,6 +135,7 @@ RESET_FROM_STEP: "resetFromStep",
 ```
 
 Add payload type to `src/types/WebviewMessageTypes.ts`:
+
 ```typescript
 export interface ResetFromStepMessage {
   type: "resetFromStep";
@@ -142,6 +146,7 @@ export interface ResetFromStepMessage {
 ### PromptItem Changes
 
 Add props:
+
 ```typescript
 /** True when prompt is completed and workflow is stopped — shows rewind button on hover */
 canRewind?: boolean;
@@ -158,7 +163,10 @@ On hover + `canRewind` true: swap `StatusIcon` for the rewind button:
   {canRewind && isHovered ? (
     <button
       className="text-description-fg hover:text-foreground transition-colors"
-      onClick={(e) => { e.stopPropagation(); onRewind?.(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onRewind?.();
+      }}
       title={`Rewind to step ${index + 1}`}
       aria-label={`Rewind to step ${index + 1}`}
     >
@@ -180,13 +188,16 @@ const canRewindPrompts =
   executionState !== EXECUTION_STATES.CANCELLING &&
   currentStep > 0;
 
-const handleRewindClick = useCallback((index: number) => {
-  if (!globalSettings.confirmResetOperations) {
-    sendMessage(MESSAGE_TYPES.RESET_FROM_STEP, { fromIndex: index });
-    return;
-  }
-  setRewindFromIndex(index);
-}, [globalSettings.confirmResetOperations]);
+const handleRewindClick = useCallback(
+  (index: number) => {
+    if (!globalSettings.confirmResetOperations) {
+      sendMessage(MESSAGE_TYPES.RESET_FROM_STEP, { fromIndex: index });
+      return;
+    }
+    setRewindFromIndex(index);
+  },
+  [globalSettings.confirmResetOperations]
+);
 
 const handleRewindConfirm = useCallback(() => {
   if (rewindFromIndex === null) return;
@@ -198,6 +209,7 @@ const handleRewindConfirm = useCallback(() => {
 ### Extension-Side Handler
 
 In `WebviewMessageRouter` / `WorkflowOrchestrator`, handle `RESET_FROM_STEP`:
+
 1. Call `WorkflowOrchestrator.resetFromStep(fromIndex)`.
 2. In `resetFromStep`: for all prompts at index `>= fromIndex`, clear `_runtime.completedAt`, `_runtime.startedAt`, `_runtime.harness`, `_runtime.model`; set `status = undefined`. Set `_runtime.currentIndex = fromIndex` and `executionState = IDLE`.
 3. Write working file.
@@ -212,15 +224,19 @@ In `WebviewMessageRouter` / `WorkflowOrchestrator`, handle `RESET_FROM_STEP`:
 A sticky divider row rendered in the `PromptsPanel` list between index `currentStep - 1` and `currentStep` **when `currentStep > 0`** (i.e., at least one prompt has been completed).
 
 Content:
+
 ```
 ──────── ✓ 47 completed ────────
 ```
+
 or more compact:
+
 ```
 ──── ▶ Next: step 48 ────
 ```
 
 Styling:
+
 - Full-width horizontal rule with centered label
 - `text-description-fg`, `border-panel-border`
 - `text-[10px] uppercase tracking-widest`
@@ -232,15 +248,19 @@ Styling:
 In `PromptsPanel.tsx`, after rendering `prompts[currentStep - 1]` and before `prompts[currentStep]`:
 
 ```tsx
-{index === currentStep && currentStep > 0 && (
-  <BoundaryBar completedCount={currentStep} />
-)}
+{
+  index === currentStep && currentStep > 0 && (
+    <BoundaryBar completedCount={currentStep} />
+  );
+}
 ```
 
 `BoundaryBar` is a tiny inline component (can live in `components/prompts/`):
 
 ```tsx
-export const BoundaryBar: React.FC<{ completedCount: number }> = ({ completedCount }) => (
+export const BoundaryBar: React.FC<{ completedCount: number }> = ({
+  completedCount,
+}) => (
   <div className="flex items-center gap-2 px-3 py-1 select-none">
     <div className="flex-1 h-px bg-panel-border" />
     <span className="text-[10px] uppercase tracking-widest text-description-fg whitespace-nowrap">
@@ -261,15 +281,16 @@ When `currentStep === 0` (nothing completed) or `currentStep === prompts.length`
 
 **Chosen over alternatives because:**
 
-| Library | Verdict |
-|---|---|
+| Library                               | Verdict                                                                                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@dnd-kit/core` + `@dnd-kit/sortable` | ✅ **Best choice** — modular, actively maintained, built-in `KeyboardSensor` with full arrow-key sorting, ARIA live regions, no jQuery/DOM mutation, React 19 compatible, tree-shakeable |
-| `react-sortable-hoc` | ❌ Deprecated/unmaintained — author recommends migrating to dnd-kit |
-| `hello-pangea/dnd` | ⚠️ Good (Atlassian lineage), but more opinionated API, weaker TypeScript types |
-| `pragmatic-drag-and-drop` | ⚠️ Newer Atlassian library, less community resources, no built-in React hooks |
-| `react-beautiful-dnd` | ❌ Deprecated |
+| `react-sortable-hoc`                  | ❌ Deprecated/unmaintained — author recommends migrating to dnd-kit                                                                                                                      |
+| `hello-pangea/dnd`                    | ⚠️ Good (Atlassian lineage), but more opinionated API, weaker TypeScript types                                                                                                           |
+| `pragmatic-drag-and-drop`             | ⚠️ Newer Atlassian library, less community resources, no built-in React hooks                                                                                                            |
+| `react-beautiful-dnd`                 | ❌ Deprecated                                                                                                                                                                            |
 
 **Keyboard support (replaces ▲▼ buttons):** dnd-kit's `KeyboardSensor` with `sortableKeyboardCoordinates` gives:
+
 - `Tab` → focus the drag handle
 - `Enter` or `Space` → pick up the item
 - `Arrow Up/Down` → move the item
@@ -285,6 +306,7 @@ npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
 ```
 
 Packages to add to `package.json` devDependencies (they compile into the webview bundle):
+
 - `@dnd-kit/core`
 - `@dnd-kit/sortable`
 - `@dnd-kit/utilities`
@@ -366,16 +388,18 @@ dragHandleProps?: {
 When `dragHandleProps` is provided, render a `$(grabber)` handle on the left before the status icon:
 
 ```tsx
-{dragHandleProps && (
-  <span
-    className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-    {...dragHandleProps.listeners}
-    {...dragHandleProps.attributes}
-    aria-label="Drag to reorder"
-  >
-    <i className="codicon codicon-grabber text-[12px]" />
-  </span>
-)}
+{
+  dragHandleProps && (
+    <span
+      className="flex-shrink-0 cursor-grab active:cursor-grabbing text-description-fg hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+      {...dragHandleProps.listeners}
+      {...dragHandleProps.attributes}
+      aria-label="Drag to reorder"
+    >
+      <i className="codicon codicon-grabber text-[12px]" />
+    </span>
+  );
+}
 ```
 
 Add `group` class to the container div so `group-hover:opacity-100` works on the handle.
@@ -383,6 +407,7 @@ Add `group` class to the container div so `group-hover:opacity-100` works on the
 ### Extension-Side Handler for `REORDER_PROMPTS`
 
 In `WorkflowCommandHandler` (or wherever `RESET_WORKFLOW_STATE` is handled):
+
 1. Receive new order of pending prompt indices.
 2. Reconstruct `queueData.prompts`: keep completed prefix as-is, splice pending prompts in new order.
 3. Write working file.
@@ -392,34 +417,34 @@ In `WorkflowCommandHandler` (or wherever `RESET_WORKFLOW_STATE` is handled):
 
 ## Interaction Summary
 
-| State | Clear All guard | Set Start Point | Boundary Bar | Drag Reorder |
-|---|---|---|---|---|
-| `idle` | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown | ✅ enabled |
-| `running` | N/A (button hidden) | ❌ hidden | ✅ shown | ❌ disabled |
-| `paused` | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown | ✅ enabled |
-| `cancelling` | N/A (button hidden) | ❌ hidden | ✅ shown | ❌ disabled |
-| `completed` | ✅ modal if setting on | ✅ visible | ✅ shown | ✅ enabled |
-| `error` | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown | ✅ enabled |
+| State        | Clear All guard        | Set Start Point         | Boundary Bar | Drag Reorder |
+| ------------ | ---------------------- | ----------------------- | ------------ | ------------ |
+| `idle`       | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown     | ✅ enabled   |
+| `running`    | N/A (button hidden)    | ❌ hidden               | ✅ shown     | ❌ disabled  |
+| `paused`     | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown     | ✅ enabled   |
+| `cancelling` | N/A (button hidden)    | ❌ hidden               | ✅ shown     | ❌ disabled  |
+| `completed`  | ✅ modal if setting on | ✅ visible              | ✅ shown     | ✅ enabled   |
+| `error`      | ✅ modal if setting on | ✅ if `currentStep > 0` | ✅ shown     | ✅ enabled   |
 
 ---
 
 ## Files to Touch
 
-| File | Change |
-|---|---|
-| `package.json` | Add `flightpath.confirmResetOperations` setting; add `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` deps |
-| `src/utils/ConfigurationUtils.ts` | Add `shouldConfirmResetOperations()` + `setConfirmResetOperations()` |
-| `src/types/DashboardConstants.ts` | Add `RESET_FROM_STEP`, `REORDER_PROMPTS`, `UPDATE_CONFIRM_RESET` message types |
-| `src/types/WebviewMessageTypes.ts` | Add payload types; add `confirmResetOperations` to `GlobalSettings` |
-| `src/ui/webview-react/components/shared/ResetConfirmModal.tsx` | **New** — mirrors `DeleteConfirmModal` for reset operations |
-| `src/ui/webview-react/components/prompts/BoundaryBar.tsx` | **New** — visual divider between completed/pending sections |
-| `src/ui/webview-react/components/layout/PromptsPanel.tsx` | Guard eraser with modal; split completed/pending render; add dnd-kit context; rewind state; boundary bar |
-| `src/ui/webview-react/components/prompts/PromptItem.tsx` | Add `canRewind`, `onRewind`, `dragHandleProps` props; hover state |
-| `src/ui/webview-react/store/settingsStore.ts` | Add `confirmResetOperations` to `GlobalSettings` shape |
-| `src/ui/WebviewMessageRouter.ts` | Handle `RESET_FROM_STEP`, `REORDER_PROMPTS`, `UPDATE_CONFIRM_RESET` |
-| `src/ui/WebviewSettingsSync.ts` | Send `confirmResetOperations` in `globalSettingsUpdate` messages |
-| `src/flightpath/WorkflowOrchestrator.ts` | Add `resetFromStep(fromIndex)` and `reorderPrompts(fromIndex, newOrder)` methods |
-| `src/flightpath/WorkflowInstance.ts` | Wire new orchestrator methods; call `notifyWorkflowStateReset` after `resetFromStep` |
+| File                                                           | Change                                                                                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                                 | Add `flightpath.confirmResetOperations` setting; add `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities` deps |
+| `src/utils/ConfigurationUtils.ts`                              | Add `shouldConfirmResetOperations()` + `setConfirmResetOperations()`                                                 |
+| `src/types/DashboardConstants.ts`                              | Add `RESET_FROM_STEP`, `REORDER_PROMPTS`, `UPDATE_CONFIRM_RESET` message types                                       |
+| `src/types/WebviewMessageTypes.ts`                             | Add payload types; add `confirmResetOperations` to `GlobalSettings`                                                  |
+| `src/ui/webview-react/components/shared/ResetConfirmModal.tsx` | **New** — mirrors `DeleteConfirmModal` for reset operations                                                          |
+| `src/ui/webview-react/components/prompts/BoundaryBar.tsx`      | **New** — visual divider between completed/pending sections                                                          |
+| `src/ui/webview-react/components/layout/PromptsPanel.tsx`      | Guard eraser with modal; split completed/pending render; add dnd-kit context; rewind state; boundary bar             |
+| `src/ui/webview-react/components/prompts/PromptItem.tsx`       | Add `canRewind`, `onRewind`, `dragHandleProps` props; hover state                                                    |
+| `src/ui/webview-react/store/settingsStore.ts`                  | Add `confirmResetOperations` to `GlobalSettings` shape                                                               |
+| `src/ui/WebviewMessageRouter.ts`                               | Handle `RESET_FROM_STEP`, `REORDER_PROMPTS`, `UPDATE_CONFIRM_RESET`                                                  |
+| `src/ui/WebviewSettingsSync.ts`                                | Send `confirmResetOperations` in `globalSettingsUpdate` messages                                                     |
+| `src/flightpath/WorkflowOrchestrator.ts`                       | Add `resetFromStep(fromIndex)` and `reorderPrompts(fromIndex, newOrder)` methods                                     |
+| `src/flightpath/WorkflowInstance.ts`                           | Wire new orchestrator methods; call `notifyWorkflowStateReset` after `resetFromStep`                                 |
 
 ---
 

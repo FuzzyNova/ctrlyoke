@@ -11,6 +11,7 @@ export interface RunSelectorProps {
   isLiveRunActive: boolean; // whether a workflow is currently executing
   onSelectRun: (runIndex: number) => void;
   onBackToLive: () => void;
+  onClearHistory?: () => void;
   /** startedAt timestamps for each run, index 0 = most recent. Optional. */
   runTimestamps?: (number | undefined)[];
   /** executionState for each run, index 0 = most recent. Optional. */
@@ -36,6 +37,7 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
   isLiveRunActive,
   onSelectRun,
   onBackToLive,
+  onClearHistory,
   runTimestamps,
   runStates,
 }) => {
@@ -222,6 +224,22 @@ export const RunSelector: React.FC<RunSelectorProps> = ({
               </button>
             );
           })}
+
+          {/* Footer - Clear History */}
+          {onClearHistory && (
+            <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onClearHistory();
+                }}
+                className="w-full px-3 py-1.5 border-none bg-transparent text-link-fg text-center cursor-pointer text-xs rounded transition-colors hover:bg-list-hover-bg"
+              >
+                Clear History
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
