@@ -140,8 +140,13 @@ export class WorkflowInstance {
   private readonly promptFileWatcher: PromptFileWatcher;
   readonly outputHistoryManager: OutputHistoryManager;
 
-  /** Execution integrations created for the current/most-recent run — disposed in finally block */
-  private readonly executionIntegrations = new Set<HarnessIntegration>();
+  /**
+   * Execution integrations created for the current/most-recent run — disposed in finally block.
+   * Keyed by harness ID so harness switches reuse the same integration instance rather than
+   * allocating a new one per prompt (important for long-running / infinite-queue workflows).
+   * Max live integrations = number of distinct harness types used (≤ 4).
+   */
+  private readonly executionIntegrations = new Map<string, HarnessIntegration>();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -1258,12 +1263,17 @@ export class WorkflowInstance {
     harnessOverride?: Harness
   ): HarnessIntegration {
     const harness = harnessOverride ?? ConfigurationUtils.getIntegrationMode();
+    const cached = this.executionIntegrations.get(harness);
+    if (cached) {
+      Log.info(`♻️ Reusing cached integration for harness: ${harness}`);
+      return cached;
+    }
     if (harnessOverride) {
       Log.info(`🔀 Using harness override: ${harnessOverride}`);
     }
     const integration = this.integrationFactory.createForExecution(harness);
     integration.setWorkflowName(this.workflowName || undefined);
-    this.executionIntegrations.add(integration);
+    this.executionIntegrations.set(harness, integration);
     return integration;
   }
 
@@ -1311,17 +1321,19 @@ export class WorkflowInstance {
           prompt: PromptItem,
           harnessOverride?: Harness
         ) => {
+          const currentIntegration = this.activeIntegration ?? activeIntegration;
           const resolvedHarness = harnessOverride || prompt.harness;
-          if (resolvedHarness) {
+          if (resolvedHarness && resolvedHarness !== currentIntegration.getIntegrationMode()) {
+            currentIntegration.closeTerminal(); // close orphaned terminal before switching harnesses
             Log.info(
-              `🔀 Prompt ${prompt.name || "unnamed"} using harness override: ${resolvedHarness}`
+              `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
             );
             const overrideIntegration =
               this.createIntegrationForMode(resolvedHarness);
             this.activeIntegration = overrideIntegration;
             return overrideIntegration;
           }
-          return activeIntegration;
+          return currentIntegration;
         },
         captureOutputInit: (
           stepIndex,
@@ -1407,7 +1419,7 @@ export class WorkflowInstance {
       // Dispose all execution integrations created for this run.
       // They are short-lived (one run), not registered with context.subscriptions,
       // so must be disposed manually to release their EventEmitter resources.
-      for (const execIntegration of this.executionIntegrations) {
+      for (const execIntegration of this.executionIntegrations.values()) {
         execIntegration.dispose();
       }
       this.executionIntegrations.clear();

@@ -29,9 +29,9 @@ import { sendMessage } from "../../hooks/useMessageHandler";
 export const PromptsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
 }> = ({ panelBarOrientation = "vertical" }) => {
-  const { prompts, currentStep, executionState, retryStates, cliOutputs } =
+  const { prompts, currentStep, executionState, retryStates, cliOutputs, historyOutputs } =
     useWorkflowStore();
-  const { promptsCollapsed, togglePromptsCollapse } = useUiStore();
+  const { promptsCollapsed, togglePromptsCollapse, isViewingHistory } = useUiStore();
   const { selectedPromptIndex, selectPrompt } = useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
@@ -81,18 +81,27 @@ export const PromptsPanel: React.FC<{
       const prompt = prompts[index];
       if (prompt) {
         selectPrompt(index, prompt);
-        // Scroll to this step's output if it exists
-        const hasOutput = (cliOutputs[index]?.length ?? 0) > 0;
+        // Scroll to this step's output if it exists.
+        // In history mode, check historyOutputs; otherwise check live cliOutputs.
+        let hasOutput: boolean;
+        if (isViewingHistory && historyOutputs) {
+          const step = historyOutputs.steps[index];
+          hasOutput =
+            (step?.cliOutputs?.length ?? 0) > 0 ||
+            (step?.statusMessages?.length ?? 0) > 0;
+        } else {
+          hasOutput = (cliOutputs[index]?.length ?? 0) > 0;
+        }
         if (hasOutput) {
           requestAnimationFrame(() => {
             document
               .getElementById(`output-step-${index}`)
-              ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
           });
         }
       }
     },
-    [prompts, selectPrompt, cliOutputs]
+    [prompts, selectPrompt, cliOutputs, isViewingHistory, historyOutputs]
   );
 
   // Determine if workflow is running

@@ -1178,6 +1178,11 @@ export class CliIntegration extends HarnessIntegration {
     return true;
   }
 
+  override closeTerminal(): void {
+    this.processManager.disposeTerminal();
+    this.currentExecution = undefined;
+  }
+
   /**
    * Get integration status.
    */

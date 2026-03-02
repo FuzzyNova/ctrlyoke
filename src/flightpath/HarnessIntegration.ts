@@ -603,4 +603,12 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   isCli(): boolean {
     return false;
   }
+
+  /**
+   * Close any open interactive terminal without fully disposing the integration.
+   * No-op for non-CLI integrations. Overridden by CliIntegration.
+   * Called by WorkflowInstance before switching to a different harness mid-workflow,
+   * so the outgoing integration's terminal is not orphaned.
+   */
+  closeTerminal(): void {}
 }
