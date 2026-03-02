@@ -9,6 +9,7 @@ import { ChatSessionParser } from "./ChatSessionParser";
 import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../utils/Log";
 import { retryWithBackoff } from "../../utils/RetryUtils";
+import { AgentExpander } from "../../utils/AgentExpander";
 import { CliOutputFormatter } from "../cli/shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { ResolvedProperties } from "../../utils/PropertyResolver";
@@ -119,21 +120,28 @@ export class CopilotChatIntegration extends HarnessIntegration {
   /**
    * Open a new chat session for a specific agent.
    *
-   * VS Code/Copilot registers a command per discovered agent:
-   *   `workbench.action.chat.open<agentName>`
-   * e.g., `workbench.action.chat.openflightpath-orchestrator`
+   * VS Code/Copilot registers a command per discovered agent using the frontmatter
+   * `name:` field, not the filename:
+   *   `workbench.action.chat.open<frontmatterName>`
+   * e.g., `workbench.action.chat.openSenior Developer` (name from frontmatter)
    *
    * Falls back to generic agent mode if the agent-specific command doesn't exist.
    */
   private async openAgentSpecificChat(agentName: string): Promise<boolean> {
-    const agentCommand = `workbench.action.chat.open${agentName}`;
+    // VS Code registers commands using the frontmatter `name:` field, not the filename.
+    // E.g., senior-developer.agent.md with `name: Senior Developer` → openSenior Developer
+    const commandName = await AgentExpander.getAgentCommandName(
+      agentName,
+      this.getWorkspaceRoot()
+    );
+    const agentCommand = `workbench.action.chat.open${commandName}`;
 
     try {
       // Check if the agent-specific command exists
       const commands = await vscode.commands.getCommands();
       if (commands.includes(agentCommand)) {
         await vscode.commands.executeCommand(agentCommand);
-        Log.info(`🤖 Opened agent-specific chat: ${agentName}`);
+        Log.info(`🤖 Opened agent-specific chat: ${commandName}`);
         await new Promise((resolve) => setTimeout(resolve, 200));
         return true;
       } else {
@@ -698,6 +706,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const submitSuccess = await this.submitWithRetry(rawPromptText);
 
       if (!submitSuccess) {
+        if (this.isCancelling) {
+          return false; // Graceful stop — no error
+        }
         throw new Error(
           "Failed to submit message after multiple retries - prompt not found in session files"
         );

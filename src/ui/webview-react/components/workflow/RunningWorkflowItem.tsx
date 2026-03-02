@@ -95,13 +95,13 @@ export const RunningWorkflowItem: React.FC<RunningWorkflowItemProps> = ({
         {workflow.workflowName}
       </span>
 
-      {/* Status badge */}
-      <span className="text-[11px] text-description-fg flex-shrink-0 uppercase font-semibold">
+      {/* Status badge — fixed-width column so "RUNNING"/"PAUSED" align across rows */}
+      <span className="text-[11px] text-description-fg flex-shrink-0 uppercase font-semibold w-[52px] text-center">
         {workflow.executionState}
       </span>
 
-      {/* Elapsed time */}
-      <span className="text-[11px] text-description-fg flex-shrink-0 font-mono min-w-[32px] text-right">
+      {/* Elapsed time — fixed-width column for consistent m:ss alignment */}
+      <span className="text-[11px] text-description-fg flex-shrink-0 font-mono w-[36px] text-right">
         {elapsed}
       </span>
 

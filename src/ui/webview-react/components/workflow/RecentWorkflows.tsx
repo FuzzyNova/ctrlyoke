@@ -77,19 +77,19 @@ export const RecentWorkflows: React.FC<RecentWorkflowsProps> = ({
                   {workflow.workflowName}
                 </span>
 
-                {/* Execution State Badge */}
-                <span
-                  className={`workflow-menu-item-state text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 ${getExecutionStateBadgeClass(workflow.executionState)}`}
-                >
-                  {workflow.executionState}
+                {/* Execution State Badge — fixed-width column so badges align across rows */}
+                <span className="flex-shrink-0 w-[76px] flex justify-center">
+                  <span
+                    className={`workflow-menu-item-state text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold ${getExecutionStateBadgeClass(workflow.executionState)}`}
+                  >
+                    {workflow.executionState}
+                  </span>
                 </span>
 
-                {/* Time */}
-                {timeAgo && (
-                  <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0">
-                    {timeAgo}
-                  </span>
-                )}
+                {/* Time — fixed-width column so timestamps align across rows */}
+                <span className="workflow-menu-item-time text-[11px] text-description-fg flex-shrink-0 w-[80px] text-right">
+                  {timeAgo || ""}
+                </span>
 
                 {/* Delete button — visible only on row hover */}
                 {onRemove && (
