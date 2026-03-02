@@ -423,7 +423,7 @@ export const SettingsPanel: React.FC<{
     (checked: boolean) => {
       vscode.postMessage({
         type: MESSAGE_TYPES.UPDATE_CONFIG,
-        key: "respectGitignoreForCompletions",
+        key: "flightpath.respectGitignoreForCompletions",
         value: checked,
       });
     },

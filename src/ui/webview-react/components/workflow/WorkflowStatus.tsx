@@ -384,9 +384,8 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
           left: "50%",
           transform: `translateX(-50%) translateY(${isDropdownOpen && !isEditing ? "0" : "-4px"})`,
           // allow dropdown to grow with the overall view; use viewport height
-          // rather than a hard 400px limit so expanding the panel gives more room
-          maxHeight: "60vh",
-          height: "60vh",
+          maxHeight: "75vh",
+          height: "75vh",
         }}
       >
         {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}

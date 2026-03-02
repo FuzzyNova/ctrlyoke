@@ -425,7 +425,10 @@ export class WebviewSettingsSync {
       return;
     }
 
-    await ConfigurationUtils.updateSetting(key, value);
+    // Strip the "flightpath." prefix — ConfigurationUtils.updateSetting uses a
+    // scoped getConfiguration("flightpath"), so it expects a relative key.
+    const relativeKey = key.slice("flightpath.".length);
+    await ConfigurationUtils.updateSetting(relativeKey, value);
   }
 
   // ============================================================================
