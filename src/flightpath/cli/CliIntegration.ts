@@ -11,13 +11,11 @@ import {
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { HarnessIntegration, HarnessStatus } from "../HarnessIntegration";
 import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
-import { TempFileManager } from "../../utils/TempFileManager";
 import { CliProcessManager } from "../../utils/CliProcessManager";
 import { Log } from "../../utils/Log";
 import { ICliProvider } from "./shared/interfaces/ICliProvider";
 import { CliOutputFormatter } from "./shared/CliOutputFormatter";
 import { CliLogMonitor } from "./CliLogMonitor";
-import { PromptFileSplitter } from "../../utils/PromptFileSplitter";
 import {
   ResolvedProperties,
   PropertyResolver,
@@ -338,68 +336,20 @@ export class CliIntegration extends HarnessIntegration {
     promptText: string,
     workflowContext?: WorkflowContext
   ): Promise<PromptFileResult> {
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      throw new Error("No workspace root available for temp file");
-    }
-
-    const tempMgr = new TempFileManager(workspaceRoot);
-
-    // Check if splitting is needed
-    const splitter = new PromptFileSplitter();
-    const splitResult = splitter.split(promptText);
-
-    if (!splitResult.needsSplit) {
-      // Single file path (backward compatible)
-      const tempFilePath = await tempMgr.createPromptFile(
-        promptText,
-        workflowContext?.filePath,
-        workflowContext ? workflowContext.promptIndex + 1 : undefined
-      );
-      const relativeFilePath = tempMgr.getRelativePath(tempFilePath);
-      const fileReference = this.provider.formatFileReference(relativeFilePath);
-      const promptWithInstruction = `Follow instructions in ${fileReference} `;
-
-      Log.info(`📁 Temp file created: ${relativeFilePath}`);
-      Log.info(
-        `📊 Prompt stats: ${splitResult.tokenCounts[0]} tokens, ${splitResult.lineCounts[0]} lines`
-      );
-
-      return {
-        tempFilePaths: [tempFilePath],
-        promptWithInstruction,
-      };
-    }
-
-    // Multiple files needed
-    const tempFilePaths = await tempMgr.createSplitPromptFiles(
-      splitResult.chunks,
+    const { tempFilePaths, relativePaths } = await this.createTempPromptFiles(
+      promptText,
       workflowContext?.filePath,
       workflowContext ? workflowContext.promptIndex + 1 : undefined
     );
 
-    // Build instruction referencing all files
-    const fileReferences = tempFilePaths.map((fp) => {
-      const relativePath = tempMgr.getRelativePath(fp);
-      return this.provider.formatFileReference(relativePath);
-    });
-
-    // Format: "Follow instructions in @file1, @file2, and @file3 "
-    const promptWithInstruction =
-      this.formatMultipleFileReferences(fileReferences);
-
-    // Log split statistics
-    Log.info(`📁 Prompt split into ${splitResult.chunks.length} files:`);
-    splitResult.chunks.forEach((_, idx) => {
-      const relativePath = tempMgr.getRelativePath(tempFilePaths[idx]);
-      Log.info(
-        `   ${idx + 1}. ${relativePath} (${splitResult.tokenCounts[idx]} tokens, ${splitResult.lineCounts[idx]} lines)`
-      );
-    });
+    // Format references per provider convention (e.g., @file for Copilot, -f file for Codex)
+    const fileReferences = relativePaths.map((rp) =>
+      this.provider.formatFileReference(rp)
+    );
 
     return {
       tempFilePaths,
-      promptWithInstruction,
+      promptWithInstruction: this.formatMultipleFileReferences(fileReferences),
     };
   }
 
@@ -811,14 +761,7 @@ export class CliIntegration extends HarnessIntegration {
     if (tempFilePaths.length === 0) {
       return;
     }
-
-    const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {
-      return;
-    }
-
-    const tempMgr = new TempFileManager(workspaceRoot);
-    await tempMgr.deleteFiles(tempFilePaths);
+    await this.deleteTempFiles(tempFilePaths);
     Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
   }
 
@@ -960,12 +903,8 @@ export class CliIntegration extends HarnessIntegration {
     } finally {
       // Cleanup temp file(s) (if used)
       if (tempFilePaths.length > 0) {
-        const workspaceRoot = this.getWorkspaceRoot();
-        if (workspaceRoot) {
-          const tempMgr = new TempFileManager(workspaceRoot);
-          await tempMgr.deleteFiles(tempFilePaths);
-          Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
-        }
+        await this.deleteTempFiles(tempFilePaths);
+        Log.debug(`🗑️ Cleaned up ${tempFilePaths.length} temp file(s)`);
       }
     }
   }

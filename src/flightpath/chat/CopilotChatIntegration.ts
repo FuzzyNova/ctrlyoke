@@ -40,6 +40,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
   // Last parsed structured output (populated after each completed response)
   private lastParsedOutput?: UniversalCliOutput;
 
+  // Temp file paths created during prompt building (for cleanup after execution)
+  private pendingTempFiles: string[] = [];
+
   constructor(
     context: vscode.ExtensionContext,
     registerWithContext: boolean = true
@@ -110,6 +113,41 @@ export class CopilotChatIntegration extends HarnessIntegration {
     } catch (error) {
       Log.warn("⚠️ Could not switch to agent mode:", error);
       // Don't throw - user may have manually selected agent mode
+    }
+  }
+
+  /**
+   * Open a new chat session for a specific agent.
+   *
+   * VS Code/Copilot registers a command per discovered agent:
+   *   `workbench.action.chat.open<agentName>`
+   * e.g., `workbench.action.chat.openflightpath-orchestrator`
+   *
+   * Falls back to generic agent mode if the agent-specific command doesn't exist.
+   */
+  private async openAgentSpecificChat(agentName: string): Promise<boolean> {
+    const agentCommand = `workbench.action.chat.open${agentName}`;
+
+    try {
+      // Check if the agent-specific command exists
+      const commands = await vscode.commands.getCommands();
+      if (commands.includes(agentCommand)) {
+        await vscode.commands.executeCommand(agentCommand);
+        Log.info(`🤖 Opened agent-specific chat: ${agentName}`);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return true;
+      } else {
+        Log.warn(
+          `⚠️ Agent command "${agentCommand}" not found, falling back to generic agent mode`
+        );
+        return false;
+      }
+    } catch (error) {
+      Log.warn(
+        `⚠️ Could not open agent-specific chat for "${agentName}":`,
+        error
+      );
+      return false;
     }
   }
 
@@ -349,6 +387,11 @@ export class CopilotChatIntegration extends HarnessIntegration {
       const resolvedResumeSession =
         workflowContext?.resolvedProperties?.resumeSession;
 
+      // Resolve agent for this prompt (needed for agent-specific chat windows)
+      const resolvedAgent = workflowContext?.resolvedProperties?.agent;
+      const useNativeAttachments =
+        ConfigurationUtils.shouldUseChatNativeAttachments();
+
       // Start new chat session if NOT resuming
       // Use resolved property if available, otherwise fall back to prompt property
       const shouldStartNewSession = !(
@@ -358,7 +401,19 @@ export class CopilotChatIntegration extends HarnessIntegration {
       );
       if (shouldStartNewSession) {
         Log.info("🆕 Starting new chat session");
-        await this.startNewChatSession();
+
+        // When using native attachments and an agent is selected, open the
+        // agent-specific chat window (e.g., workbench.action.chat.openflightpath-orchestrator)
+        // so Copilot automatically applies that agent's instructions.
+        let openedAgentChat = false;
+        if (useNativeAttachments && resolvedAgent) {
+          openedAgentChat = await this.openAgentSpecificChat(resolvedAgent);
+        }
+
+        if (!openedAgentChat) {
+          await this.startNewChatSession();
+        }
+
         // Clear session tracking so we search for the new session
         this.sessionMonitor.resetSession();
       } else {
@@ -368,7 +423,9 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // Ensure we're in agent mode if user has enabled force agent mode setting
       // This prevents issues with Ask/Plan modes but overrides custom agents
       const forceAgentMode = ConfigurationUtils.shouldForceAgentModeForChat();
-      if (forceAgentMode) {
+      if (forceAgentMode && !useNativeAttachments) {
+        // Only force generic agent mode when NOT using native attachments
+        // (native attachments flow uses agent-specific commands instead)
         await this.ensureAgentMode();
       }
 
@@ -383,22 +440,29 @@ export class CopilotChatIntegration extends HarnessIntegration {
           ? needsCompletionDetection
           : !!prompt.endCondition?.script;
 
-      // Get raw prompt text (what will appear in session files - without XML tags)
-      const rawPromptText = prompt.prompt.trim();
-
-      // Build full prompt with XML instructions (what we'll type into chat)
+      // Build full prompt (what we'll type into chat)
       const chatPrompt = await this.buildCopilotChatPrompt(
         prompt,
         workflowContext
       );
 
-      // Record session position with RAW text for matching (session files don't include XML tags)
-      await this.sessionMonitor.recordPositionBeforeSend(rawPromptText);
+      // Determine what text appears in session files so we can verify submission.
+      // When using temp files, the session file stores the short instruction
+      // ("Follow instructions in prompt.md"), not the raw user prompt (which
+      // is inside the temp file). For inline prompts, session files strip XML
+      // tags so we match on the raw user text.
+      const sessionSearchText =
+        this.pendingTempFiles.length > 0
+          ? chatPrompt.trim()
+          : prompt.prompt.trim();
 
-      // Execute direct automation - type full prompt (with XML), verify with raw text
+      // Record session position before send (used by ChatSessionMonitor)
+      await this.sessionMonitor.recordPositionBeforeSend(sessionSearchText);
+
+      // Execute direct automation - type full prompt, verify with session search text
       const sent = await this.sendPromptWithDirectAutomation(
         chatPrompt,
-        rawPromptText,
+        sessionSearchText,
         shouldStartNewSession
       );
 
@@ -420,6 +484,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
         if (result.userCancelled) {
           Log.info("⚠️ User cancelled - stopping workflow");
           this.lastFailureWasUserCancellation = true;
+          await this.cleanupTempFiles();
           return false;
         }
 
@@ -436,6 +501,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
             // Proceed as if completed - extract session output and fire event
             const responseText = await this.extractSessionOutput();
             this.responseCompleteEmitter.fire(responseText);
+            await this.cleanupTempFiles();
             return true;
           }
 
@@ -443,6 +509,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
           if (result.failureReason) {
             this.lastFailureReason = result.failureReason;
           }
+          await this.cleanupTempFiles();
           return false;
         }
 
@@ -451,6 +518,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
         this.responseCompleteEmitter.fire(responseText);
       }
 
+      await this.cleanupTempFiles();
       return true;
     } catch (error) {
       Log.error("❌ Failed to send prompt:", error);
@@ -463,6 +531,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       vscode.window.showErrorMessage(
         `FlightPath: Failed to send prompt: ${error}`
       );
+      await this.cleanupTempFiles();
       return false;
     }
   }
@@ -664,8 +733,26 @@ export class CopilotChatIntegration extends HarnessIntegration {
     }
   }
 
-  /** Override to use native VS Code attachments when enabled */
-  protected async buildPromptText(prompt: PromptItem): Promise<string> {
+  /**
+   * Override to handle two chat-specific prompt building strategies:
+   *
+   * **useNativeAttachments=true** (opt-in):
+   *   Uses VS Code's native `attachFile`/`attachSelection` commands for clean UI.
+   *   Agent is handled via agent-specific chat window commands (see openAgentSpecificChat).
+   *   Skills are NOT supported in this mode (VS Code has no native skill API).
+   *
+   * **useNativeAttachments=false** (default):
+   *   Builds fully expanded temp prompt files (with agent, skills, and context
+   *   embedded), then attaches those temp files to chat using native file
+   *   attachment commands. The typed prompt becomes a short instruction:
+   *   "Follow instructions in prompt1.md and prompt2.md"
+   *   This gives a uniform experience matching CLI harnesses.
+   */
+  protected async buildPromptText(
+    prompt: PromptItem,
+    resolvedAgent?: string,
+    resolvedSkills?: string[]
+  ): Promise<string> {
     // Check if auto-attachment is enabled
     const autoAttach = ConfigurationUtils.shouldAutoAttachFiles();
 
@@ -678,10 +765,93 @@ export class CopilotChatIntegration extends HarnessIntegration {
     }
 
     if (useNativeAttachments) {
+      // Native attachments: use VS Code commands to attach files directly.
+      // Agent is handled by opening agent-specific chat window (sendPrompt).
+      // Skills NOT supported in this mode.
       return await this.attachmentHandler.processAttachments(prompt.prompt);
-    } else {
-      return await super.buildPromptText(prompt);
     }
+
+    // Non-native attachments: build fully expanded prompt (with agent, skills,
+    // context references), write to temp file(s), attach to chat, and return
+    // a short instruction referencing the files.
+    return await this.buildTempFilePrompt(
+      prompt,
+      resolvedAgent,
+      resolvedSkills
+    );
+  }
+
+  /**
+   * Build expanded prompt, write to temp file(s), attach them to chat,
+   * and return a short "Follow instructions in ..." message.
+   *
+   * This mirrors the CLI flow: agent + skills + context are embedded in
+   * temp .prompt.md files, giving a uniform experience across all harnesses.
+   */
+  private async buildTempFilePrompt(
+    prompt: PromptItem,
+    resolvedAgent?: string,
+    resolvedSkills?: string[]
+  ): Promise<string> {
+    // Build fully expanded prompt text (base class handles agent, skills, context)
+    const expandedText = await super.buildPromptText(
+      prompt,
+      resolvedAgent,
+      resolvedSkills
+    );
+
+    if (!this.getWorkspaceRoot()) {
+      Log.warn("No workspace root, falling back to inline prompt");
+      return expandedText;
+    }
+
+    // Create temp file(s) via base class (handles splitting, logging)
+    const { tempFilePaths } = await this.createTempPromptFiles(expandedText);
+
+    // Track temp files for cleanup after execution
+    this.pendingTempFiles.push(...tempFilePaths);
+
+    // Attach each temp file to chat using native file attachment
+    for (const filePath of tempFilePaths) {
+      try {
+        const uri = vscode.Uri.file(filePath);
+        await vscode.commands.executeCommand(
+          "workbench.action.chat.attachFile",
+          uri
+        );
+        Log.info(`📎 Attached to chat: ${path.basename(filePath)}`);
+        // Small delay between attachments to prevent race conditions
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      } catch (error) {
+        Log.error(
+          `❌ Failed to attach temp file: ${path.basename(filePath)}`,
+          error
+        );
+      }
+    }
+
+    // Build short instruction referencing the files (bare filenames - no @ prefix)
+    const fileNames = tempFilePaths.map((fp) => path.basename(fp));
+    if (fileNames.length === 1) {
+      return `Follow instructions in ${fileNames[0]}`;
+    }
+    // Natural language: "file1, file2, and file3"
+    const last = fileNames.pop()!;
+    return `Follow instructions in ${fileNames.join(", ")}, and ${last}`;
+  }
+
+  /**
+   * Clean up any temp files created during prompt building.
+   * Called after execution completes (success or failure).
+   */
+  private async cleanupTempFiles(): Promise<void> {
+    if (this.pendingTempFiles.length === 0) {
+      return;
+    }
+    const count = this.pendingTempFiles.length;
+    await this.deleteTempFiles(this.pendingTempFiles);
+    Log.info(`🗑️ Cleaned up ${count} temp file(s)`);
+    this.pendingTempFiles = [];
   }
 
   /** Build final prompt with dynamic queue instructions if applicable */

@@ -546,9 +546,9 @@
         "flightpath.chatUseNativeAttachments": {
           "order": 101,
           "type": "boolean",
-          "default": true,
-          "description": "[Chat Mode] Use VS Code's native attachment commands",
-          "markdownDescription": "**Chat Mode Only.** When enabled (default), FlightPath uses VS Code's native `attachFile` and `attachSelection` commands for clean UI. When disabled, uses raw XML attachment (reliable but shows raw text in chat). **Note:** Native attachments have a known VS Code bug with multiple file ranges - disable if you encounter issues."
+          "default": false,
+          "description": "[Chat Mode] Use VS Code's native attachment commands instead of temp prompt files",
+          "markdownDescription": "**Chat Mode Only.** When enabled, FlightPath uses VS Code's native `attachFile` and `attachSelection` commands and opens agent-specific chat windows. **Does not support skills** (VS Code has no native skill API).\n\nWhen disabled (default), FlightPath builds temp prompt files with agent, skills, and context embedded — matching the CLI harness behavior for a uniform experience. Files are attached to chat and the prompt becomes \"Follow instructions in prompt.md\"."
         },
         "flightpath.forceAgentModeForChat": {
           "order": 102,

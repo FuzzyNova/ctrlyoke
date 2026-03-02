@@ -460,10 +460,12 @@ export const ConfigurationUtils = {
   },
 
   /**
-   * Check if native attachments should be used for chat mode
+   * Check if native attachments should be used for chat mode.
+   * When false (default), builds temp prompt files with embedded agent/skills/context.
+   * When true, uses VS Code's native attachFile commands and agent-specific chat windows.
    */
   shouldUseChatNativeAttachments(): boolean {
-    return getConfig().get<boolean>("chatUseNativeAttachments", true);
+    return getConfig().get<boolean>("chatUseNativeAttachments", false);
   },
 
   // ============================================================

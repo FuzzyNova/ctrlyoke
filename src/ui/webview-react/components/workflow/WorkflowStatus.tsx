@@ -374,58 +374,60 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       )}
 
       {/* Dropdown Menu */}
-        <div
-          ref={dropdownRef}
-          className={`workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col transition-all duration-150 ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
-          style={{
-            top: containerRef.current
-              ? containerRef.current.getBoundingClientRect().bottom + 4
-              : "auto",
-            left: "50%",
-            transform: `translateX(-50%) translateY(${isDropdownOpen && !isEditing ? "0" : "-4px"})`,
-            maxHeight: "min(400px, 70vh)",
-            height: "min(400px, 70vh)",
-          }}
-        >
-          {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}
-          {loadedWorkflows.length > 0 && (
-            <div className="running-workflows-section flex-shrink-0">
-              <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg">
-                Running Workflows
-              </div>
-              <div className="py-1">
-                {loadedWorkflows.map((workflow) => (
-                  <RunningWorkflowItem
-                    key={workflow.id}
-                    workflow={workflow}
-                    isCurrent={workflow.id === activeWorkflowId}
-                    onClick={() => handleSwitchWorkflow(workflow.id)}
-                    onPause={() => handlePauseWorkflow(workflow.id)}
-                    onResume={() => handleResumeWorkflow(workflow.id)}
-                    onStop={() => handleStopWorkflow(workflow.id)}
-                  />
-                ))}
-              </div>
-              <div className="border-t border-dropdown-border" />
+      <div
+        ref={dropdownRef}
+        className={`workflow-dropdown-menu fixed min-w-[300px] max-w-[min(500px,90vw)] bg-dropdown-bg border border-dropdown-border rounded shadow-lg z-[100] overflow-hidden flex flex-col transition-all duration-150 ${isDropdownOpen && !isEditing ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+        style={{
+          top: containerRef.current
+            ? containerRef.current.getBoundingClientRect().bottom + 4
+            : "auto",
+          left: "50%",
+          transform: `translateX(-50%) translateY(${isDropdownOpen && !isEditing ? "0" : "-4px"})`,
+          // allow dropdown to grow with the overall view; use viewport height
+          // rather than a hard 400px limit so expanding the panel gives more room
+          maxHeight: "60vh",
+          height: "60vh",
+        }}
+      >
+        {/* Section 1: Running Workflows — only shown when any workflow is RUNNING or PAUSED */}
+        {loadedWorkflows.length > 0 && (
+          <div className="running-workflows-section flex-shrink-0">
+            <div className="workflow-menu-header px-3 py-2 text-[11px] font-semibold text-description-fg uppercase tracking-wider border-b border-dropdown-border bg-editor-bg">
+              Running Workflows
             </div>
-          )}
-
-          {/* Recent workflows list — exclude any already shown in Running Workflows */}
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            <RecentWorkflows
-              workflows={recentWorkflows.filter(
-                (rw) =>
-                  !loadedWorkflows.some(
-                    (lw) => lw.workingFilePath === rw.filePath
-                  )
-              )}
-              currentFilePath={fileName}
-              onSelect={handleSelectWorkflow}
-              onClearHistory={handleClearHistory}
-              onRemove={handleRemoveWorkflow}
-            />
+            <div className="py-1">
+              {loadedWorkflows.map((workflow) => (
+                <RunningWorkflowItem
+                  key={workflow.id}
+                  workflow={workflow}
+                  isCurrent={workflow.id === activeWorkflowId}
+                  onClick={() => handleSwitchWorkflow(workflow.id)}
+                  onPause={() => handlePauseWorkflow(workflow.id)}
+                  onResume={() => handleResumeWorkflow(workflow.id)}
+                  onStop={() => handleStopWorkflow(workflow.id)}
+                />
+              ))}
+            </div>
+            <div className="border-t border-dropdown-border" />
           </div>
+        )}
+
+        {/* Recent workflows list — exclude any already shown in Running Workflows */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <RecentWorkflows
+            workflows={recentWorkflows.filter(
+              (rw) =>
+                !loadedWorkflows.some(
+                  (lw) => lw.workingFilePath === rw.filePath
+                )
+            )}
+            currentFilePath={fileName}
+            onSelect={handleSelectWorkflow}
+            onClearHistory={handleClearHistory}
+            onRemove={handleRemoveWorkflow}
+          />
         </div>
+      </div>
 
       {/* Delete workflow history confirmation modal */}
       <DeleteConfirmModal

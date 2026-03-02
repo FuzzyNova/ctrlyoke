@@ -13,6 +13,8 @@ import { ContextExpander } from "../utils/ContextExpander";
 import { Log } from "../utils/Log";
 import { ResolvedProperties } from "../utils/PropertyResolver";
 import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
+import { TempFileManager } from "../utils/TempFileManager";
+import { PromptFileSplitter } from "../utils/PromptFileSplitter";
 import type { PromptQueue } from "./PromptQueue";
 
 /**
@@ -397,6 +399,81 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
 
     // Prepend instructions to prompt
     return instructions + promptText;
+  }
+
+  /**
+   * Create temp prompt file(s) from expanded prompt text.
+   * Handles large-prompt splitting (>20K tokens or >1800 lines) via PromptFileSplitter.
+   * Logs creation stats for debugging.
+   *
+   * This is the single implementation shared by all harnesses that use temp files
+   * (CliIntegration for file-reference passing; CopilotChatIntegration for attachment).
+   *
+   * @param promptText The full expanded prompt text to write
+   * @param filePath Optional workflow file path (for meaningful temp filenames)
+   * @param promptNumber Optional 1-based prompt number (for meaningful temp filenames)
+   * @returns Absolute file paths and workspace-relative paths for each created file
+   */
+  protected async createTempPromptFiles(
+    promptText: string,
+    filePath?: string,
+    promptNumber?: number
+  ): Promise<{ tempFilePaths: string[]; relativePaths: string[] }> {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      throw new Error("No workspace root available for temp file");
+    }
+
+    const tempMgr = new TempFileManager(workspaceRoot);
+    const splitter = new PromptFileSplitter();
+    const splitResult = splitter.split(promptText);
+
+    let tempFilePaths: string[];
+
+    if (!splitResult.needsSplit) {
+      const tempFilePath = await tempMgr.createPromptFile(
+        promptText,
+        filePath,
+        promptNumber
+      );
+      tempFilePaths = [tempFilePath];
+      Log.info(
+        `📁 Temp file: ${tempMgr.getRelativePath(tempFilePath)} ` +
+          `(${splitResult.tokenCounts[0]} tokens, ${splitResult.lineCounts[0]} lines)`
+      );
+    } else {
+      tempFilePaths = await tempMgr.createSplitPromptFiles(
+        splitResult.chunks,
+        filePath,
+        promptNumber
+      );
+      Log.info(`📁 Prompt split into ${splitResult.chunks.length} files:`);
+      splitResult.chunks.forEach((_, idx) => {
+        Log.info(
+          `   ${idx + 1}. ${tempMgr.getRelativePath(tempFilePaths[idx])} ` +
+            `(${splitResult.tokenCounts[idx]} tokens, ${splitResult.lineCounts[idx]} lines)`
+        );
+      });
+    }
+
+    const relativePaths = tempFilePaths.map((fp) => tempMgr.getRelativePath(fp));
+    return { tempFilePaths, relativePaths };
+  }
+
+  /**
+   * Delete temp prompt files created during execution.
+   * No-op if the array is empty or no workspace root is available.
+   */
+  protected async deleteTempFiles(tempFilePaths: string[]): Promise<void> {
+    if (tempFilePaths.length === 0) {
+      return;
+    }
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {
+      return;
+    }
+    const tempMgr = new TempFileManager(workspaceRoot);
+    await tempMgr.deleteFiles(tempFilePaths);
   }
 
   /**
