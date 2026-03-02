@@ -144,10 +144,12 @@ CLI Flags > Environment Variables > Config File > Defaults
 
 1. Chat window integration (VS Code only - requires VS Code APIs)
 2. Dynamic queue extension (v2)
-3. Watch mode (re-run on file changes)
-4. Parallel execution
-5. TUI Dashboard (ink/blessed)
-6. IntelliSense/completions
+3. Watch mode / `--close-on-completion` (auto-advance between prompts while user watches; requires per-harness exit command handling)
+4. File watch mode (re-run on file changes)
+5. Parallel execution
+6. TUI Dashboard (ink/blessed)
+7. IntelliSense/completions
+8. `init` command (interactive workflow scaffolding)
 
 ---
 
@@ -181,7 +183,6 @@ flightpath <command> [options]
 Commands:
   run <file>       Execute a prompt or workflow file
   validate <file>  Validate a prompt file without executing
-  init             Create a new .flightpath.json file interactively
   version          Show version information
 
 Global Options:
@@ -208,7 +209,6 @@ Workflow Options (override file-level and config settings):
   --timeout, -t    Global timeout in seconds (default: 3600)
   --resume, -r     Resume session with given ID
   --new-session    Force new session (ignore resume)
-  --allow-dynamic-extension  Allow the AI to extend the workflow queue
 
   Note: --harness and --model are especially useful for .prompt.md files, which
   cannot embed these settings in the file format itself.
@@ -216,27 +216,18 @@ Workflow Options (override file-level and config settings):
 Execution Mode:
   --interactive              Force interactive mode (PTY, user can respond to prompts)
   --headless                 Force headless mode (CI/CD, no user interaction)
-  --close-on-completion      Watch mode: output visible but session auto-closes when hook
-                             fires (user can see output but cannot type). Requires
-                             --interactive or TTY. Uses hook notification to detect when
-                             AI finishes responding, then sends exit command to stdin.
 
-Tool Permissions (Copilot CLI):
-  --allow-all-tools          Allow all tools without prompting
-  --allow-tool <pattern>     Allow specific tool pattern (can repeat)
+Tool Permissions:
+  --allow-all-tools          Allow all tools without prompting (auto-applied in headless)
+  --allow-tool <pattern>     Allow specific tool pattern (can repeat; auto-converted per harness)
   --deny-tool <pattern>      Deny specific tool pattern (can repeat)
-  --add-dir <path>           Add directory to allowed paths (can repeat)
-
-Tool Permissions (Claude CLI):
-  --skip-permissions         Skip all permission prompts (dangerous)
-  --allowed-tools <list>     Comma-separated list of allowed tools
+  --add-dir <path>           Add directory to Copilot CLI allowed paths (can repeat)
 
 Output Control:
   --json                     Output as JSON
   --quiet, -q                Only show errors
   --verbose                  Show debug information
   --no-color                 Disable colored output
-  --output, -o <file>        Write output to file
 ```
 
 ### Examples
@@ -279,11 +270,12 @@ CLI Flags > Environment Variables > Config File > Defaults
 
 ### Config File (`.flightpathrc.json`)
 
-Located in:
+Located in (highest to lowest priority):
 
-1. Current directory
-2. Home directory (`~/.flightpathrc.json`)
-3. XDG config (`~/.config/flightpath/config.json`)
+1. Current directory — project-level, can be committed or gitignored
+2. Home directory (`~/.flightpathrc.json`) — user defaults
+
+Config keys mirror CLI flag names directly. Harness-specific permission translation (e.g. Copilot `shell(git:*)` format → Claude tool names) is handled by `IToolPermissionMapper`, not by the config author.
 
 ```json
 {
@@ -291,23 +283,10 @@ Located in:
   "model": "claude-sonnet-4.5",
   "timeout": 3600,
   "scriptTimeout": 30000,
-  "permissions": {
-    "copilot": {
-      "allowAllTools": false,
-      "allowedTools": ["shell(git:*)"],
-      "deniedTools": ["shell(rm:*)"],
-      "allowedDirs": ["."]
-    },
-    "claude": {
-      "skipPermissions": false,
-      "allowedTools": ["Bash", "Read", "Write"]
-    }
-  },
-  "output": {
-    "color": true,
-    "timestamps": true,
-    "verbose": false
-  }
+  "allowedTools": ["shell(git:*)"],
+  "deniedTools": ["shell(rm:*)"],
+  "color": true,
+  "verbose": false
 }
 ```
 
@@ -318,9 +297,8 @@ FLIGHTPATH_HARNESS=copilot-cli|claude-cli|codex-cli
 FLIGHTPATH_MODEL=claude-sonnet-4.5
 FLIGHTPATH_TIMEOUT=3600
 FLIGHTPATH_SCRIPT_TIMEOUT=30000
-FLIGHTPATH_ALLOW_ALL_TOOLS=true|false
 FLIGHTPATH_VERBOSE=true|false
-FLIGHTPATH_JSON_OUTPUT=true|false
+FLIGHTPATH_JSON=true|false
 FLIGHTPATH_NO_COLOR=true|false
 ```
 
@@ -646,9 +624,11 @@ constructor(
 
 ```typescript
 // Uses:
-vscode.window.showWarningMessage(...)   → platform.warn(...)
+vscode.window.showWarningMessage(...)      → platform.warn(...)
 vscode.window.showInformationMessage(...)  → platform.log(...)
-vscode.commands.executeCommand("flightpath.focusDashboard")  → platform.focusDashboard?.() (no-op in CLI)
+vscode.commands.executeCommand("flightpath.focusDashboard")  → remove from WorkflowExecutor
+                                           // Dashboard focus is a VS Code UI concern only.
+                                           // WorkflowOrchestrator handles it post-execution.
 ```
 
 **Impact**: Low-Medium. Straightforward substitution, no structural changes needed.
@@ -873,15 +853,16 @@ All three harnesses already implement `INotificationMonitor` in the extension �
 
 FlightPath runs `INotificationMonitor.monitorForCompletion()` in a parallel Promise alongside the spawned AI CLI process. When the hook fires and the notification file appears, FlightPath knows the AI has finished responding to the current prompt and can advance.
 
-### Three Execution Sub-Modes
+### Two Execution Modes
 
-The CLI supports three distinct modes based on `stdio` configuration:
+The CLI supports two modes based on `stdio` configuration:
 
 | Mode | `stdio` | User can type | Session ends | Output |
 |------|---------|---------------|--------------|--------|
-| **full-interactive** (default TTY) | `'inherit'` | ✅ Yes | Manually (user exits) | Raw AI CLI passthrough |
-| **watch** (`--close-on-completion`) | `['pipe', 'inherit', 'inherit']` | ❌ No | Auto when hook fires | Raw AI CLI visible |
-| **headless** (default CI/CD) | `['pipe','pipe','pipe']` | ❌ No | Auto when process exits | Chalk-formatted events |
+| **interactive** (default in TTY) | `'inherit'` | ✅ Yes | Manually (user exits) | Raw AI CLI passthrough |
+| **headless** (default in CI/CD) | `['pipe','pipe','pipe']` | ❌ No | Auto when process exits | Chalk-formatted events |
+
+> **Future (v2)**: Watch mode (`--close-on-completion`) — `stdio: ['pipe', 'inherit', 'inherit']` — user sees output but cannot type; FlightPath auto-advances when the hook fires. Deferred because it requires per-harness exit command handling (`/exit\n` for Claude, EOF for Copilot/Codex).
 
 ### Full-Interactive Mode (default in TTY)
 
@@ -904,33 +885,6 @@ await Promise.race([
 ```
 
 **Limitations**: No output capture (no `CliEvent[]`, no history), session ID must be noted manually for `--resume`.
-
-### Watch Mode (`--close-on-completion`)
-
-`stdio: ['pipe', 'inherit', 'inherit']` — stdout and stderr pass through so the user sees all AI CLI output in real-time, but stdin is a pipe that FlightPath controls. The user **cannot type** during the session.
-
-When `monitorForCompletion()` detects the hook notification, FlightPath auto-closes the session by writing the harness exit command to stdin:
-
-```typescript
-// Watch mode: user sees output, FlightPath auto-advances when hook fires
-const child = spawn(command, args, {
-  stdio: ["pipe", "inherit", "inherit"],
-});
-
-await Promise.race([
-  new Promise<void>(resolve => child.on("close", resolve)),
-  notificationMonitor.monitorForCompletion(config, sessionId, startTime)
-    .then(() => {
-      // Hook fired — AI finished responding, close the session
-      child.stdin.write("/exit\n");  // Claude
-      // Copilot/Codex: child.stdin.end() sends EOF
-    }),
-]);
-```
-
-This is the right mode for multi-prompt workflows where the user wants to watch progress without babysitting each session. Same hook mechanism as the VS Code extension, just with a different process spawning strategy.
-
-**Limitations**: Same as full-interactive — no output capture, no `CliEvent[]`, no history per run.
 
 ### Headless Mode (default when not TTY)
 
@@ -1465,7 +1419,8 @@ program
   .option("--headless", "Force headless mode")
   .option("--interactive", "Force interactive mode")
   .option("--allow-all-tools", "Allow all tools without prompting")
-  .option("--skip-permissions", "Skip all permission prompts (Claude CLI)")
+  .option("--allow-tool <pattern>", "Allow specific tool pattern (repeatable)", collect, [])
+  .option("--deny-tool <pattern>", "Deny specific tool pattern (repeatable)", collect, [])
   .option("-q, --quiet", "Only show errors")
   .option("--verbose", "Show debug output")
   .option("--json", "Output results as JSON")
@@ -1516,19 +1471,19 @@ Add `"flightpath": "./out/cli.js"` to the `bin` section.
 
 ---
 
-### Phase 4: Interactive & Headless Modes
+### Phase 4: Validate End-to-End
 
-#### Step 4.1: Validate interactive mode end-to-end
+#### Step 4.1: Validate interactive mode
 
-- TTY auto-detection
+- TTY auto-detection (`process.stdout.isTTY && process.stdin.isTTY`)
 - Test with Copilot CLI and Claude CLI tool approval prompts
-- Verify Ctrl+C handling (SIGINT → graceful stop, exit code 5)
+- Verify Ctrl+C handling (SIGINT → `instance.stop()`, exit code 5)
 
 #### Step 4.2: Validate headless mode
 
-- Auto-add `--allow-all-tools` / `--dangerously-skip-permissions` flags in headless mode
+- Auto-apply `--allow-all-tools` (Copilot) / `--dangerously-skip-permissions` (Claude) in headless
 - CI/CD JSON output (`--json`)
-- Timeout handling
+- Timeout handling (exit code 4)
 
 ---
 
@@ -1538,6 +1493,7 @@ Add `"flightpath": "./out/cli.js"` to the `bin` section.
 2. **Error Messages** — user-friendly errors for missing files, missing CLIs, auth failures
 3. **Testing** — unit tests for `CliAdapter`, integration tests with mock harnesses
 4. **Documentation** — CLI README, config file reference, examples
+5. **Watch mode** — `--close-on-completion` flag (auto-advance prompts while user watches output)
 
 ---
 
@@ -1550,7 +1506,7 @@ Add `"flightpath": "./out/cli.js"` to the `bin` section.
 | `src/platform/CliAdapter.ts` | CREATE | 3.2 | Medium |
 | `src/cli.ts` | CREATE | 3.3 | Medium |
 | `src/flightpath/VsCodeIntegrationFactory.ts` | CREATE | 2.8 | Low |
-| `src/flightpath/cli/shared/CliTerminalFormatter.ts` | CREATE | 4.1 | Medium |
+| `src/flightpath/cli/shared/CliTerminalFormatter.ts` | CREATE | 3.3 | Medium |
 | `src/flightpath/HarnessIntegration.ts` | MODIFY | 2.1 | Medium |
 | `src/flightpath/PromptQueue.ts` | MODIFY | 2.2 | Low |
 | `src/flightpath/PromptFileParser.ts` | MODIFY | 2.4 | Low |
@@ -1668,4 +1624,4 @@ FlightPath CLI brings structured AI workflow automation to any terminal environm
 | Bug fixes          | Need in both     | Fix once             |
 | Testing            | Separate suites  | Shared tests         |
 
-The architecture is designed for maximum code reuse while allowing platform-specific optimizations where needed. All existing features (end conditions, session management, all three CLI harnesses, retries, dynamic queue) work automatically in the CLI since they live in the shared `WorkflowInstance` layer.
+The architecture is designed for maximum code reuse while allowing platform-specific optimizations where needed. All MVP features (end conditions, session management, all three CLI harnesses, retries) work automatically in the CLI since they live in the shared `WorkflowInstance` layer.

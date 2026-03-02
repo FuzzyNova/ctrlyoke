@@ -36,23 +36,23 @@ Add a corresponding VS Code setting (`flightpath.cliCustomArgs: string`, default
 
 These are injected regardless of `customArgs` because without them FlightPath cannot orchestrate the workflow:
 
-| Category | Component | Why it's non-negotiable |
-|---|---|---|
-| **Completion detection hooks** | Interactive: sessionEnd / stop / notify hook scripts | FlightPath polls for these; without them the workflow stalls indefinitely |
-| **Headless output format** | Claude: `-p --output-format stream-json --verbose`; Codex: `exec --json` | FlightPath's response parsers expect a specific format; wrong format = silent failure |
-| **MCP orchestration** | `--mcp-config` (or equivalent) + `--allow-tool flightpath` | Only injected when `allowDynamicExtension` is resolving to `true`; can be suppressed by setting `allowDynamicExtension: false` |
+| Category                       | Component                                                                | Why it's non-negotiable                                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Completion detection hooks** | Interactive: sessionEnd / stop / notify hook scripts                     | FlightPath polls for these; without them the workflow stalls indefinitely                                                      |
+| **Headless output format**     | Claude: `-p --output-format stream-json --verbose`; Codex: `exec --json` | FlightPath's response parsers expect a specific format; wrong format = silent failure                                          |
+| **MCP orchestration**          | `--mcp-config` (or equivalent) + `--allow-tool flightpath`               | Only injected when `allowDynamicExtension` is resolving to `true`; can be suppressed by setting `allowDynamicExtension: false` |
 
 **Copilot CLI** requires no special headless output flags (it already returns structured output), so for Copilot the only always-injected args in headless mode are MCP config (if applicable). In interactive mode the sessionEnd hook is injected.
 
 ### What Gets Skipped When customArgs Is Set
 
-| Category | Normally built by | Skipped |
-|---|---|---|
-| `--model` | `validateAndGetModel()` | ✅ |
-| `--add-dir` workspace dirs | `CliProviderUtils.getWorkspaceDirs()` | ✅ |
-| `--allow-all-paths` | `ConfigurationUtils.shouldAllowAllPaths()` | ✅ |
-| Tool permissions (`--allow-all-tools`, `--allowedTools`, disallowed-tools, etc.) | `IToolPermissionMapper.buildArgs()` | ✅ |
-| Session resumption (`-r`, `--resume`, `resume <id>`) | Session management block | ✅ (see note below) |
+| Category                                                                         | Normally built by                          | Skipped             |
+| -------------------------------------------------------------------------------- | ------------------------------------------ | ------------------- |
+| `--model`                                                                        | `validateAndGetModel()`                    | ✅                  |
+| `--add-dir` workspace dirs                                                       | `CliProviderUtils.getWorkspaceDirs()`      | ✅                  |
+| `--allow-all-paths`                                                              | `ConfigurationUtils.shouldAllowAllPaths()` | ✅                  |
+| Tool permissions (`--allow-all-tools`, `--allowedTools`, disallowed-tools, etc.) | `IToolPermissionMapper.buildArgs()`        | ✅                  |
+| Session resumption (`-r`, `--resume`, `resume <id>`)                             | Session management block                   | ✅ (see note below) |
 
 ### Session Management Nuance
 
@@ -72,7 +72,7 @@ When `customArgs` is set, these fields are **silently ignored** (no error, but s
 - `model`
 - `agent` (injected into prompt text, not CLI args, so this one is actually unaffected — see note)
 - `skills` (same — injected into prompt text, not CLI args, also unaffected)
-- `harness` — still respected; `customArgs` only affects *arg building*, not harness selection
+- `harness` — still respected; `customArgs` only affects _arg building_, not harness selection
 - `resumeSession` / `sessionId` — skipped (see above)
 
 > **Agent and skills note**: Because agents and skills are injected into the **prompt text** by `HarnessIntegration.buildPromptText()` (not as CLI args), they continue to work even when `customArgs` is set. The UI should still show these as active, not grayed out.
@@ -92,9 +92,11 @@ Fields that **continue to work normally** alongside `customArgs`:
 ### copilot-cli
 
 **Interactive mode** — always inject:
+
 ```
 --events-hook <path/to/flightpath-copilot-hook.js>
 ```
+
 (the sessionEnd hook, needed for completion detection)
 
 Skipped: `--model`, `--add-dir`, `--allow-all-paths`, `--allow-tool` (non-MCP), `--resume`
@@ -104,11 +106,13 @@ Skipped: `--model`, `--add-dir`, `--allow-all-paths`, `--allow-tool` (non-MCP), 
 Skipped: same as interactive plus all tool permission args.
 
 Final command shape (interactive):
+
 ```
 copilot -i "<prompt>" --events-hook <hookPath> [MCP args if applicable] <customArgs>
 ```
 
 Final command shape (headless):
+
 ```
 copilot --prompt "<prompt>" [MCP args if applicable] <customArgs>
 ```
@@ -118,9 +122,11 @@ copilot --prompt "<prompt>" [MCP args if applicable] <customArgs>
 ### claude-cli
 
 **Interactive mode** — always inject:
+
 ```
 --settings '<stop hook JSON>'
 ```
+
 (needed for completion detection via the stop hook script)
 
 Skipped: `--model`, `--add-dir`, `-r <sessionId>`
@@ -128,19 +134,23 @@ Skipped: `--model`, `--add-dir`, `-r <sessionId>`
 Skipped (tool permissions): `--allowedTools`, `--disallowedTools`
 
 **Headless mode** — always inject:
+
 ```
 -p --output-format stream-json --verbose
 ```
+
 (FlightPath's Claude response parser requires `stream-json` format; without `--verbose` it does not emit token counts or some metadata)
 
 Skipped: same as interactive.
 
 Final command shape (interactive):
+
 ```
 claude "<prompt>" --settings '<hookJson>' [MCP args if applicable] <customArgs>
 ```
 
 Final command shape (headless):
+
 ```
 claude "<prompt>" -p --output-format stream-json --verbose [MCP args if applicable] <customArgs>
 ```
@@ -150,9 +160,11 @@ claude "<prompt>" -p --output-format stream-json --verbose [MCP args if applicab
 ### codex-cli
 
 **Interactive mode** — always inject:
+
 ```
 --config '<notify hook TOML>'
 ```
+
 (needed for completion detection via the notify hook script)
 
 **Note**: If the user's `customArgs` also includes `--config`, there will be a conflict because Codex's `--config` is a single-value flag. This is a known limitation documented in the warnings section below.
@@ -160,17 +172,21 @@ claude "<prompt>" -p --output-format stream-json --verbose [MCP args if applicab
 Skipped: `--model`, `--add-dir`, tool permission args, resume subcommand.
 
 **Headless mode** — always inject:
+
 ```
 exec --json
 ```
+
 (FlightPath's Codex response parser requires JSONL event stream; `exec` subcommand enables headless pipe mode)
 
 Final command shape (interactive):
+
 ```
 codex "<prompt>" --config '<hookToml>' [MCP args if applicable] <customArgs>
 ```
 
 Final command shape (headless):
+
 ```
 codex exec --json [MCP args if applicable] <customArgs> "<prompt>"
 ```
@@ -180,31 +196,38 @@ codex exec --json [MCP args if applicable] <customArgs> "<prompt>"
 ## Implementation Plan
 
 ### 1. Schema (`schemas/prompt-schema.json`)
+
 - Add `customArgs: { type: "string" }` to `executionProperties` definition
 - Run `npm run generate-schema` to regenerate YAML schema
 
 ### 2. Types (`src/types/FlightPathTypes.ts`)
+
 - Add `customArgs?: string` to `PromptItem` interface (inherits via `executionProperties` in schema; verify the type mirrors the schema)
 
 ### 3. Extension Settings (`package.json`)
+
 - Add `flightpath.cliCustomArgs` setting (`type: string`, default `""`, description matching schema)
 - Add to `ConfigurationUtils` as `getCliCustomArgs(): string`
 
 ### 4. PropertyResolver (`src/flightpath/`)
+
 - Ensure `customArgs` is included in `ResolvedProperties` so it participates in three-tier resolution
 - Add `resolvedCustomArgs` to the resolved output alongside `resolvedModel`, `resolvedResumeSession`, etc.
 
 ### 5. Each Provider's `buildCliArgs` (`src/flightpath/cli/*/`)
+
 Pattern — at the top of each method, check for custom args:
 
 ```typescript
-const resolvedCustomArgs = workflowContext?.resolvedProperties?.customArgs
-  ?? ConfigurationUtils.getCliCustomArgs()
-  || undefined;
+const resolvedCustomArgs =
+  (workflowContext?.resolvedProperties?.customArgs ??
+    ConfigurationUtils.getCliCustomArgs()) ||
+  undefined;
 const useCustomArgs = !!resolvedCustomArgs;
 ```
 
 Then wrap each "skippable" block in `if (!useCustomArgs) { ... }` guards:
+
 - Model selection block
 - `--add-dir` workspace dirs block
 - `--allow-all-paths` block
@@ -212,30 +235,36 @@ Then wrap each "skippable" block in `if (!useCustomArgs) { ... }` guards:
 - Session resumption block
 
 At the end of the method, append custom args:
+
 ```typescript
 if (resolvedCustomArgs) {
   // Split on whitespace respecting quoted segments, then push each token
   const tokens = parseArgString(resolvedCustomArgs); // new shared util
   args.push(...tokens);
-  Log.info(`🔧 Custom CLI args applied (${tokens.length} tokens); standard args skipped`);
+  Log.info(
+    `🔧 Custom CLI args applied (${tokens.length} tokens); standard args skipped`
+  );
 }
 ```
 
 The `parseArgString` utility (new, in `src/utils/CliArgParser.ts`) should handle basic shell-style quoting (double-quoted strings preserved as single token, unquoted whitespace-split). Does **not** need to support bash substitution — inputs are static strings from YAML.
 
 ### 6. `buildHeadlessArgs` / `buildInteractiveTuiCommand`
+
 No changes needed. These methods only handle prompt positioning and the always-injected output format flags, which continue to be added.
 
 ### 7. Dashboard UI (`src/ui/webview-react/`)
+
 When the resolved `customArgs` is non-empty for a prompt:
 
 - Gray out / disable: model selector, tool permissions selector, allowed/denied tool lists, workspace path settings, session resume controls
-- Show a tooltip or inline note: *"Custom CLI args active — these settings are bypassed"*
+- Show a tooltip or inline note: _"Custom CLI args active — these settings are bypassed"_
 - Agent, skills, endCondition, and allowDynamicExtension controls remain active
 
 This is purely cosmetic — the logic enforcement is in the provider's `buildCliArgs`.
 
 ### 8. Warnings & Validation
+
 - If `customArgs` is set alongside `model`, `resumeSession`, or `sessionId`, emit a `Log.warn` (not an error) indicating the fields are bypassed.
 - If the harness is `copilot-chat`, emit a `Log.warn` that `customArgs` is ignored (chat harness has no CLI args).
 - **Codex conflict**: if `customArgs` contains `--config` and the harness is `codex-cli` in interactive mode, emit a `vscode.window.showWarningMessage` noting the conflict with FlightPath's completion hook. Do not block execution.
@@ -246,7 +275,7 @@ This is purely cosmetic — the logic enforcement is in the provider's `buildCli
 
 1. **Arg parsing fidelity**: Should `parseArgString` attempt full POSIX-style quoting (single-quoted strings, escaped chars)? Probably yes for basic single-quote support since MCP inline config strings often use `--mcp-config '{"key":"value"}'`. The implementation complexity is low.
 
-2. **Per-prompt vs workflow-level**: `customArgs` at workflow level means *all* prompts use it. Should there be a way to opt individual prompts back out (e.g., set `customArgs: ""` on a specific prompt to explicitly clear the workflow default)? This is the standard three-tier behaviour — an empty string at prompt level should override a workflow default. Need to confirm that PropertyResolver treats `""` as "explicitly set" vs "not provided" to avoid masking the workflow default. May need `customArgs: null` or a sentinel to clear.
+2. **Per-prompt vs workflow-level**: `customArgs` at workflow level means _all_ prompts use it. Should there be a way to opt individual prompts back out (e.g., set `customArgs: ""` on a specific prompt to explicitly clear the workflow default)? This is the standard three-tier behaviour — an empty string at prompt level should override a workflow default. Need to confirm that PropertyResolver treats `""` as "explicitly set" vs "not provided" to avoid masking the workflow default. May need `customArgs: null` or a sentinel to clear.
 
 3. **Splitting responsibility for always-injected flags**: Currently `buildHeadlessArgs` handles headless format flags for Claude and Codex. It would be cleaner to move that responsibility explicitly into a `buildAlwaysRequiredArgs()` method on each provider so it's clearly separated from the "skippable" args. Low priority but worth doing as part of this work.
 
