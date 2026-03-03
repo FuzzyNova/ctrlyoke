@@ -43,7 +43,7 @@ const QUEUE_DIR = ".queue";
 // Initialize log file
 const workspaceRoot = process.env.FLIGHTPATH_WORKSPACE || process.cwd();
 const logDir = path.join(workspaceRoot, FLIGHTPATH_DIR, LOGS_DIR);
-const logFile = path.join(logDir, `mcp-server-${Date.now()}.log`);
+const logFile = path.join(logDir, `flightpath-mcp-${Date.now()}.log`);
 
 // Ensure log directory exists
 try {

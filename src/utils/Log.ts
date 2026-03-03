@@ -23,6 +23,10 @@ export class Log {
   private static outputChannel: vscode.OutputChannel;
   private static logLevel: LogLevel = LogLevel.INFO;
   private static logFilePath: string | undefined;
+  /** True when running as the standalone CLI binary (not VS Code extension). */
+  private static cliMode = false;
+  /** Log file path used in CLI mode. */
+  private static cliLogFilePath: string | undefined;
 
   /**
    * Initialize logging. In dev builds, automatically uses TRACE level.
@@ -44,7 +48,7 @@ export class Log {
       if (workspaceRoot) {
         const logDir = path.join(workspaceRoot, ".flightpath", "logs");
         fs.mkdirSync(logDir, { recursive: true });
-        this.logFilePath = path.join(logDir, "debug.log");
+        this.logFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
         fs.writeFileSync(this.logFilePath, ""); // truncate on each session start
       }
     } else {
@@ -58,6 +62,31 @@ export class Log {
     }
 
     this.info("FlightPath logging initialized");
+  }
+
+  /**
+   * Initialize logging for the standalone CLI binary.
+   *
+   * Must be called early in `runCommand()` before any Log.* calls.
+   * Redirects all log output to `.flightpath/logs/flightpath-<timestamp>.log`
+   * and suppresses console output so the terminal stays clean for prompt output.
+   *
+   * @param workspaceDir - Working directory (parent of .flightpath/).
+   * @param verbose      - When true, enables DEBUG level; otherwise INFO.
+   */
+  static initializeCli(workspaceDir: string, verbose = false): void {
+    this.cliMode = true;
+    this.logLevel = verbose ? LogLevel.DEBUG : LogLevel.INFO;
+
+    const logDir = path.join(workspaceDir, ".flightpath", "logs");
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+      this.cliLogFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
+      fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
+    } catch {
+      // Proceed without file logging if directory creation fails
+      this.cliLogFilePath = undefined;
+    }
   }
 
   /**
@@ -179,16 +208,30 @@ export class Log {
       args.length > 0 ? `${message} ${JSON.stringify(args)}` : message;
     const logEntry = `[${timestamp}] ${level}: ${formattedMessage}`;
 
-    // Write to output channel
+    if (this.cliMode) {
+      // CLI binary: write only to the log file — never pollute stdout/stderr.
+      if (this.cliLogFilePath) {
+        try {
+          fs.appendFileSync(this.cliLogFilePath, logEntry + "\n");
+        } catch {
+          // Ignore file write errors silently in CLI mode
+        }
+      }
+      return;
+    }
+
+    // VS Code extension mode: write to output channel and console.
     if (this.outputChannel) {
       this.outputChannel.appendLine(logEntry);
     }
 
-    // Also log to console for development
-    console.log(`FlightPath ${logEntry}`);
+    if (IS_DEV_MODE) {
+      // Also log to console for development
+      console.log(`FlightPath ${logEntry}`);
 
-    if (IS_DEV_MODE && this.logFilePath) {
-      fs.appendFileSync(this.logFilePath, logEntry + "\n");
+      if (this.logFilePath) {
+        fs.appendFileSync(this.logFilePath, logEntry + "\n");
+      }
     }
   }
 }

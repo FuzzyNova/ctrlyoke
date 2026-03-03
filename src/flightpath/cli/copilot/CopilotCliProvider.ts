@@ -14,7 +14,9 @@ import { CliMcpConfigGenerator } from "../shared/CliMcpConfigGenerator";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import {
   getCliSupportedModelIds,
+  initializeModelRegistry,
   isCliModelSupported,
+  isRegistryInitialized,
 } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { retryWithBackoff } from "../../../utils/RetryUtils";
@@ -168,7 +170,7 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     // Model selection with validation - use resolved property if available
-    const model = this.validateAndGetModel(resolvedModel);
+    const model = await this.validateAndGetModel(resolvedModel);
     if (model) {
       args.push("--model", model);
     }
@@ -197,13 +199,22 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Validate model is supported by Copilot CLI, fallback to default if not
+   * Validate model is supported by Copilot CLI, fallback to default if not.
+   * Lazily initializes the model registry if needed (e.g. CLI mode where
+   * initializeModelRegistry() is never called during extension activation).
    */
-  private validateAndGetModel(requestedModel?: string): string {
+  private async validateAndGetModel(requestedModel?: string): Promise<string> {
     const defaultModel = ConfigurationUtils.getCliModel();
 
     if (!requestedModel) {
       return defaultModel;
+    }
+
+    // Lazily initialize the registry if not yet done (CLI mode).
+    // queryCopilotCliModels() runs `copilot help config` — no VS Code context needed.
+    // queryChatModels() falls back to the static list via the vscode shim.
+    if (!isRegistryInitialized()) {
+      await initializeModelRegistry();
     }
 
     // Check if model is supported by CLI (using dynamically discovered models)

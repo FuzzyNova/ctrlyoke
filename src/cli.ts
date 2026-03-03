@@ -11,6 +11,7 @@ import { EXECUTION_STATES, STEP_STATUS } from "./types/DashboardConstants";
 import { Harness } from "./types/FlightPathTypes";
 import type { QueueState } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./flightpath/cli/shared/CliTerminalFormatter";
+import { Log } from "./utils/Log";
 
 // VERSION is injected by esbuild define
 declare const VERSION: string;
@@ -151,7 +152,12 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   }
 
   const resolvedFile = path.resolve(file);
-  const workingDir = options.cwd ?? path.dirname(resolvedFile);
+  const workingDir = options.cwd ?? process.cwd();
+
+  // Redirect all Log.* output to .flightpath/logs/flightpath-<timestamp>.log.
+  // Must be called before any component code that calls Log.debug/info/etc.,
+  // so that diagnostic messages never pollute the terminal output.
+  Log.initializeCli(workingDir, options.verbose);
 
   // Detect execution mode: explicit flags override TTY auto-detection
   const executionMode = getExecutionMode(options);

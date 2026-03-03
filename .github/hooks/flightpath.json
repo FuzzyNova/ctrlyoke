@@ -4,16 +4,16 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "node \"c:/dev/FlightPath/out/scripts/flightpath-copilot-hook.js\" \"c:/dev/FlightPath/.flightpath/temp/copilot-notifications\" \"sessionStart\"",
-        "powershell": "node \"c:\\\\dev\\\\FlightPath\\\\out\\\\scripts\\\\flightpath-copilot-hook.js\" \"c:\\\\dev\\\\FlightPath\\\\.flightpath\\\\temp\\\\copilot-notifications\" \"sessionStart\"",
+        "bash": "node \"C:/dev/FlightPath/out/scripts/flightpath-copilot-hook.js\" \"C:/dev/FlightPath/.flightpath/temp/copilot-notifications\" \"sessionStart\"",
+        "powershell": "node \"C:\\\\dev\\\\FlightPath\\\\out\\\\scripts\\\\flightpath-copilot-hook.js\" \"C:\\\\dev\\\\FlightPath\\\\.flightpath\\\\temp\\\\copilot-notifications\" \"sessionStart\"",
         "timeoutSec": 10
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "node \"c:/dev/FlightPath/out/scripts/flightpath-copilot-hook.js\" \"c:/dev/FlightPath/.flightpath/temp/copilot-notifications\" \"sessionEnd\"",
-        "powershell": "node \"c:\\\\dev\\\\FlightPath\\\\out\\\\scripts\\\\flightpath-copilot-hook.js\" \"c:\\\\dev\\\\FlightPath\\\\.flightpath\\\\temp\\\\copilot-notifications\" \"sessionEnd\"",
+        "bash": "node \"C:/dev/FlightPath/out/scripts/flightpath-copilot-hook.js\" \"C:/dev/FlightPath/.flightpath/temp/copilot-notifications\" \"sessionEnd\"",
+        "powershell": "node \"C:\\\\dev\\\\FlightPath\\\\out\\\\scripts\\\\flightpath-copilot-hook.js\" \"C:\\\\dev\\\\FlightPath\\\\.flightpath\\\\temp\\\\copilot-notifications\" \"sessionEnd\"",
         "timeoutSec": 10
       }
     ]
