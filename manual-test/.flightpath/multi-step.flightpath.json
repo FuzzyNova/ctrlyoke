@@ -13,6 +13,11 @@
       "prompt": "What is the capital of Germany? Reply with just the city name.",
       "model": "gpt-5-mini",
       "resumeSession": true
+    },
+    {
+      "prompt": "What questions have I asked you so far? Reply with a list of the questions.",
+      "model": "gpt-5-mini",
+      "resumeSession": true
     }
   ]
 }

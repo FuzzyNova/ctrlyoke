@@ -351,10 +351,13 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 **Completion Detection**:
 
 - **Headless**: Process exit (deterministic)
-- **Interactive**: sessionEnd hook (writes JSON to `.flightpath/temp/copilot-notifications/`)
+- **Interactive**: sessionStart + sessionEnd hooks (write JSON to `.flightpath/temp/copilot-notifications/`)
 - **Hook format**: `.github/hooks/flightpath.json` with bash/powershell fields
-- **Monitoring**: Wildcard mode (any new file in directory triggers completion)
-- **Session ID**: Extracted from log files (hook doesn't provide session ID)
+- **File naming**: `{sessionId}.json` — SAME file for both events; `status` field distinguishes them
+  - sessionStart writes: `{ status: "started", sessionId: "...", hookType: "sessionStart" }`
+  - sessionEnd overwrites: `{ status: "completed", sessionId: "...", hookType: "sessionEnd" }`
+- **Monitoring**: Status-aware mode — polls `{sessionId}.json` for `status: "completed"`, skips `status: "started"`
+- **Session ID**: Extracted from sessionStart hook notification (no log file search needed)
 
 **Output Format**: Plain text with statistics on stderr
 **Tool Permissions**: `--allow-all-tools`, `--allow-tools`, `--deny-tools` with Copilot-specific patterns
@@ -362,7 +365,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 **MCP Config**: `--additional-mcp-config @file` with JSON format
 **Models**: Dynamic via `copilot help config` (claude-sonnet-4.5, gpt-5, etc.)
 
-**Log Requirements**: `--log-level debug` required for session ID extraction
+**Log Requirements**: `--log-level debug` required for session ID extraction (fallback only)
 
 **See**: CopilotCliProvider.ts, CopilotNotificationMonitor.ts
 

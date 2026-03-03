@@ -82,7 +82,7 @@ export class CliLogMonitor {
    * - Log file for streaming content
    * - Notification file for completion signal
    *
-   * For harnesses without notification monitors (Copilot), relies on
+   * For harnesses without notification monitors, relies on
    * log file completion detection only.
    *
    * @param logPath Absolute path to log file

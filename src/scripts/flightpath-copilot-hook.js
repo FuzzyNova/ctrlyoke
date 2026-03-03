@@ -5,33 +5,37 @@
  *
  * This script is executed by Copilot CLI when hook events occur.
  * It receives hook input JSON via stdin and writes a notification file
- * that FlightPath monitors for completion detection.
+ * that FlightPath monitors for session discovery and completion detection.
  *
- * Registered hooks:
- * - sessionStart: Log session start data (may contain session ID)
- * - userPromptSubmitted: Log prompt submission data (may contain session ID)
- * - sessionEnd: Write completion notification for FlightPath monitoring
+ * Notification file format mirrors flightpath-claude-hook.js for consistency:
+ * - SessionStart: {sessionId}-start.json  → { hookEvent: "SessionStart", sessionId, status: "started" }
+ * - SessionEnd:   {sessionId}-stop.json   → { hookEvent: "Stop", sessionId, status: "completed" }
+ *
+ * Using the same format as Claude's hook allows NotificationMonitorBase to share
+ * all monitoring logic (waitForSessionStart, monitorForCompletion, cleanupNotificationFiles).
  *
  * Usage (configured by FlightPath via .github/hooks/*.json):
  * {
  *   "version": 1,
  *   "hooks": {
  *     "sessionStart": [{"type": "command", "bash": "node <script> <dir> sessionStart"}],
- *     "userPromptSubmitted": [{"type": "command", "bash": "node <script> <dir> userPromptSubmitted"}],
  *     "sessionEnd": [{"type": "command", "bash": "node <script> <dir> sessionEnd"}]
  *   }
  * }
  *
- * Actual hook input format (discovered via debugging):
+ * Copilot hook input format (via stdin):
  * {
- *   "timestamp": 1768451996969,
+ *   "sessionId": "970deee9-5760-4843-a2a3-8067d1dc79ea",
+ *   "timestamp": 1772552070055,
  *   "cwd": "C:\\dev\\FlightPath",
- *   "reason": "complete"
+ *   "source": "new",          // sessionStart only
+ *   "initialPrompt": "...",   // sessionStart only
+ *   "reason": "complete"      // sessionEnd only
  * }
  *
  * Arguments:
  * - argv[2]: Notification directory
- * - argv[3]: Hook type (sessionStart | userPromptSubmitted | sessionEnd)
+ * - argv[3]: Hook type (sessionStart | sessionEnd)
  *
  * Debug logging: All hook data logged to <workspace>/.flightpath/logs/flightpath-copilot-hook-debug.log
  */
@@ -122,13 +126,8 @@ function main() {
         parsedData: hookInput,
       });
 
-      // Try to extract session ID from various possible fields
-      const sessionId =
-        hookInput.sessionId ||
-        hookInput.session_id ||
-        hookInput.id ||
-        hookInput.requestId ||
-        hookInput.request_id;
+      // Extract session ID from Copilot's hook data
+      const sessionId = hookInput.sessionId || hookInput.session_id;
 
       if (sessionId) {
         debugLog("🔑 Session ID found!", { hookType, sessionId });
@@ -147,21 +146,26 @@ function main() {
           debugLog("📁 Created notification directory", { notifyDir });
         }
 
-        // Write notification file
-        // Use session ID if available, otherwise use timestamp for wildcard monitoring
+        // Use same file naming convention as flightpath-claude-hook.js:
+        //   sessionStart → {sessionId}-start.json
+        //   sessionEnd   → {sessionId}-stop.json
+        // Separate files prevent any overwrite race conditions and allow
+        // NotificationMonitorBase to share all monitoring logic between providers.
         const safeSessionId = sessionId ? path.basename(sessionId) : null;
         const filename = safeSessionId
-          ? `${safeSessionId}.json`
+          ? hookType === "sessionStart"
+            ? `${safeSessionId}-start.json`
+            : `${safeSessionId}-stop.json`
           : `${hookType}-${Date.now()}.json`;
         const notifyFile = path.join(notifyDir, filename);
 
-        // Create notification data
+        // Create notification data using the same schema as flightpath-claude-hook.js
         const notifyData = {
           timestamp: Date.now(),
           sessionId: sessionId || null,
           status: hookType === "sessionStart" ? "started" : "completed",
-          hookType: hookType,
-          reason: hookInput.reason,
+          // hookEvent matches Claude's format: "SessionStart" | "Stop"
+          hookEvent: hookType === "sessionStart" ? "SessionStart" : "Stop",
           cwd: hookInput.cwd,
           rawHookData: hookInput,
         };

@@ -1,3 +1,7 @@
+import * as fs from "fs";
+import * as path from "path";
+import { Log } from "../../../../utils/Log";
+
 /**
  * Notification monitoring configuration
  */
@@ -50,8 +54,8 @@ export interface INotificationMonitor {
   /**
    * Whether this harness includes session IDs in notification filenames.
    *
-   * - `true`: Notification files include session ID (e.g., Claude: `stop-{threadId}.json`)
-   * - `false`: Notification files use timestamps (e.g., Copilot: `sessionEnd-{timestamp}.json`)
+   * - `true`: Notification files include session ID (e.g., Claude: `{threadId}-stop.json`)
+   * - `false`: Notification files use timestamps (wildcard monitoring required)
    *
    * This determines the monitoring mode:
    * - When true: Use specific session monitoring (faster, more reliable)
@@ -123,7 +127,7 @@ export interface INotificationMonitor {
    *
    * Called after completion is detected to clean up any remaining notification files.
    * Harnesses can override this to handle harness-specific cleanup
-   * (e.g., Claude needs to cleanup both -start.json and -stop.json files)
+   * (e.g., deleting the -start.json file that was left from session start)
    *
    * @param sessionId Session ID
    * @param directory Notification directory
@@ -135,20 +139,32 @@ export interface INotificationMonitor {
 }
 
 /**
- * Shared utilities for notification monitors (optional base class)
+ * Standard notification monitor base class
  *
- * Provides common utilities for file-based notification monitoring.
- * Providers can extend this class to avoid duplicating polling logic.
+ * Implements all monitoring logic for harnesses that use the standardized
+ * two-file notification format:
+ *
+ *   {sessionId}-start.json → { hookEvent: "SessionStart", sessionId, status: "started" }
+ *   {sessionId}-stop.json  → { hookEvent: "Stop", sessionId, status: "completed" }
+ *
+ * Currently used by: Copilot CLI, Claude CLI
+ *
+ * Harnesses with a different format (e.g., Codex: notify-{id}.json) extend this
+ * class and override monitorForCompletion() only. The file utilities and other
+ * concrete methods remain available.
+ *
+ * Abstract requirements (must implement in subclass):
+ * - buildHookConfig()      — CLI-specific hook registration format
+ * - getNotificationDirectory() — CLI-specific notification path
  */
 export abstract class NotificationMonitorBase implements INotificationMonitor {
-  abstract readonly supportsSessionIdInFilename: boolean;
+  /**
+   * Standard harnesses include session IDs in notification filenames.
+   * Override to false for harnesses that use timestamp-based filenames.
+   */
+  readonly supportsSessionIdInFilename: boolean = true;
 
-  abstract monitorForCompletion(
-    config: NotificationConfig,
-    sessionId: string | undefined,
-    startTime: Date,
-    onCancel?: () => boolean
-  ): Promise<NotificationResult>;
+  // ── Abstract (CLI-specific) ──────────────────────────────────────────────
 
   abstract buildHookConfig(
     scriptPath: string,
@@ -158,65 +174,197 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
 
   abstract getNotificationDirectory(workspaceRoot: string): string;
 
+  // ── Concrete (shared two-file format) ────────────────────────────────────
+
+  /**
+   * Extract session ID from standard notification data.
+   */
+  extractSessionId(data: any): string | undefined {
+    return data?.sessionId;
+  }
+
+  /**
+   * Monitor for completion via {sessionId}-stop.json with hookEvent: "Stop".
+   *
+   * When sessionId is provided: polls {sessionId}-stop.json directly.
+   * When sessionId is undefined (wildcard): scans for any *-stop.json newer than startTime.
+   *
+   * Deletes the stop file when completion is confirmed.
+   */
+  async monitorForCompletion(
+    config: NotificationConfig,
+    sessionId: string | undefined,
+    startTime: Date,
+    onCancel?: () => boolean
+  ): Promise<NotificationResult> {
+    const pollMs = config.pollMs || 500;
+
+    Log.debug(
+      `[NotificationMonitorBase] Monitoring for Stop hook (session: ${sessionId || "wildcard"})`
+    );
+
+    while (Date.now() - startTime.getTime() < config.timeoutMs) {
+      if (onCancel?.()) {
+        Log.debug("⏹️ Stop hook monitoring stopped (cancelled or already completed)");
+        return { completed: false, error: "Execution cancelled" };
+      }
+
+      try {
+        if (sessionId) {
+          const stopFile = path.join(config.directory, `${sessionId}-stop.json`);
+          const data = await this.readNotificationFile(stopFile);
+
+          if (data?.hookEvent === "Stop" && data?.status === "completed") {
+            Log.info(`✅ Completion detected via Stop hook (session: ${sessionId})`);
+            try {
+              fs.unlinkSync(stopFile);
+              Log.debug("🗑️ Cleaned up Stop notification file");
+            } catch (error) {
+              Log.debug(`Failed to cleanup Stop file: ${error}`);
+            }
+            return { completed: true, data };
+          }
+        } else {
+          const files = await this.findNotificationFiles(
+            config.directory,
+            /-stop\.json$/
+          );
+
+          for (const file of files) {
+            if (await this.isFileNewerThan(file, startTime)) {
+              const data = await this.readNotificationFile(file);
+
+              if (data?.hookEvent === "Stop" && data?.status === "completed") {
+                Log.info(`✅ Completion detected via Stop hook (file: ${file})`);
+                try {
+                  fs.unlinkSync(file);
+                  Log.debug("🗑️ Cleaned up Stop notification file");
+                } catch (error) {
+                  Log.debug(`Failed to cleanup Stop file: ${error}`);
+                }
+                return { completed: true, data };
+              }
+            }
+          }
+        }
+      } catch (error) {
+        Log.debug(`Stop notification check error: ${error}`);
+      }
+
+      await this.delay(pollMs);
+    }
+
+    Log.warn(`⏱️ Stop hook monitoring timed out`);
+    return {
+      completed: false,
+      error: "Timeout waiting for Stop hook notification",
+    };
+  }
+
+  /**
+   * Wait for session start via {sessionId}-start.json with hookEvent: "SessionStart".
+   *
+   * Scans for any *-start.json file newer than startTime.
+   * Does NOT delete the file — cleanupNotificationFiles() handles it after completion.
+   *
+   * Returns the full notification data; callers use data.sessionId.
+   */
+  async waitForSessionStart(
+    config: NotificationConfig,
+    startTime: Date,
+    onCancel?: () => boolean
+  ): Promise<NotificationResult> {
+    const pollMs = config.pollMs || 100;
+
+    Log.debug(
+      `[NotificationMonitorBase] Waiting for SessionStart notification (timeout: ${config.timeoutMs}ms)`
+    );
+
+    while (Date.now() - startTime.getTime() < config.timeoutMs) {
+      if (onCancel?.()) {
+        Log.debug("[NotificationMonitorBase] SessionStart wait cancelled");
+        return { completed: false, error: "User cancelled execution" };
+      }
+
+      const files = await this.findNotificationFiles(
+        config.directory,
+        /-start\.json$/
+      );
+
+      for (const file of files) {
+        if (await this.isFileNewerThan(file, startTime)) {
+          const data = await this.readNotificationFile(file);
+
+          if (data?.hookEvent === "SessionStart" && data?.sessionId) {
+            Log.debug(
+              `[NotificationMonitorBase] Found SessionStart notification: ${data.sessionId}`
+            );
+            // NOTE: Do NOT delete — cleanupNotificationFiles() removes it after completion
+            return { completed: true, data };
+          }
+        }
+      }
+
+      await this.delay(pollMs);
+    }
+
+    Log.warn("[NotificationMonitorBase] SessionStart wait timeout");
+    return {
+      completed: false,
+      error: "Timeout waiting for SessionStart notification",
+    };
+  }
+
+  /**
+   * Cleanup the {sessionId}-start.json file after session completion.
+   * The stop file is already deleted by monitorForCompletion().
+   */
+  async cleanupNotificationFiles(
+    sessionId: string,
+    directory: string
+  ): Promise<void> {
+    const startFile = path.join(directory, `${sessionId}-start.json`);
+    try {
+      fs.unlinkSync(startFile);
+      Log.debug("🗑️ Cleaned up SessionStart notification file");
+    } catch (error) {
+      // Ignore — file might not exist or already deleted
+      Log.debug(`SessionStart file cleanup skipped: ${error}`);
+    }
+  }
+
+  // ── Protected helpers ────────────────────────────────────────────────────
+
   /**
    * Simple delay utility
-   * @param ms Milliseconds to wait
    */
   protected delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
-   * Read and parse JSON notification file
-   * @param filePath Path to notification file
-   * @returns Parsed JSON data or null if not found/invalid
+   * Read and parse a JSON notification file WITHOUT deleting it.
+   * Returns null if the file doesn't exist or contains invalid JSON.
    */
   protected async readNotificationFile(filePath: string): Promise<any | null> {
     try {
-      const fs = await import("fs");
       const content = fs.readFileSync(filePath, "utf-8");
       return JSON.parse(content);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
   /**
-   * Check for specific notification file
-   * @param directory Notification directory
-   * @param fileName File name to check
-   * @returns Notification result
-   */
-  protected async checkSpecificFile(
-    directory: string,
-    fileName: string
-  ): Promise<NotificationResult> {
-    const path = require("path");
-    const filePath = path.join(directory, fileName);
-
-    const data = await this.readNotificationFile(filePath);
-    if (data) {
-      return { completed: true, data };
-    }
-
-    return { completed: false };
-  }
-
-  /**
-   * Find notification files matching a pattern
-   * @param directory Directory to search
-   * @param pattern File name pattern (regex)
-   * @returns Array of matching file paths
+   * Find notification files matching a pattern in a directory.
+   * Returns empty array if the directory doesn't exist or is unreadable.
    */
   protected async findNotificationFiles(
     directory: string,
     pattern: RegExp
   ): Promise<string[]> {
     try {
-      const fs = await import("fs");
       const files = fs.readdirSync(directory);
-      const path = require("path");
-
       return files
         .filter((file) => pattern.test(file))
         .map((file) => path.join(directory, file));
@@ -226,17 +374,13 @@ export abstract class NotificationMonitorBase implements INotificationMonitor {
   }
 
   /**
-   * Check if notification file is newer than start time
-   * @param filePath File path
-   * @param startTime Execution start time
-   * @returns True if file is newer
+   * Check if a notification file was modified after the given start time.
    */
   protected async isFileNewerThan(
     filePath: string,
     startTime: Date
   ): Promise<boolean> {
     try {
-      const fs = await import("fs");
       const stats = fs.statSync(filePath);
       return stats.mtime > startTime;
     } catch {

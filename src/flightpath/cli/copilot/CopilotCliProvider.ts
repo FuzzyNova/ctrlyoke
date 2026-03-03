@@ -439,6 +439,10 @@ export class CopilotCliProvider implements ICliProvider {
   /**
    * Extract session ID from session log files by matching prompt text.
    *
+   * Fallback method used when the session ID is not available from hook notifications.
+   * With the current Copilot hook format, session IDs are provided via sessionStart
+   * notifications, making this a true fallback (e.g., hooks not configured or timed out).
+   *
    * Uses prompt-text matching (via discoverSessionLog) to find the correct
    * session log among potentially many concurrent sessions, then extracts
    * the session ID from the session.start event.

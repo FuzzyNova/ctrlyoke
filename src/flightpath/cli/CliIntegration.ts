@@ -577,9 +577,9 @@ export class CliIntegration extends HarnessIntegration {
    * 2. Spawn CLI in terminal (TUI displays for user, but we ignore it)
    * 3. Wait for session start and discover log file:
    *    - **Session resumption:** If resolvedSessionId provided, use it directly to find log file
-   *    - **Claude (SessionStart hook):** Wait up to 60 seconds for SessionStart hook,
+   *    - **Claude + Copilot (SessionStart hook):** Wait up to 60 seconds for SessionStart hook,
    *      then use session ID to find log file directly
-   *    - **Copilot/Codex (no hook):** Discover log file by matching prompt text
+   *    - **Codex (no start hook):** Discover log file by matching prompt text
    * 4. Monitor log file for completion
    *
    * **Important:** 60-second timeout gives Claude CLI plenty of time to:
@@ -1568,9 +1568,11 @@ export class CliIntegration extends HarnessIntegration {
         success = result.success;
         extractedSessionId = result.sessionId;
 
-        // Fallback: Extract session ID from logs if not available from notification
-        // Note: For Copilot CLI, this is currently the ONLY working method since hooks
-        // don't provide session IDs yet. For Claude/Codex, this is a true fallback.
+        // Fallback: Extract session ID from logs if not available from notification.
+        // Copilot and Claude provide session IDs via hooks (SessionStart + Stop hooks).
+        // Codex provides a thread ID at completion (notify hook) but has no start hook yet —
+        // it discovers the session log via prompt-text matching instead. This fallback
+        // also covers edge cases where hook delivery fails for any harness.
         // Skip if we already have resolvedSessionId - log discovery is unnecessary
         // (the session didn't change) and would search deep into a resumed session log.
         if (
