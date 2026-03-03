@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   truncate,
   extractKeyParameters,
@@ -14,7 +14,7 @@ import {
 import { openFile } from "@hooks/useMessageHandler";
 import {
   getLanguageFromPath,
-  highlightCode,
+  highlightLines,
   injectHljsStyles,
 } from "@utils/hljsUtils";
 
@@ -122,6 +122,15 @@ const DiffView: React.FC<DiffViewProps> = ({
   language,
   className = "",
 }) => {
+  // Highlight all lines as a single block so that multi-line constructs
+  // (block comments, template literals, etc.) are recognised across line
+  // boundaries. splitHighlightedHtml then gives us one fragment per line.
+  const highlightedLines = useMemo(() => {
+    if (lines.length === 0) return [];
+    const combined = lines.map((l) => l.content).join("\n");
+    return highlightLines(combined, language);
+  }, [lines, language]);
+
   if (lines.length === 0) return null;
 
   return (
@@ -130,7 +139,7 @@ const DiffView: React.FC<DiffViewProps> = ({
     >
       {lines.map((line, index) => {
         const styles = DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
-        const highlighted = highlightCode(line.content, language);
+        const highlighted = highlightedLines[index] ?? "";
 
         return (
           <div

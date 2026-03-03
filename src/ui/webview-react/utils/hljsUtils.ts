@@ -252,3 +252,73 @@ export function highlightCode(code: string, language?: string): string {
       .replace(/>/g, "&gt;");
   }
 }
+
+/**
+ * Split highlight.js HTML output into per-line fragments.
+ *
+ * Open `<span>` tags are closed at every `\n` boundary and reopened at the
+ * start of the next line so that each fragment is self-contained and safe to
+ * assign via `dangerouslySetInnerHTML` without dangling tags.
+ */
+function splitHighlightedHtml(html: string): string[] {
+  const lines: string[] = [];
+  const openTags: string[] = []; // stack of full opening tags, e.g. '<span class="hljs-comment">'
+  let current = "";
+  let i = 0;
+
+  while (i < html.length) {
+    if (html[i] === "\n") {
+      // Close all open spans for this line, then push it
+      current += "</span>".repeat(openTags.length);
+      lines.push(current);
+      // Reopen the same spans for the next line
+      current = openTags.join("");
+      i++;
+    } else if (html[i] === "<") {
+      const tagEnd = html.indexOf(">", i);
+      if (tagEnd === -1) {
+        // Malformed – emit the rest verbatim
+        current += html.slice(i);
+        break;
+      }
+      const tag = html.slice(i, tagEnd + 1);
+      if (tag.startsWith("<span")) {
+        openTags.push(tag);
+      } else if (tag.startsWith("</span")) {
+        openTags.pop();
+      }
+      current += tag;
+      i = tagEnd + 1;
+    } else {
+      current += html[i];
+      i++;
+    }
+  }
+
+  // Flush the last line
+  if (current || lines.length === 0) {
+    current += "</span>".repeat(openTags.length);
+    lines.push(current);
+  }
+
+  return lines;
+}
+
+/**
+ * Highlight a multi-line code block and return an array of per-line HTML
+ * fragments — one entry per `\n`-delimited line in `code`.
+ *
+ * Unlike calling `highlightCode` once per line, this highlights the **entire
+ * block** so that multi-line constructs (block comments, template literals,
+ * heredocs, etc.) are recognised correctly across line boundaries.  The
+ * resulting HTML is then split into self-contained fragments with no unclosed
+ * tags, safe to assign via `dangerouslySetInnerHTML`.
+ *
+ * @param code     Multi-line source text
+ * @param language hljs language identifier (e.g. "typescript")
+ * @returns        One HTML fragment per line in the input
+ */
+export function highlightLines(code: string, language?: string): string[] {
+  const html = highlightCode(code, language);
+  return splitHighlightedHtml(html);
+}
