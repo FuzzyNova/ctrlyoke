@@ -65,7 +65,7 @@ export class ClaudeToolPermissionMapper
       if (convertedAllowTools.length > 0) {
         const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
         args.push("--allowedTools", ...quotedTools);
-        Log.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
 
@@ -82,7 +82,7 @@ export class ClaudeToolPermissionMapper
     if (convertedDenyTools.length > 0) {
       const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
       args.push("--disallowedTools", ...quotedTools);
-      Log.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+      Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
     }
 
     return args;

@@ -264,7 +264,7 @@ export class WorkingFileManager {
         const promptsWithRuntime = workingFile.prompts.filter(
           (p) => p._runtime
         ).length;
-        Log.info(
+        Log.debug(
           `updateWorkingFile - Writing ${workingFile.prompts.length} prompts to ${workingFilePath}, ` +
             `_runtime: ${promptsWithRuntime}/${workingFile.prompts.length} prompts`
         );
@@ -290,7 +290,7 @@ export class WorkingFileManager {
           skipLock: true,
         });
       });
-      Log.info(`updateWorkingFile - Successfully wrote working file`);
+      Log.debug(`updateWorkingFile - Successfully wrote working file`);
     } catch (error) {
       Log.error(
         `FlightPath: Failed to update working file: ${error instanceof Error ? error.message : String(error)}`

@@ -133,7 +133,7 @@ export class FlightPathWebviewProvider implements vscode.WebviewViewProvider {
       this.router.route(message);
     });
 
-    Log.info("resolveWebviewView() complete — view is now set");
+    Log.debug("resolveWebviewView() complete — view is now set");
 
     // Best-effort early INIT: VS Code buffers postMessage until the
     // webview iframe loads, but React's message listener may not be
@@ -491,7 +491,7 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a new workflow was loaded into the registry. */
   public notifyWorkflowAdded(summary: WorkflowSummary): void {
-    Log.info(
+    Log.debug(
       `[notifyWorkflowAdded] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
         `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"} ` +
         `wfp=${summary.workingFilePath ? path.basename(summary.workingFilePath) : "?"}`
@@ -501,13 +501,13 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a workflow was dismissed from the registry. */
   public notifyWorkflowDismissed(workflowId: string): void {
-    Log.info(`[notifyWorkflowDismissed] inst:${workflowId.slice(0, 8)}`);
+    Log.debug(`[notifyWorkflowDismissed] inst:${workflowId.slice(0, 8)}`);
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_DISMISSED, workflowId });
   }
 
   /** Notify webview that the active (displayed) workflow changed. */
   public notifyActiveWorkflowChanged(workflowId: string): void {
-    Log.info(`[notifyActiveWorkflowChanged] inst:${workflowId.slice(0, 8)}`);
+    Log.debug(`[notifyActiveWorkflowChanged] inst:${workflowId.slice(0, 8)}`);
     this.postMessage({
       type: MESSAGE_TYPES.ACTIVE_WORKFLOW_CHANGED,
       workflowId,
@@ -516,7 +516,7 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
   public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    Log.info(
+    Log.debug(
       `[notifyWorkflowSummaryUpdated] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
         `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"}`
     );
@@ -579,7 +579,7 @@ window.vscodeApi = acquireVsCodeApi();
         this.outputHistoryManager.getRunTimestamps(workflowId),
         this.outputHistoryManager.getRunStates(workflowId),
       ]);
-      Log.info(
+      Log.debug(
         `[FlightPathWebviewProvider] loadOutputHistoryForWorkflow: sending ${runs.length} runs, timestamps: ${JSON.stringify(runTimestamps)}`
       );
 

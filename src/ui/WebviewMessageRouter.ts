@@ -70,7 +70,7 @@ export class WebviewMessageRouter {
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
     table.set(MESSAGE_TYPES.READY, async () => {
-      Log.info("Received READY from React — sending INIT");
+      Log.debug("Received READY from React — sending INIT");
       this.settingsSync.sendInitialState();
       const manager = this.getManager();
       if (manager) {
@@ -290,7 +290,7 @@ export class WebviewMessageRouter {
     table.set(MESSAGE_TYPES.GET_WORKFLOWS_LIST, () => {
       const manager = this.getManager();
       const summaries = manager?.getWorkflowSummaries() ?? [];
-      Log.info(
+      Log.trace(
         `[GET_WORKFLOWS_LIST] returning ${summaries.length} summaries: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState})`).join(", ") || "(none)"}`
       );
       this.postMessage({
@@ -606,7 +606,7 @@ export class WebviewMessageRouter {
         Log.error(prefixed);
         break;
       default:
-        Log.info(prefixed);
+        Log.debug(prefixed);
         break;
     }
   }

@@ -139,7 +139,7 @@ export class WorkflowOrchestrator {
       context.subscriptions.push(
         integration.onDidChangeStatus((status) => {
           if (integration === defaultIntegration) {
-            Log.info(`🔄 Copilot status changed to: ${status}`);
+            Log.debug(`🔄 Copilot status changed to: ${status}`);
             this.updateStatusBar();
           }
           if (
@@ -156,7 +156,7 @@ export class WorkflowOrchestrator {
     }
 
     this.updateStatusBar();
-    Log.info("WorkflowOrchestrator initialized");
+    Log.debug("WorkflowOrchestrator initialized");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ export class WorkflowOrchestrator {
   async createWorkflow(
     _filePath?: string
   ): Promise<WorkflowInstance | undefined> {
-    Log.info(
+    Log.debug(
       `createWorkflow: filePath="${_filePath ?? "(none)"}", currently viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}, running=${this.workflows.size}`
     );
     // ── Duplicate detection: only running/paused instances are in the Map ──
@@ -203,13 +203,13 @@ export class WorkflowOrchestrator {
 
     // Dispose current viewedInstance if it is idle (not in the execution registry)
     if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
-      Log.info(
+      Log.debug(
         `createWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
       );
       this.viewedInstance.dispose();
     } else if (this.viewedInstance) {
       // It is running/paused — just deactivate it visually
-      Log.info(
+      Log.debug(
         `createWorkflow: deactivating running viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
       );
       this.viewedInstance.setActive(false);
@@ -239,14 +239,14 @@ export class WorkflowOrchestrator {
   private retireWorkflow(workflowId: string): void {
     const instance = this.workflows.get(workflowId);
     if (!instance) {
-      Log.info(
+      Log.debug(
         `retireWorkflow: inst:${workflowId.slice(0, 8)} not in registry (already retired?)`
       );
       return;
     }
 
     const isViewed = this.viewedInstance === instance;
-    Log.info(
+    Log.debug(
       `retireWorkflow: inst:${workflowId.slice(0, 8)} name=\"${instance.workflowName || "(empty)"}\" ` +
         `status=${instance.getQueueState().status}, isViewed=${isViewed}, remaining=${this.workflows.size - 1}`
     );
@@ -299,13 +299,13 @@ export class WorkflowOrchestrator {
       );
     }
 
-    Log.info(
+    Log.debug(
       `setActiveWorkflow: switching from inst:${this.viewedInstance?.id.slice(0, 8) ?? "null"} → inst:${workflowId.slice(0, 8)} (${instance.workflowName || "unnamed"})`
     );
 
     // Dispose current viewedInstance if it is idle (not executing)
     if (this.viewedInstance && !this.workflows.has(this.viewedInstance.id)) {
-      Log.info(
+      Log.debug(
         `setActiveWorkflow: disposing idle viewedInstance inst:${this.viewedInstance.id.slice(0, 8)}`
       );
       this.viewedInstance.dispose();
@@ -318,7 +318,7 @@ export class WorkflowOrchestrator {
     instance.setActive(true);
     // Notify the dashboard that the active workflow selection changed.
     this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
-    Log.info(
+    Log.debug(
       `setActiveWorkflow: switch complete — inst:${workflowId.slice(0, 8)} is now active`
     );
     // Restore run history counter so the RunSelector appears in the output header.
@@ -336,7 +336,7 @@ export class WorkflowOrchestrator {
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
     const summaries = [...this.workflows.values()].map((w) => w.getSummary());
-    Log.info(
+    Log.trace(
       `[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances, viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
@@ -367,7 +367,7 @@ export class WorkflowOrchestrator {
 
   async initialize(): Promise<void> {
     try {
-      Log.info("WorkflowOrchestrator: Initializing...");
+      Log.debug("WorkflowOrchestrator: Initializing...");
 
       const integrationMode = ConfigurationUtils.getIntegrationMode();
       const modeLabel =
@@ -393,12 +393,12 @@ export class WorkflowOrchestrator {
       }
 
       this.orchestratorInitialized = true;
-      Log.info("WorkflowOrchestrator: Initialization complete");
+      Log.debug("WorkflowOrchestrator: Initialization complete");
 
       await this.restoreState(); // no-op
 
       if (this.dashboardReady) {
-        Log.info(
+        Log.debug(
           "Dashboard was ready before init — triggering deferred auto-load"
         );
         await this.triggerAutoLoad();
@@ -419,7 +419,7 @@ export class WorkflowOrchestrator {
     if (this.orchestratorInitialized) {
       await this.triggerAutoLoad();
     } else {
-      Log.info(
+      Log.debug(
         "Orchestrator not yet initialized — deferring auto-load until init completes"
       );
     }
@@ -430,7 +430,7 @@ export class WorkflowOrchestrator {
       ConfigurationUtils.shouldAutoLoadRecentSession() &&
       this.currentWorkspaceFolder
     ) {
-      Log.info("Triggering auto-load of recent session");
+      Log.debug("Triggering auto-load of recent session");
 
       await this.workspaceSessionManager.autoLoadRecentSession(
         this.currentWorkspaceFolder.uri.fsPath,
@@ -510,7 +510,7 @@ export class WorkflowOrchestrator {
     // Previously this called getActiveInstance().executePromptFile() which would
     // clear the active instance's queue (even if it was a running workflow) and
     // load the new file into it — stomping on parallel workflows.
-    Log.info(
+    Log.debug(
       `executePromptFile: loading "${path.basename(filePath)}" into new instance ` +
         `(${this.workflows.size} workflow(s) currently in registry)`
     );
@@ -525,7 +525,7 @@ export class WorkflowOrchestrator {
       status === EXECUTION_STATES.RUNNING ||
       status === EXECUTION_STATES.PAUSED
     ) {
-      Log.info(
+      Log.debug(
         `executePromptFile: switched to existing ${status} workflow inst:${instance.id.slice(0, 8)}, skipping re-execution`
       );
       return;
@@ -606,7 +606,7 @@ export class WorkflowOrchestrator {
     ) {
       // Running/paused workflow stays alive in the background;
       // create a fresh empty instance as the new active view.
-      Log.info(
+      Log.debug(
         `clearWorkflow: active inst:${active.id.slice(0, 8)} is ${state} — creating new empty instance`
       );
       await this.createWorkflow();
@@ -836,7 +836,7 @@ export class WorkflowOrchestrator {
     this.workflows.clear();
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
-    Log.info("WorkflowOrchestrator disposed");
+    Log.debug("WorkflowOrchestrator disposed");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -874,7 +874,7 @@ export class WorkflowOrchestrator {
       this.currentWorkspaceFolder?.uri.fsPath
     );
 
-    Log.info(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
+    Log.debug(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);
 
     // Broadcast summary updates whenever this instance's execution state changes.
     // This covers both active and inactive workflows so the multi-workflow list
@@ -882,7 +882,7 @@ export class WorkflowOrchestrator {
     instance.promptQueue.onDidChangeState((state) => {
       const summary = instance.getSummary();
 
-      Log.info(
+      Log.debug(
         `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
           `inRegistry=${this.workflows.has(instance.id)} registrySize=${this.workflows.size} ` +
           `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${summary.currentStep}/${summary.totalSteps}`
@@ -902,7 +902,7 @@ export class WorkflowOrchestrator {
         !this.workflows.has(instance.id)
       ) {
         this.workflows.set(instance.id, instance);
-        Log.info(
+        Log.debug(
           `onDidChangeState: registered inst:${instance.id.slice(0, 8)} in running registry on ${state.status} ` +
             `name="${summary.workflowName || "(empty)"}" (total: ${this.workflows.size})`
         );
@@ -919,7 +919,7 @@ export class WorkflowOrchestrator {
         state.status === EXECUTION_STATES.ERROR ||
         state.status === EXECUTION_STATES.STOPPED
       ) {
-        Log.info(
+        Log.debug(
           `onDidChangeState: inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
         );
         this.retireWorkflow(instance.id);

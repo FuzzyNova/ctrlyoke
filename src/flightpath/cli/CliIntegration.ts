@@ -621,7 +621,7 @@ export class CliIntegration extends HarnessIntegration {
 
       // 1. Record start time BEFORE spawning CLI
       const startTime = new Date();
-      Log.info(`⏱️ Recording start time: ${startTime.toISOString()}`);
+      Log.debug(`⏱️ Recording start time: ${startTime.toISOString()}`);
 
       // Clean up any stale stop notification file from a previous run of this session.
       // If the previous run crashed before cleanup, the leftover file would cause an
@@ -665,7 +665,7 @@ export class CliIntegration extends HarnessIntegration {
 
       // If we already have a resolved session ID (from resumption), use it directly
       if (resolvedSessionId) {
-        Log.info(
+        Log.debug(
           `🔄 Resuming session ${resolvedSessionId} - discovering log file directly...`
         );
 
@@ -728,14 +728,14 @@ export class CliIntegration extends HarnessIntegration {
         const hookSessionId = startResultNotify.data?.sessionId || null;
 
         if (hookSessionId) {
-          Log.info(
+          Log.debug(
             `✅ SessionStart hook provided session ID: ${hookSessionId}`
           );
         } else {
-          Log.info(
+          Log.debug(
             "✅ SessionStart hook confirmed (session ID not provided by CLI)"
           );
-          Log.info(
+          Log.debug(
             "🔍 Discovering session log file via prompt text matching..."
           );
         }
@@ -834,7 +834,7 @@ export class CliIntegration extends HarnessIntegration {
       await this.createPromptFileWithReference(promptText, workflowContext);
     const actualPromptText = promptWithInstruction; // "Follow instructions in @file1 "
 
-    Log.info(
+    Log.debug(
       `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
     );
 
@@ -1022,7 +1022,7 @@ export class CliIntegration extends HarnessIntegration {
                 // Debug logging: Log raw CLI output if enabled
                 const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
                 if (logRawOutput) {
-                  Log.info(
+                  Log.debug(
                     `[${this.provider.config.displayName} RAW OUTPUT]: ${chunk}`
                   );
                 }
@@ -1221,7 +1221,7 @@ export class CliIntegration extends HarnessIntegration {
           versionInfo = version ? `: ${version}` : "";
         }
 
-        Log.info(
+        Log.debug(
           `✅ ${this.provider.config.displayName} available${versionInfo}`
         );
         this.isAvailable = true;
@@ -1311,7 +1311,7 @@ export class CliIntegration extends HarnessIntegration {
    * Cancel the current CLI process
    */
   protected async cancelImplementation(): Promise<void> {
-    Log.info(
+    Log.debug(
       `⏹️ CLI Integration cancel called (harness: ${this.provider.config.displayName})`
     );
 
@@ -1322,7 +1322,7 @@ export class CliIntegration extends HarnessIntegration {
 
     if (!hasActiveProcess) {
       // No active process anywhere - fire responseComplete immediately
-      Log.info(
+      Log.debug(
         "⏹️ No active process/execution - firing responseComplete immediately"
       );
       this.responseCompleteEmitter.fire("Cancelled before process started");
@@ -1400,11 +1400,11 @@ export class CliIntegration extends HarnessIntegration {
       // Debug logging: Log raw stdout/stderr if enabled
       const logRawOutput = ConfigurationUtils.shouldLogRawCliOutput();
       if (logRawOutput) {
-        Log.info(
+        Log.debug(
           `[${this.provider.config.displayName} FINAL STDOUT${label}]:\n${result.stdout}`
         );
         if (result.stderr) {
-          Log.info(
+          Log.debug(
             `[${this.provider.config.displayName} FINAL STDERR${label}]:\n${result.stderr}`
           );
         }

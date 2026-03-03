@@ -67,7 +67,7 @@ export class AgentExpander {
     // Read agent file content
     try {
       const content = await fs.promises.readFile(agent.path, "utf-8");
-      Log.info(`🤖 Agent "${agentName}" loaded from ${agent.path}`);
+      Log.debug(`🤖 Agent "${agentName}" loaded from ${agent.path}`);
       return AgentExpander.stripFrontmatter(content, agentName);
     } catch (error) {
       Log.warn(`⚠️ Failed to read agent file "${agent.path}": ${error}`);
@@ -125,7 +125,7 @@ export class AgentExpander {
       const content = await fs.promises.readFile(agent.path, "utf-8");
       const frontmatterName = AgentExpander.extractFrontmatterName(content);
       if (frontmatterName) {
-        Log.info(
+        Log.debug(
           `🤖 Agent command name: "${frontmatterName}" (file: ${agentName})`
         );
         return frontmatterName;

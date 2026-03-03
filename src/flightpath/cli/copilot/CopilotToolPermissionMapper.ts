@@ -73,7 +73,7 @@ export class CopilotToolPermissionMapper
       if (convertedAllowTools.length > 0) {
         const quotedTools = convertedAllowTools.map((tool) => `"${tool}"`);
         args.push("--allow-tool", ...quotedTools);
-        Log.info(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
+        Log.debug(`✅ Allowed tools: ${convertedAllowTools.join(", ")}`);
       }
     }
 
@@ -93,13 +93,13 @@ export class CopilotToolPermissionMapper
       if (convertedDenyTools.length > 0) {
         const quotedTools = convertedDenyTools.map((tool) => `"${tool}"`);
         args.push("--deny-tool", ...quotedTools);
-        Log.info(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
+        Log.debug(`🚫 Denied tools: ${convertedDenyTools.join(", ")}`);
       }
     }
 
     // Log filtered tools for visibility
     if (filteredTools.length > 0) {
-      Log.info(
+      Log.debug(
         `ℹ️ Filtered out tools not requiring Copilot permission: ${filteredTools.join(", ")} (read-only operations are always allowed)`
       );
     }

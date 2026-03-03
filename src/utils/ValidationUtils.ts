@@ -290,7 +290,7 @@ export class ValidationUtils {
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
       .replace(/\${[^}]*}/g, (match) => {
         // Keep template variables but log them
-        Log.info(`Template variable found: ${match}`);
+        Log.debug(`Template variable found: ${match}`);
         return match;
       });
   }

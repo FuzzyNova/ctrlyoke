@@ -126,7 +126,7 @@ export class CliProviderUtils {
     );
 
     if (mcpArgs) {
-      Log.info("🔧 MCP server config added for dynamic queue extension");
+      Log.debug("🔧 MCP server config added for dynamic queue extension");
       return mcpArgs;
     }
 

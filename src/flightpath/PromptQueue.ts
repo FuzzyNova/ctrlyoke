@@ -337,7 +337,7 @@ export class PromptQueue {
    */
   async start(): Promise<void> {
     if (this.state.status === EXECUTION_STATES.RUNNING) {
-      Log.info("Queue is already running");
+      Log.debug("Queue is already running");
       return;
     }
 
@@ -351,7 +351,7 @@ export class PromptQueue {
     this.state.stopped = false; // Clear stopped flag when starting
     this.emitStateChange();
 
-    Log.info("Queue state set to running");
+    Log.debug("Queue state set to running");
 
     // Update working file to persist RUNNING state to disk
     await this.updateWorkingFile();
@@ -411,7 +411,7 @@ export class PromptQueue {
         if (currentResult.status === STEP_STATUS.CANCELLED) {
           currentResult.status = STEP_STATUS.PENDING;
           currentResult.timestamp = new Date();
-          Log.info("Reset cancelled prompt to PENDING for restart");
+          Log.debug("Reset cancelled prompt to PENDING for restart");
         }
       }
     }
@@ -550,7 +550,7 @@ export class PromptQueue {
     this.state.prompts = [];
     this.state.results = [];
     this.emitStateChange();
-    Log.info("Queue cleared");
+    Log.debug("Queue cleared");
   }
 
   /**
@@ -914,7 +914,7 @@ export class PromptQueue {
     }
 
     if (newPrompts.length === 0) {
-      Log.info("Queue reload: No new prompts found");
+      Log.trace("Queue reload: No new prompts found");
       return 0;
     }
 
@@ -1294,7 +1294,7 @@ export class PromptQueue {
     // Emit state change
     this.emitStateChange();
 
-    Log.info(`Updated prompt at index ${index}`);
+    Log.debug(`Updated prompt at index ${index}`);
   }
 
   /**
@@ -1343,7 +1343,7 @@ export class PromptQueue {
     // Emit state change
     this.emitStateChange();
 
-    Log.info(`Deleted prompt at index ${index}`);
+    Log.debug(`Deleted prompt at index ${index}`);
   }
 
   /**
@@ -1361,7 +1361,7 @@ export class PromptQueue {
     }
 
     this.emitStateChange();
-    Log.info(`Updated workflow name to: ${workflowName}`);
+    Log.debug(`Updated workflow name to: ${workflowName}`);
   }
 
   /**
@@ -1370,6 +1370,6 @@ export class PromptQueue {
    */
   public async loadWorkingFile(filePath: string): Promise<void> {
     await this.restoreFromWorkingFile(filePath);
-    Log.info(`Loaded working file: ${filePath}`);
+    Log.debug(`Loaded working file: ${filePath}`);
   }
 }

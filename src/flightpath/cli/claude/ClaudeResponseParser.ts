@@ -284,7 +284,7 @@ export class ClaudeResponseParser
             // Note: signature field is available but not included (cryptographic, not user-facing)
           },
         });
-        Log.info(
+        Log.trace(
           `🔍 [ClaudeParser] Extracted THINKING event: ${contentBlock.thinking.substring(0, 50)}...`
         );
       }
@@ -296,7 +296,7 @@ export class ClaudeResponseParser
           timestamp: Date.now(),
           data: { text: contentBlock.text },
         });
-        Log.info(
+        Log.trace(
           `🔍 [ClaudeParser] Extracted TEXT event: ${contentBlock.text.substring(0, 100)}...`
         );
       }
@@ -600,7 +600,7 @@ export class ClaudeResponseParser
         const beforeCount = events.length;
         this.processAssistantContent(json.message.content, events);
         const afterCount = events.length;
-        Log.info(
+        Log.trace(
           `🔍 [ClaudeParser] Processed assistant message during streaming: extracted ${afterCount - beforeCount} events (total: ${afterCount})`
         );
       }

@@ -167,7 +167,7 @@ export class WebviewSettingsSync {
     const harnessStatuses = Object.entries(this.harnessStatus)
       .map(([id, s]) => `${id}=${s.status}`)
       .join(", ");
-    Log.info(
+    Log.debug(
       `sendInitialState() — harness: [${harnessStatuses}], agents: ${this.availableAgents.length}`
     );
 

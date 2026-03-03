@@ -115,7 +115,7 @@ export class ClaudeCliProvider implements ICliProvider {
       // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
       // Claude uses mcp__servername pattern to match all tools from a server
       args.push("--allowed-tools", "mcp__flightpath");
-      Log.info("🔧 FlightPath MCP tools auto-approved");
+      Log.debug("🔧 FlightPath MCP tools auto-approved");
     }
 
     // Note: Headless-specific flags (-p, --output-format, --verbose) are added by

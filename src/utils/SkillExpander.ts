@@ -71,7 +71,7 @@ export class SkillExpander {
       }
 
       resolvedBlocks.push(this.buildSkillBlock(skill));
-      Log.info(`🎯 Skill "${skillName}" resolved from ${skill.path}`);
+      Log.debug(`🎯 Skill "${skillName}" resolved from ${skill.path}`);
     }
 
     if (resolvedBlocks.length === 0) {

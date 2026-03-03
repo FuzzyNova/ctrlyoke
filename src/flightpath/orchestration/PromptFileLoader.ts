@@ -42,7 +42,7 @@ export class PromptFileLoader {
     workspaceFolderPath?: string
   ): Promise<string | undefined> {
     try {
-      Log.info(`Loading prompt file: ${filePath}`);
+      Log.debug(`Loading prompt file: ${filePath}`);
 
       const fileName = path.basename(filePath);
 
@@ -90,11 +90,11 @@ export class PromptFileLoader {
 
               if (result?.appliedKeys.length) {
                 for (const key of result.appliedKeys) {
-                  Log.info(
+                  Log.debug(
                     `Copied workflow property '${key}' from loaded file to working file: ${JSON.stringify(updates[key])}`
                   );
                 }
-                Log.info(
+                Log.debug(
                   "Persisted workflow-level properties from loaded file to working file"
                 );
               }
@@ -108,7 +108,7 @@ export class PromptFileLoader {
 
             if (Object.keys(defaults).length > 0) {
               await this.promptQueue.updateWorkingFileProperties(defaults);
-              Log.info(
+              Log.debug(
                 `Populated VS Code defaults for new working file: ${Object.keys(defaults).join(", ")}`
               );
             }
@@ -131,7 +131,7 @@ export class PromptFileLoader {
         dashboard.updateFileSelected(fileName, promptFile.prompts);
       }
 
-      Log.info(
+      Log.debug(
         `Loaded ${promptFile.prompts.length} prompt(s) from ${fileName}`
       );
 
@@ -193,7 +193,7 @@ export class PromptFileLoader {
       if (actualMode === "replace") {
         // Scenario 1: Loading a different session (resume/auto-load)
         // Clear queue and restore full state including completed prompts, currentIndex, etc.
-        Log.info(
+        Log.debug(
           `Restoring session from working file (${workingFile.prompts.length} prompts, mode: ${mode}, isAutoLoad: ${isAutoLoad})`
         );
         await this.promptQueue.restoreFromWorkingFile(
@@ -224,7 +224,7 @@ export class PromptFileLoader {
       } else {
         // Scenario 2: Queue extended during execution (MCP/append to same file)
         // Merge new prompts preserving state and send PROMPTS_EXTENDED
-        Log.info(
+        Log.debug(
           `Merging prompts from working file (state: ${queueState.status}, mode: ${mode})`
         );
         const newPromptsCount = await this.promptQueue.mergePromptsFromDisk();
@@ -233,18 +233,18 @@ export class PromptFileLoader {
         if (newPromptsCount > 0 && mergeDashboard) {
           // Get updated state after merge
           const updatedState = this.promptQueue.getState();
-          Log.info(
+          Log.debug(
             `Queue extended by ${newPromptsCount} prompts (total: ${updatedState.prompts.length}). Sending PROMPTS_EXTENDED to dashboard.`
           );
 
           // Send PROMPTS_EXTENDED message with updated prompt list
           mergeDashboard.updatePromptsExtended(updatedState.prompts);
         } else if (newPromptsCount === 0) {
-          Log.info("Working file changed but no new prompts detected");
+          Log.debug("Working file changed but no new prompts detected");
         }
       }
 
-      Log.info(
+      Log.debug(
         `Reloaded ${workingFile.prompts.length} prompts from working file`
       );
     } catch (error) {

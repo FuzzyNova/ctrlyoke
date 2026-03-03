@@ -227,7 +227,7 @@ export abstract class HarnessIntegration {
       );
       if (agentContent) {
         expandedText = this.insertAgentInstructions(expandedText, agentContent);
-        Log.info(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
+        Log.debug(`🤖 Agent "${resolvedAgent}" instructions added to prompt`);
       } else {
         Log.warn(
           `⚠️ Agent "${resolvedAgent}" not found, continuing without agent`
@@ -244,7 +244,7 @@ export abstract class HarnessIntegration {
       );
       if (skillContent) {
         expandedText = this.insertSkillInstructions(expandedText, skillContent);
-        Log.info(
+        Log.debug(
           `🎯 Skills [${resolvedSkills.join(", ")}] instructions added to prompt`
         );
       } else {

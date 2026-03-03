@@ -119,7 +119,7 @@ async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
     "**/.git/**" // Only exclude Git database directory
   );
 
-  Log.info(`[Completions] Found ${files.length} total files before filtering`);
+  Log.trace(`[Completions] Found ${files.length} total files before filtering`);
 
   // OFF: Return ALL files (node_modules, dist, logs, everything)
   // ON:  Filter out gitignored files using Git extension API
@@ -127,7 +127,7 @@ async function getWorkspaceFiles(): Promise<vscode.Uri[]> {
     ? await filterGitIgnoredFiles(files)
     : files;
 
-  Log.info(
+  Log.trace(
     `[Completions] Returning ${filteredFiles.length} files (respectGitignore=${respectGitignore}, filtered out ${files.length - filteredFiles.length})`
   );
 
@@ -304,7 +304,7 @@ export function initializeCompletionHelpers(
   configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("flightpath.respectGitignoreForCompletions")) {
       clearFilesCache();
-      Log.info("[Completions] Cache cleared due to gitignore setting change");
+      Log.debug("[Completions] Cache cleared due to gitignore setting change");
     }
   });
 

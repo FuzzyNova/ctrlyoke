@@ -95,7 +95,7 @@ export class AgentDiscovery {
         agents.push(...flightpathAgents);
       }
 
-      Log.info(`Discovered ${agents.length} custom agents`);
+      Log.debug(`Discovered ${agents.length} custom agents`);
     } catch (error) {
       Log.error("Error discovering agents:", error);
     }
@@ -182,7 +182,7 @@ export class AgentDiscovery {
       }
 
       if (agents.length > 0) {
-        Log.info(
+        Log.debug(
           `Found ${agents.length} agent(s) in ${directoryPath}:`,
           agents.map((a) => a.name).join(", ")
         );

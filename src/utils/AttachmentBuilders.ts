@@ -26,7 +26,7 @@ export async function resolveSymbol(
   symbolRef: string
 ): Promise<FileReference | null> {
   try {
-    Log.info(`[resolveSymbol] Resolving: ${symbolRef}`);
+    Log.debug(`[resolveSymbol] Resolving: ${symbolRef}`);
 
     // Parse format: path/to/file.ts:SymbolName:123
     // Use lastIndexOf to handle the line number (last colon), then second-to-last for symbol name
@@ -56,7 +56,7 @@ export async function resolveSymbol(
     const filePath = remainingRef.substring(0, secondLastColonIndex);
     const symbolName = remainingRef.substring(secondLastColonIndex + 1);
 
-    Log.info(
+    Log.debug(
       `[resolveSymbol] Parsed: filePath="${filePath}", symbolName="${symbolName}", line=${targetLine}`
     );
 
@@ -83,7 +83,7 @@ export async function resolveSymbol(
       return null;
     }
 
-    Log.info(
+    Log.debug(
       `[resolveSymbol] Found ${symbols.length} top-level symbols, searching for "${symbolName}" at line ${targetLine}...`
     );
 
@@ -97,7 +97,7 @@ export async function resolveSymbol(
       return null;
     }
 
-    Log.info(
+    Log.debug(
       `[resolveSymbol] Found symbol: ${targetSymbol.name} (lines ${targetSymbol.range.start.line + 1}-${targetSymbol.range.end.line + 1})`
     );
 
@@ -142,7 +142,7 @@ function findSymbolAtLine(
       normalizedSymbolName === normalizedSearchName &&
       symbolStartLine === targetLine
     ) {
-      Log.info(
+      Log.debug(
         `[findSymbolAtLine] ✓ Found: ${symbol.name} at line ${symbolStartLine}`
       );
       return symbol;

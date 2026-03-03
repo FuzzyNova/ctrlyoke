@@ -62,11 +62,11 @@ export class NativeAttachmentHandler {
         if (ref.symbolName) {
           // Symbol reference - resolve to file location
           const symbolRef = `${ref.path}:${ref.symbolName}:${ref.startLine}`;
-          Log.info(`🔍 Resolving symbol: ${symbolRef}`);
+          Log.debug(`🔍 Resolving symbol: ${symbolRef}`);
           const resolved = await resolveSymbol(symbolRef);
           if (resolved) {
             resolvedRefs.push(resolved);
-            Log.info(
+            Log.debug(
               `✓ Resolved to: ${resolved.path}:${resolved.startLine}-${resolved.endLine}`
             );
           } else {
@@ -95,7 +95,7 @@ export class NativeAttachmentHandler {
               "workbench.action.chat.attachFolder",
               uri
             );
-            Log.info(`✅ Directory: ${ref.path}`);
+            Log.debug(`✅ Directory: ${ref.path}`);
           } catch (error) {
             Log.error(`❌ Attach directory failed: ${ref.path}`, error);
           }
@@ -107,7 +107,7 @@ export class NativeAttachmentHandler {
                 "github.copilot.chat.attachFile"
               );
             });
-            Log.info(`✅ File: ${ref.path}`);
+            Log.debug(`✅ File: ${ref.path}`);
           } catch (error) {
             Log.error(`❌ Attach failed: ${ref.path}`, error);
           }
@@ -128,7 +128,7 @@ export class NativeAttachmentHandler {
             const refDesc = ref.symbolName
               ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`
               : `${ref.path}:${ref.startLine}-${ref.endLine}`;
-            Log.info(`✅ Selection: ${refDesc}`);
+            Log.debug(`✅ Selection: ${refDesc}`);
           } catch (error) {
             const refDesc = ref.symbolName
               ? `${ref.symbolName} (${ref.path}:${ref.startLine}-${ref.endLine})`

@@ -153,7 +153,7 @@ export class ContextExpander {
         let resolved: FileReference | null;
         if (this.symbolResolutionCache.has(symbolRef)) {
           resolved = this.symbolResolutionCache.get(symbolRef)!;
-          Log.info(`Using cached resolution for: ${symbolRef}`);
+          Log.debug(`Using cached resolution for: ${symbolRef}`);
         } else {
           // Not in cache - resolve and cache the result
           resolved = await resolveSymbol(symbolRef);
@@ -186,7 +186,7 @@ export class ContextExpander {
 
     // Skip if already attached
     if (this.attachmentIds.has(attachmentId)) {
-      Log.info(`Skipping duplicate attachment: ${attachmentId}`);
+      Log.debug(`Skipping duplicate attachment: ${attachmentId}`);
       return ""; // Return empty string for duplicates
     }
 

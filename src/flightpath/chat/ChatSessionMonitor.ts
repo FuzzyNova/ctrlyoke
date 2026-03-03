@@ -418,7 +418,7 @@ export class ChatSessionMonitor {
               ? `cachedCount=${cachedSnapshot.requestCount}, completedIndices=[${[...cachedSnapshot.completedRequestIndices].join(",")}]`
               : "not-in-cache";
 
-            Log.info(
+            Log.debug(
               `✅ Found ${sessionType} session file by prompt match: ${basename} req[${i}] ` +
                 `(modified ${ageDisplay}, checked ${filesChecked + 1} files, ${cachedInfo})`
             );
@@ -435,7 +435,7 @@ export class ChatSessionMonitor {
     }
 
     if (textMatchesSkippedDueToCompletion > 0) {
-      Log.info(
+      Log.debug(
         `🔍 Prompt text found in ${textMatchesSkippedDueToCompletion} request(s) but all were already complete before send — still searching for new request`
       );
     }
@@ -518,7 +518,7 @@ export class ChatSessionMonitor {
         const totalElapsed = hasTimings
           ? lastRequest.result.timings.totalElapsed
           : "N/A";
-        Log.info(
+        Log.debug(
           `      🔍 Last request: result=${hasResult}, timings=${hasTimings}, totalElapsed=${totalElapsed}`
         );
       }
@@ -600,7 +600,7 @@ export class ChatSessionMonitor {
       totalCompletedRequests += snapshot.completedRequestIndices.size;
     }
 
-    Log.info(
+    Log.debug(
       `📍 Snapshot: ${allFiles.length} sessions (parsed ${parsedCount}, skipped ${skippedCount}, ${totalCompletedRequests} completed requests)`
     );
 
@@ -656,7 +656,7 @@ export class ChatSessionMonitor {
     if (!foundSessionFile) {
       Log.info("⏳ Searching for session file by prompt text...");
     } else {
-      Log.info(
+      Log.debug(
         `⏳ Monitoring session: ${path.basename(this.sessionFilePath!)} (inactivity timeout: ${Math.round(maxInactivityMs / 1000)}s)`
       );
       // Seed initial mtime so first write resets the inactivity clock
@@ -714,7 +714,7 @@ export class ChatSessionMonitor {
           const isExisting = this.sessionsBeforeSend.has(basename);
           const sessionType = isExisting ? "EXISTING" : "NEW";
 
-          Log.info(
+          Log.debug(
             `🎯 Found ${sessionType} session after ${elapsed}s: ${basename} (${requestCount} requests)`
           );
 
@@ -734,7 +734,7 @@ export class ChatSessionMonitor {
               this.isLastRequestComplete(matchedFile);
             if (complete) {
               if (cancelled) {
-                Log.info(
+                Log.debug(
                   "⚠️ User cancelled in chat (detected on file discovery)"
                 );
                 return {
@@ -742,7 +742,7 @@ export class ChatSessionMonitor {
                   userCancelled: true,
                 };
               }
-              Log.info("✅ Response already complete when session found");
+              Log.debug("✅ Response already complete when session found");
               return { completed: true };
             }
           }
@@ -753,7 +753,7 @@ export class ChatSessionMonitor {
           // Log search progress every 5 seconds
           if (now - lastLogTime >= 5000) {
             const elapsed = Math.round((now - startTime) / 1000);
-            Log.info(`🔍 Still searching... (${elapsed}s elapsed)`);
+            Log.trace(`🔍 Still searching... (${elapsed}s elapsed)`);
             lastLogTime = now;
           }
           // Keep searching
@@ -785,7 +785,7 @@ export class ChatSessionMonitor {
 
       // Log progress every 5 seconds
       if (now - lastLogTime >= 5000) {
-        Log.info(
+        Log.debug(
           `⏳ Waiting for completion... ${totalSec}s total, ${inactiveSec}s inactive (${currentRequestCount} requests)`
         );
         lastLogTime = now;
@@ -801,7 +801,7 @@ export class ChatSessionMonitor {
         );
 
         if (shouldDebug) {
-          Log.info(
+          Log.debug(
             `   🔎 Completion check result: complete=${complete}, cancelled=${cancelled}`
           );
         }

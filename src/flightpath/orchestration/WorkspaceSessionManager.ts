@@ -64,7 +64,7 @@ export class WorkspaceSessionManager {
       // Extract workflow name from filename for logging
       const workflowName = this.extractWorkflowName(mostRecentFile);
 
-      Log.info(
+      Log.debug(
         `FlightPath: Auto-loaded recent session: ${workflowName} (${mostRecentFile})`
       );
 
@@ -88,7 +88,7 @@ export class WorkspaceSessionManager {
     try {
       const promptFiles =
         await this.promptFileParser.discoverPromptFiles(workspaceFolderPath);
-      Log.info(`FlightPath: Discovered ${promptFiles.length} prompt files`);
+      Log.debug(`FlightPath: Discovered ${promptFiles.length} prompt files`);
       return promptFiles;
     } catch (error) {
       Log.error("FlightPath: Failed to discover prompt files:", error);

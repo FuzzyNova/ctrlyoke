@@ -95,7 +95,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
 
     try {
       await vscode.commands.executeCommand(command);
-      Log.info(
+      Log.debug(
         `✨ New chat session: ${ConfigurationUtils.getChatWindowLocation()}`
       );
     } catch (error) {
@@ -108,7 +108,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
   private async ensureAgentMode(): Promise<void> {
     try {
       await vscode.commands.executeCommand("workbench.action.chat.openagent");
-      Log.info("🤖 Agent mode enabled");
+      Log.debug("🤖 Agent mode enabled");
       // Small delay to allow mode switch
       await new Promise((resolve) => setTimeout(resolve, 200));
     } catch (error) {
@@ -499,7 +499,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
         const inactivityTimeoutMs =
           ConfigurationUtils.getChatInactivityTimeoutMs();
 
-        Log.info("🔍 Monitoring session file for completion...");
+        Log.debug("🔍 Monitoring session file for completion...");
         const result = await this.sessionMonitor.waitForCompletion(
           () => this.isCancelling,
           inactivityTimeoutMs
@@ -593,7 +593,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
       // Format for output window (plain text)
       const formattedText = CliOutputFormatter.toPlainText(output);
 
-      Log.info(
+      Log.debug(
         `📋 Extracted response: ${formattedText.length} chars, ${output.events.length} events`
       );
 
@@ -612,7 +612,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
    */
   private async submitWithRetry(promptText: string): Promise<boolean> {
     const normalizedPrompt = promptText.trim().substring(0, 60);
-    Log.info(`🔍 Verifying submission for prompt: "${normalizedPrompt}..."`);
+    Log.debug(`🔍 Verifying submission for prompt: "${normalizedPrompt}..."`);
 
     const result = await retryWithBackoff(
       async () => {
@@ -637,7 +637,7 @@ export class CopilotChatIntegration extends HarnessIntegration {
           this.sessionMonitor.findSessionFileByPromptText(promptText);
 
         if (sessionFile) {
-          Log.info(
+          Log.debug(
             `✅ Submit verified via session file: ${path.basename(sessionFile)}`
           );
           // Cache session file so waitForCompletion() doesn't re-search

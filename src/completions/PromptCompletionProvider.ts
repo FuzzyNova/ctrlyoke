@@ -183,7 +183,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
     const currentIndentActual =
       currentIndent === -1 ? currentLineText.length : currentIndent;
 
-    Log.info(
+    Log.trace(
       `[isInsideYamlPromptValue] Checking line ${currentLine}: "${currentLineText}" (indent=${currentIndentActual})`
     );
 
@@ -256,7 +256,7 @@ export class PromptCompletionProvider implements vscode.CompletionItemProvider {
       }
     }
 
-    Log.info(`[isInsideYamlPromptValue] No prompt: found, returning false`);
+    Log.trace(`[isInsideYamlPromptValue] No prompt: found, returning false`);
     return false;
   }
 

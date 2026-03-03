@@ -40,7 +40,7 @@ export class PromptFileParser {
 
       this.promptSchema = JSON.parse(promptSchemaContent);
 
-      Log.info("JSON schema loaded successfully");
+      Log.debug("JSON schema loaded successfully");
     } catch (error) {
       Log.error("Failed to load JSON schema:", error);
       if (this.platform) {
@@ -250,7 +250,7 @@ export class PromptFileParser {
         return promptValue; // Return original if file is empty
       }
 
-      Log.info(`Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`);
+      Log.debug(`Resolved prompt from file: ${trimmedPath} -> ${resolvedPath}`);
       return trimmedContent;
     } catch (error) {
       Log.error(`Failed to read prompt file ${resolvedPath}:`, error);
@@ -434,7 +434,7 @@ export class PromptFileParser {
       const files = await this.findPromptFilesRecursive(promptsDirPath);
       return files;
     } catch (error) {
-      Log.info(
+      Log.debug(
         `FlightPath: Prompts directory ${promptsDirPath} not found or inaccessible`
       );
       return [];

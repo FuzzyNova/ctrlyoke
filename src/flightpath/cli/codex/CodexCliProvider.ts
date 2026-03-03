@@ -121,7 +121,7 @@ export class CodexCliProvider implements ICliProvider {
     );
     if (mcpArgs.length > 0) {
       args.push(...mcpArgs);
-      Log.info("🔧 MCP server config added for dynamic queue extension");
+      Log.debug("🔧 MCP server config added for dynamic queue extension");
     }
 
     // Headless mode: add exec command and --json flag

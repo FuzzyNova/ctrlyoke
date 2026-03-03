@@ -214,7 +214,7 @@ export class WorkflowSerializer {
 
       await fs.writeFile(absolutePath, serialized, "utf-8");
 
-      Log.info(`Saved workflow to: ${absolutePath}`);
+      Log.debug(`Saved workflow to: ${absolutePath}`);
 
       this.postMessage({
         type: MESSAGE_TYPES.WORKFLOW_SAVED,
@@ -557,7 +557,7 @@ export class WorkflowSerializer {
           );
       }
 
-      Log.info(
+      Log.debug(
         `handleRemoveWorkflowHistory: removed ${candidates.length} working file(s) and history for "${stem}"`
       );
     } catch (error) {

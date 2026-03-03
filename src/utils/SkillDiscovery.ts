@@ -160,7 +160,7 @@ export class SkillDiscovery {
         }
       }
 
-      Log.info(`Discovered ${skills.length} skills`);
+      Log.debug(`Discovered ${skills.length} skills`);
     } catch (error) {
       Log.error("Error discovering skills:", error);
     }
@@ -252,7 +252,7 @@ export class SkillDiscovery {
       }
 
       if (skills.length > 0) {
-        Log.info(
+        Log.debug(
           `Found ${skills.length} skill(s) in ${directoryPath}:`,
           skills.map((s) => s.name).join(", ")
         );

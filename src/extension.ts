@@ -14,7 +14,7 @@ import { getQueueStatus, appendToQueue } from "./flightpath/QueueOperations";
 import { initializeModelRegistry } from "./utils/ModelRegistry";
 import { TempFileManager } from "./utils/TempFileManager";
 import { IS_DEV_MODE, BUILD_DATE } from "./utils/BuildConfig";
-import { Log, LogLevel } from "./utils/Log";
+import { Log } from "./utils/Log";
 import { saveIfDirty } from "./utils/FileSystemUtils";
 
 let workflowOrchestrator: WorkflowOrchestrator;
@@ -129,7 +129,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(queueStatusTool, queueAppendTool);
-    Log.info(
+    Log.debug(
       "FlightPath: Registered Language Model Tools (flightpath_queue_status, flightpath_append_queue)"
     );
   } catch (error) {
@@ -144,12 +144,12 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
 export async function activate(context: vscode.ExtensionContext) {
   Log.info("FlightPath: Extension activating...");
   if (IS_DEV_MODE) {
-    Log.info(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
+    Log.debug(`🔧 Development mode enabled (Build: ${BUILD_DATE})`);
   }
 
   try {
     // Initialize logging system early (creates output channel)
-    Log.initialize(context, LogLevel.DEBUG);
+    Log.initialize(context);
     // Initialize model registry (queries available Copilot models)
     // Run this early so models are available for IntelliSense
     initializeModelRegistry().catch((err) => {
@@ -179,7 +179,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { webviewOptions: { retainContextWhenHidden: true } }
       )
     );
-    Log.info("FlightPath: React webview provider registered");
+    Log.debug("FlightPath: React webview provider registered");
 
     // Initialize FlightPath orchestrator with React webview provider
     workflowOrchestrator = new WorkflowOrchestrator(context, webviewProvider);
@@ -231,7 +231,7 @@ export async function activate(context: vscode.ExtensionContext) {
         "#" // Trigger on # character for snippets
       )
     );
-    Log.info(
+    Log.debug(
       "FlightPath: Registered completion provider for prompt files (.json, .yaml, .md, and prompt language) with @ and # triggers"
     );
 
@@ -243,11 +243,11 @@ export async function activate(context: vscode.ExtensionContext) {
         promptLinkProvider
       )
     );
-    Log.info("FlightPath: Registered link provider for prompt files");
+    Log.debug("FlightPath: Registered link provider for prompt files");
 
     // Initialize completion helpers with config watcher
     initializeCompletionHelpers(context);
-    Log.info("FlightPath: Initialized completion helpers with config watcher");
+    Log.debug("FlightPath: Initialized completion helpers with config watcher");
 
     // Register Language Model Tools (for VS Code Chat integration)
     registerLanguageModelTools(context);
@@ -603,15 +603,15 @@ function registerCommands(context: vscode.ExtensionContext) {
     registerDevCommands(context);
   }
 
-  Log.info("FlightPath: Commands registered successfully");
+  Log.debug("FlightPath: Commands registered successfully");
 }
 
 export function deactivate() {
-  Log.info("FlightPath: Extension deactivating...");
+  Log.debug("FlightPath: Extension deactivating...");
 
   if (workflowOrchestrator) {
     workflowOrchestrator.dispose();
   }
 
-  Log.info("FlightPath: Extension deactivated");
+  Log.debug("FlightPath: Extension deactivated");
 }

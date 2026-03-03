@@ -111,7 +111,7 @@ export async function initializeModelRegistry(): Promise<void> {
  */
 async function queryCopilotCliModels(): Promise<void> {
   try {
-    Log.info(
+    Log.debug(
       "Querying Copilot CLI for available models via 'copilot help config'..."
     );
 
@@ -154,7 +154,7 @@ async function queryCopilotCliModels(): Promise<void> {
 
       if (models && models.length > 0) {
         cachedCopilotCliModelIds = models.map((m) => m.replace(/"/g, ""));
-        Log.info(
+        Log.debug(
           `Copilot CLI supports ${cachedCopilotCliModelIds.length} models: ${cachedCopilotCliModelIds.join(", ")}`
         );
         return;
@@ -174,7 +174,7 @@ async function queryCopilotCliModels(): Promise<void> {
  */
 async function queryChatModels(): Promise<void> {
   try {
-    Log.info("Querying VS Code LM API for available models...");
+    Log.debug("Querying VS Code LM API for available models...");
 
     const models = await vscode.lm.selectChatModels({
       vendor: "copilot",
@@ -188,7 +188,7 @@ async function queryChatModels(): Promise<void> {
         cliSupported: cachedCopilotCliModelIds.includes(model.id),
       }));
 
-      Log.info(
+      Log.debug(
         `Discovered ${cachedModels.length} chat models: ${cachedModels.map((m) => m.id).join(", ")}`
       );
     } else {

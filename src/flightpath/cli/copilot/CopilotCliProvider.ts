@@ -129,7 +129,7 @@ export class CopilotCliProvider implements ICliProvider {
       args.push(...mcpArgs);
       // Auto-approve FlightPath MCP tools (FlightPath is the orchestrator)
       args.push("--allow-tool", "flightpath");
-      Log.info("🔧 FlightPath MCP tools auto-approved");
+      Log.debug("🔧 FlightPath MCP tools auto-approved");
     }
 
     // Tool permissions (only for headless mode - interactive mode lets user approve interactively)

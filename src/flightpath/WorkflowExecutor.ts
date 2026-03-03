@@ -209,7 +209,7 @@ export class WorkflowExecutor {
       Log.info(`🚀 Executing prompt ${i + 1}/${liveProgress.total}`);
 
       // Log resolved properties for debugging
-      Log.info(
+      Log.debug(
         `📋 Resolved properties for prompt ${i + 1}: ` +
           `harness=${resolvedProperties.harness}, ` +
           `model=${resolvedProperties.model}, ` +
@@ -375,7 +375,7 @@ export class WorkflowExecutor {
     currentIndex: number,
     duration: number
   ): Promise<boolean> {
-    Log.info(`🔍 Evaluating end condition for prompt ${currentIndex + 1}...`);
+    Log.debug(`🔍 Evaluating end condition for prompt ${currentIndex + 1}...`);
 
     // Validate that the end condition has a script property
     if (!prompt.endCondition?.script) {
@@ -485,7 +485,7 @@ export class WorkflowExecutor {
       const disposable = integration.onResponseComplete(
         async (responseText: string) => {
           if (responseHandled) {
-            Log.info("⚠️ Duplicate response complete event ignored");
+            Log.debug("⚠️ Duplicate response complete event ignored");
             return;
           }
           responseHandled = true;
@@ -836,7 +836,7 @@ export class WorkflowExecutor {
       const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalPrompts} prompts. ${remainingCount} prompts remaining in queue.`;
 
       this.platform.warn(message);
-      Log.info(`⏱️ ${message}`);
+      Log.trace(`⏱️ ${message}`);
 
       await this.promptQueue.markErrored();
       return true; // Should stop
@@ -991,12 +991,12 @@ export class WorkflowExecutor {
     context.captureCompletedOutput?.(currentIndex, cliOutputObj);
 
     // Save to history (same data, same moment)
-    Log.info(
+    Log.debug(
       `🟢 [APPEND-DEBUG] Step ${currentIndex}: About to save to history. historyFilePath="${context.historyFilePath}", hasManager=${!!context.outputHistoryManager}`
     );
     if (context.historyFilePath && context.outputHistoryManager) {
       const statusMessages = this.stepStatusMessages.get(currentIndex) ?? [];
-      Log.info(
+      Log.debug(
         `🟢 [APPEND-DEBUG] Step ${currentIndex}: Calling saveStepOutput(path="${context.historyFilePath}", stepIndex=${currentIndex}, outputsCount=1, messagesCount=${statusMessages.length})`
       );
       await context.outputHistoryManager
@@ -1009,11 +1009,11 @@ export class WorkflowExecutor {
         .catch((err) =>
           Log.warn("Failed to save step output to history:", err)
         );
-      Log.info(
+      Log.debug(
         `🟢 [APPEND-DEBUG] Step ${currentIndex}: saveStepOutput completed successfully`
       );
     } else {
-      Log.warn(
+      Log.debug(
         `🔴 [APPEND-DEBUG] Step ${currentIndex}: NOT saving to history - historyFilePath empty or manager missing`
       );
     }

@@ -26,7 +26,7 @@ export class EndConditionEvaluator {
     this.platform = platform;
     const workspaceRoot = platform.getWorkspaceRoot();
     this.processManager = new CliProcessManager(workspaceRoot, (msg) =>
-      Log.info(msg)
+      Log.debug(msg)
     );
   }
 
@@ -260,10 +260,10 @@ export class EndConditionEvaluator {
     exitCode?: number;
   }> {
     // Log what we're about to execute
-    Log.info(
+    Log.debug(
       `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
     );
-    Log.info(
+    Log.debug(
       `Working directory: ${workingDirectory || this.platform.getWorkspaceRoot()}`
     );
 
@@ -279,7 +279,7 @@ export class EndConditionEvaluator {
     for (const key of vsCodeEnvVars) {
       delete cleanEnv[key];
     }
-    Log.info(
+    Log.debug(
       `Cleaned ${vsCodeEnvVars.length} VS Code env vars for isolated execution`
     );
 
@@ -516,6 +516,6 @@ export class EndConditionEvaluator {
    */
   dispose(): void {
     this.killAllProcesses();
-    Log.info("EndConditionEvaluator disposed");
+    Log.debug("EndConditionEvaluator disposed");
   }
 }
