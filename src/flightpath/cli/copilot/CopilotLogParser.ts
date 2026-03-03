@@ -194,6 +194,35 @@ interface CopilotAssistantTurnEndEvent extends CopilotBaseEvent {
 }
 
 /**
+ * Session truncation event (fires once per model call with context window stats)
+ *
+ * This is the primary source of token usage data for Copilot CLI.
+ * Fires after `assistant.turn_start` and before `assistant.message` on every turn.
+ */
+interface CopilotSessionTruncationEvent extends CopilotBaseEvent {
+  type: "session.truncation";
+  data: {
+    /** Model's context window limit in tokens */
+    tokenLimit: number;
+    /** Token count of all messages before any truncation */
+    preTruncationTokensInMessages: number;
+    /** Message count before any truncation */
+    preTruncationMessagesLength: number;
+    /** Token count actually sent to the model (after truncation if needed) */
+    postTruncationTokensInMessages: number;
+    /** Message count actually sent to the model */
+    postTruncationMessagesLength: number;
+    /** Tokens removed to fit within tokenLimit (0 if no truncation needed) */
+    tokensRemovedDuringTruncation: number;
+    /** Messages removed to fit within tokenLimit */
+    messagesRemovedDuringTruncation: number;
+    /** Name of the truncation strategy used */
+    performedBy: string;
+  };
+  parentId: string;
+}
+
+/**
  * Union type of all Copilot log event types
  */
 type CopilotLogEvent =
@@ -206,7 +235,8 @@ type CopilotLogEvent =
   | CopilotAssistantReasoningEvent
   | CopilotToolExecutionStartEvent
   | CopilotToolExecutionCompleteEvent
-  | CopilotAssistantTurnEndEvent;
+  | CopilotAssistantTurnEndEvent
+  | CopilotSessionTruncationEvent;
 
 // ============================================================================
 // CopilotLogParser Implementation
@@ -312,6 +342,9 @@ export class CopilotLogParser extends BaseLogParser {
     let model: string | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
+    // Context window usage tracked via session.truncation events (fire every turn as a pre-call snapshot)
+    let contextWindowUsedTokens = 0;
+    let contextWindowSize: number | undefined;
 
     // Track pending tool calls to associate execution_start with execution_complete
     const pendingTools = new Map<
@@ -340,6 +373,28 @@ export class CopilotLogParser extends BaseLogParser {
         }
       }
 
+      // session.truncation fires every turn as a pre-call context snapshot (not just during actual truncation).
+      // postTruncationTokensInMessages = tokens actually sent to the model this turn (grows each turn).
+      // Always take the latest value — use it to track context window fill across the session.
+      if (event.type === "session.truncation" && event.data) {
+        contextWindowUsedTokens = event.data.postTruncationTokensInMessages || 0;
+        contextWindowSize = event.data.tokenLimit;
+
+        // Also surface it as a visible event when messages were actually dropped
+        const removed = event.data.tokensRemovedDuringTruncation;
+        if (removed > 0) {
+          const post = event.data.postTruncationTokensInMessages;
+          const limit = event.data.tokenLimit;
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.TEXT,
+            timestamp,
+            data: {
+              text: `[Context truncated: ${removed.toLocaleString()} tokens removed, ${post.toLocaleString()}/${limit.toLocaleString()} tokens remaining]`,
+            } as TextData,
+          });
+        }
+      }
+
       // Handle session.error events (emit as error text)
       if (event.type === "session.error" && event.data) {
         const errorCode = event.data.errorType || "UNKNOWN";
@@ -365,12 +420,26 @@ export class CopilotLogParser extends BaseLogParser {
           });
         }
 
+        // Extract inline reasoning (new format: reasoningText embedded in assistant.message)
+        // Newer Copilot versions embed reasoning here instead of a separate assistant.reasoning event
+        if (event.data.reasoningText) {
+          outputEvents.push({
+            type: CLI_EVENT_TYPES.THINKING,
+            timestamp,
+            data: {
+              text: event.data.reasoningText,
+              label: "Reasoning",
+              timestamp,
+            } as ThinkingBlock,
+          });
+        }
+
         // Note: tool calls are extracted from tool.execution_start (not toolRequests)
         // because tool.execution_start provides more accurate timestamps and allows
         // us to add structuredPatch from tool.execution_complete
       }
 
-      // Extract thinking/reasoning blocks
+      // Extract thinking/reasoning blocks (old format: separate assistant.reasoning event)
       if (event.type === "assistant.reasoning" && event.data?.content) {
         outputEvents.push({
           type: CLI_EVENT_TYPES.THINKING,
@@ -554,13 +623,12 @@ export class CopilotLogParser extends BaseLogParser {
         });
       }
 
-      // Extract token usage from metadata (if available)
-      if (event.data?.metadata?.usage) {
-        const usage = event.data.metadata.usage;
-        inputTokens += usage.input_tokens || usage.inputTokens || 0;
-        outputTokens += usage.output_tokens || usage.outputTokens || 0;
-      }
     }
+
+    // Prefer context window data from session.truncation (fires every turn, most accurate source).
+    // Fall back to legacy metadata.usage accumulation (not seen in practice, kept for safety).
+    const effectiveInputTokens = contextWindowUsedTokens > 0 ? contextWindowUsedTokens : inputTokens;
+    const effectiveContextWindowSize = contextWindowSize ?? COPILOT_CLI_CONTEXT_WINDOW_SIZE;
 
     return {
       events: outputEvents,
@@ -569,14 +637,14 @@ export class CopilotLogParser extends BaseLogParser {
         model,
         harness: "copilot-cli",
         usage:
-          inputTokens > 0 || outputTokens > 0
+          effectiveInputTokens > 0 || outputTokens > 0
             ? {
-                inputTokens,
+                inputTokens: effectiveInputTokens,
                 outputTokens,
-                totalTokens: inputTokens + outputTokens,
-                // For Copilot, "in" is the full context window input for this invocation
-                contextWindowUsedTokens: inputTokens,
-                contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
+                totalTokens: effectiveInputTokens + outputTokens,
+                // postTruncationTokensInMessages = full context sent to model on last turn
+                contextWindowUsedTokens: effectiveInputTokens,
+                contextWindowSize: effectiveContextWindowSize,
               }
             : undefined,
       },

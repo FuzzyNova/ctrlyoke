@@ -1686,6 +1686,20 @@ export class CliIntegration extends HarnessIntegration {
         // Add session ID if available (may be undefined for first prompt or if extraction failed)
         if (extractedSessionId) {
           prompt._runtime.sessionId = extractedSessionId;
+
+          // Propagate session ID back into lastParsedOutput.metadata so the dashboard
+          // renders it in the stats section. Copilot's response parser always sets
+          // metadata.sessionId=undefined (session ID comes from log files, not CLI output),
+          // so this is the only place where it gets merged into the structured output.
+          if (this.lastParsedOutput && !this.lastParsedOutput.metadata.sessionId) {
+            this.lastParsedOutput = {
+              ...this.lastParsedOutput,
+              metadata: {
+                ...this.lastParsedOutput.metadata,
+                sessionId: extractedSessionId,
+              },
+            };
+          }
         }
 
         prompt._runtime.completedAt = Date.now();

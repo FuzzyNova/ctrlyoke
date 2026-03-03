@@ -30,7 +30,7 @@ import {
   DashboardOutput,
 } from "./cli/shared/CliOutputFormatter";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
-import { StatusMessage } from "../types/WebviewMessageTypes";
+import { StatusMessage, CliEvent } from "../types/WebviewMessageTypes";
 
 /**
  * Context provided by FlightPathManager for workflow execution.
@@ -85,6 +85,11 @@ export interface WorkflowContext {
    * Used to replay completed-step outputs when switching back to this workflow.
    */
   captureCompletedOutput?: (stepIndex: number, output: any) => void;
+  /**
+   * Always-on callback to capture structured streaming events (called even when inactive).
+   * Used to buffer events for replay when switching back to this workflow.
+   */
+  captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
 }
 
 /**
@@ -619,16 +624,10 @@ export class WorkflowExecutor {
       context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
     });
 
-    if (context.dashboardProvider) {
-      structuredStreamingDisposable = integration.onStreamingEvents(
-        (events) => {
-          context.dashboardProvider?.updateCliStreamingEvents(
-            stepIndex,
-            events
-          );
-        }
-      );
-    }
+    structuredStreamingDisposable = integration.onStreamingEvents((events) => {
+      context.captureEvents?.(stepIndex, events);
+      context.dashboardProvider?.updateCliStreamingEvents(stepIndex, events);
+    });
 
     const disposeListeners = () => {
       streamingDisposable?.dispose();

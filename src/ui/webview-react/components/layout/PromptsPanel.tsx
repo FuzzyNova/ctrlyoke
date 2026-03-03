@@ -94,9 +94,16 @@ export const PromptsPanel: React.FC<{
         }
         if (hasOutput) {
           requestAnimationFrame(() => {
-            document
-              .getElementById(`output-step-${index}`)
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            const anchor = document.getElementById(`output-step-${index}`);
+            const container = document.getElementById("output-content");
+            if (anchor && container) {
+              const anchorTop = anchor.getBoundingClientRect().top;
+              const containerTop = container.getBoundingClientRect().top;
+              container.scrollTo({
+                top: container.scrollTop + (anchorTop - containerTop),
+                behavior: "smooth",
+              });
+            }
           });
         }
       }

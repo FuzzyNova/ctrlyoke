@@ -1,3 +1,5 @@
+import type { CliEvent } from "./WebviewMessageTypes";
+
 /**
  * IDashboardSink
  *
@@ -61,6 +63,8 @@ export interface IDashboardSink {
   updateCliOutput(stepIndex: number, output: unknown): void;
 
   updateCliStreamingChunk(stepIndex: number, chunk: string): void;
+
+  updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void;
 
   updatePromptsExtended(prompts: any[]): void;
 

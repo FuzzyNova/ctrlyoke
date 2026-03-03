@@ -24,6 +24,7 @@ import {
 } from "../types/DashboardConstants";
 import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { IDashboardSink } from "../types/IDashboardSink";
+import type { CliEvent } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
@@ -113,6 +114,7 @@ export class WorkflowInstance {
       timestampMs: number;
       attemptIndex: number;
       accumulatedText: string;
+      accumulatedEvents: CliEvent[];
       rawTextOutput?: boolean;
     }
   >();
@@ -375,6 +377,14 @@ export class WorkflowInstance {
           this.dashboardSink.updateCliStreamingChunk(
             runningStep,
             buffer.accumulatedText
+          );
+        }
+        // Replay accumulated structured events so tool calls/file edits are
+        // visible when switching back to a workflow mid-execution.
+        if (buffer.accumulatedEvents.length > 0) {
+          this.dashboardSink.updateCliStreamingEvents(
+            runningStep,
+            buffer.accumulatedEvents
           );
         }
       }
@@ -1351,15 +1361,19 @@ export class WorkflowInstance {
           attemptIndex,
           rawTextOutput
         ) => {
-          // Always buffer the init state so we can replay it when switching back
+          // Always buffer the init state so we can replay it when switching back.
+          // Preserve accumulatedText and accumulatedEvents across the two
+          // captureOutputInit calls that occur within a single attempt (the
+          // second call updates cliCommand once the process starts).
+          const existing = self.stepOutputBuffer.get(stepIndex);
           self.stepOutputBuffer.set(stepIndex, {
             prompt,
             cliCommand,
             workingDirectory,
             timestampMs,
             attemptIndex,
-            accumulatedText:
-              self.stepOutputBuffer.get(stepIndex)?.accumulatedText ?? "",
+            accumulatedText: existing?.accumulatedText ?? "",
+            accumulatedEvents: existing?.accumulatedEvents ?? [],
             rawTextOutput,
           });
 
@@ -1389,6 +1403,12 @@ export class WorkflowInstance {
           const existing = self.stepOutputBuffer.get(stepIndex);
           if (existing) {
             existing.accumulatedText += chunk;
+          }
+        },
+        captureEvents: (stepIndex, events) => {
+          const existing = self.stepOutputBuffer.get(stepIndex);
+          if (existing) {
+            existing.accumulatedEvents.push(...events);
           }
         },
         captureCompletedOutput: (stepIndex, output) => {
