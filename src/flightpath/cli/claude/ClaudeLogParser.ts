@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import * as vscode from "vscode";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent, ILogParser } from "../shared/interfaces/ILogParser";
 import { Log } from "../../../utils/Log";
@@ -95,6 +94,21 @@ interface ClaudeProviderEvent extends BaseCliEvent {
 }
 
 export class ClaudeLogParser extends BaseLogParser implements ILogParser {
+  /**
+   * Workspace root directory — set by CliIntegration after construction.
+   * Used by getClaudeProjectDirectory() to locate Claude's session log folder.
+   * Falls back to process.cwd() when not set (CLI mode).
+   */
+  private workspaceRoot?: string;
+
+  /**
+   * Set the workspace root directory for session log discovery.
+   * Called by CliIntegration so the log parser knows where to look.
+   */
+  setWorkspaceRoot(root: string): void {
+    this.workspaceRoot = root;
+  }
+
   /**
    * Extract complete response from Claude log events
    *
@@ -766,14 +780,8 @@ export class ClaudeLogParser extends BaseLogParser implements ILogParser {
    * - Session logs: `<session-id>.jsonl`
    */
   private getClaudeProjectDirectory(): string | null {
-    // Get first workspace folder
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
-      return null;
-    }
-
-    // Get workspace path and normalize it
-    const workspacePath = workspaceFolder.uri.fsPath;
+    // Use stored workspaceRoot (set by CliIntegration) or fall back to process.cwd()
+    const workspacePath = this.workspaceRoot ?? process.cwd();
     const normalizedPath = this.normalizeWorkspacePath(workspacePath);
 
     // Build Claude project directory path

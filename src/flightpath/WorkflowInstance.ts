@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import { PromptFileParser } from "./PromptFileParser";
 import { PromptQueue } from "./PromptQueue";
@@ -23,9 +22,11 @@ import {
   type ActionType,
   type QueuePosition,
 } from "../types/DashboardConstants";
-import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import type { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
+import { IDashboardSink } from "../types/IDashboardSink";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { PlatformAdapter } from "../platform/PlatformAdapter";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -146,11 +147,14 @@ export class WorkflowInstance {
    * allocating a new one per prompt (important for long-running / infinite-queue workflows).
    * Max live integrations = number of distinct harness types used (≤ 4).
    */
-  private readonly executionIntegrations = new Map<string, HarnessIntegration>();
+  private readonly executionIntegrations = new Map<
+    string,
+    HarnessIntegration
+  >();
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
-    private readonly dashboardProvider: FlightPathWebviewProvider | undefined,
+    private readonly platform: PlatformAdapter,
+    private readonly dashboardSink: IDashboardSink | undefined,
     /**
      * Factory for creating per-run execution integrations.
      * Each call to createIntegrationForMode() produces a fresh, isolated integration.
@@ -171,32 +175,32 @@ export class WorkflowInstance {
     private readonly onWorkflowNameChange: (name: string | undefined) => void,
     /** Callback so status bar in orchestrator stays in sync with queue state */
     private readonly onStatusBarUpdate: () => void,
-    private readonly workspaceFolder: vscode.WorkspaceFolder | undefined
+    private readonly workspaceFolderPath: string | undefined
   ) {
     this.id = crypto.randomUUID();
     this.createdAt = Date.now();
 
     // Per-workflow dependencies
-    this.promptFileParser = new PromptFileParser();
+    this.promptFileParser = new PromptFileParser(this.platform);
     this.promptQueue = new PromptQueue();
 
-    const workspaceFolderPath =
-      workspaceFolder?.uri.fsPath ??
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
-      "";
-    this.outputHistoryManager = new OutputHistoryManager(workspaceFolderPath);
+    const resolvedWorkspacePath =
+      workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    this.outputHistoryManager = new OutputHistoryManager(resolvedWorkspacePath);
 
-    this.endConditionEvaluator = new EndConditionEvaluator(context);
+    this.endConditionEvaluator = new EndConditionEvaluator(this.platform);
     this.endConditionHandler = new EndConditionHandler(
       this.endConditionEvaluator,
       this.promptQueue,
-      () => this.activeDashboard
+      () => this.activeDashboard,
+      this.platform
     );
     this.workflowExecutor = new WorkflowExecutor(
       this.promptQueue,
       this.promptFileParser,
       this.endConditionHandler,
-      this.endConditionEvaluator
+      this.endConditionEvaluator,
+      this.platform
     );
     this.promptFileLoader = new PromptFileLoader(
       this.promptFileParser,
@@ -222,7 +226,9 @@ export class WorkflowInstance {
    * output is not routed to the UI.
    */
   private get activeDashboard(): FlightPathWebviewProvider | undefined {
-    return this.isActive ? this.dashboardProvider : undefined;
+    return this.isActive
+      ? (this.dashboardSink as unknown as FlightPathWebviewProvider | undefined)
+      : undefined;
   }
 
   /**
@@ -266,7 +272,7 @@ export class WorkflowInstance {
    * and internally when flushing the event buffer.
    */
   sendFullStateToDashboard(): void {
-    if (!this.dashboardProvider) {
+    if (!this.dashboardSink) {
       return;
     }
     const state = this.promptQueue.getState();
@@ -276,7 +282,7 @@ export class WorkflowInstance {
     Log.info(
       `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.stepOutputBuffer.size}`
     );
-    this.dashboardProvider.updateSessionRestored(
+    this.dashboardSink.updateSessionRestored(
       fileName,
       state.prompts,
       state.results,
@@ -295,14 +301,14 @@ export class WorkflowInstance {
         // If this step had retries, send retry state BEFORE the outputs so
         // the webview store's addCliOutput guard accepts attemptIndex > 0.
         if (entry.retryState) {
-          this.dashboardProvider.updateRetryAttempt(
+          this.dashboardSink.updateRetryAttempt(
             stepIndex,
             entry.retryState.currentRetry,
             entry.retryState.maxRetries
           );
         }
         for (const output of entry.outputs) {
-          this.dashboardProvider.updateCliOutput(stepIndex, output);
+          this.dashboardSink.updateCliOutput(stepIndex, output);
         }
       }
     }
@@ -343,7 +349,7 @@ export class WorkflowInstance {
             Log.info(
               `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: sending fallback retryState for step ${runningStep} (attempt ${buffer.attemptIndex}/${maxRetries})`
             );
-            this.dashboardProvider.updateRetryAttempt(
+            this.dashboardSink.updateRetryAttempt(
               runningStep,
               buffer.attemptIndex,
               maxRetries
@@ -352,7 +358,7 @@ export class WorkflowInstance {
         }
 
         // Re-initialize the step as streaming (so the output panel shows it correctly)
-        this.dashboardProvider.updateCliOutput(runningStep, {
+        this.dashboardSink.updateCliOutput(runningStep, {
           prompt: buffer.prompt,
           response: "",
           elapsed: 0,
@@ -366,7 +372,7 @@ export class WorkflowInstance {
         });
         // Replay the accumulated text as a single chunk
         if (buffer.accumulatedText) {
-          this.dashboardProvider.updateCliStreamingChunk(
+          this.dashboardSink.updateCliStreamingChunk(
             runningStep,
             buffer.accumulatedText
           );
@@ -500,7 +506,7 @@ export class WorkflowInstance {
 
     const workingFilePath = await this.promptFileLoader.loadPromptFile(
       filePath,
-      this.workspaceFolder
+      this.workspaceFolderPath
     );
 
     if (workingFilePath) {
@@ -549,7 +555,7 @@ export class WorkflowInstance {
       Log.info(`Loaded workflow: ${filePath}`);
     } catch (loadError) {
       Log.error("Failed to load workflow:", loadError as Error);
-      vscode.window.showErrorMessage(
+      this.platform.error(
         `Failed to load workflow: ${loadError instanceof Error ? loadError.message : String(loadError)}`
       );
       throw loadError;
@@ -593,7 +599,7 @@ export class WorkflowInstance {
     continueFromCurrent: boolean = false
   ): Promise<void> {
     if (!this.currentPromptFile) {
-      vscode.window.showWarningMessage(
+      this.platform.warn(
         "No prompt file loaded. Use 'Change' button to select a file first."
       );
       return;
@@ -627,8 +633,8 @@ export class WorkflowInstance {
     try {
       Log.info(`FlightPath: Executing loaded prompt file: ${filePath}`);
 
-      if (this.dashboardProvider && !this.isDashboardReady()) {
-        const action = await vscode.window.showWarningMessage(
+      if (this.dashboardSink && !this.isDashboardReady()) {
+        const action = await this.platform.showChoice(
           `FlightPath dashboard is still initializing. Please wait a moment and try again.`,
           "Retry",
           "Cancel"
@@ -653,7 +659,7 @@ export class WorkflowInstance {
       const integration = this.createIntegrationForMode(modeOverride);
 
       if (detailedStatus.initializationStatus === HarnessStatus.Initializing) {
-        const action = await vscode.window.showWarningMessage(
+        const action = await this.platform.showChoice(
           `FlightPath is still initializing Copilot integration. Please wait a moment and try again.`,
           "Retry",
           "Cancel"
@@ -669,7 +675,7 @@ export class WorkflowInstance {
       }
 
       if (detailedStatus.initializationStatus === HarnessStatus.Waiting) {
-        const action = await vscode.window.showWarningMessage(
+        const action = await this.platform.showChoice(
           `FlightPath is waiting for Copilot to activate (attempt ${detailedStatus.pollingAttempts}/${detailedStatus.maxPollingAttempts}). Please wait...`,
           "Retry",
           "Cancel"
@@ -685,7 +691,7 @@ export class WorkflowInstance {
       }
 
       if (detailedStatus.initializationStatus === HarnessStatus.Unavailable) {
-        const action = await vscode.window.showErrorMessage(
+        const action = await this.platform.showChoice(
           `FlightPath: Copilot automation is unavailable. Please ensure GitHub Copilot Chat is installed and active.`,
           "Retry Detection",
           "View Requirements",
@@ -746,7 +752,7 @@ export class WorkflowInstance {
             this.outputHistoryManager.getRunTimestamps(workflowId),
             this.outputHistoryManager.getRunStates(workflowId),
           ]);
-          this.dashboardProvider?.notifyRunHistoryUpdated(
+          this.dashboardSink?.notifyRunHistoryUpdated(
             historyInit.runCount,
             runTimestamps,
             runStates
@@ -807,13 +813,13 @@ export class WorkflowInstance {
         );
       }
 
-      if (this.dashboardProvider && totalPrompts > 0) {
+      if (this.dashboardSink && totalPrompts > 0) {
         if (continueFromCurrent) {
           const currentIndex = currentQueueState.currentIndex;
           Log.info(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true, preserveStepCount=${currentIndex}, totalSteps=${totalPrompts}`
           );
-          this.dashboardProvider.updateExecutionStarted(
+          this.dashboardSink.updateExecutionStarted(
             fileName,
             totalPrompts,
             true,
@@ -823,7 +829,7 @@ export class WorkflowInstance {
           Log.info(
             `[executeLoadedPromptFile] Sending EXECUTION_STARTED isContinuation=true (append-to-completed), preserveStepCount=${prevCompletedCount}, totalSteps=${totalPrompts}`
           );
-          this.dashboardProvider.updateExecutionStarted(
+          this.dashboardSink.updateExecutionStarted(
             fileName,
             totalPrompts,
             true,
@@ -835,7 +841,7 @@ export class WorkflowInstance {
           );
           this.stepOutputBuffer.clear();
           this.completedStepOutputs.clear();
-          this.dashboardProvider.updateExecutionStarted(fileName, totalPrompts);
+          this.dashboardSink.updateExecutionStarted(fileName, totalPrompts);
         }
       }
 
@@ -854,7 +860,7 @@ export class WorkflowInstance {
     } catch (error) {
       Log.error("Failed to execute prompt file:", error);
       await this.promptQueue.markErrored();
-      vscode.window.showErrorMessage(`FlightPath: Execution failed: ${error}`);
+      this.platform.error(`FlightPath: Execution failed: ${error}`);
     }
   }
 
@@ -972,7 +978,7 @@ export class WorkflowInstance {
       const parsed = await this.promptFileParser.parsePromptFile(filePath);
 
       if (!parsed?.prompts?.length) {
-        vscode.window.showErrorMessage("No prompts found in file");
+        this.platform.error("No prompts found in file");
         return;
       }
 
@@ -998,7 +1004,7 @@ export class WorkflowInstance {
       }
 
       if (!this.promptQueue.canAppend()) {
-        vscode.window.showErrorMessage(
+        this.platform.error(
           "Cannot queue prompts: Workflow must be cleared first"
         );
         return;
@@ -1010,7 +1016,7 @@ export class WorkflowInstance {
       const newSize = currentSize + parsed.prompts.length;
 
       if (!unlimitedMode && newSize > maxQueueSize) {
-        vscode.window.showWarningMessage(
+        this.platform.warn(
           `Queue size limit exceeded: ${newSize}/${maxQueueSize} prompts. ` +
             `Enable unlimitedMode or increase maxQueueSize to proceed.`
         );
@@ -1020,10 +1026,10 @@ export class WorkflowInstance {
       const source = `User append (${position}): ${path.basename(filePath)}`;
       await this.promptQueue.appendPrompts(parsed.prompts, source, position);
 
-      if (this.dashboardProvider) {
+      if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
-        this.dashboardProvider.updateProgress(
+        this.dashboardSink.updatePromptsExtended(updatedState.prompts);
+        this.dashboardSink.updateProgress(
           updatedState.currentIndex,
           updatedState.prompts.length
         );
@@ -1043,12 +1049,12 @@ export class WorkflowInstance {
         position === QUEUE_POSITION.NEXT
           ? "after current prompt"
           : "at end of queue";
-      vscode.window.showInformationMessage(
+      this.platform.log(
         `Queued ${parsed.prompts.length} prompt(s) ${positionText}`
       );
     } catch (error) {
       Log.error("Failed to queue prompts:", error);
-      vscode.window.showErrorMessage(
+      this.platform.error(
         `Failed to queue prompts: ${error instanceof Error ? error.message : String(error)}`
       );
     }
@@ -1087,9 +1093,9 @@ export class WorkflowInstance {
       ...this.buildPromptItemProperties(properties),
     };
     await this.promptQueue.updatePrompt(index, updates);
-    if (this.dashboardProvider) {
+    if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
-      this.dashboardProvider.updatePromptsExtended(currentState.prompts);
+      this.dashboardSink.updatePromptsExtended(currentState.prompts);
     }
     Log.info(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
   }
@@ -1099,15 +1105,12 @@ export class WorkflowInstance {
       `🗑️ WorkflowInstance.deletePromptFromQueue: Deleting prompt at index ${index}`
     );
     await this.promptQueue.deletePrompt(index);
-    if (this.dashboardProvider) {
+    if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
       const fileName = this.currentPromptFile
         ? path.basename(this.currentPromptFile.filePath)
         : "Untitled";
-      this.dashboardProvider.updatePromptDeleted(
-        fileName,
-        currentState.prompts
-      );
+      this.dashboardSink.updatePromptDeleted(fileName, currentState.prompts);
     }
     Log.info(`Deleted prompt ${index}`);
   }
@@ -1115,9 +1118,9 @@ export class WorkflowInstance {
   async resetWorkflowState(): Promise<void> {
     Log.info("WorkflowInstance.resetWorkflowState: Resetting workflow state");
     await this.promptQueue.restart();
-    if (this.dashboardProvider) {
+    if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
-      this.dashboardProvider.notifyWorkflowStateReset(currentState.prompts);
+      this.dashboardSink.notifyWorkflowStateReset(currentState.prompts);
     }
     Log.info("WorkflowInstance.resetWorkflowState: Complete");
   }
@@ -1211,9 +1214,9 @@ export class WorkflowInstance {
         shouldRun
       );
 
-      if (this.dashboardProvider) {
+      if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardProvider.updatePromptsExtended(updatedState.prompts);
+        this.dashboardSink.updatePromptsExtended(updatedState.prompts);
       }
 
       if (shouldRun) {
@@ -1305,7 +1308,7 @@ export class WorkflowInstance {
       // undefined and background output stops flowing to the UI.
       const self = this;
       const workflowContext: WorkflowContext = {
-        workspaceFolderPath: this.workspaceFolder?.uri.fsPath,
+        workspaceFolderPath: this.workspaceFolderPath,
         currentPromptFilePath: this.currentPromptFile?.filePath,
         get dashboardProvider() {
           return self.activeDashboard;
@@ -1321,9 +1324,13 @@ export class WorkflowInstance {
           prompt: PromptItem,
           harnessOverride?: Harness
         ) => {
-          const currentIntegration = this.activeIntegration ?? activeIntegration;
+          const currentIntegration =
+            this.activeIntegration ?? activeIntegration;
           const resolvedHarness = harnessOverride || prompt.harness;
-          if (resolvedHarness && resolvedHarness !== currentIntegration.getIntegrationMode()) {
+          if (
+            resolvedHarness &&
+            resolvedHarness !== currentIntegration.getIntegrationMode()
+          ) {
             currentIntegration.closeTerminal(); // close orphaned terminal before switching harnesses
             Log.info(
               `🔀 Prompt ${prompt.name || "unnamed"} switching to harness: ${resolvedHarness}`
@@ -1479,9 +1486,9 @@ export class WorkflowInstance {
     );
     this.onStatusBarUpdate();
 
-    if (this.isActive && this.dashboardProvider) {
+    if (this.isActive && this.dashboardSink) {
       // Active workflow: forward state changes directly to the dashboard
-      this.dashboardProvider.updateExecutionState(state.status);
+      this.dashboardSink.updateExecutionState(state.status);
 
       // When cancelling, the currently-executing step must be marked CANCELLED.
       // The queue updates its internal result record but WorkflowExecutor never
@@ -1490,7 +1497,7 @@ export class WorkflowInstance {
       if (state.status === EXECUTION_STATES.CANCELLING) {
         const currentResult = state.results[state.currentIndex];
         if (currentResult && currentResult.status === STEP_STATUS.CANCELLED) {
-          this.dashboardProvider.updateStepStatus(state.currentIndex, {
+          this.dashboardSink.updateStepStatus(state.currentIndex, {
             state: STEP_STATUS.CANCELLED,
           });
         }
@@ -1500,8 +1507,8 @@ export class WorkflowInstance {
         Log.info(
           `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.prompts.length}. Notifying dashboard.`
         );
-        this.dashboardProvider.updatePromptsExtended(state.prompts);
-        this.dashboardProvider.updateProgress(
+        this.dashboardSink.updatePromptsExtended(state.prompts);
+        this.dashboardSink.updateProgress(
           state.currentIndex,
           state.prompts.length
         );
@@ -1533,7 +1540,7 @@ export class WorkflowInstance {
         state.workingFilePath || undefined
       ).catch((error) => {
         Log.error("Auto-start failed:", error);
-        vscode.window.showErrorMessage(
+        this.platform.error(
           `FlightPath: Failed to auto-start workflow: ${error}`
         );
       });
@@ -1570,20 +1577,20 @@ export class WorkflowInstance {
       }
     }
 
-    const workspaceFolder =
-      this.workspaceFolder ?? vscode.workspace.workspaceFolders?.[0];
-    if (!workingFilePath && workspaceFolder) {
+    const workspaceFolderPath =
+      this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
+    if (!workingFilePath && workspaceFolderPath) {
       try {
         workingFilePath = await this.promptQueue.createWorkingFile(
           displayName,
           prompts,
-          workspaceFolder,
+          workspaceFolderPath,
           originalFilePath
         );
         Log.info(`✅ Created working file: ${workingFilePath}`);
 
-        if (this.dashboardProvider) {
-          await this.dashboardProvider.applyPendingWorkflowProperties();
+        if (this.dashboardSink) {
+          await this.dashboardSink.applyPendingWorkflowProperties();
         }
       } catch (error) {
         Log.error("Failed to create working file:", error);
@@ -1614,9 +1621,9 @@ export class WorkflowInstance {
         `, getSummary().workflowName="${this.getSummary().workflowName || "(empty)"}"`
     );
 
-    if (this.dashboardProvider) {
+    if (this.dashboardSink) {
       const queueState = this.promptQueue.getState();
-      this.dashboardProvider.updateFileSelected(
+      this.dashboardSink.updateFileSelected(
         displayName,
         prompts,
         queueState.workflowName || undefined
@@ -1640,7 +1647,7 @@ export class WorkflowInstance {
     }
 
     if (notificationMessage) {
-      vscode.window.showInformationMessage(notificationMessage);
+      this.platform.log(notificationMessage);
     }
 
     return workingFilePath;

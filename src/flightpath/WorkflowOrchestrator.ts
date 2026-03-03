@@ -4,6 +4,7 @@ import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CliIntegration } from "./cli/CliIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
+import { VsCodeIntegrationFactory } from "./VsCodeIntegrationFactory";
 import { WorkflowInstance } from "./WorkflowInstance";
 import { PromptQueue } from "./PromptQueue";
 import {
@@ -30,6 +31,7 @@ import { TemplateImporter } from "./orchestration/TemplateImporter";
 import { WorkflowCommandHandler } from "./orchestration/WorkflowCommandHandler";
 import { WorkspaceSessionManager } from "./orchestration/WorkspaceSessionManager";
 import { PromptFileParser } from "./PromptFileParser";
+import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 
 /**
  * WorkflowOrchestrator
@@ -63,7 +65,7 @@ export class WorkflowOrchestrator {
   // Cross-cutting concerns
   // ─────────────────────────────────────────────────────────────────────────
   private dashboardProvider?: FlightPathWebviewProvider;
-  private readonly integrationFactory: IntegrationFactory;
+  private readonly integrationFactory: VsCodeIntegrationFactory;
   private readonly statusBarManager: StatusBarManager;
   private currentWorkspaceFolder: vscode.WorkspaceFolder | undefined;
 
@@ -90,7 +92,9 @@ export class WorkflowOrchestrator {
     dashboardProvider?: FlightPathWebviewProvider
   ) {
     this.dashboardProvider = dashboardProvider;
-    this.integrationFactory = new IntegrationFactory(context);
+    this.integrationFactory = new VsCodeIntegrationFactory(
+      new VsCodeAdapter(context)
+    );
 
     // Create the four shared harness integrations
     this.copilotCliIntegration = this.integrationFactory.createCopilotCli();
@@ -105,12 +109,15 @@ export class WorkflowOrchestrator {
     this.currentWorkspaceFolder = vscode.workspace.workspaceFolders?.[0];
 
     // Shared parsers / orchestration helpers
-    this.promptFileParser = new PromptFileParser();
+    this.promptFileParser = new PromptFileParser(new VsCodeAdapter(context));
     this.workspaceSessionManager = new WorkspaceSessionManager(
-      this.promptFileParser
+      this.promptFileParser,
+      new VsCodeAdapter(context)
     );
     this.templateImporter = new TemplateImporter(context);
-    this.endConditionEvaluatorForCommands = new EndConditionEvaluator(context);
+    this.endConditionEvaluatorForCommands = new EndConditionEvaluator(
+      new VsCodeAdapter(context)
+    );
     this.workflowCommandHandler = new WorkflowCommandHandler(
       context,
       this.promptFileParser,
@@ -381,7 +388,7 @@ export class WorkflowOrchestrator {
 
       if (this.currentWorkspaceFolder) {
         await this.workspaceSessionManager.discoverPromptFiles(
-          this.currentWorkspaceFolder
+          this.currentWorkspaceFolder.uri.fsPath
         );
       }
 
@@ -426,7 +433,7 @@ export class WorkflowOrchestrator {
       Log.info("Triggering auto-load of recent session");
 
       await this.workspaceSessionManager.autoLoadRecentSession(
-        this.currentWorkspaceFolder,
+        this.currentWorkspaceFolder.uri.fsPath,
         async (workingFilePath: string) => {
           await this.getActiveInstance().autoLoadFromWorkingFile(
             workingFilePath
@@ -708,7 +715,7 @@ export class WorkflowOrchestrator {
 
     try {
       const sessions = await this.workspaceSessionManager.discoverSessions(
-        this.currentWorkspaceFolder
+        this.currentWorkspaceFolder.uri.fsPath
       );
 
       if (sessions.length === 0) {
@@ -856,7 +863,7 @@ export class WorkflowOrchestrator {
    */
   private buildWorkflowInstance(): WorkflowInstance {
     const instance = new WorkflowInstance(
-      this.context,
+      new VsCodeAdapter(this.context),
       this.dashboardProvider,
       this.integrationFactory,
       (harnessOverride?: Harness) =>
@@ -864,7 +871,7 @@ export class WorkflowOrchestrator {
       (name: string | undefined) =>
         this.propagateWorkflowNameToIntegrations(name),
       () => this.updateStatusBar(),
-      this.currentWorkspaceFolder
+      this.currentWorkspaceFolder?.uri.fsPath
     );
 
     Log.info(`buildWorkflowInstance: created inst:${instance.id.slice(0, 8)}`);

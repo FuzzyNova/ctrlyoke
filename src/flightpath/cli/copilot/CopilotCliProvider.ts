@@ -1,6 +1,5 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
@@ -98,7 +97,7 @@ export class CopilotCliProvider implements ICliProvider {
   async buildCliArgs(
     prompt: PromptItem,
     isInteractive: boolean,
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
@@ -122,7 +121,7 @@ export class CopilotCliProvider implements ICliProvider {
       prompt,
       workflowContext,
       workspaceRoot,
-      context,
+      extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv) =>
         this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
     );
@@ -146,7 +145,10 @@ export class CopilotCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure sessionEnd hook for completion detection
       if (workspaceRoot) {
-        const hookArgs = this.buildSessionEndHookArgs(context, workspaceRoot);
+        const hookArgs = this.buildSessionEndHookArgs(
+          extensionPath,
+          workspaceRoot
+        );
         args.push(...hookArgs);
         Log.debug(`🔔 Configured sessionEnd hook for completion detection`);
       }
@@ -214,7 +216,7 @@ export class CopilotCliProvider implements ICliProvider {
     const message = `Model "${requestedModel}" not supported by Copilot CLI. Using default: ${defaultModel}`;
     Log.warn(`⚠️ ${message}`);
 
-    vscode.window.showWarningMessage(
+    console.warn(
       `FlightPath: ${message}\n\nCLI-supported models: ${supportedModels.join(", ")}`
     );
 
@@ -230,7 +232,7 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns CLI arguments array
    */
   private buildSessionEndHookArgs(
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string
   ): string[] {
     // Get notification directory from notification monitor
@@ -238,7 +240,8 @@ export class CopilotCliProvider implements ICliProvider {
       this.notificationMonitor.getNotificationDirectory(workspaceRoot);
 
     // Get hook script path from extension
-    const hookScriptPath = context.asAbsolutePath(
+    const hookScriptPath = path.join(
+      extensionPath,
       "out/scripts/flightpath-copilot-hook.js"
     );
 

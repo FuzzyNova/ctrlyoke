@@ -34,12 +34,12 @@ export class PromptFileLoader {
   /**
    * Load a prompt file into the queue without executing
    * @param filePath Path to the prompt file
-   * @param workspaceFolder Current workspace folder for working file creation
+   * @param workspaceFolderPath Path to workspace folder root for working file creation
    * @returns Working file path if created, undefined otherwise
    */
   async loadPromptFile(
     filePath: string,
-    workspaceFolder?: vscode.WorkspaceFolder
+    workspaceFolderPath?: string
   ): Promise<string | undefined> {
     try {
       Log.info(`Loading prompt file: ${filePath}`);
@@ -70,12 +70,12 @@ export class PromptFileLoader {
 
       // Create working file in .flightpath/.queue/ directory
       let workingFilePath: string | undefined;
-      if (workspaceFolder) {
+      if (workspaceFolderPath) {
         try {
           workingFilePath = await this.promptQueue.createWorkingFile(
             filePath,
             promptFile.prompts,
-            workspaceFolder,
+            workspaceFolderPath,
             filePath // real source file path — stored as originalFile
           );
 

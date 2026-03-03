@@ -1,4 +1,3 @@
-import type * as vscode from "vscode";
 import type { IResponseParser } from "./IResponseParser";
 import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper } from "./IToolPermissionMapper";
@@ -105,7 +104,7 @@ export interface ICliProvider {
   buildCliArgs(
     prompt: PromptItem,
     isInteractive: boolean,
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {

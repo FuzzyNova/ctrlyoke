@@ -328,6 +328,50 @@ export class CliProcessManager {
   }
 
   /**
+   * Spawn a CLI process in interactive mode with stdio inherited from the
+   * parent process. All three file descriptors (stdin, stdout, stderr) are
+   * wired to the user's terminal so the AI CLI runs as if launched directly.
+   *
+   * Used exclusively in the standalone CLI binary (CliAdapter context).
+   * The VS Code extension always uses createTerminal() instead.
+   *
+   * @param command Full shell command string (e.g. "claude \"@file\" --model foo")
+   * @param workingDirectory Working directory for the child process
+   */
+  async spawnInteractive(
+    command: string,
+    workingDirectory: string
+  ): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.logger?.(`📤 Spawning interactive: ${command}`);
+
+      const child = spawn(command, [], {
+        cwd: workingDirectory,
+        stdio: "inherit",
+        shell: true,
+      });
+
+      this.currentProcess = child;
+
+      child.on("close", () => {
+        if (this.currentProcess === child) {
+          this.currentProcess = undefined;
+        }
+        this.logger?.("✅ Interactive process exited");
+        resolve();
+      });
+
+      child.on("error", (err: Error) => {
+        if (this.currentProcess === child) {
+          this.currentProcess = undefined;
+        }
+        this.logger?.(`❌ Interactive process error: ${err.message}`);
+        resolve(); // treat errors as exit — caller checks success via return value
+      });
+    });
+  }
+
+  /**
    * Dispose only the process resources, leaving the terminal open.
    * Used when closeTerminalWhenPromptCompletes is false.
    */

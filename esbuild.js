@@ -207,14 +207,50 @@ async function main() {
     logLevel: "silent",
   });
 
+  // Build standalone CLI binary
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "package.json"), "utf-8")
+  );
+  const cliCtx = await esbuild.context({
+    entryPoints: ["src/cli.ts"],
+    bundle: true,
+    format: "cjs",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "node",
+    target: "node22",
+    outfile: "out/cli.js",
+    // vscode is intentionally NOT in externals — the shim below satisfies all vscode imports
+    // with no-op stubs so the CLI binary can run in plain Node.js without VS Code present.
+    external: ["node-pty"], // optional native dep; not used by CLI paths
+    alias: {
+      // Redirect all `import ... from 'vscode'` in the CLI bundle to the no-op shim.
+      // The real vscode module is only available inside the VS Code extension host.
+      vscode: path.resolve(__dirname, "src/platform/vscode-shim.ts"),
+    },
+    logLevel: "silent",
+    banner: {
+      js: "#!/usr/bin/env node",
+    },
+    define: {
+      ...defineConstants,
+      VERSION: JSON.stringify(packageJson.version || "0.0.0"),
+      IS_DEV_MODE: "false", // CLI is always production-like
+    },
+  });
+
   if (watch) {
     await ctx.watch();
     await mcpCtx.watch();
+    await cliCtx.watch();
   } else {
     await ctx.rebuild();
     await mcpCtx.rebuild();
+    await cliCtx.rebuild();
     await ctx.dispose();
     await mcpCtx.dispose();
+    await cliCtx.dispose();
   }
 }
 

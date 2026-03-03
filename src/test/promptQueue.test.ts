@@ -317,7 +317,7 @@ suite("PromptQueue State Machine Tests", () => {
       const workingFilePath = await queue.createWorkingFile(
         "test.flightpath.json",
         samplePrompts,
-        workspaceFolder
+        workspaceFolder.uri.fsPath
       );
 
       // Complete some prompts

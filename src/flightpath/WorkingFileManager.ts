@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { PromptItem, WorkingFile } from "../types/FlightPathTypes";
@@ -64,7 +63,7 @@ export class WorkingFileManager {
    */
   private async generateWorkingFilePath(
     originalFilePath: string,
-    workspaceFolder: vscode.WorkspaceFolder
+    workspaceFolderPath: string
   ): Promise<string> {
     const fileName = path.basename(
       originalFilePath,
@@ -75,7 +74,7 @@ export class WorkingFileManager {
       .replace(/[:.]/g, "-")
       .substring(0, 19);
     const queueDir = path.join(
-      workspaceFolder.uri.fsPath,
+      workspaceFolderPath,
       PATH_CONSTANTS.FLIGHTPATH_DIR,
       PATH_CONSTANTS.QUEUE_DIR
     );
@@ -166,13 +165,13 @@ export class WorkingFileManager {
   public async createWorkingFile(
     nameForFile: string,
     prompts: PromptItem[],
-    workspaceFolder: vscode.WorkspaceFolder,
+    workspaceFolderPath: string,
     workflowName: string,
     originalFilePath?: string
   ): Promise<string> {
     const workingFilePath = await this.generateWorkingFilePath(
       nameForFile,
-      workspaceFolder
+      workspaceFolderPath
     );
 
     const workingFile: WorkingFile = {

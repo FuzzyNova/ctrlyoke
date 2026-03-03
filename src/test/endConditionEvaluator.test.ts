@@ -4,33 +4,25 @@ import {
   EndConditionEvaluator,
   EvaluationResult,
 } from "../flightpath/EndConditionEvaluator";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 suite("EndConditionEvaluator Tests", () => {
   let evaluator: EndConditionEvaluator;
 
   setup(() => {
-    // Create a mock extension context for testing
-    const mockContext = {
-      extensionPath: "",
-      subscriptions: [],
-      workspaceState: {} as any,
-      globalState: {} as any,
-      extensionUri: vscode.Uri.file(""),
-      storageUri: undefined,
-      globalStorageUri: vscode.Uri.file(""),
-      logUri: vscode.Uri.file(""),
-      extensionMode: vscode.ExtensionMode.Test,
-      environmentVariableCollection: {} as any,
-      secrets: {} as any,
-      languageModelAccessInformation: {} as any,
-      asAbsolutePath: (relativePath: string) => relativePath,
-      storagePath: undefined,
-      globalStoragePath: "",
-      logPath: "",
-      extension: {} as any,
-    } as unknown as vscode.ExtensionContext;
+    // Create a minimal mock PlatformAdapter for testing
+    const mockPlatform: PlatformAdapter = {
+      getConfig: <T>(_key: string, defaultValue: T) => defaultValue,
+      getWorkspaceRoot: () => "",
+      getExtensionPath: () => "",
+      log: () => {},
+      warn: () => {},
+      error: () => {},
+      showProgress: () => {},
+      showChoice: async () => undefined,
+    };
 
-    evaluator = new EndConditionEvaluator(mockContext);
+    evaluator = new EndConditionEvaluator(mockPlatform);
   });
 
   teardown(() => {

@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import * as path from "path";
+import { PlatformAdapter } from "../platform/PlatformAdapter";
 import {
   PromptItem,
   PromptFile,
@@ -114,7 +114,8 @@ export class WorkflowExecutor {
     private readonly promptQueue: PromptQueue,
     private readonly promptFileParser: PromptFileParser,
     private readonly endConditionHandler: EndConditionHandler,
-    private readonly endConditionEvaluator: EndConditionEvaluator
+    private readonly endConditionEvaluator: EndConditionEvaluator,
+    private readonly platform: PlatformAdapter
   ) {}
 
   /**
@@ -577,9 +578,9 @@ export class WorkflowExecutor {
     // Set up streaming listeners.
     // streamingDisposable is always registered (not gated on dashboardProvider) so background
     // workflows can buffer their output for replay when the user switches back to them.
-    let streamingDisposable: vscode.Disposable | undefined;
-    let structuredStreamingDisposable: vscode.Disposable | undefined;
-    let promptReadyDisposable: vscode.Disposable | undefined;
+    let streamingDisposable: { dispose(): void } | undefined;
+    let structuredStreamingDisposable: { dispose(): void } | undefined;
+    let promptReadyDisposable: { dispose(): void } | undefined;
 
     if (context.dashboardProvider) {
       promptReadyDisposable = integration.onPromptReady((data) => {
@@ -804,7 +805,7 @@ export class WorkflowExecutor {
    */
   private async showDashboard(): Promise<void> {
     try {
-      await vscode.commands.executeCommand("flightpath.dashboard.focus");
+      this.platform.focusDashboard?.();
     } catch (error) {
       Log.error("Could not focus dashboard panel:", error);
     }
@@ -835,7 +836,7 @@ export class WorkflowExecutor {
 
       const message = `Workflow stopped - Maximum execution time reached (${elapsedSec}s / ${maxTimeSec}s).\nCompleted ${completedCount} of ${totalPrompts} prompts. ${remainingCount} prompts remaining in queue.`;
 
-      vscode.window.showWarningMessage(message);
+      this.platform.warn(message);
       Log.info(`⏱️ ${message}`);
 
       await this.promptQueue.markErrored();
@@ -894,7 +895,7 @@ export class WorkflowExecutor {
 
     // Real error - get the specific failure reason and show message
     const failureReason = integration.getLastFailureReason();
-    vscode.window.showErrorMessage(
+    this.platform.error(
       `Failed to execute prompt ${currentIndex + 1}: ${failureReason}`
     );
 

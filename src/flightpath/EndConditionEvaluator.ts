@@ -1,10 +1,11 @@
-import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { Log } from "../utils/Log";
 import { EndCondition } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { CliProcessManager } from "../utils/CliProcessManager";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 export interface EvaluationResult {
   success: boolean;
@@ -18,13 +19,12 @@ export interface EvaluationResult {
 }
 
 export class EndConditionEvaluator {
-  private context: vscode.ExtensionContext;
+  private platform: PlatformAdapter;
   private processManager: CliProcessManager;
 
-  constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-    const workspaceRoot =
-      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "";
+  constructor(platform: PlatformAdapter) {
+    this.platform = platform;
+    const workspaceRoot = platform.getWorkspaceRoot();
     this.processManager = new CliProcessManager(workspaceRoot, (msg) =>
       Log.info(msg)
     );
@@ -139,13 +139,12 @@ export class EndConditionEvaluator {
     scriptPath: string,
     workingDirectory?: string
   ): Promise<string | null> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    const workspaceRoot = workspaceFolder?.uri.fsPath;
+    const workspaceRoot = this.platform.getWorkspaceRoot();
 
     // Try absolute path first
     if (path.isAbsolute(scriptPath)) {
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(scriptPath));
+        await fs.promises.access(scriptPath);
         // Security: validate absolute path is within workspace
         if (workspaceRoot && !scriptPath.startsWith(workspaceRoot)) {
           Log.error(
@@ -163,7 +162,7 @@ export class EndConditionEvaluator {
     if (workingDirectory) {
       const fullPath = path.resolve(workingDirectory, scriptPath);
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(fullPath));
+        await fs.promises.access(fullPath);
         // Security: validate resolved path is within workspace
         if (workspaceRoot && !fullPath.startsWith(workspaceRoot)) {
           Log.error(
@@ -178,13 +177,10 @@ export class EndConditionEvaluator {
     }
 
     // Try relative to workspace root
-    if (workspaceFolder) {
-      const workspacePath = path.resolve(
-        workspaceFolder.uri.fsPath,
-        scriptPath
-      );
+    if (workspaceRoot) {
+      const workspacePath = path.resolve(workspaceRoot, scriptPath);
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(workspacePath));
+        await fs.promises.access(workspacePath);
         return workspacePath;
       } catch {
         // Continue to .flightpath directory
@@ -193,12 +189,12 @@ export class EndConditionEvaluator {
       // Try in .flightpath directory
       const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const flightpathPath = path.resolve(
-        workspaceFolder.uri.fsPath,
+        workspaceRoot,
         flightpathDir,
         scriptPath
       );
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(flightpathPath));
+        await fs.promises.access(flightpathPath);
         return flightpathPath;
       } catch {
         // Script not found
@@ -268,7 +264,7 @@ export class EndConditionEvaluator {
       `Spawning command - executable: "${executable}", args: [${args.map((a) => `"${a}"`).join(", ")}]`
     );
     Log.info(
-      `Working directory: ${workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath}`
+      `Working directory: ${workingDirectory || this.platform.getWorkspaceRoot()}`
     );
 
     // Clean VS Code-specific environment variables that interfere with nested VS Code instances
@@ -289,9 +285,7 @@ export class EndConditionEvaluator {
 
     try {
       const result = await this.processManager.spawn(executable, args, {
-        cwd:
-          workingDirectory ||
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+        cwd: workingDirectory || this.platform.getWorkspaceRoot(),
         timeout,
         env: cleanEnv,
       });
@@ -401,18 +395,18 @@ export class EndConditionEvaluator {
     scriptType: "python" | "javascript" | "shell" | "powershell",
     workingDirectory?: string
   ): Promise<string | null> {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder && !workingDirectory) {
+    const workspaceRoot = this.platform.getWorkspaceRoot();
+    if (!workspaceRoot && !workingDirectory) {
       return null;
     }
 
-    const baseDir = workingDirectory || workspaceFolder!.uri.fsPath;
+    const baseDir = workingDirectory || workspaceRoot!;
     const flightpathDir = path.join(baseDir, ".flightpath");
     const scriptsDir = path.join(flightpathDir, "scripts");
 
     // Ensure .flightpath/scripts directory exists
     try {
-      await vscode.workspace.fs.createDirectory(vscode.Uri.file(scriptsDir));
+      await fs.promises.mkdir(scriptsDir, { recursive: true });
     } catch {
       // Directory might already exist
     }
@@ -451,7 +445,7 @@ export class EndConditionEvaluator {
 
     // Get template file path from extension directory
     const templatePath = path.join(
-      this.context.extensionPath,
+      this.platform.getExtensionPath(),
       "out",
       "templates",
       templateFileName
@@ -460,15 +454,10 @@ export class EndConditionEvaluator {
 
     try {
       // Read template file
-      const templateContent = await vscode.workspace.fs.readFile(
-        vscode.Uri.file(templatePath)
-      );
+      const templateContent = await fs.promises.readFile(templatePath);
 
       // Write to destination
-      await vscode.workspace.fs.writeFile(
-        vscode.Uri.file(destinationPath),
-        templateContent
-      );
+      await fs.promises.writeFile(destinationPath, templateContent);
 
       // Make script executable on Unix systems
       if (process.platform !== "win32" && scriptType === "shell") {
@@ -494,9 +483,9 @@ export class EndConditionEvaluator {
     scriptPath: string
   ): Promise<{ valid: boolean; error?: string }> {
     try {
-      const stats = await vscode.workspace.fs.stat(vscode.Uri.file(scriptPath));
+      const stats = await fs.promises.stat(scriptPath);
 
-      if (stats.type !== vscode.FileType.File) {
+      if (!stats.isFile()) {
         return { valid: false, error: "Path is not a file" };
       }
 

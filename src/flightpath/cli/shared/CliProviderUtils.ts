@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
 import { Log } from "../../../utils/Log";
@@ -32,11 +31,7 @@ export class CliProviderUtils {
     const workspaceDirs: string[] = [];
 
     // Add primary workspace folder
-    if (vscode.workspace.workspaceFolders) {
-      vscode.workspace.workspaceFolders.forEach((folder) => {
-        workspaceDirs.push(folder.uri.fsPath);
-      });
-    }
+    workspaceDirs.push(workspaceRoot);
 
     // Add configured allowed directories
     const allowedDirs = ConfigurationUtils.getCliAllowedDirs();
@@ -63,7 +58,7 @@ export class CliProviderUtils {
    * @param prompt - The prompt item
    * @param workflowContext - Workflow context with resolved properties
    * @param workspaceRoot - Workspace root directory
-   * @param context - VS Code extension context
+   * @param extensionPath Extension installation directory
    * @param getMcpConfigArgs - Provider-specific MCP config args generator
    * @returns CLI arguments to add, or empty array if MCP not needed
    */
@@ -79,7 +74,7 @@ export class CliProviderUtils {
         }
       | undefined,
     workspaceRoot: string | undefined,
-    context: { asAbsolutePath(relativePath: string): string },
+    extensionPath: string,
     getMcpConfigArgs: (
       mcpServerPath: string,
       workspaceRoot: string,
@@ -115,7 +110,7 @@ export class CliProviderUtils {
       return [];
     }
 
-    const mcpServerPath = context.asAbsolutePath("out/mcp-server.js");
+    const mcpServerPath = path.join(extensionPath, "out/mcp-server.js");
 
     // Pass queue limits to MCP server via env vars so it enforces the same settings
     const additionalEnv: Record<string, string> = {

@@ -1,0 +1,397 @@
+import { Command } from "commander";
+import chalk from "chalk";
+import * as path from "path";
+import { access } from "fs/promises";
+import { CliAdapter } from "./platform/CliAdapter";
+import type { ResolvedCliConfig } from "./platform/CliAdapter";
+import { registerCliAdapter } from "./platform/vscode-shim";
+import { IntegrationFactory } from "./flightpath/IntegrationFactory";
+import { WorkflowInstance } from "./flightpath/WorkflowInstance";
+import { EXECUTION_STATES, STEP_STATUS } from "./types/DashboardConstants";
+import { Harness } from "./types/FlightPathTypes";
+import type { QueueState } from "./types/FlightPathTypes";
+import { CliTerminalFormatter } from "./flightpath/cli/shared/CliTerminalFormatter";
+
+// VERSION is injected by esbuild define
+declare const VERSION: string;
+const version = typeof VERSION !== "undefined" ? VERSION : "0.0.0-dev";
+
+const program = new Command();
+
+program
+  .name("flightpath")
+  .description("Execute AI-powered workflow automation from the command line")
+  .version(version);
+
+program
+  .command("run <file>")
+  .description("Execute a prompt or workflow file")
+  .option(
+    "-H, --harness <harness>",
+    "AI harness: copilot-cli, claude-cli, codex-cli",
+    "copilot-cli"
+  )
+  .option("-m, --model <model>", "Model to use")
+  .option(
+    "-d, --cwd <path>",
+    "Working directory (default: directory of prompt file)"
+  )
+  .option("-t, --timeout <seconds>", "Global timeout in seconds", "3600")
+  .option("--script-timeout <seconds>", "End condition script timeout", "30")
+  .option("--headless", "Force headless mode (CI/CD, no user interaction)")
+  .option(
+    "--interactive",
+    "Force interactive mode (TUI passthrough, user controls session end)"
+  )
+  .option(
+    "--allow-tool <pattern>",
+    "Allow specific tool pattern (repeatable)",
+    collectRepeatable,
+    [] as string[]
+  )
+  .option(
+    "--deny-tool <pattern>",
+    "Deny specific tool pattern (repeatable)",
+    collectRepeatable,
+    [] as string[]
+  )
+  .option("--allow-all-tools", "Dangerously allow all tools without approval")
+  .option(
+    "--add-dir <path>",
+    "Add directory to Copilot CLI allowed paths (repeatable)",
+    collectRepeatable,
+    [] as string[]
+  )
+  .option("--resume <session-id>", "Resume an existing session by ID")
+  .option(
+    "--new-session",
+    "Force a new session (ignore workflow resumeSession)"
+  )
+  .option("--json", "Output results as JSON")
+  .option("-q, --quiet", "Suppress all output except errors")
+  .option("--verbose", "Show debug information")
+  .option("--no-color", "Disable colored output")
+  .action(async (file: string, options: RunOptions) => {
+    await runCommand(file, options);
+  });
+
+program
+  .command("validate <file>")
+  .description("Validate a prompt file without executing it")
+  .action(async (file: string) => {
+    await validateCommand(file);
+  });
+
+program.parse();
+
+// ---- Types ----
+
+interface RunOptions {
+  harness: string;
+  model?: string;
+  cwd?: string;
+  timeout: string;
+  scriptTimeout: string;
+  headless?: boolean;
+  interactive?: boolean;
+  allowTool: string[];
+  denyTool: string[];
+  allowAllTools?: boolean;
+  addDir: string[];
+  resume?: string;
+  newSession?: boolean;
+  json?: boolean;
+  quiet?: boolean;
+  verbose?: boolean;
+  color?: boolean;
+}
+
+function collectRepeatable(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+/**
+ * Determine execution mode from CLI flags and TTY detection.
+ *
+ * Precedence:
+ *   1. --headless flag  → always headless
+ *   2. --interactive flag → always interactive
+ *   3. TTY detection: both stdout AND stdin are a TTY → interactive (default for terminal users)
+ *   4. Otherwise → headless (CI/CD, pipes, redirects)
+ */
+function getExecutionMode(
+  options: Pick<RunOptions, "headless" | "interactive">
+): "interactive" | "headless" {
+  if (options.headless) return "headless";
+  if (options.interactive) return "interactive";
+  return process.stdout.isTTY && process.stdin.isTTY
+    ? "interactive"
+    : "headless";
+}
+
+// ---- Helper: map harness string to Harness enum ----
+
+function resolveHarness(harnessStr: string): Harness {
+  switch (harnessStr) {
+    case "claude-cli":
+      return Harness.ClaudeCli;
+    case "codex-cli":
+      return Harness.CodexCli;
+    case "copilot-cli":
+    default:
+      return Harness.CopilotCli;
+  }
+}
+
+// ---- Commands ----
+
+async function runCommand(file: string, options: RunOptions): Promise<void> {
+  if (options.color === false) {
+    process.env.NO_COLOR = "1";
+  }
+
+  const resolvedFile = path.resolve(file);
+  const workingDir = options.cwd ?? path.dirname(resolvedFile);
+
+  // Detect execution mode: explicit flags override TTY auto-detection
+  const executionMode = getExecutionMode(options);
+
+  // In headless mode, auto-apply tool permissions unless the user specified
+  // custom allow/deny lists (which imply deliberate control).
+  const hasCustomTools =
+    (options.allowTool && options.allowTool.length > 0) ||
+    (options.denyTool && options.denyTool.length > 0);
+  const allowAllTools =
+    options.allowAllTools ?? (executionMode === "headless" && !hasCustomTools);
+
+  const config: ResolvedCliConfig = {
+    harness: options.harness || "copilot-cli",
+    model: options.model,
+    cwd: workingDir,
+    timeout: parseInt(options.timeout, 10) * 1000,
+    scriptTimeout: parseInt(options.scriptTimeout, 10) * 1000,
+    allowedTools: options.allowTool || [],
+    deniedTools: options.denyTool || [],
+    allowAllTools,
+    additionalDirs: options.addDir || [],
+    resume: options.resume,
+    newSession: options.newSession,
+    verbose: options.verbose ?? false,
+    quiet: options.quiet ?? false,
+    json: options.json ?? false,
+    color: options.color !== false,
+    headless: options.headless,
+    cliExecutionMode: executionMode,
+  };
+
+  const platform = new CliAdapter(config);
+  // Register the adapter with the vscode-shim so ConfigurationUtils calls inside
+  // providers (getCliAllowedTools, getCliToolPermissions, etc.) read CLI flag
+  // values instead of hard-coded defaults.
+  registerCliAdapter(platform);
+  const factory = new IntegrationFactory(platform);
+  const harness = resolveHarness(config.harness);
+
+  if (options.verbose) {
+    console.log(
+      chalk.dim(
+        `[verbose] Execution mode: ${executionMode} (TTY: stdout=${!!process.stdout.isTTY} stdin=${!!process.stdin.isTTY})`
+      )
+    );
+    console.log(chalk.dim(`[verbose] Harness: ${config.harness}`));
+    if (config.model) {
+      console.log(chalk.dim(`[verbose] Model: ${config.model}`));
+    }
+    console.log(chalk.dim(`[verbose] Workspace root: ${workingDir}`));
+  }
+
+  if (!options.quiet && !options.json) {
+    if (executionMode === "interactive") {
+      // In interactive mode the terminal belongs to the AI CLI — keep the
+      // FlightPath header minimal so it doesn't clutter the user's session.
+      console.log(
+        chalk.dim(
+          `FlightPath v${version} — starting ${chalk.yellow(config.harness)} in interactive mode…`
+        )
+      );
+      console.log();
+    } else {
+      console.log(chalk.bold(`FlightPath CLI v${version}`));
+      console.log(chalk.dim("━".repeat(52)));
+      console.log();
+      console.log(`Running: ${chalk.cyan(path.basename(resolvedFile))}`);
+      console.log(
+        `Harness: ${chalk.yellow(config.harness)}${config.model ? chalk.dim(" (" + config.model + ")") : ""}`
+      );
+      console.log(chalk.dim("─".repeat(52)));
+    }
+  }
+
+  // Create a cached detector integration (pre-marked as ready, used for pre-flight checks)
+  const detectorIntegration = factory.createForExecution(harness);
+
+  // In headless mode, stream structured events to the terminal as they arrive.
+  // Interactive mode passes the AI CLI's stdout straight through, so no subscription needed.
+  if (executionMode === "headless" && !options.quiet && !options.json) {
+    detectorIntegration.onStreamingEvents((events) => {
+      CliTerminalFormatter.renderEvents(events);
+    });
+  }
+
+  const instance = new WorkflowInstance(
+    platform,
+    undefined, // no dashboard sink in CLI
+    factory,
+    (_harnessOverride?: Harness) => detectorIntegration,
+    (_name: string | undefined) => {}, // no tab management
+    () => {}, // no status bar update
+    workingDir
+  );
+
+  // Handle Ctrl+C gracefully
+  const cleanup = async (): Promise<void> => {
+    if (!options.quiet) {
+      console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
+    }
+    await instance.stop();
+    process.exit(5);
+  };
+  process.on("SIGINT", () => {
+    void cleanup();
+  });
+  process.on("SIGTERM", () => {
+    void cleanup();
+  });
+
+  try {
+    await instance.loadPromptFile(resolvedFile);
+
+    // Apply --resume / --new-session overrides to the first prompt before execution.
+    // getState() returns a shallow copy but prompts[] is the same array reference,
+    // so mutations to PromptItem objects propagate into the queue's internal state.
+    const queueState = instance.promptQueue.getState();
+    if (config.resume && queueState.prompts.length > 0) {
+      queueState.prompts[0].sessionId = config.resume;
+      queueState.prompts[0].resumeSession = true;
+    } else if (config.newSession) {
+      for (const prompt of queueState.prompts) {
+        delete prompt.sessionId;
+        prompt.resumeSession = false;
+      }
+    }
+
+    await instance.executeLoadedPromptFile(harness);
+
+    const state = instance.promptQueue.getState();
+    const exitCode = getExitCode(state);
+    const completed = exitCode === 0;
+
+    if (options.json) {
+      const results = {
+        version,
+        file: resolvedFile,
+        harness: config.harness,
+        model: config.model,
+        status: state.status,
+        summary: {
+          total: state.prompts?.length ?? 0,
+          completed:
+            state.results?.filter((r) => r.status === STEP_STATUS.COMPLETED)
+              .length ?? 0,
+          failed:
+            state.results?.filter((r) => r.status === STEP_STATUS.FAILED)
+              .length ?? 0,
+        },
+      };
+      console.log(JSON.stringify(results, null, 2));
+    } else if (!options.quiet) {
+      console.log();
+      console.log(chalk.dim("━".repeat(52)));
+      if (completed) {
+        console.log(chalk.green("✓ Workflow completed successfully"));
+      } else {
+        console.log(chalk.red("✗ Workflow ended: " + state.status));
+      }
+    }
+
+    process.exit(exitCode);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (options.json) {
+      console.log(JSON.stringify({ status: "error", error: message }));
+    } else {
+      console.error(chalk.red("Error: " + message));
+    }
+    process.exit(2);
+  }
+}
+
+async function validateCommand(file: string): Promise<void> {
+  const resolvedFile = path.resolve(file);
+
+  // Check file existence before invoking the parser to avoid internal Log.error() noise.
+  try {
+    await access(resolvedFile);
+  } catch {
+    console.error(chalk.red(`Error: File not found: ${resolvedFile}`));
+    process.exit(2);
+    return;
+  }
+
+  try {
+    const { PromptFileParser } = await import("./flightpath/PromptFileParser");
+    const parser = new PromptFileParser();
+    const result = await parser.parsePromptFile(resolvedFile);
+    if (result) {
+      console.log(chalk.green(`✓ ${path.basename(resolvedFile)} is valid`));
+      console.log(chalk.dim(`  ${result.prompts?.length ?? 1} prompt(s)`));
+      process.exit(0);
+    } else {
+      console.error(
+        chalk.red(`✗ ${path.basename(resolvedFile)} failed validation`)
+      );
+      process.exit(2);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red("Error: " + message));
+    process.exit(2);
+  }
+}
+
+/**
+ * Determine a structured exit code from the final queue state.
+ *
+ * Exit codes:
+ *   0 – success (all prompts completed)
+ *   1 – prompt(s) failed (general AI / end-condition failure)
+ *   3 – provider error (CLI not installed, auth failure, command not found)
+ *   4 – timeout exceeded
+ */
+function getExitCode(state: QueueState): number {
+  if (state.status === EXECUTION_STATES.COMPLETED) return 0;
+  if (state.status === EXECUTION_STATES.ERROR) {
+    // Scan failed results for a clue about the error category.
+    const failedResult = state.results?.find(
+      (r) => r.status === STEP_STATUS.FAILED && r.error
+    );
+    const errorMsg = (failedResult?.error ?? "").toLowerCase();
+    if (
+      errorMsg.includes("timeout") ||
+      errorMsg.includes("timed out") ||
+      errorMsg.includes("time limit")
+    ) {
+      return 4;
+    }
+    if (
+      errorMsg.includes("not installed") ||
+      errorMsg.includes("not found") ||
+      errorMsg.includes("command not found") ||
+      errorMsg.includes("enoent")
+    ) {
+      return 3;
+    }
+    return 1;
+  }
+  return 1;
+}

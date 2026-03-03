@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import * as path from "path";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 import { PromptItem } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
@@ -74,7 +74,9 @@ export class EndConditionHandler {
     private readonly promptQueue: PromptQueue,
     private readonly getDashboard: () =>
       | FlightPathWebviewProvider
-      | undefined = () => undefined
+      | undefined = () => undefined,
+    private readonly platform?: PlatformAdapter,
+    private readonly openFile?: (filePath: string) => Promise<void>
   ) {}
 
   /**
@@ -143,7 +145,7 @@ export class EndConditionHandler {
 
     Log.error(`❌ ${errorMessage}`);
 
-    const action = await vscode.window.showErrorMessage(
+    const action = await this.platform?.showChoice(
       `FlightPath: ${errorMessage}`,
       DIALOG_ACTIONS.STOP_WORKFLOW,
       DIALOG_ACTIONS.SKIP_CONDITION,
@@ -159,16 +161,20 @@ export class EndConditionHandler {
         const script = prompt.endCondition.script.split(/\s+/)[0]; // Extract first token (path)
         if (this.looksLikeFilePath(script)) {
           try {
-            const scriptUri = vscode.Uri.file(script);
-            const doc = await vscode.workspace.openTextDocument(scriptUri);
-            await vscode.window.showTextDocument(doc);
+            if (this.openFile) {
+              await this.openFile(script);
+            } else if (this.platform?.openTextFile) {
+              await this.platform.openTextFile(script);
+            } else {
+              this.platform?.warn(
+                `Open Script is not available in this execution context: ${script}`
+              );
+            }
           } catch {
-            vscode.window.showErrorMessage(
-              `Could not open script file: ${script}`
-            );
+            this.platform?.error(`Could not open script file: ${script}`);
           }
         } else {
-          vscode.window.showInformationMessage(
+          this.platform?.log(
             `"${prompt.endCondition.script}" appears to be a shell command, not a file path.`
           );
         }
@@ -284,7 +290,7 @@ export class EndConditionHandler {
       if (retryResponseText === null) {
         // Failed to send retry prompt - get actual reason from integration
         const failureReason = retryContext.integration.getLastFailureReason();
-        vscode.window.showErrorMessage(
+        this.platform?.error(
           `FlightPath: Failed to send retry prompt: ${failureReason}`
         );
         return { shouldContinue: false, failureReason };
@@ -357,7 +363,7 @@ export class EndConditionHandler {
         ? `End condition failed after ${retryCount} retries.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}\n\nScript output:\n${evaluationResult.stdout.substring(0, 200)}`
         : `End condition validation failed.\n\nExpected: ${prompt.endCondition?.returns}\nActual: ${evaluationResult.result}`;
 
-    const action = await vscode.window.showErrorMessage(
+    const action = await this.platform?.showChoice(
       `FlightPath: ${message}`,
       DIALOG_ACTIONS.STOP_WORKFLOW,
       DIALOG_ACTIONS.CONTINUE_ANYWAY,

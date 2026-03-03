@@ -1,9 +1,10 @@
-import * as vscode from "vscode";
+import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptFileParser } from "../PromptFileParser";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 import { Log } from "../../utils/Log";
 import { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
+import type { PlatformAdapter } from "../../platform/PlatformAdapter";
 
 /**
  * WorkspaceSessionManager
@@ -17,7 +18,10 @@ import { PromptItem, WorkingFile } from "../../types/FlightPathTypes";
  * - Session continuity after VS Code restart or crash
  */
 export class WorkspaceSessionManager {
-  constructor(private promptFileParser: PromptFileParser) {}
+  constructor(
+    private promptFileParser: PromptFileParser,
+    private readonly platform: PlatformAdapter
+  ) {}
 
   /**
    * Auto-load the most recent workflow session from .flightpath/.queue/
@@ -27,19 +31,19 @@ export class WorkspaceSessionManager {
    * @param onLoad Callback to load the working file
    */
   async autoLoadRecentSession(
-    workspaceFolder: vscode.WorkspaceFolder,
+    workspaceFolderPath: string,
     onLoad: (workingFilePath: string) => Promise<void>
   ): Promise<void> {
     try {
       const queueDir = path.join(
-        workspaceFolder.uri.fsPath,
+        workspaceFolderPath,
         PATH_CONSTANTS.FLIGHTPATH_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
 
       // Check if queue directory exists
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
+        await fs.stat(queueDir);
       } catch {
         // Queue directory doesn't exist yet
         return;
@@ -80,12 +84,10 @@ export class WorkspaceSessionManager {
    * @param workspaceFolder Current workspace folder
    * @returns Array of prompt file paths
    */
-  async discoverPromptFiles(
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<string[]> {
+  async discoverPromptFiles(workspaceFolderPath: string): Promise<string[]> {
     try {
       const promptFiles =
-        await this.promptFileParser.discoverPromptFiles(workspaceFolder);
+        await this.promptFileParser.discoverPromptFiles(workspaceFolderPath);
       Log.info(`FlightPath: Discovered ${promptFiles.length} prompt files`);
       return promptFiles;
     } catch (error) {
@@ -106,17 +108,14 @@ export class WorkspaceSessionManager {
   ): Promise<string | undefined> {
     try {
       // Read directory contents
-      const files = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(queueDir)
-      );
+      const entries = await fs.readdir(queueDir, { withFileTypes: true });
 
       // Filter to .flightpath.json files
-      const workingFiles = files
+      const workingFiles = entries
         .filter(
-          ([name, type]) =>
-            type === vscode.FileType.File && name.endsWith(".flightpath.json")
+          (entry) => entry.isFile() && entry.name.endsWith(".flightpath.json")
         )
-        .map(([name]) => name);
+        .map((entry) => entry.name);
 
       if (workingFiles.length === 0) {
         return undefined;
@@ -127,10 +126,8 @@ export class WorkspaceSessionManager {
         workingFiles.map(async (filename) => {
           try {
             const filePath = path.join(queueDir, filename);
-            const content = await vscode.workspace.fs.readFile(
-              vscode.Uri.file(filePath)
-            );
-            const workingFile = JSON.parse(content.toString()) as WorkingFile;
+            const content = await fs.readFile(filePath, "utf8");
+            const workingFile = JSON.parse(content) as WorkingFile;
 
             // Use lastModifiedAt if available, fall back to startedAt
             const timestamp =
@@ -174,7 +171,7 @@ export class WorkspaceSessionManager {
    * @param workspaceFolder Current workspace folder
    * @returns Array of session info objects or empty array if none found
    */
-  async discoverSessions(workspaceFolder: vscode.WorkspaceFolder): Promise<
+  async discoverSessions(workspaceFolderPath: string): Promise<
     Array<{
       label: string;
       description: string;
@@ -184,29 +181,26 @@ export class WorkspaceSessionManager {
   > {
     try {
       const queueDir = path.join(
-        workspaceFolder.uri.fsPath,
+        workspaceFolderPath,
         PATH_CONSTANTS.FLIGHTPATH_DIR,
         PATH_CONSTANTS.QUEUE_DIR
       );
 
       // Check if queue directory exists
       try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(queueDir));
+        await fs.stat(queueDir);
       } catch {
         return []; // No queue directory
       }
 
       // Find all working files
-      const files = await vscode.workspace.fs.readDirectory(
-        vscode.Uri.file(queueDir)
-      );
+      const entries = await fs.readdir(queueDir, { withFileTypes: true });
 
-      const workingFiles = files
+      const workingFiles = entries
         .filter(
-          ([name, type]) =>
-            type === vscode.FileType.File && name.endsWith(".flightpath.json")
+          (entry) => entry.isFile() && entry.name.endsWith(".flightpath.json")
         )
-        .map(([name]) => name);
+        .map((entry) => entry.name);
 
       if (workingFiles.length === 0) {
         return [];
@@ -221,10 +215,8 @@ export class WorkspaceSessionManager {
       for (const filename of sortedFiles) {
         try {
           const filePath = path.join(queueDir, filename);
-          const content = await vscode.workspace.fs.readFile(
-            vscode.Uri.file(filePath)
-          );
-          const workingFile = JSON.parse(content.toString()) as WorkingFile;
+          const content = await fs.readFile(filePath, "utf8");
+          const workingFile = JSON.parse(content) as WorkingFile;
 
           const runtime = workingFile._runtime;
           // completedPrompts is a legacy field (no longer on WorkingFileRuntime interface)

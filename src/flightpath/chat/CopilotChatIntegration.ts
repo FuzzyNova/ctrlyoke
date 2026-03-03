@@ -164,6 +164,22 @@ export class CopilotChatIntegration extends HarnessIntegration {
     return ConfigurationUtils.getCopilotChatModel();
   }
 
+  /** Resolve workspace root for chat-mode file expansion/attachments. */
+  protected override getWorkspaceRoot(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  }
+
+  /** Preserve VS Code status-bar progress updates for chat harness. */
+  protected override async updateWorkflowProgress(): Promise<void> {
+    if (this.totalSteps > 0) {
+      const progress = `${this.workflowStep}/${this.totalSteps}`;
+      vscode.window.setStatusBarMessage(
+        `$(compass-dot) FlightPath: Step ${progress} completed`,
+        3000
+      );
+    }
+  }
+
   /** Switch chat model - always switches to ensure consistency with CLI modes */
   private async switchModelIfNeeded(model?: string): Promise<void> {
     // Use prompt model if specified, otherwise use setting default

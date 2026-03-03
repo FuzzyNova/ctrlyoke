@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import * as path from "path";
 import Ajv from "ajv";
@@ -6,6 +5,7 @@ import * as yaml from "js-yaml";
 import { PromptFile, PromptItem } from "../types/FlightPathTypes";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
+import type { PlatformAdapter } from "../platform/PlatformAdapter";
 
 /**
  * Extensions that indicate a prompt value might be a file path
@@ -17,7 +17,7 @@ export class PromptFileParser {
   private ajv = new Ajv();
   private promptSchema: any;
 
-  constructor() {
+  constructor(private readonly platform?: PlatformAdapter) {
     this.loadSchemas();
   }
 
@@ -43,9 +43,11 @@ export class PromptFileParser {
       Log.info("JSON schema loaded successfully");
     } catch (error) {
       Log.error("Failed to load JSON schema:", error);
-      vscode.window.showErrorMessage(
-        "FlightPath: Failed to load validation schema"
-      );
+      if (this.platform) {
+        this.platform.error("FlightPath: Failed to load validation schema");
+      } else {
+        console.error("FlightPath: Failed to load validation schema");
+      }
     }
   }
 
@@ -99,9 +101,15 @@ export class PromptFileParser {
       return await this.normalizePromptFile(parsed, filePath);
     } catch (error) {
       Log.error(`Failed to parse file ${filePath}:`, error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
-      );
+      if (this.platform) {
+        this.platform.error(
+          `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
+        );
+      } else {
+        console.error(
+          `FlightPath: Failed to parse ${path.basename(filePath)}: ${error}`
+        );
+      }
       return null;
     }
   }
@@ -132,9 +140,15 @@ export class PromptFileParser {
       };
     } catch (error) {
       Log.error(`Failed to read markdown prompt file ${filePath}:`, error);
-      vscode.window.showErrorMessage(
-        `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
-      );
+      if (this.platform) {
+        this.platform.error(
+          `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
+        );
+      } else {
+        console.error(
+          `FlightPath: Failed to read ${path.basename(filePath)}: ${error}`
+        );
+      }
       return null;
     }
   }
@@ -218,7 +232,7 @@ export class PromptFileParser {
         Log.warn(
           `Prompt file reference not found, using as literal text: "${trimmedPath}"`
         );
-        vscode.window.showWarningMessage(
+        this.platform?.warn(
           `FlightPath: Could not find prompt file "${trimmedPath}". Using as literal prompt text.`
         );
       }
@@ -276,12 +290,9 @@ export class PromptFileParser {
     }
 
     // Try relative to workspace root
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (workspaceFolder) {
-      const relativeToWorkspace = path.resolve(
-        workspaceFolder.uri.fsPath,
-        filePath
-      );
+    const workspaceRoot = this.platform?.getWorkspaceRoot();
+    if (workspaceRoot) {
+      const relativeToWorkspace = path.resolve(workspaceRoot, filePath);
       if (await this.fileExists(relativeToWorkspace)) {
         return relativeToWorkspace;
       }
@@ -289,7 +300,7 @@ export class PromptFileParser {
       // Try in .flightpath directory
       const flightpathDir = ConfigurationUtils.getPromptsDirectory();
       const relativeToFlightpath = path.resolve(
-        workspaceFolder.uri.fsPath,
+        workspaceRoot,
         flightpathDir,
         filePath
       );
@@ -306,7 +317,7 @@ export class PromptFileParser {
    */
   private async fileExists(filePath: string): Promise<boolean> {
     try {
-      await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+      await fs.stat(filePath);
       return true;
     } catch {
       return false;
@@ -415,11 +426,9 @@ export class PromptFileParser {
   /**
    * Discover prompt files in workspace
    */
-  async discoverPromptFiles(
-    workspaceFolder: vscode.WorkspaceFolder
-  ): Promise<string[]> {
+  async discoverPromptFiles(workspaceFolderPath: string): Promise<string[]> {
     const promptsDir = ConfigurationUtils.getPromptsDirectory();
-    const promptsDirPath = path.join(workspaceFolder.uri.fsPath, promptsDir);
+    const promptsDirPath = path.join(workspaceFolderPath, promptsDir);
 
     try {
       const files = await this.findPromptFilesRecursive(promptsDirPath);

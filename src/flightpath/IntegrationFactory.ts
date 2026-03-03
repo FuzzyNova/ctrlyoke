@@ -1,7 +1,6 @@
-import * as vscode from "vscode";
+import { PlatformAdapter } from "../platform/PlatformAdapter";
 import { Harness } from "../types/FlightPathTypes";
 import { HarnessIntegration } from "./HarnessIntegration";
-import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
 import { CliIntegration } from "./cli/CliIntegration";
 import { CopilotCliProvider } from "./cli/copilot/CopilotCliProvider";
 import { ClaudeCliProvider } from "./cli/claude/ClaudeCliProvider";
@@ -10,11 +9,15 @@ import { CodexCliProvider } from "./cli/codex/CodexCliProvider";
 /**
  * IntegrationFactory
  *
- * RESPONSIBILITY: Harness Integration Creation
+ * RESPONSIBILITY: CLI Harness Integration Creation (platform-agnostic)
  *
- * Factory for creating harness integration instances. Centralises all
- * integration construction so callers never import individual provider
+ * Factory for creating CLI harness integration instances. Centralises all
+ * CLI integration construction so callers never import individual provider
  * classes directly.
+ *
+ * Handles copilot-cli, claude-cli, and codex-cli harnesses only.
+ * For copilot-chat (VS Code-only), use VsCodeIntegrationFactory which
+ * extends this class and adds chat support.
  *
  * Phase 1: WorkflowOrchestrator creates and caches the four integrations at
  *           startup (same lifecycle as today).
@@ -22,36 +25,32 @@ import { CodexCliProvider } from "./cli/codex/CodexCliProvider";
  *           fresh, isolated integration per execution.
  */
 export class IntegrationFactory {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(protected readonly platform: PlatformAdapter) {}
 
   /** Create a new Copilot CLI integration */
   createCopilotCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CopilotCliProvider();
-    return new CliIntegration(provider, this.context, registerWithContext);
+    return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
   /** Create a new Claude Code CLI integration */
   createClaudeCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new ClaudeCliProvider();
-    return new CliIntegration(provider, this.context, registerWithContext);
+    return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
   /** Create a new Codex CLI integration */
   createCodexCli(registerWithContext: boolean = true): CliIntegration {
     const provider = new CodexCliProvider();
-    return new CliIntegration(provider, this.context, registerWithContext);
+    return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
-  /** Create a new Copilot Chat integration */
-  createCopilotChat(registerWithContext: boolean = true): CopilotChatIntegration {
-    return new CopilotChatIntegration(this.context, registerWithContext);
-  }
-
-  /** Create a new integration for the given harness */
-  createForHarness(harness: Harness, registerWithContext: boolean = true): HarnessIntegration {
+  /** Create a new integration for the given harness (CLI harnesses only) */
+  createForHarness(
+    harness: Harness,
+    registerWithContext: boolean = true
+  ): HarnessIntegration {
     switch (harness) {
-      case Harness.CopilotChat:
-        return this.createCopilotChat(registerWithContext);
       case Harness.ClaudeCli:
         return this.createClaudeCli(registerWithContext);
       case Harness.CodexCli:

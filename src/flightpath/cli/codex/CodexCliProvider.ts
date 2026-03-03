@@ -1,6 +1,5 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import * as vscode from "vscode";
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
@@ -91,7 +90,7 @@ export class CodexCliProvider implements ICliProvider {
   async buildCliArgs(
     prompt: PromptItem,
     isInteractive: boolean,
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
@@ -116,7 +115,7 @@ export class CodexCliProvider implements ICliProvider {
       prompt,
       workflowContext,
       workspaceRoot,
-      context,
+      extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv) =>
         this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
     );
@@ -170,7 +169,7 @@ export class CodexCliProvider implements ICliProvider {
       // Interactive mode: Configure notify hook for completion detection
       if (workspaceRoot) {
         const scriptPath = path.join(
-          context.extensionPath,
+          extensionPath,
           "out",
           "scripts",
           "flightpath-codex-notify.js"
@@ -235,7 +234,7 @@ export class CodexCliProvider implements ICliProvider {
     // Model not supported - warn user and fallback
     const message = `Model "${requestedModel}" not supported by Codex CLI. Using default: ${defaultModel}`;
     Log.warn(`⚠️ ${message}`);
-    vscode.window.showWarningMessage(
+    console.warn(
       `FlightPath: ${message}\n\nCodex-supported models: ${CODEX_CLI_MODELS.join(", ")}`
     );
 

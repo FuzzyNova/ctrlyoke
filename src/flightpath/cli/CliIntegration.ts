@@ -1,6 +1,8 @@
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { PlatformAdapter } from "../../platform/PlatformAdapter";
+import type { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import { CliResult } from "../../types/CliOutputTypes";
 import {
   PromptItem,
@@ -93,6 +95,9 @@ export class CliIntegration extends HarnessIntegration {
   /** Provider instance that encapsulates all CLI-specific logic */
   private readonly provider: ICliProvider;
 
+  /** Platform adapter (VS Code or standalone CLI) */
+  private readonly platform: PlatformAdapter;
+
   /** Delegates rawTextOutput from provider config (used by WorkflowExecutor for streaming CliOutput) */
   override get rawTextOutput(): boolean {
     return this.provider.config.rawTextOutput ?? false;
@@ -132,19 +137,37 @@ export class CliIntegration extends HarnessIntegration {
    * Create a new CLI integration with the specified CLI provider.
    *
    * @param cliProvider The CLI provider instance (encapsulates all CLI-specific logic)
-   * @param context VS Code extension context
+   * @param platform Platform adapter (VS Code or standalone CLI)
    */
   constructor(
     cliProvider: ICliProvider,
-    context: vscode.ExtensionContext,
+    platform: PlatformAdapter,
     registerWithContext: boolean = true
   ) {
-    super(context, registerWithContext);
+    // Pass ExtensionContext to base class if available (VS Code context) for subscription management
+    const vsCtx =
+      "getExtensionContext" in platform
+        ? (platform as VsCodeAdapter).getExtensionContext()
+        : undefined;
+    super(vsCtx, registerWithContext);
+    this.platform = platform;
     this.provider = cliProvider;
     this.processManager = new CliProcessManager(
       this.getWorkspaceRoot() || "",
       (msg) => Log.debug(msg)
     );
+    // Propagate workspace root to the log parser for session log discovery.
+    // For example, ClaudeLogParser uses this to locate ~/.claude/projects/<workspace>.
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (
+      workspaceRoot &&
+      this.provider.logParser &&
+      "setWorkspaceRoot" in this.provider.logParser
+    ) {
+      (
+        this.provider.logParser as { setWorkspaceRoot(r: string): void }
+      ).setWorkspaceRoot(workspaceRoot);
+    }
   }
 
   // ============================================================
@@ -152,10 +175,26 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Get the configured execution mode (interactive or headless)
+   * Get the configured execution mode (interactive or headless).
+   *
+   * Uses the platform adapter rather than ConfigurationUtils so that
+   * the standalone CLI (CliAdapter) always gets "headless" — the shim
+   * would otherwise return the vscode-shim default ("interactive") which
+   * would trigger createTerminal() and throw at runtime.
    */
   protected getExecutionMode(): CliExecutionMode {
-    return ConfigurationUtils.getCliExecutionMode() as CliExecutionMode;
+    return this.platform.getConfig<string>(
+      "cliExecutionMode",
+      "interactive"
+    ) as CliExecutionMode;
+  }
+
+  /**
+   * Override base class getWorkspaceRoot() to use the platform adapter.
+   * The platform adapter knows the true workspace root in both VS Code and CLI contexts.
+   */
+  protected override getWorkspaceRoot(): string | undefined {
+    return this.platform.getWorkspaceRoot() || undefined;
   }
 
   /**
@@ -424,6 +463,100 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Returns true when running inside a VS Code extension context.
+   *
+   * Uses the presence of `getExtensionContext` on the platform adapter as a
+   * lightweight discriminator — only VsCodeAdapter exposes that method.
+   * CliAdapter does not, so `"getExtensionContext" in this.platform` is false.
+   *
+   * This lets CliIntegration choose between:
+   *  - VS Code interactive path: createTerminal() + shell integration
+   *  - CLI interactive path: spawn() with stdio:'inherit'
+   */
+  private isVsCodeContext(): boolean {
+    return "getExtensionContext" in this.platform;
+  }
+
+  // ============================================================
+  // CLI INTERACTIVE EXECUTION (spawn with stdio:inherit)
+  // ============================================================
+
+  /**
+   * Execute a CLI command in interactive mode for the standalone CLI binary.
+   *
+   * Unlike the VS Code interactive path (which runs the AI CLI inside a
+   * vscode.Terminal), this path spawns the AI CLI as a child process with
+   * `stdio: 'inherit'` so the user's terminal is wired directly to the AI
+   * CLI's stdin/stdout/stderr.
+   *
+   * The user ends the session manually (Ctrl+D, /exit, etc.). When the child
+   * process exits, this method returns and the next prompt starts.
+   *
+   * No output is captured (no CliEvent[], no session ID extraction from logs).
+   *
+   * @param args Base CLI args (from buildCliArgs with isInteractive=true)
+   * @param promptText Prompt text (written to temp file for safe passing)
+   * @param workflowContext Optional workflow context for temp file naming
+   * @param resolvedSessionId Resolved session ID (preserved across prompts)
+   * @returns success flag and the original sessionId (no new ID extracted)
+   */
+  private async executeInteractiveCliProcess(
+    args: string[],
+    promptText: string,
+    workflowContext: WorkflowContext | undefined,
+    resolvedSessionId: string | undefined
+  ): Promise<{ success: boolean; sessionId?: string }> {
+    let tempFilePaths: string[] = [];
+
+    try {
+      // Print a separator for multi-prompt workflows so users see the boundary
+      if (workflowContext && workflowContext.promptIndex > 0) {
+        console.log(`\n${"─".repeat(52)}`);
+        console.log(
+          `Prompt ${workflowContext.promptIndex + 1} / ${workflowContext.allPrompts.length}`
+        );
+        console.log();
+      }
+
+      // Use temp file for prompt passing (same security policy as VS Code path)
+      const { tempFilePaths: paths, promptWithInstruction } =
+        await this.createPromptFileWithReference(promptText, workflowContext);
+      tempFilePaths = paths;
+      this.actualPromptSent = promptWithInstruction;
+
+      // Build the interactive TUI command string
+      const tuiCommand = this.provider.buildInteractiveTuiCommand(
+        args,
+        promptWithInstruction
+      );
+      const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
+      this.lastCliCommand = commandStr;
+
+      this.promptReadyEmitter.fire({
+        fullPrompt: promptText,
+        cliCommand: commandStr,
+      });
+
+      // Spawn with stdio:'inherit' — the user interacts with the AI CLI directly
+      const workingDir = this.getWorkspaceRoot() || process.cwd();
+      await this.processManager.spawnInteractive(commandStr, workingDir);
+
+      // Session ended (user exited). Fire responseComplete so WorkflowExecutor
+      // can advance to the next prompt.
+      this.responseCompleteEmitter.fire("Interactive session ended");
+
+      return { success: true, sessionId: resolvedSessionId };
+    } catch (error) {
+      Log.error("❌ CLI interactive execution error", error);
+      this.lastFailureReason =
+        error instanceof Error ? error.message : String(error);
+      return { success: false };
+    } finally {
+      await this.cleanupTempFiles(tempFilePaths);
+    }
+  }
+
+  /**
    * Execute a CLI command in interactive mode with log file monitoring.
    *
    * Strategy:
@@ -453,6 +586,17 @@ export class CliIntegration extends HarnessIntegration {
     workflowContext?: WorkflowContext,
     resolvedSessionId?: string
   ): Promise<{ success: boolean; sessionId?: string }> {
+    // In the standalone CLI binary (CliAdapter), vscode.Terminal is unavailable.
+    // Delegate to the spawn-with-stdio:inherit path so the user gets a real TUI.
+    if (!this.isVsCodeContext()) {
+      return this.executeInteractiveCliProcess(
+        args,
+        promptText,
+        workflowContext,
+        resolvedSessionId
+      );
+    }
+
     let tempFilePaths: string[] = [];
 
     try {
@@ -1003,8 +1147,8 @@ export class CliIntegration extends HarnessIntegration {
    */
   protected getWorkspaceDirs(): string[] {
     const configured = ConfigurationUtils.getCliAllowedDirs();
-    const workspaceDirs =
-      vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) || [];
+    const root = this.platform.getWorkspaceRoot();
+    const workspaceDirs = root ? [root] : [];
     return [...workspaceDirs, ...configured];
   }
 
@@ -1091,9 +1235,7 @@ export class CliIntegration extends HarnessIntegration {
   protected warnIfHeadlessWithoutPermissions(): void {
     const mode = this.getExecutionMode();
     if (mode === CLI_EXECUTION_MODE.HEADLESS && !this.hasFullPermissions()) {
-      vscode.window.showWarningMessage(
-        CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS
-      );
+      this.platform.warn(CLI_WARNING_MESSAGES.HEADLESS_WITHOUT_PERMISSIONS);
     }
   }
 
@@ -1386,7 +1528,7 @@ export class CliIntegration extends HarnessIntegration {
       const baseArgs = await this.provider.buildCliArgs(
         prompt,
         isInteractive,
-        this.context,
+        this.platform.getExtensionPath(),
         workspaceRoot,
         resolvedSessionId, // Use resolved session instead of this.sessionId
         workflowContext
@@ -1473,7 +1615,7 @@ export class CliIntegration extends HarnessIntegration {
                 const argsWithoutResume = await this.provider.buildCliArgs(
                   prompt,
                   false, // headless mode
-                  this.context,
+                  this.platform.getExtensionPath(),
                   this.getWorkspaceRoot() || "",
                   undefined, // no session ID - start new session
                   workflowContext

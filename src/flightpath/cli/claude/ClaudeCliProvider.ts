@@ -1,6 +1,5 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import * as vscode from "vscode";
 import * as path from "path";
 import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
@@ -84,7 +83,7 @@ export class ClaudeCliProvider implements ICliProvider {
   async buildCliArgs(
     prompt: PromptItem,
     isInteractive: boolean,
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string | undefined,
     sessionId: string | undefined,
     workflowContext?: {
@@ -107,7 +106,7 @@ export class ClaudeCliProvider implements ICliProvider {
       prompt,
       workflowContext,
       workspaceRoot,
-      context,
+      extensionPath,
       (serverPath, wsRoot, workingFile, additionalEnv) =>
         this.getMcpConfigArgs(serverPath, wsRoot, workingFile, additionalEnv)
     );
@@ -174,7 +173,10 @@ export class ClaudeCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {
-        const hookSettings = this.buildStopHookSettings(context, workspaceRoot);
+        const hookSettings = this.buildStopHookSettings(
+          extensionPath,
+          workspaceRoot
+        );
         // Wrap JSON in single quotes for shell safety (PowerShell/bash)
         args.push("--settings", `'${hookSettings}'`);
         Log.debug(`🔔 Configured stop hook for completion detection`);
@@ -212,7 +214,7 @@ export class ClaudeCliProvider implements ICliProvider {
     Log.warn(`⚠️ ${message}`);
     Log.warn(`   Accepted formats: ${supportedFormats}`);
 
-    vscode.window.showWarningMessage(`FlightPath: ${message}`);
+    console.warn(`FlightPath: ${message}`);
 
     const defaultFullName = getClaudeModelName(defaultModel);
     return defaultFullName || defaultModel;
@@ -222,11 +224,11 @@ export class ClaudeCliProvider implements ICliProvider {
    * Build settings JSON string with Stop hook configuration
    */
   private buildStopHookSettings(
-    context: vscode.ExtensionContext,
+    extensionPath: string,
     workspaceRoot: string
   ): string {
     const scriptPath = path.join(
-      context.extensionPath,
+      extensionPath,
       "out",
       "scripts",
       "flightpath-claude-hook.js"

@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import * as path from "path";
+import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   PromptItem,
   PromptFile,
@@ -78,15 +78,13 @@ function getEffectiveRetryPrompt(
 export class PromptQueue {
   private state: QueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
-  private onStateChanged: vscode.EventEmitter<QueueState> =
-    new vscode.EventEmitter<QueueState>();
+  private onStateChanged = new TypedEmitter<QueueState>();
   private isPaused: boolean = false;
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
   private readonly workingFileManager: WorkingFileManager;
 
   // Public event for state changes
-  public readonly onDidChangeState: vscode.Event<QueueState> =
-    this.onStateChanged.event;
+  public readonly onDidChangeState = this.onStateChanged.event;
 
   constructor() {
     this.state = {
@@ -344,7 +342,7 @@ export class PromptQueue {
     }
 
     if (this.state.prompts.length === 0) {
-      vscode.window.showWarningMessage("FlightPath: No prompts to execute");
+      Log.warn("FlightPath: No prompts to execute");
       return;
     }
 
@@ -651,7 +649,7 @@ export class PromptQueue {
     Log.error(
       `FlightPath: Prompt ${this.state.currentIndex + 1} failed: ${error}`
     );
-    vscode.window.showErrorMessage(
+    Log.error(
       `FlightPath: Execution failed at prompt ${this.state.currentIndex + 1}: ${error}`
     );
   }
@@ -880,7 +878,7 @@ export class PromptQueue {
     } catch (error) {
       // Invalid JSON - log error and continue with current queue
       Log.error("Failed to reload queue - invalid JSON", error as Error);
-      vscode.window.showErrorMessage(
+      Log.error(
         "FlightPath: Queue file has invalid JSON. Continuing with current queue."
       );
       return -1;
@@ -926,7 +924,7 @@ export class PromptQueue {
       Log.warn(
         `Queue size limit reached: ${newQueueSize} > ${maxQueueSize}. Cannot add ${newPrompts.length} new prompts.`
       );
-      vscode.window.showWarningMessage(
+      Log.warn(
         `FlightPath: Queue limit reached (${this.state.prompts.length}/${maxQueueSize} prompts). Cannot add more prompts. Consider increasing maxQueueSize in settings.`
       );
       return -1;
@@ -1197,7 +1195,7 @@ export class PromptQueue {
    * Create working file from original prompt file
    * @param nameForFile Display name or file path used to generate the working file's filename
    * @param prompts Prompts to store in working file
-   * @param workspaceFolder Current workspace folder
+   * @param workspaceFolderPath Path to the current workspace folder root
    * @param originalFilePath The true source file path (if any). Only set for file-based workflows;
    *   leave undefined for ephemeral/dashboard-created workflows so the save dialog defaults correctly.
    * @returns Path to created working file
@@ -1205,7 +1203,7 @@ export class PromptQueue {
   public async createWorkingFile(
     nameForFile: string,
     prompts: PromptItem[],
-    workspaceFolder: vscode.WorkspaceFolder,
+    workspaceFolderPath: string,
     originalFilePath?: string
   ): Promise<string> {
     // Compute workflow name and store back into state so loadPrompts preserves it
@@ -1216,7 +1214,7 @@ export class PromptQueue {
     const workingFilePath = await this.workingFileManager.createWorkingFile(
       nameForFile,
       prompts,
-      workspaceFolder,
+      workspaceFolderPath,
       computedWorkflowName,
       originalFilePath
     );

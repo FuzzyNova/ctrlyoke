@@ -1,6 +1,6 @@
-import * as vscode from "vscode";
 import * as path from "path";
 import { PromptItem, PromptFile } from "../types/FlightPathTypes";
+import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   CliResult,
   UniversalCliOutput,
@@ -16,6 +16,15 @@ import { shouldInjectExtensionInstructions } from "../utils/PromptIdentity";
 import { TempFileManager } from "../utils/TempFileManager";
 import { PromptFileSplitter } from "../utils/PromptFileSplitter";
 import type { PromptQueue } from "./PromptQueue";
+
+/**
+ * Minimal container for VS Code-style disposable subscriptions.
+ * Avoids importing the `vscode` module in the shared core, which must also
+ * compile into the standalone CLI bundle (where `vscode` is not available).
+ */
+interface SubscriptionContainer {
+  readonly subscriptions: Array<{ dispose(): void }>;
+}
 
 /**
  * Harness initialization status
@@ -34,7 +43,7 @@ export enum HarnessStatus {
  * Harness integration strategies must implement.
  */
 export abstract class HarnessIntegration {
-  protected context: vscode.ExtensionContext;
+  protected context: SubscriptionContainer | undefined;
   protected isAvailable: boolean = false;
   protected workflowStep: number = 0;
   protected totalSteps: number = 0;
@@ -42,10 +51,10 @@ export abstract class HarnessIntegration {
   protected lastFailureReason: string | null = null;
 
   // Event emitters for status and response completion
-  protected statusChangeEmitter = new vscode.EventEmitter<HarnessStatus>();
+  protected statusChangeEmitter = new TypedEmitter<HarnessStatus>();
   public readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
-  protected responseCompleteEmitter = new vscode.EventEmitter<string>();
+  protected responseCompleteEmitter = new TypedEmitter<string>();
   public readonly onResponseComplete = this.responseCompleteEmitter.event;
 
   /**
@@ -58,22 +67,22 @@ export abstract class HarnessIntegration {
   }
 
   // Event emitter for streaming response chunks (plain text - for Copilot CLI backward compatibility)
-  protected streamingChunkEmitter = new vscode.EventEmitter<string>();
+  protected streamingChunkEmitter = new TypedEmitter<string>();
   public readonly onStreamingChunk = this.streamingChunkEmitter.event;
 
   // Event emitter for structured streaming events (for Claude/Codex CLI)
-  protected streamingEventsEmitter = new vscode.EventEmitter<CliEvent[]>();
+  protected streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
   public readonly onStreamingEvents = this.streamingEventsEmitter.event;
 
   // Event emitter for prompt ready (fires when prompt is built but before execution)
-  protected promptReadyEmitter = new vscode.EventEmitter<{
+  protected promptReadyEmitter = new TypedEmitter<{
     fullPrompt: string;
     cliCommand?: string;
   }>();
   public readonly onPromptReady = this.promptReadyEmitter.event;
 
   constructor(
-    context: vscode.ExtensionContext,
+    context: SubscriptionContainer | undefined,
     registerWithContext: boolean = true
   ) {
     this.context = context;
@@ -81,7 +90,7 @@ export abstract class HarnessIntegration {
     // Detector singletons register with context so VS Code disposes them on deactivation.
     // Execution integrations (per-run, short-lived) skip registration and are disposed
     // manually in startWorkflowExecution's finally block to avoid leaking into subscriptions.
-    if (registerWithContext) {
+    if (context && registerWithContext) {
       context.subscriptions.push(this.statusChangeEmitter);
       context.subscriptions.push(this.responseCompleteEmitter);
       context.subscriptions.push(this.streamingChunkEmitter);
@@ -456,7 +465,9 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
       });
     }
 
-    const relativePaths = tempFilePaths.map((fp) => tempMgr.getRelativePath(fp));
+    const relativePaths = tempFilePaths.map((fp) =>
+      tempMgr.getRelativePath(fp)
+    );
     return { tempFilePaths, relativePaths };
   }
 
@@ -496,8 +507,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Get workspace root directory
    */
   protected getWorkspaceRoot(): string | undefined {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    return workspaceFolder?.uri.fsPath;
+    return undefined;
   }
 
   /**
@@ -513,13 +523,7 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
    * Update workflow progress status bar message
    */
   protected async updateWorkflowProgress(): Promise<void> {
-    if (this.totalSteps > 0) {
-      const progress = `${this.workflowStep}/${this.totalSteps}`;
-      vscode.window.setStatusBarMessage(
-        `$(compass-dot) FlightPath: Step ${progress} completed`,
-        3000
-      );
-    }
+    // No-op in base class; VS Code subclasses override for status bar integration.
   }
 
   /**
