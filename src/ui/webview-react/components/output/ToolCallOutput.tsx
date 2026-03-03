@@ -11,6 +11,15 @@ import {
   TOOL_CALL_LINE,
   TOOL_RESULT_LINE,
 } from "./outputStyles";
+import { openFile } from "@hooks/useMessageHandler";
+import {
+  getLanguageFromPath,
+  highlightCode,
+  injectHljsStyles,
+} from "@utils/hljsUtils";
+
+// Ensure VS Code-themed HLJS stylesheet is in <head> (idempotent)
+injectHljsStyles();
 import type {
   CliEvent,
   FileOperationStatus,
@@ -19,6 +28,54 @@ import type {
   ToolResult,
 } from "../../types/cliEvents";
 import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../../types/cliEvents";
+
+// ============================================================================
+// Shared Dot + FilePath primitives
+// ============================================================================
+
+type DotStatus = "pending" | "success" | "error";
+
+const DOT_COLORS: Record<DotStatus, string> = {
+  pending: "text-editor-fg",
+  success: "text-bash-status-success",
+  error: "text-bash-status-error",
+};
+
+/** Coloured ● bullet that reflects the operation status */
+const ToolDot: React.FC<{ status: DotStatus }> = ({ status }) => (
+  <span className={DOT_COLORS[status]}>●</span>
+);
+
+/** Clickable file path that opens the file in VS Code */
+const FilePath: React.FC<{ path: string }> = ({ path }) => (
+  <button
+    type="button"
+    className="text-link-fg hover:underline cursor-pointer bg-transparent border-none p-0 font-[inherit] text-[inherit]"
+    onClick={() => openFile(path)}
+    title={`Open ${path}`}
+  >
+    {path}
+  </button>
+);
+
+// ── Status helpers ──────────────────────────────────────────────────────────
+
+function fileOpDotStatus(status?: FileOperationStatus): DotStatus {
+  if (status === OPERATION_STATUS.COMPLETED) return "success";
+  if (status === OPERATION_STATUS.FAILED) return "error";
+  return "pending"; // INITIATED or undefined
+}
+
+function boolDotStatus(success?: boolean): DotStatus {
+  if (success === true) return "success";
+  if (success === false) return "error";
+  return "pending";
+}
+
+function resultDotStatus(result?: ToolResult): DotStatus {
+  if (!result) return "pending";
+  return result.success ? "success" : "error";
+}
 
 // ============================================================================
 // Diff Visualization Component
@@ -47,13 +104,24 @@ const DIFF_LINE_STYLES = {
 
 interface DiffViewProps {
   lines: DiffLine[];
+  /** hljs language id inferred from the file path (e.g. "typescript") */
+  language?: string;
   className?: string;
 }
 
 /**
- * DiffView renders a unified diff with line numbers and color-coded changes
+ * DiffView renders a unified diff with line numbers, color-coded changes,
+ * and per-line syntax highlighting via highlight.js.
+ *
+ * Row backgrounds (green / red) communicate add / remove.
+ * The +/- prefix retains its diff colour.
+ * Token colours from hljs show through on the code content.
  */
-const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
+const DiffView: React.FC<DiffViewProps> = ({
+  lines,
+  language,
+  className = "",
+}) => {
   if (lines.length === 0) return null;
 
   return (
@@ -62,6 +130,7 @@ const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
     >
       {lines.map((line, index) => {
         const styles = DIFF_LINE_STYLES[line.type] || DIFF_LINE_STYLES.context;
+        const highlighted = highlightCode(line.content, language);
 
         return (
           <div
@@ -78,11 +147,14 @@ const DiffView: React.FC<DiffViewProps> = ({ lines, className = "" }) => {
             >
               {line.type !== "removed" ? line.newLineNum : ""}
             </span>
+            {/* prefix: keep diff colour; content: hljs token colours */}
             <span
-              className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre ${styles.contentColor}`}
+              className={`flex-1 min-w-0 py-0.5 pr-2 overflow-visible whitespace-pre`}
             >
-              <span className="font-bold">{styles.prefix}</span>
-              {line.content}
+              <span className={`font-bold ${styles.contentColor}`}>
+                {styles.prefix}
+              </span>
+              <span dangerouslySetInnerHTML={{ __html: highlighted }} />
             </span>
           </div>
         );
@@ -123,33 +195,23 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
   error,
   className = "",
 }) => {
-  // Determine action text based on status
-  const getActionText = (): string => {
-    if (status === OPERATION_STATUS.INITIATED) {
-      return `Editing ${path}`;
-    }
-    if (status === OPERATION_STATUS.FAILED) {
-      return `Edit failed: ${path}`;
-    }
-    return `Edited ${path}`;
+  const dotStatus = fileOpDotStatus(status);
+
+  const getActionLabel = (): string => {
+    if (status === OPERATION_STATUS.INITIATED) return "Editing";
+    if (status === OPERATION_STATUS.FAILED) return "Edit failed:";
+    return "Edited";
   };
 
   // Generate diff lines
   const getDiffLines = (): DiffLine[] => {
-    if (status === OPERATION_STATUS.INITIATED) {
-      return [];
-    }
-
-    // Prefer structured patch with accurate line numbers
+    if (status === OPERATION_STATUS.INITIATED) return [];
     if (structuredPatch && structuredPatch.length > 0) {
       return parseUnifiedDiff(structuredPatch);
     }
-
-    // Fallback: Generate diff from content
     if (oldContent && newContent) {
       return generateDiffLines(oldContent, newContent);
     }
-
     return [];
   };
 
@@ -158,13 +220,16 @@ export const FileEditOutput: React.FC<FileEditOutputProps> = ({
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● {getActionText()}</span>
+        <ToolDot status={dotStatus} />
+        <span>{getActionLabel()}</span>
+        <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {error}</span>
+          <span className="text-bash-status-error">— {error}</span>
         )}
       </div>
-
-      {diffLines.length > 0 && <DiffView lines={diffLines} />}
+      {diffLines.length > 0 && (
+        <DiffView lines={diffLines} language={getLanguageFromPath(path)} />
+      )}
     </div>
   );
 };
@@ -188,23 +253,23 @@ export const FileWriteOutput: React.FC<FileWriteOutputProps> = ({
   error,
   className = "",
 }) => {
-  const getActionText = (): string => {
-    if (status === OPERATION_STATUS.INITIATED) {
-      return `Writing ${path} (starting...)`;
-    }
-    if (status === OPERATION_STATUS.FAILED) {
-      return `Write failed: ${path}`;
-    }
+  const dotStatus = fileOpDotStatus(status);
+
+  const getActionLabel = (): string => {
+    if (status === OPERATION_STATUS.INITIATED) return "Writing";
+    if (status === OPERATION_STATUS.FAILED) return "Write failed:";
     const sizeInfo = content ? ` (${content.length} bytes)` : "";
-    return `Wrote ${path}${sizeInfo}`;
+    return `Wrote${sizeInfo}`;
   };
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● {getActionText()}</span>
+        <ToolDot status={dotStatus} />
+        <span>{getActionLabel()}</span>
+        <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {error}</span>
+          <span className="text-bash-status-error">— {error}</span>
         )}
       </div>
     </div>
@@ -228,22 +293,22 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
   error,
   className = "",
 }) => {
-  const getActionText = (): string => {
-    if (status === OPERATION_STATUS.INITIATED) {
-      return `Reading ${path} (starting...)`;
-    }
-    if (status === OPERATION_STATUS.FAILED) {
-      return `Read failed: ${path}`;
-    }
-    return `Read ${path}`;
+  const dotStatus = fileOpDotStatus(status);
+
+  const getActionLabel = (): string => {
+    if (status === OPERATION_STATUS.INITIATED) return "Reading";
+    if (status === OPERATION_STATUS.FAILED) return "Read failed:";
+    return "Read";
   };
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● {getActionText()}</span>
+        <ToolDot status={dotStatus} />
+        <span>{getActionLabel()}</span>
+        <FilePath path={path} />
         {error && status === OPERATION_STATUS.FAILED && (
-          <span className="text-vscode-error-fg"> - {error}</span>
+          <span className="text-bash-status-error">— {error}</span>
         )}
       </div>
     </div>
@@ -256,17 +321,28 @@ export const FileReadOutput: React.FC<FileReadOutputProps> = ({
 
 interface FileDeleteOutputProps {
   path: string;
+  success?: boolean;
+  error?: string;
   className?: string;
 }
 
 export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
   path,
+  success,
+  error,
   className = "",
 }) => {
+  const dotStatus = boolDotStatus(success);
+
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● Delete file: {path}</span>
+        <ToolDot status={dotStatus} />
+        <span>Delete file:</span>
+        <FilePath path={path} />
+        {error && success === false && (
+          <span className="text-bash-status-error">— {error}</span>
+        )}
       </div>
     </div>
   );
@@ -279,19 +355,22 @@ export const FileDeleteOutput: React.FC<FileDeleteOutputProps> = ({
 interface McpToolCallOutputProps {
   server: string;
   tool: string;
+  result?: ToolResult;
   className?: string;
 }
 
 export const McpToolCallOutput: React.FC<McpToolCallOutputProps> = ({
   server,
   tool,
+  result,
   className = "",
 }) => {
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
+        <ToolDot status={resultDotStatus(result)} />
         <span>
-          ● MCP: {server}.{tool}
+          MCP: {server}.{tool}
         </span>
       </div>
     </div>
@@ -314,7 +393,8 @@ export const WebSearchOutput: React.FC<WebSearchOutputProps> = ({
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
       <div className={TOOL_CALL_LINE}>
-        <span>● Web search: "{query}"</span>
+        <ToolDot status="pending" />
+        <span>Web search: &ldquo;{query}&rdquo;</span>
       </div>
     </div>
   );
@@ -338,27 +418,29 @@ export const GenericToolCallOutput: React.FC<GenericToolCallOutputProps> = ({
   className = "",
 }) => {
   const params = extractKeyParameters(name, parameters);
-  const toolLine = `● ${name}(${params})`;
 
-  const getResultText = (result: ToolResult): string => {
-    if (!result.success && result.error) {
-      return truncate(result.error, 200);
-    }
-    if (result.output) {
-      return truncate(result.output, 100);
-    }
-    return result.success ? "Success" : "Failed";
+  const getResultText = (r: ToolResult): string => {
+    if (!r.success && r.error) return truncate(r.error, 200);
+    if (r.output) return truncate(r.output, 100);
+    return r.success ? "Success" : "Failed";
   };
 
   return (
     <div className={`${TOOL_CALL_TERMINAL} ${className}`}>
-      <div className={TOOL_CALL_LINE}>{toolLine}</div>
+      <div className={TOOL_CALL_LINE}>
+        <ToolDot status={resultDotStatus(result)} />
+        <span>
+          {name}({params})
+        </span>
+      </div>
       {result && (
         <div
-          className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px]"} flex items-start gap-1`}
+          className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[11px]"} flex items-start gap-1`}
         >
           <span className="shrink-0">⎿</span>
-          <span className="whitespace-pre-wrap break-words min-w-0">{getResultText(result)}</span>
+          <span className="whitespace-pre-wrap break-words min-w-0">
+            {getResultText(result)}
+          </span>
         </div>
       )}
     </div>
@@ -437,16 +519,32 @@ export const ToolCallOutput: React.FC<ToolCallOutputProps> = ({
     }
 
     case CLI_EVENT_TYPES.FILE_DELETE: {
-      const deleteData = data as { path: string };
-      return <FileDeleteOutput path={deleteData.path} className={className} />;
+      const deleteData = data as {
+        path: string;
+        success?: boolean;
+        error?: string;
+      };
+      return (
+        <FileDeleteOutput
+          path={deleteData.path}
+          success={deleteData.success}
+          error={deleteData.error}
+          className={className}
+        />
+      );
     }
 
     case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
-      const mcpData = data as { server: string; tool: string };
+      const mcpData = data as {
+        server: string;
+        tool: string;
+        result?: ToolResult;
+      };
       return (
         <McpToolCallOutput
           server={mcpData.server}
           tool={mcpData.tool}
+          result={mcpData.result}
           className={className}
         />
       );

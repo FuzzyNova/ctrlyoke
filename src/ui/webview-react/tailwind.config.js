@@ -147,6 +147,19 @@ module.exports = {
         "diff-context-fg": "var(--vscode-editor-foreground, #cccccc)",
         "diff-line-num": "var(--vscode-editorLineNumber-foreground, #858585)",
 
+        // ── Markdown enrichment colors (VS Code symbol icon palette) ──
+        // Used by MarkdownText.tsx for bold, italic, headings, and tables.
+        // Fallbacks are Dark+ defaults so the UI looks reasonable on all themes.
+        "md-strong-fg": "var(--vscode-symbolIcon-interfaceForeground, #75beff)",
+        "md-em-fg": "var(--vscode-symbolIcon-functionForeground, #b180d7)",
+        "md-heading-fg": "var(--vscode-symbolIcon-classForeground, #ee9d28)",
+        "md-table-head-bg":
+          "var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1))",
+
+        // ── Inline code color ──
+        // Warm VS Code string tint for backtick inline code (no language class).
+        "code-inline-fg": "var(--vscode-debugTokenExpression-string, #ce9178)",
+
         // ── Bash output colors ──
         "bash-expand-link": "#569cd6",
         "bash-status-success": "var(--vscode-charts-green, #89d185)",
@@ -170,15 +183,15 @@ module.exports = {
         // Tailwind build to generate VS Code-themed CSS for those classes.
         // 'foreground' is already mapped above.
         // Fallback to transparent where a VS Code theme may leave a value unset.
-        "background": "var(--vscode-editor-background)",
-        "sidebar": "var(--vscode-sideBar-background)",
-        "border": "var(--vscode-panel-border, transparent)",
-        "muted": {
+        background: "var(--vscode-editor-background)",
+        sidebar: "var(--vscode-sideBar-background)",
+        border: "var(--vscode-panel-border, transparent)",
+        muted: {
           DEFAULT:
             "var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1))",
           foreground: "var(--vscode-descriptionForeground)",
         },
-        "ring": "var(--vscode-focusBorder, transparent)",
+        ring: "var(--vscode-focusBorder, transparent)",
       },
 
       keyframes: {

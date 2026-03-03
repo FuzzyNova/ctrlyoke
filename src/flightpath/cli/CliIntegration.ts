@@ -133,6 +133,10 @@ export class CliIntegration extends HarnessIntegration {
   /** Workflow display name used for VS Code terminal tab naming */
   private workflowName?: string;
 
+  /** Current prompt index (1-based) and total, for terminal tab naming */
+  private currentPromptNumber?: number;
+  private currentPromptTotal?: number;
+
   /**
    * Create a new CLI integration with the specified CLI provider.
    *
@@ -206,7 +210,12 @@ export class CliIntegration extends HarnessIntegration {
    * the user closes it or the new terminal opens.
    */
   protected disposeTerminalIfExists(): void {
-    Log.debug("🗑️ Disposing existing terminal for fresh CLI session");
+    const hasTerminal = !!this.processManager.getTerminal();
+    if (hasTerminal) {
+      Log.info(`🗑️ Closing previous terminal before starting next prompt (was: "${this.buildTerminalName()}")`);
+    } else {
+      Log.debug("🗑️ disposeTerminalIfExists: no terminal open, nothing to close");
+    }
     this.processManager.disposeTerminal();
     this.currentExecution = undefined;
   }
@@ -223,7 +232,7 @@ export class CliIntegration extends HarnessIntegration {
    * Build the VS Code terminal tab name.
    *
    * Format: "FP: {Harness}" when no workflow is loaded,
-   *         "FP: {Harness} · {name}" when a workflow is active.
+   *         "FP: {Harness} · {name} [{n}/{total}]" when a workflow is active.
    *
    * Workflow name is capped at 25 characters; VS Code handles tab-level
    * truncation naturally when many terminals are open.
@@ -235,7 +244,11 @@ export class CliIntegration extends HarnessIntegration {
     }
     const cleaned = this.workflowName.trim();
     const short = cleaned.length > 25 ? `${cleaned.slice(0, 24)}…` : cleaned;
-    return `${base} · ${short}`;
+    const promptSuffix =
+      this.currentPromptNumber !== undefined && this.currentPromptTotal !== undefined
+        ? ` [${this.currentPromptNumber}/${this.currentPromptTotal}]`
+        : "";
+    return `${base} · ${short}${promptSuffix}`;
   }
 
   /**
@@ -836,7 +849,14 @@ export class CliIntegration extends HarnessIntegration {
     // Store the actual prompt sent for log discovery
     this.actualPromptSent = actualPromptText;
 
+    // Update prompt number for terminal tab naming before creating the terminal
+    if (workflowContext) {
+      this.currentPromptNumber = workflowContext.promptIndex + 1;
+      this.currentPromptTotal = workflowContext.allPrompts.length;
+    }
+
     const terminal = await this.createFreshTerminal();
+    Log.info(`🖥️ Opened terminal: "${this.buildTerminalName()}"`);
     terminal.show();
 
     this.promptReadyEmitter.fire({

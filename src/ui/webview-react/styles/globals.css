@@ -287,7 +287,6 @@ button .codicon {
   font-weight: 600;
   margin-top: 1em;
   margin-bottom: 0.4em;
-  color: var(--vscode-foreground);
   border-bottom: 1px solid var(--vscode-panel-border);
   padding-bottom: 0.2em;
 }
@@ -331,7 +330,6 @@ button .codicon {
   background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1));
   padding: 0.3em 0.8em;
   margin: 0.5em 0;
-  color: var(--vscode-descriptionForeground);
 }
 
 .markdown-text table {
@@ -349,7 +347,6 @@ button .codicon {
 }
 
 .markdown-text th {
-  background: var(--vscode-sideBar-background);
   font-weight: 600;
 }
 
@@ -365,7 +362,6 @@ button .codicon {
 
 .markdown-text strong {
   font-weight: 700;
-  color: var(--vscode-foreground);
 }
 
 .markdown-text em {

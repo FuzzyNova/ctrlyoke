@@ -129,7 +129,7 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
 
   return (
     <div
-      className={`${result.success ? TOOL_RESULT_LINE : "text-vscode-error-fg pl-4 ml-2 text-[11px]"} flex items-start gap-1 ${className}`}
+      className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[11px]"} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
       <span className="whitespace-pre-wrap break-words min-w-0">{contentText}</span>
@@ -238,7 +238,14 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           case CLI_EVENT_TYPES.FILE_DELETE: {
             const data = event.data as FileDeleteData;
             if (!data.path) return null;
-            return <FileDeleteOutput key={key} path={data.path} />;
+            return (
+              <FileDeleteOutput
+                key={key}
+                path={data.path}
+                success={data.success}
+                error={data.error}
+              />
+            );
           }
 
           case CLI_EVENT_TYPES.MCP_TOOL_CALL: {
@@ -249,6 +256,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
                 key={key}
                 server={data.server}
                 tool={data.tool}
+                result={data.result}
               />
             );
           }
@@ -387,7 +395,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
       return (
         <>
           <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}
+            className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}
           >
             {rawTextOutput ? (
               <div className="whitespace-pre-wrap">{streamingChunk}</div>
@@ -416,7 +424,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 3: Streaming with ONLY text chunks (no structured events)
     if (hasStreamingText) {
       return (
-        <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
+        <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
           {rawTextOutput ? (
             <div className="whitespace-pre-wrap">{streamingChunk}</div>
           ) : (
@@ -434,7 +442,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     // Case 5: Final output with plain response text (no structured data)
     if (hasFinalResponse) {
       return (
-        <div className={`${OUTPUT_BLOCK_BASE} border-l-[var(--border-color)]`}>
+        <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
           {rawTextOutput ? (
             <div className="whitespace-pre-wrap">{output.response as string}</div>
           ) : (

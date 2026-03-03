@@ -504,8 +504,16 @@ export class WebviewMessageRouter {
         ? normalizedPath.replace(/\/+$/, "")
         : normalizedPath;
 
-      const segments = trimmedPath.split("/").filter(Boolean);
-      const targetUri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+      // Detect absolute paths (Windows: C:/... or C:\..., POSIX: /...)
+      // and resolve them directly instead of joining with the workspace root.
+      const isAbsolute =
+        /^[A-Za-z]:\//.test(trimmedPath) || trimmedPath.startsWith("/");
+      const targetUri = isAbsolute
+        ? vscode.Uri.file(trimmedPath.replace(/\//g, "\\"))
+        : vscode.Uri.joinPath(
+            workspaceFolder.uri,
+            ...trimmedPath.split("/").filter(Boolean)
+          );
 
       if (isDirectory) {
         try {
