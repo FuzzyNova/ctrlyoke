@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { Log } from "../../utils/Log";
+import { Log } from "../../../utils/Log";
 import { ChatSessionParser } from "./ChatSessionParser";
 
 interface SessionFile {

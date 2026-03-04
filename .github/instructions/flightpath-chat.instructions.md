@@ -1,5 +1,5 @@
 ---
-applyTo: "src/flightpath/chat/**"
+applyTo: "src/flightpath/harness/chat/**"
 ---
 
 <purpose>

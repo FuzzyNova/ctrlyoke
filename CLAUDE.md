@@ -14,18 +14,19 @@ The `.github/instructions/` directory contains detailed implementation guideline
 
 When editing or analyzing files, read the corresponding instruction file:
 
-| File Pattern                           | Instruction File                                       | When to Read                                                                                |
-| -------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md` | HarnessIntegration, FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
-| `src/flightpath/chat/**`               | `.github/instructions/flightpath-chat.instructions.md` | CopilotChatIntegration (UI automation)                                                      |
-| `src/flightpath/cli/**`                | `.github/instructions/flightpath-cli.instructions.md`  | CliIntegration, CLI providers (Copilot, Claude, Codex)                                      |
-| `src/ui/**`                            | `.github/instructions/ui.instructions.md`              | Status bar, dashboard, settings webview providers                                           |
-| `src/types/**`                         | `.github/instructions/types.instructions.md`           | Type definitions and data structures                                                        |
-| `src/templates/**`                     | `.github/instructions/templates.instructions.md`       | End condition script templates                                                              |
-| `src/test/**`                          | `.github/instructions/test.instructions.md`            | Testing patterns and conventions                                                            |
-| `src/completions/**`                   | `.github/instructions/completions.instructions.md`     | IntelliSense providers                                                                      |
-| `src/utils/**`                         | `.github/instructions/utils.instructions.md`           | Utility functions and helpers                                                               |
-| `src/ui/webview-react/**`              | `.github/instructions/webview-react.instructions.md`   | React dashboard (components, stores, hooks)                                                 |
+| File Pattern                           | Instruction File                                             | When to Read                                                                                |
+| -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `src/flightpath/*.ts` (top-level only) | `.github/instructions/flightpath-core.instructions.md`       | HarnessIntegration, FlightPathManager, PromptQueue, PromptFileParser, EndConditionEvaluator |
+| `src/flightpath/harness/chat/**`       | `.github/instructions/flightpath-chat.instructions.md`       | CopilotChatIntegration (UI automation)                                                      |
+| `src/flightpath/harness/**`            | `.github/instructions/harness-integrations.instructions.md`  | CliIntegration, Harness providers (Copilot, Claude, Codex)                                  |
+| `src/cli.ts`, `src/cli/**`             | `.github/instructions/flightpath-cli-binary.instructions.md` | FlightPath CLI binary, CliAdapter, CliTerminalFormatter                                     |
+| `src/ui/**`                            | `.github/instructions/ui.instructions.md`                    | Status bar, dashboard, settings webview providers                                           |
+| `src/types/**`                         | `.github/instructions/types.instructions.md`                 | Type definitions and data structures                                                        |
+| `src/templates/**`                     | `.github/instructions/templates.instructions.md`             | End condition script templates                                                              |
+| `src/test/**`                          | `.github/instructions/test.instructions.md`                  | Testing patterns and conventions                                                            |
+| `src/completions/**`                   | `.github/instructions/completions.instructions.md`           | IntelliSense providers                                                                      |
+| `src/utils/**`                         | `.github/instructions/utils.instructions.md`                 | Utility functions and helpers                                                               |
+| `src/ui/webview-react/**`              | `.github/instructions/webview-react.instructions.md`         | React dashboard (components, stores, hooks)                                                 |
 
 ### How to Use
 
@@ -43,8 +44,8 @@ When editing or analyzing files, read the corresponding instruction file:
 - Working on `src/ui/FlightPathDashboardProvider.ts`?
   - Read: `.github/instructions/ui.instructions.md`
 
-- Working on `src/flightpath/cli/CopilotCommandLineIntegration.ts`?
-  - Read: `.github/instructions/flightpath-cli.instructions.md`
+- Working on `src/flightpath/harness/CliIntegration.ts`?
+  - Read: `.github/instructions/harness-integrations.instructions.md`
 
 - Working on multiple files across different directories?
   - Read all relevant instruction files for those directories

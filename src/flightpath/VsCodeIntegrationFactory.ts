@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { VsCodeAdapter } from "../platform/VsCodeAdapter";
 import { Harness } from "../types/FlightPathTypes";
 import { HarnessIntegration } from "./HarnessIntegration";
-import { CopilotChatIntegration } from "./chat/CopilotChatIntegration";
+import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
 import { IntegrationFactory } from "./IntegrationFactory";
 
 /**

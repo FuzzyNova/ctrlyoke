@@ -2,9 +2,9 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { ClaudeLogParser } from "../../../flightpath/cli/claude/ClaudeLogParser";
-import { CopilotLogParser } from "../../../flightpath/cli/copilot/CopilotLogParser";
-import { CodexLogParser } from "../../../flightpath/cli/codex/CodexLogParser";
+import { ClaudeLogParser } from "../../../flightpath/harness/claude/ClaudeLogParser";
+import { CopilotLogParser } from "../../../flightpath/harness/copilot/CopilotLogParser";
+import { CodexLogParser } from "../../../flightpath/harness/codex/CodexLogParser";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -14,7 +14,7 @@ import {
   FileWriteData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
-import { BaseCliEvent } from "../../../flightpath/cli/shared/interfaces/ILogParser";
+import { BaseCliEvent } from "../../../flightpath/harness/shared/interfaces/ILogParser";
 
 /**
  * Comprehensive unit tests for CLI log parser implementations

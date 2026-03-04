@@ -1,15 +1,15 @@
 ---
-applyTo: "src/flightpath/cli/**"
+applyTo: "src/flightpath/harness/**"
 ---
 
 <purpose>
-CLI integrations for GitHub Copilot, Claude Code, and Codex. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
+Harness integrations for GitHub Copilot, Claude Code, and Codex. Deterministic completion, structured output, no UI dependencies. Supports both interactive TUI and headless background execution modes.
 </purpose>
 
 <architectureOverview>
 **Composition-based architecture** (as of January 2026):
 
-FlightPath uses **composition over inheritance** for CLI integrations. This makes adding new CLI providers (Gemini, OpenCode, etc.) simple and safe:
+FlightPath uses **composition over inheritance** for harness integrations. This makes adding new CLI providers (Gemini, OpenCode, etc.) simple and safe:
 
 - **Single generic integration class** (`CliIntegration`) works with ALL providers
 - **Harness-specific logic** encapsulated in provider directories (copilot/, claude/, codex/)
@@ -37,14 +37,21 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 </architectureOverview>
 
 <coreComponents>
-**CliIntegration** (src/flightpath/cli/CliIntegration.ts):
+**CliIntegration** (src/flightpath/harness/CliIntegration.ts):
 - Generic integration class that works with ANY provider
 - Delegates all provider-specific behavior to ICliProvider instance
 - Handles execution lifecycle (interactive/headless modes)
 - Manages session continuity, cancellation, and status updates
 - **Never needs modification** when adding new providers
 
-**ICliProvider Interface** (src/flightpath/cli/shared/interfaces/ICliProvider.ts):
+**CliLogMonitor** (src/flightpath/harness/CliLogMonitor.ts):
+
+- Wraps `INotificationMonitor` with polling logic and file-based session end detection
+- Used by `CliIntegration` to detect when a headless AI CLI process has completed its response
+- Monitors hook/notification files written by the AI CLI's notify scripts
+- Not used by interactive mode (the user signals completion manually)
+
+**ICliProvider Interface** (src/flightpath/harness/shared/interfaces/ICliProvider.ts):
 
 - Main provider contract - defines what a CLI provider must implement
 - Includes: config (metadata), responseParser, notificationMonitor, toolPermissionMapper
@@ -56,7 +63,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for step-by-step guide
 Each provider is self-contained in its own directory with 5 required files:
 
 ```
-src/flightpath/cli/copilot/
+src/flightpath/harness/copilot/
 ├── CopilotCliProvider.ts          # Main provider descriptor (implements ICliProvider)
 ├── CopilotResponseParser.ts       # Implements IResponseParser (parse output, extract tokens)
 ├── CopilotNotificationMonitor.ts  # Implements INotificationMonitor (completion detection)
@@ -293,7 +300,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for complete guide
 <addingNewProviders>
 **To add a new CLI provider** (e.g., Gemini, OpenCode):
 
-1. Create provider directory: `src/flightpath/cli/gemini/`
+1. Create provider directory: `src/flightpath/harness/gemini/`
 2. Implement 5 required classes:
    - GeminiCliProvider.ts (implements ICliProvider)
    - GeminiResponseParser.ts (implements IResponseParser)
@@ -342,7 +349,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
    - ✅ Patterns converted correctly for CLI
 
 **Manual test files**: `manual-test/*.flightpath.json`
-**Unit tests**: `src/test/suite/flightpath-cli.test.ts`
+**Unit tests**: `src/test/suite/harness/`
 </testingProviders>
 
 <providerSpecifics>
@@ -416,45 +423,45 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 </providerSpecifics>
 
 <sharedUtilities>
-**Truly shared utilities** (provider-agnostic, no CLI-specific logic):
+**Truly shared utilities** (provider-agnostic, no harness-specific logic):
 
-**BaseLogParser** (src/flightpath/cli/shared/BaseLogParser.ts):
+**BaseLogParser** (src/flightpath/harness/shared/BaseLogParser.ts):
 
 - Abstract base class implementing ILogParser
 - Common log file monitoring (polling, line tracking)
 - Provider subclasses extend this for format-specific parsing
 
-**CliNotificationMonitor** (src/flightpath/cli/shared/CliNotificationMonitor.ts):
+**CliNotificationMonitor** (src/flightpath/harness/shared/CliNotificationMonitor.ts):
 
 - Shared notification/hook file monitoring
 - Supports both specific-file and wildcard polling modes
 - Extracts completion events and session IDs from hook output
 
-**CliOutputFormatter** (src/flightpath/cli/shared/CliOutputFormatter.ts):
+**CliOutputFormatter** (src/flightpath/harness/shared/CliOutputFormatter.ts):
 
 - Formats CLI responses for the Output panel and dashboard
 - Structures `DashboardOutput` (text, tokens, statistics)
 - Provider-agnostic display formatting
 
-**CliResponseParser** (src/flightpath/cli/shared/CliResponseParser.ts):
+**CliResponseParser** (src/flightpath/harness/shared/CliResponseParser.ts):
 
 - Shared parsing utilities (`CliJsonResponse`, `CliUsage` interfaces)
 - Common JSON/JSONL response extraction helpers
 - Base parsing logic used by provider-specific parsers
 
-**CliToolPermissionMapper** (src/flightpath/cli/shared/CliToolPermissionMapper.ts):
+**CliToolPermissionMapper** (src/flightpath/harness/shared/CliToolPermissionMapper.ts):
 
 - Core tool permission logic shared across providers
 - Handles dangerouslyAllowAll, allowAll, and custom modes
 - `ToolPermissionConfig` interface defines the mapping contract
 
-**CliMcpConfigGenerator** (src/flightpath/cli/shared/CliMcpConfigGenerator.ts):
+**CliMcpConfigGenerator** (src/flightpath/harness/shared/CliMcpConfigGenerator.ts):
 
 - MCP configuration JSON generation
 - Template-based config creation
 - Provider-agnostic (caller specifies provider-specific fields)
 
-**Interfaces** (src/flightpath/cli/shared/interfaces/):
+**Interfaces** (src/flightpath/harness/shared/interfaces/):
 
 - ICliProvider.ts: Main provider contract
 - IResponseParser.ts: Output parsing interface
@@ -463,7 +470,7 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 - ILogParser.ts: Log file monitoring interface
 - index.ts: Barrel export for all interfaces
 
-**Note**: These utilities contain NO provider-specific logic. All CLI-specific behavior lives in provider directories.
+**Note**: These utilities contain NO provider-specific logic. All harness-specific behavior lives in provider directories.
 </sharedUtilities>
 
 <importantNotes>
@@ -482,4 +489,5 @@ See: `docs/ADDING_NEW_CLI_PROVIDER.md` for detailed step-by-step guide with code
 13. **Interface contracts**: TypeScript interfaces (ICliProvider, IResponseParser, ILogParser, etc.) prevent implementation mistakes
 14. **Testable components**: Provider components testable in isolation without mocking
 15. **All integrations instantiated eagerly**: FlightPathManager creates all 4 integrations at startup (not lazy/on-demand)
+16. **CliTerminalFormatter is NOT here**: It lives in `src/cli/CliTerminalFormatter.ts` — it is strictly a FlightPath CLI binary display helper, not a harness utility
 </importantNotes>

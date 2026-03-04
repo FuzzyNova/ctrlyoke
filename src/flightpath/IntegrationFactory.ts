@@ -1,10 +1,10 @@
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import { Harness } from "../types/FlightPathTypes";
 import { HarnessIntegration } from "./HarnessIntegration";
-import { CliIntegration } from "./cli/CliIntegration";
-import { CopilotCliProvider } from "./cli/copilot/CopilotCliProvider";
-import { ClaudeCliProvider } from "./cli/claude/ClaudeCliProvider";
-import { CodexCliProvider } from "./cli/codex/CodexCliProvider";
+import { CliIntegration } from "./harness/CliIntegration";
+import { CopilotCliProvider } from "./harness/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "./harness/claude/ClaudeCliProvider";
+import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
 
 /**
  * IntegrationFactory

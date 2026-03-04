@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { ChatSessionParser } from "../flightpath/chat/ChatSessionParser";
+import { ChatSessionParser } from "../flightpath/harness/chat/ChatSessionParser";
 import { CLI_EVENT_TYPES } from "../types/DashboardConstants";
 
 suite("ChatSessionParser Tests", () => {

@@ -2,9 +2,9 @@ import * as vscode from "vscode";
 import {
   FileReference,
   parseAllFileReferences,
-} from "../../utils/FileReferenceParser";
-import { Log } from "../../utils/Log";
-import { resolveSymbol } from "../../utils/AttachmentBuilders";
+} from "../../../utils/FileReferenceParser";
+import { Log } from "../../../utils/Log";
+import { resolveSymbol } from "../../../utils/AttachmentBuilders";
 
 /** Function type for resolving workspace-relative paths */
 export type PathResolver = (relativePath: string) => string;

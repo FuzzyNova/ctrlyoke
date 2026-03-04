@@ -10,7 +10,7 @@ import { WorkflowInstance } from "./flightpath/WorkflowInstance";
 import { EXECUTION_STATES, STEP_STATUS } from "./types/DashboardConstants";
 import { Harness } from "./types/FlightPathTypes";
 import type { QueueState } from "./types/FlightPathTypes";
-import { CliTerminalFormatter } from "./flightpath/cli/shared/CliTerminalFormatter";
+import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 
 // VERSION is injected by esbuild define

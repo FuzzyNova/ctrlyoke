@@ -10,7 +10,7 @@ import { NativeAttachmentHandler } from "./NativeAttachmentHandler";
 import { Log } from "../../utils/Log";
 import { retryWithBackoff } from "../../utils/RetryUtils";
 import { AgentExpander } from "../../utils/AgentExpander";
-import { CliOutputFormatter } from "../cli/shared/CliOutputFormatter";
+import { CliOutputFormatter } from "../harness/shared/CliOutputFormatter";
 import { UniversalCliOutput } from "../../types/CliOutputTypes";
 import { ResolvedProperties } from "../../utils/PropertyResolver";
 

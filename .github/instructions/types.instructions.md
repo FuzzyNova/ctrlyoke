@@ -178,7 +178,7 @@ private isChatIntegration(integration: CopilotIntegration): integration is Copil
 
 - `../flightpath/cli/CliIntegration.ts` - Uses CliResult, WorkflowContext
 - `../flightpath/cli/*/Provider.ts` - Harness-specific providers (Copilot, Claude, Codex)
-- `../flightpath/chat/CopilotChatIntegration.ts` - Uses CopilotChatRequest/Response
+- `../flightpath/harness/chat/CopilotChatIntegration.ts` - Uses CopilotChatRequest/Response
 
 **UI:**
 

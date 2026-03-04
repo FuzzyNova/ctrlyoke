@@ -28,7 +28,7 @@ import {
 import {
   CliOutputFormatter,
   DashboardOutput,
-} from "./cli/shared/CliOutputFormatter";
+} from "./harness/shared/CliOutputFormatter";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { StatusMessage, CliEvent } from "../types/WebviewMessageTypes";
 

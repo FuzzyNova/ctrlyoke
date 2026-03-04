@@ -1,7 +1,7 @@
 import * as assert from "assert";
-import { CliIntegration } from "../../flightpath/cli/CliIntegration";
-import { CopilotCliProvider } from "../../flightpath/cli/copilot/CopilotCliProvider";
-import { ClaudeCliProvider } from "../../flightpath/cli/claude/ClaudeCliProvider";
+import { CliIntegration } from "../../flightpath/harness/CliIntegration";
+import { CopilotCliProvider } from "../../flightpath/harness/copilot/CopilotCliProvider";
+import { ClaudeCliProvider } from "../../flightpath/harness/claude/ClaudeCliProvider";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import * as vscode from "vscode";
 

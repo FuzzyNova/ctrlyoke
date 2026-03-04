@@ -72,7 +72,7 @@ Every CLI provider consists of exactly **5 files** implementing **4 interfaces**
 ### Directory Structure
 
 ```
-src/flightpath/cli/
+src/flightpath/harness/
 ├── CliIntegration.ts                  # Generic integration (NEVER modified)
 ├── shared/
 │   ├── interfaces/                    # Interfaces (rarely change)
@@ -146,7 +146,7 @@ Gemini CLI v1.0.0
 **Goal**: Set up the file structure.
 
 ```bash
-cd src/flightpath/cli
+cd src/flightpath/harness
 mkdir gemini
 cd gemini
 ```
@@ -170,7 +170,7 @@ touch GeminiToolPermissionMapper.ts
 touch GeminiLogParser.ts
 ```
 
-**Template**: Extend `BaseLogParser` from `src/flightpath/cli/shared/BaseLogParser.ts`
+**Template**: Extend `BaseLogParser` from `src/flightpath/harness/shared/BaseLogParser.ts`
 
 **Implementation checklist**:
 
@@ -469,7 +469,7 @@ npm run sync-models
    - Completion detection approach
    - Known limitations
 
-2. **Update main instructions**: `.github/instructions/flightpath-cli.instructions.md`
+2. **Update main instructions**: `.github/instructions/harness-integrations.instructions.md`
    - Add provider to `<providerSpecifics>` section
 
 3. **Example workflow**: `manual-test/gemini-test.flightpath.yaml`
@@ -1435,7 +1435,7 @@ This example shows a complete integration for a hypothetical "Gemini CLI" with t
 ### Directory Structure
 
 ```
-src/flightpath/cli/gemini/
+src/flightpath/harness/gemini/
 ├── GeminiCliProvider.ts
 ├── GeminiResponseParser.ts
 ├── GeminiNotificationMonitor.ts
@@ -1556,7 +1556,7 @@ Adding a new CLI provider to FlightPath requires:
 **Questions or Issues?**
 
 - Review existing providers: copilot/, claude/, codex/
-- Check `.github/instructions/flightpath-cli.instructions.md`
+- Check `.github/instructions/harness-integrations.instructions.md`
 - Open GitHub issue with `provider-integration` label
 
 Happy integrating! 🚀

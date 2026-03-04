@@ -52,7 +52,7 @@ User loads workflow (.flightpath.yaml/.json/.prompt.md)
 `CliIntegration` is a **generic class** that works with all CLI harnesses via composition. Each harness lives in its own directory with 5 required files implementing clear interfaces:
 
 ```
-src/flightpath/cli/
+src/flightpath/harness/
 ├── CliIntegration.ts          ← Generic, never modified for new harnesses
 ├── shared/interfaces/         ← ICliProvider, IResponseParser, INotificationMonitor, IToolPermissionMapper, ILogParser
 ├── copilot/                   ← CopilotCliProvider + 4 supporting classes
@@ -164,8 +164,8 @@ src/
 │   ├── EndConditionHandler.ts    # Retry orchestration
 │   ├── TemplateManager.ts        # Workflow template management
 │   ├── QueueOperations.ts        # Shared queue ops (MCP + LM Tools)
-│   ├── chat/                     # CopilotChatIntegration + session monitoring
-│   ├── cli/                      # CliIntegration + 3 harness providers
+│   ├── harness/                  # ALL harnesses: CliIntegration, 3 CLI providers, + chat/
+│   │   └── chat/                 # CopilotChatIntegration + session monitoring
 │   └── orchestration/            # PromptFileLoader, PromptFileWatcher,
 │                                 # TemplateImporter, WorkflowCommandHandler,
 │                                 # WorkspaceSessionManager, OutputHistoryManager
@@ -320,7 +320,7 @@ npm test                 # Run Mocha test suite
 
 ### Adding a New CLI Harness
 
-See `docs/ADDING_NEW_CLI_PROVIDER.md`. Create 5 files in `src/flightpath/cli/<name>/`. Zero changes to `CliIntegration.ts` or shared utilities required.
+See `docs/ADDING_NEW_CLI_PROVIDER.md`. Create 5 files in `src/flightpath/harness/<name>/`. Zero changes to `CliIntegration.ts` or shared utilities required.
 
 ### Adding a New Prompt Property
 

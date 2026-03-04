@@ -168,7 +168,7 @@ The following stale references remain and should be cleaned up:
 
 1. **Stale comment in `CopilotCliProvider.ts` line 77:** JSDoc comment still mentions `--log-dir` and `--log-level` as handled args, but the implementation no longer passes them.
 2. **Stale docs in `.github/copilot-instructions.md`:** Still mentions `flightpath.copilotCliLogDir` setting (removed from package.json).
-3. **Stale docs in `.github/instructions/flightpath-cli.instructions.md`:** Same stale `copilotCliLogDir` reference.
+3. **Stale docs in `.github/instructions/harness-integrations.instructions.md`:** Same stale `copilotCliLogDir` reference.
 
 ---
 

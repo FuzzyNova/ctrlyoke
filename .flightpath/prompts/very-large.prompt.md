@@ -1443,7 +1443,8 @@ Always read the main project instructions:
 
 Read the relevant instruction file(s) based on which files you're working with:
 
-- `src/flightpath/cli/**` → `@.github/instructions/flightpath-cli.instructions.md`
+- `src/flightpath/harness/**` → `@.github/instructions/harness-integrations.instructions.md`
+- `src/cli.ts`, `src/cli/**` → `@.github/instructions/flightpath-cli-binary.instructions.md`
 - `src/ui/**` → `@.github/instructions/ui.instructions.md`
 ```
 

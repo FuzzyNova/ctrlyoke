@@ -2,7 +2,7 @@ import * as assert from "assert";
 import {
   CliOutputFormatter,
   DashboardOutput,
-} from "../../flightpath/cli/shared/CliOutputFormatter";
+} from "../../flightpath/harness/shared/CliOutputFormatter";
 import {
   UniversalCliOutput,
   ToolCall,

@@ -9,9 +9,9 @@ import {
   FileReadData,
   BashCommandData,
   FileDeleteData,
-} from "../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../types/DashboardConstants";
-import { Log } from "../../utils/Log";
+} from "../../../types/CliOutputTypes";
+import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import { Log } from "../../../utils/Log";
 
 /**
  * Chat session file structure (top-level)
