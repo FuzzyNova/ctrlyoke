@@ -127,6 +127,35 @@ export class CliLogMonitor {
         // Extract final response from accumulated events
         const response = parser.extractResponse(events);
 
+        // Copilot-specific: augment context window data from the process log.
+        // The process log (process-*.log) contains CompactionProcessor lines with
+        // accurate context utilization that fires every turn — more reliable than
+        // session.truncation events which only appear for long sessions.
+        const effectiveSessionId =
+          response.metadata.sessionId || sessionId || undefined;
+        if (
+          effectiveSessionId &&
+          typeof (parser as any).extractContextFromProcessLog === "function"
+        ) {
+          const processCtx = await (parser as any).extractContextFromProcessLog(
+            effectiveSessionId
+          );
+          if (processCtx) {
+            if (response.metadata.usage) {
+              response.metadata.usage.contextWindowUsedTokens = processCtx.used;
+              response.metadata.usage.contextWindowSize = processCtx.size;
+            } else {
+              response.metadata.usage = {
+                inputTokens: 0,
+                outputTokens: 0,
+                totalTokens: 0,
+                contextWindowUsedTokens: processCtx.used,
+                contextWindowSize: processCtx.size,
+              };
+            }
+          }
+        }
+
         // Extract text from events for legacy response field
         const responseText = CliLogMonitor.extractTextFromEvents(response);
 

@@ -488,6 +488,53 @@ You have access to flightpath_queue_status and flightpath_append_queue tools. Us
   }
 
   /**
+   * Check if a prompt is simple enough to pass directly without a temp file.
+   *
+   * Simple prompts must be:
+   * - Short length (≤300 characters)
+   * - No dynamic queue XML instructions
+   * - No shell-dangerous characters (quotes, backslashes, newlines, metacharacters, etc.)
+   *
+   * **Security-critical for CLI:** We're conservative because the prompt gets embedded
+   * directly in the shell command line. Even with escaping, complex prompts could
+   * break parsing or introduce security issues.
+   *
+   * For chat harnesses the same check applies as a fast-path gate: if it passes,
+   * the prompt is short and clean enough to type inline, skipping temp file I/O.
+   *
+   * @param finalPromptText The final prompt text (after instruction injection)
+   * @returns true if prompt can be passed directly
+   */
+  protected isSimplePrompt(finalPromptText: string): boolean {
+    const MAX_SIMPLE_PROMPT_LENGTH = 300;
+
+    if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
+      return false;
+    }
+
+    if (finalPromptText.includes("<criticalInstruction>")) {
+      return false;
+    }
+
+    // Only allow: letters, numbers, spaces, and basic safe punctuation.
+    // If anything else exists, use file-based passing.
+    const SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
+    if (!SAFE_CHARS_PATTERN.test(finalPromptText)) {
+      Log.debug(
+        "📁 Prompt contains special characters, using file-based passing for safety"
+      );
+      return false;
+    }
+
+    if (/[\n\r\t]/.test(finalPromptText)) {
+      Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Resolve relative path to absolute workspace path
    * Uses Node.js path.resolve for cross-platform compatibility
    */

@@ -1237,6 +1237,118 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   // ========================================================================
+  // Process Log — Context Window Extraction
+  // ========================================================================
+
+  /**
+   * Extract context window usage from the Copilot process log for a session.
+   *
+   * Copilot writes per-process log files to `~/.copilot/logs/process-*.log`.
+   * Each file begins with `Workspace initialized: {sessionId}`, making session
+   * matching straightforward. The `CompactionProcessor` lines report the current
+   * context utilization every turn:
+   *
+   * ```
+   * 2026-03-04T15:14:58.073Z [INFO] CompactionProcessor: Utilization 37.2% (47591/128000 tokens) below threshold 80%
+   * ```
+   *
+   * We use the **last** such line (most recent turn) to get the final context
+   * window state after the prompt completed.
+   *
+   * @param sessionId - Copilot session UUID (from session.start event / hook)
+   * @returns Context window tokens `{ used, size }`, or undefined if unavailable
+   */
+  async extractContextFromProcessLog(
+    sessionId: string
+  ): Promise<{ used: number; size: number } | undefined> {
+    try {
+      const logsDir = path.join(os.homedir(), ".copilot", "logs");
+      if (!fs.existsSync(logsDir)) {
+        return undefined;
+      }
+
+      // Find the process-*.log file for this session
+      const processLog = this.findProcessLogForSession(logsDir, sessionId);
+      if (!processLog) {
+        Log.debug(
+          `[CopilotLogParser] No process log found for session ${sessionId}`
+        );
+        return undefined;
+      }
+
+      // Read file and scan for the last CompactionProcessor line
+      const content = fs.readFileSync(processLog, "utf8");
+      let used: number | undefined;
+      let size: number | undefined;
+
+      for (const line of content.split("\n")) {
+        const match = line.match(
+          /CompactionProcessor: Utilization [\d.]+% \((\d+)\/(\d+) tokens\)/
+        );
+        if (match) {
+          used = parseInt(match[1], 10);
+          size = parseInt(match[2], 10);
+        }
+      }
+
+      if (used === undefined || size === undefined) {
+        Log.debug(
+          `[CopilotLogParser] No CompactionProcessor events in ${path.basename(processLog)}`
+        );
+        return undefined;
+      }
+
+      Log.debug(
+        `[CopilotLogParser] Context from process log: ${used}/${size} tokens (${path.basename(processLog)})`
+      );
+      return { used, size };
+    } catch (error) {
+      Log.debug(
+        `[CopilotLogParser] Failed to read process log for context: ${error}`
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Find the process-*.log file whose first line identifies the given session.
+   *
+   * @param logsDir - `~/.copilot/logs/`
+   * @param sessionId - Session UUID to search for
+   * @returns Absolute path to the matching log file, or null
+   */
+  private findProcessLogForSession(
+    logsDir: string,
+    sessionId: string
+  ): string | null {
+    try {
+      const files = fs
+        .readdirSync(logsDir)
+        .filter((f) => f.startsWith("process-") && f.endsWith(".log"));
+
+      for (const file of files) {
+        const filePath = path.join(logsDir, file);
+        try {
+          // Read only the first line to check session ID (fast path)
+          const fd = fs.openSync(filePath, "r");
+          const buf = Buffer.alloc(256);
+          const bytesRead = fs.readSync(fd, buf, 0, 256, 0);
+          fs.closeSync(fd);
+          const firstChunk = buf.toString("utf8", 0, bytesRead);
+          if (firstChunk.includes(`Workspace initialized: ${sessionId}`)) {
+            return filePath;
+          }
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ========================================================================
   // Private Helper Methods
   // ========================================================================
 

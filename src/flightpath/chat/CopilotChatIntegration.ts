@@ -832,6 +832,13 @@ export class CopilotChatIntegration extends HarnessIntegration {
       return expandedText;
     }
 
+    // Fast path: simple prompts (short, no special chars) can be typed inline —
+    // no temp file I/O or attachment commands needed.
+    if (this.isSimplePrompt(expandedText)) {
+      Log.debug(`📝 Simple prompt - using inline (fast path)`);
+      return expandedText;
+    }
+
     // Create temp file(s) via base class (handles splitting, logging)
     const { tempFilePaths } = await this.createTempPromptFiles(expandedText);
 

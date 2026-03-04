@@ -317,61 +317,6 @@ export class CliIntegration extends HarnessIntegration {
   // ============================================================
 
   /**
-   * Check if a prompt is simple enough to pass directly without temp file.
-   *
-   * Simple prompts must be:
-   * - Short length (≤300 characters)
-   * - No dynamic queue XML instructions
-   * - No shell-dangerous characters (quotes, backslashes, newlines, metacharacters, etc.)
-   *
-   * **Security-critical:** We're conservative here because the prompt gets embedded
-   * directly in the shell command line. Even with escaping, complex prompts could
-   * break parsing or introduce security issues.
-   *
-   * Benefits of direct passing:
-   * - No file I/O overhead
-   * - Faster response for quick queries
-   * - Better UX for interactive commands
-   *
-   * @param finalPromptText The final prompt text (after instruction injection)
-   * @returns true if prompt can be passed directly
-   */
-  protected isSimplePrompt(finalPromptText: string): boolean {
-    const MAX_SIMPLE_PROMPT_LENGTH = 300;
-
-    // Check length
-    if (finalPromptText.length > MAX_SIMPLE_PROMPT_LENGTH) {
-      return false;
-    }
-
-    // Check for XML instructions (dynamic queue)
-    if (finalPromptText.includes("<criticalInstruction>")) {
-      return false;
-    }
-
-    // Check for shell-dangerous characters
-    // We only allow: letters, numbers, spaces, and basic safe punctuation
-    // This regex matches SAFE characters; if anything else exists, use file-based passing
-    const SAFE_CHARS_PATTERN = /^[a-zA-Z0-9\s.,!?:;\-_()@#/]*$/;
-    if (!SAFE_CHARS_PATTERN.test(finalPromptText)) {
-      Log.debug(
-        "📁 Prompt contains special characters, using file-based passing for safety"
-      );
-      return false;
-    }
-
-    // Check for control characters and newlines
-    if (/[\n\r\t]/.test(finalPromptText)) {
-      Log.debug("📁 Prompt contains newlines/tabs, using file-based passing");
-      return false;
-    }
-
-    // SAFE_CHARS_PATTERN above already excludes all dangerous chars (", ', \, `, $)
-    // No additional per-character checks needed.
-    return true;
-  }
-
-  /**
    * Create temp file(s) for the prompt and return file reference instruction.
    *
    * For large prompts (>20K tokens or >1800 lines), splits into multiple files
@@ -508,7 +453,7 @@ export class CliIntegration extends HarnessIntegration {
    * No output is captured (no CliEvent[], no session ID extraction from logs).
    *
    * @param args Base CLI args (from buildCliArgs with isInteractive=true)
-   * @param promptText Prompt text (written to temp file for safe passing)
+   * @param promptText Prompt text (passed directly if simple, else via temp file)
    * @param workflowContext Optional workflow context for temp file naming
    * @param resolvedSessionId Resolved session ID (preserved across prompts)
    * @returns success flag and the original sessionId (no new ID extracted)
@@ -531,16 +476,27 @@ export class CliIntegration extends HarnessIntegration {
         console.log();
       }
 
-      // Use temp file for prompt passing (same security policy as VS Code path)
-      const { tempFilePaths: paths, promptWithInstruction } =
-        await this.createPromptFileWithReference(promptText, workflowContext);
-      tempFilePaths = paths;
-      this.actualPromptSent = promptWithInstruction;
+      // Use simple prompt directly when possible; fall back to temp file for
+      // complex prompts (isSimplePrompt enforces shell-safety for both paths).
+      let promptToSend: string;
+      if (this.isSimplePrompt(promptText)) {
+        promptToSend = promptText;
+        Log.debug(`📝 CLI interactive using direct prompt (fast path)`);
+      } else {
+        const { tempFilePaths: paths, promptWithInstruction } =
+          await this.createPromptFileWithReference(promptText, workflowContext);
+        tempFilePaths = paths;
+        promptToSend = promptWithInstruction;
+        Log.debug(
+          `📁 CLI interactive using ${tempFilePaths.length} temp file(s) for prompt passing`
+        );
+      }
+      this.actualPromptSent = promptToSend;
 
       // Build the interactive TUI command string
       const tuiCommand = this.provider.buildInteractiveTuiCommand(
         args,
-        promptWithInstruction
+        promptToSend
       );
       const commandStr = String(tuiCommand).replace(/\s+/g, " ").trim();
       this.lastCliCommand = commandStr;
@@ -860,11 +816,11 @@ export class CliIntegration extends HarnessIntegration {
   /**
    * Start CLI process in terminal and return execution details.
    *
-   * **Security: Always uses temp file for prompt passing.**
-   * The prompt text is never embedded directly in the shell command string,
-   * eliminating shell injection risk entirely. A temp file is created and
-   * a file reference (e.g., "Follow instructions in @.flightpath/temp/prompt.md")
-   * is passed instead.
+   * **Security:** Uses `isSimplePrompt` to decide the passing strategy.
+   * Simple prompts (≤300 chars, shell-safe characters only) are passed directly.
+   * Complex prompts go through a temp file reference
+   * (e.g., "Follow instructions in @.flightpath/temp/prompt.md"),
+   * which eliminates shell injection risk entirely.
    *
    * @param args CLI arguments
    * @param promptText Prompt text
@@ -880,21 +836,31 @@ export class CliIntegration extends HarnessIntegration {
     execution: vscode.TerminalShellExecution;
     tempFilePaths: string[];
   }> {
-    // Security: Always use temp file for interactive mode prompt passing.
-    // The prompt text is embedded in a shell command string by buildInteractiveTuiCommand(),
-    // so even with escaping, raw prompt text could contain shell metacharacters.
-    // Using temp files eliminates shell injection entirely — prompt never enters the command line.
-    const { tempFilePaths, promptWithInstruction } =
-      await this.createPromptFileWithReference(promptText, workflowContext);
-    const actualPromptText = promptWithInstruction; // "Follow instructions in @file1 "
+    // Use simple prompt directly when possible; isSimplePrompt enforces shell-safety
+    // (only allows chars safe for embedding in a command string), so a true result
+    // means we can skip temp file I/O entirely. Complex or shell-unsafe prompts
+    // still go through file-based passing to eliminate injection risk.
+    let tempFilePaths: string[] = [];
+    let actualPromptText: string;
 
-    Log.debug(
-      `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
-    );
+    if (this.isSimplePrompt(promptText)) {
+      actualPromptText = promptText;
+      Log.debug(`📝 Interactive mode using direct prompt (fast path)`);
+    } else {
+      const result = await this.createPromptFileWithReference(
+        promptText,
+        workflowContext
+      );
+      tempFilePaths = result.tempFilePaths;
+      actualPromptText = result.promptWithInstruction;
+      Log.debug(
+        `📁 Interactive mode using ${tempFilePaths.length} temp file(s) for safe prompt passing`
+      );
+    }
 
     const tuiCommand = this.provider.buildInteractiveTuiCommand(
       args,
-      actualPromptText // Use file reference or original depending on size
+      actualPromptText
     );
 
     // Persist the actual TUI command (trimmed and collapsed to one line)
