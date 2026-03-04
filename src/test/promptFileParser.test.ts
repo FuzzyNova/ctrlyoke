@@ -1,7 +1,6 @@
 import * as assert from "assert";
 import * as path from "path";
 import { PromptFileParser } from "../flightpath/PromptFileParser";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 
 suite("PromptFileParser Tests", () => {
   let parser: PromptFileParser;
@@ -298,37 +297,6 @@ suite("PromptFileParser Tests", () => {
       const filePath = path.join(fixturesPath, "simple.prompt.md");
       const result = await parser.parsePromptFile(filePath);
       assert.ok(result, "Should parse .prompt.md files");
-    });
-  });
-
-  suite("resumeSession Setting Resolution", () => {
-    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to true", () => {
-      const result = ConfigurationUtils.shouldResumeSessionForPrompt(true);
-      assert.strictEqual(
-        result,
-        true,
-        "Should use explicit prompt value (true)"
-      );
-    });
-
-    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to false", () => {
-      const result = ConfigurationUtils.shouldResumeSessionForPrompt(false);
-      assert.strictEqual(
-        result,
-        false,
-        "Should use explicit prompt value (false)"
-      );
-    });
-
-    test("shouldResumeSessionForPrompt should fall back to global setting when prompt value is undefined", () => {
-      // The global setting defaults to false
-      const result = ConfigurationUtils.shouldResumeSessionForPrompt(undefined);
-      // We can't mock VS Code settings in unit tests, so we just verify it returns a boolean
-      assert.strictEqual(
-        typeof result,
-        "boolean",
-        "Should return boolean from global setting"
-      );
     });
   });
 });

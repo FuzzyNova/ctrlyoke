@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import { SessionResolver } from "../../utils/SessionResolver";
 import { PromptFile, PromptItem, Harness } from "../../types/FlightPathTypes";
+import { ConfigurationUtils } from "../../utils/ConfigurationUtils";
 
 suite("SessionResolver Tests", () => {
   suite("resolve - workflow-level sessionId inheritance", () => {
@@ -490,6 +491,37 @@ suite("SessionResolver Tests", () => {
       const result = SessionResolver.validate(prompts[1], 1, prompts);
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.error, undefined);
+    });
+  });
+
+  suite("resumeSession Setting Resolution", () => {
+    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to true", () => {
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(true);
+      assert.strictEqual(
+        result,
+        true,
+        "Should use explicit prompt value (true)"
+      );
+    });
+
+    test("shouldResumeSessionForPrompt should use prompt value when explicitly set to false", () => {
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(false);
+      assert.strictEqual(
+        result,
+        false,
+        "Should use explicit prompt value (false)"
+      );
+    });
+
+    test("shouldResumeSessionForPrompt should fall back to global setting when prompt value is undefined", () => {
+      // The global setting defaults to false
+      const result = ConfigurationUtils.shouldResumeSessionForPrompt(undefined);
+      // We can't mock VS Code settings in unit tests, so we just verify it returns a boolean
+      assert.strictEqual(
+        typeof result,
+        "boolean",
+        "Should return boolean from global setting"
+      );
     });
   });
 });

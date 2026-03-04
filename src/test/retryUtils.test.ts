@@ -176,14 +176,14 @@ suite("RetryUtils", () => {
       assert.strictEqual(attempts, 5);
     });
 
-    test("should distinguish between null and truthy values", async () => {
+    test("should treat empty string as success (neither null nor undefined)", async () => {
       let attempts = 0;
       const result = await retryWithBackoff(async () => {
         attempts++;
         if (attempts < 2) {
           return null; // Fail first attempt
         }
-        return ""; // Empty string is truthy enough
+        return ""; // Empty string is neither null nor undefined, so retryWithBackoff returns it as a valid result
       });
 
       assert.strictEqual(result, "");

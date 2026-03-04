@@ -180,5 +180,77 @@ suite("PromptIdentity Tests", () => {
         false
       );
     });
+
+    suite("new path: global allowDynamicExtension parameter", () => {
+      function makePrompt(
+        index: number,
+        overrides?: Partial<PromptItem>
+      ): PromptItem {
+        return { prompt: `Prompt ${index}`, ...overrides };
+      }
+
+      test("should return false when global allowDynamicExtension=false regardless of prompt flags", () => {
+        const prompts = [makePrompt(0), makePrompt(1), makePrompt(2)];
+        // Last prompt, dynamicExtensionOnLastPrompt=true, but global=false
+        assert.strictEqual(
+          shouldInjectExtensionInstructions(
+            prompts[2],
+            2,
+            prompts,
+            true,
+            false
+          ),
+          false
+        );
+      });
+
+      test("should return true when prompt.allowDynamicExtension=true and global=true", () => {
+        const prompts = [makePrompt(0, { allowDynamicExtension: true })];
+        assert.strictEqual(
+          shouldInjectExtensionInstructions(
+            prompts[0],
+            0,
+            prompts,
+            false,
+            true
+          ),
+          true
+        );
+      });
+
+      test("new path: should auto-inject on last prompt when global=true and no explicit prompt flags", () => {
+        const prompts = [makePrompt(0), makePrompt(1), makePrompt(2)];
+        assert.strictEqual(
+          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
+          true
+        );
+      });
+
+      test("new path: should NOT auto-inject if any prompt has explicit true flag", () => {
+        // First prompt has explicit true, last prompt has no flag — anyExplicitFlag suppresses auto-inject on last
+        const prompts = [
+          makePrompt(0, { allowDynamicExtension: true }),
+          makePrompt(1),
+          makePrompt(2),
+        ];
+        assert.strictEqual(
+          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
+          false
+        );
+      });
+
+      test("new path: explicit false on prompt does not suppress auto-inject (unlike legacy path)", () => {
+        // In new path, prompt-level false is ignored; last-prompt auto still fires when global=true and no anyExplicitFlag
+        const prompts = [
+          makePrompt(0),
+          makePrompt(1),
+          makePrompt(2, { allowDynamicExtension: false }),
+        ];
+        assert.strictEqual(
+          shouldInjectExtensionInstructions(prompts[2], 2, prompts, true, true),
+          true
+        );
+      });
+    });
   });
 });
