@@ -81,7 +81,6 @@ const FormField: React.FC<{
   </div>
 );
 
-
 /**
  * SettingsPanel Component
  *
@@ -638,7 +637,7 @@ export const SettingsPanel: React.FC<{
               <label
                 htmlFor="settings-dynamic-ext"
                 className="text-[11px] font-semibold uppercase text-description-fg cursor-pointer"
-                title="Allow prompts to extend the workflow queue"
+                title="Allow harness to extend the workflow queue. \n This will add Flightpath's MCP configuration to the harness, which exposes functions for extending and querying the workflow queue."
               >
                 Allow Dynamic Extension
               </label>

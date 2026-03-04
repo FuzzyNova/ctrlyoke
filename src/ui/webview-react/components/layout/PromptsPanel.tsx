@@ -151,9 +151,12 @@ export const PromptsPanel: React.FC<{
     return STEP_STATUS.PENDING;
   };
 
-  // Get latest output for a step
+  // Get latest output for a step (history-aware)
   const getLatestOutput = (index: number) => {
-    const outputs = cliOutputs[index];
+    const outputs =
+      isViewingHistory && historyOutputs
+        ? historyOutputs.steps[index]?.cliOutputs
+        : cliOutputs[index];
     if (!outputs || outputs.length === 0) return null;
     return outputs[outputs.length - 1];
   };
@@ -168,7 +171,7 @@ export const PromptsPanel: React.FC<{
     const details: PromptDetails = {};
 
     if (output?.elapsed) {
-      details.duration = output.elapsed / 1000;
+      details.duration = output.elapsed;
     }
 
     // TODO: End condition results would come from workflow state
