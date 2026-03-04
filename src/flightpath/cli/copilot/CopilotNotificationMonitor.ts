@@ -40,13 +40,21 @@ export class CopilotNotificationMonitor
     notifyDir: string,
     workspaceRoot: string
   ): HookConfig {
+    // Normalize Windows drive letter to lowercase for stable output (VS Code returns
+    // uppercase from GUI launches, lowercase from CLI launches — normalize to avoid
+    // spurious diffs in the tracked .github/hooks/flightpath.json file).
+    const normalizeDrive = (p: string) =>
+      p.replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase() + ":");
+    const normalizedScriptPath = normalizeDrive(scriptPath);
+    const normalizedNotifyDir = normalizeDrive(notifyDir);
+
     // Bash: Forward slashes (works on Windows and Unix)
-    const bashScriptPath = scriptPath.replace(/\\/g, "/");
-    const bashNotifyDir = notifyDir.replace(/\\/g, "/");
+    const bashScriptPath = normalizedScriptPath.replace(/\\/g, "/");
+    const bashNotifyDir = normalizedNotifyDir.replace(/\\/g, "/");
 
     // PowerShell: Backslashes escaped for JSON (Windows standard)
-    const psScriptPath = scriptPath.replace(/\\/g, "\\\\");
-    const psNotifyDir = notifyDir.replace(/\\/g, "\\\\");
+    const psScriptPath = normalizedScriptPath.replace(/\\/g, "\\\\");
+    const psNotifyDir = normalizedNotifyDir.replace(/\\/g, "\\\\");
 
     return {
       type: "json",

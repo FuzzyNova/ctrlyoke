@@ -173,12 +173,11 @@ export class ClaudeCliProvider implements ICliProvider {
     } else {
       // Interactive mode: Configure stop hook for completion detection
       if (workspaceRoot) {
-        const hookSettings = this.buildStopHookSettings(
+        const hookSettingsPath = await this.buildStopHookSettings(
           extensionPath,
           workspaceRoot
         );
-        // Wrap JSON in single quotes for shell safety (PowerShell/bash)
-        args.push("--settings", `'${hookSettings}'`);
+        args.push("--settings", hookSettingsPath);
         Log.debug(`🔔 Configured stop hook for completion detection`);
       }
     }
@@ -221,12 +220,15 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Build settings JSON string with Stop hook configuration
+   * Write stop hook settings JSON to a temp file and return its path.
+   * Claude CLI's --settings flag requires a file path, not inline JSON.
    */
-  private buildStopHookSettings(
+  private async buildStopHookSettings(
     extensionPath: string,
     workspaceRoot: string
-  ): string {
+  ): Promise<string> {
+    const fs = require("fs/promises");
+
     const scriptPath = path.join(
       extensionPath,
       "out",
@@ -243,10 +245,15 @@ export class ClaudeCliProvider implements ICliProvider {
     );
 
     // Extract JSON string from hook config (type guard for json-string variant)
-    if (hookConfig.type === "json-string") {
-      return hookConfig.config;
+    if (hookConfig.type !== "json-string") {
+      throw new Error("Unexpected hook config type for Claude CLI");
     }
-    throw new Error("Unexpected hook config type for Claude CLI");
+
+    const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
+    await fs.mkdir(tempDir, { recursive: true });
+    const settingsPath = path.join(tempDir, "claude-hook-settings.json");
+    await fs.writeFile(settingsPath, hookConfig.config, "utf-8");
+    return settingsPath;
   }
 
   /**
@@ -351,6 +358,15 @@ export class ClaudeCliProvider implements ICliProvider {
       // MCP config generation failed - return null to continue without MCP
       return null;
     }
+  }
+
+  /**
+   * Unset CLAUDECODE so Claude CLI doesn't refuse to start inside an active session.
+   */
+  getInteractiveSpawnEnv(): NodeJS.ProcessEnv {
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+    return env;
   }
 
   /**

@@ -14,6 +14,7 @@ import type {
   ToolResultData,
 } from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import type { PromptCompleteData } from "../../WorkflowInstance";
 
 /**
  * Chalk-based terminal renderer for CliEvent arrays.
@@ -128,6 +129,56 @@ export class CliTerminalFormatter {
         }
         break;
       }
+    }
+  }
+
+  /**
+   * Renders per-prompt statistics (tokens, session ID, elapsed time) to stdout
+   * after a prompt completes, mirroring the stats section of the webview's CliOutput component.
+   */
+  static renderStats(data: PromptCompleteData): void {
+    const parts: string[] = [];
+
+    if (data.tokens) {
+      const {
+        prompt,
+        completion,
+        cached,
+        cacheCreated,
+        contextWindowUsed,
+        contextWindowSize,
+      } = data.tokens;
+      const total = prompt + completion;
+      const fmt = (n: number) =>
+        n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+      const tokenDetail = [
+        `Tokens: ${fmt(prompt)} in / ${fmt(completion)} out / ${fmt(total)} total`,
+        ...(cached ? [`${fmt(cached)} cached`] : []),
+        ...(cacheCreated ? [`${fmt(cacheCreated)} cache-created`] : []),
+      ].join(", ");
+
+      if (contextWindowUsed !== undefined && contextWindowSize) {
+        const pct = Math.round((contextWindowUsed / contextWindowSize) * 100);
+        parts.push(
+          `Context: ${fmt(contextWindowUsed)}/${fmt(contextWindowSize)} (${pct}%)  [${tokenDetail}]`
+        );
+      } else {
+        parts.push(tokenDetail);
+      }
+    }
+
+    if (data.sessionId) {
+      const harnessLabel = data.harness ? ` (${data.harness})` : "";
+      parts.push(`Session${harnessLabel}: ${data.sessionId}`);
+    }
+
+    if (data.elapsed !== undefined) {
+      parts.push(`${data.elapsed}s`);
+    }
+
+    if (parts.length > 0) {
+      console.log(chalk.dim(parts.join(" | ")));
     }
   }
 }

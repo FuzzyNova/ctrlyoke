@@ -28,6 +28,7 @@ import type { CliEvent } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
+import { TypedEmitter } from "../utils/TypedEmitter";
 
 // Import orchestration classes
 import { PromptFileLoader } from "./orchestration/PromptFileLoader";
@@ -59,6 +60,23 @@ import { IntegrationFactory } from "./IntegrationFactory";
  * Phase 1: WorkflowOrchestrator holds exactly one instance.
  * Phase 2: Multiple instances run in parallel (one per open workflow).
  */
+
+/** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
+export interface PromptCompleteData {
+  stepIndex: number;
+  tokens?: {
+    prompt: number;
+    completion: number;
+    cached?: number;
+    cacheCreated?: number;
+    contextWindowUsed?: number;
+    contextWindowSize?: number;
+  };
+  sessionId?: string;
+  harness?: string;
+  elapsed?: number; // seconds
+}
+
 export class WorkflowInstance {
   /** Unique identifier — stable for this instance's lifetime */
   readonly id: string;
@@ -153,6 +171,33 @@ export class WorkflowInstance {
     string,
     HarnessIntegration
   >();
+
+  /**
+   * Integrations from the previous run whose terminals were intentionally left open
+   * (closeTerminalWhenPromptCompletes = false). Closed at the start of the next run
+   * so old terminals don't accumulate when a workflow is restarted or extended.
+   */
+  private lastRunIntegrations: HarnessIntegration[] = [];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Streaming event forwarding — aggregates events from all execution integrations
+  // so callers (e.g. the standalone CLI) can subscribe once on the instance.
+  // ─────────────────────────────────────────────────────────────────────────
+  private readonly _streamingEventsEmitter = new TypedEmitter<CliEvent[]>();
+  /** Fires structured CLI events (Claude/Codex) from the active execution integration. */
+  public readonly onStreamingEvents = this._streamingEventsEmitter.event;
+
+  private readonly _streamingChunkEmitter = new TypedEmitter<string>();
+  /** Fires plain-text chunks (Copilot) from the active execution integration. */
+  public readonly onStreamingChunk = this._streamingChunkEmitter.event;
+
+  private readonly _promptCompleteEmitter = new TypedEmitter<PromptCompleteData>();
+  /**
+   * Fires after each prompt fully completes (after session ID extraction),
+   * carrying token stats, session ID, harness, and elapsed time.
+   * Designed for the standalone CLI to display per-prompt statistics.
+   */
+  public readonly onPromptComplete = this._promptCompleteEmitter.event;
 
   constructor(
     private readonly platform: PlatformAdapter,
@@ -438,6 +483,11 @@ export class WorkflowInstance {
   dispose(): void {
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
+    // Close any lingering terminals from the last run and release references.
+    for (const prev of this.lastRunIntegrations) {
+      prev.closeTerminal();
+    }
+    this.lastRunIntegrations = [];
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1286,6 +1336,12 @@ export class WorkflowInstance {
     }
     const integration = this.integrationFactory.createForExecution(harness);
     integration.setWorkflowName(this.workflowName || undefined);
+    integration.onStreamingEvents((events) =>
+      this._streamingEventsEmitter.fire(events)
+    );
+    integration.onStreamingChunk((chunk) =>
+      this._streamingChunkEmitter.fire(chunk)
+    );
     this.executionIntegrations.set(harness, integration);
     return integration;
   }
@@ -1304,6 +1360,17 @@ export class WorkflowInstance {
 
     this.startPending = true;
     this.startedAt = Date.now();
+
+    // Close any terminals left open from the previous run. With
+    // closeTerminalWhenPromptCompletes=false, dispose() only kills the process
+    // and leaves the terminal visible. When a new run starts (restart, resume,
+    // or prompt-append auto-start) the previous run's CliProcessManager is gone
+    // so createFreshTerminal() can't find and close the old terminal — we must
+    // do it explicitly here before the new integration opens its own terminal.
+    for (const prev of this.lastRunIntegrations) {
+      prev.closeTerminal();
+    }
+    this.lastRunIntegrations = [];
 
     try {
       const activeIntegration = integration || this.createIntegrationForMode();
@@ -1436,6 +1503,16 @@ export class WorkflowInstance {
           );
           // The step is no longer streaming; remove from streaming buffer
           self.stepOutputBuffer.delete(stepIndex);
+          // Fire prompt-complete event so standalone CLI can render per-step stats.
+          // This fires AFTER sendPrompt() returns (post session-ID extraction), so
+          // metadata.sessionId is already populated for all harnesses.
+          self._promptCompleteEmitter.fire({
+            stepIndex,
+            tokens: output.tokens,
+            sessionId: output.structured?.metadata?.sessionId,
+            harness: output.structured?.metadata?.harness,
+            elapsed: output.elapsed,
+          });
         },
       };
 
@@ -1446,6 +1523,9 @@ export class WorkflowInstance {
       // Dispose all execution integrations created for this run.
       // They are short-lived (one run), not registered with context.subscriptions,
       // so must be disposed manually to release their EventEmitter resources.
+      // Save references first so the next run can close any terminals that were
+      // intentionally left open (closeTerminalWhenPromptCompletes = false).
+      this.lastRunIntegrations = [...this.executionIntegrations.values()];
       for (const execIntegration of this.executionIntegrations.values()) {
         execIntegration.dispose();
       }

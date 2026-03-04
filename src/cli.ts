@@ -236,14 +236,6 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   // Create a cached detector integration (pre-marked as ready, used for pre-flight checks)
   const detectorIntegration = factory.createForExecution(harness);
 
-  // In headless mode, stream structured events to the terminal as they arrive.
-  // Interactive mode passes the AI CLI's stdout straight through, so no subscription needed.
-  if (executionMode === "headless" && !options.quiet && !options.json) {
-    detectorIntegration.onStreamingEvents((events) => {
-      CliTerminalFormatter.renderEvents(events);
-    });
-  }
-
   const instance = new WorkflowInstance(
     platform,
     undefined, // no dashboard sink in CLI
@@ -253,6 +245,22 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
     () => {}, // no status bar update
     workingDir
   );
+
+  // In headless mode, stream output to the terminal as events arrive.
+  // Subscriptions go on the instance (not detectorIntegration) because WorkflowInstance
+  // creates a fresh execution integration via the factory and forwards events from it.
+  // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
+  if (executionMode === "headless" && !options.quiet && !options.json) {
+    instance.onStreamingEvents((events) => {
+      CliTerminalFormatter.renderEvents(events);
+    });
+    instance.onStreamingChunk((chunk) => {
+      process.stdout.write(chunk);
+    });
+    instance.onPromptComplete((data) => {
+      CliTerminalFormatter.renderStats(data);
+    });
+  }
 
   // Handle Ctrl+C gracefully
   const cleanup = async (): Promise<void> => {
@@ -311,6 +319,11 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
       };
       console.log(JSON.stringify(results, null, 2));
     } else if (!options.quiet) {
+      // In interactive mode the AI CLI TUI may leave the terminal with a hidden
+      // cursor or stale attributes when killed. Reset before printing the summary.
+      if (executionMode === "interactive") {
+        process.stdout.write("\x1b[?25h\x1b[0m\r\n");
+      }
       console.log();
       console.log(chalk.dim("━".repeat(52)));
       if (completed) {

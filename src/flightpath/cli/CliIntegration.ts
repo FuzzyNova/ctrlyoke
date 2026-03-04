@@ -550,15 +550,69 @@ export class CliIntegration extends HarnessIntegration {
         cliCommand: commandStr,
       });
 
-      // Spawn with stdio:'inherit' — the user interacts with the AI CLI directly
-      const workingDir = this.getWorkspaceRoot() || process.cwd();
-      await this.processManager.spawnInteractive(commandStr, workingDir);
+      // Record start time before spawning so we can filter stale notification files
+      const startTime = new Date();
 
-      // Session ended (user exited). Fire responseComplete so WorkflowExecutor
-      // can advance to the next prompt.
+      // Spawn with stdio:'inherit' — the user sees the AI CLI TUI directly.
+      const workingDir = this.getWorkspaceRoot() || process.cwd();
+      const interactiveEnv = this.provider.getInteractiveSpawnEnv?.();
+      let processExited = false;
+      const spawnPromise = this.processManager
+        .spawnInteractive(commandStr, workingDir, interactiveEnv)
+        .finally(() => {
+          processExited = true;
+        });
+
+      // When the harness supports hook-based completion detection, monitor for the
+      // stop notification in parallel. When it fires, kill the process so the
+      // workflow automatically advances to the next prompt without user interaction.
+      const workspaceRoot = this.getWorkspaceRoot();
+      let hookSessionId: string | undefined;
+
+      if (
+        workspaceRoot &&
+        this.provider.config.usesInteractiveNotificationMonitor
+      ) {
+        const notifyDir =
+          this.provider.notificationMonitor.getNotificationDirectory(
+            workspaceRoot
+          );
+        const timeoutMs =
+          ConfigurationUtils.getMaxPromptExecutionTimeMs() ?? 3_600_000;
+
+        const monitorPromise = this.provider.notificationMonitor
+          .monitorForCompletion(
+            { directory: notifyDir, timeoutMs },
+            resolvedSessionId, // wildcard mode when undefined (new session)
+            startTime,
+            () => this.isCancelling || processExited
+          )
+          .then((result) => {
+            if (result.completed && !processExited) {
+              hookSessionId =
+                this.provider.notificationMonitor.extractSessionId?.(
+                  result.data
+                );
+              // Completion hook fired — terminate the TUI so the next prompt can start.
+              // Terminal scrollback remains visible to the user.
+              Log.info(
+                `✅ Stop hook detected — terminating interactive session` +
+                  (hookSessionId ? ` (session: ${hookSessionId})` : "")
+              );
+              this.processManager.disposeProcess();
+            }
+          });
+
+        await Promise.all([spawnPromise, monitorPromise]);
+      } else {
+        // No hook monitoring — wait for the user to exit manually (Ctrl+D, /exit, etc.)
+        await spawnPromise;
+      }
+
+      // Session ended. Fire responseComplete so WorkflowExecutor can advance to the next prompt.
       this.responseCompleteEmitter.fire("Interactive session ended");
 
-      return { success: true, sessionId: resolvedSessionId };
+      return { success: true, sessionId: hookSessionId ?? resolvedSessionId };
     } catch (error) {
       Log.error("❌ CLI interactive execution error", error);
       this.lastFailureReason =

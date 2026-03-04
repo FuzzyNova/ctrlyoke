@@ -340,7 +340,8 @@ export class CliProcessManager {
    */
   async spawnInteractive(
     command: string,
-    workingDirectory: string
+    workingDirectory: string,
+    env?: NodeJS.ProcessEnv
   ): Promise<void> {
     return new Promise<void>((resolve) => {
       this.logger?.(`📤 Spawning interactive: ${command}`);
@@ -349,6 +350,7 @@ export class CliProcessManager {
         cwd: workingDirectory,
         stdio: "inherit",
         shell: true,
+        ...(env ? { env } : {}),
       });
 
       this.currentProcess = child;

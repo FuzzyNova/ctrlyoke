@@ -165,6 +165,13 @@ export interface ICliProvider {
   getVersion?(): Promise<string | undefined>;
 
   /**
+   * Return environment variable overrides for interactive spawning.
+   * Use this to unset variables that conflict with the child process
+   * (e.g., CLAUDECODE blocks nested Claude CLI sessions).
+   */
+  getInteractiveSpawnEnv?(): NodeJS.ProcessEnv;
+
+  /**
    * Extract session ID from log files (optional)
    *
    * For CLIs that don't include session ID in their output (like Copilot),
