@@ -249,12 +249,16 @@ export class PromptQueue {
 
       // Determine execution state
       // When auto-loading on startup, NEVER restore as RUNNING (prevents unwanted auto-start)
-      // Force to PAUSED so user must explicitly resume
+      // Force to STOPPED — preserves per-prompt progress so the user can see how far the
+      // workflow got and resume from the current prompt. PAUSED is semantically wrong here
+      // (it implies the user intentionally paused); STOPPED signals "aborted, position kept".
       let executionState = runtime?.executionState || EXECUTION_STATES.IDLE;
+      let forcedToStopped = false;
       if (isAutoLoad && executionState === EXECUTION_STATES.RUNNING) {
-        executionState = EXECUTION_STATES.PAUSED;
+        executionState = EXECUTION_STATES.STOPPED;
+        forcedToStopped = true;
         Log.info(
-          "Auto-load: Forced RUNNING state to PAUSED to prevent auto-start"
+          "Auto-load: Forced RUNNING state to STOPPED to prevent auto-start"
         );
       }
 
@@ -312,6 +316,14 @@ export class PromptQueue {
       });
 
       this.emitStateChange();
+
+      // Persist forced STOPPED state to disk immediately so subsequent
+      // handleGetRecentWorkflows reads see the correct state, not "running".
+      if (forcedToStopped) {
+        await this.updateWorkingFile().catch((err) =>
+          Log.warn("Auto-load: failed to persist STOPPED state to disk:", err)
+        );
+      }
 
       // Log runtime metadata restoration (Phase 4: Session Management)
       const promptsWithRuntime = this.state.prompts.filter(

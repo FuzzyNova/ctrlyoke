@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { WorkflowSummary, EXECUTION_STATES } from "../../types/FlightPathTypes";
 import { WorkflowLockManager } from "../../utils/WorkflowLockManager";
+import { LOCK_STATUS } from "../../types/DashboardConstants";
 import { Log } from "../../utils/Log";
 import { PATH_CONSTANTS } from "../../utils/ConfigurationUtils";
 
@@ -73,9 +74,7 @@ export class CliWatchSession implements vscode.Disposable {
       d.dispose();
     }
     this.disposables = [];
-    Log.debug(
-      `[CliWatchSession] disposed: workflowId="${this.workflowId}"`
-    );
+    Log.debug(`[CliWatchSession] disposed: workflowId="${this.workflowId}"`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -85,7 +84,9 @@ export class CliWatchSession implements vscode.Disposable {
   private setupWorkingFileWatcher(): void {
     const pattern = new vscode.RelativePattern(
       this.workspaceFolderPath,
-      path.relative(this.workspaceFolderPath, this.workingFilePath).replace(/\\/g, "/")
+      path
+        .relative(this.workspaceFolderPath, this.workingFilePath)
+        .replace(/\\/g, "/")
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
@@ -217,7 +218,9 @@ export class CliWatchSession implements vscode.Disposable {
     );
     const pattern = new vscode.RelativePattern(
       this.workspaceFolderPath,
-      path.relative(this.workspaceFolderPath, historyFilePath).replace(/\\/g, "/")
+      path
+        .relative(this.workspaceFolderPath, historyFilePath)
+        .replace(/\\/g, "/")
     );
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
@@ -271,7 +274,7 @@ export class CliWatchSession implements vscode.Disposable {
     this.heartbeatPollInterval = setInterval(() => {
       WorkflowLockManager.checkLock(this.workingFilePath)
         .then((status) => {
-          if (status === "none" || status === "stale") {
+          if (status === LOCK_STATUS.NONE || status === LOCK_STATUS.STALE) {
             Log.debug(
               `[CliWatchSession] heartbeat poll: lock is ${status} for workflowId="${this.workflowId}" — calling onFinished`
             );
@@ -279,10 +282,7 @@ export class CliWatchSession implements vscode.Disposable {
           }
         })
         .catch((err) => {
-          Log.warn(
-            `[CliWatchSession] heartbeat poll: checkLock failed:`,
-            err
-          );
+          Log.warn(`[CliWatchSession] heartbeat poll: checkLock failed:`, err);
         });
     }, 10_000);
   }

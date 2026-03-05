@@ -18,13 +18,17 @@ import {
 } from "../types/FlightPathTypes";
 import {
   HARNESS_IDS,
+  LOCK_STATUS,
   type QueuePosition,
   type ActionType,
 } from "../types/DashboardConstants";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
-import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
+import {
+  ConfigurationUtils,
+  PATH_CONSTANTS,
+} from "../utils/ConfigurationUtils";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
@@ -372,6 +376,49 @@ export class WorkflowOrchestrator {
   }
 
   /**
+   * Ensure a CliWatchSession exists for the given working file if the lock is active-cli.
+   *
+   * Called by WorkflowSerializer.handleGetRecentWorkflows to bridge the timing gap between
+   * CLI lock file creation and the runnerJsonCreateWatcher firing (VS Code file-watcher
+   * latency on Windows can be several hundred milliseconds).
+   *
+   * Also implements Entry Point 2 from the CLI Watch Mode plan: the user opens a recently-run
+   * workflow from the dropdown while the CLI is still actively running it.
+   *
+   * @returns true if the working file is (or was just registered as) CLI-managed;
+   *          false if no active-cli lock exists or the session could not be started.
+   */
+  async ensureCliWatchSession(workingFilePath: string): Promise<boolean> {
+    const workflowId = path
+      .basename(workingFilePath)
+      .replace(/\.flightpath\.json$/, "");
+
+    // Already tracked — nothing to do
+    if (this.cliSessions.has(workflowId)) {
+      return true;
+    }
+
+    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceFolderPath) {
+      return false;
+    }
+
+    const lockStatus = await WorkflowLockManager.checkLock(workingFilePath);
+    Log.debug(
+      `[WorkflowOrchestrator] ensureCliWatchSession: "${workflowId}" lockStatus=${lockStatus}`
+    );
+    if (lockStatus !== LOCK_STATUS.ACTIVE_CLI) {
+      return false;
+    }
+
+    Log.info(
+      `[WorkflowOrchestrator] ensureCliWatchSession: registering CLI watch session for "${workflowId}" (lock was active-cli but watcher hadn't fired yet)`
+    );
+    await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+    return true;
+  }
+
+  /**
    * Clears persisted workflow state from the previous architecture.
    * Running/paused workflows live only in the in-memory Map and cannot be
    * meaningfully restored after the extension host terminates, so we write
@@ -467,6 +514,18 @@ export class WorkflowOrchestrator {
       await this.workspaceSessionManager.autoLoadRecentSession(
         this.currentWorkspaceFolder.uri.fsPath,
         async (workingFilePath: string) => {
+          // Skip auto-loading if this working file is actively managed by the CLI.
+          // The CliWatchSession was already created in setupCliWatching(), so the
+          // workflow is already visible in the Running section — auto-loading it
+          // as a VS Code instance would create a conflicting viewedInstance.
+          const lockStatus =
+            await WorkflowLockManager.checkLock(workingFilePath);
+          if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
+            Log.debug(
+              `triggerAutoLoad: skipping CLI-managed workflow "${path.basename(workingFilePath)}"`
+            );
+            return;
+          }
           await this.getActiveInstance().autoLoadFromWorkingFile(
             workingFilePath
           );
@@ -637,17 +696,25 @@ export class WorkflowOrchestrator {
   async stopCliSession(workflowId: string): Promise<void> {
     const entry = this.cliSessions.get(workflowId);
     if (!entry) {
-      Log.warn(`stopCliSession: no CLI session found for workflowId="${workflowId}"`);
+      Log.warn(
+        `stopCliSession: no CLI session found for workflowId="${workflowId}"`
+      );
       return;
     }
 
-    const lock = await WorkflowLockManager.readLock(entry.summary.workingFilePath ?? "");
+    const lock = await WorkflowLockManager.readLock(
+      entry.summary.workingFilePath ?? ""
+    );
     if (!lock) {
-      Log.warn(`stopCliSession: no lock file found for workflowId="${workflowId}"`);
+      Log.warn(
+        `stopCliSession: no lock file found for workflowId="${workflowId}"`
+      );
       return;
     }
 
-    Log.info(`stopCliSession: sending SIGTERM to CLI pid=${lock.pid} for workflowId="${workflowId}"`);
+    Log.info(
+      `stopCliSession: sending SIGTERM to CLI pid=${lock.pid} for workflowId="${workflowId}"`
+    );
     try {
       process.kill(lock.pid, "SIGTERM");
     } catch (err) {
@@ -694,6 +761,36 @@ export class WorkflowOrchestrator {
   }
 
   async loadWorkingFile(filePath: string): Promise<void> {
+    const workflowId = path
+      .basename(filePath)
+      .replace(/\.flightpath\.json$/, "");
+
+    // If already tracked as a CLI session, switch the panel view to it (Entry Point 2)
+    const existingCliEntry = this.cliSessions.get(workflowId);
+    if (existingCliEntry) {
+      Log.debug(
+        `loadWorkingFile: "${workflowId}" is CLI-managed (session exists) — switching view`
+      );
+      this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
+      this.dashboardProvider?.notifyWorkflowSummaryUpdated(
+        existingCliEntry.summary
+      );
+      return;
+    }
+
+    // Check for an active CLI lock before creating a VS Code instance (Entry Point 2)
+    const lockStatus = await WorkflowLockManager.checkLock(filePath);
+    if (lockStatus === LOCK_STATUS.ACTIVE_CLI) {
+      const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+      if (workspaceFolderPath) {
+        Log.debug(
+          `loadWorkingFile: "${workflowId}" has active CLI lock — starting CliWatchSession`
+        );
+        await this.startCliWatchSession(filePath, workspaceFolderPath);
+      }
+      return;
+    }
+
     // Phase 2: loading a working file creates a new instance alongside any running ones
     await this.createWorkflow();
     return this.getActiveInstance().loadWorkingFile(filePath);
@@ -1063,10 +1160,12 @@ export class WorkflowOrchestrator {
     // Normalize stale locks and get active-cli paths
     let activeCliPaths: string[];
     try {
-      activeCliPaths =
-        await WorkflowLockManager.normalizeStaleLocks(queueDir);
+      activeCliPaths = await WorkflowLockManager.normalizeStaleLocks(queueDir);
     } catch (err) {
-      Log.warn("[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:", err);
+      Log.warn(
+        "[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:",
+        err
+      );
       activeCliPaths = [];
     }
 
@@ -1101,11 +1200,21 @@ export class WorkflowOrchestrator {
       Log.debug(
         `[WorkflowOrchestrator] runner.json created: ${path.basename(uri.fsPath)}`
       );
-      await this.handleRunnerJsonCreated(uri.fsPath, workspaceFolderPath);
+      await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
+    });
+
+    // Fallback for Windows: atomic file creation via rename (writeFile+rename)
+    // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
+    // also use atomic rename, so this fires ~5s after CLI start at the latest.
+    this.runnerJsonCreateWatcher.onDidChange(async (uri) => {
+      Log.debug(
+        `[WorkflowOrchestrator] runner.json changed: ${path.basename(uri.fsPath)}`
+      );
+      await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
     });
   }
 
-  private async handleRunnerJsonCreated(
+  private async handleRunnerJsonEvent(
     lockFilePath: string,
     workspaceFolderPath: string
   ): Promise<void> {
@@ -1114,33 +1223,47 @@ export class WorkflowOrchestrator {
     try {
       const content = await fs.promises.readFile(lockFilePath, "utf8");
       lock = JSON.parse(content) as WorkflowRunnerLock;
-    } catch {
-      return; // Unreadable or mid-write — ignore
+    } catch (err) {
+      Log.debug(
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: skipping "${path.basename(lockFilePath)}" — unreadable/mid-write: ${(err as NodeJS.ErrnoException).code ?? err}`
+      );
+      return;
     }
 
     if (lock.runner !== "cli") {
-      return; // VS Code lock — not a CLI-managed workflow
+      Log.debug(
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: skipping "${path.basename(lockFilePath)}" — runner="${lock.runner}" (not CLI-managed)`
+      );
+      return;
     }
 
     // Derive the working file path from the lock path
-    const workingFilePath = lockFilePath.replace(/\.runner\.json$/, ".flightpath.json");
+    const workingFilePath = lockFilePath.replace(
+      /\.runner\.json$/,
+      ".flightpath.json"
+    );
 
     // Check if there is already an active CliWatchSession for this workflow
     const workflowId = path
       .basename(workingFilePath)
       .replace(/\.flightpath\.json$/, "");
+
+    Log.debug(
+      `[WorkflowOrchestrator] handleRunnerJsonEvent: CLI lock detected for "${workflowId}" pid=${lock.pid} heartbeat=${lock.lastHeartbeat}`
+    );
+
     if (this.cliSessions.has(workflowId)) {
       Log.debug(
-        `[WorkflowOrchestrator] handleRunnerJsonCreated: session already exists for "${workflowId}"`
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: session already exists for "${workflowId}" — skipping`
       );
       return;
     }
 
     // Verify the lock is truly active before creating a session
     const status = await WorkflowLockManager.checkLock(workingFilePath);
-    if (status !== "active-cli") {
+    if (status !== LOCK_STATUS.ACTIVE_CLI) {
       Log.debug(
-        `[WorkflowOrchestrator] handleRunnerJsonCreated: lock status is "${status}" for "${workflowId}" — skipping`
+        `[WorkflowOrchestrator] handleRunnerJsonEvent: lock status is "${status}" for "${workflowId}" — skipping`
       );
       return;
     }
@@ -1159,6 +1282,20 @@ export class WorkflowOrchestrator {
     const workflowId = path
       .basename(workingFilePath)
       .replace(/\.flightpath\.json$/, "");
+
+    // Retire any existing VS Code WorkflowInstance tracking this same working file.
+    // This prevents a conflict where VS Code auto-loaded the workflow in PAUSED state
+    // and the CLI is now taking over execution. Without this, the PAUSED instance
+    // stays in the Running Workflows section alongside the CLI watch session.
+    for (const [instanceId, instance] of [...this.workflows.entries()]) {
+      if (instance.getSummary().workingFilePath === workingFilePath) {
+        Log.info(
+          `[WorkflowOrchestrator] startCliWatchSession: retiring conflicting WorkflowInstance inst:${instanceId.slice(0, 8)} for "${workflowId}"`
+        );
+        this.retireWorkflow(instanceId);
+        break;
+      }
+    }
 
     // Read working file to build initial summary
     let workingFile: {
@@ -1246,10 +1383,7 @@ export class WorkflowOrchestrator {
       .readFile(historyFilePath, "utf8")
       .then((content) => {
         const history = JSON.parse(content) as {
-          promptOutputs: Record<
-            string,
-            { cliOutputs: Array<unknown> }
-          >;
+          promptOutputs: Record<string, { cliOutputs: Array<unknown> }>;
         };
 
         for (const [stepIndexStr, stepOutput] of Object.entries(
@@ -1295,9 +1429,7 @@ export class WorkflowOrchestrator {
       return;
     }
 
-    Log.info(
-      `[WorkflowOrchestrator] CLI session finished for "${workflowId}"`
-    );
+    Log.info(`[WorkflowOrchestrator] CLI session finished for "${workflowId}"`);
 
     // Dispose the session first so watchers stop firing
     entry.session.dispose();
@@ -1341,7 +1473,8 @@ export class WorkflowOrchestrator {
         const finalSummary: WorkflowSummary = {
           ...entry.summary,
           executionState: finalState as WorkflowSummary["executionState"],
-          currentStep: workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
+          currentStep:
+            workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
           totalSteps: workingFile.prompts?.length ?? entry.summary.totalSteps,
           managedBy: undefined, // no longer CLI-managed
         };

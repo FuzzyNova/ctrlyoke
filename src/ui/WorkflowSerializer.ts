@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as yaml from "js-yaml";
-import { MESSAGE_TYPES } from "../types/DashboardConstants";
+import { MESSAGE_TYPES, EXECUTION_STATES } from "../types/DashboardConstants";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { Log } from "../utils/Log";
 import type { TemplateManager } from "../flightpath/TemplateManager";
@@ -390,6 +390,16 @@ export class WorkflowSerializer {
       const files = await fs.readdir(queueDir);
       const workflowFiles = files.filter((f) => f.endsWith(".flightpath.json"));
 
+      // Build a fast lookup set of working file paths that are currently active
+      // in memory (running or paused). Used below to normalize stale RUNNING states.
+      const manager = this.getManager();
+      const activeWorkingFilePaths = new Set<string>(
+        (manager?.getWorkflowSummaries() ?? [])
+          .filter((s) => s.executionState === EXECUTION_STATES.RUNNING)
+          .map((s) => s.workingFilePath)
+          .filter((p): p is string => p !== undefined)
+      );
+
       const workflows = await Promise.all(
         workflowFiles.map(async (file) => {
           const filePath = path.join(queueDir, file);
@@ -401,12 +411,41 @@ export class WorkflowSerializer {
             const lastModified =
               workingFile.lastModifiedAt || workingFile.startedAt || 0;
 
+            let executionState: string =
+              workingFile._runtime?.executionState || EXECUTION_STATES.IDLE;
+
+            // Normalize stale RUNNING state: if the disk says "running" but no
+            // in-memory workflow is actually executing this file, show STOPPED.
+            // This guards against race windows before normalizeStaleLocks finishes.
+            // HOWEVER: first check whether the lock file says the CLI is actively
+            // running it — this bridges the timing gap where the runner.json
+            // file-watcher hasn't fired yet (common on Windows due to watcher latency).
+            if (
+              executionState === EXECUTION_STATES.RUNNING &&
+              !activeWorkingFilePaths.has(filePath)
+            ) {
+              const isCli =
+                (await manager?.ensureCliWatchSession(filePath)) ?? false;
+              if (isCli) {
+                Log.debug(
+                  `[WorkflowSerializer] getRecentWorkflows: "${file}" has active CLI lock — keeping running state (CliWatchSession registered)`
+                );
+                // executionState stays "running"; the session is now in cliSessions
+                // so the next GET_WORKFLOWS_LIST will move it to the Running section.
+              } else {
+                Log.debug(
+                  `[WorkflowSerializer] getRecentWorkflows: normalizing "${file}" running→stopped (not in activeWorkingFilePaths: [${[...activeWorkingFilePaths].map((p) => path.basename(p)).join(", ") || "none"}])`
+                );
+                executionState = EXECUTION_STATES.STOPPED;
+              }
+            }
+
             return {
               filePath,
               workflowName:
                 workingFile.workflowName ||
                 file.replace(".flightpath.json", ""),
-              executionState: workingFile._runtime?.executionState || "IDLE",
+              executionState,
               startedAt: workingFile.startedAt || 0,
               lastModifiedAt: lastModified,
             };

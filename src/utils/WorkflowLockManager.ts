@@ -1,17 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 import { WorkflowRunnerLock } from "../types/FlightPathTypes";
+import { RUNNER_IDS, LOCK_STATUS } from "../types/DashboardConstants";
+import type { LockStatus } from "../types/DashboardConstants";
 import { Log } from "./Log";
 
-/**
- * Status of a workflow lock file.
- *
- * - "none"         — no lock file exists (or it is unreadable)
- * - "stale"        — lock file exists but the process is dead or heartbeat is too old
- * - "active-vscode" — lock is held by a live VS Code Extension Host process
- * - "active-cli"   — lock is held by a live FlightPath CLI process
- */
-export type LockStatus = "none" | "stale" | "active-vscode" | "active-cli";
+export type { LockStatus };
 
 /** Heartbeat staleness threshold in milliseconds (30 seconds) */
 const STALE_HEARTBEAT_MS = 30_000;
@@ -32,7 +26,9 @@ export class WorkflowLockManager {
    */
   static getLockPath(workingFilePath: string): string {
     const dir = path.dirname(workingFilePath);
-    const base = path.basename(workingFilePath).replace(/\.flightpath\.json$/, "");
+    const base = path
+      .basename(workingFilePath)
+      .replace(/\.flightpath\.json$/, "");
     return path.join(dir, `${base}.runner.json`);
   }
 
@@ -85,7 +81,11 @@ export class WorkflowLockManager {
       const lock = JSON.parse(content) as WorkflowRunnerLock;
       lock.lastHeartbeat = Date.now();
       const tmpPath = lockPath + ".tmp";
-      await fs.promises.writeFile(tmpPath, JSON.stringify(lock, null, 2), "utf8");
+      await fs.promises.writeFile(
+        tmpPath,
+        JSON.stringify(lock, null, 2),
+        "utf8"
+      );
       await fs.promises.rename(tmpPath, lockPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -102,7 +102,9 @@ export class WorkflowLockManager {
    * Read the raw lock data for a given working file.
    * Returns null if the lock file does not exist or cannot be parsed.
    */
-  static async readLock(workingFilePath: string): Promise<WorkflowRunnerLock | null> {
+  static async readLock(
+    workingFilePath: string
+  ): Promise<WorkflowRunnerLock | null> {
     const lockPath = WorkflowLockManager.getLockPath(workingFilePath);
     try {
       const content = await fs.promises.readFile(lockPath, "utf8");
@@ -132,13 +134,19 @@ export class WorkflowLockManager {
     }
 
     const pidAlive = isPidAlive(lock.pid);
-    const heartbeatFresh = Date.now() - lock.lastHeartbeat <= STALE_HEARTBEAT_MS;
+    const heartbeatAge = Date.now() - lock.lastHeartbeat;
+    const heartbeatFresh = heartbeatAge <= STALE_HEARTBEAT_MS;
 
     if (!pidAlive || !heartbeatFresh) {
-      return "stale";
+      Log.debug(
+        `[WorkflowLockManager] checkLock: stale — runner="${lock.runner}" pid=${lock.pid} pidAlive=${pidAlive} heartbeatAge=${heartbeatAge}ms fresh=${heartbeatFresh}`
+      );
+      return LOCK_STATUS.STALE;
     }
 
-    return lock.runner === "cli" ? "active-cli" : "active-vscode";
+    return lock.runner === RUNNER_IDS.CLI
+      ? LOCK_STATUS.ACTIVE_CLI
+      : LOCK_STATUS.ACTIVE_VSCODE;
   }
 
   /**
@@ -187,7 +195,7 @@ export class WorkflowLockManager {
 
       const status = await WorkflowLockManager.checkLock(workingFilePath);
 
-      if (status === "active-cli") {
+      if (status === LOCK_STATUS.ACTIVE_CLI) {
         Log.info(
           `[WorkflowLockManager] normalizeStaleLocks: ${fileName} is active-cli — preserving RUNNING`
         );
@@ -220,7 +228,7 @@ export class WorkflowLockManager {
       }
 
       // Clean up any stale lock file
-      if (status === "stale") {
+      if (status === LOCK_STATUS.STALE) {
         await WorkflowLockManager.releaseLock(workingFilePath);
       }
     }

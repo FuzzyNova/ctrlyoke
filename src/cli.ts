@@ -14,6 +14,11 @@ import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
 import { WorkflowLockManager } from "./utils/WorkflowLockManager";
+import { setRuntimeMode } from "./utils/RuntimeMode";
+import { RUNNER_IDS } from "./types/DashboardConstants";
+
+// Mark this process as the standalone CLI binary before anything else runs.
+setRuntimeMode(RUNNER_IDS.CLI);
 
 // VERSION is injected by esbuild define
 declare const VERSION: string;

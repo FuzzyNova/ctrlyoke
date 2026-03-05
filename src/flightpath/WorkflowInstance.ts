@@ -29,6 +29,7 @@ import { IDashboardSink } from "../types/IDashboardSink";
 import type { CliEvent } from "../types/WebviewMessageTypes";
 import { Log } from "../utils/Log";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { isCli } from "../utils/RuntimeMode";
 import { PlatformAdapter } from "../platform/PlatformAdapter";
 import { TypedEmitter } from "../utils/TypedEmitter";
 
@@ -209,7 +210,8 @@ export class WorkflowInstance {
   /** Fires plain-text chunks (Copilot) from the active execution integration. */
   public readonly onStreamingChunk = this._streamingChunkEmitter.event;
 
-  private readonly _promptCompleteEmitter = new TypedEmitter<PromptCompleteData>();
+  private readonly _promptCompleteEmitter =
+    new TypedEmitter<PromptCompleteData>();
   /**
    * Fires after each prompt fully completes (after session ID extraction),
    * carrying token stats, session ID, harness, and elapsed time.
@@ -1418,17 +1420,27 @@ export class WorkflowInstance {
     }
     this.lastRunIntegrations = [];
 
-    // Acquire process lock so the extension can be identified as the runner
-    // and stale-lock detection works correctly on next startup.
+    // Acquire process lock so the runner can be identified and stale-lock
+    // detection works correctly on next startup.
+    // In CLI mode the CLI process is the runner — write "cli" rather than
+    // "vscode" so the VS Code extension detects the lock and registers a
+    // CliWatchSession.  Use isCli() rather than checking dashboardSink so a
+    // future TUI dashboard implementation doesn't accidentally flip the value.
     if (workingFilePath) {
+      const runner = isCli() ? "cli" : "vscode";
       const lock: WorkflowRunnerLock = {
-        runner: "vscode",
+        runner,
         pid: process.pid,
         startedAt: Date.now(),
         lastHeartbeat: Date.now(),
         instanceId: this.id,
-        workflowId: path.basename(workingFilePath).replace(/\.flightpath\.json$/, ""),
+        workflowId: path
+          .basename(workingFilePath)
+          .replace(/\.flightpath\.json$/, ""),
       };
+      Log.debug(
+        `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: acquiring ${runner} lock for "${path.basename(workingFilePath)}"`
+      );
       await WorkflowLockManager.acquireLock(workingFilePath, lock).catch(
         (err) =>
           Log.warn(
@@ -1460,9 +1472,9 @@ export class WorkflowInstance {
         get dashboardProvider() {
           return self.activeDashboard;
         },
-        // In CLI mode (no dashboard sink) always show the CLI command so it
-        // flows through captureOutputInit and into onPromptStart events.
-        shouldShowCliCommand: !this.dashboardSink || this.shouldShowCliCommand(),
+        // In CLI mode always show the CLI command so it flows through
+        // captureOutputInit and into onPromptStart events.
+        shouldShowCliCommand: isCli() || this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         historyFilePath,

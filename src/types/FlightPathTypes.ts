@@ -188,7 +188,7 @@ export interface WorkflowSummary {
  */
 export interface WorkflowRunnerLock {
   /** Which runner created this lock */
-  runner: "vscode" | "cli";
+  runner: import("./DashboardConstants").RunnerId;
   /** OS process ID of the runner (Extension Host PID for vscode, CLI process PID for cli) */
   pid: number;
   /** Unix ms timestamp when execution started */

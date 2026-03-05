@@ -350,6 +350,24 @@ export const CLI_EVENT_TYPES = {
 } as const;
 
 // ============================================================================
+// RUNNER IDS - Process runner identifiers written into workflow lock files
+// ============================================================================
+export const RUNNER_IDS = {
+  VSCODE: "vscode",
+  CLI: "cli",
+} as const;
+
+// ============================================================================
+// LOCK STATUS - Status values returned by WorkflowLockManager.checkLock()
+// ============================================================================
+export const LOCK_STATUS = {
+  NONE: "none",
+  STALE: "stale",
+  ACTIVE_VSCODE: "active-vscode",
+  ACTIVE_CLI: "active-cli",
+} as const;
+
+// ============================================================================
 // LOG LEVELS - Webview → Extension log level strings (LOG_MESSAGE payload)
 // ============================================================================
 export const LOG_LEVELS = {
@@ -379,3 +397,5 @@ export type CliEventType =
 export type HarnessStatusString =
   (typeof HARNESS_STATUS_STRINGS)[keyof typeof HARNESS_STATUS_STRINGS];
 export type WebviewLogLevel = (typeof LOG_LEVELS)[keyof typeof LOG_LEVELS];
+export type RunnerId = (typeof RUNNER_IDS)[keyof typeof RUNNER_IDS];
+export type LockStatus = (typeof LOCK_STATUS)[keyof typeof LOCK_STATUS];
