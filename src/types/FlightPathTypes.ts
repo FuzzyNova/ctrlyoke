@@ -173,7 +173,7 @@ export interface WorkflowSummary {
   filePath: string;
   workingFilePath?: string; // Path to .flightpath.json working file (for dedup with recent workflows list)
   executionState: ExecutionState;
-  /** 1-indexed step number (matches CliWatchSession convention; webview subtracts 1 to get 0-indexed) */
+  /** 0-indexed: index of the next prompt to execute (mirrors PromptQueue.state.currentIndex) */
   currentStep: number;
   totalSteps: number;
   startedAt?: number;
@@ -181,6 +181,10 @@ export interface WorkflowSummary {
   /** Set to "cli" when the workflow is being executed by the FlightPath CLI. Undefined means vscode-managed. */
   managedBy?: "vscode" | "cli";
 }
+
+/** Returns the 1-indexed step number for display (logs, UI labels). currentStep is 0-indexed internally. */
+export const workflowDisplayStep = (s: Pick<WorkflowSummary, "currentStep">): number =>
+  s.currentStep + 1;
 
 /**
  * Process lock file written alongside the working file while a workflow is running.

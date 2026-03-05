@@ -112,7 +112,7 @@ export class CliWatchSession implements vscode.Disposable {
         EXECUTION_STATES.RUNNING;
 
       this.onUpdate({
-        currentStep: currentIndex + 1,
+        currentStep: currentIndex,
         totalSteps: workingFile.prompts?.length ?? 0,
         executionState: executionState as WorkflowSummary["executionState"],
       });

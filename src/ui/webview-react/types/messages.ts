@@ -85,5 +85,6 @@ export {
   type UnifiedDiffHunk,
 } from "@root/types/WebviewMessageTypes";
 
-// Re-export WorkflowSummary from FlightPathTypes for multi-workflow support
+// Re-export WorkflowSummary and helpers from FlightPathTypes for multi-workflow support
 export type { WorkflowSummary } from "@root/types/FlightPathTypes";
+export { workflowDisplayStep } from "@root/types/FlightPathTypes";

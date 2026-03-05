@@ -13,6 +13,7 @@ import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
 import { WorkflowOrchestrator } from "../flightpath/WorkflowOrchestrator";
 import type { WorkflowSummary } from "../types/FlightPathTypes";
+import { workflowDisplayStep } from "../types/FlightPathTypes";
 import { OutputHistoryManager } from "../flightpath/orchestration/OutputHistoryManager";
 import { ConfigurationUtils } from "../utils/ConfigurationUtils";
 import { WebviewSettingsSync } from "./WebviewSettingsSync";
@@ -522,7 +523,7 @@ window.vscodeApi = acquireVsCodeApi();
   public notifyWorkflowAdded(summary: WorkflowSummary): void {
     Log.debug(
       `[notifyWorkflowAdded] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"} ` +
+        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"} ` +
         `wfp=${summary.workingFilePath ? path.basename(summary.workingFilePath) : "?"}`
     );
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_ADDED, summary });
@@ -547,7 +548,7 @@ window.vscodeApi = acquireVsCodeApi();
   public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
     Log.debug(
       `[notifyWorkflowSummaryUpdated] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"}`
+        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"}`
     );
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }

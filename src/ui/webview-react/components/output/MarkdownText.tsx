@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Streamdown } from "streamdown";
+import { Streamdown, defaultRemarkPlugins } from "streamdown";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import type { Root, Link } from "mdast";
 import { openFile } from "@hooks/useMessageHandler";
@@ -69,8 +69,9 @@ function remarkFileLinks() {
   };
 }
 
-// Module-level stable array so Streamdown's memo doesn't see a new reference
-const REMARK_PLUGINS = [remarkFileLinks];
+// Module-level stable array so Streamdown's memo doesn't see a new reference.
+// Spread streamdown's defaults (remarkGfm) first, then add our file-link plugin.
+const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkFileLinks];
 
 // ── Component ──────────────────────────────────────────────────────────────
 

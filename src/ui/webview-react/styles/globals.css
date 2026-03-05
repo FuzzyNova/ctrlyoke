@@ -332,27 +332,6 @@ button .codicon {
   margin: 0.5em 0;
 }
 
-.markdown-text table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0.5em 0;
-  font-size: 0.9em;
-}
-
-.markdown-text th,
-.markdown-text td {
-  border: 1px solid var(--vscode-panel-border);
-  padding: 4px 8px;
-  text-align: left;
-}
-
-.markdown-text th {
-  font-weight: 600;
-}
-
-.markdown-text tr:nth-child(even) td {
-  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.05));
-}
 
 .markdown-text hr {
   border: none;
@@ -381,55 +360,6 @@ button .codicon {
   );
 }
 
-/* ─── Streamdown Table Controls ──────────────────────────────────────────── */
-/* Streamdown's Copy/Download icon buttons use Tailwind classes mapped in
-   tailwind.config.js (text-muted-foreground → descriptionForeground,
-   hover:text-foreground → foreground). Those classes are handled by the
-   Tailwind token additions there, not here.
-   This block covers three things:
-     1. Hide the Download button — VS Code webviews cannot trigger file-save
-        dialogs via blob anchor clicks, so the button would silently do nothing.
-     2. Dropdown panels use --vscode-dropdown-background (not editor background).
-     3. bg-muted/40 opacity modifier is a no-op when the color is a CSS variable;
-        an explicit rule is needed for the dropdown item hover state.
-   Dropdown panels and items have no data-streamdown attribute so they are
-   targeted via :has(> button[class*="w-full"]), which matches the panel div
-   whose direct children are the full-width format-choice buttons (CSV, TSV,
-   Markdown). The icon trigger buttons are not full-width and are unaffected. */
-
-/* Hide the Download table dropdown.
-   The controls bar is the last direct-child div of the wrapper; within it,
-   Copy is first and Download is last. Safe when controls are hidden entirely
-   (controls={{ table: false }}) because the table scroller's only child is
-   a <table> element, so > div:last-child matches nothing there. */
-[data-streamdown="table-wrapper"] > div:last-child > div:last-child {
-  display: none;
-}
-
-/* Dropdown panel */
-[data-streamdown="table-wrapper"] div:has(> button[class*="w-full"]) {
-  background-color: var(
-    --vscode-dropdown-background,
-    var(--vscode-editor-background)
-  );
-  border-color: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
-}
-
-/* Dropdown item default text color */
-[data-streamdown="table-wrapper"] div:has(> button[class*="w-full"]) button {
-  color: var(--vscode-dropdown-foreground, var(--vscode-editor-foreground));
-}
-
-/* Dropdown item hover (replaces the non-functional bg-muted/40) */
-[data-streamdown="table-wrapper"]
-  div:has(> button[class*="w-full"])
-  button:hover {
-  background-color: var(
-    --vscode-list-hoverBackground,
-    rgba(127, 127, 127, 0.15)
-  );
-  color: var(--vscode-list-hoverForeground, var(--vscode-foreground));
-}
 
 /* ============================================================================
    Panel Collapse/Expand Animation

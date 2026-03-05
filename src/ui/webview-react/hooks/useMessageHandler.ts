@@ -19,6 +19,7 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
+  workflowDisplayStep,
   type ExecutionState,
   type StepStatus,
   type HarnessId,
@@ -829,7 +830,7 @@ function createMessageHandlers(): MessageHandlerMap {
     const uiStore = useUiStore.getState();
     WebviewLog.debug(
       `[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${summary.currentStep}/${summary.totalSteps} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} ` +
+        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} ` +
         `— loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
     );
     if (
@@ -854,10 +855,10 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // If this is the currently active workflow, sync workflowStore so the
     // PromptsPanel stays in sync during CLI watch mode step advances.
-    // WorkflowSummary.currentStep is 1-indexed; workflowStore.currentStep is 0-indexed.
+    // WorkflowSummary.currentStep is 0-indexed (matches workflowStore.currentStep).
     if (summary.id === uiStore.activeWorkflowId) {
       const workflowStore = useWorkflowStore.getState();
-      workflowStore.setCurrentStep(summary.currentStep - 1);
+      workflowStore.setCurrentStep(summary.currentStep);
       workflowStore.setTotalSteps(summary.totalSteps);
       workflowStore.setExecutionState(summary.executionState);
     }

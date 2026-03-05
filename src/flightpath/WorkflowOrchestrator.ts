@@ -17,6 +17,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   type PromptItem,
+  workflowDisplayStep,
 } from "../types/FlightPathTypes";
 import {
   HARNESS_IDS,
@@ -1064,7 +1065,7 @@ export class WorkflowOrchestrator {
       Log.debug(
         `[onDidChangeState] inst:${instance.id.slice(0, 8)} state=${state.status} name="${summary.workflowName || "(empty)"}" ` +
           `inRegistry=${this.workflows.has(instance.id)} registrySize=${this.workflows.size} ` +
-          `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${summary.currentStep}/${summary.totalSteps}`
+          `fp=${summary.filePath ? path.basename(summary.filePath) : "?"} step=${workflowDisplayStep(summary)}/${summary.totalSteps}`
       );
 
       // Register in the running/paused registry the first time this instance
@@ -1334,7 +1335,7 @@ export class WorkflowOrchestrator {
       filePath: workingFilePath,
       workingFilePath,
       executionState: EXECUTION_STATES.RUNNING,
-      currentStep: currentIndex + 1,
+      currentStep: currentIndex,
       totalSteps,
       startedAt: workingFile.startedAt,
       managedBy: "cli",
@@ -1417,7 +1418,7 @@ export class WorkflowOrchestrator {
 
     // Read the latest working file to get current prompt list and step position
     let prompts: PromptItem[] = [];
-    let currentIndex = (cliEntry.summary.currentStep ?? 1) - 1;
+    let currentIndex = cliEntry.summary.currentStep ?? 0;
 
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");

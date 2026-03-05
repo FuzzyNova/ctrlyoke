@@ -554,7 +554,7 @@ export class WorkflowInstance {
       filePath: this.filePath,
       workingFilePath: state.workingFilePath || undefined,
       executionState: state.status,
-      currentStep: state.currentIndex + 1, // 1-indexed to match CliWatchSession convention
+      currentStep: state.currentIndex,
       totalSteps: state.prompts.length,
       startedAt: this.startedAt || undefined,
     };
