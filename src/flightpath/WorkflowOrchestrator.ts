@@ -1350,6 +1350,7 @@ export class WorkflowOrchestrator {
         if (!entry) {
           return;
         }
+        const prevTotalSteps = entry.summary.totalSteps;
         const updatedSummary: WorkflowSummary = {
           ...entry.summary,
           ...partialSummary,
@@ -1357,6 +1358,31 @@ export class WorkflowOrchestrator {
         };
         entry.summary = updatedSummary;
         this.dashboardProvider?.notifyWorkflowSummaryUpdated(updatedSummary);
+
+        // If the CLI extended the queue, send the new prompts so the PromptsPanel reflects them
+        if (
+          updatedSummary.totalSteps > prevTotalSteps &&
+          this.dashboardProvider
+        ) {
+          const provider = this.dashboardProvider;
+          fs.promises
+            .readFile(workingFilePath, "utf8")
+            .then((content) => {
+              const wf = JSON.parse(content) as { prompts?: unknown[] };
+              if (wf.prompts) {
+                Log.debug(
+                  `[WorkflowOrchestrator] CLI extended queue for "${workflowId}": ${prevTotalSteps} → ${updatedSummary.totalSteps} steps`
+                );
+                provider.notifyCliPromptsExtended(workflowId, wf.prompts);
+              }
+            })
+            .catch((err) => {
+              Log.warn(
+                `[WorkflowOrchestrator] onUpdate: failed to read working file for queue extension:`,
+                err
+              );
+            });
+        }
       },
       (historyFilePath) => {
         this.handleCliWatchOutput(workflowId, historyFilePath);

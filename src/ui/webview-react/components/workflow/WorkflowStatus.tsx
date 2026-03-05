@@ -39,6 +39,9 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
   const { loadedWorkflows, activeWorkflowId } = useUiStore();
   const { globalSettings } = useSettingsStore();
 
+  const isCLIManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
+
   // Local state
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState("");
@@ -61,7 +64,7 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
       if (message.type === MESSAGE_TYPES.RECENT_WORKFLOWS) {
         const workflows = message.workflows || [];
         WebviewLog.debug(
-          `[WorkflowStatus:RECENT_WORKFLOWS] received ${workflows.length} recent workflows: ${workflows.map((w: RecentWorkflow) => `"${w.workflowName || "(empty)"}" state=${w.executionState} path=${w.filePath.split(/[\\/]/).pop()}`).join(", ") || "(none)"}`
+          `[WorkflowStatus:RECENT_WORKFLOWS] received ${workflows.length} recent workflows`
         );
         setRecentWorkflows(workflows);
       }
@@ -256,19 +259,6 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
     ? workflowName || getWorkflowNameFromPath(fileName)
     : "";
 
-  // Log only when data actually changes (not on every render)
-  useEffect(() => {
-    if (!fileName) return;
-    const filteredRecent = recentWorkflows.filter(
-      (rw) => !loadedWorkflows.some((lw) => lw.workingFilePath === rw.filePath)
-    );
-    WebviewLog.debug(
-      `[WorkflowStatus] displayName="${displayName}", executionState=${executionState || "(none)"}, ` +
-        `RUNNING (${loadedWorkflows.length}): [${loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState}, fp=${w.filePath?.split(/[\\/]/).pop() || "?"}, wfp=${w.workingFilePath?.split(/[\\/]/).pop() || "?"})`).join(", ") || "(none)"}], ` +
-        `RECENT (${filteredRecent.length}): [${filteredRecent.map((rw) => `"${rw.workflowName || "(empty)"}"(state=${rw.executionState}, fp=${rw.filePath.split(/[\\/]/).pop()})`).join(", ") || "(none)"}]`
-    );
-  }, [fileName, displayName, executionState, loadedWorkflows, recentWorkflows]);
-
   // No workflow loaded - show empty state
   if (!fileName) {
     return (
@@ -313,6 +303,16 @@ export const WorkflowStatus: React.FC<WorkflowStatusProps> = ({
               <span className="font-semibold text-sm truncate flex-1">
                 {displayName}
               </span>
+
+              {/* CLI Managed badge */}
+              {isCLIManaged && (
+                <span
+                  className="text-[11px] px-1.5 py-[1px] rounded uppercase font-semibold flex-shrink-0 bg-blue-800/50 text-blue-300 border border-blue-600/40"
+                  title="Workflow is being managed by the FlightPath CLI"
+                >
+                  CLI
+                </span>
+              )}
 
               {/* Execution State */}
               {executionState && executionState !== EXECUTION_STATES.IDLE && (

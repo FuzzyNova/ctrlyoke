@@ -554,7 +554,7 @@ export class WorkflowInstance {
       filePath: this.filePath,
       workingFilePath: state.workingFilePath || undefined,
       executionState: state.status,
-      currentStep: state.currentIndex,
+      currentStep: state.currentIndex + 1, // 1-indexed to match CliWatchSession convention
       totalSteps: state.prompts.length,
       startedAt: this.startedAt || undefined,
     };
@@ -1643,7 +1643,16 @@ export class WorkflowInstance {
       // Save references first so the next run can close any terminals that were
       // intentionally left open (closeTerminalWhenPromptCompletes = false).
       this.lastRunIntegrations = [...this.executionIntegrations.values()];
+      const workspaceRoot =
+        this.workspaceFolderPath ?? this.platform.getWorkspaceRoot();
       for (const execIntegration of this.executionIntegrations.values()) {
+        if (workspaceRoot) {
+          await execIntegration
+            .cleanupWorkflowArtifacts(workingFilePath, workspaceRoot)
+            .catch((err) =>
+              Log.warn("Failed to clean up workflow artifacts:", err)
+            );
+        }
         execIntegration.dispose();
       }
       this.executionIntegrations.clear();

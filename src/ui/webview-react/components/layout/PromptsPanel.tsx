@@ -140,18 +140,19 @@ export const PromptsPanel: React.FC<{
     promptData: (typeof prompts)[0],
     index: number
   ): StepStatus => {
-    // Position-based running check takes priority: when the workflow is
-    // actively executing, the current step is always RUNNING regardless of
-    // any stored status (which may be stale — e.g., PENDING or SENT — when
-    // switching back to a workflow mid-execution via SESSION_RESTORED).
-    if (isRunning && index === currentStep) {
-      return STEP_STATUS.RUNNING;
+    // When running, position wins for current and past steps.
+    // This prevents stale RUNNING icons when currentStep advances without
+    // an explicit STEP_STATUS_CHANGED being sent (e.g., CLI watch mode).
+    if (isRunning) {
+      if (index === currentStep) return STEP_STATUS.RUNNING;
+      if (index < currentStep) return STEP_STATUS.COMPLETED;
     }
-    // If prompt has explicit status, use it
+    // Use explicit status for non-running states or future steps
+    // (covers COMPLETED, ERROR, etc. set by STEP_STATUS_CHANGED)
     if (promptData.status) {
       return promptData.status;
     }
-    // Otherwise derive from position
+    // Position-based fallback
     if (index < currentStep) {
       return STEP_STATUS.COMPLETED;
     }

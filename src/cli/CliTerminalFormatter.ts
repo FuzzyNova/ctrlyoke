@@ -328,8 +328,9 @@ export class CliTerminalFormatter {
       data;
 
     if (cliCommand !== undefined) {
-      // Second fire — print the CLI command once it is known
-      console.log(chalk.dim("$ " + cliCommand));
+      // Second fire — print the CLI command with a yellow left border (mirrors border-l-output-command-border)
+      const cmdBorder = chalk.yellow("│");
+      console.log(`${cmdBorder} ${chalk.dim("$ " + cliCommand)}`);
       console.log();
       return;
     }
@@ -338,22 +339,30 @@ export class CliTerminalFormatter {
     console.log();
     console.log(chalk.dim("─".repeat(52)));
 
+    // Blue left border mirrors border-l-output-prompt-border in the webview
+    const border = chalk.blue("│");
+
     if (attemptIndex > 0) {
       console.log(
-        chalk.yellow(`Retry ${attemptIndex} — Step ${stepIndex + 1}/${totalSteps}`)
+        `${border} ${chalk.yellow(`Retry ${attemptIndex} — Step ${stepIndex + 1}/${totalSteps}`)}`
       );
     } else {
       console.log(
-        chalk.bold(`Step ${stepIndex + 1}/${totalSteps}`)
+        `${border} ${chalk.bold(`Step ${stepIndex + 1}/${totalSteps}`)}`
       );
     }
 
     // Show up to 5 lines of the prompt as a preview
     const MAX_PREVIEW_LINES = 5;
     const lines = promptText.trimEnd().split("\n");
-    const preview = lines.slice(0, MAX_PREVIEW_LINES).join("\n");
+    const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
     const truncated = lines.length > MAX_PREVIEW_LINES;
-    console.log(chalk.dim(preview + (truncated ? "\n…" : "")));
+    for (const line of previewLines) {
+      console.log(`${border} ${chalk.dim(line)}`);
+    }
+    if (truncated) {
+      console.log(`${border} ${chalk.dim("…")}`);
+    }
     console.log();
   }
 
@@ -363,11 +372,14 @@ export class CliTerminalFormatter {
    */
   static renderStatusMessage(message: string, severity: string): void {
     if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
-      console.log(chalk.red("✗ " + message));
+      // Red left border mirrors border-l-severity-error in the webview
+      console.log(`${chalk.red("│")} ${chalk.red("✗ " + message)}`);
     } else if (severity === STATUS_MESSAGE_SEVERITY.WARNING) {
-      console.log(chalk.yellow("⚠ " + message));
+      // Yellow left border mirrors border-l-severity-warning in the webview
+      console.log(`${chalk.yellow("│")} ${chalk.yellow("⚠ " + message)}`);
     } else {
-      console.log(chalk.dim("ℹ " + message));
+      // Cyan left border mirrors border-l-severity-info in the webview
+      console.log(`${chalk.cyan("│")} ${chalk.dim("ℹ " + message)}`);
     }
   }
 

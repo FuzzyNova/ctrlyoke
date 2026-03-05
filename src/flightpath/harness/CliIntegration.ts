@@ -1378,6 +1378,26 @@ export class CliIntegration extends HarnessIntegration {
   }
 
   /**
+   * Delete the MCP config file written for this workflow run, if any.
+   *
+   * Providers that write file-based MCP configs implement getMcpConfigFilePath
+   * to declare which file they wrote. CliIntegration owns the deletion so the
+   * fs operation is not duplicated across providers.
+   */
+  override async cleanupWorkflowArtifacts(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): Promise<void> {
+    const configPath = this.provider.getMcpConfigFilePath?.(
+      workingFilePath,
+      workspaceRoot
+    );
+    if (configPath) {
+      await fs.promises.unlink(configPath).catch(() => {});
+    }
+  }
+
+  /**
    * Mark this execution integration as ready without running initialize().
    * The detector singleton has already confirmed availability; we set the
    * local initializationStatus so getDetailedStatus() returns Ready immediately.

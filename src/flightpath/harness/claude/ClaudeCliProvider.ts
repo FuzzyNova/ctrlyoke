@@ -327,7 +327,6 @@ export class ClaudeCliProvider implements ICliProvider {
   ): Promise<string[] | null> {
     try {
       const fs = require("fs/promises");
-      const path = require("path");
 
       // Generate MCP config JSON using shared utility
       // Claude CLI requires "type": "stdio"
@@ -340,16 +339,8 @@ export class ClaudeCliProvider implements ICliProvider {
       );
 
       // Write to temp directory — use unique name per execution to avoid parallel workflow collisions
-      const tempDir = path.join(workspaceRoot, ".flightpath", "temp");
-      await fs.mkdir(tempDir, { recursive: true });
-
-      const configSuffix = workingFilePath
-        ? path.basename(workingFilePath, ".flightpath.json")
-        : "default";
-      const configPath = path.join(
-        tempDir,
-        `mcp-config-claude-${configSuffix}.json`
-      );
+      const configPath = this.getMcpConfigFilePath(workingFilePath, workspaceRoot)!;
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
       await fs.writeFile(configPath, configJson, "utf-8");
 
       // Return --mcp-config <file> argument
@@ -358,6 +349,21 @@ export class ClaudeCliProvider implements ICliProvider {
       // MCP config generation failed - return null to continue without MCP
       return null;
     }
+  }
+
+  /**
+   * Return the path of the MCP config file this provider writes.
+   * Used by CliIntegration to delete the file after the workflow finishes.
+   */
+  getMcpConfigFilePath(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): string {
+    return CliMcpConfigGenerator.getConfigFilePath(
+      workingFilePath,
+      workspaceRoot,
+      "mcp-config-claude"
+    );
   }
 
   /**

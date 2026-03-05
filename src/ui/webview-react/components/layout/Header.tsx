@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback } from "react";
 import { useWorkflowStore } from "@store/workflowStore";
 import { useUiStore } from "@store/uiStore";
 import { useVsCodeApi } from "@hooks/useVsCodeApi";
@@ -77,12 +77,6 @@ export const Header: React.FC = () => {
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
 
-  // Dismissable banner state — reset when switching to a different workflow
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-  useEffect(() => {
-    setBannerDismissed(false);
-  }, [activeWorkflowId]);
-
   // Derived state
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const isPaused = executionState === EXECUTION_STATES.PAUSED;
@@ -141,34 +135,6 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      {/* CLI Watch Mode banner — dismissable per session, resets on workflow switch */}
-      {isCLIManaged && !bannerDismissed && (
-        <div className="cli-watch-banner flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border-b border-blue-500/30 text-sm text-blue-200">
-          <i className="codicon codicon-zap text-blue-400" />
-          <span className="flex-1">
-            <span className="font-semibold">Running via FlightPath CLI</span>
-            {" — "}panel is read-only. Output updates live. Controls are disabled until CLI finishes.
-          </span>
-          <button
-            type="button"
-            onClick={handleStopCliRun}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-800/50 hover:bg-red-700/70 transition-colors text-red-200 hover:text-white border border-red-600/40"
-            title="Stop CLI run"
-          >
-            <i className="codicon codicon-debug-stop text-[11px]" />
-            Stop
-          </button>
-          <button
-            type="button"
-            onClick={() => setBannerDismissed(true)}
-            className="p-0.5 rounded hover:bg-white/10 transition-colors text-blue-300 hover:text-white"
-            title="Dismiss"
-          >
-            <i className="codicon codicon-close" />
-          </button>
-        </div>
-      )}
-
       <header className="header grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_1fr] gap-x-4 gap-y-1.5 items-center px-3 py-1.5 border-b border-panel-border bg-sidebar-bg flex-shrink-0 overflow-visible">
         {/* Left Section: Workflow Controls + Save button */}
         <div className="header-left flex items-center gap-2">
@@ -240,15 +206,15 @@ export const Header: React.FC = () => {
           {/* Stop Button */}
           <button
             className={`control-button flex items-center justify-center min-w-[28px] px-2 py-1.5 text-sm rounded border border-btn-border transition-colors ${
-              canStop && !isCLIManaged
+              canStop || isCLIManaged
                 ? "bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover"
                 : "bg-btn-secondary-bg text-btn-secondary-fg opacity-50 cursor-not-allowed"
             }`}
-            onClick={handleStop}
-            disabled={!canStop || isCLIManaged}
+            onClick={isCLIManaged ? handleStopCliRun : handleStop}
+            disabled={!canStop && !isCLIManaged}
             title={
               isCLIManaged
-                ? "Workflow is running via FlightPath CLI"
+                ? "Stop CLI run"
                 : "Stop execution"
             }
             aria-label="Stop"

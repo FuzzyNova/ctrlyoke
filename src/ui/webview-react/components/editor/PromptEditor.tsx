@@ -40,7 +40,9 @@ interface PromptEditorProps {
  * - Mode-aware actions (New vs Edit mode)
  * - State persistence to VS Code webview state
  */
-export const PromptEditor: React.FC<PromptEditorProps> = ({ isCLIManaged = false }) => {
+export const PromptEditor: React.FC<PromptEditorProps> = ({
+  isCLIManaged = false,
+}) => {
   const {
     selectedPromptIndex,
     promptText,
@@ -105,7 +107,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ isCLIManaged = false
     if (prompts.length === 0) return false;
 
     for (let i = currentStep; i < prompts.length; i++) {
-      if (prompts[i].status === STEP_STATUS.PENDING) {
+      if (prompts[i]?.status === STEP_STATUS.PENDING) {
         return true;
       }
     }

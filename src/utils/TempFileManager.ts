@@ -22,6 +22,7 @@ export class TempFileManager {
   private readonly TEMP_DIR_NAME = ".flightpath";
   private readonly TEMP_SUBDIR_NAME = "temp";
   private readonly PROMPT_EXTENSION = ".prompt.md";
+  private readonly MCP_CONFIG_PREFIX = "mcp-config";
   private readonly MAX_FILE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   private workspaceRoot: string;
@@ -213,8 +214,11 @@ export class TempFileManager {
 
       // Process each file
       for (const file of files) {
-        // Only process .prompt.md files
-        if (!file.endsWith(this.PROMPT_EXTENSION)) {
+        // Only process known temp file types: prompt files and MCP config files
+        const isTempFile =
+          file.endsWith(this.PROMPT_EXTENSION) ||
+          file.startsWith(this.MCP_CONFIG_PREFIX);
+        if (!isTempFile) {
           continue;
         }
 

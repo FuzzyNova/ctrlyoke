@@ -424,6 +424,18 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
+  /**
+   * Called when a CLI-managed workflow dynamically extends its queue.
+   * Includes the workflowId so the webview can ignore updates for inactive workflows.
+   */
+  public notifyCliPromptsExtended(workflowId: string, prompts: any[]): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.PROMPTS_EXTENDED,
+      workflowId,
+      prompts,
+    });
+  }
+
   public updatePromptDeleted(fileName: string, prompts: any[]): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,

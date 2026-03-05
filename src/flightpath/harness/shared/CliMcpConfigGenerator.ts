@@ -1,3 +1,4 @@
+import * as path from "path";
 import { Log } from "../../../utils/Log";
 
 /**
@@ -46,6 +47,34 @@ export interface McpConfigResult {
  * Each harness integration calls the appropriate methods directly.
  */
 export class CliMcpConfigGenerator {
+  /**
+   * Compute the path for a file-based MCP config in .flightpath/temp/.
+   *
+   * Single source of truth for all file-based MCP config paths. Both
+   * getMcpConfigArgs (write) and getMcpConfigFilePath (cleanup) must use
+   * this method to guarantee the paths always match.
+   *
+   * @param workingFilePath Active working file for this workflow (used as filename suffix)
+   * @param workspaceRoot Workspace root directory
+   * @param filenamePrefix Harness-specific prefix (e.g., "mcp-config", "mcp-config-claude")
+   * @returns Absolute path to the config file
+   */
+  static getConfigFilePath(
+    workingFilePath: string | undefined,
+    workspaceRoot: string,
+    filenamePrefix: string
+  ): string {
+    const configSuffix = workingFilePath
+      ? path.basename(workingFilePath, ".flightpath.json")
+      : "default";
+    return path.join(
+      workspaceRoot,
+      ".flightpath",
+      "temp",
+      `${filenamePrefix}-${configSuffix}.json`
+    );
+  }
+
   /**
    * Generate JSON MCP configuration
    *

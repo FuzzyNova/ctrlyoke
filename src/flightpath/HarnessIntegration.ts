@@ -113,6 +113,24 @@ export abstract class HarnessIntegration {
   }
 
   /**
+   * Clean up workflow-scoped artifacts created during execution (e.g. MCP config files).
+   *
+   * Called from the finally block in WorkflowInstance.startWorkflowExecution after
+   * each workflow run completes. Default is a no-op; CliIntegration overrides this
+   * to delegate to the provider's cleanupMcpConfig.
+   *
+   * @param workingFilePath The working file path for this workflow run
+   * @param workspaceRoot Workspace root directory
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async cleanupWorkflowArtifacts(
+    _workingFilePath: string | undefined,
+    _workspaceRoot: string
+  ): Promise<void> {
+    // no-op by default
+  }
+
+  /**
    * Mark this integration as ready without running initialize().
    * Called by IntegrationFactory.createForExecution() on per-run execution integrations:
    * the detector singleton has already confirmed harness availability, so we skip the

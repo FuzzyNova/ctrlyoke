@@ -173,6 +173,7 @@ export interface WorkflowSummary {
   filePath: string;
   workingFilePath?: string; // Path to .flightpath.json working file (for dedup with recent workflows list)
   executionState: ExecutionState;
+  /** 1-indexed step number (matches CliWatchSession convention; webview subtracts 1 to get 0-indexed) */
   currentStep: number;
   totalSteps: number;
   startedAt?: number;

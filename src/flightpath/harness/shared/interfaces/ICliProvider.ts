@@ -153,6 +153,25 @@ export interface ICliProvider {
   ): Promise<string[] | null>;
 
   /**
+   * Return the path of the MCP config file this provider writes (optional).
+   *
+   * Used by CliIntegration to delete the file after the workflow finishes.
+   * Only providers that write a file-based config need to implement this
+   * (Copilot, Claude). Providers that embed config inline (Codex) do not.
+   *
+   * Must use CliMcpConfigGenerator.getConfigFilePath() so the path always
+   * matches what getMcpConfigArgs() wrote.
+   *
+   * @param workingFilePath Active working file path used when the config was created
+   * @param workspaceRoot Workspace root directory
+   * @returns Absolute path to the config file, or null if no file is used
+   */
+  getMcpConfigFilePath?(
+    workingFilePath: string | undefined,
+    workspaceRoot: string
+  ): string | null;
+
+  /**
    * Check if CLI is available on the system
    * @returns True if CLI executable found
    */

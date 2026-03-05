@@ -208,6 +208,17 @@ function createMessageHandlers(): MessageHandlerMap {
   // PROMPTS_EXTENDED - Queue was extended with new prompts
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.PROMPTS_EXTENDED] = (message) => {
+    // If workflowId is present (CLI watch mode), only apply to the active workflow
+    if (message.workflowId) {
+      const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+      if (message.workflowId !== activeWorkflowId) {
+        WebviewLog.debug(
+          `[PROMPTS_EXTENDED] ignoring — workflowId=${message.workflowId?.slice(0, 8)} !== activeWorkflowId=${activeWorkflowId?.slice(0, 8)}`
+        );
+        return;
+      }
+    }
+
     const workflowStore = useWorkflowStore.getState();
 
     // Update prompts list (keep existing status for completed prompts)
@@ -223,6 +234,9 @@ function createMessageHandlers(): MessageHandlerMap {
       }
     );
 
+    WebviewLog.debug(
+      `[PROMPTS_EXTENDED] ${currentPrompts.length} → ${newPrompts.length} prompts${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
+    );
     workflowStore.setPrompts(newPrompts);
   };
 
@@ -837,6 +851,16 @@ function createMessageHandlers(): MessageHandlerMap {
       uiStore.removeLoadedWorkflow(summary.id);
     }
     // IDLE: do nothing — transient state during load/clear, not a terminal state
+
+    // If this is the currently active workflow, sync workflowStore so the
+    // PromptsPanel stays in sync during CLI watch mode step advances.
+    // WorkflowSummary.currentStep is 1-indexed; workflowStore.currentStep is 0-indexed.
+    if (summary.id === uiStore.activeWorkflowId) {
+      const workflowStore = useWorkflowStore.getState();
+      workflowStore.setCurrentStep(summary.currentStep - 1);
+      workflowStore.setTotalSteps(summary.totalSteps);
+      workflowStore.setExecutionState(summary.executionState);
+    }
   };
 
   // --------------------------------------------------------------------------
