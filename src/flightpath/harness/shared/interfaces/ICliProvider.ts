@@ -172,6 +172,18 @@ export interface ICliProvider {
   ): string | null;
 
   /**
+   * Return additional file paths to delete after workflow cleanup.
+   *
+   * Used by providers that write interactive-mode setup files that are
+   * not covered by getMcpConfigFilePath() (e.g., OpenCode plugin file).
+   * CliIntegration.cleanupWorkflowArtifacts() deletes all returned paths.
+   *
+   * @param workspaceRoot Workspace root directory
+   * @returns Array of absolute file paths to delete (empty array = nothing to clean up)
+   */
+  getAdditionalCleanupFilePaths?(workspaceRoot: string): string[];
+
+  /**
    * Check if CLI is available on the system
    * @returns True if CLI executable found
    */

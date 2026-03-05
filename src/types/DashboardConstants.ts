@@ -214,6 +214,7 @@ export const HARNESS_IDS = {
   COPILOT_CHAT: "copilot-chat",
   CLAUDE_CLI: "claude-cli",
   CODEX_CLI: "codex-cli",
+  OPENCODE_CLI: "opencode-cli",
 } as const;
 
 // ============================================================================
@@ -227,6 +228,7 @@ export const HARNESS_INFO = {
   },
   [HARNESS_IDS.CLAUDE_CLI]: { name: "Claude CLI", shortName: "Claude CLI" },
   [HARNESS_IDS.CODEX_CLI]: { name: "Codex CLI", shortName: "Codex CLI" },
+  [HARNESS_IDS.OPENCODE_CLI]: { name: "OpenCode CLI", shortName: "OpenCode" },
 } as const;
 
 // ============================================================================
@@ -245,6 +247,7 @@ export const DEFAULT_MODELS = {
   [HARNESS_IDS.COPILOT_CHAT]: "claude-sonnet-4.5",
   [HARNESS_IDS.CLAUDE_CLI]: "sonnet",
   [HARNESS_IDS.CODEX_CLI]: "gpt-5.2-codex",
+  [HARNESS_IDS.OPENCODE_CLI]: "anthropic/claude-sonnet-4-6",
 } as const;
 
 // ============================================================================

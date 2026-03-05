@@ -198,6 +198,17 @@ export const COPILOT_CLI_CONTEXT_WINDOW_SIZE = 128_000;
  */
 export const CODEX_CLI_CONTEXT_WINDOW_SIZE = 400_000;
 
+// ============================================================================
+// OPENCODE CLI FALLBACK MODELS
+// Fallback only — runtime list comes from `opencode models`
+// Do NOT add a full static list here — models are user-specific
+// ============================================================================
+export const OPENCODE_CLI_FALLBACK_MODELS = [
+  "opencode/big-pickle",
+  "opencode/claude-haiku-4-5",
+  "opencode/claude-sonnet-4-6",
+] as const;
+
 /**
  * Get the context window size for a Claude CLI model.
  *

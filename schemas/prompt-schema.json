@@ -38,9 +38,7 @@
               "$ref": "#/definitions/runtimeMetadata"
             }
           },
-          "required": [
-            "prompts"
-          ]
+          "required": ["prompts"]
         }
       ]
     }
@@ -57,7 +55,8 @@
             "copilot-cli",
             "copilot-chat",
             "claude-cli",
-            "codex-cli"
+            "codex-cli",
+            "opencode-cli"
           ]
         },
         "model": {
@@ -111,10 +110,7 @@
           "description": "Enable dynamic queue extension for this prompt. When true: CLI modes (copilot-cli, claude-cli, codex-cli) pass MCP server configuration to enable flightpath_append_queue and flightpath_queue_status tools. Chat mode injects instructions to use these tools via Language Model Tools API. When false, no MCP config or instructions are provided. When omitted, defaults to true for last prompt only (when no other prompts have explicit flags)."
         },
         "sessionId": {
-          "type": [
-            "string",
-            "number"
-          ],
+          "type": ["string", "number"],
           "description": "Session ID for resuming CLI conversations. Can be a string (exact CLI session ID to resume) or number (prompt reference: 1 = use session from first prompt). When omitted and resumeSession=true, automatically resumes previous prompt's session. Working file runtime metadata stores the actual session ID used during execution."
         },
         "skills": {
@@ -152,9 +148,7 @@
               "description": "Per-prompt runtime execution metadata (optional, added automatically during execution)"
             }
           },
-          "required": [
-            "prompt"
-          ]
+          "required": ["prompt"]
         }
       ]
     },
@@ -184,10 +178,7 @@
           "description": "Template for retry prompt with placeholders: {scriptOutput}, {errorOutput}, {expectedValue}, {actualValue}, {retryCount}, {maxRetries}"
         }
       },
-      "required": [
-        "script",
-        "returns"
-      ]
+      "required": ["script", "returns"]
     },
     "promptRuntimeMetadata": {
       "type": "object",
@@ -211,9 +202,7 @@
               "description": "Number of retry attempts for this prompt"
             }
           },
-          "required": [
-            "startedAt"
-          ]
+          "required": ["startedAt"]
         }
       ]
     },
@@ -240,10 +229,7 @@
           "description": "Current execution state"
         }
       },
-      "required": [
-        "currentIndex",
-        "executionState"
-      ],
+      "required": ["currentIndex", "executionState"],
       "additionalProperties": false
     }
   }

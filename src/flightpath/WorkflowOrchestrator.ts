@@ -94,6 +94,7 @@ export class WorkflowOrchestrator {
   private readonly chatIntegration: CopilotChatIntegration;
   private readonly claudeCliIntegration: CliIntegration;
   private readonly codexCliIntegration: CliIntegration;
+  private readonly openCodeCliIntegration: CliIntegration;
 
   // Orchestration helpers
   private readonly templateImporter: TemplateImporter;
@@ -121,6 +122,7 @@ export class WorkflowOrchestrator {
     this.chatIntegration = this.integrationFactory.createCopilotChat();
     this.claudeCliIntegration = this.integrationFactory.createClaudeCli();
     this.codexCliIntegration = this.integrationFactory.createCodexCli();
+    this.openCodeCliIntegration = this.integrationFactory.createOpenCodeCli();
 
     // Status bar
     this.statusBarManager = new StatusBarManager(context);
@@ -154,6 +156,7 @@ export class WorkflowOrchestrator {
       [HARNESS_IDS.COPILOT_CHAT, this.chatIntegration],
       [HARNESS_IDS.CLAUDE_CLI, this.claudeCliIntegration],
       [HARNESS_IDS.CODEX_CLI, this.codexCliIntegration],
+      [HARNESS_IDS.OPENCODE_CLI, this.openCodeCliIntegration],
     ];
     for (const [harnessId, integration] of allIntegrations) {
       context.subscriptions.push(
@@ -463,6 +466,7 @@ export class WorkflowOrchestrator {
           [Harness.ClaudeCli]: "Claude Code CLI",
           [Harness.CodexCli]: "Codex CLI",
           [Harness.CopilotCli]: "Copilot CLI",
+          [Harness.OpenCodeCli]: "OpenCode CLI",
         }[integrationMode] || "Copilot CLI";
       Log.info(`🔄 Default integration: ${modeLabel}`);
 
@@ -471,6 +475,7 @@ export class WorkflowOrchestrator {
         this.chatIntegration.initialize(),
         this.claudeCliIntegration.initialize(),
         this.codexCliIntegration.initialize(),
+        this.openCodeCliIntegration.initialize(),
       ]);
 
       if (this.currentWorkspaceFolder) {
@@ -1129,6 +1134,8 @@ export class WorkflowOrchestrator {
         return this.claudeCliIntegration;
       case Harness.CodexCli:
         return this.codexCliIntegration;
+      case Harness.OpenCodeCli:
+        return this.openCodeCliIntegration;
       case Harness.CopilotCli:
       default:
         return this.copilotCliIntegration;
@@ -1139,6 +1146,7 @@ export class WorkflowOrchestrator {
     this.copilotCliIntegration.setWorkflowName(name);
     this.claudeCliIntegration.setWorkflowName(name);
     this.codexCliIntegration.setWorkflowName(name);
+    this.openCodeCliIntegration.setWorkflowName(name);
   }
 
   private updateStatusBar(): void {

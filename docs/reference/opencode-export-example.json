@@ -1,0 +1,866 @@
+{
+  "info": {
+    "id": "ses_340325359ffejJqLbgD9CkEEq3",
+    "slug": "mighty-planet",
+    "projectID": "5ee91d4b3e0398cf8d5addb98204c7da4258999d",
+    "directory": "C:\\dev\\FlightPath",
+    "title": "Manual-test file-edit prompt instructions",
+    "version": "1.2.18",
+    "summary": {
+      "additions": 0,
+      "deletions": 0,
+      "files": 0
+    },
+    "permission": [
+      {
+        "permission": "question",
+        "pattern": "*",
+        "action": "deny"
+      },
+      {
+        "permission": "plan_enter",
+        "pattern": "*",
+        "action": "deny"
+      },
+      {
+        "permission": "plan_exit",
+        "pattern": "*",
+        "action": "deny"
+      }
+    ],
+    "time": {
+      "created": 1772744453286,
+      "updated": 1772744480552
+    }
+  },
+  "messages": [
+    {
+      "info": {
+        "role": "user",
+        "time": {
+          "created": 1772744453349
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "opencode",
+          "modelID": "big-pickle"
+        },
+        "id": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "text",
+          "text": "\"follow instructions in @manual-test\\file-edit.prompt.md\"",
+          "id": "prt_cbfcdace5002OnEEwEAD6WHAKS",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdace50013aRNHuw1n4d1eH"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744453359,
+          "completed": 1772744458333
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 13694,
+          "input": 150,
+          "output": 60,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 13484
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcdacee001gLMSwX1OCIfLv6",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "id": "prt_cbfcdbbae0015lRWHp7OTeCa1P",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdacee001gLMSwX1OCIfLv6"
+        },
+        {
+          "type": "reasoning",
+          "text": "The user wants me to follow instructions in a specific file. Let me read that file first.",
+          "metadata": {
+            "anthropic": {
+              "signature": "7443a4830a74f40f97ae5df8a3626c23dee0d5c892cc47d4b3c921b3436ea021"
+            }
+          },
+          "time": {
+            "start": 1772744457135,
+            "end": 1772744457702
+          },
+          "id": "prt_cbfcdbbaf001l3drZKnFsaJGfn",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdacee001gLMSwX1OCIfLv6"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_i6v5ba1win8r_1",
+          "tool": "read",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "C:\\dev\\FlightPath\\manual-test\\file-edit.prompt.md"
+            },
+            "output": "<path>C:\\dev\\FlightPath\\manual-test\\file-edit.prompt.md</path>\n<type>file</type>\n<content>1: We testing flightpath's output formatting for file editing and tool calling. Please do the following steps as discrete actions, do not batch actions, perform one action at a time and wait for the result before performing the next action:\n2: \n3: 1. create a file named 'temp.txt' in the manual-test directory with 10 lines in it\n4: 2. edit 2 of those lines\n5: 3. call a bash command like `cat temp.txt` to show the contents of the file after editing.\n6: 4. delete the file after showing its contents.\n\n(End of file - total 6 lines)\n</content>",
+            "title": "manual-test\\file-edit.prompt.md",
+            "metadata": {
+              "preview": "We testing flightpath's output formatting for file editing and tool calling. Please do the following steps as discrete actions, do not batch actions, perform one action at a time and wait for the result before performing the next action:\n\n1. create a file named 'temp.txt' in the manual-test directory with 10 lines in it\n2. edit 2 of those lines\n3. call a bash command like `cat temp.txt` to show the contents of the file after editing.\n4. delete the file after showing its contents.",
+              "truncated": false,
+              "loaded": []
+            },
+            "time": {
+              "start": 1772744458073,
+              "end": 1772744458078
+            }
+          },
+          "id": "prt_cbfcdbde6001N7IRGq0FIs6drh",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdacee001gLMSwX1OCIfLv6"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "cost": 0,
+          "tokens": {
+            "total": 13694,
+            "input": 150,
+            "output": 60,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 13484
+            }
+          },
+          "id": "prt_cbfcdbfa8001Dc03FZjm3OBTeG",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdacee001gLMSwX1OCIfLv6"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744458334,
+          "completed": 1772744463398
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14095,
+          "input": 327,
+          "output": 219,
+          "reasoning": 0,
+          "cache": {
+            "read": 13465,
+            "write": 84
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcdc05e001rlUJHRRzCtTwXi",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "id": "prt_cbfcdc6f5001CHjwTC1l1Nq3by",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        },
+        {
+          "type": "reasoning",
+          "text": "The user wants me to test the flightpath output formatting by performing file editing operations step by step. Let me start with step 1: create a file named 'temp.txt' in the manual-test directory with 10 lines in it.",
+          "metadata": {
+            "anthropic": {
+              "signature": "3f61019ce30e2de5931b810e1bff8b134036b5a1d4c628f07439a5a0c9e83149"
+            }
+          },
+          "time": {
+            "start": 1772744460021,
+            "end": 1772744460551
+          },
+          "id": "prt_cbfcdc6f5002NldG1GD8nQ5aXr",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        },
+        {
+          "type": "text",
+          "text": "I'll perform these actions one at a time as requested.\n\n**Step 1: Creating temp.txt with 10 lines**",
+          "time": {
+            "start": 1772744461034,
+            "end": 1772744461034
+          },
+          "id": "prt_cbfcdc908001FSCWxT4WfgnrDB",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_qtpwg5lfywwl_1",
+          "tool": "write",
+          "state": {
+            "status": "completed",
+            "input": {
+              "content": "Line 1: This is the first line\nLine 2: This is the second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+              "filePath": "C:\\dev\\FlightPath\\manual-test\\temp.txt"
+            },
+            "output": "Wrote file successfully.",
+            "title": "manual-test\\temp.txt",
+            "metadata": {
+              "diagnostics": {},
+              "filepath": "C:\\dev\\FlightPath\\manual-test\\temp.txt",
+              "exists": false,
+              "truncated": false
+            },
+            "time": {
+              "start": 1772744463121,
+              "end": 1772744463150
+            }
+          },
+          "id": "prt_cbfcdcaeb001iDN5vxqefR478W",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "ab915558e2e2e2237026278ad90444fb3d03eed9",
+          "cost": 0,
+          "tokens": {
+            "total": 14095,
+            "input": 327,
+            "output": 219,
+            "reasoning": 0,
+            "cache": {
+              "read": 13465,
+              "write": 84
+            }
+          },
+          "id": "prt_cbfcdd35b001YIq5DT36b6OC3l",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        },
+        {
+          "type": "patch",
+          "hash": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "files": [
+            "C:/dev/FlightPath/manual-test/temp.txt"
+          ],
+          "id": "prt_cbfcdd41e001WzDOHJ8S6ASVmZ",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdc05e001rlUJHRRzCtTwXi"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744463400,
+          "completed": 1772744467640
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14214,
+          "input": 165,
+          "output": 99,
+          "reasoning": 0,
+          "cache": {
+            "read": 13484,
+            "write": 466
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcdd428001UmfNKZx7dXhNT8",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "ab915558e2e2e2237026278ad90444fb3d03eed9",
+          "id": "prt_cbfcddbb8001H0Jdzet1MbXiJj",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        },
+        {
+          "type": "reasoning",
+          "text": "Now step 2: edit 2 of those lines.",
+          "metadata": {
+            "anthropic": {
+              "signature": "c54f060843ce57d39dd5cd9bf6ee068fcc44d06077faaa57217e1acff17ab27d"
+            }
+          },
+          "time": {
+            "start": 1772744465337,
+            "end": 1772744465963
+          },
+          "id": "prt_cbfcddbb9001TVlHB1Lda4Qku8",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        },
+        {
+          "type": "text",
+          "text": "**Step 2: Editing 2 lines**",
+          "time": {
+            "start": 1772744465964,
+            "end": 1772744465964
+          },
+          "id": "prt_cbfcdde2c001Ds2oVy898nKFYZ",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_ji8el9m2fsr5_1",
+          "tool": "edit",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "C:\\dev\\FlightPath\\manual-test\\temp.txt",
+              "newString": "Line 2: This is the UPDATED second line",
+              "oldString": "Line 2: This is the second line"
+            },
+            "output": "Edit applied successfully.",
+            "title": "manual-test\\temp.txt",
+            "metadata": {
+              "diagnostics": {},
+              "diff": "Index: C:\\dev\\FlightPath\\manual-test\\temp.txt\n===================================================================\n--- C:\\dev\\FlightPath\\manual-test\\temp.txt\n+++ C:\\dev\\FlightPath\\manual-test\\temp.txt\n@@ -1,6 +1,6 @@\n Line 1: This is the first line\n-Line 2: This is the second line\n+Line 2: This is the UPDATED second line\n Line 3: This is the third line\n Line 4: This is the fourth line\n Line 5: This is the fifth line\n Line 6: This is the sixth line\n",
+              "filediff": {
+                "file": "C:\\dev\\FlightPath\\manual-test\\temp.txt",
+                "before": "Line 1: This is the first line\nLine 2: This is the second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+                "after": "Line 1: This is the first line\nLine 2: This is the UPDATED second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+                "additions": 1,
+                "deletions": 1
+              },
+              "truncated": false
+            },
+            "time": {
+              "start": 1772744467365,
+              "end": 1772744467393
+            }
+          },
+          "id": "prt_cbfcdde2d001Nlxgp5Y8rxg4s4",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "d6aa6ed82a22862d8503bff3575cf72af79834ea",
+          "cost": 0,
+          "tokens": {
+            "total": 14214,
+            "input": 165,
+            "output": 99,
+            "reasoning": 0,
+            "cache": {
+              "read": 13484,
+              "write": 466
+            }
+          },
+          "id": "prt_cbfcde3f8001KhAVNApKsjMNgg",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        },
+        {
+          "type": "patch",
+          "hash": "ab915558e2e2e2237026278ad90444fb3d03eed9",
+          "files": [
+            "C:/dev/FlightPath/manual-test/temp.txt"
+          ],
+          "id": "prt_cbfcde4b1001zdegUR5mzWM6fw",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdd428001UmfNKZx7dXhNT8"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744467642,
+          "completed": 1772744470514
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14327,
+          "input": 164,
+          "output": 94,
+          "reasoning": 0,
+          "cache": {
+            "read": 13726,
+            "write": 343
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcde4ba0018nkWnJHaLLe86G",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "d6aa6ed82a22862d8503bff3575cf72af79834ea",
+          "id": "prt_cbfcde9cb001pqtMFUMxsO4jak",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
+        },
+        {
+          "type": "reasoning",
+          "text": "Now edit the second line (I'll edit line 5 as the second edit).",
+          "metadata": {
+            "anthropic": {
+              "signature": "9138cc098f4e45b7c28b707982404307866dce6da168e0e0280a48de1f3bdd00"
+            }
+          },
+          "time": {
+            "start": 1772744468939,
+            "end": 1772744469470
+          },
+          "id": "prt_cbfcde9cb002ZTcXzgWGX8hajn",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_mqjkcd4mu81u_1",
+          "tool": "edit",
+          "state": {
+            "status": "completed",
+            "input": {
+              "filePath": "C:\\dev\\FlightPath\\manual-test\\temp.txt",
+              "newString": "Line 5: This is the MODIFIED fifth line",
+              "oldString": "Line 5: This is the fifth line"
+            },
+            "output": "Edit applied successfully.",
+            "title": "manual-test\\temp.txt",
+            "metadata": {
+              "diagnostics": {},
+              "diff": "Index: C:\\dev\\FlightPath\\manual-test\\temp.txt\n===================================================================\n--- C:\\dev\\FlightPath\\manual-test\\temp.txt\n+++ C:\\dev\\FlightPath\\manual-test\\temp.txt\n@@ -1,9 +1,9 @@\n Line 1: This is the first line\n Line 2: This is the UPDATED second line\n Line 3: This is the third line\n Line 4: This is the fourth line\n-Line 5: This is the fifth line\n+Line 5: This is the MODIFIED fifth line\n Line 6: This is the sixth line\n Line 7: This is the seventh line\n Line 8: This is the eighth line\n Line 9: This is the ninth line\n",
+              "filediff": {
+                "file": "C:\\dev\\FlightPath\\manual-test\\temp.txt",
+                "before": "Line 1: This is the first line\nLine 2: This is the UPDATED second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+                "after": "Line 1: This is the first line\nLine 2: This is the UPDATED second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the MODIFIED fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+                "additions": 1,
+                "deletions": 1
+              },
+              "truncated": false
+            },
+            "time": {
+              "start": 1772744470211,
+              "end": 1772744470240
+            }
+          },
+          "id": "prt_cbfcdebde001Md5JrYaPJzPJR6",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "67b12e6f6a9b089a642afe9dad227d5701c30955",
+          "cost": 0,
+          "tokens": {
+            "total": 14327,
+            "input": 164,
+            "output": 94,
+            "reasoning": 0,
+            "cache": {
+              "read": 13726,
+              "write": 343
+            }
+          },
+          "id": "prt_cbfcdef1700156qNS3JvqGjtSu",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
+        },
+        {
+          "type": "patch",
+          "hash": "d6aa6ed82a22862d8503bff3575cf72af79834ea",
+          "files": [
+            "C:/dev/FlightPath/manual-test/temp.txt"
+          ],
+          "id": "prt_cbfcdefe9001txN5xeO5QrWs15",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcde4ba0018nkWnJHaLLe86G"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744470515,
+          "completed": 1772744473117
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14416,
+          "input": 164,
+          "output": 70,
+          "reasoning": 0,
+          "cache": {
+            "read": 13965,
+            "write": 217
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcdeff3001mc1yqj20cXHe99",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "67b12e6f6a9b089a642afe9dad227d5701c30955",
+          "id": "prt_cbfcdf4ee001h4fY347hj4Yy3q",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdeff3001mc1yqj20cXHe99"
+        },
+        {
+          "type": "reasoning",
+          "text": "Now step 3: call a bash command to show the contents of the file.",
+          "metadata": {
+            "anthropic": {
+              "signature": "87dbb38cf3e8e4333b7ddf44254d3ea8d5d7961d4b952c39b585b1b49007c0d2"
+            }
+          },
+          "time": {
+            "start": 1772744471791,
+            "end": 1772744472273
+          },
+          "id": "prt_cbfcdf4ef001khAAvEaYAyzrqR",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdeff3001mc1yqj20cXHe99"
+        },
+        {
+          "type": "text",
+          "text": "**Step 3: Showing file contents**",
+          "time": {
+            "start": 1772744472767,
+            "end": 1772744472767
+          },
+          "id": "prt_cbfcdf6d1001vRHi9Vq4vWv0uX",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdeff3001mc1yqj20cXHe99"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_1ub9r0n6whhm_1",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "cat manual-test/temp.txt",
+              "description": "Display temp.txt contents"
+            },
+            "output": "Line 1: This is the first line\nLine 2: This is the UPDATED second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the MODIFIED fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+            "title": "Display temp.txt contents",
+            "metadata": {
+              "output": "Line 1: This is the first line\nLine 2: This is the UPDATED second line\nLine 3: This is the third line\nLine 4: This is the fourth line\nLine 5: This is the MODIFIED fifth line\nLine 6: This is the sixth line\nLine 7: This is the seventh line\nLine 8: This is the eighth line\nLine 9: This is the ninth line\nLine 10: This is the tenth line\n",
+              "exit": 0,
+              "description": "Display temp.txt contents",
+              "truncated": false
+            },
+            "time": {
+              "start": 1772744472870,
+              "end": 1772744472944
+            }
+          },
+          "id": "prt_cbfcdf8c0001SbLH8hEvJS3Xlr",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdeff3001mc1yqj20cXHe99"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "67b12e6f6a9b089a642afe9dad227d5701c30955",
+          "cost": 0,
+          "tokens": {
+            "total": 14416,
+            "input": 164,
+            "output": 70,
+            "reasoning": 0,
+            "cache": {
+              "read": 13965,
+              "write": 217
+            }
+          },
+          "id": "prt_cbfcdf971001b1n90Shz3SErls",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdeff3001mc1yqj20cXHe99"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744473119,
+          "completed": 1772744475856
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14597,
+          "input": 263,
+          "output": 63,
+          "reasoning": 0,
+          "cache": {
+            "read": 14083,
+            "write": 188
+          }
+        },
+        "finish": "tool-calls",
+        "id": "msg_cbfcdfa1f001omclJbzT1ojdKd",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "67b12e6f6a9b089a642afe9dad227d5701c30955",
+          "id": "prt_cbfce0075001Qo7z0XBoDRI91h",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        },
+        {
+          "type": "reasoning",
+          "text": "Now step 4: delete the file.",
+          "metadata": {
+            "anthropic": {
+              "signature": "6f24f3b41f0752d9326a292ca0963471d9ae1d258204dc5d58ecd6e61be5bb26"
+            }
+          },
+          "time": {
+            "start": 1772744474742,
+            "end": 1772744475210
+          },
+          "id": "prt_cbfce0075002kE1DSS7oh1nmFF",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        },
+        {
+          "type": "text",
+          "text": "**Step 4: Deleting the file**",
+          "time": {
+            "start": 1772744475211,
+            "end": 1772744475211
+          },
+          "id": "prt_cbfce024b001bb7KZk3XryQ36q",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        },
+        {
+          "type": "tool",
+          "callID": "call_function_blvh53zd30ko_1",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "rm manual-test/temp.txt",
+              "description": "Delete temp.txt file"
+            },
+            "output": "",
+            "title": "Delete temp.txt file",
+            "metadata": {
+              "output": "",
+              "exit": 0,
+              "description": "Delete temp.txt file",
+              "truncated": false
+            },
+            "time": {
+              "start": 1772744475608,
+              "end": 1772744475652
+            }
+          },
+          "id": "prt_cbfce024c001prdXm9zT90fcmI",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        },
+        {
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "cost": 0,
+          "tokens": {
+            "total": 14597,
+            "input": 263,
+            "output": 63,
+            "reasoning": 0,
+            "cache": {
+              "read": 14083,
+              "write": 188
+            }
+          },
+          "id": "prt_cbfce0423001ZorPjDRUTVm948",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        },
+        {
+          "type": "patch",
+          "hash": "67b12e6f6a9b089a642afe9dad227d5701c30955",
+          "files": [
+            "C:/dev/FlightPath/manual-test/temp.txt"
+          ],
+          "id": "prt_cbfce04ce00126fDipL9LW0L5p",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfcdfa1f001omclJbzT1ojdKd"
+        }
+      ]
+    },
+    {
+      "info": {
+        "role": "assistant",
+        "time": {
+          "created": 1772744475861,
+          "completed": 1772744480496
+        },
+        "parentID": "msg_cbfcdace50013aRNHuw1n4d1eH",
+        "modelID": "big-pickle",
+        "providerID": "opencode",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "C:\\dev\\FlightPath",
+          "root": "C:\\dev\\FlightPath"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 14713,
+          "input": 155,
+          "output": 106,
+          "reasoning": 0,
+          "cache": {
+            "read": 14196,
+            "write": 256
+          }
+        },
+        "finish": "stop",
+        "id": "msg_cbfce04d5001OH5gWVZkMBEqGK",
+        "sessionID": "ses_340325359ffejJqLbgD9CkEEq3"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "id": "prt_cbfce0d210015Jo6liKWKVJFeh",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfce04d5001OH5gWVZkMBEqGK"
+        },
+        {
+          "type": "reasoning",
+          "text": "All 4 steps have been completed:\n1. Created temp.txt with 10 lines ✓\n2. Edited 2 lines (lines 2 and 5) ✓\n3. Showed the file contents via cat ✓\n4. Deleted the file ✓\n\nThe test is complete.",
+          "metadata": {
+            "anthropic": {
+              "signature": "28c892f169cbee1074364865b1fd1c76ba1e9e86781f99bc7f689ad54d67907c"
+            }
+          },
+          "time": {
+            "start": 1772744477986,
+            "end": 1772744479207
+          },
+          "id": "prt_cbfce0d220018bx0htEd6ab6LW",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfce04d5001OH5gWVZkMBEqGK"
+        },
+        {
+          "type": "text",
+          "text": "All 4 steps completed:\n1. Created `temp.txt` with 10 lines\n2. Edited lines 2 and 5\n3. Displayed file contents (showing edits applied)\n4. Deleted the file",
+          "time": {
+            "start": 1772744480232,
+            "end": 1772744480232
+          },
+          "id": "prt_cbfce11e8001hTS0aosc85Lhl9",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfce04d5001OH5gWVZkMBEqGK"
+        },
+        {
+          "type": "step-finish",
+          "reason": "stop",
+          "snapshot": "5863e039041482a4f7d4d9c189c75f480b4138bf",
+          "cost": 0,
+          "tokens": {
+            "total": 14713,
+            "input": 155,
+            "output": 106,
+            "reasoning": 0,
+            "cache": {
+              "read": 14196,
+              "write": 256
+            }
+          },
+          "id": "prt_cbfce1644001yiv8a1b7Dv7rwr",
+          "sessionID": "ses_340325359ffejJqLbgD9CkEEq3",
+          "messageID": "msg_cbfce04d5001OH5gWVZkMBEqGK"
+        }
+      ]
+    }
+  ]
+}

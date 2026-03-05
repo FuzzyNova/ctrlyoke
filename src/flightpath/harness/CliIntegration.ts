@@ -212,9 +212,13 @@ export class CliIntegration extends HarnessIntegration {
   protected disposeTerminalIfExists(): void {
     const hasTerminal = !!this.processManager.getTerminal();
     if (hasTerminal) {
-      Log.info(`🗑️ Closing previous terminal before starting next prompt (was: "${this.buildTerminalName()}")`);
+      Log.info(
+        `🗑️ Closing previous terminal before starting next prompt (was: "${this.buildTerminalName()}")`
+      );
     } else {
-      Log.debug("🗑️ disposeTerminalIfExists: no terminal open, nothing to close");
+      Log.debug(
+        "🗑️ disposeTerminalIfExists: no terminal open, nothing to close"
+      );
     }
     this.processManager.disposeTerminal();
     this.currentExecution = undefined;
@@ -245,7 +249,8 @@ export class CliIntegration extends HarnessIntegration {
     const cleaned = this.workflowName.trim();
     const short = cleaned.length > 25 ? `${cleaned.slice(0, 24)}…` : cleaned;
     const promptSuffix =
-      this.currentPromptNumber !== undefined && this.currentPromptTotal !== undefined
+      this.currentPromptNumber !== undefined &&
+      this.currentPromptTotal !== undefined
         ? ` [${this.currentPromptNumber}/${this.currentPromptTotal}]`
         : "";
     return `${base} · ${short}${promptSuffix}`;
@@ -1395,6 +1400,12 @@ export class CliIntegration extends HarnessIntegration {
     if (configPath) {
       await fs.promises.unlink(configPath).catch(() => {});
     }
+    // Clean up provider-specific interactive setup files (e.g., OpenCode plugin)
+    const additionalPaths =
+      this.provider.getAdditionalCleanupFilePaths?.(workspaceRoot) ?? [];
+    for (const p of additionalPaths) {
+      await fs.promises.unlink(p).catch(() => {});
+    }
   }
 
   /**
@@ -1753,7 +1764,10 @@ export class CliIntegration extends HarnessIntegration {
           // renders it in the stats section. Copilot's response parser always sets
           // metadata.sessionId=undefined (session ID comes from log files, not CLI output),
           // so this is the only place where it gets merged into the structured output.
-          if (this.lastParsedOutput && !this.lastParsedOutput.metadata.sessionId) {
+          if (
+            this.lastParsedOutput &&
+            !this.lastParsedOutput.metadata.sessionId
+          ) {
             this.lastParsedOutput = {
               ...this.lastParsedOutput,
               metadata: {

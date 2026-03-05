@@ -25,6 +25,7 @@ import {
   COPILOT_CHAT_MODEL_IDS,
   COPILOT_CLI_MODEL_IDS,
   CLAUDE_CLI_MODELS,
+  OPENCODE_CLI_FALLBACK_MODELS,
 } from "./ModelConstants";
 import { Log } from "./Log";
 import { retryWithBackoff } from "./RetryUtils";
@@ -57,6 +58,7 @@ export interface CopilotModel {
 // In-memory cache of discovered models
 let cachedModels: CopilotModel[] = [];
 let cachedCopilotCliModelIds: string[] = [];
+let cachedOpenCodeModelIds: string[] = [];
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -86,6 +88,7 @@ export async function initializeModelRegistry(): Promise<void> {
     // Query Copilot CLI first, then Chat models (so we can set cliSupported correctly)
     await queryCopilotCliModels();
     await queryChatModels();
+    await queryOpenCodeModels();
     isInitialized = true;
     // Notify subscribers that models are now available
     modelsLoadedEmitter.fire();
@@ -202,6 +205,30 @@ async function queryChatModels(): Promise<void> {
 }
 
 /**
+ * Query available models from `opencode models` (newline-separated model IDs)
+ */
+async function queryOpenCodeModels(): Promise<void> {
+  try {
+    Log.debug("Querying OpenCode for available models via 'opencode models'...");
+    const { stdout } = await execAsync("opencode models", { timeout: 10000 });
+    const ids = stdout
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    if (ids.length > 0) {
+      cachedOpenCodeModelIds = ids;
+      Log.debug(`OpenCode reports ${ids.length} models`);
+    } else {
+      Log.info("opencode models returned empty list, using fallback");
+      cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
+    }
+  } catch (error) {
+    Log.warn(`Failed to query opencode models: ${error}`);
+    cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
+  }
+}
+
+/**
  * Populate cache with static fallback models
  */
 function useFallbackModels(): void {
@@ -289,6 +316,20 @@ export function isClaudeCliModel(modelId: string): boolean {
 }
 
 /**
+ * Get OpenCode model IDs (discovered via `opencode models`, falls back to static list)
+ */
+export function getOpenCodeModelIds(): string[] {
+  return cachedOpenCodeModelIds;
+}
+
+/**
+ * Get OpenCode model IDs synchronously (from cache)
+ */
+export function getOpenCodeModelIdsSync(): string[] {
+  return cachedOpenCodeModelIds;
+}
+
+/**
  * Refresh the model cache (force re-query)
  * Call this if you expect model availability to have changed
  */
@@ -296,6 +337,7 @@ export async function refreshModelRegistry(): Promise<void> {
   isInitialized = false;
   cachedModels = [];
   cachedCopilotCliModelIds = [];
+  cachedOpenCodeModelIds = [];
   await initializeModelRegistry();
 }
 

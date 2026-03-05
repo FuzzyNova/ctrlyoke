@@ -46,6 +46,7 @@ definitions:
           - copilot-chat
           - claude-cli
           - codex-cli
+          - opencode-cli
       model:
         type: string
         description: >-

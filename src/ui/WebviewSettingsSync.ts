@@ -13,6 +13,7 @@ import { Log } from "../utils/Log";
 import {
   getAvailableModelsSync,
   getCliSupportedModelIdsSync,
+  getOpenCodeModelIdsSync,
 } from "../utils/ModelRegistry";
 import {
   getModelDisplayName,
@@ -558,11 +559,17 @@ export class WebviewSettingsSync {
       ([value, label]) => ({ value, label })
     );
 
+    const openCodeCliOptions = getOpenCodeModelIdsSync().map((id) => ({
+      value: id,
+      label: id,
+    }));
+
     return {
       [HARNESS_IDS.COPILOT_CLI]: copilotCliOptions,
       [HARNESS_IDS.COPILOT_CHAT]: copilotChatOptions,
       [HARNESS_IDS.CLAUDE_CLI]: claudeCliOptions,
       [HARNESS_IDS.CODEX_CLI]: codexCliOptions,
+      [HARNESS_IDS.OPENCODE_CLI]: openCodeCliOptions,
     };
   }
 

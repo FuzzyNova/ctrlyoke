@@ -5,6 +5,7 @@ import { CliIntegration } from "./harness/CliIntegration";
 import { CopilotCliProvider } from "./harness/copilot/CopilotCliProvider";
 import { ClaudeCliProvider } from "./harness/claude/ClaudeCliProvider";
 import { CodexCliProvider } from "./harness/codex/CodexCliProvider";
+import { OpenCodeCliProvider } from "./harness/opencode/OpenCodeCliProvider";
 
 /**
  * IntegrationFactory
@@ -45,6 +46,12 @@ export class IntegrationFactory {
     return new CliIntegration(provider, this.platform, registerWithContext);
   }
 
+  /** Create a new OpenCode CLI integration */
+  createOpenCodeCli(registerWithContext: boolean = true): CliIntegration {
+    const provider = new OpenCodeCliProvider();
+    return new CliIntegration(provider, this.platform, registerWithContext);
+  }
+
   /** Create a new integration for the given harness (CLI harnesses only) */
   createForHarness(
     harness: Harness,
@@ -55,6 +62,8 @@ export class IntegrationFactory {
         return this.createClaudeCli(registerWithContext);
       case Harness.CodexCli:
         return this.createCodexCli(registerWithContext);
+      case Harness.OpenCodeCli:
+        return this.createOpenCodeCli(registerWithContext);
       case Harness.CopilotCli:
       default:
         return this.createCopilotCli(registerWithContext);

@@ -14,6 +14,7 @@ export enum Harness {
   CopilotChat = "copilot-chat", // Copilot Chat
   ClaudeCli = "claude-cli", // Claude Code CLI
   CodexCli = "codex-cli", // Codex CLI
+  OpenCodeCli = "opencode-cli", // OpenCode CLI
 }
 
 /**
@@ -183,8 +184,9 @@ export interface WorkflowSummary {
 }
 
 /** Returns the 1-indexed step number for display (logs, UI labels). currentStep is 0-indexed internally. */
-export const workflowDisplayStep = (s: Pick<WorkflowSummary, "currentStep">): number =>
-  s.currentStep + 1;
+export const workflowDisplayStep = (
+  s: Pick<WorkflowSummary, "currentStep">
+): number => s.currentStep + 1;
 
 /**
  * Process lock file written alongside the working file while a workflow is running.

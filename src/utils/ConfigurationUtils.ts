@@ -65,6 +65,8 @@ function getModelSettingKeyForHarness(harness: Harness): string {
       return "claudeCliModel";
     case Harness.CodexCli:
       return "codexCliModel";
+    case Harness.OpenCodeCli:
+      return "openCodeCliModel";
     default:
       return "copilotCliModel";
   }
@@ -120,6 +122,9 @@ export const ConfigurationUtils = {
       case "codex-cli":
       case Harness.CodexCli:
         return Harness.CodexCli;
+      case "opencode-cli":
+      case Harness.OpenCodeCli:
+        return Harness.OpenCodeCli;
       case "copilot-cli":
       case Harness.CopilotCli:
       default:
@@ -221,6 +226,8 @@ export const ConfigurationUtils = {
         return ConfigurationUtils.getClaudeCliModel();
       case Harness.CodexCli:
         return ConfigurationUtils.getCodexCliModel();
+      case Harness.OpenCodeCli:
+        return ConfigurationUtils.getOpenCodeCliModel();
       default:
         // Fallback to Copilot CLI model
         return ConfigurationUtils.getCliModel();
@@ -321,6 +328,20 @@ export const ConfigurationUtils = {
    */
   getClaudeCliModel(): string {
     return getConfig().get<string>("claudeCliModel", "sonnet");
+  },
+
+  // ============================================================
+  // OPENCODE CLI SETTINGS
+  // ============================================================
+
+  /**
+   * Get OpenCode CLI model (user-configured, free-form provider/model format)
+   */
+  getOpenCodeCliModel(): string {
+    return getConfig().get<string>(
+      "openCodeCliModel",
+      "anthropic/claude-sonnet-4-6"
+    );
   },
 
   // ============================================================
