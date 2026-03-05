@@ -15,6 +15,8 @@ import {
   WorkflowSummary,
   WorkflowRunnerLock,
   EXECUTION_STATES,
+  STEP_STATUS,
+  type PromptItem,
 } from "../types/FlightPathTypes";
 import {
   HARNESS_IDS,
@@ -315,6 +317,14 @@ export class WorkflowOrchestrator {
       this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
       // Send the CLI session's summary so the dashboard shows read-only state
       this.dashboardProvider?.notifyWorkflowSummaryUpdated(cliEntry.summary);
+      // Send full workflow state (prompts + outputs) so the dashboard panels update
+      this.sendCliWorkflowFullStateToDashboard(workflowId, cliEntry).catch(
+        (err) =>
+          Log.warn(
+            `setActiveWorkflow: failed to send full CLI state for "${workflowId}":`,
+            err
+          )
+      );
       return;
     }
 
@@ -1364,6 +1374,120 @@ export class WorkflowOrchestrator {
     Log.info(
       `[WorkflowOrchestrator] CLI watch session started for "${workflowId}"`
     );
+  }
+
+  /**
+   * Send full workflow state to the dashboard when switching to a CLI-managed workflow.
+   * Sends SESSION_RESTORED with the current prompts, then replays all captured outputs.
+   */
+  private async sendCliWorkflowFullStateToDashboard(
+    workflowId: string,
+    cliEntry: { session: CliWatchSession; summary: WorkflowSummary }
+  ): Promise<void> {
+    const workingFilePath = cliEntry.summary.workingFilePath;
+    if (!workingFilePath) {
+      return;
+    }
+
+    // Read the latest working file to get current prompt list and step position
+    let prompts: PromptItem[] = [];
+    let currentIndex = (cliEntry.summary.currentStep ?? 1) - 1;
+
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf8");
+      const workingFile = JSON.parse(content) as WorkingFile;
+      prompts = ((workingFile.prompts as PromptItem[]) ?? []).map((p) => ({
+        ...p,
+        // Strip any existing status so loadWorkflow sets it from the results array
+        status: undefined as unknown as string,
+      }));
+      currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] sendCliWorkflowFullStateToDashboard: could not read working file:`,
+        err
+      );
+    }
+
+    // Derive step statuses from current position:
+    //   < currentIndex  → completed
+    //   = currentIndex  → running
+    //   > currentIndex  → pending
+    const results = prompts.map((_, i) => ({
+      status:
+        i < currentIndex
+          ? STEP_STATUS.COMPLETED
+          : i === currentIndex
+            ? STEP_STATUS.RUNNING
+            : STEP_STATUS.PENDING,
+    }));
+
+    const fileName = path.basename(workingFilePath);
+    await this.dashboardProvider?.updateSessionRestored(
+      fileName,
+      prompts,
+      results,
+      cliEntry.summary.executionState,
+      currentIndex,
+      cliEntry.summary.workflowName
+    );
+
+    // Replay all captured CLI outputs from the active history file
+    const historyFilePath = cliEntry.session.getActiveHistoryFilePath();
+    if (historyFilePath) {
+      await this.replayCliWatchHistoryFile(workflowId, historyFilePath);
+    }
+  }
+
+  /**
+   * Replay all captured CLI outputs from a history file to the dashboard.
+   * Updates lastKnownOutputByStep so subsequent incremental updates don't re-send.
+   */
+  private async replayCliWatchHistoryFile(
+    workflowId: string,
+    historyFilePath: string
+  ): Promise<void> {
+    const entry = this.cliSessions.get(workflowId);
+    if (!entry) {
+      return;
+    }
+
+    try {
+      const content = await fs.promises.readFile(historyFilePath, "utf8");
+      const history = JSON.parse(content) as {
+        promptOutputs: Record<string, { cliOutputs: Array<unknown> }>;
+      };
+
+      for (const [stepIndexStr, stepOutput] of Object.entries(
+        history.promptOutputs
+      )) {
+        const stepIndex = parseInt(stepIndexStr, 10);
+        const outputs = stepOutput.cliOutputs ?? [];
+
+        // Update lastKnown so subsequent incremental handleCliWatchOutput calls
+        // don't re-send these outputs
+        entry.session.getAndUpdateLastKnownOutputCount(
+          stepIndex,
+          outputs.length
+        );
+
+        // Send ALL outputs from the beginning (full replay, not diff)
+        for (let i = 0; i < outputs.length; i++) {
+          this.dashboardProvider?.notifyCliWatchOutput(
+            workflowId,
+            stepIndex,
+            outputs[i] as Parameters<
+              FlightPathWebviewProvider["notifyCliWatchOutput"]
+            >[2]
+          );
+        }
+      }
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] replayCliWatchHistoryFile: failed to read history file:`,
+        err
+      );
+    }
   }
 
   /**

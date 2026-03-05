@@ -416,6 +416,19 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // CLI_WATCH_OUTPUT - Live CLI output streamed from a CLI-managed workflow.
+  // Only processed when this workflowId is the currently active workflow so
+  // outputs from background CLI sessions are not mixed into the live view.
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.CLI_WATCH_OUTPUT] = (message) => {
+    const activeWorkflowId = useUiStore.getState().activeWorkflowId;
+    if (message.workflowId !== activeWorkflowId) {
+      return;
+    }
+    useWorkflowStore.getState().addCliOutput(message.stepIndex, message.output);
+  };
+
+  // --------------------------------------------------------------------------
   // STATUS_MESSAGE - Status message for a step (info/warning/error)
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
