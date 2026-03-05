@@ -8,6 +8,7 @@ import { Log } from "./Log";
  * - Copilot CLI: UUID v4 (strict format)
  * - Claude CLI: UUID v4 (strict format)
  * - Codex CLI: Thread ID string (thread_xxx format, flexible)
+ * - OpenCode CLI: ses_ prefix + alphanumeric string (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)
  *
  * This validator ensures session IDs match the expected format for each harness
  * before passing to CLI commands, preventing CLI errors and enabling graceful fallback.
@@ -32,12 +33,21 @@ export class SessionValidator {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /**
+   * OpenCode session ID regex pattern.
+   *
+   * Format: "ses_" prefix followed by alphanumeric characters (mixed case).
+   * Example: ses_34106de37ffeG7oh0Bvq9cmRki
+   */
+  private static readonly OPENCODE_SESSION_REGEX = /^ses_[A-Za-z0-9]+$/;
+
+  /**
    * Validate session ID format for a specific harness.
    *
    * Validation rules by harness:
    * - **Copilot CLI**: Strict UUID v4 format required
    * - **Claude CLI**: Strict UUID v4 format required (rejects invalid with error)
    * - **Codex CLI**: Any non-empty string (typically thread_xxx)
+   * - **OpenCode CLI**: Must start with "ses_" followed by alphanumeric characters
    * - **Copilot Chat**: Not applicable (no session IDs)
    *
    * @param sessionId Session ID to validate
@@ -54,6 +64,9 @@ export class SessionValidator {
 
       case Harness.CodexCli:
         return this.validateCodexThreadId(sessionId);
+
+      case Harness.OpenCodeCli:
+        return this.validateOpenCodeSessionId(sessionId);
 
       case Harness.CopilotChat:
         // Chat mode doesn't use session IDs
@@ -104,6 +117,27 @@ export class SessionValidator {
     if (trimmed.length === 0) {
       Log.warn(
         `⚠️ Empty session ID for Codex CLI. Starting new session instead.`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Validate OpenCode session ID format.
+   *
+   * OpenCode assigns session IDs with a "ses_" prefix followed by alphanumeric
+   * characters (mixed case). Example: ses_34106de37ffeG7oh0Bvq9cmRki
+   *
+   * @param sessionId Session ID to validate
+   * @returns True if valid OpenCode session ID, false otherwise
+   */
+  private static validateOpenCodeSessionId(sessionId: string): boolean {
+    if (!this.OPENCODE_SESSION_REGEX.test(sessionId)) {
+      Log.warn(
+        `⚠️ Session ID "${sessionId}" is not a valid OpenCode session ID. ` +
+          `Starting new session instead. ` +
+          `Expected format: ses_<alphanumeric> (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)`
       );
       return false;
     }

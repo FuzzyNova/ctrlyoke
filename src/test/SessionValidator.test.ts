@@ -89,6 +89,45 @@ suite("SessionValidator Tests", () => {
     });
   });
 
+  suite("OpenCode Session ID Validation", () => {
+    test("Valid ses_ session IDs should pass", () => {
+      const validIds = [
+        "ses_34106de37ffeG7oh0Bvq9cmRki",
+        "ses_abc123XYZ",
+        "ses_ABC",
+        "ses_0",
+      ];
+
+      validIds.forEach((id) => {
+        assert.strictEqual(
+          SessionValidator.validate(id, Harness.OpenCodeCli),
+          true,
+          `OpenCode session ID "${id}" should pass`
+        );
+      });
+    });
+
+    test("Invalid OpenCode session IDs should fail", () => {
+      const invalidIds = [
+        "550e8400-e29b-41d4-a716-446655440000", // UUID format
+        "thread_abc123", // Codex format
+        "abc123", // Missing ses_ prefix
+        "ses_", // Empty after prefix
+        "ses_abc 123", // Contains space
+        "ses_abc-123", // Contains hyphen
+        "", // Empty
+      ];
+
+      invalidIds.forEach((id) => {
+        assert.strictEqual(
+          SessionValidator.validate(id, Harness.OpenCodeCli),
+          false,
+          `Invalid OpenCode session ID "${id}" should fail`
+        );
+      });
+    });
+  });
+
   suite("Copilot Chat (Not Applicable)", () => {
     test("Should return false and warn for Copilot Chat", () => {
       const sessionId = "any-session-id";
