@@ -60,6 +60,15 @@ export interface WorkflowContext {
   workingFilePath?: string;
   /** Short instance tag for log prefixing, e.g. "[inst:abc12345] " */
   instanceTag?: string;
+  /**
+   * Optional callback fired for each status message (end condition results, retries, etc.).
+   * Used by the standalone CLI to render status messages to the terminal.
+   */
+  onStatusMessage?: (
+    stepIndex: number,
+    message: string,
+    severity: string
+  ) => void;
   /** OutputHistoryManager for saving step outputs */
   outputHistoryManager?: OutputHistoryManager;
   /**
@@ -351,6 +360,7 @@ export class WorkflowExecutor {
       message,
       severity as any
     );
+    context.onStatusMessage?.(stepIndex, message, severity);
 
     // Track for history storage
     const msgs = this.stepStatusMessages.get(stepIndex) ?? [];
@@ -587,12 +597,14 @@ export class WorkflowExecutor {
     let structuredStreamingDisposable: { dispose(): void } | undefined;
     let promptReadyDisposable: { dispose(): void } | undefined;
 
-    if (context.dashboardProvider) {
-      promptReadyDisposable = integration.onPromptReady((data) => {
-        const cliCommand = context.shouldShowCliCommand
-          ? data.cliCommand
-          : undefined;
-        context.dashboardProvider?.updateCliOutput(stepIndex, {
+    // Always register onPromptReady so the CLI command flows to captureOutputInit
+    // (and thus to CLI event emitters) even when there is no dashboard provider.
+    promptReadyDisposable = integration.onPromptReady((data) => {
+      const cliCommand = context.shouldShowCliCommand
+        ? data.cliCommand
+        : undefined;
+      if (context.dashboardProvider) {
+        context.dashboardProvider.updateCliOutput(stepIndex, {
           prompt: promptItem.prompt,
           response: "",
           elapsed: 0,
@@ -604,18 +616,18 @@ export class WorkflowExecutor {
           attemptIndex,
           rawTextOutput,
         });
-        // Update the captured init state with the actual cliCommand once known
-        context.captureOutputInit?.(
-          stepIndex,
-          promptItem.prompt,
-          cliCommand,
-          context.workspaceFolderPath,
-          Date.now(),
-          attemptIndex,
-          rawTextOutput
-        );
-      });
-    }
+      }
+      // Always update captureOutputInit with the CLI command once known
+      context.captureOutputInit?.(
+        stepIndex,
+        promptItem.prompt,
+        cliCommand,
+        context.workspaceFolderPath,
+        Date.now(),
+        attemptIndex,
+        rawTextOutput
+      );
+    });
 
     // Always register the chunk listener — routes to dashboard when active, always buffers
     streamingDisposable = integration.onStreamingChunk((chunk) => {

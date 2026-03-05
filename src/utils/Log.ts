@@ -68,7 +68,7 @@ export class Log {
    * Initialize logging for the standalone CLI binary.
    *
    * Must be called early in `runCommand()` before any Log.* calls.
-   * Redirects all log output to `.flightpath/logs/flightpath-<timestamp>.log`
+   * Redirects all log output to `.flightpath/logs/flightpath-cli-<timestamp>.log`
    * and suppresses console output so the terminal stays clean for prompt output.
    *
    * @param workspaceDir - Working directory (parent of .flightpath/).
@@ -81,7 +81,7 @@ export class Log {
     const logDir = path.join(workspaceDir, ".flightpath", "logs");
     try {
       fs.mkdirSync(logDir, { recursive: true });
-      this.cliLogFilePath = path.join(logDir, `flightpath-${Date.now()}.log`);
+      this.cliLogFilePath = path.join(logDir, `flightpath-cli-${Date.now()}.log`);
       fs.writeFileSync(this.cliLogFilePath, ""); // create / truncate
     } catch {
       // Proceed without file logging if directory creation fails

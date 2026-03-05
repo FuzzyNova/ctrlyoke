@@ -14,7 +14,7 @@ import type { PlatformAdapter } from "../platform/PlatformAdapter";
 const PROMPT_FILE_EXTENSIONS = [".prompt.md", ".md", ".txt"] as const;
 
 export class PromptFileParser {
-  private ajv = new Ajv();
+  private ajv = new Ajv({ allowUnionTypes: true });
   private promptSchema: any;
 
   constructor(private readonly platform?: PlatformAdapter) {

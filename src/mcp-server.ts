@@ -246,26 +246,26 @@ class FlightPathMCPServer {
    */
   private async queueOperation<T>(operation: () => Promise<T>): Promise<T> {
     const previousOperation = this.operationQueue;
-    let resolver: (value: T) => void;
-    let rejecter: (error: any) => void;
+    let release: () => void;
 
-    // Create a new promise that will be the next item in the queue
-    this.operationQueue = new Promise((resolve, reject) => {
-      resolver = resolve;
-      rejecter = reject;
+    // Gate promise always resolves (never rejects) so that:
+    //   1. Subsequent operations are never blocked by a previous failure.
+    //   2. There is no unhandled promise rejection that would crash the process.
+    this.operationQueue = new Promise<void>((resolve) => {
+      release = resolve;
     });
 
     try {
-      // Wait for the previous operation to complete
+      // Wait for the previous operation to complete (ignoring its outcome)
       await previousOperation;
       log("Operation started (previous operations completed)");
 
       // Execute the current operation
       const result = await operation();
-      resolver!(result);
+      release!();
       return result;
     } catch (error) {
-      rejecter!(error);
+      release!(); // Always unblock the queue, even on failure
       throw error;
     }
   }

@@ -63,6 +63,20 @@ import { IntegrationFactory } from "./IntegrationFactory";
  * Phase 2: Multiple instances run in parallel (one per open workflow).
  */
 
+/**
+ * Data carried by onPromptStart when a prompt step begins (or retries).
+ * Fires twice per attempt: once immediately (cliCommand undefined), then again
+ * when the harness CLI command is known (cliCommand populated).
+ */
+export interface PromptStartData {
+  stepIndex: number;
+  totalSteps: number;
+  promptText: string;
+  attemptIndex: number;
+  /** The harness CLI command string, populated only on the second fire. */
+  cliCommand?: string;
+}
+
 /** Data carried by onPromptComplete after each prompt fully finishes (post session-ID extraction). */
 export interface PromptCompleteData {
   stepIndex: number;
@@ -202,6 +216,28 @@ export class WorkflowInstance {
    * Designed for the standalone CLI to display per-prompt statistics.
    */
   public readonly onPromptComplete = this._promptCompleteEmitter.event;
+
+  private readonly _promptStartEmitter = new TypedEmitter<PromptStartData>();
+  /**
+   * Fires when a prompt step begins (or retries).
+   * Fires once immediately with the prompt text (cliCommand undefined), then again
+   * when the harness CLI command is known (cliCommand populated).
+   * Designed for the standalone CLI to display step headers and CLI commands.
+   */
+  public readonly onPromptStart = this._promptStartEmitter.event;
+
+  private readonly _workflowStatusMessageEmitter = new TypedEmitter<{
+    stepIndex: number;
+    message: string;
+    severity: string;
+  }>();
+  /**
+   * Fires for each status message produced during workflow execution
+   * (end condition results, retry notifications, etc.).
+   * Designed for the standalone CLI to display status updates.
+   */
+  public readonly onWorkflowStatusMessage =
+    this._workflowStatusMessageEmitter.event;
 
   constructor(
     private readonly platform: PlatformAdapter,
@@ -1424,7 +1460,9 @@ export class WorkflowInstance {
         get dashboardProvider() {
           return self.activeDashboard;
         },
-        shouldShowCliCommand: this.shouldShowCliCommand(),
+        // In CLI mode (no dashboard sink) always show the CLI command so it
+        // flows through captureOutputInit and into onPromptStart events.
+        shouldShowCliCommand: !this.dashboardSink || this.shouldShowCliCommand(),
         showCliOutput: ConfigurationUtils.shouldShowCliOutput(),
         dynamicQueueConfig: this.getDynamicQueueConfig(),
         historyFilePath,
@@ -1499,6 +1537,18 @@ export class WorkflowInstance {
               );
             }
           }
+
+          // Forward to CLI subscribers (standalone CLI terminal rendering).
+          // Fires twice per attempt: first with cliCommand=undefined (step start),
+          // then again when the harness CLI command becomes available.
+          const totalSteps = self.promptQueue.getProgress().total;
+          self._promptStartEmitter.fire({
+            stepIndex,
+            totalSteps,
+            promptText: prompt,
+            attemptIndex,
+            cliCommand,
+          });
         },
         captureChunk: (stepIndex, chunk) => {
           const existing = self.stepOutputBuffer.get(stepIndex);
@@ -1546,6 +1596,13 @@ export class WorkflowInstance {
             sessionId: output.structured?.metadata?.sessionId,
             harness: output.structured?.metadata?.harness,
             elapsed: output.elapsed,
+          });
+        },
+        onStatusMessage: (stepIndex, message, severity) => {
+          self._workflowStatusMessageEmitter.fire({
+            stepIndex,
+            message,
+            severity,
           });
         },
       };

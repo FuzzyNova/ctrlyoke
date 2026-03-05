@@ -15,8 +15,15 @@ import type {
   ToolResultData,
   UnifiedDiffHunk,
 } from "../types/CliOutputTypes";
-import { CLI_EVENT_TYPES, OPERATION_STATUS } from "../types/DashboardConstants";
-import type { PromptCompleteData } from "../flightpath/WorkflowInstance";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+  STATUS_MESSAGE_SEVERITY,
+} from "../types/DashboardConstants";
+import type {
+  PromptCompleteData,
+  PromptStartData,
+} from "../flightpath/WorkflowInstance";
 
 /** Maximum diff lines shown before truncating with a "… N more" message. */
 const MAX_DIFF_LINES = 60;
@@ -308,6 +315,59 @@ export class CliTerminalFormatter {
         }
         break;
       }
+    }
+  }
+
+  /**
+   * Renders the step header (step N/M, prompt preview) or CLI command line.
+   * Called twice per attempt: first without cliCommand (show header + prompt),
+   * then with cliCommand (show the harness command being run).
+   */
+  static renderPromptHeader(data: PromptStartData): void {
+    const { stepIndex, totalSteps, promptText, attemptIndex, cliCommand } =
+      data;
+
+    if (cliCommand !== undefined) {
+      // Second fire — print the CLI command once it is known
+      console.log(chalk.dim("$ " + cliCommand));
+      console.log();
+      return;
+    }
+
+    // First fire — print step divider, step label, and a prompt preview
+    console.log();
+    console.log(chalk.dim("─".repeat(52)));
+
+    if (attemptIndex > 0) {
+      console.log(
+        chalk.yellow(`Retry ${attemptIndex} — Step ${stepIndex + 1}/${totalSteps}`)
+      );
+    } else {
+      console.log(
+        chalk.bold(`Step ${stepIndex + 1}/${totalSteps}`)
+      );
+    }
+
+    // Show up to 5 lines of the prompt as a preview
+    const MAX_PREVIEW_LINES = 5;
+    const lines = promptText.trimEnd().split("\n");
+    const preview = lines.slice(0, MAX_PREVIEW_LINES).join("\n");
+    const truncated = lines.length > MAX_PREVIEW_LINES;
+    console.log(chalk.dim(preview + (truncated ? "\n…" : "")));
+    console.log();
+  }
+
+  /**
+   * Renders a workflow status message (end condition result, retry notification, etc.)
+   * using severity-appropriate chalk colour.
+   */
+  static renderStatusMessage(message: string, severity: string): void {
+    if (severity === STATUS_MESSAGE_SEVERITY.ERROR) {
+      console.log(chalk.red("✗ " + message));
+    } else if (severity === STATUS_MESSAGE_SEVERITY.WARNING) {
+      console.log(chalk.yellow("⚠ " + message));
+    } else {
+      console.log(chalk.dim("ℹ " + message));
     }
   }
 

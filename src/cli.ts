@@ -253,11 +253,17 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   // creates a fresh execution integration via the factory and forwards events from it.
   // Interactive mode passes the AI CLI's stdout straight through — no subscription needed.
   if (executionMode === "headless" && !options.quiet && !options.json) {
+    instance.onPromptStart((data) => {
+      CliTerminalFormatter.renderPromptHeader(data);
+    });
     instance.onStreamingEvents((events) => {
       CliTerminalFormatter.renderEvents(events);
     });
     instance.onStreamingChunk((chunk) => {
       process.stdout.write(chunk);
+    });
+    instance.onWorkflowStatusMessage((data) => {
+      CliTerminalFormatter.renderStatusMessage(data.message, data.severity);
     });
     instance.onPromptComplete((data) => {
       CliTerminalFormatter.renderStats(data);

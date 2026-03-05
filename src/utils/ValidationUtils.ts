@@ -25,7 +25,7 @@ const ALL_MODEL_IDS: string[] = [
 ];
 
 export class ValidationUtils {
-  private static ajv = new Ajv({ allErrors: true });
+  private static ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 
   // Schema for PromptItem
   private static promptItemSchema: JSONSchemaType<PromptItem> = {
