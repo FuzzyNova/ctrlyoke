@@ -22,6 +22,8 @@ interface EditorFooterProps {
   onCancel: () => void;
   onToggleProperties: () => void;
   propertiesOpen: boolean;
+  /** When true, all edit actions are disabled (CLI watch mode). */
+  isCLIManaged?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   onCancel,
   onToggleProperties,
   propertiesOpen,
+  isCLIManaged = false,
 }) => {
   const { promptText } = useEditorStore();
   const tokenCount = useAttachmentTokenCount(promptText);
@@ -101,7 +104,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
-              title="Cancel editing and return to new prompt mode"
+              disabled={isCLIManaged}
+              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : "Cancel editing and return to new prompt mode"}
             >
               <i className="codicon codicon-close" />
               {!isNarrow && <span className="btn-text">Cancel</span>}
@@ -110,13 +114,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={!hasContent || isPromptBeingSent || isPromptCompleted}
+              disabled={isCLIManaged || !hasContent || isPromptBeingSent || isPromptCompleted}
               title={
-                isPromptCompleted
-                  ? "Cannot edit a completed prompt — use Clear workflow state to reset"
-                  : isPromptBeingSent
-                    ? "Cannot update a prompt that is currently being sent"
-                    : "Update prompt in queue"
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : isPromptCompleted
+                    ? "Cannot edit a completed prompt — use Clear workflow state to reset"
+                    : isPromptBeingSent
+                      ? "Cannot update a prompt that is currently being sent"
+                      : "Update prompt in queue"
               }
             >
               <i className="codicon codicon-check" />
@@ -126,13 +132,15 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isPromptActivelyRunning || isPromptCompleted}
+              disabled={isCLIManaged || isPromptActivelyRunning || isPromptCompleted}
               title={
-                isPromptCompleted
-                  ? "Cannot delete a completed prompt — use Clear workflow state to reset"
-                  : isPromptActivelyRunning
-                    ? "Cannot delete a prompt that is currently running"
-                    : "Delete prompt from queue"
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : isPromptCompleted
+                    ? "Cannot delete a completed prompt — use Clear workflow state to reset"
+                    : isPromptActivelyRunning
+                      ? "Cannot delete a prompt that is currently running"
+                      : "Delete prompt from queue"
               }
             >
               <i className="codicon codicon-trash" />
@@ -145,8 +153,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
-              disabled={!hasContent}
-              title={queueButtonTooltip}
+              disabled={isCLIManaged || !hasContent}
+              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : queueButtonTooltip}
             >
               <i className="codicon codicon-add" />
               {!isNarrow && <span className="btn-text">Queue</span>}
@@ -155,8 +163,8 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
-              disabled={!hasContent}
-              title={runButtonTooltip}
+              disabled={isCLIManaged || !hasContent}
+              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : runButtonTooltip}
             >
               <i className="codicon codicon-send" />
               {!isNarrow && <span className="btn-text">{runButtonText}</span>}

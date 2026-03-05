@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import * as path from "path";
+import * as crypto from "crypto";
 import { access } from "fs/promises";
 import { CliAdapter } from "./platform/CliAdapter";
 import type { ResolvedCliConfig } from "./platform/CliAdapter";
@@ -9,9 +10,10 @@ import { IntegrationFactory } from "./flightpath/IntegrationFactory";
 import { WorkflowInstance } from "./flightpath/WorkflowInstance";
 import { EXECUTION_STATES, STEP_STATUS } from "./types/DashboardConstants";
 import { Harness } from "./types/FlightPathTypes";
-import type { QueueState } from "./types/FlightPathTypes";
+import type { QueueState, WorkflowRunnerLock } from "./types/FlightPathTypes";
 import { CliTerminalFormatter } from "./cli/CliTerminalFormatter";
 import { Log } from "./utils/Log";
+import { WorkflowLockManager } from "./utils/WorkflowLockManager";
 
 // VERSION is injected by esbuild define
 declare const VERSION: string;
@@ -262,12 +264,30 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
     });
   }
 
+  // Generate a unique instance ID for this CLI run
+  const instanceId = crypto.randomUUID();
+
+  // Lock management state
+  let cliWorkingFilePath: string | undefined;
+  let cliHeartbeatInterval: ReturnType<typeof setInterval> | undefined;
+
+  const releaseLockAndCleanup = async (): Promise<void> => {
+    if (cliHeartbeatInterval !== undefined) {
+      clearInterval(cliHeartbeatInterval);
+      cliHeartbeatInterval = undefined;
+    }
+    if (cliWorkingFilePath) {
+      await WorkflowLockManager.releaseLock(cliWorkingFilePath).catch(() => {});
+    }
+  };
+
   // Handle Ctrl+C gracefully
   const cleanup = async (): Promise<void> => {
     if (!options.quiet) {
       console.log(chalk.yellow("\n\nInterrupted. Stopping workflow..."));
     }
     await instance.stop();
+    await releaseLockAndCleanup();
     process.exit(5);
   };
   process.on("SIGINT", () => {
@@ -276,9 +296,54 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
   process.on("SIGTERM", () => {
     void cleanup();
   });
+  // Best-effort lock release on any exit (covers process.exit() in non-signal paths)
+  process.on("exit", () => {
+    if (cliHeartbeatInterval !== undefined) {
+      clearInterval(cliHeartbeatInterval);
+    }
+    // Synchronous file deletion is best-effort — failures are acceptable here
+    if (cliWorkingFilePath) {
+      try {
+        const lockPath = WorkflowLockManager.getLockPath(cliWorkingFilePath);
+        require("fs").unlinkSync(lockPath);
+      } catch {
+        // Ignore errors on exit
+      }
+    }
+  });
 
   try {
     await instance.loadPromptFile(resolvedFile);
+
+    // Acquire the process lock after loading so workingFilePath is available
+    const queueStateAfterLoad = instance.promptQueue.getState();
+    cliWorkingFilePath = queueStateAfterLoad.workingFilePath;
+    if (cliWorkingFilePath) {
+      const workflowId = path
+        .basename(cliWorkingFilePath)
+        .replace(/\.flightpath\.json$/, "");
+      const lock: WorkflowRunnerLock = {
+        runner: "cli",
+        pid: process.pid,
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+        instanceId,
+        workflowId,
+      };
+      await WorkflowLockManager.acquireLock(cliWorkingFilePath, lock).catch(
+        (err) => {
+          Log.warn(`[CLI] Failed to acquire lock: ${err}`);
+        }
+      );
+      // Heartbeat every 5 seconds
+      cliHeartbeatInterval = setInterval(() => {
+        if (cliWorkingFilePath) {
+          WorkflowLockManager.updateHeartbeat(cliWorkingFilePath).catch(
+            () => {}
+          );
+        }
+      }, 5_000);
+    }
 
     // Apply --resume / --new-session overrides to the first prompt before execution.
     // getState() returns a shallow copy but prompts[] is the same array reference,
@@ -333,9 +398,11 @@ async function runCommand(file: string, options: RunOptions): Promise<void> {
       }
     }
 
+    await releaseLockAndCleanup();
     process.exit(exitCode);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    await releaseLockAndCleanup();
     if (options.json) {
       console.log(JSON.stringify({ status: "error", error: message }));
     } else {

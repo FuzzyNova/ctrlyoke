@@ -100,7 +100,13 @@ export const SettingsPanel: React.FC<{
     hiddenDropdownOptions,
     hideDropdownOption,
     unhideDropdownOption,
+    loadedWorkflows,
+    activeWorkflowId,
   } = useUiStore();
+
+  // Derive whether the active workflow is CLI-managed (read-only watch mode)
+  const isCLIManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
   const {
     availableAgents,
     availableSkills,
@@ -472,8 +478,8 @@ export const SettingsPanel: React.FC<{
         </div>
       </div>
 
-      {/* Body - Scrollable */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
+      <div className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}>
         <div className="px-4 py-3 space-y-4">
           {/* Harness */}
           <FormField
@@ -847,7 +853,7 @@ export const SettingsPanel: React.FC<{
       {/* Always-visible footer with quick toggle buttons */}
       <div
         ref={footerRef}
-        className="flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 h-[35px]"
+        className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 h-[35px]${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
       >
         <IconToggleButton
           active={globalSettings.executionMode === "interactive"}

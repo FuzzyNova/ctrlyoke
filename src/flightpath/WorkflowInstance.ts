@@ -14,7 +14,9 @@ import {
   EXECUTION_STATES,
   WorkingFile,
   WorkflowSummary,
+  WorkflowRunnerLock,
 } from "../types/FlightPathTypes";
+import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
   QUEUE_POSITION,
@@ -108,6 +110,8 @@ export class WorkflowInstance {
   startPending: boolean = false;
   /** Tracks prompt count to detect MCP-triggered merges */
   private lastKnownPromptCount: number = 0;
+  /** Heartbeat interval for the process lock file (cleared in finally + dispose) */
+  private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Background buffering for inactive workflows
@@ -481,6 +485,12 @@ export class WorkflowInstance {
 
   /** Release file-system watchers and child processes owned by this instance */
   dispose(): void {
+    // Clear heartbeat interval (the finally block in startWorkflowExecution handles
+    // releaseLock for normal termination; crash path is covered by staleness detection).
+    if (this.heartbeatInterval !== undefined) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = undefined;
+    }
     this.promptFileWatcher.dispose();
     this.endConditionEvaluator.dispose();
     // Close any lingering terminals from the last run and release references.
@@ -1372,6 +1382,30 @@ export class WorkflowInstance {
     }
     this.lastRunIntegrations = [];
 
+    // Acquire process lock so the extension can be identified as the runner
+    // and stale-lock detection works correctly on next startup.
+    if (workingFilePath) {
+      const lock: WorkflowRunnerLock = {
+        runner: "vscode",
+        pid: process.pid,
+        startedAt: Date.now(),
+        lastHeartbeat: Date.now(),
+        instanceId: this.id,
+        workflowId: path.basename(workingFilePath).replace(/\.flightpath\.json$/, ""),
+      };
+      await WorkflowLockManager.acquireLock(workingFilePath, lock).catch(
+        (err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to acquire lock:`,
+            err
+          )
+      );
+      // Heartbeat every 5 seconds
+      this.heartbeatInterval = setInterval(() => {
+        WorkflowLockManager.updateHeartbeat(workingFilePath).catch(() => {});
+      }, 5_000);
+    }
+
     try {
       const activeIntegration = integration || this.createIntegrationForMode();
       this.activeIntegration = activeIntegration;
@@ -1520,6 +1554,20 @@ export class WorkflowInstance {
 
       this.activeIntegration = undefined;
     } finally {
+      // Stop heartbeat and release the process lock
+      if (this.heartbeatInterval !== undefined) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = undefined;
+      }
+      if (workingFilePath) {
+        await WorkflowLockManager.releaseLock(workingFilePath).catch((err) =>
+          Log.warn(
+            `[inst:${this.id.slice(0, 8)}] startWorkflowExecution: failed to release lock:`,
+            err
+          )
+        );
+      }
+
       // Dispose all execution integrations created for this run.
       // They are short-lived (one run), not registered with context.subscriptions,
       // so must be disposed manually to release their EventEmitter resources.

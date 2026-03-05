@@ -177,6 +177,28 @@ export interface WorkflowSummary {
   totalSteps: number;
   startedAt?: number;
   completedAt?: number;
+  /** Set to "cli" when the workflow is being executed by the FlightPath CLI. Undefined means vscode-managed. */
+  managedBy?: "vscode" | "cli";
+}
+
+/**
+ * Process lock file written alongside the working file while a workflow is running.
+ * Enables the VS Code extension and CLI to coexist without stomping on each other's state.
+ * Lock file path: {queueDir}/{workflowId}.runner.json
+ */
+export interface WorkflowRunnerLock {
+  /** Which runner created this lock */
+  runner: "vscode" | "cli";
+  /** OS process ID of the runner (Extension Host PID for vscode, CLI process PID for cli) */
+  pid: number;
+  /** Unix ms timestamp when execution started */
+  startedAt: number;
+  /** Unix ms timestamp updated every 5s while running — guards against PID recycling */
+  lastHeartbeat: number;
+  /** UUID generated once at extension activation (vscode) or CLI startup (cli) */
+  instanceId: string;
+  /** WorkflowInstance.id — matches the workflowId portion of the working file name */
+  workflowId: string;
 }
 
 // Re-export constants for convenience

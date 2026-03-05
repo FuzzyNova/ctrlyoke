@@ -31,7 +31,11 @@ export const PromptsPanel: React.FC<{
 }> = ({ panelBarOrientation = "vertical" }) => {
   const { prompts, currentStep, executionState, retryStates, cliOutputs, historyOutputs } =
     useWorkflowStore();
-  const { promptsCollapsed, togglePromptsCollapse, isViewingHistory } = useUiStore();
+  const { promptsCollapsed, togglePromptsCollapse, isViewingHistory, loadedWorkflows, activeWorkflowId } = useUiStore();
+
+  // Derive whether the active workflow is CLI-managed (read-only watch mode)
+  const isCLIManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
   const { selectedPromptIndex, selectPrompt } = useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
@@ -75,9 +79,10 @@ export const PromptsPanel: React.FC<{
     };
   };
 
-  // Handle clicking a prompt to edit it
+  // Handle clicking a prompt to edit it (disabled in CLI watch mode)
   const handlePromptClick = useCallback(
     (index: number) => {
+      if (isCLIManaged) return;
       const prompt = prompts[index];
       if (prompt) {
         selectPrompt(index, prompt);
@@ -116,7 +121,9 @@ export const PromptsPanel: React.FC<{
 
   // Show eraser button when the workflow has run but is not actively executing.
   // Allows resetting completion state so all prompts become editable before re-running.
+  // Hidden in CLI watch mode (read-only).
   const canClearState =
+    !isCLIManaged &&
     prompts.length > 0 &&
     !isRunning &&
     executionState !== EXECUTION_STATES.CANCELLING &&

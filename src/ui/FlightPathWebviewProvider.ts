@@ -489,6 +489,23 @@ window.vscodeApi = acquireVsCodeApi();
   // Multi-workflow coordination notifications (called by WorkflowOrchestrator)
   // ─────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Send a live CLI output update to the webview for a CLI-managed workflow.
+   * Called by WorkflowOrchestrator when CliWatchSession.onOutput fires.
+   */
+  public notifyCliWatchOutput(
+    workflowId: string,
+    stepIndex: number,
+    output: CliOutput
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.CLI_WATCH_OUTPUT,
+      workflowId,
+      stepIndex,
+      output,
+    });
+  }
+
   /** Notify webview that a new workflow was loaded into the registry. */
   public notifyWorkflowAdded(summary: WorkflowSummary): void {
     Log.debug(

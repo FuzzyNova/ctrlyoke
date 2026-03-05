@@ -18,8 +18,12 @@ import { PanelBar } from "../shared";
  */
 export const EditorSection: React.FC = () => {
   const { selectedPromptIndex, promptName, setPromptName } = useEditorStore();
-  const { editorCollapsed, toggleEditorCollapse } = useUiStore();
+  const { editorCollapsed, toggleEditorCollapse, loadedWorkflows, activeWorkflowId } = useUiStore();
   const { prompts } = useWorkflowStore();
+
+  // Derive whether the active workflow is CLI-managed (read-only watch mode)
+  const isCLIManaged =
+    loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
 
   const isEditMode = selectedPromptIndex !== null;
   const totalPrompts = prompts.length;
@@ -70,22 +74,25 @@ export const EditorSection: React.FC = () => {
 
         {/* Center: Mode text */}
         <span className="editor-mode-indicator flex-1 text-center text-xs text-description-fg truncate">
-          {getModeText()}
+          {isCLIManaged ? "Read-only — CLI run in progress" : getModeText()}
         </span>
 
-        {/* Right: Prompt name input (shown in both new and edit modes) */}
+        {/* Right: Prompt name input (shown in both new and edit modes; disabled in CLI watch mode) */}
         <input
           type="text"
-          className="prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0"
+          className={`prompt-name-input max-w-xs px-2 py-0.5 text-sm bg-input-bg text-input-fg border-0 rounded focus:outline-none flex-shrink-0 ${
+            isCLIManaged ? "opacity-50 cursor-not-allowed" : ""
+          }`}
           placeholder="Prompt name (optional)"
           value={promptName}
           onChange={(e) => setPromptName(e.target.value)}
+          disabled={isCLIManaged}
         />
       </div>
 
       {/* Content area */}
       <div className="prompt-editor-wrapper flex flex-1 overflow-hidden relative">
-        <PromptEditor />
+        <PromptEditor isCLIManaged={isCLIManaged} />
       </div>
     </section>
   );

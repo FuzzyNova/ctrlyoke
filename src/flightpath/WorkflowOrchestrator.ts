@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
 import * as path from "path";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { CopilotChatIntegration } from "./harness/chat/CopilotChatIntegration";
@@ -12,6 +13,7 @@ import {
   QueueState,
   WorkingFile,
   WorkflowSummary,
+  WorkflowRunnerLock,
   EXECUTION_STATES,
 } from "../types/FlightPathTypes";
 import {
@@ -22,9 +24,11 @@ import {
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
 import { Log } from "../utils/Log";
-import { ConfigurationUtils } from "../utils/ConfigurationUtils";
+import { ConfigurationUtils, PATH_CONSTANTS } from "../utils/ConfigurationUtils";
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
+import { WorkflowLockManager } from "../utils/WorkflowLockManager";
+import { CliWatchSession } from "./orchestration/CliWatchSession";
 
 // Orchestration classes that remain at orchestrator level
 import { TemplateImporter } from "./orchestration/TemplateImporter";
@@ -57,6 +61,15 @@ export class WorkflowOrchestrator {
 
   /** RUNNING and PAUSED instances only — the parallel execution registry */
   private readonly workflows: Map<string, WorkflowInstance> = new Map();
+
+  /** CLI-managed workflows being watched (keyed by workflowId) */
+  private readonly cliSessions: Map<
+    string,
+    { session: CliWatchSession; summary: WorkflowSummary }
+  > = new Map();
+
+  /** Watcher for *.runner.json creation (Entry Point 3: CLI starts while VS Code is open) */
+  private runnerJsonCreateWatcher?: vscode.FileSystemWatcher;
 
   /** The instance currently displayed in the dashboard (may or may not be in the Map) */
   private viewedInstance: WorkflowInstance | null = null;
@@ -289,6 +302,18 @@ export class WorkflowOrchestrator {
   }
 
   setActiveWorkflow(workflowId: string): void {
+    // Check if this is a CLI-managed session
+    const cliEntry = this.cliSessions.get(workflowId);
+    if (cliEntry) {
+      Log.debug(
+        `setActiveWorkflow: switching to CLI-managed session workflowId="${workflowId}"`
+      );
+      this.dashboardProvider?.notifyActiveWorkflowChanged(workflowId);
+      // Send the CLI session's summary so the dashboard shows read-only state
+      this.dashboardProvider?.notifyWorkflowSummaryUpdated(cliEntry.summary);
+      return;
+    }
+
     const instance = this.workflows.get(workflowId);
     if (!instance) {
       Log.warn(
@@ -335,9 +360,13 @@ export class WorkflowOrchestrator {
 
   /** Return summaries without exposing WorkflowInstance internals */
   getWorkflowSummaries(): WorkflowSummary[] {
-    const summaries = [...this.workflows.values()].map((w) => w.getSummary());
+    const vsSummaries = [...this.workflows.values()].map((w) => w.getSummary());
+    const cliSummaries = [...this.cliSessions.values()].map(
+      (entry) => entry.summary
+    );
+    const summaries = [...vsSummaries, ...cliSummaries];
     Log.trace(
-      `[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances, viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
+      `[getWorkflowSummaries] registry has ${this.workflows.size} running/paused instances + ${this.cliSessions.size} CLI sessions, viewed=${this.viewedInstance?.id.slice(0, 8) ?? "null"}: ${summaries.map((s) => `inst:${s.id.slice(0, 8)}(${s.executionState},fp=${s.filePath ? path.basename(s.filePath) : "?"})`).join(", ") || "(none)"}`
     );
     return summaries;
   }
@@ -390,6 +419,9 @@ export class WorkflowOrchestrator {
         await this.workspaceSessionManager.discoverPromptFiles(
           this.currentWorkspaceFolder.uri.fsPath
         );
+        // Must run after harness init and before auto-load so stale RUNNING files
+        // are normalized and CLI-managed workflows are registered.
+        await this.setupCliWatching();
       }
 
       this.orchestratorInitialized = true;
@@ -595,6 +627,36 @@ export class WorkflowOrchestrator {
       return;
     }
     return instance.stop();
+  }
+
+  /**
+   * Kill the CLI process for a CLI-managed workflow by sending SIGTERM to its PID.
+   * The CLI handles SIGTERM by releasing the lock and exiting cleanly, which triggers
+   * CliWatchSession.onFinished() → workflow transitions to STOPPED automatically.
+   */
+  async stopCliSession(workflowId: string): Promise<void> {
+    const entry = this.cliSessions.get(workflowId);
+    if (!entry) {
+      Log.warn(`stopCliSession: no CLI session found for workflowId="${workflowId}"`);
+      return;
+    }
+
+    const lock = await WorkflowLockManager.readLock(entry.summary.workingFilePath ?? "");
+    if (!lock) {
+      Log.warn(`stopCliSession: no lock file found for workflowId="${workflowId}"`);
+      return;
+    }
+
+    Log.info(`stopCliSession: sending SIGTERM to CLI pid=${lock.pid} for workflowId="${workflowId}"`);
+    try {
+      process.kill(lock.pid, "SIGTERM");
+    } catch (err) {
+      // ESRCH = process already dead — that's fine, the session will clean itself up
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ESRCH") {
+        Log.warn(`stopCliSession: process.kill(${lock.pid}) failed:`, err);
+      }
+    }
   }
 
   async clearWorkflow(): Promise<void> {
@@ -834,6 +896,16 @@ export class WorkflowOrchestrator {
       instance.dispose();
     }
     this.workflows.clear();
+
+    // Dispose all CLI watch sessions
+    for (const entry of this.cliSessions.values()) {
+      entry.session.dispose();
+    }
+    this.cliSessions.clear();
+
+    // Dispose the runner.json create watcher
+    this.runnerJsonCreateWatcher?.dispose();
+
     this.statusBarManager.dispose();
     this.endConditionEvaluatorForCommands.dispose();
     Log.debug("WorkflowOrchestrator disposed");
@@ -966,5 +1038,327 @@ export class WorkflowOrchestrator {
     const state = activeInstance.getQueueState();
     const harnessStatus = this.getDefaultIntegration().getDetailedStatus();
     this.statusBarManager.updateStatusBar(state, harnessStatus);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CLI Watch Mode
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Normalize stale locks and set up watchers for any active CLI-managed workflows.
+   * Called during initialize() after harness initialization.
+   */
+  private async setupCliWatching(): Promise<void> {
+    const workspaceFolderPath = this.currentWorkspaceFolder?.uri.fsPath;
+    if (!workspaceFolderPath) {
+      return;
+    }
+
+    const queueDir = path.join(
+      workspaceFolderPath,
+      PATH_CONSTANTS.FLIGHTPATH_DIR,
+      PATH_CONSTANTS.QUEUE_DIR
+    );
+
+    // Normalize stale locks and get active-cli paths
+    let activeCliPaths: string[];
+    try {
+      activeCliPaths =
+        await WorkflowLockManager.normalizeStaleLocks(queueDir);
+    } catch (err) {
+      Log.warn("[WorkflowOrchestrator] setupCliWatching: normalizeStaleLocks failed:", err);
+      activeCliPaths = [];
+    }
+
+    // Create CliWatchSession for each active-cli workflow (Entry Point 1)
+    for (const workingFilePath of activeCliPaths) {
+      await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+    }
+
+    // Entry Point 3: Watch for new *.runner.json files created while VS Code is open
+    this.setupRunnerJsonCreateWatcher(workspaceFolderPath, queueDir);
+  }
+
+  /**
+   * Watch for new *.runner.json files so we detect when the CLI starts a workflow
+   * while VS Code is already open.
+   */
+  private setupRunnerJsonCreateWatcher(
+    workspaceFolderPath: string,
+    queueDir: string
+  ): void {
+    const queueRelative = path
+      .relative(workspaceFolderPath, queueDir)
+      .replace(/\\/g, "/");
+    const pattern = new vscode.RelativePattern(
+      workspaceFolderPath,
+      `${queueRelative}/*.runner.json`
+    );
+    this.runnerJsonCreateWatcher =
+      vscode.workspace.createFileSystemWatcher(pattern);
+
+    this.runnerJsonCreateWatcher.onDidCreate(async (uri) => {
+      Log.debug(
+        `[WorkflowOrchestrator] runner.json created: ${path.basename(uri.fsPath)}`
+      );
+      await this.handleRunnerJsonCreated(uri.fsPath, workspaceFolderPath);
+    });
+  }
+
+  private async handleRunnerJsonCreated(
+    lockFilePath: string,
+    workspaceFolderPath: string
+  ): Promise<void> {
+    // Read and validate the lock file
+    let lock: WorkflowRunnerLock;
+    try {
+      const content = await fs.promises.readFile(lockFilePath, "utf8");
+      lock = JSON.parse(content) as WorkflowRunnerLock;
+    } catch {
+      return; // Unreadable or mid-write — ignore
+    }
+
+    if (lock.runner !== "cli") {
+      return; // VS Code lock — not a CLI-managed workflow
+    }
+
+    // Derive the working file path from the lock path
+    const workingFilePath = lockFilePath.replace(/\.runner\.json$/, ".flightpath.json");
+
+    // Check if there is already an active CliWatchSession for this workflow
+    const workflowId = path
+      .basename(workingFilePath)
+      .replace(/\.flightpath\.json$/, "");
+    if (this.cliSessions.has(workflowId)) {
+      Log.debug(
+        `[WorkflowOrchestrator] handleRunnerJsonCreated: session already exists for "${workflowId}"`
+      );
+      return;
+    }
+
+    // Verify the lock is truly active before creating a session
+    const status = await WorkflowLockManager.checkLock(workingFilePath);
+    if (status !== "active-cli") {
+      Log.debug(
+        `[WorkflowOrchestrator] handleRunnerJsonCreated: lock status is "${status}" for "${workflowId}" — skipping`
+      );
+      return;
+    }
+
+    await this.startCliWatchSession(workingFilePath, workspaceFolderPath);
+  }
+
+  /**
+   * Create and start a CliWatchSession for a CLI-managed workflow.
+   * Reads the working file, builds a WorkflowSummary, and registers the session.
+   */
+  private async startCliWatchSession(
+    workingFilePath: string,
+    workspaceFolderPath: string
+  ): Promise<void> {
+    const workflowId = path
+      .basename(workingFilePath)
+      .replace(/\.flightpath\.json$/, "");
+
+    // Read working file to build initial summary
+    let workingFile: {
+      workflowName?: string;
+      startedAt?: number;
+      prompts?: unknown[];
+      _runtime?: { currentIndex?: number; executionState?: string };
+    };
+    try {
+      const content = await fs.promises.readFile(workingFilePath, "utf8");
+      workingFile = JSON.parse(content);
+    } catch (err) {
+      Log.warn(
+        `[WorkflowOrchestrator] startCliWatchSession: failed to read working file "${path.basename(workingFilePath)}":`,
+        err
+      );
+      return;
+    }
+
+    const currentIndex = workingFile._runtime?.currentIndex ?? 0;
+    const totalSteps = workingFile.prompts?.length ?? 0;
+
+    const summary: WorkflowSummary = {
+      id: workflowId,
+      workflowName: workingFile.workflowName ?? workflowId,
+      filePath: workingFilePath,
+      workingFilePath,
+      executionState: EXECUTION_STATES.RUNNING,
+      currentStep: currentIndex + 1,
+      totalSteps,
+      startedAt: workingFile.startedAt,
+      managedBy: "cli",
+    };
+
+    const session = new CliWatchSession(
+      workingFilePath,
+      workflowId,
+      workspaceFolderPath,
+      (partialSummary) => {
+        // Merge partial update into stored summary
+        const entry = this.cliSessions.get(workflowId);
+        if (!entry) {
+          return;
+        }
+        const updatedSummary: WorkflowSummary = {
+          ...entry.summary,
+          ...partialSummary,
+          managedBy: "cli",
+        };
+        entry.summary = updatedSummary;
+        this.dashboardProvider?.notifyWorkflowSummaryUpdated(updatedSummary);
+      },
+      (historyFilePath) => {
+        this.handleCliWatchOutput(workflowId, historyFilePath);
+      },
+      () => {
+        this.handleCliSessionFinished(workflowId, workingFilePath);
+      }
+    );
+
+    this.cliSessions.set(workflowId, { session, summary });
+    await session.start();
+
+    // Notify the dashboard so the workflow appears in the Running section
+    this.dashboardProvider?.notifyWorkflowAdded(summary);
+    Log.info(
+      `[WorkflowOrchestrator] CLI watch session started for "${workflowId}"`
+    );
+  }
+
+  /**
+   * Handle output change notifications from a CliWatchSession.
+   * Reads the history file and sends new outputs to the dashboard.
+   */
+  private handleCliWatchOutput(
+    workflowId: string,
+    historyFilePath: string
+  ): void {
+    const entry = this.cliSessions.get(workflowId);
+    if (!entry) {
+      return;
+    }
+
+    fs.promises
+      .readFile(historyFilePath, "utf8")
+      .then((content) => {
+        const history = JSON.parse(content) as {
+          promptOutputs: Record<
+            string,
+            { cliOutputs: Array<unknown> }
+          >;
+        };
+
+        for (const [stepIndexStr, stepOutput] of Object.entries(
+          history.promptOutputs
+        )) {
+          const stepIndex = parseInt(stepIndexStr, 10);
+          const outputs = stepOutput.cliOutputs ?? [];
+          const lastKnown = entry.session.getAndUpdateLastKnownOutputCount(
+            stepIndex,
+            outputs.length
+          );
+
+          // Send only new outputs
+          for (let i = lastKnown; i < outputs.length; i++) {
+            this.dashboardProvider?.notifyCliWatchOutput(
+              workflowId,
+              stepIndex,
+              outputs[i] as Parameters<
+                FlightPathWebviewProvider["notifyCliWatchOutput"]
+              >[2]
+            );
+          }
+        }
+      })
+      .catch((err) => {
+        Log.warn(
+          `[WorkflowOrchestrator] handleCliWatchOutput: failed to read history file:`,
+          err
+        );
+      });
+  }
+
+  /**
+   * Handle CLI session completion (lock deleted or heartbeat stale).
+   * Reads the final working file state, normalizes if needed, and updates the dashboard.
+   */
+  private handleCliSessionFinished(
+    workflowId: string,
+    workingFilePath: string
+  ): void {
+    const entry = this.cliSessions.get(workflowId);
+    if (!entry) {
+      return;
+    }
+
+    Log.info(
+      `[WorkflowOrchestrator] CLI session finished for "${workflowId}"`
+    );
+
+    // Dispose the session first so watchers stop firing
+    entry.session.dispose();
+    this.cliSessions.delete(workflowId);
+
+    // Read final working file state
+    fs.promises
+      .readFile(workingFilePath, "utf8")
+      .then(async (content) => {
+        const workingFile = JSON.parse(content) as {
+          _runtime?: { executionState?: string; currentIndex?: number };
+          prompts?: unknown[];
+          workflowName?: string;
+          startedAt?: number;
+        };
+
+        let finalState = workingFile._runtime?.executionState ?? "stopped";
+
+        // If still shows "running", normalize to "stopped" on disk
+        if (finalState === "running") {
+          finalState = "stopped";
+          if (workingFile._runtime) {
+            workingFile._runtime.executionState = "stopped";
+          }
+          try {
+            const tmpPath = workingFilePath + ".tmp";
+            await fs.promises.writeFile(
+              tmpPath,
+              JSON.stringify(workingFile, null, 2),
+              "utf8"
+            );
+            await fs.promises.rename(tmpPath, workingFilePath);
+          } catch (writeErr) {
+            Log.warn(
+              `[WorkflowOrchestrator] handleCliSessionFinished: failed to normalize working file:`,
+              writeErr
+            );
+          }
+        }
+
+        const finalSummary: WorkflowSummary = {
+          ...entry.summary,
+          executionState: finalState as WorkflowSummary["executionState"],
+          currentStep: workingFile._runtime?.currentIndex ?? entry.summary.currentStep,
+          totalSteps: workingFile.prompts?.length ?? entry.summary.totalSteps,
+          managedBy: undefined, // no longer CLI-managed
+        };
+
+        // Update the dashboard: send final state then dismiss from Running section
+        this.dashboardProvider?.notifyWorkflowSummaryUpdated(finalSummary);
+        this.dashboardProvider?.notifyWorkflowDismissed(workflowId);
+
+        void this.saveState();
+      })
+      .catch((err) => {
+        Log.warn(
+          `[WorkflowOrchestrator] handleCliSessionFinished: failed to read working file:`,
+          err
+        );
+        // Still dismiss from the dashboard
+        this.dashboardProvider?.notifyWorkflowDismissed(workflowId);
+      });
   }
 }

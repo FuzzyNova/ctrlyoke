@@ -25,6 +25,11 @@ const ACTION_TYPES = {
   RUN_BEFORE_CURRENT: "runBeforeCurrent",
 } as const;
 
+interface PromptEditorProps {
+  /** When true, the editor is in CLI watch mode — all editing is disabled. */
+  isCLIManaged?: boolean;
+}
+
 /**
  * PromptEditor - Main prompt editing component
  *
@@ -35,7 +40,7 @@ const ACTION_TYPES = {
  * - Mode-aware actions (New vs Edit mode)
  * - State persistence to VS Code webview state
  */
-export const PromptEditor: React.FC = () => {
+export const PromptEditor: React.FC<PromptEditorProps> = ({ isCLIManaged = false }) => {
   const {
     selectedPromptIndex,
     promptText,
@@ -410,6 +415,7 @@ export const PromptEditor: React.FC = () => {
           placeholder="Use @ for files and folders, # for selections and symbols"
           affUri={affUri}
           dicUri={dicUri}
+          readOnly={isCLIManaged}
         />
 
         {/* Properties Drawer (slides up from bottom, overlays only editor) */}
@@ -437,6 +443,7 @@ export const PromptEditor: React.FC = () => {
         onCancel={cancelEdit}
         onToggleProperties={togglePropertiesDrawer}
         propertiesOpen={propertiesDrawerOpen}
+        isCLIManaged={isCLIManaged}
       />
 
       {/* Delete Confirmation Modal */}

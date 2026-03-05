@@ -328,6 +328,13 @@ export class WebviewMessageRouter {
       }
     });
 
+    table.set(MESSAGE_TYPES.STOP_CLI_RUN, async (message) => {
+      const { workflowId } = message;
+      if (workflowId) {
+        await this.getManager()?.stopCliSession(workflowId);
+      }
+    });
+
     table.set(MESSAGE_TYPES.REMOVE_WORKFLOW_HISTORY, async (message) => {
       const { filePath } = message;
       if (filePath) {

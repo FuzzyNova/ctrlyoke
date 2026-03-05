@@ -6,6 +6,7 @@ import {
   ViewPlugin,
   Decoration,
 } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
 import {
   autocompletion,
@@ -43,6 +44,8 @@ interface CodeMirrorEditorProps {
   placeholder?: string;
   affUri: string;
   dicUri: string;
+  /** When true, the editor is read-only (no edits allowed). */
+  readOnly?: boolean;
 }
 
 /**
@@ -57,7 +60,7 @@ interface CodeMirrorEditorProps {
  * - Search support
  */
 export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
-  const { value, onChange, affUri, dicUri } = props;
+  const { value, onChange, affUri, dicUri, readOnly = false } = props;
   const placeholderText =
     props.placeholder ||
     "Use @ for files and folders, # for selections and symbols";
@@ -66,6 +69,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const viewRef = useRef<EditorView | null>(null);
   const typoCheckerRef = useRef<TypoChecker | null>(null);
   const onChangeRef = useRef(onChange);
+  const readOnlyRef = useRef(readOnly);
   const pendingCompletionResolveRef = useRef<((value: any) => void) | null>(
     null
   );
@@ -77,6 +81,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  // Update read-only state when prop changes (set contentEditable on the CodeMirror content DOM)
+  useEffect(() => {
+    readOnlyRef.current = readOnly;
+    if (viewRef.current) {
+      viewRef.current.contentDOM.contentEditable = readOnly ? "false" : "true";
+    }
+  }, [readOnly]);
 
   // Initialize Typo.js spell checker
   useEffect(() => {
@@ -228,6 +240,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       extensions: [
         minimalSetup,
         EditorView.lineWrapping,
+        EditorState.readOnly.of(readOnlyRef.current),
         history(),
         keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
         placeholder(placeholderText),
