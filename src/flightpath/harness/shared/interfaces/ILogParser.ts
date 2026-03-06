@@ -263,4 +263,17 @@ export interface ILogParser {
    * ```
    */
   formatStatistics(metadata: BaseCliEvent): string;
+
+  /**
+   * Fetch any additional events that become available only after completion.
+   *
+   * Most harnesses stream their final events through the normal watch/read path,
+   * so the default behavior is to return no additional events. Harnesses with
+   * deferred export semantics can override this to do one final fetch after the
+   * completion signal arrives.
+   *
+   * @param logPath - Absolute log path, or harness-specific monitor identifier
+   * @returns Additional completion-time events to append before final extraction
+   */
+  getFinalEventsOnCompletion(logPath: string): Promise<BaseCliEvent[]>;
 }

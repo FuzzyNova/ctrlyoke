@@ -144,6 +144,19 @@ export abstract class BaseLogParser implements ILogParser {
   abstract formatStatistics(metadata: BaseCliEvent): string;
 
   /**
+   * Fetch any additional events that become available only after completion.
+   *
+   * Default implementation is a no-op because file-backed harnesses already
+   * surface their final events through normal watch/read flows.
+   *
+   * @param _logPath - Absolute log path, or harness-specific monitor identifier
+   * @returns Empty array by default
+   */
+  async getFinalEventsOnCompletion(_logPath: string): Promise<BaseCliEvent[]> {
+    return [];
+  }
+
+  /**
    * Build common statistics parts shared across all harnesses
    *
    * Extracts session ID, model, and token usage from metadata and returns

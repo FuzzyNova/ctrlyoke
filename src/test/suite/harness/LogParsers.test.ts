@@ -5,6 +5,7 @@ import * as os from "os";
 import { ClaudeLogParser } from "../../../flightpath/harness/claude/ClaudeLogParser";
 import { CopilotLogParser } from "../../../flightpath/harness/copilot/CopilotLogParser";
 import { CodexLogParser } from "../../../flightpath/harness/codex/CodexLogParser";
+import { OpenCodeLogParser } from "../../../flightpath/harness/opencode/OpenCodeLogParser";
 import {
   UniversalCliOutput,
   ToolCall,
@@ -1418,6 +1419,60 @@ suite("CodexLogParser", () => {
 
       assert.ok(match);
       assert.strictEqual(match[0], "thread_xyz789");
+    });
+  });
+});
+
+// ============================================================================
+// OpenCodeLogParser Tests
+// ============================================================================
+
+suite("OpenCodeLogParser", () => {
+  let parser: OpenCodeLogParser;
+
+  setup(() => {
+    parser = new OpenCodeLogParser();
+  });
+
+  suite("getFinalEventsOnCompletion", () => {
+    test("should return no additional events by default for file-backed parsers", async () => {
+      const copilotParser = new CopilotLogParser();
+      const finalEvents =
+        await copilotParser.getFinalEventsOnCompletion("ignored-log-path");
+
+      assert.deepStrictEqual(finalEvents, []);
+    });
+
+    test("should reset seen parts and re-export final events for OpenCode", async () => {
+      // Cast via any to access private members for testing purposes.
+      const parserWithInternals = parser as any as {
+        seenPartIds: Set<string>;
+        fetchNewEvents: (sessionId: string) => Promise<BaseCliEvent[]>;
+      };
+
+      parserWithInternals.seenPartIds.add("part-1");
+
+      let fetchCalledWith: string | undefined;
+      parserWithInternals.fetchNewEvents = async (sessionId: string) => {
+        fetchCalledWith = sessionId;
+        assert.ok(parserWithInternals.seenPartIds.has("part-1"));
+
+        return [
+          {
+            type: "text",
+            sessionID: sessionId,
+            timestamp: Date.now(),
+            part: { text: "final response" },
+          },
+        ];
+      };
+
+      const finalEvents =
+        await parser.getFinalEventsOnCompletion("ses_test_final");
+
+      assert.strictEqual(fetchCalledWith, "ses_test_final");
+      assert.strictEqual(finalEvents.length, 1);
+      assert.strictEqual(finalEvents[0].type, "text");
     });
   });
 });

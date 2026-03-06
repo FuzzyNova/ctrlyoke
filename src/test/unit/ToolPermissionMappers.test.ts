@@ -3,6 +3,7 @@ import { suite, test } from "mocha";
 import { CopilotToolPermissionMapper } from "../../flightpath/harness/copilot/CopilotToolPermissionMapper";
 import { ClaudeToolPermissionMapper } from "../../flightpath/harness/claude/ClaudeToolPermissionMapper";
 import { CodexToolPermissionMapper } from "../../flightpath/harness/codex/CodexToolPermissionMapper";
+import { OpenCodeToolPermissionMapper } from "../../flightpath/harness/opencode/OpenCodeToolPermissionMapper";
 import type { ToolPermissionConfig } from "../../flightpath/harness/shared/interfaces/IToolPermissionMapper";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -294,6 +295,48 @@ suite("ToolPermissionMappers", () => {
 
       test("allowAll → false", () => {
         assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), false);
+      });
+
+      test("custom → false", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("custom", ["write"], [])),
+          false
+        );
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  suite("OpenCodeToolPermissionMapper", () => {
+    const mapper = new OpenCodeToolPermissionMapper();
+
+    suite("buildArgs", () => {
+      test("dangerouslyAllowAll → no CLI args", () => {
+        const args = mapper.buildArgs(cfg("dangerouslyAllowAll"));
+        assert.deepStrictEqual(args, []);
+      });
+
+      test("allowAll → no CLI args", () => {
+        const args = mapper.buildArgs(cfg("allowAll"));
+        assert.deepStrictEqual(args, []);
+      });
+
+      test("custom with allow and deny patterns → still no CLI args", () => {
+        const args = mapper.buildArgs(cfg("custom", ["write"], ["shell"]));
+        assert.deepStrictEqual(args, []);
+      });
+    });
+
+    suite("hasFullPermissions", () => {
+      test("dangerouslyAllowAll → true", () => {
+        assert.strictEqual(
+          mapper.hasFullPermissions(cfg("dangerouslyAllowAll")),
+          true
+        );
+      });
+
+      test("allowAll → true", () => {
+        assert.strictEqual(mapper.hasFullPermissions(cfg("allowAll")), true);
       });
 
       test("custom → false", () => {

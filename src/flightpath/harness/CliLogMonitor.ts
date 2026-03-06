@@ -124,6 +124,19 @@ export class CliLogMonitor {
         // Drain any remaining log entries before final extraction (race-safe for fast prompts)
         await drainLogEvents();
 
+        const finalEvents = await parser.getFinalEventsOnCompletion(logPath);
+        for (const event of finalEvents) {
+          const entryTime = getEntryTimestamp(event);
+          if (entryTime && entryTime < startTime) {
+            continue;
+          }
+          events.push(event);
+          const content = parser.extractContentFromEvent(event);
+          if (content) {
+            this.deps.onStreamingChunk(content);
+          }
+        }
+
         // Extract final response from accumulated events
         const response = parser.extractResponse(events);
 

@@ -2,12 +2,14 @@ import * as assert from "assert";
 import { CliIntegration } from "../../flightpath/harness/CliIntegration";
 import { CopilotCliProvider } from "../../flightpath/harness/copilot/CopilotCliProvider";
 import { ClaudeCliProvider } from "../../flightpath/harness/claude/ClaudeCliProvider";
+import { OpenCodeCliProvider } from "../../flightpath/harness/opencode/OpenCodeCliProvider";
 import { VsCodeAdapter } from "../../platform/VsCodeAdapter";
 import * as vscode from "vscode";
 
 suite("Token Parsing Integration Tests", () => {
   let copilotIntegration: CliIntegration;
   let claudeIntegration: CliIntegration;
+  let openCodeIntegration: CliIntegration;
 
   setup(() => {
     const context = {
@@ -16,6 +18,10 @@ suite("Token Parsing Integration Tests", () => {
     const platform = new VsCodeAdapter(context);
     copilotIntegration = new CliIntegration(new CopilotCliProvider(), platform);
     claudeIntegration = new CliIntegration(new ClaudeCliProvider(), platform);
+    openCodeIntegration = new CliIntegration(
+      new OpenCodeCliProvider(),
+      platform
+    );
   });
 
   suite("Copilot CLI Token Parsing", () => {
@@ -85,6 +91,35 @@ Usage by model:
     test("should return undefined for invalid format", () => {
       const statistics = "No token information here";
       const result = claudeIntegration.parseTokenCounts(statistics);
+
+      assert.strictEqual(result, undefined);
+    });
+  });
+
+  suite("OpenCode CLI Token Parsing", () => {
+    test("should parse aggregated step_finish JSONL token counts", () => {
+      const statistics = [
+        JSON.stringify({
+          type: "step_finish",
+          part: { tokens: { input: 1234, output: 56 } },
+        }),
+        JSON.stringify({
+          type: "step_finish",
+          part: { tokens: { input: 10, output: 20 } },
+        }),
+      ].join("\n");
+      const result = openCodeIntegration.parseTokenCounts(statistics);
+
+      assert.strictEqual(result?.prompt, 1244);
+      assert.strictEqual(result?.completion, 76);
+    });
+
+    test("should return undefined when no token-bearing events exist", () => {
+      const statistics = JSON.stringify({
+        type: "text",
+        part: { text: "No usage data here" },
+      });
+      const result = openCodeIntegration.parseTokenCounts(statistics);
 
       assert.strictEqual(result, undefined);
     });

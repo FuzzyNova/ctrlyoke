@@ -6,7 +6,11 @@ import { EventEmitter } from "events";
 import type * as fs from "fs";
 import { BaseLogParser } from "../shared/BaseLogParser";
 import { BaseCliEvent } from "../shared/interfaces/ILogParser";
-import { UniversalCliOutput, CliEvent, TokenUsage } from "../../../types/CliOutputTypes";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  TokenUsage,
+} from "../../../types/CliOutputTypes";
 import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
 import { Log } from "../../../utils/Log";
 
@@ -238,8 +242,7 @@ export class OpenCodeLogParser extends BaseLogParser {
             tokenUsage.inputTokens =
               (tokenUsage.inputTokens ?? 0) + ((tokens.input as number) ?? 0);
             tokenUsage.outputTokens =
-              (tokenUsage.outputTokens ?? 0) +
-              ((tokens.output as number) ?? 0);
+              (tokenUsage.outputTokens ?? 0) + ((tokens.output as number) ?? 0);
             tokenUsage.totalTokens =
               (tokenUsage.totalTokens ?? 0) +
               ((tokens.input as number) ?? 0) +
@@ -276,6 +279,10 @@ export class OpenCodeLogParser extends BaseLogParser {
   formatStatistics(metadata: BaseCliEvent): string {
     const parts = this.buildCommonStatisticsParts(metadata, 8, "...");
     return parts.join(" | ");
+  }
+
+  async getFinalEventsOnCompletion(sessionId: string): Promise<BaseCliEvent[]> {
+    return this.fetchNewEvents(sessionId);
   }
 
   getLogDirectory(): string {
@@ -359,7 +366,12 @@ export class OpenCodeLogParser extends BaseLogParser {
 
     switch (part.type) {
       case "step-start":
-        return { type: "step_start", sessionID, timestamp: messageTimestamp, part };
+        return {
+          type: "step_start",
+          sessionID,
+          timestamp: messageTimestamp,
+          part,
+        };
 
       case "step-finish":
         return {
@@ -422,7 +434,8 @@ export class OpenCodeLogParser extends BaseLogParser {
           timestamp,
           data: {
             command: input.command ?? "",
-            output: typeof output === "string" ? output : JSON.stringify(output),
+            output:
+              typeof output === "string" ? output : JSON.stringify(output),
             exitCode: part.state?.metadata?.exit,
           },
         };
@@ -472,7 +485,9 @@ export class OpenCodeLogParser extends BaseLogParser {
               ? {
                   success: true,
                   output:
-                    typeof output === "string" ? output : JSON.stringify(output),
+                    typeof output === "string"
+                      ? output
+                      : JSON.stringify(output),
                 }
               : undefined,
           },
