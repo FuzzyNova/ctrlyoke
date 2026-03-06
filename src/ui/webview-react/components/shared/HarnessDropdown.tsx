@@ -13,7 +13,7 @@ export const HARNESS_DISPLAY_NAMES: Record<HarnessId, string> = {
   [HARNESS_IDS.COPILOT_CHAT]: "Copilot",
   [HARNESS_IDS.CLAUDE_CLI]: "Claude Code",
   [HARNESS_IDS.CODEX_CLI]: "Codex",
-  [HARNESS_IDS.OPENCODE_CLI]: "Opencode",
+  [HARNESS_IDS.OPENCODE_CLI]: "OpenCode",
 };
 
 // ─── Grouping ─────────────────────────────────────────────────────────────────
@@ -322,58 +322,60 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
       </button>
 
       {/* Dropdown panel */}
-      <div className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}>
-          {/* "Default" sentinel (PropertiesDrawer only) */}
-          {showDefault && (
-            <div
-              className={`flex items-center ${
-                value === "default"
-                  ? "bg-dropdown-selected-bg text-list-active-fg"
-                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => handleSelect("default")}
-                className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
-              >
-                Default
-              </button>
-            </div>
-          )}
-
-          {/* ── CLI group ── */}
-          {showCliGroup && (
-            <>
-              <GroupHeader label="CLI" />
-              {renderGroup(CLI_HARNESSES)}
-            </>
-          )}
-
-          {/* ── VS Code Chat group ── */}
-          {showChatGroup && (
-            <>
-              <GroupHeader label="VS Code Chat" />
-              {renderGroup(CHAT_HARNESSES)}
-            </>
-          )}
-
-          {/* ── Footer ── */}
-          <div className="border-t border-dropdown-border bg-editor-bg">
+      <div
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+      >
+        {/* "Default" sentinel (PropertiesDrawer only) */}
+        {showDefault && (
+          <div
+            className={`flex items-center ${
+              value === "default"
+                ? "bg-dropdown-selected-bg text-list-active-fg"
+                : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+            }`}
+          >
             <button
               type="button"
-              disabled={totalHidden === 0}
-              onClick={() => setShowHidden((s) => !s)}
-              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+              onClick={() => handleSelect("default")}
+              className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
             >
-              {showHidden
-                ? "Hide hidden"
-                : totalHidden > 0
-                  ? `Show hidden (${totalHidden})`
-                  : "Show hidden"}
+              Default
             </button>
           </div>
+        )}
+
+        {/* ── CLI group ── */}
+        {showCliGroup && (
+          <>
+            <GroupHeader label="CLI" />
+            {renderGroup(CLI_HARNESSES)}
+          </>
+        )}
+
+        {/* ── VS Code Chat group ── */}
+        {showChatGroup && (
+          <>
+            <GroupHeader label="VS Code Chat" />
+            {renderGroup(CHAT_HARNESSES)}
+          </>
+        )}
+
+        {/* ── Footer ── */}
+        <div className="border-t border-dropdown-border bg-editor-bg">
+          <button
+            type="button"
+            disabled={totalHidden === 0}
+            onClick={() => setShowHidden((s) => !s)}
+            className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+          >
+            {showHidden
+              ? "Hide hidden"
+              : totalHidden > 0
+                ? `Show hidden (${totalHidden})`
+                : "Show hidden"}
+          </button>
         </div>
+      </div>
     </div>
   );
 };
