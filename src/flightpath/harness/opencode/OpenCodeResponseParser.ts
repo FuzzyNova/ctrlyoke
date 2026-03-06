@@ -23,11 +23,26 @@ import { Log } from "../../../utils/Log";
  *
  * Session ID: extracted from top-level `sessionID` field on any event.
  * Session ID format: ses_<alphanumeric> (e.g., ses_34106de37ffeG7oh0Bvq9cmRki)
+ *
+ * Context window: size is supplied via contextWindowSizeFn (injected from OpenCodeCliProvider,
+ * which discovers it via `opencode models --verbose`). The `tokens.total` field in the last
+ * step_finish event represents the full context occupancy for that turn.
  */
 export class OpenCodeResponseParser
   extends ResponseParserBase
   implements IResponseParser
 {
+  /**
+   * Returns the context window size (in tokens) for the current model.
+   * Injected from OpenCodeCliProvider so parsers don't call the CLI themselves.
+   */
+  private readonly contextWindowSizeFn: () => number | undefined;
+
+  constructor(contextWindowSizeFn: () => number | undefined = () => undefined) {
+    super();
+    this.contextWindowSizeFn = contextWindowSizeFn;
+  }
+
   /**
    * Parse complete JSONL output into structured result
    */
@@ -39,6 +54,7 @@ export class OpenCodeResponseParser
       outputTokens: 0,
       totalTokens: 0,
     };
+    let lastStepTotal: number | undefined;
 
     const lines = stdout.split("\n");
     for (const line of lines) {
@@ -72,12 +88,25 @@ export class OpenCodeResponseParser
             tokenUsage.cachedInputTokens =
               (tokenUsage.cachedInputTokens ?? 0) + tokens.cache.read;
           }
+          // tokens.total = input + output + cache.read + cache.write for this step,
+          // representing full context occupancy. Track the last value for context window usage.
+          if (typeof tokens.total === "number") {
+            lastStepTotal = tokens.total;
+          }
         }
       } catch {
         Log.debug(
           `OpenCode: skipping non-JSON line: ${line.substring(0, 100)}`
         );
       }
+    }
+
+    if (lastStepTotal !== undefined) {
+      tokenUsage.contextWindowUsedTokens = lastStepTotal;
+    }
+    const contextWindowSize = this.contextWindowSizeFn();
+    if (contextWindowSize !== undefined) {
+      tokenUsage.contextWindowSize = contextWindowSize;
     }
 
     return {

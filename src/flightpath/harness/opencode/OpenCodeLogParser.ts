@@ -92,6 +92,17 @@ export class OpenCodeLogParser extends BaseLogParser {
   /** Part IDs already emitted — prevents re-emitting on re-poll */
   private readonly seenPartIds = new Set<string>();
 
+  /**
+   * Returns the context window size (in tokens) for the current model.
+   * Injected from OpenCodeCliProvider so parsers don't call the CLI themselves.
+   */
+  private readonly contextWindowSizeFn: () => number | undefined;
+
+  constructor(contextWindowSizeFn: () => number | undefined = () => undefined) {
+    super();
+    this.contextWindowSizeFn = contextWindowSizeFn;
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // ILogParser contract
   // ──────────────────────────────────────────────────────────────────
@@ -187,6 +198,7 @@ export class OpenCodeLogParser extends BaseLogParser {
       outputTokens: 0,
       totalTokens: 0,
     };
+    let lastStepTotal: number | undefined;
 
     for (const event of events) {
       const e = event as Record<string, any>;
@@ -237,10 +249,22 @@ export class OpenCodeLogParser extends BaseLogParser {
                 (tokenUsage.cachedInputTokens ?? 0) +
                 (tokens.cache.read as number);
             }
+            // tokens.total = full context occupancy for this step; track the last value.
+            if (typeof tokens.total === "number") {
+              lastStepTotal = tokens.total as number;
+            }
           }
           break;
         }
       }
+    }
+
+    if (lastStepTotal !== undefined) {
+      tokenUsage.contextWindowUsedTokens = lastStepTotal;
+    }
+    const contextWindowSize = this.contextWindowSizeFn();
+    if (contextWindowSize !== undefined) {
+      tokenUsage.contextWindowSize = contextWindowSize;
     }
 
     return {
