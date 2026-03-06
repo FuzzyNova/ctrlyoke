@@ -11,7 +11,7 @@ import { OpenCodeNotificationMonitor } from "./OpenCodeNotificationMonitor";
 import { OpenCodeToolPermissionMapper } from "./OpenCodeToolPermissionMapper";
 import { OpenCodeLogParser } from "./OpenCodeLogParser";
 import { ConfigurationUtils } from "../../../utils/ConfigurationUtils";
-import { OPENCODE_CLI_FALLBACK_MODELS } from "../../../utils/ModelConstants";
+import { getOpenCodeContextWindowSize } from "../../../utils/ModelRegistry";
 import { Log } from "../../../utils/Log";
 import { CliProviderUtils } from "../shared/CliProviderUtils";
 import type { PromptItem } from "../../../types/FlightPathTypes";
@@ -63,21 +63,18 @@ export class OpenCodeCliProvider implements ICliProvider {
     usesInteractiveNotificationMonitor: true,
   };
 
-  /** Context window sizes (tokens) keyed by fully-qualified model ID (e.g. "opencode/big-pickle"). */
-  private contextWindowMap: Map<string, number> = new Map();
-
   /** The fully-qualified model ID used for the most-recently started execution (e.g. "anthropic/claude-sonnet-4-6"). */
   private resolvedCurrentModel: string = "anthropic/claude-sonnet-4-6";
 
   readonly responseParser: IResponseParser = new OpenCodeResponseParser(
-    () => this.contextWindowMap.get(this.resolvedCurrentModel)
+    () => getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
   readonly notificationMonitor: INotificationMonitor =
     new OpenCodeNotificationMonitor();
   readonly toolPermissionMapper: IToolPermissionMapper =
     new OpenCodeToolPermissionMapper();
   readonly logParser = new OpenCodeLogParser(
-    () => this.contextWindowMap.get(this.resolvedCurrentModel)
+    () => getOpenCodeContextWindowSize(this.resolvedCurrentModel)
   );
 
   /** Path of the plugin file written for the current interactive execution (for cleanup) */
@@ -358,98 +355,9 @@ export class OpenCodeCliProvider implements ICliProvider {
     }
   }
 
-  /**
-   * Discover available models via `opencode models --verbose` command.
-   * Populates the internal context window map from the verbose JSON output and
-   * returns the list of model IDs. Falls back to OPENCODE_CLI_FALLBACK_MODELS if unavailable.
-   *
-   * This is an opencode-specific public method — NOT part of ICliProvider.
-   * Called at harness initialization to populate the model dropdown.
-   */
-  async getAvailableModels(): Promise<string[]> {
-    try {
-      const { stdout } = await execAsync("opencode models --verbose", {
-        timeout: 10000,
-      });
-      const models = this.parseVerboseModels(stdout);
-      if (models.length > 0) {
-        return models;
-      }
-    } catch {
-      Log.debug(
-        "OpenCode: failed to discover models via `opencode models --verbose`, using fallback list"
-      );
-    }
-    return [...OPENCODE_CLI_FALLBACK_MODELS];
-  }
-
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
-
-  /**
-   * Parse `opencode models --verbose` stdout.
-   *
-   * Output format: alternating model-ID lines (e.g. "opencode/big-pickle") and
-   * multi-line JSON blocks containing `limit.context` (context window size in tokens).
-   *
-   * Populates `this.contextWindowMap` and returns the list of model IDs.
-   */
-  private parseVerboseModels(stdout: string): string[] {
-    const modelIds: string[] = [];
-    const lines = stdout.split("\n");
-    let currentModelId: string | undefined;
-    let jsonBuffer = "";
-    let braceDepth = 0;
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      if (braceDepth === 0) {
-        if (trimmed.startsWith("{")) {
-          // Start of a JSON block for the current model
-          jsonBuffer = line + "\n";
-          braceDepth +=
-            (line.match(/{/g) ?? []).length - (line.match(/}/g) ?? []).length;
-        } else {
-          // Model ID line (e.g. "opencode/big-pickle")
-          currentModelId = trimmed;
-          modelIds.push(currentModelId);
-          jsonBuffer = "";
-        }
-      } else {
-        jsonBuffer += line + "\n";
-        braceDepth +=
-          (line.match(/{/g) ?? []).length - (line.match(/}/g) ?? []).length;
-
-        if (braceDepth <= 0) {
-          braceDepth = 0;
-          if (currentModelId && jsonBuffer.trim()) {
-            try {
-              const parsed = JSON.parse(jsonBuffer.trim()) as {
-                limit?: { context?: number };
-              };
-              const contextSize = parsed?.limit?.context;
-              if (typeof contextSize === "number") {
-                this.contextWindowMap.set(currentModelId, contextSize);
-              }
-            } catch {
-              // Non-fatal: skip malformed JSON block
-            }
-          }
-          jsonBuffer = "";
-        }
-      }
-    }
-
-    Log.debug(
-      `OpenCode: discovered ${modelIds.length} models, ${this.contextWindowMap.size} with context window sizes`
-    );
-    return modelIds;
-  }
 
   /**
    * Get the model to use, validating format and applying fallback.

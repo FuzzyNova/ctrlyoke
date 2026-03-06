@@ -59,6 +59,8 @@ export interface CopilotModel {
 let cachedModels: CopilotModel[] = [];
 let cachedCopilotCliModelIds: string[] = [];
 let cachedOpenCodeModelIds: string[] = [];
+/** Context window size (tokens) keyed by fully-qualified OpenCode model ID */
+const cachedOpenCodeContextWindows = new Map<string, number>();
 let isInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -205,27 +207,92 @@ async function queryChatModels(): Promise<void> {
 }
 
 /**
- * Query available models from `opencode models` (newline-separated model IDs)
+ * Query available models from `opencode models --verbose`.
+ *
+ * The verbose output alternates between a model-ID line (e.g. "opencode/big-pickle")
+ * and a multi-line JSON block containing `limit.context` (context window size in tokens).
+ * Populates both `cachedOpenCodeModelIds` and `cachedOpenCodeContextWindows`.
  */
 async function queryOpenCodeModels(): Promise<void> {
   try {
-    Log.debug("Querying OpenCode for available models via 'opencode models'...");
-    const { stdout } = await execAsync("opencode models", { timeout: 10000 });
-    const ids = stdout
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    Log.debug(
+      "Querying OpenCode for available models via 'opencode models --verbose'..."
+    );
+    const { stdout } = await execAsync("opencode models --verbose", {
+      timeout: 10000,
+    });
+    const ids = parseOpenCodeVerboseOutput(stdout);
     if (ids.length > 0) {
       cachedOpenCodeModelIds = ids;
-      Log.debug(`OpenCode reports ${ids.length} models`);
+      Log.debug(
+        `OpenCode reports ${ids.length} models, ${cachedOpenCodeContextWindows.size} with context window sizes`
+      );
     } else {
-      Log.info("opencode models returned empty list, using fallback");
+      Log.info("opencode models --verbose returned empty list, using fallback");
       cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
     }
   } catch (error) {
     Log.warn(`Failed to query opencode models: ${error}`);
     cachedOpenCodeModelIds = [...OPENCODE_CLI_FALLBACK_MODELS];
   }
+}
+
+/**
+ * Parse `opencode models --verbose` stdout into a list of model IDs.
+ * As a side effect, populates `cachedOpenCodeContextWindows` with context window sizes.
+ *
+ * Output format: alternating model-ID lines (e.g. "opencode/big-pickle") and
+ * multi-line JSON blocks containing `limit.context`.
+ */
+function parseOpenCodeVerboseOutput(stdout: string): string[] {
+  const modelIds: string[] = [];
+  const lines = stdout.split("\n");
+  let currentModelId: string | undefined;
+  let jsonBuffer = "";
+  let braceDepth = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (braceDepth === 0) {
+      if (trimmed.startsWith("{")) {
+        jsonBuffer = line + "\n";
+        braceDepth +=
+          (line.match(/{/g) ?? []).length - (line.match(/}/g) ?? []).length;
+      } else {
+        currentModelId = trimmed;
+        modelIds.push(currentModelId);
+        jsonBuffer = "";
+      }
+    } else {
+      jsonBuffer += line + "\n";
+      braceDepth +=
+        (line.match(/{/g) ?? []).length - (line.match(/}/g) ?? []).length;
+
+      if (braceDepth <= 0) {
+        braceDepth = 0;
+        if (currentModelId && jsonBuffer.trim()) {
+          try {
+            const parsed = JSON.parse(jsonBuffer.trim()) as {
+              limit?: { context?: number };
+            };
+            const contextSize = parsed?.limit?.context;
+            if (typeof contextSize === "number") {
+              cachedOpenCodeContextWindows.set(currentModelId, contextSize);
+            }
+          } catch {
+            // Skip malformed JSON block
+          }
+        }
+        jsonBuffer = "";
+      }
+    }
+  }
+
+  return modelIds;
 }
 
 /**
@@ -316,7 +383,7 @@ export function isClaudeCliModel(modelId: string): boolean {
 }
 
 /**
- * Get OpenCode model IDs (discovered via `opencode models`, falls back to static list)
+ * Get OpenCode model IDs (discovered via `opencode models --verbose`, falls back to static list)
  */
 export function getOpenCodeModelIds(): string[] {
   return cachedOpenCodeModelIds;
@@ -330,6 +397,19 @@ export function getOpenCodeModelIdsSync(): string[] {
 }
 
 /**
+ * Get the context window size (in tokens) for a fully-qualified OpenCode model ID.
+ * Populated at startup by `queryOpenCodeModels` via `opencode models --verbose`.
+ *
+ * @param modelId Fully-qualified model ID (e.g. "anthropic/claude-sonnet-4-6")
+ * @returns Context window size in tokens, or undefined if not discovered
+ */
+export function getOpenCodeContextWindowSize(
+  modelId: string
+): number | undefined {
+  return cachedOpenCodeContextWindows.get(modelId);
+}
+
+/**
  * Refresh the model cache (force re-query)
  * Call this if you expect model availability to have changed
  */
@@ -338,6 +418,7 @@ export async function refreshModelRegistry(): Promise<void> {
   cachedModels = [];
   cachedCopilotCliModelIds = [];
   cachedOpenCodeModelIds = [];
+  cachedOpenCodeContextWindows.clear();
   await initializeModelRegistry();
 }
 

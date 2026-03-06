@@ -100,6 +100,7 @@ export class WebviewSettingsSync {
     HARNESS_IDS.COPILOT_CHAT,
     HARNESS_IDS.CLAUDE_CLI,
     HARNESS_IDS.CODEX_CLI,
+    HARNESS_IDS.OPENCODE_CLI,
   ] as const;
 
   private static readonly VALID_EXECUTION_MODES = [
@@ -483,6 +484,7 @@ export class WebviewSettingsSync {
       [HARNESS_IDS.COPILOT_CHAT]: this.getModelForHarness(Harness.CopilotChat),
       [HARNESS_IDS.CLAUDE_CLI]: this.getModelForHarness(Harness.ClaudeCli),
       [HARNESS_IDS.CODEX_CLI]: this.getModelForHarness(Harness.CodexCli),
+      [HARNESS_IDS.OPENCODE_CLI]: this.getModelForHarness(Harness.OpenCodeCli),
     };
 
     return {

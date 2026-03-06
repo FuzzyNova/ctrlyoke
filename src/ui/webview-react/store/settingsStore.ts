@@ -202,6 +202,10 @@ const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
     available: false,
     status: HARNESS_STATUS_STRINGS.CHECKING,
   },
+  [HARNESS_IDS.OPENCODE_CLI]: {
+    available: false,
+    status: HARNESS_STATUS_STRINGS.CHECKING,
+  },
 };
 
 const initialState: SettingsState = {
@@ -210,6 +214,7 @@ const initialState: SettingsState = {
     [HARNESS_IDS.COPILOT_CHAT]: [],
     [HARNESS_IDS.CLAUDE_CLI]: CLAUDE_CLI_MODELS,
     [HARNESS_IDS.CODEX_CLI]: CODEX_CLI_MODELS,
+    [HARNESS_IDS.OPENCODE_CLI]: [],
   },
   availableAgents: [],
   availableSkills: [],
