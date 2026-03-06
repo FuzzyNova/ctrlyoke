@@ -344,9 +344,9 @@ export class CliIntegration extends HarnessIntegration {
       workflowContext ? workflowContext.promptIndex + 1 : undefined
     );
 
-    // Format references per provider convention (e.g., @file for Copilot, -f file for Codex)
+    // Format references per provider convention. Default is "@path" (most CLIs); override via formatFileReference().
     const fileReferences = relativePaths.map((rp) =>
-      this.provider.formatFileReference(rp)
+      this.provider.formatFileReference?.(rp) ?? `@${rp}`
     );
 
     return {

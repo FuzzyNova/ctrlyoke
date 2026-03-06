@@ -201,20 +201,6 @@ export class OpenCodeCliProvider implements ICliProvider {
   }
 
   /**
-   * Format a file path reference for OpenCode CLI.
-   *
-   * OpenCode inline @ support is unconfirmed; return path as-is.
-   * The -f <file> flag is available for headless mode but is not used
-   * by the base CliIntegration adaptive prompt passing flow.
-   *
-   * @param relativeFilePath Relative file path
-   * @returns File path as-is (no @ prefix)
-   */
-  formatFileReference(relativeFilePath: string): string {
-    return relativeFilePath;
-  }
-
-  /**
    * Generate MCP server configuration for OpenCode CLI.
    *
    * OpenCode reads MCP config from .opencode/opencode.json in the project root.

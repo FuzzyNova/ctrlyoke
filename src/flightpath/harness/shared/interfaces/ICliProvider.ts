@@ -132,11 +132,13 @@ export interface ICliProvider {
   buildInteractiveTuiCommand(baseArgs: string[], promptText: string): string;
 
   /**
-   * Format a file path reference for this CLI
+   * Format a file path reference for this CLI.
+   * Default (when not implemented): "@path" — most CLIs accept @ as a file attachment prefix.
+   * Override only when the CLI uses a different convention (e.g., Codex uses no prefix).
    * @param relativeFilePath Relative file path
    * @returns Formatted file reference (e.g., "@path" or "path")
    */
-  formatFileReference(relativeFilePath: string): string;
+  formatFileReference?(relativeFilePath: string): string;
 
   /**
    * Generate MCP server configuration arguments (optional)

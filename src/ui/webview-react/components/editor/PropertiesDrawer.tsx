@@ -17,6 +17,9 @@ import {
   harnessCategory,
 } from "../shared";
 
+/** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
+const DRAWER_DROPDOWN_MAX_HEIGHT = "150px";
+
 interface PropertiesDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -139,7 +142,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.HARNESS, v)
                 }
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
 
@@ -175,7 +178,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onHideOption={(v) => hideDropdownOption(modelNamespace, v)}
                 onUnhideOption={(v) => unhideDropdownOption(modelNamespace, v)}
                 nonHideableValues={["default", ""]}
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
           </div>
@@ -211,7 +214,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.AGENT, v)
                 }
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
 
@@ -243,7 +246,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 onUnhideOption={(v) =>
                   unhideDropdownOption(DROPDOWN_NAMESPACES.SKILLS, v)
                 }
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
               {properties.skills.length > 0 && (
                 <p className="text-[10px] text-description-fg">
@@ -275,7 +278,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   },
                   { value: "no", label: "No - Disable dynamic extension" },
                 ]}
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
 
@@ -296,7 +299,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                   { value: "yes", label: "Yes - Resume previous session" },
                   { value: "no", label: "No - Start new session" },
                 ]}
-                dropdownMaxHeight="40vh"
+                dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
               />
             </div>
           </div>

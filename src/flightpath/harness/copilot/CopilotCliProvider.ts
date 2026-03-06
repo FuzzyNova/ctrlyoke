@@ -343,18 +343,6 @@ export class CopilotCliProvider implements ICliProvider {
   }
 
   /**
-   * Format a file path reference for Copilot CLI
-   *
-   * Copilot uses @ prefix for file references.
-   *
-   * @param relativeFilePath Relative file path
-   * @returns Formatted file reference (e.g., "@path/to/file.ts")
-   */
-  formatFileReference(relativeFilePath: string): string {
-    return `@${relativeFilePath}`;
-  }
-
-  /**
    * Generate MCP server configuration arguments for Copilot CLI
    *
    * Copilot CLI uses --additional-mcp-config @<file> format.

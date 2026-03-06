@@ -297,18 +297,6 @@ export class ClaudeCliProvider implements ICliProvider {
   }
 
   /**
-   * Format a file path reference for Claude CLI
-   *
-   * Claude uses @ prefix for file references (same as Copilot).
-   *
-   * @param relativeFilePath Relative file path
-   * @returns Formatted file reference (e.g., "@path/to/file.ts")
-   */
-  formatFileReference(relativeFilePath: string): string {
-    return `@${relativeFilePath}`;
-  }
-
-  /**
    * Generate MCP server configuration arguments for Claude CLI
    *
    * Claude CLI uses --mcp-config <file> format.

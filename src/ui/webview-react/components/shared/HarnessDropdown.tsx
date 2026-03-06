@@ -326,46 +326,49 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 
       {/* Dropdown panel */}
       <div
-        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top overflow-y-auto ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
         style={{ maxHeight: dropdownMaxHeight }}
       >
-        {/* "Default" sentinel (PropertiesDrawer only) */}
-        {showDefault && (
-          <div
-            className={`flex items-center ${
-              value === "default"
-                ? "bg-dropdown-selected-bg text-list-active-fg"
-                : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => handleSelect("default")}
-              className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
+        {/* Scrollable options area */}
+        <div className="overflow-y-auto min-h-0 flex-1">
+          {/* "Default" sentinel (PropertiesDrawer only) */}
+          {showDefault && (
+            <div
+              className={`flex items-center ${
+                value === "default"
+                  ? "bg-dropdown-selected-bg text-list-active-fg"
+                  : "hover:bg-list-hover-bg hover:text-list-highlight-fg cursor-pointer"
+              }`}
             >
-              Default
-            </button>
-          </div>
-        )}
+              <button
+                type="button"
+                onClick={() => handleSelect("default")}
+                className="flex-1 px-2 py-1.5 text-xs text-left focus:outline-none border-none bg-transparent cursor-inherit"
+              >
+                Default
+              </button>
+            </div>
+          )}
 
-        {/* ── CLI group ── */}
-        {showCliGroup && (
-          <>
-            <GroupHeader label="CLI" />
-            {renderGroup(CLI_HARNESSES)}
-          </>
-        )}
+          {/* ── CLI group ── */}
+          {showCliGroup && (
+            <>
+              <GroupHeader label="CLI" />
+              {renderGroup(CLI_HARNESSES)}
+            </>
+          )}
 
-        {/* ── VS Code Chat group ── */}
-        {showChatGroup && (
-          <>
-            <GroupHeader label="VS Code Chat" />
-            {renderGroup(CHAT_HARNESSES)}
-          </>
-        )}
+          {/* ── VS Code Chat group ── */}
+          {showChatGroup && (
+            <>
+              <GroupHeader label="VS Code Chat" />
+              {renderGroup(CHAT_HARNESSES)}
+            </>
+          )}
+        </div>
 
-        {/* ── Footer ── */}
-        <div className="border-t border-dropdown-border bg-editor-bg">
+        {/* ── Footer — pinned at bottom, outside scroll area ── */}
+        <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
           <button
             type="button"
             disabled={totalHidden === 0}
