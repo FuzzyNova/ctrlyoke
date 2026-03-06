@@ -33,6 +33,8 @@ interface CustomSelectProps extends HideableProps {
   options: SelectOption[];
   disabled?: boolean;
   className?: string;
+  /** Max height of the open dropdown panel. Defaults to "60vh". */
+  dropdownMaxHeight?: string;
 }
 
 const DEFAULT_NON_HIDEABLE = ["default", ""];
@@ -58,6 +60,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   onHideOption,
   onUnhideOption,
   nonHideableValues,
+  dropdownMaxHeight = "60vh",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -141,7 +144,12 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         />
       </button>
 
-      <div className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}>
+      <div
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        style={{ maxHeight: dropdownMaxHeight }}
+      >
+        {/* Scrollable options area */}
+        <div className="overflow-y-auto min-h-0 flex-1">
           {/* Visible options */}
           {visibleOptions.map((option) => {
             const isSelected = value === option.value;
@@ -182,61 +190,59 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             );
           })}
 
-          {/* Footer bar — always shown when hide feature is active */}
-          {hideEnabled && (
+          {/* Separator + hidden section (inside scroll area) */}
+          {hideEnabled && showHidden && hiddenOptions.length > 0 && (
             <>
-              {/* Separator + hidden section */}
-              {showHidden && hiddenOptions.length > 0 && (
-                <>
-                  <div className="border-t border-dropdown-border my-0" />
-                  {hiddenOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
-                    >
-                      {/* Eye icon at far left — primary unhide action */}
-                      <button
-                        type="button"
-                        title="Unhide this option"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUnhideOption?.(option.value);
-                        }}
-                        className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
-                      >
-                        <i className="codicon codicon-eye text-[11px]" />
-                      </button>
-                      {/* Clicking label: select AND unhide */}
-                      <button
-                        type="button"
-                        onClick={() => handleSelectHidden(option.value)}
-                        className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
-                      >
-                        {option.label}
-                      </button>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* Footer toggle — distinct bg signals meta-action, not a normal option */}
-              <div className="border-t border-dropdown-border bg-editor-bg">
-                <button
-                  type="button"
-                  disabled={hiddenOptions.length === 0}
-                  onClick={() => setShowHidden((s) => !s)}
-                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+              <div className="border-t border-dropdown-border my-0" />
+              {hiddenOptions.map((option) => (
+                <div
+                  key={option.value}
+                  className="group w-full flex items-center opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
                 >
-                  {showHidden
-                    ? "Hide hidden"
-                    : hiddenOptions.length > 0
-                      ? `Show hidden (${hiddenOptions.length})`
-                      : "Show hidden"}
-                </button>
-              </div>
+                  {/* Eye icon at far left — primary unhide action */}
+                  <button
+                    type="button"
+                    title="Unhide this option"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnhideOption?.(option.value);
+                    }}
+                    className="flex-shrink-0 px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                  >
+                    <i className="codicon codicon-eye text-[11px]" />
+                  </button>
+                  {/* Clicking label: select AND unhide */}
+                  <button
+                    type="button"
+                    onClick={() => handleSelectHidden(option.value)}
+                    className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left text-description-fg focus:outline-none border-none bg-transparent cursor-pointer"
+                  >
+                    {option.label}
+                  </button>
+                </div>
+              ))}
             </>
           )}
         </div>
+
+        {/* Footer toggle — pinned at bottom, outside scroll area */}
+        {hideEnabled && (
+          <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+            <button
+              type="button"
+              disabled={hiddenOptions.length === 0}
+              onClick={() => setShowHidden((s) => !s)}
+              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+            >
+              {showHidden
+                ? "Hide hidden"
+                : hiddenOptions.length > 0
+                  ? `Show hidden (${hiddenOptions.length})`
+                  : "Show hidden"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

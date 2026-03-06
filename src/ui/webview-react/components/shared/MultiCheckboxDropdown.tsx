@@ -9,6 +9,8 @@ export interface MultiCheckboxDropdownProps extends HideableProps {
   onChange: (values: string[]) => void;
   options: Array<{ value: string; label: string; description?: string }>;
   placeholder?: string;
+  /** Max height of the open dropdown panel. Defaults to "60vh". */
+  dropdownMaxHeight?: string;
 }
 
 /**
@@ -31,6 +33,7 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
   onHideOption,
   onUnhideOption,
   nonHideableValues,
+  dropdownMaxHeight = "60vh",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -53,7 +56,8 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
 
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -131,7 +135,12 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
         />
       </button>
 
-      <div className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg max-h-48 overflow-y-auto transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}>
+      <div
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top flex flex-col ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        style={{ maxHeight: dropdownMaxHeight }}
+      >
+        {/* Scrollable options area */}
+        <div className="overflow-y-auto min-h-0 flex-1">
           {visibleOptions.length === 0 && !hideEnabled ? (
             <div className="px-3 py-2 text-xs text-description-fg">
               No skills available
@@ -161,7 +170,9 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
                       tabIndex={-1}
                     />
                     <span className="flex flex-col min-w-0">
-                      <span className="font-medium truncate">{option.label}</span>
+                      <span className="font-medium truncate">
+                        {option.label}
+                      </span>
                       {option.description && (
                         <span className="text-[10px] text-description-fg truncate">
                           {option.description}
@@ -188,79 +199,78 @@ export const MultiCheckboxDropdown: React.FC<MultiCheckboxDropdownProps> = ({
             })
           )}
 
-          {/* Footer + hidden section — only when hide feature is active */}
-          {hideEnabled && (
+          {/* Hidden section (inside scroll area) */}
+          {hideEnabled && showHidden && hiddenOptions.length > 0 && (
             <>
-              {showHidden && hiddenOptions.length > 0 && (
-                <>
-                  <div className="border-t border-dropdown-border my-0" />
-                  {hiddenOptions.map((option) => {
-                    const isSelected = selectedValues.includes(option.value);
-                    return (
-                      <div
-                        key={option.value}
-                        className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
-                      >
-                        {/* Eye icon at far left — unhide action */}
-                        <button
-                          type="button"
-                          title="Unhide this option"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUnhideOption?.(option.value);
-                          }}
-                          className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
-                        >
-                          <i className="codicon codicon-eye text-[11px]" />
-                        </button>
-                        {/* Clicking checkbox or label: unhide + check */}
-                        <button
-                          type="button"
-                          onClick={() => handleUnhideAndCheck(option.value)}
-                          className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
-                            tabIndex={-1}
-                          />
-                          <span className="flex flex-col min-w-0">
-                            <span className="font-medium truncate text-description-fg">
-                              {option.label}
-                            </span>
-                            {option.description && (
-                              <span className="text-[10px] text-description-fg truncate">
-                                {option.description}
-                              </span>
-                            )}
+              <div className="border-t border-dropdown-border my-0" />
+              {hiddenOptions.map((option) => {
+                const isSelected = selectedValues.includes(option.value);
+                return (
+                  <div
+                    key={option.value}
+                    className="group w-full flex items-start opacity-60 italic hover:bg-list-hover-bg cursor-pointer"
+                  >
+                    {/* Eye icon at far left — unhide action */}
+                    <button
+                      type="button"
+                      title="Unhide this option"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnhideOption?.(option.value);
+                      }}
+                      className="flex-shrink-0 self-center px-1.5 py-1.5 text-description-fg hover:text-foreground focus:outline-none border-none bg-transparent"
+                    >
+                      <i className="codicon codicon-eye text-[11px]" />
+                    </button>
+                    {/* Clicking checkbox or label: unhide + check */}
+                    <button
+                      type="button"
+                      onClick={() => handleUnhideAndCheck(option.value)}
+                      className="flex-1 min-w-0 pr-2 py-1.5 text-xs text-left flex items-start gap-2 focus:outline-none border-none bg-transparent cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="mt-0.5 w-3 h-3 flex-shrink-0 accent-focus-border cursor-pointer"
+                        tabIndex={-1}
+                      />
+                      <span className="flex flex-col min-w-0">
+                        <span className="font-medium truncate text-description-fg">
+                          {option.label}
+                        </span>
+                        {option.description && (
+                          <span className="text-[10px] text-description-fg truncate">
+                            {option.description}
                           </span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
-              {/* Footer toggle — distinct bg signals meta-action, not a normal option */}
-              <div className="border-t border-dropdown-border bg-editor-bg">
-                <button
-                  type="button"
-                  disabled={hiddenOptions.length === 0}
-                  onClick={() => setShowHidden((s) => !s)}
-                  className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
-                >
-                  {showHidden
-                    ? "Hide hidden"
-                    : hiddenOptions.length > 0
-                      ? `Show hidden (${hiddenOptions.length})`
-                      : "Show hidden"}
-                </button>
-              </div>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
+
+        {/* Footer toggle — pinned at bottom, outside scroll area */}
+        {hideEnabled && (
+          <div className="border-t border-dropdown-border bg-editor-bg flex-shrink-0">
+            <button
+              type="button"
+              disabled={hiddenOptions.length === 0}
+              onClick={() => setShowHidden((s) => !s)}
+              className="w-full px-2 py-1.5 text-xs text-center text-description-fg disabled:opacity-40 hover:enabled:bg-list-hover-bg focus:outline-none border-none bg-transparent transition-colors"
+            >
+              {showHidden
+                ? "Hide hidden"
+                : hiddenOptions.length > 0
+                  ? `Show hidden (${hiddenOptions.length})`
+                  : "Show hidden"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

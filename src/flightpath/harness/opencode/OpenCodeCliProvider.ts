@@ -220,6 +220,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    * OpenCode reads MCP config from .opencode/opencode.json in the project root.
    * There is no --mcp-config CLI flag. The file is auto-detected at startup.
    *
+   * Written to {workspaceRoot}/.opencode/opencode.json (merged with existing config).
    * Config format (opencode uses "mcp" key with "type": "local"):
    * {
    *   "$schema": "https://opencode.ai/config.json",
@@ -238,7 +239,7 @@ export class OpenCodeCliProvider implements ICliProvider {
    * @param mcpServerPath Absolute path to MCP server executable
    * @param workspaceRoot Workspace root directory
    * @param workingFilePath Active working file for this workflow
-   * @returns Empty array (config file is auto-detected, no CLI args needed)
+   * @returns Empty array (config file is auto-detected by filename, no CLI args needed)
    */
   async getMcpConfigArgs(
     mcpServerPath: string,
@@ -260,9 +261,26 @@ export class OpenCodeCliProvider implements ICliProvider {
         Object.assign(env, additionalEnv);
       }
 
+      const configPath = this.getMcpConfigFilePath(
+        workingFilePath,
+        workspaceRoot
+      )!;
+      await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
+
+      // Merge with existing opencode.json to preserve user settings (theme, models, etc.)
+      let existingConfig: Record<string, unknown> = {};
+      try {
+        const existing = await fs.promises.readFile(configPath, "utf-8");
+        existingConfig = JSON.parse(existing);
+      } catch {
+        // No existing config — start fresh
+      }
+
       const config = {
+        ...existingConfig,
         $schema: "https://opencode.ai/config.json",
         mcp: {
+          ...(existingConfig.mcp as Record<string, unknown> | undefined),
           flightpath: {
             type: "local",
             command: ["node", normalizedServerPath],
@@ -271,11 +289,6 @@ export class OpenCodeCliProvider implements ICliProvider {
         },
       };
 
-      const configPath = this.getMcpConfigFilePath(
-        workingFilePath,
-        workspaceRoot
-      )!;
-      await fs.promises.mkdir(path.dirname(configPath), { recursive: true });
       await fs.promises.writeFile(
         configPath,
         JSON.stringify(config, null, 2),
@@ -297,17 +310,12 @@ export class OpenCodeCliProvider implements ICliProvider {
    * CliIntegration uses this to delete the file after the workflow finishes.
    */
   getMcpConfigFilePath(
-    workingFilePath: string | undefined,
+    _workingFilePath: string | undefined,
     workspaceRoot: string
   ): string | null {
-    const configSuffix = workingFilePath
-      ? path.basename(workingFilePath, ".flightpath.json")
-      : "default";
-    return path.join(
-      workspaceRoot,
-      ".opencode",
-      `opencode-mcp-${configSuffix}.json`
-    );
+    // OpenCode auto-discovers only the fixed filename opencode.json.
+    // The suffix-based naming used by other providers does not apply here.
+    return path.join(workspaceRoot, ".opencode", "opencode.json");
   }
 
   /**
@@ -364,20 +372,23 @@ export class OpenCodeCliProvider implements ICliProvider {
    * OpenCode models use provider/model format (e.g., anthropic/claude-sonnet-4-6).
    */
   private getModel(resolvedModel?: string): string {
-    const configured =
-      resolvedModel ?? ConfigurationUtils.getOpenCodeCliModel();
-
-    // Validate provider/model format
-    if (configured && configured.includes("/")) {
-      return configured;
+    // If we have a resolved model in the correct format, use it
+    if (resolvedModel?.includes("/")) {
+      return resolvedModel;
     }
 
-    // If the model doesn't have a slash, warn and use default
-    if (configured && configured !== "anthropic/claude-sonnet-4-6") {
+    // If resolved model is set but wrong format, warn and fall back to configured default
+    if (resolvedModel) {
       Log.warn(
-        `OpenCode: model "${configured}" does not use provider/model format. ` +
-          `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using default.`
+        `OpenCode: model "${resolvedModel}" does not use provider/model format. ` +
+          `Expected format: provider/model (e.g., anthropic/claude-sonnet-4-6). Using configured default.`
       );
+    }
+
+    // Fall back to user-configured default
+    const configuredDefault = ConfigurationUtils.getOpenCodeCliModel();
+    if (configuredDefault?.includes("/")) {
+      return configuredDefault;
     }
 
     return "anthropic/claude-sonnet-4-6";

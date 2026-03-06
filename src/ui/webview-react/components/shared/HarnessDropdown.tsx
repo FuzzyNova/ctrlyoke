@@ -196,6 +196,8 @@ export interface HarnessDropdownProps {
   hiddenValues?: string[];
   onHideOption?: (value: string) => void;
   onUnhideOption?: (value: string) => void;
+  /** Max height of the open dropdown panel. Defaults to "60vh". */
+  dropdownMaxHeight?: string;
 }
 
 export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
@@ -208,6 +210,7 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
   hiddenValues = [],
   onHideOption,
   onUnhideOption,
+  dropdownMaxHeight = "60vh",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -323,7 +326,8 @@ export const HarnessDropdown: React.FC<HarnessDropdownProps> = ({
 
       {/* Dropdown panel */}
       <div
-        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        className={`absolute top-full left-0 right-0 mt-0 bg-dropdown-bg border border-dropdown-border z-50 shadow-lg transition-all duration-150 origin-top overflow-y-auto ${isOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-1 invisible pointer-events-none"}`}
+        style={{ maxHeight: dropdownMaxHeight }}
       >
         {/* "Default" sentinel (PropertiesDrawer only) */}
         {showDefault && (
