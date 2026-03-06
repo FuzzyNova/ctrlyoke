@@ -63,7 +63,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
   return (
     <div
       ref={footerRef}
-      className="editor-footer flex items-center justify-between px-3 py-1 border-t border-panel-border bg-sidebar-bg"
+      className="editor-footer flex items-center justify-between px-3 py-1.5 border-t border-panel-border bg-sidebar-bg"
     >
       {/* Left side: Properties toggle */}
       <div className="editor-footer-left flex items-center">
@@ -105,7 +105,11 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-cancel px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onCancel}
               disabled={isCLIManaged}
-              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : "Cancel editing and return to new prompt mode"}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : "Cancel editing and return to new prompt mode"
+              }
             >
               <i className="codicon codicon-close" />
               {!isNarrow && <span className="btn-text">Cancel</span>}
@@ -114,7 +118,12 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-update px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onUpdate}
-              disabled={isCLIManaged || !hasContent || isPromptBeingSent || isPromptCompleted}
+              disabled={
+                isCLIManaged ||
+                !hasContent ||
+                isPromptBeingSent ||
+                isPromptCompleted
+              }
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
@@ -132,7 +141,9 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
             <button
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
-              disabled={isCLIManaged || isPromptActivelyRunning || isPromptCompleted}
+              disabled={
+                isCLIManaged || isPromptActivelyRunning || isPromptCompleted
+              }
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
@@ -154,7 +165,11 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-queue px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-secondary-bg text-btn-secondary-fg hover:bg-btn-secondary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onQueue}
               disabled={isCLIManaged || !hasContent}
-              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : queueButtonTooltip}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : queueButtonTooltip
+              }
             >
               <i className="codicon codicon-add" />
               {!isNarrow && <span className="btn-text">Queue</span>}
@@ -164,7 +179,11 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-run px-3 py-1 text-xs rounded flex items-center gap-1 bg-btn-bg text-btn-fg hover:bg-btn-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onRun}
               disabled={isCLIManaged || !hasContent}
-              title={isCLIManaged ? "Read-only — workflow is running via FlightPath CLI" : runButtonTooltip}
+              title={
+                isCLIManaged
+                  ? "Read-only — workflow is running via FlightPath CLI"
+                  : runButtonTooltip
+              }
             >
               <i className="codicon codicon-send" />
               {!isNarrow && <span className="btn-text">{runButtonText}</span>}

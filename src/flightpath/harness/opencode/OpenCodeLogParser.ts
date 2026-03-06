@@ -223,6 +223,17 @@ export class OpenCodeLogParser extends BaseLogParser {
           }
           break;
         }
+        case CLI_EVENT_TYPES.THINKING: {
+          const text = e.part?.text as string | undefined;
+          if (text) {
+            cliEvents.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp: e.timestamp as number | undefined,
+              data: { text },
+            });
+          }
+          break;
+        }
         case "tool_use": {
           const part = e.part as Record<string, any> | undefined;
           if (part) {
@@ -313,6 +324,11 @@ export class OpenCodeLogParser extends BaseLogParser {
   /**
    * Walk export messages in chronological order and emit events for
    * any parts not already tracked in seenPartIds.
+   *
+   * Parts are only marked seen once they are in a final/completed state.
+   * OpenCode writes parts incrementally (same ID, status pending → completed),
+   * so a part polled while still running would have empty input/text.
+   * Skipping incomplete parts lets the next poll pick them up when finished.
    */
   private extractNewEventsFromExport(
     exportData: OpenCodeExport
@@ -331,6 +347,13 @@ export class OpenCodeLogParser extends BaseLogParser {
         if (this.seenPartIds.has(part.id)) {
           continue;
         }
+
+        // Skip parts that are still in-progress so we don't capture partial data.
+        // They will be picked up on the next poll once finalized.
+        if (!this.isPartCompleted(part)) {
+          continue;
+        }
+
         this.seenPartIds.add(part.id);
 
         const event = this.convertPartToEvent(part, messageTimestamp);
@@ -341,6 +364,27 @@ export class OpenCodeLogParser extends BaseLogParser {
     }
 
     return newEvents;
+  }
+
+  /**
+   * Returns true when a part has reached its final state and its data is safe
+   * to capture. OpenCode updates parts in-place as they progress, so we must
+   * wait for completion before recording to avoid empty/partial fields.
+   */
+  private isPartCompleted(part: OpenCodeExportPart): boolean {
+    const p = part as any;
+    switch (part.type) {
+      case "tool":
+        // Tool parts transition through "pending" → "completed"; only emit when done.
+        return p.state?.status === "completed";
+      case "text":
+      case "reasoning":
+        // Text/reasoning parts are finalized when time.end is set.
+        return p.time?.end !== undefined;
+      default:
+        // step-start, step-finish, patch, etc. are atomic and always final.
+        return true;
+    }
   }
 
   /**
@@ -355,7 +399,7 @@ export class OpenCodeLogParser extends BaseLogParser {
    *   step-finish → step_finish  (carries reason + tokens)
    *   text        → text         (carries part.text)
    *   tool        → tool_use     (carries part.tool + part.state)
-   *   reasoning   → (skipped)
+   *   reasoning   → thinking     (carries part.text — extended thinking content)
    *   patch       → (skipped)
    */
   private convertPartToEvent(
@@ -387,6 +431,14 @@ export class OpenCodeLogParser extends BaseLogParser {
       case "text":
         return {
           type: "text",
+          sessionID,
+          timestamp: (part as any).time?.start ?? messageTimestamp,
+          part: { text: (part as any).text },
+        };
+
+      case "reasoning":
+        return {
+          type: CLI_EVENT_TYPES.THINKING,
           sessionID,
           timestamp: (part as any).time?.start ?? messageTimestamp,
           part: { text: (part as any).text },

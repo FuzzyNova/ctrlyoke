@@ -1443,7 +1443,7 @@ suite("OpenCodeLogParser", () => {
       assert.deepStrictEqual(finalEvents, []);
     });
 
-    test("should reset seen parts and re-export final events for OpenCode", async () => {
+    test("should call fetchNewEvents with the session ID for OpenCode", async () => {
       // Cast via any to access private members for testing purposes.
       const parserWithInternals = parser as any as {
         seenPartIds: Set<string>;
@@ -1455,8 +1455,6 @@ suite("OpenCodeLogParser", () => {
       let fetchCalledWith: string | undefined;
       parserWithInternals.fetchNewEvents = async (sessionId: string) => {
         fetchCalledWith = sessionId;
-        assert.ok(parserWithInternals.seenPartIds.has("part-1"));
-
         return [
           {
             type: "text",
@@ -1473,6 +1471,200 @@ suite("OpenCodeLogParser", () => {
       assert.strictEqual(fetchCalledWith, "ses_test_final");
       assert.strictEqual(finalEvents.length, 1);
       assert.strictEqual(finalEvents[0].type, "text");
+    });
+  });
+
+  suite("extractNewEventsFromExport — part completion gating", () => {
+    function makeExport(parts: object[]): object {
+      return {
+        info: { id: "ses_test" },
+        messages: [
+          {
+            info: { role: "assistant", time: { created: 1000 } },
+            parts,
+          },
+        ],
+      };
+    }
+
+    function callExtractNewEvents(p: OpenCodeLogParser, exportData: object): BaseCliEvent[] {
+      return (p as any).extractNewEventsFromExport(exportData);
+    }
+
+    test("should skip tool parts with pending status and not add to seenPartIds", () => {
+      const exportData = makeExport([
+        {
+          type: "tool",
+          id: "prt_pending_tool",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          tool: "read",
+          callID: "call_1",
+          state: { status: "pending", input: {}, output: "" },
+        },
+      ]);
+
+      const events = callExtractNewEvents(parser, exportData);
+
+      assert.strictEqual(events.length, 0, "pending tool should not emit an event");
+      assert.ok(
+        !(parser as any).seenPartIds.has("prt_pending_tool"),
+        "pending tool ID should NOT be in seenPartIds"
+      );
+    });
+
+    test("should emit tool parts with completed status and add to seenPartIds", () => {
+      const exportData = makeExport([
+        {
+          type: "tool",
+          id: "prt_completed_tool",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          tool: "read",
+          callID: "call_1",
+          state: {
+            status: "completed",
+            input: { filePath: "/some/file.ts" },
+            output: "file contents",
+            time: { start: 1001, end: 1005 },
+          },
+        },
+      ]);
+
+      const events = callExtractNewEvents(parser, exportData);
+
+      assert.strictEqual(events.length, 1, "completed tool should emit an event");
+      assert.strictEqual(events[0].type, "tool_use");
+      assert.ok(
+        (parser as any).seenPartIds.has("prt_completed_tool"),
+        "completed tool ID should be in seenPartIds"
+      );
+    });
+
+    test("should pick up a tool part on the next poll once it transitions to completed", () => {
+      const pendingExport = makeExport([
+        {
+          type: "tool",
+          id: "prt_transitioning",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          tool: "write",
+          callID: "call_2",
+          state: { status: "pending", input: {}, output: "" },
+        },
+      ]);
+      const completedExport = makeExport([
+        {
+          type: "tool",
+          id: "prt_transitioning",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          tool: "write",
+          callID: "call_2",
+          state: {
+            status: "completed",
+            input: { filePath: "/some/output.ts" },
+            output: "",
+            time: { start: 2000, end: 2010 },
+          },
+        },
+      ]);
+
+      const firstPoll = callExtractNewEvents(parser, pendingExport);
+      assert.strictEqual(firstPoll.length, 0, "pending: no event emitted");
+
+      const secondPoll = callExtractNewEvents(parser, completedExport);
+      assert.strictEqual(secondPoll.length, 1, "completed: event emitted on next poll");
+      assert.strictEqual(secondPoll[0].type, "tool_use");
+    });
+
+    test("should skip text parts without time.end and emit once time.end is present", () => {
+      const inProgressExport = makeExport([
+        {
+          type: "text",
+          id: "prt_text_1",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          text: "partial...",
+          time: { start: 3000 },
+        },
+      ]);
+      const finalExport = makeExport([
+        {
+          type: "text",
+          id: "prt_text_1",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          text: "Full response text.",
+          time: { start: 3000, end: 3100 },
+        },
+      ]);
+
+      const firstPoll = callExtractNewEvents(parser, inProgressExport);
+      assert.strictEqual(firstPoll.length, 0, "in-progress text: no event emitted");
+
+      const secondPoll = callExtractNewEvents(parser, finalExport);
+      assert.strictEqual(secondPoll.length, 1, "finalized text: event emitted");
+      assert.strictEqual(secondPoll[0].type, "text");
+      assert.strictEqual((secondPoll[0] as any).part?.text, "Full response text.");
+    });
+
+    test("should skip reasoning parts without time.end and emit once time.end is present", () => {
+      const inProgressExport = makeExport([
+        {
+          type: "reasoning",
+          id: "prt_reasoning_1",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          text: "thinking...",
+          time: { start: 4000 },
+        },
+      ]);
+      const finalExport = makeExport([
+        {
+          type: "reasoning",
+          id: "prt_reasoning_1",
+          sessionID: "ses_test",
+          messageID: "msg_1",
+          text: "I should read the file first.",
+          time: { start: 4000, end: 4500 },
+        },
+      ]);
+
+      const firstPoll = callExtractNewEvents(parser, inProgressExport);
+      assert.strictEqual(firstPoll.length, 0, "in-progress reasoning: no event emitted");
+
+      const secondPoll = callExtractNewEvents(parser, finalExport);
+      assert.strictEqual(secondPoll.length, 1, "finalized reasoning: event emitted");
+      assert.strictEqual(secondPoll[0].type, "thinking");
+      assert.strictEqual((secondPoll[0] as any).part?.text, "I should read the file first.");
+    });
+  });
+
+  suite("extractResponse — thinking events", () => {
+    test("should include thinking events from reasoning parts in cliEvents", () => {
+      const events: BaseCliEvent[] = [
+        {
+          type: "thinking",
+          sessionID: "ses_test",
+          timestamp: 1000,
+          part: { text: "I need to analyze the file." },
+        } as any,
+        {
+          type: "text",
+          sessionID: "ses_test",
+          timestamp: 2000,
+          part: { text: "Here is the analysis." },
+        } as any,
+      ];
+
+      const result = parser.extractResponse(events);
+      const thinkingEvents = result.events.filter((e) => e.type === "thinking");
+      const textEvents = result.events.filter((e) => e.type === "text");
+
+      assert.strictEqual(thinkingEvents.length, 1);
+      assert.strictEqual((thinkingEvents[0].data as any).text, "I need to analyze the file.");
+      assert.strictEqual(textEvents.length, 1);
     });
   });
 });

@@ -479,7 +479,9 @@ export const SettingsPanel: React.FC<{
       </div>
 
       {/* Body - Scrollable (pointer-events disabled in CLI watch mode) */}
-      <div className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}>
+      <div
+        className={`flex-1 overflow-y-auto${isCLIManaged ? " pointer-events-none opacity-60 select-none" : ""}`}
+      >
         <div className="px-4 py-3 space-y-4">
           {/* Harness */}
           <FormField
@@ -853,7 +855,7 @@ export const SettingsPanel: React.FC<{
       {/* Always-visible footer with quick toggle buttons */}
       <div
         ref={footerRef}
-        className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 h-[35px]${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
+        className={`flex items-center justify-center gap-1 px-2 border-t border-panel-border flex-shrink-0 py-2${isCLIManaged ? " pointer-events-none opacity-60" : ""}`}
       >
         <IconToggleButton
           active={globalSettings.executionMode === "interactive"}

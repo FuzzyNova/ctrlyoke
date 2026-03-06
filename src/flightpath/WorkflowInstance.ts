@@ -693,6 +693,7 @@ export class WorkflowInstance {
     );
 
     this.setupPromptFileWatcher(workingFilePath);
+    this.propagateWorkflowNameToIntegrations();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1681,6 +1682,13 @@ export class WorkflowInstance {
       (this.currentPromptFile
         ? PromptQueue.extractWorkflowName(this.currentPromptFile.filePath)
         : undefined);
+    // Keep instance field in sync so createIntegrationForMode reads the right value.
+    this.workflowName = name ?? "";
+    // Push to all cached execution integrations created for this run.
+    for (const integration of this.executionIntegrations.values()) {
+      integration.setWorkflowName(name);
+    }
+    // Push to the detector singletons (terminal tab labeling for the idle harness).
     this.onWorkflowNameChange(name);
   }
 
