@@ -1,55 +1,148 @@
-import { CliResult } from "../../../types/CliOutputTypes";
 import {
   IResponseParser,
   ResponseParserBase,
 } from "../shared/interfaces/IResponseParser";
-import { UniversalCliOutput, CliEvent } from "../../../types/CliOutputTypes";
-import { CLI_EVENT_TYPES } from "../../../types/DashboardConstants";
+import {
+  UniversalCliOutput,
+  CliEvent,
+  TokenUsage,
+} from "../../../types/CliOutputTypes";
+import {
+  CLI_EVENT_TYPES,
+  OPERATION_STATUS,
+} from "../../../types/DashboardConstants";
 import { COPILOT_CLI_CONTEXT_WINDOW_SIZE } from "../../../utils/ModelConstants";
+import { CliResponseParser } from "../shared/CliResponseParser";
+import { CliEventMapper } from "../shared/CliEventMapper";
 
 /**
  * Copilot CLI Response Parser
  *
- * Parses Copilot CLI plain text output format:
- * - Response: Written to stdout
- * - Statistics: Written to stderr (format: "Total usage est: ...")
- * - Token counts: supports two formats (supports k suffix on all values):
- *   - New: "59.0k in, 207 out, 0 cached"
- *   - Old: "25.7k input, 223 output, 6.1k cache read"
+ * Supports two output formats:
  *
- * Example stderr statistics (as of 2026-02):
- * ```
- * Total usage est: 0 Premium requests
- * Usage by model:
- *     capi-...-claude-sonnet-4.5-... 59.0k in, 207 out, 0 cached (Est. 0 Premium requests)
- * ```
+ * **JSON mode** (`--output-format json`, headless): JSONL stream where each line is a
+ * structured event object. Key event types:
+ * - `assistant.message` — complete turn text + tool requests + outputTokens
+ * - `assistant.reasoning` — reasoning/thinking block (ephemeral)
+ * - `tool.execution_start` — tool call initiated
+ * - `tool.execution_complete` — tool execution result
+ * - `result` — session summary with sessionId and exitCode
+ *
+ * **Plain text mode** (interactive fallback): Response on stdout, statistics on stderr.
+ * - Token counts: "59.0k in, 207 out, 0 cached" or "25.7k input, 223 output, 6.1k cache read"
  */
 export class CopilotResponseParser
   extends ResponseParserBase
   implements IResponseParser
 {
   /**
-   * Parse Copilot CLI text output into structured events
+   * Parse Copilot CLI output — dispatches to JSON or plain-text parser based on content.
    *
-   * @param stdout CLI stdout (response only)
+   * @param stdout CLI stdout (JSONL events or plain text response)
    * @param stderr CLI stderr (statistics + errors)
    * @param exitCode Process exit code
    * @returns Structured output with events array and metadata
    */
   parse(stdout: string, stderr: string, exitCode: number): UniversalCliOutput {
-    const events: CliEvent[] = [];
+    // Detect JSON output: first non-whitespace character is '{'
+    const firstNonWs = stdout.trimStart()[0];
+    if (firstNonWs === "{") {
+      return this.parseJsonLines(stdout, stderr, exitCode);
+    }
+    return this.parsePlainText(stdout, stderr, exitCode);
+  }
 
-    // Copilot outputs plain text (no structured events)
-    // Create a single TEXT event for the response
-    if (stdout.trim()) {
-      events.push({
-        type: CLI_EVENT_TYPES.TEXT,
-        timestamp: Date.now(),
-        data: { text: stdout.trim() },
-      });
+  /**
+   * Parse JSONL event stream from `--output-format json` (headless mode).
+   *
+   * Processes non-ephemeral events only:
+   * - `assistant.message` → TEXT event + tool request events
+   * - `assistant.reasoning` → THINKING event
+   * - `result` → session ID, exit code
+   *
+   * Token counts: output tokens summed from assistant.message events; input tokens
+   * from stderr stats (same format as plain text mode, still emitted alongside JSON).
+   */
+  private parseJsonLines(
+    stdout: string,
+    stderr: string,
+    exitCode: number
+  ): UniversalCliOutput {
+    const events: CliEvent[] = [];
+    const { objects } = CliResponseParser.extractJsonObjectsFromStream(stdout);
+
+    let sessionId: string | undefined;
+    let model: string | undefined;
+    let totalOutputTokens = 0;
+
+    for (const json of objects) {
+      // Only process non-ephemeral events in batch parse.
+      // Ephemeral events (message_delta, reasoning_delta, assistant.reasoning) are
+      // streaming helpers — their content is also present in the non-ephemeral
+      // assistant.message event (data.content and data.reasoningText).
+      if (json.ephemeral === true) {
+        continue;
+      }
+
+      switch (json.type) {
+        case "assistant.message": {
+          const data = json.data;
+          if (!data) break;
+
+          // Extract reasoning text — present alongside content when the model used
+          // extended reasoning. Comes from assistant.message.data.reasoningText
+          // (same text as the ephemeral assistant.reasoning event, but available here
+          // without needing to process ephemeral events).
+          if (data.reasoningText) {
+            events.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp: Date.now(),
+              data: { text: data.reasoningText, label: "Reasoning" },
+            });
+          }
+
+          // Extract response text
+          if (data.content) {
+            events.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: Date.now(),
+              data: { text: data.content },
+            });
+          }
+
+          // Map tool requests to semantic events
+          if (Array.isArray(data.toolRequests)) {
+            for (const toolReq of data.toolRequests) {
+              this.mapToolRequestToEvent(toolReq, events);
+            }
+          }
+
+          // Accumulate output tokens across all turns
+          if (typeof data.outputTokens === "number") {
+            totalOutputTokens += data.outputTokens;
+          }
+          break;
+        }
+
+        case "tool.execution_complete": {
+          // Track the model used (available on each tool completion)
+          if (!model && json.data?.model) {
+            model = json.data.model;
+          }
+          break;
+        }
+
+        case "result": {
+          // Primary session ID source in JSON mode
+          if (json.sessionId) {
+            sessionId = json.sessionId;
+          }
+          break;
+        }
+      }
     }
 
-    // If error, add error event
+    // Error: non-zero exit code
     if (exitCode !== 0 && stderr.trim()) {
       events.push({
         type: CLI_EVENT_TYPES.TEXT,
@@ -58,13 +151,66 @@ export class CopilotResponseParser
       });
     }
 
-    // Parse token usage from stderr statistics
+    // Token usage: output tokens come from assistant.message.data.outputTokens (per-turn sum).
+    // Input tokens are NOT present in the JSON output format — the result event only carries
+    // timing/change metrics. contextWindowUsedTokens requires input tokens so is unavailable.
+    let usage: TokenUsage | undefined;
+    if (totalOutputTokens > 0) {
+      usage = {
+        inputTokens: 0,
+        outputTokens: totalOutputTokens,
+        totalTokens: totalOutputTokens,
+        contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
+      };
+    }
+
+    return {
+      events,
+      metadata: {
+        sessionId,
+        model,
+        usage,
+        harness: "copilot-cli",
+        rawTextOutput: false,
+      },
+    };
+  }
+
+  /**
+   * Parse plain text output (interactive mode fallback or pre-JSON Copilot versions).
+   *
+   * Response text is on stdout, token statistics on stderr.
+   * Sets rawTextOutput:true so the UI skips the markdown pipeline (Copilot pre-formats output).
+   */
+  private parsePlainText(
+    stdout: string,
+    stderr: string,
+    exitCode: number
+  ): UniversalCliOutput {
+    const events: CliEvent[] = [];
+
+    if (stdout.trim()) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: stdout.trim() },
+      });
+    }
+
+    if (exitCode !== 0 && stderr.trim()) {
+      events.push({
+        type: CLI_EVENT_TYPES.TEXT,
+        timestamp: Date.now(),
+        data: { text: `Error: ${stderr.trim()}` },
+      });
+    }
+
     const tokenCounts = this.parseTokenCounts(stderr);
 
     return {
       events,
       metadata: {
-        // Note: Session ID is extracted from log files, not CLI output
+        // Session ID is extracted from log files in plain text mode
         sessionId: undefined,
         usage: tokenCounts
           ? {
@@ -72,22 +218,232 @@ export class CopilotResponseParser
               outputTokens: tokenCounts.completion,
               totalTokens: tokenCounts.prompt + tokenCounts.completion,
               cachedInputTokens: tokenCounts.cached,
-              // For Copilot, "in" is the full context window input for this invocation
               contextWindowUsedTokens: tokenCounts.prompt,
               contextWindowSize: COPILOT_CLI_CONTEXT_WINDOW_SIZE,
             }
           : undefined,
         harness: "copilot-cli",
-        // Copilot CLI has no --json mode; it pre-formats its output with full
-        // markdown rendering (tables, headings, chrome). Skip the markdown
-        // pipeline in the UI to avoid double-rendering artifacts.
+        // Plain text output is pre-formatted by Copilot; skip markdown pipeline.
         rawTextOutput: true,
       },
     };
   }
 
   /**
-   * Parse token counts from Copilot CLI statistics string
+   * Map a Copilot tool request to a semantic CliEvent.
+   *
+   * Uses CliEventMapper.classifyTool() for consistent tool → event mapping across harnesses.
+   * Copilot tool names in JSON mode: "powershell", "read_file", "write_file", "report_intent", etc.
+   *
+   * @param toolReq Tool request from assistant.message.data.toolRequests
+   * @param events Array to append the resulting event to
+   */
+  private mapToolRequestToEvent(
+    toolReq: { toolCallId?: string; name: string; arguments?: any; type?: string },
+    events: CliEvent[]
+  ): void {
+    const toolName = toolReq.name;
+    const input = toolReq.arguments || {};
+    const classification = CliEventMapper.classifyTool(toolName);
+    const timestamp = Date.now();
+
+    switch (classification.type) {
+      case CLI_EVENT_TYPES.BASH_COMMAND:
+        events.push({
+          type: CLI_EVENT_TYPES.BASH_COMMAND,
+          timestamp,
+          data: {
+            command: input.command || input.cmd || "unknown",
+            workingDir: input.cwd || input.workingDir,
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_WRITE:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_WRITE,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            content: input.content || input.file_text || "",
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_EDIT:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_EDIT,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            oldContent: input.old_string || input.oldString,
+            newContent: input.new_string || input.newString,
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_READ:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_READ,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+            status: OPERATION_STATUS.INITIATED,
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.FILE_DELETE:
+        events.push({
+          type: CLI_EVENT_TYPES.FILE_DELETE,
+          timestamp,
+          data: {
+            path: input.path || input.file_path || "unknown",
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.WEB_SEARCH:
+        events.push({
+          type: CLI_EVENT_TYPES.WEB_SEARCH,
+          timestamp,
+          data: {
+            query: input.query || "",
+          },
+        });
+        return;
+
+      case CLI_EVENT_TYPES.MCP_TOOL_CALL:
+        events.push({
+          type: CLI_EVENT_TYPES.MCP_TOOL_CALL,
+          timestamp,
+          data: {
+            server: (classification as { server: string }).server,
+            tool: (classification as { tool: string }).tool,
+            parameters: input,
+          },
+        });
+        return;
+
+      default:
+        events.push({
+          type: CLI_EVENT_TYPES.TOOL_CALL,
+          timestamp,
+          data: {
+            name: toolName,
+            parameters: input,
+            id: toolReq.toolCallId,
+          },
+        });
+    }
+  }
+
+  /**
+   * Process a streaming stdout chunk for real-time display (JSON mode).
+   *
+   * Handles JSONL streaming events from `--output-format json`:
+   * - `assistant.message_delta` → TEXT event (real-time character streaming)
+   * - `assistant.reasoning_delta` → THINKING event (real-time reasoning)
+   * - `tool.execution_start` → Semantic tool-call event
+   *
+   * `assistant.message` events are skipped during streaming to avoid duplicating
+   * text already emitted via `message_delta` deltas.
+   *
+   * @param chunk Raw stdout chunk (may contain partial or multiple JSONL lines)
+   * @param streamState Accumulated state across chunks (key: "streamBuffer")
+   * @returns Structured events to emit, or undefined if no complete events yet
+   */
+  processStreamingChunk(
+    chunk: string,
+    streamState: Map<string, any>
+  ): CliEvent[] | undefined {
+    let buffer = (streamState.get("streamBuffer") as string) || "";
+    buffer += chunk;
+
+    const { objects, remainder } =
+      CliResponseParser.extractJsonObjectsFromStream(buffer);
+    streamState.set("streamBuffer", remainder);
+
+    if (objects.length === 0) {
+      return undefined;
+    }
+
+    const events: CliEvent[] = [];
+
+    for (const json of objects) {
+      switch (json.type) {
+        case "assistant.message_delta": {
+          const delta = json.data?.deltaContent;
+          if (delta) {
+            events.push({
+              type: CLI_EVENT_TYPES.TEXT,
+              timestamp: Date.now(),
+              data: { text: delta },
+            });
+          }
+          break;
+        }
+
+        case "assistant.reasoning_delta": {
+          const delta = json.data?.deltaContent;
+          if (delta) {
+            events.push({
+              type: CLI_EVENT_TYPES.THINKING,
+              timestamp: Date.now(),
+              data: { text: delta, label: "Reasoning" },
+            });
+          }
+          break;
+        }
+
+        case "tool.execution_start": {
+          // Emit tool start event for real-time tool visualization
+          if (json.data?.toolName && json.data?.arguments) {
+            this.mapToolRequestToEvent(
+              {
+                toolCallId: json.data.toolCallId,
+                name: json.data.toolName,
+                arguments: json.data.arguments,
+              },
+              events
+            );
+          }
+          break;
+        }
+      }
+    }
+
+    return events.length > 0 ? events : undefined;
+  }
+
+  /**
+   * Extract session ID from Copilot CLI JSON output.
+   *
+   * In JSON mode, the session ID is in the final `result` event's `sessionId` field.
+   *
+   * @param output Raw CLI stdout (JSONL)
+   * @returns Session ID UUID if found
+   */
+  extractSessionId(output: string): string | undefined {
+    const trimmed = output.trimStart();
+    if (!trimmed.startsWith("{")) {
+      return undefined;
+    }
+
+    const { objects } = CliResponseParser.extractJsonObjectsFromStream(output);
+    for (const json of objects) {
+      if (json.type === "result" && json.sessionId) {
+        return json.sessionId;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Parse token counts from Copilot CLI statistics string (stderr).
    *
    * Handles two formats (supports optional k suffix on all values):
    * - New: "59.0k in, 207 out, 0 cached"

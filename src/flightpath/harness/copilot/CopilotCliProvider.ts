@@ -31,10 +31,10 @@ const execAsync = promisify(exec);
  *
  * Implements all Copilot-specific logic using composition pattern:
  * - Log file monitoring and sessionEnd hook for completion detection
- * - Plain text output parsing with stderr statistics
+ * - JSONL output parsing in headless mode (--output-format json), plain text fallback
  * - Tool permission conversion with read-only tool filtering
  * - MCP server configuration with "local" type and tools field
- * - Session discovery via prompt matching in event logs
+ * - Session ID from result.sessionId in JSON output; log file discovery as fallback
  *
  * This provider aggregates four specialized components:
  * - CopilotResponseParser: Parses plain text output and statistics
@@ -59,9 +59,9 @@ export class CopilotCliProvider implements ICliProvider {
     // Copilot uses sessionEnd hook for reliable completion detection in interactive mode
     usesInteractiveNotificationMonitor: true,
 
-    // Copilot has no --json mode; its output is pre-formatted plain text.
-    // The UI must skip the markdown pipeline to avoid double-rendering artifacts.
-    rawTextOutput: true,
+    // Headless mode uses --output-format json, so output is structured events (not raw text).
+    // The parser sets rawTextOutput:true in metadata for interactive/plain-text fallback.
+    rawTextOutput: false,
   };
 
   readonly responseParser: IResponseParser = new CopilotResponseParser();
@@ -87,6 +87,8 @@ export class CopilotCliProvider implements ICliProvider {
    * - Model selection (--model)
    * - Session management (--resume)
    * - sessionEnd hook (interactive mode only)
+   *
+   * Note: --output-format json is added by buildHeadlessArgs(), not here.
    *
    * @param prompt The prompt item with model/agent/session settings
    * @param isInteractive Whether this is interactive TUI or headless mode
@@ -315,7 +317,7 @@ export class CopilotCliProvider implements ICliProvider {
    * Build CLI arguments for headless mode
    *
    * Copilot requires --prompt flag to specify prompts.
-   * Format: copilot --prompt "..." [other args]
+   * Format: copilot --output-format json --prompt "..." [other args]
    *
    * Handles both direct prompts and file references (e.g., "@.flightpath/temp/prompt.md")
    *
@@ -324,8 +326,9 @@ export class CopilotCliProvider implements ICliProvider {
    * @returns Complete arguments array
    */
   buildHeadlessArgs(baseArgs: string[], prompt: string): string[] {
-    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character
-    return ["--prompt", `"${prompt}"`, ...baseArgs];
+    // Note: Quotes are needed because spawn with shell:true doesn't auto-quote the @ character.
+    // --output-format json enables structured JSONL output for reliable response/session parsing.
+    return ["--output-format", "json", "--prompt", `"${prompt}"`, ...baseArgs];
   }
 
   /**
