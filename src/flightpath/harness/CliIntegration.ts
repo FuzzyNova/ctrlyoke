@@ -1462,11 +1462,17 @@ export class CliIntegration extends HarnessIntegration {
       }
 
       // Parse result using provider's response parser (returns UniversalCliOutput)
-      const parsedOutput = this.provider.responseParser.parse(
+      let parsedOutput = this.provider.responseParser.parse(
         result.stdout,
         result.stderr,
         result.exitCode
       );
+
+      // Let provider augment parsed output with data unavailable during synchronous parsing
+      // (e.g., Copilot reads session log for context window stats after process exits).
+      if (this.provider.augmentParsedOutput) {
+        parsedOutput = await this.provider.augmentParsedOutput(parsedOutput);
+      }
 
       // Store structured output for tool call/event access
       this.lastParsedOutput = parsedOutput;

@@ -3,6 +3,7 @@ import type { INotificationMonitor } from "./INotificationMonitor";
 import type { IToolPermissionMapper } from "./IToolPermissionMapper";
 import type { ILogParser } from "./ILogParser";
 import type { PromptItem } from "../../../../types/FlightPathTypes";
+import type { UniversalCliOutput } from "../../../../types/CliOutputTypes";
 
 /**
  * Harness configuration (static metadata)
@@ -223,4 +224,18 @@ export interface ICliProvider {
     promptText: string,
     startTime: Date
   ): Promise<string | undefined>;
+
+  /**
+   * Augment parsed output after the response parser runs (optional).
+   *
+   * Called by CliIntegration immediately after responseParser.parse() in headless mode.
+   * Use for post-parse data enrichment that requires async work the synchronous parser
+   * cannot do (e.g., reading session log files to retrieve token usage data).
+   *
+   * Return the same or a modified UniversalCliOutput. Must not throw.
+   *
+   * @param output - Output from responseParser.parse()
+   * @returns Enriched output (or same object if no changes needed)
+   */
+  augmentParsedOutput?(output: UniversalCliOutput): Promise<UniversalCliOutput>;
 }

@@ -984,6 +984,57 @@ export class CopilotLogParser extends BaseLogParser {
   }
 
   /**
+   * Extract context window data from a session log by session ID.
+   *
+   * Reads the last `session.truncation` event from the session log, which fires
+   * once per model call turn and contains the most accurate context fill data.
+   * Returns the final (highest) values from a multi-turn session.
+   *
+   * Used by CopilotCliProvider.augmentParsedOutput() to patch missing input token
+   * data in JSON-mode headless output.
+   *
+   * @param sessionId - Session UUID from the `result` event in JSONL stdout
+   * @returns Truncation data if found, undefined if log unavailable or unreadable
+   */
+  static async extractTruncationDataFromLog(
+    sessionId: string
+  ): Promise<{ postTruncationTokensInMessages: number; tokenLimit: number } | undefined> {
+    const logPath = await CopilotLogParser.getLogPath(sessionId);
+    if (!logPath) {
+      return undefined;
+    }
+
+    try {
+      const content = fs.readFileSync(logPath, "utf-8");
+      let last: { postTruncationTokensInMessages: number; tokenLimit: number } | undefined;
+
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const event = JSON.parse(trimmed);
+          if (
+            event.type === "session.truncation" &&
+            typeof event.data?.postTruncationTokensInMessages === "number" &&
+            typeof event.data?.tokenLimit === "number"
+          ) {
+            last = {
+              postTruncationTokensInMessages: event.data.postTruncationTokensInMessages,
+              tokenLimit: event.data.tokenLimit,
+            };
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+
+      return last;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Map Copilot tool name to semantic event type
    *
    * Converts Copilot-specific tool names to harness-agnostic semantic events.

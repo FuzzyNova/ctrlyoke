@@ -6,6 +6,7 @@ import { ICliProvider, HarnessConfig } from "../shared/interfaces/ICliProvider";
 import { IResponseParser } from "../shared/interfaces/IResponseParser";
 import { INotificationMonitor } from "../shared/interfaces/INotificationMonitor";
 import { IToolPermissionMapper } from "../shared/interfaces/IToolPermissionMapper";
+import type { UniversalCliOutput } from "../../../types/CliOutputTypes";
 import { CopilotResponseParser } from "./CopilotResponseParser";
 import { CopilotNotificationMonitor } from "./CopilotNotificationMonitor";
 import { CopilotToolPermissionMapper } from "./CopilotToolPermissionMapper";
@@ -476,6 +477,61 @@ export class CopilotCliProvider implements ICliProvider {
    * 4. Return the matching session's log path
    * 5. Extract session ID from session.start event
    */
+  /**
+   * Augment JSON-mode headless output with context window data from the session log.
+   *
+   * Copilot's --output-format json stdout contains output tokens per turn but no input tokens.
+   * The session.truncation events in the session log file contain both postTruncationTokensInMessages
+   * (= input tokens sent to the model) and tokenLimit (= context window size).
+   *
+   * This is the permanent architecture for Copilot headless — session ID is not available until
+   * the final result event, so real-time log tailing during execution is not feasible.
+   */
+  async augmentParsedOutput(output: UniversalCliOutput): Promise<UniversalCliOutput> {
+    // Plain-text mode: token data comes from stderr stats in parseTokenCounts(), not needed here.
+    if (output.metadata.rawTextOutput) {
+      return output;
+    }
+
+    const sessionId = output.metadata.sessionId;
+    if (!sessionId) {
+      return output;
+    }
+
+    // Already have input token data — Copilot may add this to JSON output in a future version.
+    if (output.metadata.usage && output.metadata.usage.inputTokens > 0) {
+      return output;
+    }
+
+    const truncation = await CopilotLogParser.extractTruncationDataFromLog(sessionId);
+    if (!truncation) {
+      Log.debug(`[CopilotCliProvider] No truncation data in session log for ${sessionId}`);
+      return output;
+    }
+
+    const { postTruncationTokensInMessages, tokenLimit } = truncation;
+    const outputTokens = output.metadata.usage?.outputTokens ?? 0;
+
+    Log.debug(
+      `[CopilotCliProvider] Context from session log: ${postTruncationTokensInMessages}/${tokenLimit} tokens`
+    );
+
+    return {
+      ...output,
+      metadata: {
+        ...output.metadata,
+        usage: {
+          ...output.metadata.usage,
+          inputTokens: postTruncationTokensInMessages,
+          outputTokens,
+          totalTokens: postTruncationTokensInMessages + outputTokens,
+          contextWindowUsedTokens: postTruncationTokensInMessages,
+          contextWindowSize: tokenLimit,
+        },
+      },
+    };
+  }
+
   async extractSessionIdFromLogs(
     promptText: string,
     startTime: Date
