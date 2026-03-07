@@ -87,7 +87,7 @@ export const HLJS_STYLES = `
 
 /* Keywords, control flow */
 .hljs-keyword,
-.hljs-selector-tag { color: var(--vscode-debugView-valueChangedHighlight, #569cd6); }
+.hljs-selector-tag { color: var(--vscode-symbolIcon-functionForeground, #569cd6); }
 
 /* Strings */
 .hljs-string,
@@ -103,14 +103,14 @@ export const HLJS_STYLES = `
 
 /* Function / method names */
 .hljs-title.function_,
-.hljs-title.function { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
+.hljs-title.function { color: var(--vscode-debugTokenExpression-string, #dcdcaa); }
 
 /* Class / type names */
 .hljs-title.class_,
-.hljs-title.class { color: var(--vscode-symbolIcon-classForeground, #4ec9b0); }
+.hljs-title.class { color: var(--vscode-chat-editedFileForeground, #4ec9b0); }
 
 /* Generic titles (fallback) */
-.hljs-title { color: var(--vscode-symbolIcon-functionForeground, #dcdcaa); }
+.hljs-title { color: var(--vscode-editorBracketHighlight-foreground1, #dcdcaa); }
 
 /* Variables, parameters, properties */
 .hljs-variable,
@@ -119,7 +119,7 @@ export const HLJS_STYLES = `
 
 /* Built-in types / functions */
 .hljs-built_in,
-.hljs-type { color: var(--vscode-symbolIcon-interfaceForeground, #4ec9b0); }
+.hljs-type { color: var(--vscode-scmGraph-foreground4, #4ec9b0); }
 
 /* Booleans, null, undefined */
 .hljs-literal,
@@ -144,7 +144,7 @@ export const HLJS_STYLES = `
 
 /* HTML/JSX tag names */
 .hljs-tag .hljs-name,
-.hljs-name { color: var(--vscode-symbolIcon-classForeground, #4ec9b0); }
+.hljs-name { color: var(--vscode-symbolIcon-constructorForeground, #4ec9b0); }
 
 /* HTML/JSX tag attributes */
 .hljs-tag .hljs-attr { color: var(--vscode-symbolIcon-variableForeground, #9cdcfe); }
