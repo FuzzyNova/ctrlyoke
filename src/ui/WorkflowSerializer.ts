@@ -341,18 +341,36 @@ export class WorkflowSerializer {
     }
   }
 
-  /**
-   * TODO: Implement createWorkflowFromTemplate in WorkflowCommandHandler.
-   * Currently a stub — redirects user to the Create Prompt File command.
-   */
-  async handleCreateWorkflow(_message: any): Promise<void> {
+  async handleCreateWorkflow(message: any): Promise<void> {
+    const { templateId, variables, filename, workflowsDir, runAfter } = message;
+
     try {
-      vscode.window.showWarningMessage(
-        "Creating workflows from templates is not yet implemented. Please use 'FlightPath: Create Prompt File' command."
+      const filePath = await this.templateManager.createWorkflow(
+        templateId,
+        variables || {},
+        filename,
+        workflowsDir
       );
+
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_CREATED,
+        filePath,
+      });
+
+      const manager = this.getManager();
+      if (manager) {
+        await manager.loadPromptFile(filePath);
+        if (runAfter) {
+          vscode.commands.executeCommand("flightpath.run");
+        }
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`Failed to create workflow: ${errorMsg}`);
+      this.postMessage({
+        type: MESSAGE_TYPES.WORKFLOW_CREATED,
+        error: errorMsg,
+      });
     }
   }
 

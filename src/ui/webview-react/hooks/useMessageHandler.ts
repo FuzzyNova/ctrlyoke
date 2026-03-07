@@ -560,9 +560,10 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.WORKFLOW_CREATED] = (message) => {
     const uiStore = useUiStore.getState();
-    uiStore.closeNewWorkflowModal();
-    // Show success toast
-    uiStore.showToast(`Workflow created: ${message.filePath}`, "success");
+    // Only close the modal on success; errors are shown by the extension via showErrorMessage
+    if (!message.error) {
+      uiStore.closeNewWorkflowModal();
+    }
   };
 
   // --------------------------------------------------------------------------

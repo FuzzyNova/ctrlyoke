@@ -1,37 +1,31 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Modal, Button } from "../shared";
-import { useVsCodeApi } from "../../hooks/useVsCodeApi";
+import { useUiStore } from "@store/uiStore";
+import { useVsCodeApi } from "@hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
-
-interface Template {
-  id: string;
-  name: string;
-  description: string;
-  variables?: string[];
-  isBuiltIn: boolean;
-  isAction?: boolean;
-}
 
 interface TemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface TemplateModalData {
-  templates: Template[];
-  workflowsDir: string;
-  defaultTemplateId: string;
-}
-
 /**
- * TemplateModal - Modal for creating workflow from template
+ * TemplateModal - Modal for creating a workflow from a template
+ *
+ * Data flow:
+ *   1. Extension sends OPEN_NEW_WORKFLOW_MODAL → useMessageHandler opens modal via uiStore
+ *   2. Template list and default template already in uiStore.templates / uiStore.defaultTemplateId
+ *   3. uiStore.currentTemplate holds the selected template (with variables list)
+ *   4. On template change, modal updates uiStore.currentTemplate directly from the local list
+ *   5. On submit, sends CREATE_WORKFLOW → extension creates file, loads it, sends WORKFLOW_CREATED
+ *   6. WORKFLOW_CREATED → useMessageHandler closes modal
  *
  * Features:
- * - Template dropdown with groups (Built-in, Custom, Actions)
+ * - Template dropdown (Built-in / Custom / Actions groups)
  * - Dynamic variable inputs based on selected template
  * - Filename input with validation
- * - Path preview
- * - Set as Default checkbox
+ * - Save location path preview
+ * - Set as Default link
  * - Create and Create & Run buttons
  */
 export const TemplateModal: React.FC<TemplateModalProps> = ({
@@ -41,88 +35,39 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const vscode = useVsCodeApi();
   const filenameRef = useRef<HTMLInputElement>(null);
 
-  // Modal data from extension
-  const [modalData, setModalData] = useState<TemplateModalData>({
-    templates: [],
-    workflowsDir: ".flightpath/workflows",
-    defaultTemplateId: "blank",
-  });
+  // Data from uiStore (populated by useMessageHandler on OPEN_NEW_WORKFLOW_MODAL)
+  const templates = useUiStore((s) => s.templates);
+  const workflowsDir = useUiStore((s) => s.workflowsDir);
+  const defaultTemplateId = useUiStore((s) => s.defaultTemplateId);
+  const currentTemplate = useUiStore((s) => s.currentTemplate);
+  const setCurrentTemplate = useUiStore((s) => s.setCurrentTemplate);
+  const setDefaultTemplateId = useUiStore((s) => s.setDefaultTemplateId);
 
-  // Form state
+  // Local form state
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [filename, setFilename] = useState("");
   const [filenameError, setFilenameError] = useState<string | null>(null);
   const [defaultConfirmation, setDefaultConfirmation] = useState(false);
 
-  // Get current template
-  const currentTemplate = modalData.templates.find(
-    (t) => t.id === selectedTemplateId
-  );
-
-  // Handle messages from extension
+  // Initialize form state when modal opens
+  const prevIsOpenRef = useRef(false);
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
+    if (isOpen && !prevIsOpenRef.current) {
+      const initId = defaultTemplateId || "blank";
+      setSelectedTemplateId(initId);
+      setVariables({});
+      setFilename("");
+      setFilenameError(null);
+      setDefaultConfirmation(false);
 
-      switch (message.type) {
-        case MESSAGE_TYPES.OPEN_NEW_WORKFLOW_MODAL:
-          setModalData({
-            templates: message.templates || [],
-            workflowsDir: message.workflowsDir || ".flightpath/workflows",
-            defaultTemplateId: message.defaultTemplateId || "blank",
-          });
-          setSelectedTemplateId(message.defaultTemplateId || "blank");
-          setFilename("");
-          setVariables({});
-          setFilenameError(null);
-          setDefaultConfirmation(false);
-          break;
-
-        case MESSAGE_TYPES.TEMPLATE_INFO:
-          // Update template variables when received
-          setModalData((prev) => ({
-            ...prev,
-            templates: prev.templates.map((t) =>
-              t.id === message.templateId
-                ? {
-                    ...t,
-                    variables: message.variables || [],
-                    description: message.description || t.description,
-                  }
-                : t
-            ),
-          }));
-          break;
-
-        case MESSAGE_TYPES.DEFAULT_TEMPLATE_SET:
-          if (message.success) {
-            setModalData((prev) => ({
-              ...prev,
-              defaultTemplateId: message.templateId,
-            }));
-            setDefaultConfirmation(true);
-            setTimeout(() => setDefaultConfirmation(false), 2000);
-          }
-          break;
-
-        case MESSAGE_TYPES.WORKFLOW_CREATED:
-          if (message.success) {
-            onClose();
-          } else {
-            setFilenameError(message.error || "Failed to create workflow");
-          }
-          break;
-
-        case MESSAGE_TYPES.CLOSE_MODAL:
-          onClose();
-          break;
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [onClose]);
+      // Sync currentTemplate to match the default selection
+      const template = templates.find((t) => t.id === initId) ?? null;
+      setCurrentTemplate(template);
+    }
+    prevIsOpenRef.current = isOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Focus filename input when modal opens
   useEffect(() => {
@@ -131,7 +76,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
   }, [isOpen]);
 
-  // Handle template selection
+  // Handle template selection change
   const handleTemplateChange = useCallback(
     (templateId: string) => {
       if (templateId === "__create_new__") {
@@ -143,13 +88,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setSelectedTemplateId(templateId);
       setVariables({});
 
-      // Request template info
-      vscode.postMessage({
-        type: MESSAGE_TYPES.TEMPLATE_SELECTED,
-        templateId,
-      });
+      // Update currentTemplate directly from the local list (no round-trip needed)
+      const template = templates.find((t) => t.id === templateId) ?? null;
+      setCurrentTemplate(template);
     },
-    [vscode, onClose]
+    [vscode, onClose, templates, setCurrentTemplate]
   );
 
   // Handle variable change
@@ -167,14 +110,12 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       return false;
     }
 
-    // Check for invalid characters
     const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
     if (invalidChars.test(name)) {
       setFilenameError("Invalid characters in filename");
       return false;
     }
 
-    // Check for reserved names (Windows)
     const reserved = /^(con|prn|aux|nul|com\d|lpt\d)$/i;
     if (reserved.test(name)) {
       setFilenameError("Reserved filename");
@@ -198,40 +139,36 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     [validateFilename]
   );
 
-  // Set as default template
+  // Set as default template (optimistic UI + persist via extension)
   const handleSetDefault = useCallback(() => {
-    if (selectedTemplateId && selectedTemplateId !== "__create_new__") {
-      vscode.postMessage({
-        type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
-        templateId: selectedTemplateId,
-      });
-    }
-  }, [vscode, selectedTemplateId]);
+    if (!selectedTemplateId || selectedTemplateId === "__create_new__") return;
+
+    vscode.postMessage({
+      type: MESSAGE_TYPES.SET_DEFAULT_TEMPLATE,
+      templateId: selectedTemplateId,
+    });
+
+    // Optimistic update
+    setDefaultTemplateId(selectedTemplateId);
+    setDefaultConfirmation(true);
+    setTimeout(() => setDefaultConfirmation(false), 2000);
+  }, [vscode, selectedTemplateId, setDefaultTemplateId]);
 
   // Submit workflow creation
   const handleSubmit = useCallback(
     (runAfter: boolean) => {
-      if (!validateFilename(filename)) {
-        return;
-      }
+      if (!validateFilename(filename)) return;
 
       vscode.postMessage({
         type: MESSAGE_TYPES.CREATE_WORKFLOW,
         templateId: selectedTemplateId,
         variables,
         filename: filename.trim(),
-        workflowsDir: modalData.workflowsDir,
+        workflowsDir,
         runAfter,
       });
     },
-    [
-      vscode,
-      selectedTemplateId,
-      variables,
-      filename,
-      modalData.workflowsDir,
-      validateFilename,
-    ]
+    [vscode, selectedTemplateId, variables, filename, workflowsDir, validateFilename]
   );
 
   // Keyboard handling
@@ -248,17 +185,15 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     [handleSubmit]
   );
 
-  // Group templates
-  const builtInTemplates = modalData.templates.filter((t) => t.isBuiltIn);
-  const customTemplates = modalData.templates.filter(
-    (t) => !t.isBuiltIn && !t.isAction
-  );
-  const actionTemplates = modalData.templates.filter((t) => t.isAction);
+  // Group templates for display
+  const builtInTemplates = templates.filter((t) => t.isBuiltIn);
+  const customTemplates = templates.filter((t) => !t.isBuiltIn && !t.isAction);
+  const actionTemplates = templates.filter((t) => t.isAction);
 
   // Path preview
   const pathPreview = filename.trim()
-    ? `${modalData.workflowsDir}/${filename.trim()}.flightpath.json`
-    : `${modalData.workflowsDir}/`;
+    ? `${workflowsDir}/${filename.trim()}.flightpath.json`
+    : `${workflowsDir}/`;
 
   return (
     <Modal
@@ -269,20 +204,20 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
-            <a
-              onClick={handleSetDefault}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && handleSetDefault()}
-              className={`text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors ${
-                !selectedTemplateId || selectedTemplateId === "__create_new__"
-                  ? "opacity-50 cursor-not-allowed pointer-events-none"
-                  : ""
-              }`}
-              title="Set this as the default template"
-            >
-              Set as Default
-            </a>
+            {selectedTemplateId && selectedTemplateId !== "__create_new__" && selectedTemplateId !== defaultTemplateId ? (
+              <a
+                onClick={handleSetDefault}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && handleSetDefault()}
+                className="text-sm font-medium text-link-fg hover:underline cursor-pointer transition-colors"
+                title="Set this as the default template"
+              >
+                Set as Default
+              </a>
+            ) : selectedTemplateId === defaultTemplateId && selectedTemplateId !== "__create_new__" ? (
+              <span className="text-sm text-description-fg">Default template</span>
+            ) : null}
             {defaultConfirmation && (
               <span className="text-xs text-notification-info-fg animate-pulse">
                 ✓ Default set
@@ -326,7 +261,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             onChange={(e) => handleTemplateChange(e.target.value)}
             className="w-full px-2 py-1.5 rounded bg-dropdown-bg text-dropdown-fg border border-dropdown-border focus:outline-none focus:border-focus-border"
           >
-            {/* Built-in Templates */}
             {builtInTemplates.length > 0 && (
               <optgroup label="Built-in Templates">
                 {builtInTemplates.map((template) => (
@@ -337,7 +271,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               </optgroup>
             )}
 
-            {/* Custom Templates */}
             {customTemplates.length > 0 && (
               <optgroup label="Custom Templates">
                 {customTemplates.map((template) => (
@@ -348,7 +281,6 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               </optgroup>
             )}
 
-            {/* Actions */}
             {actionTemplates.length > 0 && (
               <optgroup label="Actions">
                 {actionTemplates.map((template) => (

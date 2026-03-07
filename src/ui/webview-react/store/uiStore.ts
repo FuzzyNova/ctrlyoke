@@ -9,7 +9,7 @@ export interface TemplateInfo {
   id: string;
   name: string;
   description: string;
-  variables?: Record<string, unknown>;
+  variables?: string[];
   isBuiltIn: boolean;
   isAction: boolean;
 }

@@ -6,6 +6,7 @@ import { MESSAGE_TYPES, EXECUTION_STATES } from "../../types/messages";
 import { WorkflowControls } from "../workflow/WorkflowControls";
 import { WorkflowStatus } from "../workflow/WorkflowStatus";
 import { SaveWorkflowDialog } from "../workflow/SaveWorkflowDialog";
+import { TemplateModal } from "../workflow/TemplateModal";
 
 /**
  * Execution state badge configuration
@@ -71,7 +72,7 @@ const STATE_BADGE_CONFIG: Record<string, StateBadgeConfig> = {
 export const Header: React.FC = () => {
   const vscode = useVsCodeApi();
   const { fileName, executionState } = useWorkflowStore();
-  const { loadedWorkflows, activeWorkflowId } = useUiStore();
+  const { loadedWorkflows, activeWorkflowId, newWorkflowModalOpen, closeNewWorkflowModal } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
@@ -143,6 +144,9 @@ export const Header: React.FC = () => {
 
         {/* Save Workflow Dialog — rendered here for co-location with SaveWorkflowButton */}
         <SaveWorkflowDialog />
+
+        {/* Template Modal — controlled by uiStore.newWorkflowModalOpen */}
+        <TemplateModal isOpen={newWorkflowModalOpen} onClose={closeNewWorkflowModal} />
 
         {/* Center Section: Workflow Status - own row on narrow, perfectly centered on wide via 1fr/auto/1fr grid */}
         <div className="header-center order-last sm:order-none col-span-2 sm:col-span-1 justify-self-center w-full sm:w-auto flex items-center justify-center min-w-0">
