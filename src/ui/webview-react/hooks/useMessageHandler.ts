@@ -469,10 +469,6 @@ function createMessageHandlers(): MessageHandlerMap {
     const workflowStore = useWorkflowStore.getState();
     const events = message.events || [];
 
-    WebviewLog.debug(
-      `[CLI_STREAMING_EVENTS] stepIndex=${message.stepIndex}, event count=${events.length}`
-    );
-
     // Append events to streaming buffer (creates buffer if needed)
     // Events are accumulated and displayed in real-time as formatted structured output
     workflowStore.appendStreamingEvents(message.stepIndex, events);
@@ -888,11 +884,6 @@ function createMessageHandlers(): MessageHandlerMap {
     const summary: WorkflowSummary | undefined = message.summary;
     if (!summary) return;
     const uiStore = useUiStore.getState();
-    WebviewLog.debug(
-      `[WORKFLOW_SUMMARY_UPDATED] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? summary.filePath.split(/[\\/]/).pop() : "?"} ` +
-        `— loadedWorkflows: [${uiStore.loadedWorkflows.map((w) => `inst:${w.id.slice(0, 8)}(name="${w.workflowName || "(empty)"}", state=${w.executionState})`).join(", ") || "(none)"}]`
-    );
     if (
       summary.executionState === EXECUTION_STATES.RUNNING ||
       summary.executionState === EXECUTION_STATES.PAUSED

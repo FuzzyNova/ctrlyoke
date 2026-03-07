@@ -605,10 +605,6 @@ window.vscodeApi = acquireVsCodeApi();
 
   /** Notify webview that a workflow's execution summary was updated (state/progress changed). */
   public notifyWorkflowSummaryUpdated(summary: WorkflowSummary): void {
-    Log.debug(
-      `[notifyWorkflowSummaryUpdated] inst:${summary.id.slice(0, 8)} name="${summary.workflowName || "(empty)"}" state=${summary.executionState} ` +
-        `step=${workflowDisplayStep(summary)}/${summary.totalSteps} fp=${summary.filePath ? path.basename(summary.filePath) : "?"}`
-    );
     this.postMessage({ type: MESSAGE_TYPES.WORKFLOW_SUMMARY_UPDATED, summary });
   }
 

@@ -296,7 +296,6 @@ export class WorkingFileManager {
           skipLock: true,
         });
       });
-      Log.debug(`updateWorkingFile - Successfully wrote working file`);
     } catch (error) {
       Log.error(
         `FlightPath: Failed to update working file: ${error instanceof Error ? error.message : String(error)}`

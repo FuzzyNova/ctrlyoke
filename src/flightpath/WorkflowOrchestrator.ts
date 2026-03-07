@@ -1235,7 +1235,7 @@ export class WorkflowOrchestrator {
     // may deliver a "change" event instead of "create". CLI heartbeats (every 5s)
     // also use atomic rename, so this fires ~5s after CLI start at the latest.
     this.runnerJsonCreateWatcher.onDidChange(async (uri) => {
-      Log.debug(
+      Log.trace(
         `[WorkflowOrchestrator] runner.json changed: ${path.basename(uri.fsPath)}`
       );
       await this.handleRunnerJsonEvent(uri.fsPath, workspaceFolderPath);
@@ -1259,9 +1259,6 @@ export class WorkflowOrchestrator {
     }
 
     if (lock.runner !== "cli") {
-      Log.debug(
-        `[WorkflowOrchestrator] handleRunnerJsonEvent: skipping "${path.basename(lockFilePath)}" — runner="${lock.runner}" (not CLI-managed)`
-      );
       return;
     }
 
