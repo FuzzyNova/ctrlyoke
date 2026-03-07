@@ -182,7 +182,7 @@ Execute the dev-story workflow from .bmad/bmm/workflows/4-implementation/dev-sto
 </workflow>
 
 <context>
-Story file: #file:docs/bmad/sprint-artifacts/stories/{{STORY_FILE}}
+Story file: #file:docs/bmad/sprint-artifacts/stories/{storyFile}
 Sprint status: #file:docs/bmad/sprint-status.yaml
 Architecture: #file:docs/bmad/architecture.md
 </context>
@@ -300,17 +300,17 @@ Propose to BMAD-METHOD upstream:
 
 ## Template Variables
 
-FlightPath templates can use these variable patterns:
+FlightPath templates use single-brace placeholders (`{variable}`) that are filled in when the user runs the template via `FlightPath: New Workflow from Template`. The user is prompted for each declared variable before the workflow file is created.
 
-| Variable                  | Source                         | Example                             |
-| ------------------------- | ------------------------------ | ----------------------------------- |
-| `{{PROJECT_NAME}}`        | User input or config.yaml      | "FlightPath"                        |
-| `{{FEATURE_DESCRIPTION}}` | User input (first prompt)      | "Add retry logic to end conditions" |
-| `{{STORY_FILE}}`          | Parsed from sprint-status.yaml | "story-epic1-1.md"                  |
-| `{{EPIC_NUM}}`            | Current epic number            | "1"                                 |
-| `{{STORY_NUM}}`           | Current story number           | "1"                                 |
+| Variable               | Source                         | Example                             |
+| ---------------------- | ------------------------------ | ----------------------------------- |
+| `{projectName}`        | User input or config.yaml      | `FlightPath`                        |
+| `{featureDescription}` | User input (first prompt)      | `Add retry logic to end conditions` |
+| `{storyFile}`          | Parsed from sprint-status.yaml | `story-epic1-1.md`                  |
+| `{epicNum}`            | Current epic number            | `1`                                 |
+| `{storyNum}`           | Current story number           | `1`                                 |
 
-These are resolved at runtime by FlightPath before sending to Copilot.
+Variables are declared in `TemplateManager.ts` as part of the template manifest. See `src/templates/workflows/full-feature.flightpath.yaml` for a working example using `{featureDescription}` and `{planDocument}`.
 
 ---
 
@@ -632,49 +632,11 @@ phases:
 
 ---
 
-## Reference Materials Extracted from BMAD
+## Reference Materials
 
-Before removing BMAD from this project, the following valuable reference materials were extracted to `docs/reference/`:
+BMAD was evaluated for this project and subsequently removed. The reference files originally planned for extraction (`docs/reference/elicitation-methods.csv`, `docs/reference/test-patterns/`) were not retained. If needed, source materials are available directly from the [BMAD-METHOD repository](https://github.com/bmad-code-org/BMAD-METHOD).
 
-### Elicitation Methods (`docs/reference/elicitation-methods.csv`)
+**Future Work areas that were identified:**
 
-38 structured thinking techniques organized by category for use in analysis and planning prompts:
-
-**High-Priority Methods for FlightPath Prompts:**
-
-- **Pre-mortem Analysis** (Risk) - Imagine future failure, work backwards to prevent it
-- **First Principles Analysis** (Core) - Strip assumptions, rebuild from fundamentals
-- **Dependency Mapping** (Structural) - Visualize interconnections to understand impacts
-- **5 Whys Deep Dive** (Core) - Drill down to root causes
-- **Tree of Thoughts** (Advanced) - Explore multiple reasoning paths simultaneously
-- **Failure Mode Analysis** (Risk) - Systematically explore how components could fail
-- **Self-Consistency Validation** (Advanced) - Generate multiple approaches, compare for consensus
-
-**Future Work:** Create FlightPath prompt templates that apply these methods to:
-
-- Architecture review workflows
-- PRD validation
-- Risk assessment for complex features
-- Root cause analysis for test failures
-- Alternative solution exploration
-
-### Test Architecture Patterns (`docs/reference/test-patterns/`)
-
-21 reusable test engineering knowledge fragments covering:
-
-- **Fixture architecture** - Composable fixture patterns and reuse rules
-- **Network-first safeguards** - Intercept-before-navigate, HAR capture, deterministic waits
-- **Contract testing** - Pact publishing, provider verification
-- **CI burn-in strategy** - Staged jobs, shard orchestration, flakiness mitigation
-- **Risk governance** - Scoring matrix, category ownership, gate decisions
-- **Selector resilience** - Robust selector strategies and debugging
-- **Feature flag governance** - Enum management, targeting helpers, cleanup
-
-**Future Work:** Use these patterns to:
-
-- Inform end condition validation scripts
-- Create test quality assessment workflows
-- Build test architecture review prompts
-- Define FlightPath-specific testing best practices templates
-
-See `docs/reference/test-patterns/test-patterns-index.csv` for the complete catalog.
+- Create FlightPath prompt templates that apply BMAD's structured thinking techniques (pre-mortem analysis, first-principles, dependency mapping) to architecture review and PRD validation workflows
+- Use BMAD's test engineering knowledge fragments to inform end condition validation scripts and test quality assessment workflows

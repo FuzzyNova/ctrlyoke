@@ -207,7 +207,7 @@ This directory contains the orchestration layer...
 
 ## Prompt Templates (for Setup Script)
 
-#### 3. CopilotCommandLineIntegration (`src/flightpath/cli/CopilotCommandLineIntegration.ts`)
+#### 3. CopilotCliProvider (`src/flightpath/harness/copilot/CopilotCliProvider.ts`)
 
 **Changes**:
 
@@ -230,13 +230,13 @@ private buildCliArgs(
 }
 ```
 
-**B) No changes to prompt building** - injection happens in base class
+**B) No changes to prompt building** - injection happens in CliIntegration
 
-#### 4. BaseCliIntegration (`src/flightpath/base/BaseCliIntegration.ts`)
+#### 4. HarnessIntegration (`src/flightpath/HarnessIntegration.ts`)
 
 **Changes**:
 
-**Modify `buildPromptText()` to inject AGENTS.md hierarchy**
+**Modify prompt text building to inject AGENTS.md hierarchy** (alongside existing context and agent expansion logic at ~line 220)
 
 ```typescript
 protected async buildPromptText(prompt: PromptItem): Promise<string> {
@@ -630,29 +630,15 @@ Proceed with creating root-level AGENTS.md.
 
 ### Phase 4: CLI Integration for Injection
 
-- [ ] Modify `src/flightpath/cli/CopilotCommandLineIntegration.ts`
-  - [ ] Add `--no-custom-instructions` flag logic
-  - [ ] Test flag behavior with Copilot CLI
-
-- [ ] Modify `src/flightpath/base/BaseCliIntegration.ts`
-  - [ ] Add `getAgentsHierarchyContent()` method
-  - [ ] Add `getPromptContextPath()` method
-  - [ ] Integrate into `buildPromptText()`
-  - [ ] Test injection with multiple hierarchy levels
-
-### Phase 4: CLI Integration for Injection
-
-- [ ] Modify `src/flightpath/cli/CopilotCommandLineIntegration.ts`
+- [ ] Modify `src/flightpath/harness/copilot/CopilotCliProvider.ts`
   - [ ] Add `--no-custom-instructions` flag logic in `buildCliArgs()`
   - [ ] Test flag behavior with Copilot CLI
 
-- [ ] Modify `src/flightpath/base/BaseCliIntegration.ts`
+- [ ] Modify `src/flightpath/HarnessIntegration.ts`
   - [ ] Add `getAgentsHierarchyContent()` method
   - [ ] Add `getPromptContextPath()` method
-  - [ ] Integrate into `buildPromptText()`
+  - [ ] Integrate into `HarnessIntegration.ts` prompt building (alongside context/agent expansion)
   - [ ] Test injection with multiple hierarchy levels
-
-### Phase 5: Settings & Configuration
 
 ### Phase 5: Settings & Configuration
 
@@ -678,14 +664,6 @@ Proceed with creating root-level AGENTS.md.
   - [ ] Workflow generation guide
   - [ ] Settings configuration guide
   - [ ] Best practices for AGENTS.md content
-
-- [ ] Manual testing
-  - [ ] Generate workflow for FlightPath repository itself
-  - [ ] Run workflow and verify AGENTS.md files
-  - [ ] Test hierarchical injection with 3+ levels
-  - [ ] Verify `--no-custom-instructions` flag works
-  - [ ] Test with Claude CLI (should be unaffected)
-  - [ ] Test with Codex CLI (should be unaffected)
 
 ### Phase 6: Documentation & Testing
 
@@ -723,8 +701,6 @@ Proceed with creating root-level AGENTS.md.
   - [ ] Test with Claude CLI (should be unaffected)
   - [ ] Test with Codex CLI (should be unaffected)
   - [ ] Test trust dialog for custom templates with setup scripts
-
-### Phase 7: Polish & Release
 
 ### Phase 7: Polish & Release
 

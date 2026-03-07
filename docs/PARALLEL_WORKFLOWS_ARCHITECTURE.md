@@ -71,26 +71,26 @@ class WorkflowOrchestrator {
   private viewedInstance: WorkflowInstance | null;
 
   // Workflow creation — creates a new instance, always switches view to it
-  createWorkflow(filePath: string): Promise<WorkflowInstance>
+  createWorkflow(filePath?: string): Promise<WorkflowInstance | undefined>;
 
   // Returns only RUNNING/PAUSED instances (Map contents)
-  getWorkflowSummaries(): WorkflowSummary[]
+  getWorkflowSummaries(): WorkflowSummary[];
 
   // Execution — adds instance to Map; removes on completion (auto-retire)
-  executeWorkflow(workflowId?: string, modeOverride?: Provider): Promise<void>
+  executeWorkflow(workflowId?: string, modeOverride?: Provider): Promise<void>;
 
   // View switching — changes viewedInstance, sends full state sync to dashboard
-  setActiveWorkflow(workflowId: string): void
+  setActiveWorkflow(workflowId: string): void;
 
   // Delegation — apply to viewedInstance by default
-  pauseWorkflow(workflowId?: string): void
-  resumeWorkflow(workflowId?: string): Promise<void>
-  stopWorkflow(workflowId?: string): Promise<void>
-  clearWorkflow(workflowId?: string): void
+  pauseWorkflow(workflowId?: string): void;
+  resumeWorkflow(workflowId?: string): Promise<void>;
+  stopWorkflow(workflowId?: string): Promise<void>;
+  clearWorkflow(workflowId?: string): void;
 
   // No-ops (live processes cannot survive restart)
-  saveState(): Promise<void>   // intentional no-op
-  restoreState(): Promise<void> // intentional no-op
+  saveState(): Promise<void>; // intentional no-op
+  restoreState(): Promise<void>; // intentional no-op
 }
 ```
 
@@ -105,10 +105,10 @@ class WorkflowOrchestrator {
 ```typescript
 class WorkflowInstance extends EventEmitter {
   // Identity
-  readonly id: string;           // UUID
+  readonly id: string; // UUID
   workflowName: string;
   filePath: string;
-  startedAt?: number;            // Set when execute() is first called
+  startedAt?: number; // Set when execute() is first called
 
   // Whether this is the currently viewed workflow (controls buffering)
   isActive: boolean;
@@ -126,18 +126,18 @@ class WorkflowInstance extends EventEmitter {
   private promptFileWatcher?: PromptFileWatcher;
 
   // Lifecycle
-  async loadPromptFile(filePath: string): Promise<void>
-  async execute(modeOverride?: Provider): Promise<void>
-  pause(): void
-  async resume(): Promise<void>
-  async stop(): Promise<void>
-  clear(): void
+  async loadPromptFile(filePath: string): Promise<void>;
+  async execute(modeOverride?: Provider): Promise<void>;
+  pause(): void;
+  async resume(): Promise<void>;
+  async stop(): Promise<void>;
+  clear(): void;
 
   // For dropdown display
-  getSummary(): WorkflowSummary
+  getSummary(): WorkflowSummary;
 
   // Called by orchestrator on view switch — flushes buffered events to dashboard
-  sendFullStateToDashboard(): void
+  sendFullStateToDashboard(): void;
 }
 ```
 
@@ -147,13 +147,7 @@ class WorkflowInstance extends EventEmitter {
 
 **File**: `src/flightpath/IntegrationFactory.ts`
 
-Creates `HarnessIntegration` instances on demand. Each `WorkflowInstance` gets its own integration when `execute()` is called. No shared integration state between instances.
-
-```typescript
-class IntegrationFactory {
-  createForHarness(harness: Harness, context: vscode.ExtensionContext): HarnessIntegration
-}
-```
+Creates `HarnessIntegration` instances on demand. Each `WorkflowInstance` maintains its own `executionIntegrations` Map (keyed by harness ID) — integrations are created per-run and disposed in the finally block. The orchestrator also holds shared detector integrations used for pre-flight harness availability checks.
 
 ---
 
@@ -168,12 +162,12 @@ class FlightPathManager {
   private orchestrator: WorkflowOrchestrator;
 
   // All methods delegate to orchestrator
-  async loadPromptFile(filePath: string): Promise<void>
-  async executeLoadedPromptFile(modeOverride?: Provider): Promise<void>
-  pause(): void
-  async resume(): Promise<void>
-  async stop(): Promise<void>
-  clear(): void
+  async loadPromptFile(filePath: string): Promise<void>;
+  async executeLoadedPromptFile(modeOverride?: Provider): Promise<void>;
+  pause(): void;
+  async resume(): Promise<void>;
+  async stop(): Promise<void>;
+  clear(): void;
   // ... all other original public methods
 }
 ```
@@ -250,7 +244,7 @@ interface WorkflowSummary {
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
-  startedAt?: number;    // Unix ms — used for elapsed time display
+  startedAt?: number; // Unix ms — used for elapsed time display
 }
 ```
 
@@ -271,19 +265,19 @@ interface WorkflowSummary {
 
 ## Rejected Decisions (Post-Implementation Simplifications)
 
-| Original Plan                              | Rejected Because                                             |
-| ------------------------------------------ | ------------------------------------------------------------ |
-| `maxLoadedWorkflows` setting (default 20)  | Unnecessary complexity — no good reason to cap workflow count|
-| `autoSwitchToNewWorkflow` setting          | Should always switch — opinionated behavior, no opt-out      |
-| `autoDismissCompleted` setting             | Always auto-retire — another opinionated simplification      |
-| `keepDismissedWorkflows` setting           | Tied to dismiss concept which was removed                    |
-| `flightpath.switchWorkflow` command        | Accessible via dropdown; no command needed                   |
-| `flightpath.dismissWorkflow` command       | No dismiss concept — auto-retire only                        |
-| `flightpath.dismissAllWorkflows` command   | No dismiss concept — auto-retire only                        |
-| `WorkflowSelectorItem` component           | Deleted; replaced by `RunningWorkflowItem` (no dismiss btn)  |
-| "Loaded Workflows" dropdown section name   | Renamed to "Running Workflows" (more accurate)               |
-| Explicit `DISMISS_WORKFLOW` message type   | Removed with the dismiss concept                             |
-| `saveState()` / `restoreState()` (active)  | No-ops — live processes cannot survive reload                |
+| Original Plan                             | Rejected Because                                              |
+| ----------------------------------------- | ------------------------------------------------------------- |
+| `maxLoadedWorkflows` setting (default 20) | Unnecessary complexity — no good reason to cap workflow count |
+| `autoSwitchToNewWorkflow` setting         | Should always switch — opinionated behavior, no opt-out       |
+| `autoDismissCompleted` setting            | Always auto-retire — another opinionated simplification       |
+| `keepDismissedWorkflows` setting          | Tied to dismiss concept which was removed                     |
+| `flightpath.switchWorkflow` command       | Accessible via dropdown; no command needed                    |
+| `flightpath.dismissWorkflow` command      | No dismiss concept — auto-retire only                         |
+| `flightpath.dismissAllWorkflows` command  | No dismiss concept — auto-retire only                         |
+| `WorkflowSelectorItem` component          | Deleted; replaced by `RunningWorkflowItem` (no dismiss btn)   |
+| "Loaded Workflows" dropdown section name  | Renamed to "Running Workflows" (more accurate)                |
+| Explicit `DISMISS_WORKFLOW` message type  | Removed with the dismiss concept                              |
+| `saveState()` / `restoreState()` (active) | No-ops — live processes cannot survive reload                 |
 
 ---
 

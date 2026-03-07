@@ -193,6 +193,40 @@ codex exec --json [MCP args if applicable] <customArgs> "<prompt>"
 
 ---
 
+### opencode-cli
+
+**Interactive mode** — always inject:
+
+The OpenCode plugin file (written to `.opencode/plugin/flightpath-completion-hook.js` before launch) — needed for idle-based completion detection via the session.status event. This is deployed as a side effect of `buildCliArgs()`, not as a CLI arg itself, so it is unaffected by `customArgs`.
+
+Skipped: `--model` (`-m provider/model`), `-s <sessionId>`
+
+Skipped (tool permissions): OpenCode uses config-file-driven permissions (`opencode.json`), so `IToolPermissionMapper.buildArgs()` returns `[]` — nothing to skip.
+
+**Headless mode** — always inject:
+
+```
+run --format json
+```
+
+(`run` subcommand puts OpenCode in headless pipe mode; `--format json` is required for FlightPath's JSONL response parser)
+
+Final command shape (interactive):
+
+```
+opencode --prompt "<prompt>" [MCP args if applicable] <customArgs>
+```
+
+Final command shape (headless):
+
+```
+opencode run --format json [MCP args if applicable] <customArgs> "<prompt>"
+```
+
+> **Note**: Like Codex's `exec` subcommand, the `run` subcommand is structural (not an arg). If `customArgs` includes a subcommand, it would conflict. Document this as a known limitation.
+
+---
+
 ## Implementation Plan
 
 ### 1. Schema (`schemas/prompt-schema.json`)
@@ -214,7 +248,7 @@ codex exec --json [MCP args if applicable] <customArgs> "<prompt>"
 - Ensure `customArgs` is included in `ResolvedProperties` so it participates in three-tier resolution
 - Add `resolvedCustomArgs` to the resolved output alongside `resolvedModel`, `resolvedResumeSession`, etc.
 
-### 5. Each Provider's `buildCliArgs` (`src/flightpath/cli/*/`)
+### 5. Each Provider's `buildCliArgs` (`src/flightpath/harness/*/`)
 
 Pattern — at the top of each method, check for custom args:
 

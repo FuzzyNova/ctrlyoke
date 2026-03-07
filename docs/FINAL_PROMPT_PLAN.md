@@ -1,8 +1,22 @@
-# Final Prompt (Orchestrator Gate) Plan
+# Final Prompt (Orchestrator Gate)
 
 **Date**: March 6, 2026  
-**Status**: Revised Planning Phase  
-**Related**: [QUEUE_APPEND_FEATURE.md](../QUEUE_APPEND_FEATURE.md), [prompt-schema.json](../../schemas/prompt-schema.json), [WorkflowExecutor.ts](../../src/flightpath/WorkflowExecutor.ts), [PromptQueue.ts](../../src/flightpath/PromptQueue.ts), [PromptsPanel.tsx](../../src/ui/webview-react/components/layout/PromptsPanel.tsx), [OutputSection.tsx](../../src/ui/webview-react/components/layout/OutputSection.tsx)
+**Status**: Implemented  
+**Related**: [QUEUE_APPEND_FEATURE.md](QUEUE_APPEND_FEATURE.md), [prompt-schema.json](../schemas/prompt-schema.json), [WorkflowExecutor.ts](../src/flightpath/WorkflowExecutor.ts), [PromptQueue.ts](../src/flightpath/PromptQueue.ts), [PromptsPanel.tsx](../src/ui/webview-react/components/layout/PromptsPanel.tsx), [OutputSection.tsx](../src/ui/webview-react/components/layout/OutputSection.tsx)
+
+## Implementation Status
+
+Fully implemented. All design decisions described in this document were adopted as-is:
+
+- `finalPrompt` field on `PromptFile` (`src/types/FlightPathTypes.ts`)
+- `FinalPromptRuntimeState` interface and `FinalPromptPhase` type (`src/types/FlightPathTypes.ts`, `src/types/DashboardConstants.ts`)
+- `StepExecutionTarget` / `StepExecutionKey` discriminated types in `WorkflowExecutor.ts`
+- `executeSinglePrompt()` + outer queue→finalPrompt loop in `WorkflowExecutor.ts`
+- `UPDATE_FINAL_PROMPT`, `FINAL_PROMPT_STATUS_CHANGED`, `FINAL_PROMPT_OUTPUT` message constants in `DashboardConstants.ts`
+- `finalPrompt` in `schemas/prompt-schema.json` (multi-prompt schema and working-file runtime schema)
+- `FinalPromptFooter.tsx` component in the prompts panel
+- Message handling in `useMessageHandler.ts` (all finalPrompt store fields)
+- `extension.ts` wires `finalPrompt` from the workflow file to the dashboard on load
 
 ---
 

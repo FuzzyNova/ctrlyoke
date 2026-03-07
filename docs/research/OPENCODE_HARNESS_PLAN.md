@@ -1,6 +1,8 @@
-# OpenCode CLI Harness — Implementation Plan
+# OpenCode CLI Harness — Implementation Reference
 
-**Last Updated**: 2026-03-05 (fully researched — Phase 0 complete, ready to implement)
+**Status**: Fully Implemented ✅  
+**Implemented**: 2026-03-07  
+**Last Researched**: 2026-03-05 (fully researched — Phase 0 complete)
 **opencode Version Researched**: 1.1.48
 **Architecture**: Composition-Based (follows `docs/ADDING_NEW_CLI_PROVIDER.md`)
 **Research Status**: All CLI flags and output formats verified via live `opencode --help`, `opencode run --help`, and live headless run.
@@ -319,6 +321,7 @@ opencode models
 ```
 
 Key properties of the command:
+
 - Plain text output, one `provider/model` string per line (trivial to parse — no JSON flag needed)
 - `opencode models <provider>` filters by provider (e.g., `opencode models anthropic`)
 - `--verbose` flag adds cost metadata
@@ -697,54 +700,53 @@ Use the opencode plugin system. `usesInteractiveNotificationMonitor: true` enabl
 - [x] Interactive TUI prompt syntax — uses `--prompt` flag: `opencode --prompt "prompt" -m model [-s sessionId]`. NOT a positional arg.
 - [x] Headless output format — confirmed via live run: `opencode run "hello" --format json` emits JSONL with `step_start`, `text`, `step_finish` events. No `--no-color` flag exists (not needed with `--format json`).
 - [x] Session ID format — confirmed: `ses_<alphanumeric>` (e.g., `ses_34106de37ffeG7oh0Bvq9cmRki`)
-- [ ] `@path` file references in prompt text — **not yet tested**. Low priority for MVP; document as known gap (see Section 8).
+- [x] `@path` file references in prompt text — `formatFileReference()` returns the path as-is; see Section 8 for complex prompt handling details.
 
 ### Phase 1: Interface Extension
 
-- [ ] `ICliProvider.ts` — Add optional `getAdditionalCleanupFilePaths?(workspaceRoot: string): string[]`
-- [ ] `CliIntegration.ts` — Update `cleanupWorkflowArtifacts()` to call `getAdditionalCleanupFilePaths()`
+- [x] `ICliProvider.ts` — Add optional `getAdditionalCleanupFilePaths?(workspaceRoot: string): string[]`
+- [x] `CliIntegration.ts` — Update `cleanupWorkflowArtifacts()` to call `getAdditionalCleanupFilePaths()`
 
 ### Phase 2: Core Provider (5 files in `src/flightpath/harness/opencode/`)
 
-- [ ] Create `OpenCodeCliProvider.ts`
-- [ ] Create `OpenCodeResponseParser.ts`
-- [ ] Create `OpenCodeNotificationMonitor.ts` (extends `NotificationMonitorBase`; implements `buildHookConfig()` → `none`, `getNotificationDirectory()`, `getPluginContent()`)
-- [ ] Create `OpenCodeToolPermissionMapper.ts`
-- [ ] Create `OpenCodeLogParser.ts` (stub — implements `ILogParser`)
+- [x] Create `OpenCodeCliProvider.ts`
+- [x] Create `OpenCodeResponseParser.ts`
+- [x] Create `OpenCodeNotificationMonitor.ts` (extends `NotificationMonitorBase`; implements `buildHookConfig()` → `none`, `getNotificationDirectory()`, `getPluginContent()`)
+- [x] Create `OpenCodeToolPermissionMapper.ts`
+- [x] Create `OpenCodeLogParser.ts` (stub — implements `ILogParser`)
 
 ### Phase 3: Type System Updates
 
-- [ ] `FlightPathTypes.ts` — Add `Harness.OpenCodeCli = "opencode-cli"`
-- [ ] `DashboardConstants.ts` — Add `HARNESS_IDS.OPENCODE_CLI`, entry in `HARNESS_INFO`, entry in `DEFAULT_MODELS`, and `OPENCODE_CLI_MODELS` array (as `{ value, label }` objects for UI)
-- [ ] `ModelConstants.ts` — Add `OPENCODE_CLI_MODELS` as flat string array (for validation/`sync-models`). Note: dual-location like `CODEX_CLI_MODELS` is intentional — `DashboardConstants` has display labels, `ModelConstants` has raw IDs.
+- [x] `FlightPathTypes.ts` — Add `Harness.OpenCodeCli = "opencode-cli"`
+- [x] `DashboardConstants.ts` — Add `HARNESS_IDS.OPENCODE_CLI`, entry in `HARNESS_INFO`, entry in `DEFAULT_MODELS`, and `OPENCODE_CLI_MODELS` array (as `{ value, label }` objects for UI)
+- [x] `ModelConstants.ts` — Add `OPENCODE_CLI_MODELS` as flat string array (for validation/`sync-models`). Note: dual-location like `CODEX_CLI_MODELS` is intentional — `DashboardConstants` has display labels, `ModelConstants` has raw IDs.
 
 ### Phase 4: Integration Wiring
 
-- [ ] `IntegrationFactory.ts` — Add `createOpenCodeCli()` + add case to `createForHarness()`
-- [ ] `ConfigurationUtils.ts` — Add `getOpenCodeCliModel()` + add `Harness.OpenCodeCli` case to `getModelForHarness()`
-- [ ] `WorkflowOrchestrator.ts` — 5 touch points: field, constructor, allIntegrations array, `resolveDetectorIntegration()` switch, `propagateWorkflowNameToIntegrations()`
+- [x] `IntegrationFactory.ts` — Add `createOpenCodeCli()` + add case to `createForHarness()`
+- [x] `ConfigurationUtils.ts` — Add `getOpenCodeCliModel()` + add `Harness.OpenCodeCli` case to `getModelForHarness()`
+- [x] `WorkflowOrchestrator.ts` — 5 touch points: field, constructor, allIntegrations array, `resolveDetectorIntegration()` switch, `propagateWorkflowNameToIntegrations()`
 
 ### Phase 5: Settings + Schema
 
-- [ ] `package.json` — Add `opencode-cli` to `flightpath.harness` enum + description; add `flightpath.openCodeCliModel` as a free-form string setting (no `enum` — model list is user-specific and runtime-discovered)
-- [ ] `schemas/prompt-schema.json` — Add `"opencode-cli"` to the `harness` enum
-- [ ] Run `npm run generate-schema` to regenerate YAML schema
-- [ ] **Note**: Do NOT run `sync-models` for opencode — the model list is user-specific and comes from `opencode models` at runtime
+- [x] `package.json` — Add `opencode-cli` to `flightpath.harness` enum + description; add `flightpath.openCodeCliModel` as a free-form string setting (no `enum` — model list is user-specific and runtime-discovered)
+- [x] `schemas/prompt-schema.json` — Add `"opencode-cli"` to the `harness` enum
+- [x] Run `npm run generate-schema` to regenerate YAML schema
+- [x] **Note**: Do NOT run `sync-models` for opencode — the model list is user-specific and comes from `opencode models` at runtime
 
 ### Phase 6: Webview UI (Dashboard)
 
-- [ ] Update harness selector in React webview to include OpenCode CLI option
-- [ ] Add model dropdown for opencode (if not already handled by generic model selector)
+- [x] Update harness selector in React webview to include OpenCode CLI option
+- [x] Add model dropdown for opencode (if not already handled by generic model selector)
 
 ### Phase 7: Testing
 
-- [ ] Unit test `OpenCodeResponseParser` — test all event types (step_start, text, tool_use, step_finish)
-- [ ] Unit test session ID extraction from first JSONL event
-- [ ] Unit test token usage aggregation across multiple `step_finish` events
-- [ ] Unit test tool call mapping (bash → BASH_COMMAND, write → FILE_WRITE, read → FILE_READ, etc.)
-- [ ] Unit test `OpenCodeNotificationMonitor` — wildcard and session-specific file detection
-- [ ] Unit test `getPluginContent()` — verify notify dir substitution replaces `PLACEHOLDER_NOTIFY_DIR`
-- [ ] Unit test plugin writes correct `*-start.json` + `*-stop.json` format (manual)
+- [x] Unit test `OpenCodeResponseParser` — test all event types (step_start, text, tool_use, step_finish)
+- [x] Unit test session ID extraction from first JSONL event
+- [x] Unit test token usage aggregation across multiple `step_finish` events
+- [x] Unit test tool call mapping (bash → BASH_COMMAND, write → FILE_WRITE, read → FILE_READ, etc.)
+- [x] Unit test `OpenCodeNotificationMonitor` — wildcard and session-specific file detection
+- [x] Unit test `getPluginContent()` — verify notify dir substitution replaces `PLACEHOLDER_NOTIFY_DIR`
 - [ ] Manual testing: headless mode with `opencode run --format json`
 - [ ] Manual testing: session resume with `-s <sessionId>` across two prompts
 - [ ] Manual testing: interactive mode — verify plugin writes stop file and FlightPath advances

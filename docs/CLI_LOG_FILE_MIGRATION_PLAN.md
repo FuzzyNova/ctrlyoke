@@ -29,24 +29,26 @@ This document describes the migration from TUI screen parsing to JSONL log file 
 
 ### New Files Added
 
-| File                                                 | Description                                                                |
-| ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/flightpath/cli/shared/interfaces/ILogParser.ts` | Log parser interface                                                       |
-| `src/flightpath/cli/shared/BaseLogParser.ts`         | Abstract base: file watching, JSONL reading, session discovery             |
-| `src/flightpath/cli/claude/ClaudeLogParser.ts`       | Claude log parser (`~/.claude/projects/`)                                  |
-| `src/flightpath/cli/copilot/CopilotLogParser.ts`     | Copilot log parser (`~/.copilot/session-state/`), supports old+new formats |
-| `src/flightpath/cli/codex/CodexLogParser.ts`         | Codex log parser (`~/.codex/sessions/YYYY/MM/DD/`)                         |
+| File                                                     | Description                                                                              |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `src/flightpath/harness/shared/interfaces/ILogParser.ts` | Log parser interface                                                                     |
+| `src/flightpath/harness/shared/BaseLogParser.ts`         | Abstract base: file watching, JSONL reading, session discovery                           |
+| `src/flightpath/harness/CliLogMonitor.ts`                | File watch loop, event streaming, completion detection (extracted from `CliIntegration`) |
+| `src/flightpath/harness/claude/ClaudeLogParser.ts`       | Claude log parser (`~/.claude/projects/`)                                                |
+| `src/flightpath/harness/copilot/CopilotLogParser.ts`     | Copilot log parser (`~/.copilot/session-state/`), supports old+new formats               |
+| `src/flightpath/harness/codex/CodexLogParser.ts`         | Codex log parser (`~/.codex/sessions/YYYY/MM/DD/`)                                       |
+| `src/flightpath/harness/opencode/OpenCodeLogParser.ts`   | OpenCode log parser                                                                      |
 
 ### Files Modified
 
-| File                                                   | Change                                                                                                                                                            |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/flightpath/cli/CliIntegration.ts`                 | Replaced TUI streaming with `monitorLogFile()` using `provider.logParser`                                                                                         |
-| `src/flightpath/cli/copilot/CopilotCliProvider.ts`     | Removed `--log-dir`, `--log-level`, debug log dir; added `logParser` field; `extractSessionIdFromLogs()` now delegates to `CopilotLogParser.discoverSessionLog()` |
-| `src/flightpath/cli/claude/ClaudeCliProvider.ts`       | Added `logParser` field                                                                                                                                           |
-| `src/flightpath/cli/codex/CodexCliProvider.ts`         | Added `logParser` field                                                                                                                                           |
-| `src/flightpath/cli/shared/interfaces/ICliProvider.ts` | Added `readonly logParser: ILogParser` to interface; removed TUI config fields (`escapeIndicator`, `screenEndPattern`, `chromePatterns`)                          |
-| `package.json`                                         | Removed `flightpath.copilotCliLogDir` setting                                                                                                                     |
+| File                                                       | Change                                                                                                                                                            |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/flightpath/harness/CliIntegration.ts`                 | Replaced TUI streaming with `monitorLogFile()` (wraps `CliLogMonitor`) using `provider.logParser`                                                                 |
+| `src/flightpath/harness/copilot/CopilotCliProvider.ts`     | Removed `--log-dir`, `--log-level`, debug log dir; added `logParser` field; `extractSessionIdFromLogs()` now delegates to `CopilotLogParser.discoverSessionLog()` |
+| `src/flightpath/harness/claude/ClaudeCliProvider.ts`       | Added `logParser` field                                                                                                                                           |
+| `src/flightpath/harness/codex/CodexCliProvider.ts`         | Added `logParser` field                                                                                                                                           |
+| `src/flightpath/harness/shared/interfaces/ICliProvider.ts` | Added `readonly logParser?: ILogParser` to interface; removed TUI config fields (`escapeIndicator`, `screenEndPattern`, `chromePatterns`)                         |
+| `package.json`                                             | Removed `flightpath.copilotCliLogDir` setting                                                                                                                     |
 
 ### Files Deleted
 

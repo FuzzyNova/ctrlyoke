@@ -12,7 +12,7 @@
 
 All three CLI providers (Claude Code, GitHub Copilot, OpenAI Codex) maintain structured JSONL log files that FlightPath uses as the primary data source for interactive mode response monitoring. This eliminated the need for TUI screen parsing, ANSI stripping, and screen deduplication.
 
-**Implementation:** `src/flightpath/cli/shared/BaseLogParser.ts` + three provider-specific subclasses.
+**Implementation:** `src/flightpath/harness/shared/BaseLogParser.ts` + four provider-specific subclasses.
 
 ---
 
@@ -30,14 +30,15 @@ All three CLI providers (Claude Code, GitHub Copilot, OpenAI Codex) maintain str
 
 ## Implementation Files
 
-| Provider    | Log Parser           | Location                                             |
-| ----------- | -------------------- | ---------------------------------------------------- |
-| Shared base | `BaseLogParser`      | `src/flightpath/cli/shared/BaseLogParser.ts`         |
-| Claude      | `ClaudeLogParser`    | `src/flightpath/cli/claude/ClaudeLogParser.ts`       |
-| Copilot     | `CopilotLogParser`   | `src/flightpath/cli/copilot/CopilotLogParser.ts`     |
-| Codex       | `CodexLogParser`     | `src/flightpath/cli/codex/CodexLogParser.ts`         |
-| Interface   | `ILogParser`         | `src/flightpath/cli/shared/interfaces/ILogParser.ts` |
-| Tests       | `LogParsers.test.ts` | `src/test/suite/cli/LogParsers.test.ts`              |
+| Provider    | Log Parser           | Location                                                 |
+| ----------- | -------------------- | -------------------------------------------------------- |
+| Shared base | `BaseLogParser`      | `src/flightpath/harness/shared/BaseLogParser.ts`         |
+| Claude      | `ClaudeLogParser`    | `src/flightpath/harness/claude/ClaudeLogParser.ts`       |
+| Copilot     | `CopilotLogParser`   | `src/flightpath/harness/copilot/CopilotLogParser.ts`     |
+| Codex       | `CodexLogParser`     | `src/flightpath/harness/codex/CodexLogParser.ts`         |
+| OpenCode    | `OpenCodeLogParser`  | `src/flightpath/harness/opencode/OpenCodeLogParser.ts`   |
+| Interface   | `ILogParser`         | `src/flightpath/harness/shared/interfaces/ILogParser.ts` |
+| Tests       | `LogParsers.test.ts` | `src/test/suite/harness/LogParsers.test.ts`              |
 
 ---
 

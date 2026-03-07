@@ -66,8 +66,21 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
           className={`px-3 py-2 border-b border-panel-border ${
             isSelected
               ? "bg-list-active-bg text-list-active-fg"
-              : "text-foreground"
-          }`}
+              : "hover:bg-list-hover-bg text-foreground"
+          } ${isReadOnly ? "" : "cursor-pointer"}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (!isReadOnly) {
+              onSelect();
+            }
+          }}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !isReadOnly) {
+              e.preventDefault();
+              onSelect();
+            }
+          }}
         >
           {/* Prompt name / text */}
           <div className="text-[11px] leading-relaxed">

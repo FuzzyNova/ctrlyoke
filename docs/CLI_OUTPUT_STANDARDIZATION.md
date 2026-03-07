@@ -77,7 +77,8 @@ export interface OutputMetadata {
   usage?: TokenUsage;
   cliVersion?: string;
   elapsed?: number;
-  harness?: string; // 'copilot-cli' | 'claude-cli' | 'codex-cli'
+  harness?: string; // 'copilot-cli' | 'claude-cli' | 'codex-cli' | 'opencode'
+  rawTextOutput?: boolean; // true when harness pre-formats output (skips markdown rendering)
 }
 ```
 
@@ -100,7 +101,7 @@ export interface TokenUsage {
 
 ---
 
-## Shared Formatter — `src/flightpath/cli/shared/CliOutputFormatter.ts`
+## Shared Formatter — `src/flightpath/harness/shared/CliOutputFormatter.ts`
 
 Static utility class with two output targets:
 
@@ -125,15 +126,16 @@ Produces `"Session: 550e8400 | Model: claude-sonnet-4.5 | Tokens: 1234 in / 567 
 
 ---
 
-## ILogParser Interface — `src/flightpath/cli/shared/interfaces/ILogParser.ts`
+## ILogParser Interface — `src/flightpath/harness/shared/interfaces/ILogParser.ts`
 
-All three parsers implement `extractResponse(events: any[]): UniversalCliOutput`, enforcing consistent return types:
+All parsers implement `ILogParser` via `BaseLogParser` (`src/flightpath/harness/shared/BaseLogParser.ts`), which enforces `extractResponse(events: BaseCliEvent[]): UniversalCliOutput`:
 
-| Parser  | File                                             | Notes                                                  |
-| ------- | ------------------------------------------------ | ------------------------------------------------------ |
-| Copilot | `src/flightpath/cli/copilot/CopilotLogParser.ts` | Parses Copilot CLI JSON log events                     |
-| Claude  | `src/flightpath/cli/claude/ClaudeLogParser.ts`   | Parses `stream-json` format, including thinking blocks |
-| Codex   | `src/flightpath/cli/codex/CodexLogParser.ts`     | Parses JSONL events from Codex CLI                     |
+| Parser   | File                                                   | Notes                                                  |
+| -------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| Copilot  | `src/flightpath/harness/copilot/CopilotLogParser.ts`   | Parses Copilot CLI JSON log events                     |
+| Claude   | `src/flightpath/harness/claude/ClaudeLogParser.ts`     | Parses `stream-json` format, including thinking blocks |
+| Codex    | `src/flightpath/harness/codex/CodexLogParser.ts`       | Parses JSONL events from Codex CLI                     |
+| OpenCode | `src/flightpath/harness/opencode/OpenCodeLogParser.ts` | Parses OpenCode streaming JSON events                  |
 
 ---
 
