@@ -72,10 +72,11 @@ export function sendMessage(
 function applyWorkflowChange(): void {
   useWorkflowStore.getState().clearHistoryOutputs();
   useUiStore.getState().clearHistoryView();
+  useUiStore.getState().setFinalPromptFooterExpanded(false);
   useUiStore.setState({ availableRuns: 0, runTimestamps: [], runStates: [] });
 
   const editorStore = useEditorStore.getState();
-  if (editorStore.selectedPromptIndex !== null) {
+  if (editorStore.selectionTarget.kind !== "newPrompt") {
     // Was editing an existing prompt from the old workflow — cancel the edit so
     // the savedNewPromptState (what the user had typed before clicking edit) is
     // restored instead of being discarded.
@@ -159,6 +160,10 @@ function createMessageHandlers(): MessageHandlerMap {
         executionState: data.executionState as ExecutionState,
         currentStep: data.currentIndex || 0,
         results: data.results || [],
+        finalPrompt: data.finalPrompt ?? null,
+        finalPromptStatus: data.finalPromptStatus ?? null,
+        finalPromptLoopCount: data.finalPromptLoopCount ?? 0,
+        finalPromptPhase: data.finalPromptPhase ?? null,
       });
       editorStore.setHasActiveQueue(true);
       settingsStore.setWorkflowLoaded(true);
@@ -186,6 +191,10 @@ function createMessageHandlers(): MessageHandlerMap {
       fileName: message.fileName,
       workflowName: message.workflowName,
       prompts: message.prompts || [],
+      finalPrompt: message.finalPrompt ?? null,
+      finalPromptStatus: message.finalPromptStatus ?? null,
+      finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
+      finalPromptPhase: message.finalPromptPhase ?? null,
     });
     applyWorkflowChange();
   };
@@ -201,6 +210,10 @@ function createMessageHandlers(): MessageHandlerMap {
       executionState: message.executionState as ExecutionState,
       currentStep: message.currentIndex || 0,
       results: message.results || [],
+      finalPrompt: message.finalPrompt ?? null,
+      finalPromptStatus: message.finalPromptStatus ?? null,
+      finalPromptLoopCount: message.finalPromptLoopCount ?? 0,
+      finalPromptPhase: message.finalPromptPhase ?? null,
     });
     applyWorkflowChange();
   };
@@ -239,6 +252,9 @@ function createMessageHandlers(): MessageHandlerMap {
       `[PROMPTS_EXTENDED] ${currentPrompts.length} → ${newPrompts.length} prompts${message.workflowId ? ` (CLI workflowId=${message.workflowId.slice(0, 8)})` : ""}`
     );
     workflowStore.setPrompts(newPrompts);
+    if (message.finalPrompt !== undefined) {
+      workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -251,7 +267,7 @@ function createMessageHandlers(): MessageHandlerMap {
 
     // Cancel any active edit — the selected prompt's status has changed
     const editorStore = useEditorStore.getState();
-    if (editorStore.selectedPromptIndex !== null) {
+    if (editorStore.selectionTarget.kind !== "newPrompt") {
       editorStore.cancelEdit();
     }
   };
@@ -264,6 +280,9 @@ function createMessageHandlers(): MessageHandlerMap {
 
     workflowStore.setFileName(message.fileName);
     workflowStore.setPrompts(message.prompts || []);
+    if (message.finalPrompt !== undefined) {
+      workflowStore.setFinalPrompt(message.finalPrompt ?? null);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -399,6 +418,35 @@ function createMessageHandlers(): MessageHandlerMap {
   };
 
   // --------------------------------------------------------------------------
+  // UPDATE_FINAL_PROMPT - Workflow-level finalPrompt updated
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.UPDATE_FINAL_PROMPT] = (message) => {
+    useWorkflowStore.getState().setFinalPrompt(message.finalPrompt ?? null);
+  };
+
+  // --------------------------------------------------------------------------
+  // FINAL_PROMPT_STATUS_CHANGED - Runtime status updates for finalPrompt phase
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED] = (message) => {
+    useWorkflowStore
+      .getState()
+      .setFinalPromptStatus(
+        (message.status as StepStatus | null) ?? null,
+        message.loopCount ?? 0,
+        message.phase ?? null
+      );
+  };
+
+  // --------------------------------------------------------------------------
+  // FINAL_PROMPT_OUTPUT - CLI output for finalPrompt loop
+  // --------------------------------------------------------------------------
+  handlers[MESSAGE_TYPES.FINAL_PROMPT_OUTPUT] = (message) => {
+    useWorkflowStore
+      .getState()
+      .addFinalPromptOutput(message.loopIndex, message.output);
+  };
+
+  // --------------------------------------------------------------------------
   // CLI_OUTPUT - Complete CLI output for a step
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.CLI_OUTPUT] = (message) => {
@@ -448,8 +496,20 @@ function createMessageHandlers(): MessageHandlerMap {
   // --------------------------------------------------------------------------
   handlers[MESSAGE_TYPES.STATUS_MESSAGE] = (message) => {
     const workflowStore = useWorkflowStore.getState();
+    const stepIndex = Number(message.stepIndex);
+    if (Number.isFinite(stepIndex) && stepIndex < 0) {
+      // finalPrompt loop N is encoded as legacy step index -(N+1)
+      const loopIndex = Math.abs(stepIndex) - 1;
+      workflowStore.addFinalPromptStatusMessage(
+        loopIndex,
+        message.message,
+        message.severity
+      );
+      return;
+    }
+
     workflowStore.addStatusMessage(
-      message.stepIndex,
+      stepIndex,
       message.message,
       message.severity
     );

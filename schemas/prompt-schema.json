@@ -22,6 +22,10 @@
                 "$ref": "#/definitions/promptItem"
               }
             },
+            "finalPrompt": {
+              "$ref": "#/definitions/promptItem",
+              "description": "A prompt that always runs after all queued prompts complete. If allowDynamicExtension is true and finalPrompt appends prompts, those prompts run before finalPrompt executes again."
+            },
             "originalFile": {
               "type": "string",
               "description": "Path to original prompt file (working files only)"
@@ -227,6 +231,43 @@
             "error"
           ],
           "description": "Current execution state"
+        },
+        "finalPrompt": {
+          "type": "object",
+          "description": "Runtime metadata for finalPrompt execution state (optional, added automatically during execution)",
+          "properties": {
+            "phase": {
+              "type": "string",
+              "enum": ["queue", "finalPrompt"],
+              "description": "Current workflow execution phase"
+            },
+            "loopCount": {
+              "type": "number",
+              "description": "0-based finalPrompt execution loop count"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "sent",
+                "running",
+                "completed",
+                "failed",
+                "cancelled"
+              ],
+              "description": "Current finalPrompt step status"
+            },
+            "startedAt": {
+              "type": "number",
+              "description": "Timestamp when finalPrompt execution started"
+            },
+            "completedAt": {
+              "type": "number",
+              "description": "Timestamp when finalPrompt execution completed"
+            }
+          },
+          "required": ["phase", "loopCount"],
+          "additionalProperties": false
         }
       },
       "required": ["currentIndex", "executionState"],

@@ -1,4 +1,6 @@
 import type { CliEvent } from "./WebviewMessageTypes";
+import type { PromptItem } from "./FlightPathTypes";
+import type { FinalPromptPhase, StepStatus } from "./DashboardConstants";
 
 /**
  * IDashboardSink
@@ -14,7 +16,13 @@ export interface IDashboardSink {
   updateFileSelected(
     fileName: string,
     prompts: any[],
-    workflowName?: string
+    workflowName?: string,
+    finalPrompt?: PromptItem | null,
+    finalPromptRuntime?: {
+      status?: StepStatus;
+      loopCount: number;
+      phase: FinalPromptPhase;
+    }
   ): Promise<void>;
 
   updateSessionRestored(
@@ -23,7 +31,13 @@ export interface IDashboardSink {
     results: any[],
     executionState: string,
     currentIndex: number,
-    workflowName?: string
+    workflowName?: string,
+    finalPrompt?: PromptItem | null,
+    finalPromptRuntime?: {
+      status?: StepStatus;
+      loopCount: number;
+      phase: FinalPromptPhase;
+    }
   ): Promise<void>;
 
   updateExecutionStarted(
@@ -66,9 +80,23 @@ export interface IDashboardSink {
 
   updateCliStreamingEvents(stepIndex: number, events: CliEvent[]): void;
 
-  updatePromptsExtended(prompts: any[]): void;
+  updatePromptsExtended(prompts: any[], finalPrompt?: PromptItem | null): void;
 
-  updatePromptDeleted(fileName: string, prompts: any[]): void;
+  updatePromptDeleted(
+    fileName: string,
+    prompts: any[],
+    finalPrompt?: PromptItem | null
+  ): void;
+
+  updateFinalPrompt(finalPrompt: PromptItem | null): void;
+
+  updateFinalPromptStatus(
+    status: StepStatus | null,
+    loopCount: number,
+    phase: FinalPromptPhase | null
+  ): void;
+
+  updateFinalPromptOutput(loopIndex: number, output: unknown): void;
 
   notifyWorkflowStateReset(prompts: any[]): void;
 

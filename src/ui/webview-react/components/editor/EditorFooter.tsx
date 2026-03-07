@@ -5,6 +5,7 @@ import { useAttachmentTokenCount } from "../../hooks/useAttachmentTokenCount";
 
 interface EditorFooterProps {
   isEditMode: boolean;
+  isFinalPromptMode?: boolean;
   isPromptCompleted: boolean;
   /** True when the selected prompt's status is SENT or RUNNING (prevents Update) */
   isPromptBeingSent: boolean;
@@ -39,6 +40,7 @@ interface EditorFooterProps {
  */
 export const EditorFooter: React.FC<EditorFooterProps> = ({
   isEditMode,
+  isFinalPromptMode = false,
   isPromptCompleted,
   isPromptBeingSent,
   isPromptActivelyRunning,
@@ -142,20 +144,28 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
               className="btn-editor-delete px-3 py-1 text-xs rounded flex items-center gap-1 bg-input-error-bg text-input-error-fg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               onClick={onDelete}
               disabled={
-                isCLIManaged || isPromptActivelyRunning || isPromptCompleted
+                isCLIManaged ||
+                isPromptActivelyRunning ||
+                (!isFinalPromptMode && isPromptCompleted)
               }
               title={
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
-                  : isPromptCompleted
-                    ? "Cannot delete a completed prompt — use Clear workflow state to reset"
-                    : isPromptActivelyRunning
-                      ? "Cannot delete a prompt that is currently running"
-                      : "Delete prompt from queue"
+                  : isFinalPromptMode
+                    ? "Disable orchestrator prompt"
+                    : isPromptCompleted
+                      ? "Cannot delete a completed prompt — use Clear workflow state to reset"
+                      : isPromptActivelyRunning
+                        ? "Cannot delete a prompt that is currently running"
+                        : "Delete prompt from queue"
               }
             >
               <i className="codicon codicon-trash" />
-              {!isNarrow && <span className="btn-text">Delete</span>}
+              {!isNarrow && (
+                <span className="btn-text">
+                  {isFinalPromptMode ? "Disable" : "Delete"}
+                </span>
+              )}
             </button>
           </>
         ) : (

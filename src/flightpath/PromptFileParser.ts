@@ -394,6 +394,17 @@ export class PromptFileParser {
         prompts: resolvedPrompts,
       };
 
+      if (parsed.finalPrompt && typeof parsed.finalPrompt.prompt === "string") {
+        const resolvedFinalPrompt = await this.resolvePromptContent(
+          parsed.finalPrompt.prompt,
+          promptFilePath
+        );
+        promptFile.finalPrompt = this.buildPromptItem(
+          resolvedFinalPrompt,
+          parsed.finalPrompt
+        );
+      }
+
       // Copy workflow-level properties (if present)
       this.copyWorkflowLevelProperties(parsed, promptFile);
 

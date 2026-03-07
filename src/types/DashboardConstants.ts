@@ -26,6 +26,9 @@ export const MESSAGE_TYPES = {
   PROMPTS_EXTENDED: "promptsExtended", // Send updated prompt list after queue extension
   PROMPTS_APPENDED: "promptsAppended", // Reserved: defined for future use (no handler exists yet)
   PROMPT_DELETED: "promptDeleted", // Notify webview that a prompt was deleted
+  UPDATE_FINAL_PROMPT: "updateFinalPrompt", // Bidirectional: webview updates workflow-level finalPrompt; extension pushes latest finalPrompt
+  FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged", // Granular runtime status updates for finalPrompt phase
+  FINAL_PROMPT_OUTPUT: "finalPromptOutput", // CLI output for finalPrompt keyed by loop index
   QUEUE_SIZE_LIMIT_REACHED: "queueSizeLimitReached",
   EXECUTION_TIME_LIMIT_REACHED: "executionTimeLimitReached",
   DYNAMIC_QUEUE_ENABLED: "dynamicQueueEnabled",
@@ -186,6 +189,14 @@ export const STEP_STATUS = {
   COMPLETED: "completed",
   FAILED: "failed",
   CANCELLED: "cancelled",
+} as const;
+
+// ============================================================================
+// FINAL PROMPT PHASES - Runtime phase values for finalPrompt orchestration
+// ============================================================================
+export const FINAL_PROMPT_PHASES = {
+  QUEUE: "queue",
+  FINAL_PROMPT: "finalPrompt",
 } as const;
 
 // ============================================================================
@@ -387,6 +398,8 @@ export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 export type ExecutionState =
   (typeof EXECUTION_STATES)[keyof typeof EXECUTION_STATES];
 export type StepStatus = (typeof STEP_STATUS)[keyof typeof STEP_STATUS];
+export type FinalPromptPhase =
+  (typeof FINAL_PROMPT_PHASES)[keyof typeof FINAL_PROMPT_PHASES];
 export type HarnessId = (typeof HARNESS_IDS)[keyof typeof HARNESS_IDS];
 export type StatusMessageSeverity =
   (typeof STATUS_MESSAGE_SEVERITY)[keyof typeof STATUS_MESSAGE_SEVERITY];

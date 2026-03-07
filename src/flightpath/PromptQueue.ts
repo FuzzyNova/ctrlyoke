@@ -3,6 +3,7 @@ import { TypedEmitter } from "../utils/TypedEmitter";
 import {
   PromptItem,
   PromptFile,
+  FinalPromptRuntimeState,
   QueueState,
   PromptResult,
   EXECUTION_STATES,
@@ -78,6 +79,7 @@ function getEffectiveRetryPrompt(
 export class PromptQueue {
   private state: QueueState;
   private workflowFile?: PromptFile; // Store complete workflow file with workflow-level properties
+  private finalPromptRuntime?: FinalPromptRuntimeState;
   private onStateChanged = new TypedEmitter<QueueState>();
   private isPaused: boolean = false;
   private currentRetryCount: number = 0; // Track retry attempts for current prompt
@@ -109,6 +111,7 @@ export class PromptQueue {
       mergeDiskPrompts: (diskPrompts: PromptItem[]) =>
         this.mergeDiskPrompts(diskPrompts),
       emitStateChange: () => this.emitStateChange(),
+      getFinalPromptRuntime: () => this.getFinalPromptRuntime(),
       updateWorkflowProperty: (key: string, value: unknown) =>
         this.updateWorkflowProperty(key, value),
     };
@@ -154,6 +157,7 @@ export class PromptQueue {
     };
 
     this.workflowFile = undefined; // Clear workflow file reference
+    this.finalPromptRuntime = undefined;
 
     this.emitStateChange();
     Log.info("Queue cleared - ready for new workflow");
@@ -187,6 +191,7 @@ export class PromptQueue {
 
     // Store complete workflow file for property resolution
     this.workflowFile = promptFile;
+    this.finalPromptRuntime = undefined;
 
     this.emitStateChange();
     Log.info(`Loaded ${prompts.length} prompts into queue`);
@@ -210,6 +215,7 @@ export class PromptQueue {
       }
 
       const runtime = workingFile._runtime;
+      this.finalPromptRuntime = runtime?.finalPrompt;
 
       // Build completedIndices from per-prompt _runtime.completedAt (source of truth).
       // Fall back to currentIndex boundary for old working files that lack per-prompt _runtime.
@@ -515,6 +521,7 @@ export class PromptQueue {
     this.state.queueExtensions = 0;
     this.state.totalPausedDuration = 0;
     this.state.pausedTime = undefined;
+    this.finalPromptRuntime = undefined;
 
     // Clear per-prompt _runtime data (sessionId, harness, model, etc.)
     // Stale session IDs from a previous run would cause log discovery and session
@@ -1254,6 +1261,23 @@ export class PromptQueue {
    */
   public async updateWorkingFile(skipMerge: boolean = false): Promise<void> {
     return this.workingFileManager.updateWorkingFile(skipMerge);
+  }
+
+  /**
+   * Get runtime state for workflow-level finalPrompt execution.
+   */
+  public getFinalPromptRuntime(): FinalPromptRuntimeState | undefined {
+    return this.finalPromptRuntime ? { ...this.finalPromptRuntime } : undefined;
+  }
+
+  /**
+   * Persist runtime state for workflow-level finalPrompt execution.
+   */
+  public async setFinalPromptRuntime(
+    runtime: FinalPromptRuntimeState | undefined
+  ): Promise<void> {
+    this.finalPromptRuntime = runtime ? { ...runtime } : undefined;
+    await this.updateWorkingFile();
   }
 
   /**

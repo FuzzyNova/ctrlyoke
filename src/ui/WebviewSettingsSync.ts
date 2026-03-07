@@ -511,6 +511,9 @@ export class WebviewSettingsSync {
       const queueState = manager.getQueueState();
       const currentFile = manager.getCurrentPromptFile();
       const workflowName = queueState.workflowName;
+      const promptQueue = manager.getActivePromptQueue();
+      const finalPrompt = promptQueue?.getWorkflowFile().finalPrompt ?? null;
+      const finalPromptRuntime = promptQueue?.getFinalPromptRuntime();
       return {
         fileName: currentFile || "",
         workflowName: workflowName || "",
@@ -518,6 +521,10 @@ export class WebviewSettingsSync {
         executionState: queueState.status || EXECUTION_STATES.IDLE,
         currentIndex: queueState.currentIndex || 0,
         results: queueState.results || [],
+        finalPrompt,
+        finalPromptStatus: finalPromptRuntime?.status ?? null,
+        finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
+        finalPromptPhase: finalPromptRuntime?.phase ?? null,
       };
     }
 
@@ -528,6 +535,10 @@ export class WebviewSettingsSync {
       executionState: EXECUTION_STATES.IDLE,
       currentIndex: 0,
       results: [],
+      finalPrompt: null,
+      finalPromptStatus: null,
+      finalPromptLoopCount: 0,
+      finalPromptPhase: null,
     };
   }
 

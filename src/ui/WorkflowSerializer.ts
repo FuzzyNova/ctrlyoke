@@ -145,6 +145,7 @@ export class WorkflowSerializer {
       const WORKFLOW_FIELDS = [
         "prompt",
         "prompts",
+        "finalPrompt",
         "harness",
         "model",
         "agent",
@@ -163,15 +164,33 @@ export class WorkflowSerializer {
         "resumeSession",
         "allowDynamicExtension",
         "sessionId",
+        "skills",
         "endCondition",
       ] as const;
 
       const clean: Record<string, unknown> = {};
 
       for (const field of WORKFLOW_FIELDS) {
-        if (field in workingFile && field !== "prompts") {
+        if (
+          field in workingFile &&
+          field !== "prompts" &&
+          field !== "finalPrompt"
+        ) {
           clean[field] = workingFile[field];
         }
+      }
+
+      if (
+        workingFile.finalPrompt &&
+        typeof workingFile.finalPrompt === "object"
+      ) {
+        const cleanFinalPrompt: Record<string, unknown> = {};
+        for (const field of PROMPT_FIELDS) {
+          if (field in workingFile.finalPrompt) {
+            cleanFinalPrompt[field] = workingFile.finalPrompt[field];
+          }
+        }
+        clean.finalPrompt = cleanFinalPrompt;
       }
 
       if (Array.isArray(workingFile.prompts)) {

@@ -7,6 +7,8 @@ import {
 import {
   WorkflowOutputHistory,
   StepOutput,
+  OutputExecutionTarget,
+  OutputTimelineEntry,
 } from "../../types/OutputHistoryTypes";
 import { CliOutput, StatusMessage } from "../../types/WebviewMessageTypes";
 import {
@@ -97,7 +99,7 @@ export class OutputHistoryManager {
       const filePath = path.join(historyDir, fileName);
 
       const initial: WorkflowOutputHistory = {
-        schemaVersion: "1.0.0",
+        schemaVersion: "1.1.0",
         workflowId,
         runId: existingRuns.length + 1,
         startedAt,
@@ -142,21 +144,93 @@ export class OutputHistoryManager {
     cliOutputs: CliOutput[],
     statusMessages: StatusMessage[]
   ): Promise<void> {
+    await this.saveExecutionOutput(
+      historyFilePath,
+      { kind: "queue", stepIndex },
+      cliOutputs,
+      statusMessages
+    );
+  }
+
+  /**
+   * Save outputs for either a queue step or a finalPrompt loop.
+   */
+  async saveExecutionOutput(
+    historyFilePath: string,
+    target: OutputExecutionTarget,
+    cliOutputs: CliOutput[],
+    statusMessages: StatusMessage[]
+  ): Promise<void> {
     if (!historyFilePath) {
       return;
     }
 
     try {
       const history = await this.readHistory(historyFilePath);
-      const existing = history.promptOutputs[stepIndex]?.cliOutputs ?? [];
-      history.promptOutputs[stepIndex] = {
-        cliOutputs: this.mergeCliOutputs(existing, cliOutputs),
-        statusMessages,
-      };
+      if (target.kind === "queue") {
+        const existing =
+          history.promptOutputs[target.stepIndex]?.cliOutputs ?? [];
+        history.promptOutputs[target.stepIndex] = {
+          cliOutputs: this.mergeCliOutputs(existing, cliOutputs),
+          statusMessages,
+        };
+      } else {
+        if (!history.finalPromptOutputs) {
+          history.finalPromptOutputs = {};
+        }
+        const existing =
+          history.finalPromptOutputs[target.loopIndex]?.cliOutputs ?? [];
+        history.finalPromptOutputs[target.loopIndex] = {
+          cliOutputs: this.mergeCliOutputs(existing, cliOutputs),
+          statusMessages,
+        };
+      }
+
+      this.upsertTimelineEntry(history, target, cliOutputs);
       await this.writeHistory(historyFilePath, history);
     } catch (error) {
       Log.warn("Failed to save step output to history:", error);
     }
+  }
+
+  private upsertTimelineEntry(
+    history: WorkflowOutputHistory,
+    target: OutputExecutionTarget,
+    cliOutputs: CliOutput[]
+  ): void {
+    if (!history.outputTimeline) {
+      history.outputTimeline = [];
+    }
+
+    const key =
+      target.kind === "queue"
+        ? `queue:${target.stepIndex}`
+        : `final:${target.loopIndex}`;
+    const firstOutputAt =
+      cliOutputs
+        .map((o) => o.timestampMs)
+        .find((v): v is number => typeof v === "number") ?? Date.now();
+
+    const existingIndex = history.outputTimeline.findIndex(
+      (e) => e.key === key
+    );
+    const entry: OutputTimelineEntry = {
+      key,
+      target,
+      firstOutputAt,
+    };
+
+    if (existingIndex >= 0) {
+      const existing = history.outputTimeline[existingIndex];
+      history.outputTimeline[existingIndex] = {
+        ...entry,
+        firstOutputAt: Math.min(existing.firstOutputAt, firstOutputAt),
+      };
+    } else {
+      history.outputTimeline.push(entry);
+    }
+
+    history.outputTimeline.sort((a, b) => a.firstOutputAt - b.firstOutputAt);
   }
 
   /**

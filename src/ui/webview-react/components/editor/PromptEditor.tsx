@@ -44,7 +44,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   isCLIManaged = false,
 }) => {
   const {
-    selectedPromptIndex,
+    selectionTarget,
     promptText,
     promptName,
     setPromptText,
@@ -57,7 +57,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     hasActiveQueue,
   } = useEditorStore();
 
-  const { prompts, executionState, currentStep } = useWorkflowStore();
+  const { prompts, executionState, currentStep, finalPromptStatus } =
+    useWorkflowStore();
   const {
     propertiesDrawerOpen,
     togglePropertiesDrawer,
@@ -74,10 +75,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const isEditMode = selectedPromptIndex !== null;
+  const isEditMode = selectionTarget.kind !== "newPrompt";
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
   const selectedPromptStatus =
-    selectedPromptIndex !== null ? prompts[selectedPromptIndex]?.status : null;
+    selectionTarget.kind === "queue"
+      ? prompts[selectionTarget.index]?.status
+      : selectionTarget.kind === "finalPrompt"
+        ? finalPromptStatus
+        : null;
   const isPromptCompleted = selectedPromptStatus === STEP_STATUS.COMPLETED;
   // Update button: disabled when prompt is currently being sent (SENT or RUNNING)
   const isPromptBeingSent =
@@ -95,7 +100,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     if (!initializedRef.current) {
       initializedRef.current = true;
       // Only restore if in new prompt mode (not editing an existing prompt)
-      if (selectedPromptIndex === null) {
+      if (selectionTarget.kind === "newPrompt") {
         restoreFromVsCodeState(vscode);
       }
     }
@@ -117,7 +122,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
   // Debounced save to VS Code state on every content change
   // Mirrors old editor-manager.js: saveEditorState() called on every onChange, input, change event
   useEffect(() => {
-    if (selectedPromptIndex !== null) return;
+    if (selectionTarget.kind !== "newPrompt") return;
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -136,7 +141,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     promptText,
     promptName,
     properties,
-    selectedPromptIndex,
+    selectionTarget,
     saveToVsCodeState,
     vscode,
   ]);
@@ -148,14 +153,14 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = null;
       }
-      if (selectedPromptIndex === null) {
+      if (selectionTarget.kind === "newPrompt") {
         saveToVsCodeState(vscode);
       }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [selectedPromptIndex, saveToVsCodeState, vscode]);
+  }, [selectionTarget, saveToVsCodeState, vscode]);
 
   // Close drawer on ESC key
   useEffect(() => {
@@ -310,40 +315,65 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Update existing prompt
   const handleUpdate = useCallback(() => {
-    if (selectedPromptIndex === null) return;
-
     const text = promptText.trim();
     if (!text) return;
 
     // Include nulls for default values to clear overrides
     const propertyValues = getPropertyValues(true);
 
-    vscode.postMessage({
-      type: MESSAGE_TYPES.UPDATE_PROMPT,
-      index: selectedPromptIndex,
-      text,
-      properties: propertyValues,
-    });
+    if (selectionTarget.kind === "queue") {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_PROMPT,
+        index: selectionTarget.index,
+        text,
+        properties: propertyValues,
+      });
+    } else if (selectionTarget.kind === "finalPrompt") {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+        finalPrompt: {
+          ...propertyValues,
+          ...(promptName.trim() ? { name: promptName.trim() } : {}),
+          prompt: text,
+        },
+      });
+    } else {
+      return;
+    }
 
     // Return to new prompt mode
     cancelEdit();
-  }, [selectedPromptIndex, promptText, getPropertyValues, vscode, cancelEdit]);
+  }, [
+    selectionTarget,
+    promptText,
+    getPropertyValues,
+    vscode,
+    cancelEdit,
+    promptName,
+  ]);
 
   // Delete prompt - shows confirmation modal (or deletes immediately when confirmDeleteOperations is false)
   const handleDeleteClick = useCallback(() => {
-    if (selectedPromptIndex === null) return;
+    if (selectionTarget.kind === "newPrompt") return;
     if (!globalSettings.confirmDeleteOperations) {
       // Skip modal — user opted out of delete confirmation
-      vscode.postMessage({
-        type: MESSAGE_TYPES.DELETE_PROMPT,
-        index: selectedPromptIndex,
-      });
+      if (selectionTarget.kind === "queue") {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.DELETE_PROMPT,
+          index: selectionTarget.index,
+        });
+      } else {
+        vscode.postMessage({
+          type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+          finalPrompt: null,
+        });
+      }
       cancelEdit();
       return;
     }
     setShowDeleteModal(true);
   }, [
-    selectedPromptIndex,
+    selectionTarget,
     globalSettings.confirmDeleteOperations,
     vscode,
     cancelEdit,
@@ -351,15 +381,22 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
 
   // Confirm delete action
   const handleDeleteConfirm = useCallback(() => {
-    if (selectedPromptIndex === null) return;
+    if (selectionTarget.kind === "newPrompt") return;
 
-    vscode.postMessage({
-      type: MESSAGE_TYPES.DELETE_PROMPT,
-      index: selectedPromptIndex,
-    });
+    if (selectionTarget.kind === "queue") {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.DELETE_PROMPT,
+        index: selectionTarget.index,
+      });
+    } else {
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+        finalPrompt: null,
+      });
+    }
     setShowDeleteModal(false);
     cancelEdit();
-  }, [selectedPromptIndex, vscode, cancelEdit]);
+  }, [selectionTarget, vscode, cancelEdit]);
 
   // Cancel delete action
   const handleDeleteCancel = useCallback(() => {
@@ -430,6 +467,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
       {/* Editor Footer with actions (outside wrapper, not covered by drawer) */}
       <EditorFooter
         isEditMode={isEditMode}
+        isFinalPromptMode={selectionTarget.kind === "finalPrompt"}
         isPromptCompleted={isPromptCompleted}
         isPromptBeingSent={isPromptBeingSent}
         isPromptActivelyRunning={isPromptActivelyRunning}
@@ -454,7 +492,11 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         onCancel={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title="Delete Prompt"
-        message={`Are you sure you want to delete prompt ${(selectedPromptIndex ?? 0) + 1}?`}
+        message={
+          selectionTarget.kind === "finalPrompt"
+            ? "Disable orchestrator prompt?"
+            : `Are you sure you want to delete prompt ${selectionTarget.kind === "queue" ? selectionTarget.index + 1 : 1}?`
+        }
         detail="This action cannot be undone."
       />
     </div>

@@ -4,7 +4,7 @@ import { PromptQueue } from "./PromptQueue";
 import { HarnessIntegration, HarnessStatus } from "./HarnessIntegration";
 import { EndConditionEvaluator } from "./EndConditionEvaluator";
 import { EndConditionHandler } from "./EndConditionHandler";
-import { WorkflowExecutor, WorkflowContext } from "./WorkflowExecutor";
+import { WorkflowExecutor, WorkflowExecutionContext } from "./WorkflowExecutor";
 import {
   PromptFile,
   PromptItem,
@@ -19,6 +19,7 @@ import {
 import { WorkflowLockManager } from "../utils/WorkflowLockManager";
 import {
   ACTION_TYPES,
+  FINAL_PROMPT_PHASES,
   QUEUE_POSITION,
   STEP_STATUS,
   type ActionType,
@@ -171,6 +172,40 @@ export class WorkflowInstance {
       outputs: any[];
       retryState?: { currentRetry: number; maxRetries: number };
     }
+  >();
+
+  /**
+   * Per-loop streaming output buffer for workflow-level finalPrompt.
+   * Uses loopIndex keys (not queue step indices) to avoid collisions.
+   */
+  private readonly finalPromptOutputBuffer = new Map<
+    number,
+    {
+      prompt: string;
+      cliCommand: string | undefined;
+      workingDirectory: string | undefined;
+      timestampMs: number;
+      attemptIndex: number;
+      accumulatedText: string;
+      accumulatedEvents: CliEvent[];
+      rawTextOutput?: boolean;
+    }
+  >();
+
+  /**
+   * Completed outputs keyed by finalPrompt loopIndex.
+   */
+  private readonly finalPromptCompletedOutputs = new Map<
+    number,
+    { outputs: any[] }
+  >();
+
+  /**
+   * Buffered status messages keyed by finalPrompt loopIndex.
+   */
+  private readonly finalPromptStatusMessages = new Map<
+    number,
+    Array<{ message: string; severity: string; timestamp: number }>
   >();
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -369,7 +404,7 @@ export class WorkflowInstance {
       ? path.basename(this.currentPromptFile.filePath)
       : state.workflowName || "Untitled";
     Log.trace(
-      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.stepOutputBuffer.size}`
+      `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: status=${state.status}, currentIndex=${state.currentIndex}, prompts=${state.prompts.length}, bufferSteps=${this.stepOutputBuffer.size}, finalBufferLoops=${this.finalPromptOutputBuffer.size}`
     );
     this.dashboardSink.updateSessionRestored(
       fileName,
@@ -377,7 +412,9 @@ export class WorkflowInstance {
       state.results,
       state.status,
       state.currentIndex,
-      state.workflowName || undefined
+      state.workflowName || undefined,
+      this.promptQueue.getWorkflowFile().finalPrompt ?? null,
+      this.promptQueue.getFinalPromptRuntime()
     );
 
     // Replay completed step outputs so the user sees prior-prompt results
@@ -398,6 +435,42 @@ export class WorkflowInstance {
         }
         for (const output of entry.outputs) {
           this.dashboardSink.updateCliOutput(stepIndex, output);
+        }
+      }
+    }
+
+    // Replay finalPrompt completed outputs (per loop), including retries.
+    if (this.finalPromptCompletedOutputs.size > 0) {
+      for (const [loopIndex, entry] of this.finalPromptCompletedOutputs) {
+        Log.trace(
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} (${entry.outputs.length} attempt(s))`
+        );
+        for (const output of entry.outputs) {
+          this.dashboardSink.updateFinalPromptOutput(loopIndex, output);
+        }
+      }
+    }
+
+    // Replay finalPrompt status messages (encoded for compatibility as legacy
+    // negative step indices: loop N => -(N+1)).
+    if (this.finalPromptStatusMessages.size > 0) {
+      const dashboard = this.dashboardSink as {
+        updateStatusMessage?: (
+          stepIndex: number,
+          message: string,
+          severity?: string
+        ) => void;
+      };
+      if (dashboard.updateStatusMessage) {
+        for (const [loopIndex, messages] of this.finalPromptStatusMessages) {
+          const legacyLoopStepIndex = -(loopIndex + 1);
+          for (const msg of messages) {
+            dashboard.updateStatusMessage(
+              legacyLoopStepIndex,
+              msg.message,
+              msg.severity
+            );
+          }
         }
       }
     }
@@ -474,6 +547,38 @@ export class WorkflowInstance {
             buffer.accumulatedEvents
           );
         }
+      }
+    }
+
+    // Replay in-flight finalPrompt streaming output when switching back mid-loop.
+    const finalRuntime = this.promptQueue.getFinalPromptRuntime();
+    if (
+      state.status === EXECUTION_STATES.RUNNING &&
+      finalRuntime?.phase === FINAL_PROMPT_PHASES.FINAL_PROMPT
+    ) {
+      const loopIndex = finalRuntime.loopCount;
+      const buffer = this.finalPromptOutputBuffer.get(loopIndex);
+      if (buffer) {
+        Log.trace(
+          `[inst:${this.id.slice(0, 8)}] sendFullStateToDashboard: replaying finalPrompt loop ${loopIndex} buffer (${buffer.accumulatedText.length} chars, events=${buffer.accumulatedEvents.length}, attemptIndex=${buffer.attemptIndex})`
+        );
+
+        this.dashboardSink.updateFinalPromptOutput(loopIndex, {
+          prompt: buffer.prompt,
+          response: buffer.accumulatedText,
+          structured:
+            buffer.accumulatedEvents.length > 0
+              ? { events: [...buffer.accumulatedEvents], metadata: {} }
+              : undefined,
+          elapsed: 0,
+          tokens: undefined,
+          isStreaming: true,
+          cliCommand: buffer.cliCommand,
+          workingDirectory: buffer.workingDirectory,
+          timestampMs: buffer.timestampMs,
+          attemptIndex: buffer.attemptIndex,
+          rawTextOutput: buffer.rawTextOutput,
+        });
       }
     }
   }
@@ -950,6 +1055,9 @@ export class WorkflowInstance {
           );
           this.stepOutputBuffer.clear();
           this.completedStepOutputs.clear();
+          this.finalPromptOutputBuffer.clear();
+          this.finalPromptCompletedOutputs.clear();
+          this.finalPromptStatusMessages.clear();
           this.dashboardSink.updateExecutionStarted(fileName, totalPrompts);
         }
       }
@@ -1137,7 +1245,10 @@ export class WorkflowInstance {
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardSink.updatePromptsExtended(updatedState.prompts);
+        this.dashboardSink.updatePromptsExtended(
+          updatedState.prompts,
+          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+        );
         this.dashboardSink.updateProgress(
           updatedState.currentIndex,
           updatedState.prompts.length
@@ -1204,9 +1315,48 @@ export class WorkflowInstance {
     await this.promptQueue.updatePrompt(index, updates);
     if (this.dashboardSink) {
       const currentState = this.promptQueue.getState();
-      this.dashboardSink.updatePromptsExtended(currentState.prompts);
+      this.dashboardSink.updatePromptsExtended(
+        currentState.prompts,
+        this.promptQueue.getWorkflowFile().finalPrompt ?? null
+      );
     }
     Log.debug(`Updated prompt ${index}: ${text.substring(0, 50)}...`);
+  }
+
+  async updateFinalPromptInQueue(
+    finalPrompt: PromptItem | null
+  ): Promise<void> {
+    if (finalPrompt) {
+      const normalized: PromptItem = {
+        prompt: finalPrompt.prompt,
+        ...(finalPrompt.name ? { name: finalPrompt.name } : {}),
+        ...this.buildPromptItemProperties(finalPrompt as unknown),
+      };
+      this.promptQueue.updateWorkflowProperty("finalPrompt", normalized);
+      await this.promptQueue.updateWorkingFileProperties({
+        finalPrompt: normalized,
+      });
+      if (this.currentPromptFile) {
+        this.currentPromptFile.promptFile.finalPrompt = normalized;
+      }
+    } else {
+      this.promptQueue.updateWorkflowProperty("finalPrompt", undefined);
+      await this.promptQueue.updateWorkingFileProperties(
+        { finalPrompt: undefined },
+        { allowDeletes: true }
+      );
+      await this.promptQueue.setFinalPromptRuntime(undefined);
+      if (this.currentPromptFile) {
+        delete this.currentPromptFile.promptFile.finalPrompt;
+      }
+    }
+
+    this.dashboardSink?.updateFinalPrompt(finalPrompt);
+    if (!finalPrompt) {
+      this.dashboardSink?.updateFinalPromptStatus(null, 0, null);
+    }
+
+    Log.debug(`Updated finalPrompt (${finalPrompt ? "enabled" : "disabled"})`);
   }
 
   async deletePromptFromQueue(index: number): Promise<void> {
@@ -1219,7 +1369,11 @@ export class WorkflowInstance {
       const fileName = this.currentPromptFile
         ? path.basename(this.currentPromptFile.filePath)
         : "Untitled";
-      this.dashboardSink.updatePromptDeleted(fileName, currentState.prompts);
+      this.dashboardSink.updatePromptDeleted(
+        fileName,
+        currentState.prompts,
+        this.promptQueue.getWorkflowFile().finalPrompt ?? null
+      );
     }
     Log.debug(`Deleted prompt ${index}`);
   }
@@ -1325,7 +1479,10 @@ export class WorkflowInstance {
 
       if (this.dashboardSink) {
         const updatedState = this.promptQueue.getState();
-        this.dashboardSink.updatePromptsExtended(updatedState.prompts);
+        this.dashboardSink.updatePromptsExtended(
+          updatedState.prompts,
+          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+        );
       }
 
       if (shouldRun) {
@@ -1467,7 +1624,7 @@ export class WorkflowInstance {
       // (user switches to another workflow), activeDashboard returns
       // undefined and background output stops flowing to the UI.
       const self = this;
-      const workflowContext: WorkflowContext = {
+      const workflowContext: WorkflowExecutionContext = {
         workspaceFolderPath: this.workspaceFolderPath,
         currentPromptFilePath: this.currentPromptFile?.filePath,
         get dashboardProvider() {
@@ -1611,6 +1768,67 @@ export class WorkflowInstance {
             elapsed: output.elapsed,
           });
         },
+        captureFinalPromptOutputInit: (
+          loopIndex,
+          prompt,
+          cliCommand,
+          workingDirectory,
+          timestampMs,
+          attemptIndex,
+          rawTextOutput
+        ) => {
+          const existing = self.finalPromptOutputBuffer.get(loopIndex);
+          self.finalPromptOutputBuffer.set(loopIndex, {
+            prompt,
+            cliCommand,
+            workingDirectory,
+            timestampMs,
+            attemptIndex,
+            accumulatedText: existing?.accumulatedText ?? "",
+            accumulatedEvents: existing?.accumulatedEvents ?? [],
+            rawTextOutput,
+          });
+        },
+        captureFinalPromptChunk: (loopIndex, chunk) => {
+          const existing = self.finalPromptOutputBuffer.get(loopIndex);
+          if (existing) {
+            existing.accumulatedText += chunk;
+          }
+        },
+        captureFinalPromptEvents: (loopIndex, events) => {
+          const existing = self.finalPromptOutputBuffer.get(loopIndex);
+          if (existing) {
+            existing.accumulatedEvents.push(...events);
+          }
+        },
+        captureFinalPromptCompletedOutput: (loopIndex, output) => {
+          const existing = self.finalPromptCompletedOutputs.get(loopIndex);
+          if (existing) {
+            existing.outputs.push(output);
+          } else {
+            self.finalPromptCompletedOutputs.set(loopIndex, {
+              outputs: [output],
+            });
+          }
+
+          self.finalPromptOutputBuffer.delete(loopIndex);
+        },
+        onFinalPromptStatusMessage: (loopIndex, message, severity) => {
+          const messages = self.finalPromptStatusMessages.get(loopIndex) ?? [];
+          messages.push({
+            message,
+            severity,
+            timestamp: Date.now(),
+          });
+          self.finalPromptStatusMessages.set(loopIndex, messages);
+
+          // Keep standalone CLI event stream behavior unchanged.
+          self._workflowStatusMessageEmitter.fire({
+            stepIndex: -(loopIndex + 1),
+            message,
+            severity,
+          });
+        },
         onStatusMessage: (stepIndex, message, severity) => {
           self._workflowStatusMessageEmitter.fire({
             stepIndex,
@@ -1741,7 +1959,10 @@ export class WorkflowInstance {
         Log.debug(
           `Detected prompt count increase: ${this.lastKnownPromptCount} → ${state.prompts.length}. Notifying dashboard.`
         );
-        this.dashboardSink.updatePromptsExtended(state.prompts);
+        this.dashboardSink.updatePromptsExtended(
+          state.prompts,
+          this.promptQueue.getWorkflowFile().finalPrompt ?? null
+        );
         this.dashboardSink.updateProgress(
           state.currentIndex,
           state.prompts.length
@@ -1860,19 +2081,21 @@ export class WorkflowInstance {
       this.dashboardSink.updateFileSelected(
         displayName,
         prompts,
-        queueState.workflowName || undefined
+        queueState.workflowName || undefined,
+        promptFile.finalPrompt ?? null,
+        this.promptQueue.getFinalPromptRuntime()
       );
     }
 
     if (originalFilePath) {
       this.currentPromptFile = {
         filePath: originalFilePath,
-        promptFile: { prompts },
+        promptFile,
       };
     } else {
       this.currentPromptFile = {
         filePath: displayName,
-        promptFile: { prompts },
+        promptFile,
       };
     }
 

@@ -243,7 +243,9 @@ export class EndConditionHandler {
 
       // Update dashboard with retry state
       const dashboard = this.getDashboard();
-      if (dashboard) {
+      const hasQueueStep =
+        currentIndex < this.promptQueue.getState().results.length;
+      if (dashboard && hasQueueStep) {
         dashboard.updateRetryAttempt(currentIndex, currentRetry, maxRetries);
         dashboard.updateStepStatus(currentIndex, {
           state: STEP_STATUS.RUNNING,
@@ -255,7 +257,7 @@ export class EndConditionHandler {
 
       // Send status message: Retrying prompt (after building retryPrompt)
       const retryDashboard = this.getDashboard();
-      if (retryDashboard) {
+      if (retryDashboard && hasQueueStep) {
         const retryPromptPreview = retryPromptText
           .split("\n")[0]
           .substring(0, 60);

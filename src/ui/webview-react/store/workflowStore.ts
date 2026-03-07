@@ -4,6 +4,7 @@ import {
   STEP_STATUS,
   type ExecutionState,
   type StepStatus,
+  type FinalPromptPhase,
   type PromptItem,
   type CliOutput,
   type RetryState,
@@ -27,11 +28,17 @@ interface WorkflowState {
   executionState: ExecutionState;
   currentStep: number;
   totalSteps: number;
+  finalPrompt: PromptItem | null;
+  finalPromptStatus: StepStatus | null;
+  finalPromptLoopCount: number;
+  finalPromptPhase: FinalPromptPhase | null;
 
   // Step-indexed maps for outputs, retries, and messages
   cliOutputs: Record<number, CliOutput[]>;
+  finalPromptOutputs: Record<number, CliOutput[]>;
   retryStates: Record<number, RetryState>;
   statusMessages: Record<number, StatusMessage[]>;
+  finalPromptStatusMessages: Record<number, StatusMessage[]>;
 
   // Streaming state (for incremental output)
   streamingChunks: Record<number, string>;
@@ -43,6 +50,7 @@ interface WorkflowState {
   historyOutputs: {
     stepCount: number;
     steps: Record<number, StepOutput>;
+    finalPromptOutputs?: Record<number, StepOutput>;
     runMetadata: Pick<
       WorkflowOutputHistory,
       "runId" | "startedAt" | "completedAt" | "executionState"
@@ -62,9 +70,16 @@ interface WorkflowActions {
   setExecutionState: (state: ExecutionState) => void;
   setCurrentStep: (step: number) => void;
   setTotalSteps: (total: number) => void;
+  setFinalPrompt: (finalPrompt: PromptItem | null) => void;
+  setFinalPromptStatus: (
+    status: StepStatus | null,
+    loopCount: number,
+    phase: FinalPromptPhase | null
+  ) => void;
 
   // CLI output management
   addCliOutput: (stepIndex: number, output: CliOutput) => void;
+  addFinalPromptOutput: (loopIndex: number, output: CliOutput) => void;
   clearCliOutputs: (stepIndex: number) => void;
   appendStreamingChunk: (stepIndex: number, chunk: string) => void;
   clearStreamingChunk: (stepIndex: number) => void;
@@ -81,6 +96,11 @@ interface WorkflowActions {
   // Status message management
   addStatusMessage: (
     stepIndex: number,
+    message: string,
+    severity?: "info" | "warning" | "error"
+  ) => void;
+  addFinalPromptStatusMessage: (
+    loopIndex: number,
     message: string,
     severity?: "info" | "warning" | "error"
   ) => void;
@@ -118,6 +138,10 @@ interface WorkflowActions {
     executionState?: ExecutionState;
     currentStep?: number;
     results?: Array<{ status?: StepStatus }>;
+    finalPrompt?: PromptItem | null;
+    finalPromptStatus?: StepStatus | null;
+    finalPromptLoopCount?: number;
+    finalPromptPhase?: FinalPromptPhase | null;
   }) => void;
   resetWorkflow: () => void;
   clearAllRuntimeState: () => void;
@@ -160,9 +184,15 @@ const initialState: WorkflowState = {
   executionState: EXECUTION_STATES.IDLE,
   currentStep: 0,
   totalSteps: 0,
+  finalPrompt: null,
+  finalPromptStatus: null,
+  finalPromptLoopCount: 0,
+  finalPromptPhase: null,
   cliOutputs: {},
+  finalPromptOutputs: {},
   retryStates: {},
   statusMessages: {},
+  finalPromptStatusMessages: {},
   streamingChunks: {},
   historyOutputs: null,
 };
@@ -198,6 +228,28 @@ export const useWorkflowStore = create<
   setCurrentStep: (currentStep) => set({ currentStep }),
 
   setTotalSteps: (totalSteps) => set({ totalSteps }),
+
+  setFinalPrompt: (finalPrompt) =>
+    set((state) => ({
+      finalPrompt,
+      ...(finalPrompt
+        ? {}
+        : {
+            finalPromptStatus: null,
+            finalPromptLoopCount: 0,
+            finalPromptPhase: null,
+            finalPromptOutputs: {},
+            finalPromptStatusMessages: {},
+          }),
+      prompts: state.prompts,
+    })),
+
+  setFinalPromptStatus: (status, loopCount, phase) =>
+    set({
+      finalPromptStatus: status,
+      finalPromptLoopCount: loopCount,
+      finalPromptPhase: phase,
+    }),
 
   // ============================================================================
   // CLI OUTPUT MANAGEMENT
@@ -319,6 +371,31 @@ export const useWorkflowStore = create<
       };
     }),
 
+  addFinalPromptOutput: (loopIndex, output) =>
+    set((state) => {
+      const outputs = state.finalPromptOutputs[loopIndex] || [];
+      const attemptIndex = output.attemptIndex ?? 0;
+      const existingIdx = outputs.findIndex(
+        (o) => (o.attemptIndex ?? 0) === attemptIndex
+      );
+
+      const newOutputs =
+        existingIdx >= 0
+          ? [
+              ...outputs.slice(0, existingIdx),
+              output,
+              ...outputs.slice(existingIdx + 1),
+            ]
+          : [...outputs, output];
+
+      return {
+        finalPromptOutputs: {
+          ...state.finalPromptOutputs,
+          [loopIndex]: newOutputs,
+        },
+      };
+    }),
+
   clearCliOutputs: (stepIndex) =>
     set((state) => {
       const { [stepIndex]: _, ...rest } = state.cliOutputs;
@@ -426,6 +503,17 @@ export const useWorkflowStore = create<
       },
     })),
 
+  addFinalPromptStatusMessage: (loopIndex, message, severity = "info") =>
+    set((state) => ({
+      finalPromptStatusMessages: {
+        ...state.finalPromptStatusMessages,
+        [loopIndex]: [
+          ...(state.finalPromptStatusMessages[loopIndex] || []),
+          { message, severity, timestamp: Date.now() },
+        ],
+      },
+    })),
+
   clearStatusMessages: (stepIndex) =>
     set((state) => {
       const { [stepIndex]: _, ...rest } = state.statusMessages;
@@ -454,6 +542,10 @@ export const useWorkflowStore = create<
     executionState = EXECUTION_STATES.IDLE,
     currentStep = 0,
     results = [],
+    finalPrompt = null,
+    finalPromptStatus = null,
+    finalPromptLoopCount = 0,
+    finalPromptPhase = null,
   }) => {
     // Apply status from results to prompts
     const promptsWithStatus = prompts.map((prompt, index) => ({
@@ -468,10 +560,16 @@ export const useWorkflowStore = create<
       executionState,
       currentStep,
       totalSteps: prompts.length,
+      finalPrompt,
+      finalPromptStatus,
+      finalPromptLoopCount,
+      finalPromptPhase,
       // Clear runtime state on new workflow
       cliOutputs: {},
+      finalPromptOutputs: {},
       retryStates: {},
       statusMessages: {},
+      finalPromptStatusMessages: {},
       streamingChunks: {},
     });
   },
@@ -490,6 +588,7 @@ export const useWorkflowStore = create<
         historyOutputs: {
           stepCount: history.runStepCount,
           steps: history.promptOutputs,
+          finalPromptOutputs: history.finalPromptOutputs,
           runMetadata: {
             runId: history.runId,
             startedAt: history.startedAt,
@@ -545,6 +644,11 @@ export const useWorkflowStore = create<
         retryStates: newRetryStates,
         statusMessages: newStatusMessages,
         streamingChunks: newStreamingChunks,
+        finalPromptOutputs: {},
+        finalPromptStatusMessages: {},
+        finalPromptStatus: null,
+        finalPromptLoopCount: 0,
+        finalPromptPhase: null,
       };
     }),
 
@@ -586,9 +690,14 @@ export const useWorkflowStore = create<
   clearAllRuntimeState: () =>
     set({
       cliOutputs: {},
+      finalPromptOutputs: {},
       retryStates: {},
       statusMessages: {},
+      finalPromptStatusMessages: {},
       streamingChunks: {},
+      finalPromptStatus: null,
+      finalPromptLoopCount: 0,
+      finalPromptPhase: null,
     }),
 
   // ============================================================================

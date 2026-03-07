@@ -1,6 +1,16 @@
 import { ExecutionState } from "./DashboardConstants";
 import { CliOutput, StatusMessage } from "./WebviewMessageTypes";
 
+export type OutputExecutionTarget =
+  | { kind: "queue"; stepIndex: number }
+  | { kind: "finalPrompt"; loopIndex: number };
+
+export interface OutputTimelineEntry {
+  key: string;
+  target: OutputExecutionTarget;
+  firstOutputAt: number;
+}
+
 /**
  * Complete output history for a single workflow run.
  * Stored in .flightpath/.history/<workflow-id>/run-N-<timestamp>.json
@@ -14,7 +24,8 @@ import { CliOutput, StatusMessage } from "./WebviewMessageTypes";
  */
 export interface WorkflowOutputHistory {
   // Schema version for future migrations
-  schemaVersion: "1.0.0";
+  // 1.0.0 is retained for backward-compatible reads.
+  schemaVersion: "1.0.0" | "1.1.0";
 
   // Run metadata
   workflowId: string; // Working file basename (e.g., "workflow-2024-01-21T10-30-00")
@@ -32,6 +43,16 @@ export interface WorkflowOutputHistory {
   promptOutputs: {
     [stepIndex: number]: StepOutput;
   };
+
+  // Per-loop finalPrompt outputs (keyed by loopIndex, indices 0..N)
+  // Optional for backward compatibility with schemaVersion 1.0.0 histories.
+  finalPromptOutputs?: {
+    [loopIndex: number]: StepOutput;
+  };
+
+  // Chronological metadata for rendering mixed queue/finalPrompt outputs
+  // without relying on numeric queue indices.
+  outputTimeline?: OutputTimelineEntry[];
 }
 
 /**

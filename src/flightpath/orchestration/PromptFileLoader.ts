@@ -128,7 +128,13 @@ export class PromptFileLoader {
       const dashboard = this.getDashboard();
       if (dashboard) {
         // Send full prompt objects with all properties
-        dashboard.updateFileSelected(fileName, promptFile.prompts);
+        dashboard.updateFileSelected(
+          fileName,
+          promptFile.prompts,
+          undefined,
+          promptFile.finalPrompt ?? null,
+          this.promptQueue.getFinalPromptRuntime()
+        );
       }
 
       Log.debug(
@@ -215,7 +221,9 @@ export class PromptFileLoader {
             restoredState.results,
             restoredState.status,
             restoredState.currentIndex,
-            restoredState.workflowName || undefined
+            restoredState.workflowName || undefined,
+            workingFile.finalPrompt ?? null,
+            this.promptQueue.getFinalPromptRuntime()
           );
 
           // Load output history if available (auto-loads most recent run from disk)
@@ -238,7 +246,10 @@ export class PromptFileLoader {
           );
 
           // Send PROMPTS_EXTENDED message with updated prompt list
-          mergeDashboard.updatePromptsExtended(updatedState.prompts);
+          mergeDashboard.updatePromptsExtended(
+            updatedState.prompts,
+            this.promptQueue.getWorkflowFile().finalPrompt ?? null
+          );
         } else if (newPromptsCount === 0) {
           Log.debug("Working file changed but no new prompts detected");
         }
@@ -285,6 +296,9 @@ export class PromptFileLoader {
     }
     if (promptFile.endCondition !== undefined) {
       updates.endCondition = promptFile.endCondition;
+    }
+    if (promptFile.finalPrompt !== undefined) {
+      updates.finalPrompt = promptFile.finalPrompt;
     }
 
     return updates;

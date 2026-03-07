@@ -24,6 +24,7 @@ import {
   LOCK_STATUS,
   type QueuePosition,
   type ActionType,
+  type StepStatus,
 } from "../types/DashboardConstants";
 import { FlightPathWebviewProvider } from "../ui/FlightPathWebviewProvider";
 import { StatusBarManager } from "../ui/StatusBarManager";
@@ -854,6 +855,12 @@ export class WorkflowOrchestrator {
     );
   }
 
+  async updateFinalPromptInQueue(
+    finalPrompt: PromptItem | null
+  ): Promise<void> {
+    return this.getActiveInstance().updateFinalPromptInQueue(finalPrompt);
+  }
+
   async deletePromptFromQueue(index: number): Promise<void> {
     return this.getActiveInstance().deletePromptFromQueue(index);
   }
@@ -1427,6 +1434,14 @@ export class WorkflowOrchestrator {
     // Read the latest working file to get current prompt list and step position
     let prompts: PromptItem[] = [];
     let currentIndex = cliEntry.summary.currentStep ?? 0;
+    let finalPrompt: PromptItem | null = null;
+    let finalPromptRuntime:
+      | {
+          status?: StepStatus;
+          loopCount: number;
+          phase: "queue" | "finalPrompt";
+        }
+      | undefined;
 
     try {
       const content = await fs.promises.readFile(workingFilePath, "utf8");
@@ -1437,6 +1452,14 @@ export class WorkflowOrchestrator {
         status: undefined as unknown as string,
       }));
       currentIndex = workingFile._runtime?.currentIndex ?? currentIndex;
+      finalPrompt = (workingFile.finalPrompt as PromptItem | undefined) ?? null;
+      finalPromptRuntime = workingFile._runtime?.finalPrompt
+        ? {
+            status: workingFile._runtime.finalPrompt.status,
+            loopCount: workingFile._runtime.finalPrompt.loopCount,
+            phase: workingFile._runtime.finalPrompt.phase,
+          }
+        : undefined;
     } catch (err) {
       Log.warn(
         `[WorkflowOrchestrator] sendCliWorkflowFullStateToDashboard: could not read working file:`,
@@ -1464,7 +1487,9 @@ export class WorkflowOrchestrator {
       results,
       cliEntry.summary.executionState,
       currentIndex,
-      cliEntry.summary.workflowName
+      cliEntry.summary.workflowName,
+      finalPrompt,
+      finalPromptRuntime
     );
 
     // Replay all captured CLI outputs from the active history file

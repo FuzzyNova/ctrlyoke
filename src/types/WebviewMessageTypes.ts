@@ -17,6 +17,7 @@
 
 import {
   ExecutionState,
+  FinalPromptPhase,
   StepStatus,
   HarnessId,
   MESSAGE_TYPES,
@@ -241,6 +242,10 @@ export interface InitMessageData {
   executionState: ExecutionState;
   currentIndex: number;
   results: any[];
+  finalPrompt?: PromptItem | null;
+  finalPromptStatus?: StepStatus | null;
+  finalPromptLoopCount?: number;
+  finalPromptPhase?: FinalPromptPhase | null;
   globalSettings: {
     harness: HarnessId;
     model: string;
@@ -266,6 +271,10 @@ export interface FileSelectedMessage {
   fileName: string;
   prompts: PromptItem[];
   workflowName?: string;
+  finalPrompt?: PromptItem | null;
+  finalPromptStatus?: StepStatus | null;
+  finalPromptLoopCount?: number;
+  finalPromptPhase?: FinalPromptPhase | null;
 }
 
 /**
@@ -279,6 +288,10 @@ export interface SessionRestoredMessage {
   executionState: ExecutionState;
   currentIndex: number;
   workflowName?: string;
+  finalPrompt?: PromptItem | null;
+  finalPromptStatus?: StepStatus | null;
+  finalPromptLoopCount?: number;
+  finalPromptPhase?: FinalPromptPhase | null;
 }
 
 /**
@@ -380,6 +393,7 @@ export interface StatusMessageMessage {
 export interface PromptsExtendedMessage {
   type: typeof MESSAGE_TYPES.PROMPTS_EXTENDED;
   prompts: PromptItem[];
+  finalPrompt?: PromptItem | null;
 }
 
 /**
@@ -389,6 +403,34 @@ export interface PromptDeletedMessage {
   type: typeof MESSAGE_TYPES.PROMPT_DELETED;
   fileName: string;
   prompts: PromptItem[];
+  finalPrompt?: PromptItem | null;
+}
+
+/**
+ * Update finalPrompt message (extension -> webview OR webview -> extension)
+ */
+export interface UpdateFinalPromptMessage {
+  type: typeof MESSAGE_TYPES.UPDATE_FINAL_PROMPT;
+  finalPrompt: PromptItem | null;
+}
+
+/**
+ * finalPrompt runtime status changed message (extension -> webview)
+ */
+export interface FinalPromptStatusChangedMessage {
+  type: typeof MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED;
+  status: StepStatus | null;
+  loopCount: number;
+  phase: FinalPromptPhase | null;
+}
+
+/**
+ * finalPrompt CLI output message (extension -> webview)
+ */
+export interface FinalPromptOutputMessage {
+  type: typeof MESSAGE_TYPES.FINAL_PROMPT_OUTPUT;
+  loopIndex: number;
+  output: CliOutput;
 }
 
 /**
@@ -608,6 +650,9 @@ export type IncomingMessage =
   | CliStreamingChunkMessage
   | CliStreamingEventsMessage
   | StatusMessageMessage
+  | UpdateFinalPromptMessage
+  | FinalPromptStatusChangedMessage
+  | FinalPromptOutputMessage
   | { type: typeof MESSAGE_TYPES.EXECUTION_COMPLETED }
   | PromptsExtendedMessage
   | PromptDeletedMessage

@@ -6,6 +6,7 @@ import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { HARNESS_INFO } from "../../types/messages";
 import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
+import { FinalPromptFooter } from "../prompts/FinalPromptFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
 import {
@@ -29,14 +30,33 @@ import { sendMessage } from "../../hooks/useMessageHandler";
 export const PromptsPanel: React.FC<{
   panelBarOrientation?: "horizontal" | "vertical";
 }> = ({ panelBarOrientation = "vertical" }) => {
-  const { prompts, currentStep, executionState, retryStates, cliOutputs, historyOutputs } =
-    useWorkflowStore();
-  const { promptsCollapsed, togglePromptsCollapse, isViewingHistory, loadedWorkflows, activeWorkflowId } = useUiStore();
+  const {
+    prompts,
+    currentStep,
+    executionState,
+    retryStates,
+    cliOutputs,
+    historyOutputs,
+    finalPrompt,
+    finalPromptStatus,
+    finalPromptLoopCount,
+    finalPromptPhase,
+  } = useWorkflowStore();
+  const {
+    promptsCollapsed,
+    togglePromptsCollapse,
+    isViewingHistory,
+    loadedWorkflows,
+    activeWorkflowId,
+    finalPromptFooterExpanded,
+    toggleFinalPromptFooterExpanded,
+    setFinalPromptFooterExpanded,
+  } = useUiStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
-  const { selectedPromptIndex, selectPrompt } = useEditorStore();
+  const { selectionTarget, selectPrompt, selectFinalPrompt } = useEditorStore();
   const { workflowProperties, globalSettings } = useSettingsStore();
   const [headerRef, isHeaderNarrow] = useElementNarrow<HTMLDivElement>(200);
 
@@ -85,7 +105,7 @@ export const PromptsPanel: React.FC<{
       if (isCLIManaged) return;
       const prompt = prompts[index];
       if (prompt) {
-        selectPrompt(index, prompt);
+        selectPrompt({ kind: "queue", index }, prompt);
         // Scroll to this step's output if it exists.
         // In history mode, check historyOutputs; otherwise check live cliOutputs.
         let hasOutput: boolean;
@@ -99,7 +119,9 @@ export const PromptsPanel: React.FC<{
         }
         if (hasOutput) {
           requestAnimationFrame(() => {
-            const anchor = document.getElementById(`output-step-${index}`);
+            const anchor = document.getElementById(
+              `output-step-queue-${index}`
+            );
             const container = document.getElementById("output-content");
             if (anchor && container) {
               const anchorTop = anchor.getBoundingClientRect().top;
@@ -115,6 +137,27 @@ export const PromptsPanel: React.FC<{
     },
     [prompts, selectPrompt, cliOutputs, isViewingHistory, historyOutputs]
   );
+
+  const handleFinalPromptSelect = useCallback(() => {
+    if (isCLIManaged) return;
+    if (finalPrompt) {
+      selectFinalPrompt(finalPrompt);
+    } else {
+      setFinalPromptFooterExpanded(true);
+      selectPrompt({ kind: "finalPrompt" }, { prompt: "" });
+    }
+  }, [
+    isCLIManaged,
+    finalPrompt,
+    selectFinalPrompt,
+    setFinalPromptFooterExpanded,
+    selectPrompt,
+  ]);
+
+  const handleDisableFinalPrompt = useCallback(() => {
+    if (isCLIManaged || !finalPrompt) return;
+    sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalPrompt: null });
+  }, [isCLIManaged, finalPrompt]);
 
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
@@ -249,7 +292,9 @@ export const PromptsPanel: React.FC<{
               const details = getPromptDetails(prompt, index);
               const latestOutput = getLatestOutput(index);
               const isCurrent = isRunning && index === currentStep;
-              const isSelected = selectedPromptIndex === index;
+              const isSelected =
+                selectionTarget.kind === "queue" &&
+                selectionTarget.index === index;
               const harnessModel = getPromptHarnessModel(prompt);
 
               return (
@@ -275,6 +320,19 @@ export const PromptsPanel: React.FC<{
           </div>
         )}
       </div>
+
+      <FinalPromptFooter
+        finalPrompt={finalPrompt}
+        status={finalPromptStatus}
+        loopCount={finalPromptLoopCount}
+        phase={finalPromptPhase}
+        isExpanded={finalPromptFooterExpanded}
+        isSelected={selectionTarget.kind === "finalPrompt"}
+        isReadOnly={isCLIManaged}
+        onSelect={handleFinalPromptSelect}
+        onToggleExpanded={toggleFinalPromptFooterExpanded}
+        onDisable={handleDisableFinalPrompt}
+      />
     </div>
   );
 };

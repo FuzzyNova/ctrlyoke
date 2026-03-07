@@ -1,48 +1,129 @@
 # Final Prompt (Orchestrator Gate) Plan
 
-**Date**: March 4, 2026  
-**Status**: Planning Phase  
-**Related**: [QUEUE_APPEND_FEATURE.md](../QUEUE_APPEND_FEATURE.md), [prompt-schema.json](../../schemas/prompt-schema.json), [WorkflowExecutor.ts](../../src/flightpath/WorkflowExecutor.ts), [PromptsPanel.tsx](../../src/ui/webview-react/components/layout/PromptsPanel.tsx)
+**Date**: March 6, 2026  
+**Status**: Revised Planning Phase  
+**Related**: [QUEUE_APPEND_FEATURE.md](../QUEUE_APPEND_FEATURE.md), [prompt-schema.json](../../schemas/prompt-schema.json), [WorkflowExecutor.ts](../../src/flightpath/WorkflowExecutor.ts), [PromptQueue.ts](../../src/flightpath/PromptQueue.ts), [PromptsPanel.tsx](../../src/ui/webview-react/components/layout/PromptsPanel.tsx), [OutputSection.tsx](../../src/ui/webview-react/components/layout/OutputSection.tsx)
 
 ---
 
 ## Problem Statement
 
-There is no first-class way to run a "cleanup and gate" prompt that always executes after the main queue completes. Users who want this today have two imperfect options:
+FlightPath has no first-class way to run a "cleanup and gate" prompt that is structurally guaranteed to execute after all normal queue work is done.
 
-1. **Put the cleanup at the end of the static queue.** Breaks for dynamic workflows — if earlier prompts extend the queue, new prompts append after the cleanup prompt, so it no longer runs last.
+Users currently have two weak options:
 
-2. **Use `allowDynamicExtension` on every prompt to build a self-extending loop.** Each prompt becomes responsible for two things: doing its task _and_ deciding whether to add more work. This violates single responsibility, bloats prompts, and makes convergence harder to reason about.
+1. **Put the cleanup at the end of the static queue.** This breaks for dynamic workflows. If earlier prompts append more work, the cleanup prompt is no longer last.
 
-The missing primitive is a prompt that is _structurally guaranteed to be last_ — it runs after every other prompt is done, always.
+2. **Make every prompt self-orchestrating with `allowDynamicExtension`.** This mixes task execution and orchestration in every prompt, which violates single responsibility, increases prompt size, and makes convergence harder to reason about.
+
+The missing primitive is a prompt that is guaranteed to run after the queue drains, regardless of how many prompts were appended earlier.
 
 ---
 
 ## Background: The Ralph Loop Pattern
 
-The "Ralph Loop" (named for the Ralph Wiggum technique from Claude Code's stop hooks) is a pattern for long-running agentic work:
+The "Ralph Loop" pattern is an outer gate around an agentic loop:
 
-1. Hand the agent a goal and a persistent progress reference (e.g., a plan doc).
-2. The agent does work and calls "done."
-3. A stop hook intercepts the exit and asks: "Are you _actually_ done?"
-4. If not, re-inject the agent with remaining context and restart.
+1. Hand the agent a goal and a durable progress reference.
+2. Let the agent do work and declare completion.
+3. Intercept that completion with a final gate.
+4. If work remains, append new work and continue.
 
-FlightPath can implement this pattern cleanly using `finalPrompt` as the outer orchestrator. The key insight from the pattern is **separation of concerns**: inner prompts implement tasks; the outer gate evaluates completeness. Neither needs to know about the other's logic.
+FlightPath maps cleanly onto this pattern if `finalPrompt` is the outer gate and queue prompts remain focused on inner tasks.
+
+The key principle is separation of concerns:
+
+- Normal prompts perform work.
+- `finalPrompt` decides whether the workflow is actually done.
 
 ---
 
 ## Proposed Solution: `finalPrompt` Workflow Property
 
-Add a `finalPrompt` property at the workflow level. It is a full `PromptItem` — every execution property available on normal prompts (`harness`, `model`, `agent`, `skills`, `resumeSession`, `sessionId`, `endCondition`, `allowDynamicExtension`) is available on `finalPrompt`.
+Add a workflow-level `finalPrompt` property. It is a full `PromptItem`, with the same execution properties as normal prompts:
+
+- `harness`
+- `model`
+- `agent`
+- `skills`
+- `resumeSession`
+- `sessionId`
+- `endCondition`
+- `allowDynamicExtension`
 
 ### Use Cases
 
-| Pattern                       | `allowDynamicExtension` | Description                                                                                                                        |
-| ----------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Ralph Loop / Orchestrator** | `true`                  | Reads a plan doc, decides if work is complete; if not, appends more prompts to the queue and the loop continues                    |
-| **PR / Review Gate**          | `false`                 | After all implementation prompts complete, reviews changes, writes PR description, commits — no looping needed                     |
-| **Cleanup & Commit**          | `false`                 | Template workflows (e.g., "Refactor Endpoints") always end with a cleanup prompt regardless of how many implementation prompts ran |
-| **Notification / Reporting**  | `false`                 | Sends a Slack message, writes a summary file, or updates a tracking doc — always exactly once, at the end                          |
+| Pattern                       | `allowDynamicExtension` | Description                                                                                                     |
+| ----------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Ralph Loop / Orchestrator** | `true`                  | Reads a plan doc, checks completion, appends the next task if needed, and reruns after appended prompts finish  |
+| **PR / Review Gate**          | `false`                 | Reviews changes, writes a PR description, stages files, commits, or performs other end-of-run work exactly once |
+| **Cleanup & Commit**          | `false`                 | Ensures reusable templates always end with cleanup, formatting, test execution, or final bookkeeping            |
+| **Notification / Reporting**  | `false`                 | Sends a summary, writes a report, or updates a tracking file after all other prompts are complete               |
+
+---
+
+## Core Design Decisions
+
+### 1. `finalPrompt` Lives Outside the Queue
+
+`finalPrompt` is not part of `promptQueue.prompts` and does not participate in `currentIndex`.
+
+That keeps queue semantics stable:
+
+- `hasNext()` still means "is there another normal queued prompt?"
+- `currentIndex` still points only at normal prompts
+- prompt append/extend logic remains queue-native
+
+### 2. No Virtual Numeric Step Index
+
+Do **not** represent `finalPrompt` as `prompts.length` or any other numeric queue index.
+
+That would collide with newly appended prompts because a prompt appended after `finalPrompt` runs can later occupy that same numeric index. Current output, retry, status, anchor, and history paths are keyed by numeric step indices, so index reuse would misattribute data.
+
+Instead, `finalPrompt` gets its own runtime identity model.
+
+### 3. `finalPrompt` Needs a Distinct Runtime Identity
+
+Use a separate execution identity for `finalPrompt` rather than overloading queue step indices.
+
+Recommended shape:
+
+```typescript
+type StepExecutionTarget =
+  | { kind: "queue"; stepIndex: number }
+  | { kind: "finalPrompt"; loopIndex: number };
+```
+
+For places that only need a string key, use a stable derived key:
+
+```typescript
+type StepExecutionKey = `queue:${number}` | `final:${number}`;
+```
+
+Examples:
+
+- `queue:0`
+- `queue:1`
+- `final:0`
+- `final:1`
+
+This avoids collisions in:
+
+- live output storage
+- retry state storage
+- streaming buffers
+- output anchors
+- history snapshots
+- CLI watch replay
+
+### 4. `finalPrompt` Is a Real Execution Phase
+
+The workflow has two logical phases:
+
+- `queue`: draining normal prompts
+- `finalPrompt`: running the orchestrator gate
+
+This phase distinction must be reflected in runtime state so pause, stop, resume, and restore behave deterministically.
 
 ---
 
@@ -50,366 +131,586 @@ Add a `finalPrompt` property at the workflow level. It is a full `PromptItem` �
 
 ### Loop Semantics
 
+```text
+outer loop (bounded by existing maxQueueSize / unlimitedMode / maxWorkflowExecutionTime guards):
+  1. drain normal queue prompts while queue.hasNext()
+  2. if execution is no longer RUNNING, stop
+  3. if no finalPrompt, complete
+  4. execute finalPrompt once
+  5. if execution is no longer RUNNING, stop
+  6. if finalPrompt appended queue prompts, continue outer loop
+  7. otherwise complete
 ```
-outer loop (bounded by existing maxQueueSize / unlimitedMode guards):
-  ├── inner: while (queue.hasNext()) → execute normal prompts sequentially
-  └── if finalPrompt defined:
-        ├── snapshot = queue.prompts.length
-        ├── execute finalPrompt (like any other prompt, all props honored)
-        └── if allowDynamicExtension && queue.prompts.length > snapshot:
-              → queue grew → continue outer loop
-            else:
-              → queue did not grow (or allowDynamicExtension=false) → COMPLETED
-```
-
-Loop termination relies on the same guards already in place for dynamic queues: `maxQueueSize` (default: 100) caps total queue growth, and `unlimitedMode` disables that cap for users who intentionally want unbounded execution. No additional loop counter is needed.
 
 ### Key Invariants
 
-- `finalPrompt` always runs **after** all currently-queued prompts complete.
-- If `allowDynamicExtension` is `false` (or not set), the queue cannot grow during `finalPrompt` and the workflow ends immediately after `finalPrompt` completes (same as if it were a normal last prompt).
-- If `allowDynamicExtension` is `true` and `finalPrompt` appends prompts, the inner queue loop runs those new prompts, then `finalPrompt` runs again.
-- `finalPrompt` participates in pause/stop checks the same way any prompt does.
-- `finalPrompt` is NOT included in `queue.hasNext()` count — it lives outside the queue index cursor.
+- `finalPrompt` runs only after the normal queue is empty.
+- If `finalPrompt.allowDynamicExtension !== true`, the workflow ends after `finalPrompt` completes.
+- If `finalPrompt.allowDynamicExtension === true` and it appends prompts, those prompts run before `finalPrompt` runs again.
+- Existing queue growth guards remain authoritative:
+  - `maxQueueSize`
+  - `unlimitedMode`
+  - `maxWorkflowExecutionTime`
+- `finalPrompt` participates in the same harness resolution, end condition, retry, pause, and stop behavior as a normal prompt.
 
-### Loop Index Representation
+### Executor Refactor
 
-`finalPrompt` runs at a virtual step index: `prompts.length` (one past the last queue item). This sentinel index is used for:
+The current queue loop in [WorkflowExecutor.ts](../../src/flightpath/WorkflowExecutor.ts) should be split into:
 
-- Dashboard output grouping (`output-step-final`)
-- History storage
-- Status message tracking
+1. A reusable `executeSinglePrompt(...)` path used by both queue prompts and `finalPrompt`
+2. An outer orchestration loop that alternates between:
+   - draining queue prompts
+   - optionally executing `finalPrompt`
 
-On subsequent loops the index stays at `prompts.length` (which may grow), always pointing "after the last real prompt."
+Recommended sketch:
+
+```typescript
+async execute(defaultIntegration, context): Promise<void> {
+  this.clearPendingState();
+  this.stepStatusMessages.clear();
+  await this.promptQueue.start();
+  this.promptQueue.startExecutionTimer();
+
+  const workflowFile = context.workflowFile ?? this.promptQueue.getWorkflowFile();
+  const finalPrompt = workflowFile?.finalPrompt;
+
+  while (true) {
+    while (this.promptQueue.hasNext()) {
+      const state = this.promptQueue.getState();
+      const prompt = state.prompts[state.currentIndex];
+      await this.executeSinglePrompt({
+        target: { kind: "queue", stepIndex: state.currentIndex },
+        prompt,
+        defaultIntegration,
+        context,
+      });
+    }
+
+    const statusAfterQueue = this.promptQueue.getState().status;
+    if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
+      break;
+    }
+
+    if (!finalPrompt) {
+      break;
+    }
+
+    const loopIndex = context.finalPromptRuntime?.loopCount ?? 0;
+    const queueSizeBefore = this.promptQueue.getState().prompts.length;
+
+    await this.executeSinglePrompt({
+      target: { kind: "finalPrompt", loopIndex },
+      prompt: finalPrompt,
+      defaultIntegration,
+      context,
+    });
+
+    const statusAfterFinal = this.promptQueue.getState().status;
+    if (statusAfterFinal !== EXECUTION_STATES.RUNNING) {
+      break;
+    }
+
+    const queueSizeAfter = this.promptQueue.getState().prompts.length;
+    if (queueSizeAfter <= queueSizeBefore) {
+      break;
+    }
+
+    context.finalPromptRuntime = {
+      ...context.finalPromptRuntime,
+      loopCount: loopIndex + 1,
+      phase: "queue",
+    };
+  }
+}
+```
+
+---
+
+## Runtime State and Resume Semantics
+
+### Working File Requirements
+
+The current working file runtime only tracks queue position and execution state. That is not enough to restore a workflow paused or stopped during `finalPrompt`.
+
+Add runtime metadata for final prompt execution.
+
+Recommended shape:
+
+```typescript
+interface FinalPromptRuntimeState {
+  phase: "queue" | "finalPrompt";
+  loopCount: number;
+  status?: StepStatus;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+interface WorkingFileRuntime {
+  currentIndex: number;
+  executionState: ExecutionState;
+  finalPrompt?: FinalPromptRuntimeState;
+}
+```
+
+### Resume Rules
+
+- If the workflow is paused or stopped during normal queue execution, resume from `currentIndex` as today.
+- If the workflow is paused or stopped during `finalPrompt`, resume by re-running `finalPrompt` for the same `loopCount`.
+- If VS Code restarts while the workflow was in `finalPrompt`, restore phase as `finalPrompt` and let resume continue through that phase.
+- `loopCount` is not just informational. It is part of execution identity and must survive restart.
+
+### Completion Rules
+
+- If the workflow completes normally, persist final prompt runtime as completed.
+- If `finalPrompt` fails its end condition after retries, the workflow ends in `error`.
+- If the user stops during `finalPrompt`, the workflow ends in `stopped`, preserving final prompt phase for explicit resume.
 
 ---
 
 ## Schema Changes (`schemas/prompt-schema.json`)
 
-Add one property to the `"Multiple Prompts"` `allOf` block (alongside `prompts`, `originalFile`, etc.):
+Add `finalPrompt` to the multi-prompt schema using the existing `promptItem` definition:
 
 ```json
 "finalPrompt": {
   "$ref": "#/definitions/promptItem",
-  "description": "A prompt that always runs after all queued prompts complete. Useful for orchestrator gates (Ralph Loop pattern), cleanup-and-commit workflows, or PR review steps. If allowDynamicExtension is true and finalPrompt appends new prompts, those run first and then finalPrompt executes again. Loop termination is governed by the existing maxQueueSize setting. All normal PromptItem properties are supported."
+  "description": "A prompt that always runs after all queued prompts complete. Useful for orchestrator gates, cleanup-and-commit workflows, PR review steps, or final reporting. If allowDynamicExtension is true and finalPrompt appends prompts, those prompts run first and then finalPrompt executes again."
 }
 ```
 
-### YAML Example — Ralph Loop Orchestrator
+### Parsing Behavior
 
-```yaml
-harness: claude-cli
-model: claude-sonnet-4.5
+`finalPrompt.prompt` should go through the same normalization path as normal prompt bodies:
 
-prompts:
-  - id: analyze
-    name: Analyze Codebase
-    prompt: "Read docs/plan.md and implement the next incomplete task. Mark it done in the plan doc when finished."
+- inline text works unchanged
+- prompt-file references such as `./something.prompt.md` should resolve exactly as `prompts[].prompt` does today
 
-finalPrompt:
-  name: Orchestrator Gate
-  prompt: |
-    Read docs/plan.md. If all tasks are marked complete, output "done".
-    If any tasks remain, call flightpath_append_queue with one prompt for the next task.
-  allowDynamicExtension: true
-  resumeSession: false
-```
-
-### YAML Example — Cleanup & Commit (No Loop)
-
-```yaml
-harness: copilot-cli
-
-prompts:
-  - prompt: "Refactor the authentication module per the spec in docs/auth-spec.md"
-  - prompt: "Write unit tests for the refactored auth module"
-
-finalPrompt:
-  name: PR Prep
-  prompt: |
-    Review all changes with @workspace. Write a PR description to .flightpath/pr-description.md.
-    Stage all changes and commit with message: "refactor: authentication module".
-  allowDynamicExtension: false
-```
+That means `PromptFileParser` needs explicit support for normalizing `finalPrompt`, not just schema validation.
 
 ---
 
 ## Type Changes (`src/types/FlightPathTypes.ts`)
 
-Add one optional field to `PromptFile`:
+Add to `PromptFile`:
 
 ```typescript
 export interface PromptFile extends ExecutionProperties {
   prompt?: string;
   prompts?: PromptItem[];
-  /** Prompt that always runs after all queued prompts complete. See FINAL_PROMPT_PLAN.md. */
   finalPrompt?: PromptItem;
 }
 ```
 
-No changes to `PromptItem`, `ExecutionProperties`, or `WorkingFile` — `WorkingFile extends PromptFile` so it inherits `finalPrompt` automatically and it persists in the working file.
+Also extend working-file runtime types with final prompt execution state as described above.
 
----
+### Important Naming Note
 
-## `WorkflowExecutor.ts` Changes
+There are currently two `WorkflowContext` interfaces in the codebase:
 
-### `execute()` Method Restructuring
+- a shared harness-facing one in `src/types/FlightPathTypes.ts`
+- an executor-specific one in `src/flightpath/WorkflowExecutor.ts`
 
-The existing `while (this.promptQueue.hasNext())` loop becomes the **inner loop**. Wrap it in an outer `do...while`:
-
-```typescript
-async execute(defaultIntegration, context): Promise<void> {
-  // ... existing setup (clearPendingState, stepStatusMessages.clear, start, etc.) ...
-
-  const finalPrompt = context.workflowFile?.finalPrompt ?? null;
-
-  do {
-    // === INNER LOOP (unchanged) ===
-    while (this.promptQueue.hasNext()) {
-      // ... existing prompt execution body, untouched ...
-    }
-
-    // Check if aborted/paused/stopped — don't run finalPrompt
-    const statusAfterInner = this.promptQueue.getState().status;
-    if (statusAfterInner !== EXECUTION_STATES.RUNNING) break;
-
-    // No finalPrompt → normal completion
-    if (!finalPrompt) break;
-
-    // Execute finalPrompt at virtual index
-    const sizeBeforeFinal = this.promptQueue.getState().prompts.length;
-    const finalIndex = sizeBeforeFinal;
-    await this.executeSinglePrompt(finalPrompt, finalIndex, defaultIntegration, context);
-
-    const sizeAfterFinal = this.promptQueue.getState().prompts.length;
-    if (sizeAfterFinal <= sizeBeforeFinal) break; // finalPrompt didn't extend queue → done
-
-    // Queue grew → loop. Inner loop will execute the new prompts next.
-    // Termination is governed by existing maxQueueSize / unlimitedMode guards.
-    Log.info(`🔄 finalPrompt extended queue (+${sizeAfterFinal - sizeBeforeFinal} prompts).`);
-
-  } while (true);
-
-  // ... existing completion handling ...
-}
-```
-
-### New `WorkflowContext` Field
-
-Add to `WorkflowContext` interface:
-
-```typescript
-/** The loaded workflow file, for reading finalPrompt */
-workflowFile?: PromptFile;
-```
-
-`WorkflowInstance` / `FlightPathManager` already has the parsed workflow file. Pass it through when building `WorkflowContext`.
-
-### Extracting `executeSinglePrompt()`
-
-The inner loop body (currently ~150 lines) should be extracted to a private `executeSinglePrompt(prompt, index, defaultIntegration, context)` method so both the inner loop and `finalPrompt` execution share the same code path without duplication. This is a beneficial refactor regardless — it makes the loop body readable.
+This plan refers to the executor-specific context when discussing workflow execution. Rename one of them during implementation to avoid ongoing ambiguity.
 
 ---
 
 ## `PromptQueue` Changes
 
-`finalPrompt` lives **outside** the queue's `prompts` array. The queue itself needs no changes — `hasNext()`, `currentIndex`, append/extend all operate on the normal prompt array as before. `finalPrompt` is purely an executor-level concept.
+`PromptQueue` should continue to treat only normal prompts as queue entries.
 
-The virtual `finalIndex` (`prompts.length`) is only used for:
+No changes are needed to:
 
-- Dashboard UI grouping (webview message payload: `stepIndex: finalIndex`)
-- History storage
+- `hasNext()`
+- `currentIndex`
+- prompt append/extend behavior
 
-No `PromptQueue` API changes needed.
+But `PromptQueue` and its working-file helpers do need to preserve and expose:
 
----
+- `workflowFile.finalPrompt`
+- `_runtime.finalPrompt`
 
-## Dashboard / Webview Changes
-
-### Webview State (`workflowStore`)
-
-Add to the workflow store state:
-
-```typescript
-finalPrompt: PromptItem | null; // null = no final prompt
-finalPromptStatus: StepStatus | null; // null when not yet run
-finalPromptLoopCount: number; // how many times the loop has triggered so far
-```
-
-These are populated via the existing `WORKFLOW_STATE_UPDATE` message (add the fields to the payload type in `WebviewMessageTypes.ts`). The loop count is informational only — it is not used as a termination condition.
-
-### `PromptsPanel.tsx` Footer
-
-Add a footer section below the prompt list in `PromptsPanel`. The footer is always visible (not collapsible independently — it's part of the panel). It shows the `finalPrompt` state.
-
-#### States
-
-**No final prompt (default):**
-
-```
-┌─ Orchestrator ─────────────────────────────────┐
-│  ☐  No orchestrator prompt                      │
-└─────────────────────────────────────────────────┘
-```
-
-**Final prompt set, collapsed (default when set):**
-
-```
-┌─ Orchestrator ─────────────────────────── [∨] ─┐
-│  ☑  "Read docs/plan.md. If all tasks are…"      │
-└─────────────────────────────────────────────────┘
-```
-
-Status icon renders same as a normal `PromptItem` status (PENDING / RUNNING / COMPLETED).
-
-**Final prompt set, expanded:**
-
-```
-┌─ Orchestrator ─────────────────────────── [∧] ─┐
-│  ☑  Orchestrator Gate             [Loop 2]       │
-│  ┌─────────────────────────────────────────────┐ │
-│  │ Read docs/plan.md. If all tasks are…        │ │
-│  └─────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────┘
-```
-
-**During execution (running):**
-
-- Status chip matches `STEP_STATUS.RUNNING` (spinner)
-- Loop counter `[Loop N]` visible if `loopCount > 0` (no denominator — there is no max)
-
-#### Interaction
-
-- **Checkbox click**: Toggles `finalPrompt` enabled/disabled. When disabled, stores the prompt text in `editorStore` so it can be re-enabled without re-typing. Posts `MESSAGE_TYPES.UPDATE_FINAL_PROMPT` with `null` (disable) or the saved prompt object (re-enable). **Hidden in CLI watch mode (read-only).**
-- **Text click**: Selects `finalPrompt` in the editor panel, same as clicking a normal prompt. Uses a sentinel `selectedPromptIndex` value (e.g., `-1`) to distinguish from queue prompts.
-- **Expand/collapse toggle**: Controlled by new `uiStore.finalPromptExpanded` flag (persists across re-renders, does not persist to disk).
-
-#### Component Structure
-
-Create `src/ui/webview-react/components/prompts/FinalPromptFooter.tsx`:
-
-```tsx
-interface FinalPromptFooterProps {
-  finalPrompt: PromptItem | null;
-  status: StepStatus | null;
-  loopCount: number;
-  isRunning: boolean;
-  isCLIManaged: boolean;
-  isExpanded: boolean;
-  isSelected: boolean;
-  onToggleEnabled: () => void;
-  onToggleExpanded: () => void;
-  onClick: () => void;
-}
-```
-
-Used by `PromptsPanel` at the bottom of the flex column, above nothing (it's the last thing in the panel).
+This is not a queue API change, but it is a working-file persistence change.
 
 ---
 
-## Message Types (`src/types/DashboardConstants.ts`)
+## Parser, Loader, Serializer, and Settings Plumbing
 
-Add:
+This is easy to miss and must be part of the plan explicitly.
 
-```typescript
-// Webview → Extension
-UPDATE_FINAL_PROMPT: "updateFinalPrompt",
-// Payload: { finalPrompt: PromptItem | null }
+### `PromptFileParser`
 
-// Extension → Webview (added to WORKFLOW_STATE_UPDATE payload)
-// No new message type needed — piggybacks on existing state update
-```
+Update normalization so `finalPrompt` is fully normalized and prompt-file references are resolved.
 
-Add to `WorkflowStateUpdate` payload type in `src/types/WebviewMessageTypes.ts`:
+### `PromptFileLoader`
 
-```typescript
-finalPrompt?: PromptItem | null;
-finalPromptStatus?: StepStatus | null;
-finalPromptLoopCount?: number;
-```
+When loading a workflow into a working file, carry `finalPrompt` through with other workflow-level properties.
 
----
+### `WorkingFileManager`
 
-## Editor Integration (`editorStore`)
+Support updating, deleting, and persisting `finalPrompt` on the working file just like other editable workflow-level properties.
 
-The editor already handles normal prompt selection. Extend `editorStore` with:
+### `WorkflowSerializer`
 
-```typescript
-// Sentinel value: -1 means finalPrompt is selected (not a queue index)
-// Existing selectedPromptIndex: number stays as-is
-```
+Include `finalPrompt` in save/export round-trips. Current serializer logic uses explicit allowlists for workflow and prompt fields, so `finalPrompt` must be added deliberately.
 
-`selectPrompt(-1, finalPrompt)` opens `finalPrompt` in the editor. The editor panel detects `selectedPromptIndex === -1` and:
+### `WebviewSettingsSync`
 
-- Sets the title to `finalPrompt.name ?? "Orchestrator Prompt"`.
-- Saves changes back to `finalPrompt` (not the prompts array) via `UPDATE_FINAL_PROMPT`.
-- Shows all the same property fields as a normal prompt (harness, model, agent, end condition, `allowDynamicExtension` checkbox).
+Do not treat `finalPrompt` as a normal workflow-level setting in the settings drawer. It belongs in the prompts/editor UX, but the working-file sync layer still has to read and write it.
 
-No new sentinel constant needed — `-1` is unambiguous since valid indices are always `>= 0`.
+### Session Restore / Recent Workflow Load
+
+Ensure `FILE_SELECTED`, `SESSION_RESTORED`, and working-file reloads all send `finalPrompt` back to the webview.
 
 ---
 
-## Schema Validation Updates
+## Webview and Message Architecture
 
-AJV validates `finalPrompt` via the existing `promptItem` `$ref` — no extra runtime code needed.
+### Do Not Assume a Single State Update Message
+
+The current UI uses granular extension-to-webview messages rather than a monolithic `WORKFLOW_STATE_UPDATE` payload.
+
+Implementation should follow the existing message architecture instead of inventing a state update that does not exist today.
+
+### Recommended Extension-to-Webview Messages
+
+Add one or both of the following patterns:
+
+```typescript
+UPDATE_FINAL_PROMPT: "updateFinalPrompt";
+FINAL_PROMPT_STATUS_CHANGED: "finalPromptStatusChanged";
+```
+
+Suggested payloads:
+
+```typescript
+{ finalPrompt: PromptItem | null }
+{ status: StepStatus | null, loopCount: number, phase: "queue" | "finalPrompt" }
+```
+
+Also include `finalPrompt` in:
+
+- initial state
+- file selected
+- session restored
+- prompt list refresh messages where appropriate
+
+### Webview Store Shape
+
+Recommended additions to `workflowStore`:
+
+```typescript
+finalPrompt: PromptItem | null;
+finalPromptStatus: StepStatus | null;
+finalPromptLoopCount: number;
+finalPromptPhase: "queue" | "finalPrompt" | null;
+finalPromptOutputs: Record<number, StepOutput>; // keyed by loopIndex
+```
+
+If live output storage is converted to execution keys rather than raw numeric indices, store queue and final prompt outputs under separate key namespaces.
+
+---
+
+## UX Plan
+
+### Prompts Panel Footer
+
+Add a dedicated footer section below the normal prompt list.
+
+The footer is **bottom-anchored**. In collapsed state it behaves like a persistent bottom bar. In expanded state, the footer keeps its bottom edge pinned to the panel and reveals its detail body **above** the summary bar. That means the scrollable prompt list above loses height when the footer expands.
+
+States:
+
+- No final prompt configured
+- Final prompt configured and collapsed
+- Final prompt configured and expanded
+- Final prompt running
+- Final prompt completed
+- Final prompt failed
+
+Recommended collapsed default when configured.
+
+### Interaction Model
+
+- Clicking the footer selects `finalPrompt` in the editor.
+- Checkbox or enable toggle disables/re-enables `finalPrompt`.
+- Expand/collapse is local UI state and does not persist to disk.
+- The summary bar remains pinned to the bottom edge in both collapsed and expanded states.
+- When expanded, the detail body opens above the summary bar rather than below it.
+- In CLI watch mode, the entire footer is read-only.
+
+### Footer Layout
+
+Recommended structure:
+
+1. **Bottom summary bar**
+   Always visible when the footer is present. Contains:
+
+- status icon
+- `Orchestrator` label
+- enabled toggle
+- expand/collapse affordance
+- loop badge when relevant
+
+2. **Expanded detail body**
+   Revealed above the summary bar when expanded. Contains:
+
+- name or truncated prompt summary
+- harness/model metadata
+- retry state
+- duration/session/context stats when useful
+- end-condition result when available
+
+This should visually reuse the language of normal prompt rows, but it should not pretend to be a numbered queue item.
+
+### Editor Selection Model
+
+Do **not** use `selectedPromptIndex = -1`.
+
+Use an explicit selection target instead:
+
+```typescript
+type EditorSelectionTarget =
+  | { kind: "newPrompt" }
+  | { kind: "queue"; index: number }
+  | { kind: "finalPrompt" };
+```
+
+This avoids broken assumptions in current UI code that treats any non-null index as a normal queue prompt.
+
+### Editor Behavior
+
+When `finalPrompt` is selected:
+
+- Title should read `Orchestrator Prompt` or `finalPrompt.name`
+- All normal prompt properties are editable
+- Save path writes back to workflow-level `finalPrompt`
+- Delete becomes "Disable orchestrator prompt"
+
+### Progress and Status UX
+
+The current progress model is queue-count based. Without explicit design, the UI can show `N/N` while `finalPrompt` is still running.
+
+Recommended behavior:
+
+- Keep the main queue progress counter based on normal prompts only
+- Show a distinct execution badge/state when `finalPrompt` is running, for example:
+  - `3/3 • Orchestrator Running`
+  - `3/3 • Final Gate`
+- Status bar should follow the same rule
+
+### Output Panel UX
+
+`finalPrompt` output must appear in chronological order and remain distinguishable from queue prompts.
+
+Recommended rendering:
+
+- Queue outputs keep normal step ordering
+- Each `finalPrompt` run renders as a labeled section, for example `Orchestrator Loop 1`, `Orchestrator Loop 2`
+- Anchor IDs use a distinct namespace, for example:
+  - `output-step-queue-2`
+  - `output-step-final-1`
+
+### Rationale For Upward Expansion
+
+Because the footer is the last element in the prompt panel, "expanding downward" is misleading. The correct behavior is:
+
+- the footer bar stays pinned at the bottom
+- the expanded content appears above it
+- the prompt list above shrinks to make room
+
+This preserves the footer as a stable anchor while still allowing glanceable orchestrator details without opening the editor.
 
 ---
 
 ## History Storage
 
-`OutputHistoryManager` stores per-step outputs. Extend the history step format:
+Current history storage is keyed by numeric queue step index. That does not work for `finalPrompt` if it can loop and if queue size can grow between final prompt executions.
+
+Recommended history extension:
 
 ```typescript
-interface HistoryStep {
-  index: number;
-  // ... existing fields ...
-}
-
-interface HistoryRun {
-  steps: HistoryStep[];
-  /** Output from finalPrompt executions, one entry per loop */
-  finalPromptSteps?: HistoryStep[];
+interface WorkflowOutputHistory {
+  schemaVersion: "1.1.0";
+  workflowId: string;
+  runId: number;
+  startedAt: number;
+  completedAt?: number;
+  executionState: ExecutionState;
+  runStepCount: number;
+  promptOutputs: { [stepIndex: number]: StepOutput };
+  finalPromptOutputs?: { [loopIndex: number]: StepOutput };
 }
 ```
 
-Each `finalPrompt` execution appends to `finalPromptSteps`. The `index` field in each is the loop count (0, 1, 2…) for display purposes.
+Notes:
+
+- `promptOutputs` remains queue-only for backward compatibility
+- `finalPromptOutputs` is loop-indexed, not queue-indexed
+- output panel history loading must render both collections in a stable order
+
+If backward compatibility matters for old files, add tolerant loading for both `1.0.0` and `1.1.0`. If not, document the migration clearly.
 
 ---
 
-## Settings (No New Settings Required)
+## End Condition and Session Edge Cases
 
-`finalPrompt` loop termination is governed by the existing `maxQueueSize` setting (default: 100) and the `unlimitedMode` flag — no new settings needed. Users who want unbounded looping simply enable `unlimitedMode`.
+### End Conditions
+
+`finalPrompt.endCondition` should behave exactly like a normal prompt end condition:
+
+- retries supported
+- retry prompt supported
+- timeout supported
+- failure after retries ends the workflow in `error`
+
+### Session IDs
+
+`finalPrompt` supports `resumeSession` and `sessionId`, but two rules should be documented:
+
+1. Numeric `sessionId` references should continue to target normal queue prompts only.
+2. Whether later normal prompts may resume the `finalPrompt` conversation should be explicitly unsupported for v1 unless a strong use case exists.
+
+Recommended v1 simplification:
+
+- `finalPrompt` may resume itself across loops if configured
+- normal prompts do not reference `finalPrompt` by numeric session index
+
+---
+
+## Settings
+
+No new user settings are required.
+
+Loop termination remains governed by:
+
+- `maxQueueSize`
+- `maxWorkflowExecutionTime`
+- `unlimitedMode`
+
+However, the plan should explicitly mention that a looping `finalPrompt` is still subject to execution-time limits, not only queue-size limits.
 
 ---
 
 ## Implementation Order
 
-1. **Schema + Types** — Add `finalPrompt` to `prompt-schema.json` and `FlightPathTypes.ts`. Run `npm run generate-schema` to regenerate YAML schema. Low risk.
+1. **Schema + core types**
+   Add `finalPrompt` to the schema and `PromptFile`. Add runtime metadata for final prompt phase and loop count.
 
-2. **`WorkflowContext` + `WorkflowInstance`** — Add `workflowFile` to `WorkflowContext` and thread the parsed `PromptFile` through when building context. Mechanical change.
+2. **Parser normalization**
+   Normalize `finalPrompt` prompt content exactly like normal prompts.
 
-3. **`WorkflowExecutor` refactor** — Extract `executeSinglePrompt()`, then wrap inner loop in outer `do...while` with `finalPrompt` logic. This is the highest-risk step — needs careful testing with pause/stop/cancel to ensure state machine isn't confused by the virtual final index.
+3. **Working-file plumbing**
+   Thread `finalPrompt` and `_runtime.finalPrompt` through prompt loading, working-file updates, and restore flows.
 
-4. **Webview state + messages** — Extend `WorkflowStateUpdate`, `workflowStore`, and `uiStore` with the new fields.
+4. **Executor refactor**
+   Extract `executeSinglePrompt()` and add the outer loop. Introduce explicit execution target identity for queue vs final prompt.
 
-5. **`FinalPromptFooter` component** — New component in `PromptsPanel`. Wire up checkbox toggle, expand/collapse, and editor selection.
+5. **History model**
+   Extend `OutputHistoryManager` and history loading/rendering for final prompt loop outputs.
 
-6. **Editor panel support** — Handle `selectedPromptIndex === -1` to open `finalPrompt` in the editor, including save-back path.
+6. **Webview messages and stores**
+   Add final prompt data, status, loop count, and outputs to the existing granular message flow and Zustand stores.
 
-7. **History integration** — Extend `OutputHistoryManager` to store `finalPromptSteps`.
+7. **Prompts panel footer**
+   Add the new footer component and read-only CLI watch behavior.
 
-8. **Tests** — Unit tests for:
-   - No-loop path (`allowDynamicExtension: false` or queue doesn't grow)
-   - Loop path (queue grows, outer loop re-triggers)
-   - `maxQueueSize` guard prevents infinite growth as normal
-   - Pause/stop during `finalPrompt` execution
-   - Schema validation (valid `finalPrompt`, missing `prompt` field, etc.)
-   - `WorkflowStateUpdate` includes `finalPromptStatus`
+8. **Editor integration**
+   Replace index sentinel logic with an explicit selection target model and add save/disable behavior for `finalPrompt`.
+
+9. **Serializer and save/load round-trips**
+   Ensure `finalPrompt` survives save, reload, session restore, recent workflow loading, and clear/reset paths.
+
+10. **Tests**
+    Add unit and integration coverage for executor, parser, working-file persistence, history, and UI state transitions.
+
+---
+
+## Testing Plan
+
+### Core Executor Tests
+
+- `finalPrompt` runs once after a normal queue drains
+- no `finalPrompt` behaves exactly like today
+- `finalPrompt.allowDynamicExtension = false` ends the workflow after one final run
+- `finalPrompt.allowDynamicExtension = true` plus queue growth re-enters the outer loop
+- `maxQueueSize` still stops infinite queue growth
+- `maxWorkflowExecutionTime` still stops infinite looping even if queue growth is small
+
+### Collision Regression Tests
+
+- output from `finalPrompt` loop 0 is not overwritten by a newly appended queue prompt that later occupies the next numeric queue index
+- retry state and streaming buffers remain isolated between queue steps and final prompt loops
+
+### Pause / Stop / Resume Tests
+
+- pause during queue prompt
+- pause during `finalPrompt`
+- stop during `finalPrompt`
+- restore from working file while phase is `finalPrompt`
+- resume after restore reruns the correct final loop
+
+### Parser / Schema Tests
+
+- valid workflow with `finalPrompt`
+- invalid `finalPrompt` missing `prompt`
+- `finalPrompt.prompt` file-path normalization
+- save/load round-trip preserves all `finalPrompt` properties
+
+### History Tests
+
+- history stores queue outputs and final prompt outputs separately
+- history render order is deterministic across loops
+- old history files still load safely if backward compatibility is retained
+
+### Webview Store / Message Tests
+
+- initial load includes `finalPrompt`
+- session restore includes `finalPrompt`
+- enabling, disabling, and editing `finalPrompt` updates the working file correctly
+- CLI watch mode renders footer as read-only
+
+### UX Behavior Tests
+
+- progress badge remains coherent while `finalPrompt` runs after queue count is complete
+- selecting `finalPrompt` opens the correct editor state
+- switching workflows while editing `finalPrompt` preserves or discards draft state intentionally
+
+### Manual Testing
+
+- Ralph Loop with repeated append cycles
+- cleanup-only `finalPrompt`
+- `finalPrompt` with end condition retries
+- save as YAML and JSON, reload, run again
+- CLI-managed workflow watch mode with live final prompt output
+
+---
+
+## Risks and Mitigations
+
+### Risk: Runtime Identity Collisions
+
+Mitigation: use explicit queue vs final prompt execution keys, never numeric virtual indices.
+
+### Risk: Resume Logic Becomes Ambiguous
+
+Mitigation: persist execution phase and loop count in working file runtime.
+
+### Risk: UI Assumptions Around `selectedPromptIndex`
+
+Mitigation: use a discriminated editor target instead of sentinel values.
+
+### Risk: Save/Load Omissions
+
+Mitigation: treat parser, working-file manager, serializer, and restore flows as first-class implementation steps, not incidental cleanup.
+
+### Risk: Output Panel Complexity
+
+Mitigation: keep queue outputs and final prompt outputs in separate namespaces, then render them in a deliberate chronological order.
 
 ---
 
 ## Out of Scope (Future)
 
-- **`finalPrompt` in working file resume**: On VS Code restart mid-execution, the `finalPrompt` loop count (`finalPromptLoopCount`) resets to 0 — it's informational only and doesn't affect termination.
-- **Multiple final prompts**: One gate is enough. A chain of cleanup steps should be expressed as a final prompt that uses `sessionId` to resume a multi-turn conversation, or simply as static last prompts in the queue.
-- **Conditional `finalPrompt`**: Users who want a conditional gate can check conditions inside the prompt itself (e.g., "if all tests pass, output 'done' and do nothing; otherwise append a fix prompt").
+- **Multiple final prompts**: v1 supports one orchestrator gate. Chained cleanup can still be expressed inside that prompt or as static queue prompts.
+- **Conditional finalPrompt metadata outside the prompt text**: keep condition logic inside the prompt for v1.
+- **Allowing normal prompts to reference finalPrompt by numeric session index**: too much session-model complexity for v1.

@@ -18,7 +18,9 @@ const SCROLL_BOTTOM_THRESHOLD = 40; // px from bottom to consider "at bottom"
  */
 interface OutputMessage {
   type: "status" | "cli";
-  stepIndex: number;
+  target:
+    | { kind: "queue"; index: number }
+    | { kind: "finalPrompt"; index: number };
   timestamp: number;
   data: OutputStatusMessage | CliOutputType;
   attemptIndex?: number;
@@ -42,7 +44,9 @@ export const OutputSection: React.FC = () => {
     currentStep,
     totalSteps,
     cliOutputs,
+    finalPromptOutputs,
     statusMessages,
+    finalPromptStatusMessages,
     streamingChunks,
     historyOutputs,
   } = useWorkflowStore();
@@ -80,25 +84,54 @@ export const OutputSection: React.FC = () => {
   // Determine which steps data source to use: history snapshot or live outputs
   const stepsToRender = useMemo(() => {
     if (isViewingHistory && historyOutputs) {
-      // History mode: render all steps from the historical run, independent of current workflow
-      return Array.from({ length: historyOutputs.stepCount }, (_, i) => ({
-        stepIndex: i,
-        cliOutputs: historyOutputs.steps[i]?.cliOutputs ?? [],
-        statusMessages: historyOutputs.steps[i]?.statusMessages ?? [],
-      }));
+      const queueSteps = Array.from(
+        { length: historyOutputs.stepCount },
+        (_, i) => ({
+          target: { kind: "queue" as const, index: i },
+          cliOutputs: historyOutputs.steps[i]?.cliOutputs ?? [],
+          statusMessages: historyOutputs.steps[i]?.statusMessages ?? [],
+        })
+      );
+
+      const finalOutputs = historyOutputs.finalPromptOutputs ?? {};
+      const finalSteps = Object.keys(finalOutputs)
+        .map((k) => Number(k))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)
+        .map((loopIndex) => ({
+          target: { kind: "finalPrompt" as const, index: loopIndex },
+          cliOutputs: finalOutputs[loopIndex]?.cliOutputs ?? [],
+          statusMessages: finalOutputs[loopIndex]?.statusMessages ?? [],
+        }));
+
+      return [...queueSteps, ...finalSteps];
     }
-    // Live mode: render steps from current workflow
-    return Array.from({ length: totalSteps }, (_, i) => ({
-      stepIndex: i,
+
+    const queueSteps = Array.from({ length: totalSteps }, (_, i) => ({
+      target: { kind: "queue" as const, index: i },
       cliOutputs: cliOutputs[i] ?? [],
       statusMessages: statusMessages[i] ?? [],
     }));
+
+    const finalSteps = Object.keys(finalPromptOutputs)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b)
+      .map((loopIndex) => ({
+        target: { kind: "finalPrompt" as const, index: loopIndex },
+        cliOutputs: finalPromptOutputs[loopIndex] ?? [],
+        statusMessages: finalPromptStatusMessages[loopIndex] ?? [],
+      }));
+
+    return [...queueSteps, ...finalSteps];
   }, [
     isViewingHistory,
     historyOutputs,
     totalSteps,
     cliOutputs,
     statusMessages,
+    finalPromptOutputs,
+    finalPromptStatusMessages,
   ]);
 
   // Build chronologically sorted list of all messages
@@ -106,15 +139,16 @@ export const OutputSection: React.FC = () => {
     const messages: OutputMessage[] = [];
 
     for (const step of stepsToRender) {
-      const { stepIndex } = step;
+      const { target } = step;
+      const executionIndex = target.index;
 
       // Add status messages
       const stepStatusMessages = step.statusMessages || [];
       stepStatusMessages.forEach((statusMsg, index) => {
         messages.push({
           type: "status",
-          stepIndex,
-          timestamp: statusMsg.timestamp || stepIndex * 10000 + index,
+          target,
+          timestamp: statusMsg.timestamp || executionIndex * 10000 + index,
           data: {
             message: statusMsg.message,
             severity: statusMsg.severity,
@@ -134,10 +168,10 @@ export const OutputSection: React.FC = () => {
         const explicitAttemptIndex = cliOutput.attemptIndex ?? 0;
         messages.push({
           type: "cli",
-          stepIndex,
+          target,
           timestamp:
             cliOutput.timestampMs ||
-            stepIndex * 10000 +
+            executionIndex * 10000 +
               stepStatusMessages.length +
               explicitAttemptIndex,
           data: output as unknown as CliOutputType,
@@ -181,7 +215,7 @@ export const OutputSection: React.FC = () => {
     const markdownContent = generateMarkdownExport(
       allMessages.map((msg) => ({
         type: msg.type,
-        stepIndex: msg.stepIndex,
+        stepIndex: msg.target.index,
         timestamp: msg.timestamp,
         data: msg.data,
         attemptIndex: msg.attemptIndex,
@@ -204,10 +238,11 @@ export const OutputSection: React.FC = () => {
   // Map of array index → stepIndex for the first message of each step.
   // Used to insert step anchor divs so clicking a prompt can scroll to its output.
   const firstIndexByStep = useMemo(() => {
-    const map = new Map<number, number>();
+    const map = new Map<string, number>();
     allMessages.forEach((msg, idx) => {
-      if (!map.has(msg.stepIndex)) {
-        map.set(msg.stepIndex, idx);
+      const key = `${msg.target.kind}:${msg.target.index}`;
+      if (!map.has(key)) {
+        map.set(key, idx);
       }
     });
     return map;
@@ -335,13 +370,22 @@ export const OutputSection: React.FC = () => {
         ) : (
           allMessages.map((item, index) => {
             const isFirstForStep =
-              firstIndexByStep.get(item.stepIndex) === index;
+              firstIndexByStep.get(
+                `${item.target.kind}:${item.target.index}`
+              ) === index;
             if (item.type === "status") {
               const statusData = item.data as OutputStatusMessage;
               return (
                 <React.Fragment key={`status-${index}`}>
                   {isFirstForStep && (
-                    <div id={`output-step-${item.stepIndex}`} />
+                    <div
+                      id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                    />
+                  )}
+                  {isFirstForStep && item.target.kind === "finalPrompt" && (
+                    <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
+                      Orchestrator Loop {item.target.index + 1}
+                    </div>
                   )}
                   <StatusMessage
                     message={statusData.message}
@@ -353,18 +397,33 @@ export const OutputSection: React.FC = () => {
               );
             } else {
               const cliData = item.data as CliOutputType;
-              const streamingChunk = streamingChunks[item.stepIndex] || "";
+              const streamingChunk =
+                item.target.kind === "queue"
+                  ? streamingChunks[item.target.index] || ""
+                  : "";
               const isExecutionActive =
                 executionState === EXECUTION_STATES.RUNNING ||
                 executionState === EXECUTION_STATES.CANCELLING;
               return (
                 <React.Fragment key={`cli-${index}`}>
                   {isFirstForStep && (
-                    <div id={`output-step-${item.stepIndex}`} />
+                    <div
+                      id={`output-step-${item.target.kind === "queue" ? "queue" : "final"}-${item.target.index}`}
+                    />
+                  )}
+                  {isFirstForStep && item.target.kind === "finalPrompt" && (
+                    <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
+                      Orchestrator Loop {item.target.index + 1}
+                    </div>
                   )}
                   <CliOutput
                     output={cliData}
-                    stepIndex={item.stepIndex}
+                    stepIndex={item.target.index}
+                    stepLabel={
+                      item.target.kind === "queue"
+                        ? undefined
+                        : `Orchestrator Loop ${item.target.index + 1}`
+                    }
                     attemptIndex={item.attemptIndex || 0}
                     streamingChunk={streamingChunk}
                     isExecutionActive={isExecutionActive}

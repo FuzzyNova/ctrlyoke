@@ -62,11 +62,17 @@ export interface SavedNewPromptState {
   properties: PropertyValues;
 }
 
+export type EditorSelectionTarget =
+  | { kind: "newPrompt" }
+  | { kind: "queue"; index: number }
+  | { kind: "finalPrompt" };
+
 /**
  * Editor state - Prompt editing mode and content
  */
 interface EditorState {
   // Editing mode
+  selectionTarget: EditorSelectionTarget;
   selectedPromptIndex: number | null; // null = new prompt mode, number = editing existing
   originalPromptData: PromptItem | null; // For Cancel/revert functionality
   savedNewPromptState: SavedNewPromptState | null; // Saved state when switching to edit mode
@@ -91,7 +97,11 @@ interface EditorState {
  */
 interface EditorActions {
   // Mode switching
-  selectPrompt: (index: number | null, promptData?: PromptItem | null) => void;
+  selectPrompt: (
+    target: number | null | EditorSelectionTarget,
+    promptData?: PromptItem | null
+  ) => void;
+  selectFinalPrompt: (promptData: PromptItem) => void;
   enterNewPromptMode: () => void;
   enterEditMode: (index: number, promptData: PromptItem) => void;
   cancelEdit: () => void;
@@ -146,6 +156,7 @@ interface EditorSelectors {
   isNewPromptMode: () => boolean;
   // Check if in edit mode
   isEditMode: () => boolean;
+  isFinalPromptMode: () => boolean;
   // Get current property values as PromptItem properties
   getPromptProperties: () => Partial<PromptItem>;
   // Check if editor has content
@@ -155,6 +166,7 @@ interface EditorSelectors {
 }
 
 const initialState: EditorState = {
+  selectionTarget: { kind: "newPrompt" },
   selectedPromptIndex: null,
   originalPromptData: null,
   savedNewPromptState: null,
@@ -175,23 +187,42 @@ export const useEditorStore = create<
   // MODE SWITCHING
   // ============================================================================
 
-  selectPrompt: (index, promptData = null) => {
-    if (index === null) {
+  selectPrompt: (target, promptData = null) => {
+    if (typeof target === "object" && target?.kind === "finalPrompt") {
+      if (promptData) {
+        get().enterEditMode(-1, promptData);
+      }
+      return;
+    }
+
+    const resolvedIndex =
+      typeof target === "number"
+        ? target
+        : typeof target === "object" && target?.kind === "queue"
+          ? target.index
+          : null;
+
+    if (resolvedIndex === null) {
       // Switching to new prompt mode
       get().enterNewPromptMode();
     } else {
       // Switching to edit mode
       if (promptData) {
         // Call enterEditMode to properly load prompt data into editor
-        get().enterEditMode(index, promptData);
+        get().enterEditMode(resolvedIndex, promptData);
       } else {
         // Fallback if promptData not provided (shouldn't happen)
         set({
-          selectedPromptIndex: index,
+          selectionTarget: { kind: "queue", index: resolvedIndex },
+          selectedPromptIndex: resolvedIndex,
           originalPromptData: promptData,
         });
       }
     }
+  },
+
+  selectFinalPrompt: (promptData) => {
+    get().enterEditMode(-1, promptData);
   },
 
   enterNewPromptMode: () => {
@@ -199,6 +230,7 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       // Restore saved new prompt state (from switching to edit mode)
       set({
+        selectionTarget: { kind: "newPrompt" },
         selectedPromptIndex: null,
         originalPromptData: null,
         promptText: savedNewPromptState.promptText,
@@ -216,6 +248,7 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
+          selectionTarget: { kind: "newPrompt" },
           selectedPromptIndex: null,
           originalPromptData: null,
           promptText: "",
@@ -227,6 +260,7 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags
         set({
+          selectionTarget: { kind: "newPrompt" },
           selectedPromptIndex: null,
           originalPromptData: null,
           savedNewPromptState: null,
@@ -241,7 +275,7 @@ export const useEditorStore = create<
     // Save current new prompt state if we're in new prompt mode
     // Empty text is a valid state that should be restored on cancel
     const savedNewPromptState: SavedNewPromptState | null =
-      state.selectedPromptIndex === null
+      state.selectionTarget.kind === "newPrompt"
         ? {
             promptText: state.promptText,
             promptName: state.promptName,
@@ -272,8 +306,13 @@ export const useEditorStore = create<
       endCondition: promptData.endCondition ?? null,
     };
 
+    const isFinalPromptTarget = index < 0;
+
     set({
-      selectedPromptIndex: index,
+      selectionTarget: isFinalPromptTarget
+        ? { kind: "finalPrompt" }
+        : { kind: "queue", index },
+      selectedPromptIndex: isFinalPromptTarget ? null : index,
       originalPromptData: promptData,
       savedNewPromptState,
       promptText: promptData.prompt,
@@ -291,6 +330,7 @@ export const useEditorStore = create<
     if (savedNewPromptState) {
       // Restore saved new prompt state (what was typed before switching to edit mode)
       set({
+        selectionTarget: { kind: "newPrompt" },
         selectedPromptIndex: null,
         originalPromptData: null,
         promptText: savedNewPromptState.promptText,
@@ -309,6 +349,7 @@ export const useEditorStore = create<
       if (!restored) {
         // No persisted state, reset to defaults
         set({
+          selectionTarget: { kind: "newPrompt" },
           selectedPromptIndex: null,
           originalPromptData: null,
           promptText: "",
@@ -320,6 +361,7 @@ export const useEditorStore = create<
       } else {
         // State was restored, just clear edit mode flags and validation errors
         set({
+          selectionTarget: { kind: "newPrompt" },
           selectedPromptIndex: null,
           originalPromptData: null,
           savedNewPromptState: null,
@@ -448,13 +490,14 @@ export const useEditorStore = create<
     const state = get();
 
     // Only save state for new prompt mode, not when editing existing prompts
-    if (state.selectedPromptIndex !== null) {
+    if (state.selectionTarget.kind !== "newPrompt") {
       return;
     }
 
     const persistedState = {
       editorText: state.promptText,
       promptName: state.promptName,
+      selectionTarget: { kind: "newPrompt" as const },
       selectedPromptIndex: null, // Always null for new prompt state
       properties: state.properties,
     };
@@ -470,14 +513,22 @@ export const useEditorStore = create<
     }
 
     // Only restore if we were in new prompt mode
-    if (persistedState.selectedPromptIndex !== null) {
+    const persistedTarget = persistedState.selectionTarget;
+    if (
+      (persistedTarget && persistedTarget.kind !== "newPrompt") ||
+      persistedState.selectedPromptIndex !== null
+    ) {
       return false;
     }
 
     set({
+      selectionTarget: { kind: "newPrompt" },
       promptText: persistedState.editorText ?? "",
       promptName: persistedState.promptName ?? "",
-      properties: { ...PROPERTY_DEFAULTS, ...(persistedState.properties ?? {}) },
+      properties: {
+        ...PROPERTY_DEFAULTS,
+        ...(persistedState.properties ?? {}),
+      },
       isDirty: (persistedState.editorText ?? "").length > 0,
     });
 
@@ -490,6 +541,7 @@ export const useEditorStore = create<
 
   resetEditor: () =>
     set({
+      selectionTarget: { kind: "newPrompt" },
       selectedPromptIndex: null,
       originalPromptData: null,
       savedNewPromptState: null,
@@ -513,9 +565,11 @@ export const useEditorStore = create<
   // COMPUTED SELECTORS
   // ============================================================================
 
-  isNewPromptMode: () => get().selectedPromptIndex === null,
+  isNewPromptMode: () => get().selectionTarget.kind === "newPrompt",
 
-  isEditMode: () => get().selectedPromptIndex !== null,
+  isEditMode: () => get().selectionTarget.kind !== "newPrompt",
+
+  isFinalPromptMode: () => get().selectionTarget.kind === "finalPrompt",
 
   getPromptProperties: () => {
     const { promptText, promptName, properties } = get();

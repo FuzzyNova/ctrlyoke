@@ -132,6 +132,10 @@ export class WebviewMessageRouter {
       this.handleUpdatePrompt(message);
     });
 
+    table.set(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, (message) => {
+      this.handleUpdateFinalPrompt(message);
+    });
+
     table.set(MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT, (message) => {
       this.postMessage({
         type: MESSAGE_TYPES.SELECT_PROMPT_FOR_EDIT,
@@ -396,6 +400,23 @@ export class WebviewMessageRouter {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(
         `Failed to update prompt: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async handleUpdateFinalPrompt(message: any): Promise<void> {
+    const manager = this.getManager();
+    if (!manager) {
+      Log.error("FlightPathManager not initialized");
+      return;
+    }
+
+    try {
+      await manager.updateFinalPromptInQueue(message.finalPrompt ?? null);
+    } catch (error) {
+      Log.error("Failed to update finalPrompt:", error);
+      vscode.window.showErrorMessage(
+        `Failed to update finalPrompt: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

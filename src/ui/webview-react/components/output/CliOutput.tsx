@@ -132,7 +132,9 @@ const ToolResultOutput: React.FC<ToolResultOutputProps> = ({
       className={`${result.success ? TOOL_RESULT_LINE : "text-bash-status-error pl-4 ml-2 text-[11px]"} flex items-start gap-1 ${className}`}
     >
       <span className="shrink-0">⎿</span>
-      <span className="whitespace-pre-wrap break-words min-w-0">{contentText}</span>
+      <span className="whitespace-pre-wrap break-words min-w-0">
+        {contentText}
+      </span>
     </div>
   );
 };
@@ -167,7 +169,9 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
           case CLI_EVENT_TYPES.TEXT: {
             const data = event.data as TextData;
             if (!data.text) return null;
-            return <TextOutput key={key} text={data.text} raw={rawTextOutput} />;
+            return (
+              <TextOutput key={key} text={data.text} raw={rawTextOutput} />
+            );
           }
 
           case CLI_EVENT_TYPES.THINKING: {
@@ -301,6 +305,7 @@ const StructuredOutput: React.FC<StructuredOutputProps> = ({
 interface CliOutputProps {
   output: CliOutputType;
   stepIndex: number;
+  stepLabel?: string;
   attemptIndex: number;
   streamingChunk?: string;
   /** When false, suppresses the streaming indicator even if output.isStreaming is true.
@@ -325,6 +330,7 @@ interface CliOutputProps {
 export const CliOutput: React.FC<CliOutputProps> = ({
   output,
   stepIndex,
+  stepLabel,
   attemptIndex,
   streamingChunk = "",
   isExecutionActive = true,
@@ -370,11 +376,12 @@ export const CliOutput: React.FC<CliOutputProps> = ({
   // Show the streaming indicator only while execution is actively running.
   // When stopped or errored, isStreaming may still be true on the stored output
   // (no final CLI_OUTPUT is sent in those cases), so we gate on isExecutionActive.
-  const streamingIndicator = output.isStreaming && isExecutionActive ? (
-    <span className="text-output-streaming font-normal animate-pulse-streaming">
-      ⬤ Streaming...
-    </span>
-  ) : null;
+  const streamingIndicator =
+    output.isStreaming && isExecutionActive ? (
+      <span className="text-output-streaming font-normal animate-pulse-streaming">
+        ⬤ Streaming...
+      </span>
+    ) : null;
 
   // Render response: show both streaming text and structured events when available
   const renderResponse = () => {
@@ -394,9 +401,7 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     if (hasStructuredEvents && hasStreamingText) {
       return (
         <>
-          <div
-            className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}
-          >
+          <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
             {rawTextOutput ? (
               <div className="whitespace-pre-wrap">{streamingChunk}</div>
             ) : (
@@ -444,7 +449,9 @@ export const CliOutput: React.FC<CliOutputProps> = ({
       return (
         <div className={`${OUTPUT_BLOCK_BASE} border-l-transparent`}>
           {rawTextOutput ? (
-            <div className="whitespace-pre-wrap">{output.response as string}</div>
+            <div className="whitespace-pre-wrap">
+              {output.response as string}
+            </div>
           ) : (
             <MarkdownText>{output.response as string}</MarkdownText>
           )}
@@ -543,8 +550,8 @@ export const CliOutput: React.FC<CliOutputProps> = ({
     >
       {/* Header */}
       <div className="font-semibold mb-[var(--spacing-sm)] text-[var(--fg-secondary)] pb-[var(--spacing-xs)] border-b border-[var(--border-color)] text-[11px] flex items-center gap-[var(--spacing-sm)]">
-        {timestamp && <span className="output-timestamp">[{timestamp}] </span>}
-        [Prompt {stepIndex + 1}] {attemptLabel}
+        {timestamp && <span className="output-timestamp">[{timestamp}] </span>}[
+        {stepLabel ?? `Prompt ${stepIndex + 1}`}] {attemptLabel}
         {streamingIndicator}
       </div>
 

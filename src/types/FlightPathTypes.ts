@@ -2,6 +2,7 @@ import {
   EXECUTION_STATES,
   STEP_STATUS,
   ExecutionState,
+  FinalPromptPhase,
   StepStatus,
 } from "./DashboardConstants";
 
@@ -59,6 +60,18 @@ export interface ExecutionProperties {
 export interface PromptFile extends ExecutionProperties {
   prompt?: string;
   prompts?: PromptItem[];
+  finalPrompt?: PromptItem;
+}
+
+/**
+ * Runtime state for workflow-level finalPrompt execution.
+ */
+export interface FinalPromptRuntimeState {
+  phase: FinalPromptPhase;
+  loopCount: number;
+  status?: StepStatus;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 /**
@@ -69,6 +82,7 @@ export interface PromptFile extends ExecutionProperties {
 export interface WorkingFileRuntime {
   currentIndex: number;
   executionState: ExecutionState;
+  finalPrompt?: FinalPromptRuntimeState;
 }
 
 /**
@@ -93,6 +107,10 @@ export interface PromptItem extends ExecutionProperties {
 /**
  * Optional workflow context for temp file naming and session resolution.
  * Used by CliIntegration to create meaningful temp file names.
+ *
+ * NOTE: WorkflowExecutor defines a separate local WorkflowContext interface.
+ * Keep this shared harness-facing type stable for now; rename should be handled
+ * in executor-focused finalPrompt phases to avoid ambiguous naming.
  */
 export interface WorkflowContext {
   promptIndex: number;

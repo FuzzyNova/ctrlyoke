@@ -40,6 +40,7 @@ interface UiState {
   hiddenDropdownOptions: Record<string, string[]>; // namespace → hidden value[]
   // Section collapse states
   promptsCollapsed: boolean;
+  finalPromptFooterExpanded: boolean;
   outputCollapsed: boolean;
   editorCollapsed: boolean;
 
@@ -96,6 +97,8 @@ interface UiState {
 interface UiActions {
   // Section toggles
   togglePromptsCollapse: () => void;
+  toggleFinalPromptFooterExpanded: () => void;
+  setFinalPromptFooterExpanded: (expanded: boolean) => void;
   toggleOutputCollapse: () => void;
   toggleEditorCollapse: () => void;
   setPromptsCollapsed: (collapsed: boolean) => void;
@@ -175,6 +178,7 @@ const initialState: UiState = {
   saveWorkflowDialogOpen: false,
   saveWorkflowDialogData: null,
   promptsCollapsed: false,
+  finalPromptFooterExpanded: false,
   outputCollapsed: false,
   editorCollapsed: false,
   propertiesDrawerOpen: false,
@@ -220,6 +224,14 @@ export const useUiStore = create<UiState & UiActions>()(
 
       togglePromptsCollapse: () =>
         set((state) => ({ promptsCollapsed: !state.promptsCollapsed })),
+
+      toggleFinalPromptFooterExpanded: () =>
+        set((state) => ({
+          finalPromptFooterExpanded: !state.finalPromptFooterExpanded,
+        })),
+
+      setFinalPromptFooterExpanded: (expanded) =>
+        set({ finalPromptFooterExpanded: expanded }),
 
       toggleOutputCollapse: () =>
         set((state) => ({ outputCollapsed: !state.outputCollapsed })),

@@ -6,8 +6,10 @@ import {
   StatusMessageSeverity,
   STATUS_MESSAGE_SEVERITY,
   type StepStatus,
+  type FinalPromptPhase,
 } from "../types/DashboardConstants";
 import type { CliEvent, CliOutput } from "../types/WebviewMessageTypes";
+import type { PromptItem } from "../types/FlightPathTypes";
 import { TemplateManager } from "../flightpath/TemplateManager";
 import { Log } from "../utils/Log";
 import { onModelsLoaded } from "../utils/ModelRegistry";
@@ -261,13 +263,23 @@ window.vscodeApi = acquireVsCodeApi();
   public async updateFileSelected(
     fileName: string,
     prompts: any[],
-    workflowName?: string
+    workflowName?: string,
+    finalPrompt?: PromptItem | null,
+    finalPromptRuntime?: {
+      status?: StepStatus;
+      loopCount: number;
+      phase: FinalPromptPhase;
+    }
   ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.FILE_SELECTED,
       fileName,
       prompts,
       workflowName,
+      finalPrompt: finalPrompt ?? null,
+      finalPromptStatus: finalPromptRuntime?.status ?? null,
+      finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
+      finalPromptPhase: finalPromptRuntime?.phase ?? null,
     });
 
     // Apply any pending workflow properties (set before workflow creation)
@@ -286,7 +298,13 @@ window.vscodeApi = acquireVsCodeApi();
     results: any[],
     executionState: string,
     currentIndex: number,
-    workflowName?: string
+    workflowName?: string,
+    finalPrompt?: PromptItem | null,
+    finalPromptRuntime?: {
+      status?: StepStatus;
+      loopCount: number;
+      phase: FinalPromptPhase;
+    }
   ): Promise<void> {
     this.postMessage({
       type: MESSAGE_TYPES.SESSION_RESTORED,
@@ -296,6 +314,10 @@ window.vscodeApi = acquireVsCodeApi();
       executionState,
       currentIndex,
       workflowName,
+      finalPrompt: finalPrompt ?? null,
+      finalPromptStatus: finalPromptRuntime?.status ?? null,
+      finalPromptLoopCount: finalPromptRuntime?.loopCount ?? 0,
+      finalPromptPhase: finalPromptRuntime?.phase ?? null,
     });
 
     // Extract and send workflow properties to settings panel
@@ -418,10 +440,14 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updatePromptsExtended(prompts: any[]): void {
+  public updatePromptsExtended(
+    prompts: any[],
+    finalPrompt?: PromptItem | null
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPTS_EXTENDED,
       prompts,
+      finalPrompt: finalPrompt ?? null,
     });
   }
 
@@ -437,11 +463,44 @@ window.vscodeApi = acquireVsCodeApi();
     });
   }
 
-  public updatePromptDeleted(fileName: string, prompts: any[]): void {
+  public updatePromptDeleted(
+    fileName: string,
+    prompts: any[],
+    finalPrompt?: PromptItem | null
+  ): void {
     this.postMessage({
       type: MESSAGE_TYPES.PROMPT_DELETED,
       fileName,
       prompts,
+      finalPrompt: finalPrompt ?? null,
+    });
+  }
+
+  public updateFinalPrompt(finalPrompt: PromptItem | null): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.UPDATE_FINAL_PROMPT,
+      finalPrompt,
+    });
+  }
+
+  public updateFinalPromptStatus(
+    status: StepStatus | null,
+    loopCount: number,
+    phase: FinalPromptPhase | null
+  ): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.FINAL_PROMPT_STATUS_CHANGED,
+      status,
+      loopCount,
+      phase,
+    });
+  }
+
+  public updateFinalPromptOutput(loopIndex: number, output: CliOutput): void {
+    this.postMessage({
+      type: MESSAGE_TYPES.FINAL_PROMPT_OUTPUT,
+      loopIndex,
+      output,
     });
   }
 

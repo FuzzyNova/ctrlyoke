@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import type { PromptItem, WorkingFile } from "../types/FlightPathTypes";
+import type { FinalPromptRuntimeState } from "../types/FlightPathTypes";
 import { Harness } from "../types/FlightPathTypes";
 import { EXECUTION_STATES } from "../types/DashboardConstants";
 import type { ExecutionState } from "../types/DashboardConstants";
@@ -36,6 +37,9 @@ export interface IWorkingFileQueueAccess {
 
   /** Emit state change notification to listeners */
   emitStateChange(): void;
+
+  /** Runtime metadata for workflow-level finalPrompt execution */
+  getFinalPromptRuntime(): FinalPromptRuntimeState | undefined;
 
   /** Update a workflow property in cached workflow file */
   updateWorkflowProperty(key: string, value: unknown): void;
@@ -280,9 +284,11 @@ export class WorkingFileManager {
 
         // Update workflow-level runtime state
         // completedPrompts is no longer written; per-prompt _runtime.completedAt is the source of truth
+        const finalPromptRuntime = this.queueAccess.getFinalPromptRuntime();
         workingFile._runtime = {
           currentIndex: this.queueAccess.getCurrentIndex(),
           executionState: this.queueAccess.getStatus(),
+          ...(finalPromptRuntime ? { finalPrompt: finalPromptRuntime } : {}),
         };
 
         // Write atomically while holding lock

@@ -17,22 +17,30 @@ import { PanelBar } from "../shared";
  * - Handles section collapse state persistence
  */
 export const EditorSection: React.FC = () => {
-  const { selectedPromptIndex, promptName, setPromptName } = useEditorStore();
-  const { editorCollapsed, toggleEditorCollapse, loadedWorkflows, activeWorkflowId } = useUiStore();
+  const { selectionTarget, promptName, setPromptName } = useEditorStore();
+  const {
+    editorCollapsed,
+    toggleEditorCollapse,
+    loadedWorkflows,
+    activeWorkflowId,
+  } = useUiStore();
   const { prompts } = useWorkflowStore();
 
   // Derive whether the active workflow is CLI-managed (read-only watch mode)
   const isCLIManaged =
     loadedWorkflows.find((w) => w.id === activeWorkflowId)?.managedBy === "cli";
 
-  const isEditMode = selectedPromptIndex !== null;
+  const isEditMode = selectionTarget.kind !== "newPrompt";
   const totalPrompts = prompts.length;
   const [sectionRef] = useElementNarrow<HTMLElement>();
 
   // Generate mode indicator text
   const getModeText = () => {
     if (isEditMode) {
-      return `Editing: Prompt ${(selectedPromptIndex ?? 0) + 1} of ${totalPrompts}`;
+      if (selectionTarget.kind === "finalPrompt") {
+        return "Editing: Orchestrator Prompt";
+      }
+      return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;
     }
     return "New Prompt";
   };

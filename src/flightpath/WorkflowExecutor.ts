@@ -4,12 +4,14 @@ import {
   PromptItem,
   PromptFile,
   DynamicQueueConfig,
+  FinalPromptRuntimeState,
   EXECUTION_STATES,
   Harness,
 } from "../types/FlightPathTypes";
 import {
   STEP_STATUS,
   STATUS_MESSAGE_SEVERITY,
+  FINAL_PROMPT_PHASES,
 } from "../types/DashboardConstants";
 import { PromptQueue } from "./PromptQueue";
 import { PromptFileParser } from "./PromptFileParser";
@@ -32,48 +34,30 @@ import {
 import { OutputHistoryManager } from "./orchestration/OutputHistoryManager";
 import { StatusMessage, CliEvent } from "../types/WebviewMessageTypes";
 
-/**
- * Context provided by FlightPathManager for workflow execution.
- * Contains all dependencies and configuration needed during execution.
- */
-export interface WorkflowContext {
-  /** Current workspace folder path */
+export interface WorkflowExecutionContext {
   workspaceFolderPath: string | undefined;
-  /** Path to the currently loaded prompt file */
   currentPromptFilePath: string | undefined;
-  /** Dashboard provider for UI updates */
   dashboardProvider?: FlightPathWebviewProvider;
-  /** Whether to show CLI commands in output */
   shouldShowCliCommand: boolean;
-  /** Whether to show CLI output in output panel */
   showCliOutput: boolean;
-  /** Dynamic queue configuration */
   dynamicQueueConfig: DynamicQueueConfig;
-  /** Integration resolver - gets the appropriate integration for a prompt */
   getIntegrationForPrompt: (
     prompt: PromptItem,
     harnessOverride?: Harness
   ) => HarnessIntegration;
-  /** Path to current run's history file (empty string if history disabled) */
   historyFilePath: string;
-  /** Path to the active working file for this workflow instance (used by MCP server targeting) */
   workingFilePath?: string;
-  /** Short instance tag for log prefixing, e.g. "[inst:abc12345] " */
   instanceTag?: string;
-  /**
-   * Optional callback fired for each status message (end condition results, retries, etc.).
-   * Used by the standalone CLI to render status messages to the terminal.
-   */
   onStatusMessage?: (
     stepIndex: number,
     message: string,
     severity: string
   ) => void;
-  /** OutputHistoryManager for saving step outputs */
   outputHistoryManager?: OutputHistoryManager;
   /**
-   * Always-on callback to capture the init state for a step's output (called even when inactive).
-   * Used to buffer output for replay when switching back to this workflow.
+   * Always-on callback to capture the init state for a queue step's output (called even when
+   * the workflow is inactive/backgrounded). Used to buffer output for replay when switching
+   * back to this workflow instance.
    */
   captureOutputInit?: (
     stepIndex: number,
@@ -84,45 +68,57 @@ export interface WorkflowContext {
     attemptIndex: number,
     rawTextOutput?: boolean
   ) => void;
-  /**
-   * Always-on callback to capture streaming chunks (called even when inactive).
-   * Used to buffer output for replay when switching back to this workflow.
-   */
+  /** Always-on chunk buffer for queue steps — enables output replay on workflow switch. */
   captureChunk?: (stepIndex: number, chunk: string) => void;
-  /**
-   * Always-on callback to capture the final completed output for a step (called even when inactive).
-   * Used to replay completed-step outputs when switching back to this workflow.
-   */
+  /** Always-on completed-output capture for queue steps — enables replay on workflow switch. */
   captureCompletedOutput?: (stepIndex: number, output: any) => void;
-  /**
-   * Always-on callback to capture structured streaming events (called even when inactive).
-   * Used to buffer events for replay when switching back to this workflow.
-   */
+  /** Always-on structured event buffer for queue steps — enables replay on workflow switch. */
   captureEvents?: (stepIndex: number, events: CliEvent[]) => void;
+  /** Mirror of captureOutputInit for finalPrompt loops, keyed by loopIndex. */
+  captureFinalPromptOutputInit?: (
+    loopIndex: number,
+    prompt: string,
+    cliCommand: string | undefined,
+    workingDirectory: string | undefined,
+    timestampMs: number,
+    attemptIndex: number,
+    rawTextOutput?: boolean
+  ) => void;
+  captureFinalPromptChunk?: (loopIndex: number, chunk: string) => void;
+  captureFinalPromptEvents?: (loopIndex: number, events: CliEvent[]) => void;
+  captureFinalPromptCompletedOutput?: (loopIndex: number, output: any) => void;
+  onFinalPromptStatusMessage?: (
+    loopIndex: number,
+    message: string,
+    severity: string
+  ) => void;
 }
 
+type ExecutionTarget =
+  | { kind: "queue"; stepIndex: number }
+  | { kind: "finalPrompt"; loopIndex: number };
+
+type StepExecutionKey = `queue:${number}` | `final:${number}`;
+
 /**
- * Handles the execution loop for FlightPath workflows.
+ * Drives the sequential execution loop for a FlightPath workflow.
  *
- * Responsibilities:
- * - Execute prompts sequentially with pause/resume support
- * - Wait for Copilot responses
- * - Manage pause/resume state for response handling
- * - Coordinate with EndConditionHandler for validation
- * - Update dashboard with execution progress
- * - Handle dynamic queue reload after prompt completion
+ * The outer loop has two phases:
+ *   1. **Queue phase** — drains normal prompts via `promptQueue.hasNext()`.
+ *   2. **finalPrompt phase** — runs the orchestrator gate once the queue is empty.
+ *      If `finalPrompt.allowDynamicExtension` is true and the gate appends new
+ *      prompts, the outer loop repeats (queue → finalPrompt → queue → …).
  *
- * This class extracts the massive startWorkflowExecution() loop from
- * FlightPathManager to improve separation of concerns.
+ * Pause/resume is implemented by holding the response promise until
+ * `resumePendingResponse()` is called by `FlightPathManager`.
  */
 export class WorkflowExecutor {
-  // Pause/resume state: Track pending response when paused
   private pendingResponseResolver: ((text: string) => void) | null = null;
   private pendingResponseText: string | null = null;
   private isWaitingForResponse: boolean = false;
 
-  // History tracking: accumulate status messages per step for history storage
-  private stepStatusMessages: Map<number, StatusMessage[]> = new Map();
+  private stepStatusMessages: Map<StepExecutionKey, StatusMessage[]> =
+    new Map();
 
   constructor(
     private readonly promptQueue: PromptQueue,
@@ -133,316 +129,456 @@ export class WorkflowExecutor {
   ) {}
 
   /**
-   * Execute the workflow with the given integration and context.
-   * This is the main execution loop that processes prompts sequentially.
-   *
-   * @param defaultIntegration The default Copilot integration to use (can be overridden per-prompt)
-   * @param context Workflow context with dependencies and configuration
+   * Execute the workflow. Supports resume from a paused or previously-stopped
+   * run — the queue's `currentIndex` and `finalPromptRuntime` phase are both
+   * restored from the working file before this is called, so the loop picks up
+   * exactly where it left off.
    */
   async execute(
     defaultIntegration: HarnessIntegration,
-    context: WorkflowContext
+    context: WorkflowExecutionContext
   ): Promise<void> {
-    // Clear any pending response state from previous execution
     this.clearPendingState();
-
-    // Clear status message accumulator for this run
     this.stepStatusMessages.clear();
 
-    // Set queue state to running (this will emit state change and update dashboard)
     await this.promptQueue.start();
-
-    // Start execution time tracking
     this.promptQueue.startExecutionTimer();
 
-    // Get fresh state (supports resume from pause)
-    let state = this.promptQueue.getState();
-
-    // Show the FlightPath dashboard panel when execution starts
     await this.showDashboard();
 
-    // Log workflow start to output channel
-    this.logWorkflowStart(context, defaultIntegration, state.prompts.length);
+    this.logWorkflowStart(
+      context,
+      defaultIntegration,
+      this.promptQueue.getProgress().total
+    );
 
-    // Start from currentIndex to support resume functionality
-    // Note: Use queue.hasNext() instead of state.prompts.length to support dynamic queue extension
-    while (this.promptQueue.hasNext()) {
-      // Get fresh state on each iteration (supports queue extension during execution)
-      state = this.promptQueue.getState();
-      const i = state.currentIndex;
-      const prompt = state.prompts[i];
-      const dynamicConfig = context.dynamicQueueConfig;
+    const workflowFile = this.promptQueue.getWorkflowFile();
+    const finalPrompt = workflowFile.finalPrompt;
 
-      // Check if paused or stopped before starting new prompt
-      const currentStatus = this.promptQueue.getState().status;
-      if (currentStatus === EXECUTION_STATES.PAUSED) {
-        Log.info("⏸️ Workflow paused before executing next prompt");
-        break;
-      }
-      if (
-        currentStatus === EXECUTION_STATES.STOPPED ||
-        currentStatus === EXECUTION_STATES.CANCELLING
-      ) {
-        Log.info("🛑 Workflow stopped before executing next prompt");
-        break;
-      }
-
-      // Check workflow execution time limit (unless unlimited mode or timeout disabled)
-      // Use live queue state for accurate total (MCP may have extended queue)
-      const liveProgress = this.promptQueue.getProgress();
-      const shouldStop = await this.checkExecutionTimeLimit(
-        dynamicConfig,
-        i,
-        liveProgress.total
+    if (finalPrompt && !this.promptQueue.getFinalPromptRuntime()) {
+      await this.setFinalPromptRuntime(context, {
+        phase: FINAL_PROMPT_PHASES.QUEUE,
+        loopCount: 0,
+      });
+    } else if (finalPrompt) {
+      const runtime = this.promptQueue.getFinalPromptRuntime();
+      context.dashboardProvider?.updateFinalPromptStatus(
+        runtime?.status ?? null,
+        runtime?.loopCount ?? 0,
+        runtime?.phase ?? null
       );
-      if (shouldStop) {
-        break;
-      }
+    } else {
+      context.dashboardProvider?.updateFinalPromptStatus(null, 0, null);
+    }
 
-      // Resolve properties with three-tier precedence (prompt → workflow → settings)
-      const workflowFile = this.promptQueue.getWorkflowFile();
-      const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+    let runFinalPromptFirst =
+      !!finalPrompt &&
+      this.promptQueue.getFinalPromptRuntime()?.phase ===
+        FINAL_PROMPT_PHASES.FINAL_PROMPT;
 
-      // Resolve the integration for this prompt (supports per-prompt and workflow-level harness)
-      const integration = context.getIntegrationForPrompt(
-        prompt,
-        resolvedProperties.harness
-      );
+    while (true) {
+      if (!runFinalPromptFirst) {
+        while (this.promptQueue.hasNext()) {
+          const state = this.promptQueue.getState();
+          const target: ExecutionTarget = {
+            kind: "queue",
+            stepIndex: state.currentIndex,
+          };
+          const prompt = state.prompts[state.currentIndex];
 
-      // Update dashboard step status to running
-      this.updateDashboardForPromptStart(context, prompt, i);
-
-      // Update progress - use live queue state for accurate total
-      integration.setWorkflowProgress(i + 1, liveProgress.total);
-
-      Log.info(`🚀 Executing prompt ${i + 1}/${liveProgress.total}`);
-
-      // Log resolved properties for debugging
-      Log.debug(
-        `📋 Resolved properties for prompt ${i + 1}: ` +
-          `harness=${resolvedProperties.harness}, ` +
-          `model=${resolvedProperties.model}, ` +
-          `agent=${resolvedProperties.agent || "(none)"}, ` +
-          `resumeSession=${resolvedProperties.resumeSession}, ` +
-          `allowDynamicExtension=${resolvedProperties.allowDynamicExtension}, ` +
-          `endCondition=${resolvedProperties.endCondition ? "defined" : "none"}`
-      );
-
-      // Send prompt with full streaming lifecycle (listeners, response wait, cleanup)
-      const result = await this.executeWithStreaming(
-        prompt,
-        integration,
-        context,
-        i,
-        0, // attemptIndex: initial attempt
-        {
-          promptIndex: i,
-          allPrompts: state.prompts,
-          filePath: context.currentPromptFilePath,
-          workingFilePath: context.workingFilePath,
-          resolvedProperties,
-          workflowFile,
-          promptQueue: this.promptQueue,
-        },
-        async () => {
-          // Post-send hook: runs after successful send, before awaiting the response
-          await this.promptQueue.markCurrentAsSent();
-          this.isWaitingForResponse = true;
-          Log.info(
-            `⏳ Waiting for Copilot to finish responding to prompt ${i + 1}...`
+          const shouldContinue = await this.executeSinglePrompt(
+            target,
+            prompt,
+            context
           );
+          if (!shouldContinue) {
+            break;
+          }
         }
-      );
+      }
 
-      if (!result) {
-        const shouldContinue = await this.handlePromptSendFailure(
-          integration,
-          context,
-          i
-        );
-        if (!shouldContinue) {
+      runFinalPromptFirst = false;
+
+      const statusAfterQueue = this.promptQueue.getState().status;
+      if (statusAfterQueue !== EXECUTION_STATES.RUNNING) {
+        break;
+      }
+
+      if (!finalPrompt) {
+        break;
+      }
+
+      const runtime = this.promptQueue.getFinalPromptRuntime();
+      const loopIndex = runtime?.loopCount ?? 0;
+      const queueSizeBefore = this.promptQueue.getState().prompts.length;
+
+      await this.setFinalPromptRuntime(context, {
+        phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        loopCount: loopIndex,
+        status: STEP_STATUS.RUNNING,
+        startedAt: Date.now(),
+      });
+
+      const shouldContinue = await this.executeSinglePrompt(
+        { kind: "finalPrompt", loopIndex },
+        finalPrompt,
+        context
+      );
+      if (!shouldContinue) {
+        await this.persistInterruptedFinalPromptRuntime(context);
+        break;
+      }
+
+      const statusAfterFinal = this.promptQueue.getState().status;
+      if (statusAfterFinal !== EXECUTION_STATES.RUNNING) {
+        await this.persistInterruptedFinalPromptRuntime(context);
+        break;
+      }
+
+      const queueSizeAfter = this.promptQueue.getState().prompts.length;
+      if (queueSizeAfter > queueSizeBefore) {
+        const finalPromptAllowsDynamic = PropertyResolver.resolve(
+          finalPrompt,
+          workflowFile
+        ).allowDynamicExtension;
+        if (!finalPromptAllowsDynamic) {
+          await this.setFinalPromptRuntime(context, {
+            phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+            loopCount: loopIndex,
+            status: STEP_STATUS.COMPLETED,
+            startedAt: this.promptQueue.getFinalPromptRuntime()?.startedAt,
+            completedAt: Date.now(),
+          });
           break;
         }
+
+        const hitQueueSizeLimit = await this.checkQueueSizeLimit(
+          context.dynamicQueueConfig,
+          queueSizeAfter
+        );
+        if (hitQueueSizeLimit) {
+          break;
+        }
+
+        await this.setFinalPromptRuntime(context, {
+          phase: FINAL_PROMPT_PHASES.QUEUE,
+          loopCount: loopIndex + 1,
+          status: STEP_STATUS.COMPLETED,
+          startedAt:
+            this.promptQueue.getFinalPromptRuntime()?.startedAt ?? Date.now(),
+          completedAt: Date.now(),
+        });
+
         continue;
       }
 
-      Log.info(`✅ Prompt ${i + 1} completed`);
-      const { responseText, duration } = result;
+      await this.setFinalPromptRuntime(context, {
+        phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+        loopCount: loopIndex,
+        status: STEP_STATUS.COMPLETED,
+        startedAt: this.promptQueue.getFinalPromptRuntime()?.startedAt,
+        completedAt: Date.now(),
+      });
 
-      // Update dashboard with CLI output (if integration provides it) and save to history
-      await this.updateDashboardWithResponse(
-        context,
+      break;
+    }
+
+    Log.info("Workflow execution complete");
+    await this.finalizeWorkflowExecution(context);
+    this.logWorkflowCompletion(context, this.promptQueue.getProgress().total);
+  }
+
+  private async executeSinglePrompt(
+    target: ExecutionTarget,
+    prompt: PromptItem,
+    context: WorkflowExecutionContext
+  ): Promise<boolean> {
+    const state = this.promptQueue.getState();
+    const currentStatus = state.status;
+
+    if (currentStatus === EXECUTION_STATES.PAUSED) {
+      Log.info("Workflow paused before executing next prompt");
+      return false;
+    }
+    if (
+      currentStatus === EXECUTION_STATES.STOPPED ||
+      currentStatus === EXECUTION_STATES.CANCELLING
+    ) {
+      Log.info("Workflow stopped before executing next prompt");
+      return false;
+    }
+
+    const progress = this.promptQueue.getProgress();
+    const guardIndex =
+      target.kind === "queue" ? target.stepIndex : state.currentIndex;
+    const shouldStopForTime = await this.checkExecutionTimeLimit(
+      context.dynamicQueueConfig,
+      guardIndex,
+      progress.total
+    );
+    if (shouldStopForTime) {
+      return false;
+    }
+
+    const workflowFile = this.promptQueue.getWorkflowFile();
+    const resolvedProperties = PropertyResolver.resolve(prompt, workflowFile);
+
+    const integration = context.getIntegrationForPrompt(
+      prompt,
+      resolvedProperties.harness
+    );
+
+    if (target.kind === "queue") {
+      this.updateDashboardForPromptStart(context, prompt, target.stepIndex);
+      integration.setWorkflowProgress(target.stepIndex + 1, progress.total);
+      Log.info(`Executing prompt ${target.stepIndex + 1}/${progress.total}`);
+    } else {
+      Log.info(`Executing finalPrompt loop ${target.loopIndex + 1}`);
+    }
+
+    const legacyStepIndex = this.getLegacyStepIndex(target);
+    const sendPromptIndex =
+      target.kind === "queue" ? target.stepIndex : state.prompts.length;
+
+    const result = await this.executeWithStreaming(
+      prompt,
+      integration,
+      context,
+      target,
+      target.kind === "queue" ? legacyStepIndex : undefined,
+      0,
+      {
+        promptIndex: sendPromptIndex,
+        allPrompts: state.prompts,
+        filePath: context.currentPromptFilePath,
+        workingFilePath: context.workingFilePath,
+        resolvedProperties,
+        workflowFile,
+        promptQueue: this.promptQueue,
+      },
+      async () => {
+        if (target.kind === "queue") {
+          await this.promptQueue.markCurrentAsSent();
+        }
+        this.isWaitingForResponse = true;
+      }
+    );
+
+    if (!result) {
+      return this.handlePromptSendFailure(
         integration,
+        context,
+        legacyStepIndex
+      );
+    }
+
+    const { responseText, duration } = result;
+
+    await this.updateDashboardWithResponse(
+      context,
+      integration,
+      target,
+      target.kind === "queue" ? legacyStepIndex : undefined,
+      prompt,
+      responseText,
+      duration
+    );
+
+    if (prompt.endCondition) {
+      const shouldContinue = await this.evaluateEndCondition(
         prompt,
-        responseText,
-        duration,
-        i
+        integration,
+        context,
+        target,
+        target.kind === "queue" ? legacyStepIndex : undefined,
+        duration
       );
 
-      // Evaluate end condition if present
-      if (prompt.endCondition) {
-        const shouldContinue = await this.evaluateEndCondition(
-          prompt,
-          integration,
-          context,
-          i,
-          duration
-        );
-
-        if (!shouldContinue) {
-          Log.info("❌ Workflow stopped due to end condition failure");
-          await this.promptQueue.markErrored();
-          break;
-        }
-
-        // Update dashboard with success including end condition result
-        if (context.dashboardProvider) {
-          context.dashboardProvider.updateStepStatus(i, {
-            state: STEP_STATUS.COMPLETED,
-            duration: duration,
-          });
-          context.dashboardProvider.updateRetryAttempt(i, 0, 0);
-        }
-      } else {
-        // Update dashboard with success (no end condition)
-        if (context.dashboardProvider) {
-          context.dashboardProvider.updateStepStatus(i, {
-            state: STEP_STATUS.COMPLETED,
-            duration: duration,
-          });
-        }
+      if (!shouldContinue) {
+        Log.info("Workflow stopped due to end condition failure");
+        await this.promptQueue.markErrored();
+        return false;
       }
 
-      // Mark current prompt as completed and move to next
+      if (target.kind === "queue" && context.dashboardProvider) {
+        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+          state: STEP_STATUS.COMPLETED,
+          duration,
+        });
+        context.dashboardProvider.updateRetryAttempt(legacyStepIndex, 0, 0);
+      }
+    } else if (target.kind === "queue" && context.dashboardProvider) {
+      context.dashboardProvider.updateStepStatus(legacyStepIndex, {
+        state: STEP_STATUS.COMPLETED,
+        duration,
+      });
+    }
+
+    if (target.kind === "queue") {
       await this.promptQueue.completeCurrentAndMoveNext();
 
-      // Update progress after moving to next (progress.current = completed count)
       if (context.dashboardProvider) {
-        const progress = this.promptQueue.getProgress();
-        context.dashboardProvider.updateProgress(
-          progress.current,
-          progress.total
-        );
+        const live = this.promptQueue.getProgress();
+        context.dashboardProvider.updateProgress(live.current, live.total);
       }
 
-      // Note: Queue extension now handled via MCP tools (flightpath_append_queue)
-      // or user commands (Queue with FlightPath). The working file watcher in
-      // FlightPathManager will detect changes and reload the queue automatically.
-
-      // Check if workflow was paused
       if (this.promptQueue.getState().status === EXECUTION_STATES.PAUSED) {
-        Log.info("⏸️ Workflow paused");
-        break;
+        Log.info("Workflow paused");
+        return false;
       }
     }
 
-    Log.info("🎉 Workflow execution complete");
+    return true;
+  }
 
-    // Set queue state to completed (unless user paused, stopped, or error occurred)
-    await this.finalizeWorkflowExecution(context);
-
-    // Log workflow completion to output channel
-    this.logWorkflowCompletion(context, state.prompts.length);
+  private getExecutionKey(target: ExecutionTarget): StepExecutionKey {
+    return target.kind === "queue"
+      ? `queue:${target.stepIndex}`
+      : `final:${target.loopIndex}`;
   }
 
   /**
-   * Send a status message to the dashboard and track it in stepStatusMessages.
-   * This dual-write ensures history captures the same messages shown live.
+   * Maps an ExecutionTarget to the signed integer index expected by legacy
+   * dashboard/CLI callers. Queue steps use their zero-based stepIndex;
+   * finalPrompt loops use negative values (-(loopIndex+1)) so they never
+   * collide with queue indices and callers can detect them with `< 0`.
    */
+  private getLegacyStepIndex(target: ExecutionTarget): number {
+    return target.kind === "queue" ? target.stepIndex : -(target.loopIndex + 1);
+  }
+
+  private describeExecutionTarget(target: ExecutionTarget): string {
+    return target.kind === "queue"
+      ? `queue prompt ${target.stepIndex + 1}`
+      : `finalPrompt loop ${target.loopIndex + 1}`;
+  }
+
+  private async persistInterruptedFinalPromptRuntime(
+    context: WorkflowExecutionContext
+  ): Promise<void> {
+    const runtime = this.promptQueue.getFinalPromptRuntime();
+    if (!runtime) {
+      return;
+    }
+
+    const executionState = this.promptQueue.getState().status;
+    const status =
+      executionState === EXECUTION_STATES.ERROR
+        ? STEP_STATUS.FAILED
+        : executionState === EXECUTION_STATES.STOPPED ||
+            executionState === EXECUTION_STATES.CANCELLING
+          ? STEP_STATUS.CANCELLED
+          : (runtime.status ?? STEP_STATUS.RUNNING);
+
+    await this.setFinalPromptRuntime(context, {
+      ...runtime,
+      phase: FINAL_PROMPT_PHASES.FINAL_PROMPT,
+      status,
+      ...(executionState === EXECUTION_STATES.ERROR ||
+      executionState === EXECUTION_STATES.STOPPED ||
+      executionState === EXECUTION_STATES.CANCELLING
+        ? { completedAt: Date.now() }
+        : {}),
+    });
+  }
+
   private trackStatusMessage(
-    context: WorkflowContext,
-    stepIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
     message: string,
     severity: string = STATUS_MESSAGE_SEVERITY.INFO
   ): void {
+    const key = this.getExecutionKey(target);
+    const legacyStepIndex = this.getLegacyStepIndex(target);
+
+    // Queue steps keep non-negative indices; finalPrompt loops use negative
+    // legacy indices (-(loopIndex+1)) to avoid collisions with queue steps.
     context.dashboardProvider?.updateStatusMessage(
-      stepIndex,
+      legacyStepIndex,
       message,
       severity as any
     );
-    context.onStatusMessage?.(stepIndex, message, severity);
+    if (target.kind === "queue") {
+      context.onStatusMessage?.(target.stepIndex, message, severity);
+    } else {
+      context.onFinalPromptStatusMessage?.(target.loopIndex, message, severity);
+      // Backward-compatible channel used by CLI renderers and existing listeners.
+      context.onStatusMessage?.(legacyStepIndex, message, severity);
+    }
 
-    // Track for history storage
-    const msgs = this.stepStatusMessages.get(stepIndex) ?? [];
-    msgs.push({
+    const messages = this.stepStatusMessages.get(key) ?? [];
+    messages.push({
       message,
       severity: severity as any,
       timestamp: Date.now(),
     });
-    this.stepStatusMessages.set(stepIndex, msgs);
+    this.stepStatusMessages.set(key, messages);
   }
 
-  /**
-   * Evaluate end condition for a prompt.
-   * Delegates to EndConditionHandler for retry logic.
-   *
-   * @returns true to continue workflow, false to stop
-   */
   private async evaluateEndCondition(
     prompt: PromptItem,
     integration: HarnessIntegration,
-    context: WorkflowContext,
-    currentIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    legacyStepIndex: number | undefined,
     duration: number
   ): Promise<boolean> {
-    Log.debug(`🔍 Evaluating end condition for prompt ${currentIndex + 1}...`);
+    Log.debug(
+      `Evaluating end condition for ${this.describeExecutionTarget(target)}...`
+    );
 
-    // Validate that the end condition has a script property
     if (!prompt.endCondition?.script) {
       Log.error(
-        `End condition for prompt ${currentIndex + 1} is missing required 'script' property`
+        `End condition for ${this.describeExecutionTarget(target)} is missing required 'script' property`
       );
       this.trackStatusMessage(
         context,
-        currentIndex,
-        `End condition failed: Missing script property`,
+        target,
+        "End condition failed: Missing script property",
         STATUS_MESSAGE_SEVERITY.ERROR
       );
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateStepStatus(currentIndex, {
+
+      if (context.dashboardProvider && legacyStepIndex !== undefined) {
+        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
           state: STEP_STATUS.FAILED,
           message: "End condition missing required 'script' property",
           duration,
         });
       }
+
       return false;
     }
 
-    // Send status message: Evaluating end condition
     const scriptName =
       prompt.endCondition.script.split(/[\\/]/).pop() ||
       prompt.endCondition.script;
     this.trackStatusMessage(
       context,
-      currentIndex,
+      target,
       `Evaluating end condition: Running ${scriptName}`
     );
 
-    // Evaluate the end condition
     const evaluationResult = await this.endConditionEvaluator.evaluateCondition(
       prompt.endCondition,
       context.workspaceFolderPath
     );
 
-    // Send status message: End condition result
     {
-      const resultStatus = evaluationResult.success ? "Passed ✓" : "Failed ✗";
+      const resultStatus = evaluationResult.success ? "Passed" : "Failed";
       const severity = evaluationResult.success
         ? STATUS_MESSAGE_SEVERITY.INFO
         : STATUS_MESSAGE_SEVERITY.ERROR;
-      // Show error message when present, otherwise show stdout (no truncation)
       const output = evaluationResult.error
         ? evaluationResult.error
         : evaluationResult.stdout.trim();
       this.trackStatusMessage(
         context,
-        currentIndex,
+        target,
         `End condition ${resultStatus} - Output: ${output}`,
         severity
       );
     }
 
-    // Handle the evaluation result using EndConditionHandler
     const retryContext = {
       integration,
       totalPrompts: this.promptQueue.getState().prompts.length,
@@ -452,7 +588,9 @@ export class WorkflowExecutor {
 
     const sendRetryPromptCallback = this.createSendRetryPromptCallback(
       integration,
-      context
+      context,
+      target,
+      legacyStepIndex
     );
 
     const result = await this.endConditionHandler.handleEndConditionResult(
@@ -463,9 +601,8 @@ export class WorkflowExecutor {
     );
 
     if (!result.shouldContinue) {
-      // Update dashboard with failure using the reason from EndConditionHandler
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateStepStatus(currentIndex, {
+      if (context.dashboardProvider && legacyStepIndex !== undefined) {
+        context.dashboardProvider.updateStepStatus(legacyStepIndex, {
           state: STEP_STATUS.FAILED,
           message: result.failureReason || "End condition failed",
           duration,
@@ -478,12 +615,16 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Wait for Copilot to complete responding.
-   * Handles pause state by holding the response until resume.
+   * Waits for the integration to fire `onResponseComplete`.
    *
-   * @param prompt The current prompt being executed
-   * @param integration The integration instance to use
-   * @returns Promise that resolves with response text when complete
+   * If the workflow is paused at the moment the response arrives, the resolver
+   * is parked in `pendingResponseResolver` and the promise stays open until
+   * `resumePendingResponse()` is called.
+   *
+   * There is intentionally no per-prompt timeout here. Complex prompts (large
+   * refactors, full audits) can legitimately run for hours. The workflow-level
+   * `maxWorkflowExecutionTime` setting guards against runaway workflows, and
+   * users can stop manually at any time.
    */
   private async waitForResponseComplete(
     prompt: PromptItem,
@@ -495,18 +636,13 @@ export class WorkflowExecutor {
       const disposable = integration.onResponseComplete(
         async (responseText: string) => {
           if (responseHandled) {
-            Log.debug("⚠️ Duplicate response complete event ignored");
             return;
           }
           responseHandled = true;
           disposable.dispose();
 
-          // Check if workflow is paused - hold response until resume
           const currentState = this.promptQueue.getState();
           if (currentState.status === EXECUTION_STATES.PAUSED) {
-            Log.info(
-              "⏸️ Response complete but workflow is paused - holding until resume"
-            );
             this.pendingResponseResolver = resolve;
             this.pendingResponseText = responseText;
             this.isWaitingForResponse = false;
@@ -517,30 +653,29 @@ export class WorkflowExecutor {
           resolve(responseText);
         }
       );
-
-      // No per-prompt timeout: complex prompts (code audits, large refactors) can
-      // legitimately take hours. The workflow-level maxWorkflowExecutionTime setting
-      // covers runaway workflows, and users can stop manually if needed.
     });
   }
 
   /**
-   * Send a prompt with full streaming lifecycle management.
+   * Sends a prompt and manages the full streaming lifecycle: dashboard init,
+   * listener setup and teardown, and response-completion waiting.
    *
-   * Handles dashboard streaming initialization, listener setup/teardown, and response
-   * completion waiting in a single place — used by both the main execution loop
-   * (attemptIndex = 0) and retry callbacks (attemptIndex = N).
+   * Used by both the main execution loop (`attemptIndex = 0`) and retry
+   * callbacks (`attemptIndex = N`).
    *
-   * @param onPromptSent Optional async callback invoked after a successful send but before
-   *   awaiting the response. Use for queue bookkeeping that must happen in that window
-   *   (e.g. markCurrentAsSent, isWaitingForResponse).
-   * @returns { responseText, duration } on success, null if sendPrompt returns false.
+   * @param onPromptSent Optional async callback invoked after a successful send
+   *   but *before* awaiting the response. Use for queue bookkeeping that must
+   *   happen in that specific window (e.g. `markCurrentAsSent`,
+   *   `isWaitingForResponse = true`).
+   * @returns `{ responseText, duration }` on success, `null` if `sendPrompt`
+   *   returns false.
    */
   private async executeWithStreaming(
     promptItem: PromptItem,
     integration: HarnessIntegration,
-    context: WorkflowContext,
-    stepIndex: number,
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    legacyStepIndex: number | undefined,
     attemptIndex: number,
     sendOptions: {
       promptIndex: number;
@@ -555,12 +690,39 @@ export class WorkflowExecutor {
   ): Promise<{ responseText: string; duration: number } | null> {
     const startTime = Date.now();
 
-    // Initialize dashboard streaming state
     const initTimestampMs = Date.now();
     const rawTextOutput = integration.rawTextOutput || undefined;
-    if (context.dashboardProvider) {
-      context.dashboardProvider.updateCliStreamingChunk(stepIndex, "");
-      context.dashboardProvider.updateCliOutput(stepIndex, {
+
+    if (target.kind === "queue") {
+      if (context.dashboardProvider && legacyStepIndex !== undefined) {
+        context.dashboardProvider.updateCliStreamingChunk(legacyStepIndex, "");
+        context.dashboardProvider.updateCliOutput(legacyStepIndex, {
+          prompt: promptItem.prompt,
+          response: "",
+          elapsed: 0,
+          tokens: undefined,
+          isStreaming: true,
+          cliCommand: undefined,
+          workingDirectory: context.workspaceFolderPath,
+          timestampMs: initTimestampMs,
+          attemptIndex,
+          rawTextOutput,
+        });
+      }
+
+      if (legacyStepIndex !== undefined) {
+        context.captureOutputInit?.(
+          legacyStepIndex,
+          promptItem.prompt,
+          undefined,
+          context.workspaceFolderPath,
+          initTimestampMs,
+          attemptIndex,
+          rawTextOutput
+        );
+      }
+    } else {
+      context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
         prompt: promptItem.prompt,
         response: "",
         elapsed: 0,
@@ -572,39 +734,60 @@ export class WorkflowExecutor {
         attemptIndex,
         rawTextOutput,
       });
+      context.captureFinalPromptOutputInit?.(
+        target.loopIndex,
+        promptItem.prompt,
+        undefined,
+        context.workspaceFolderPath,
+        initTimestampMs,
+        attemptIndex,
+        rawTextOutput
+      );
     }
-    // Always capture init state for replay when switching workflows
-    context.captureOutputInit?.(
-      stepIndex,
-      promptItem.prompt,
-      undefined,
-      context.workspaceFolderPath,
-      initTimestampMs,
-      attemptIndex,
-      rawTextOutput
-    );
 
-    // Set up response listener BEFORE sending to avoid race condition
     const responsePromise = this.waitForResponseComplete(
       promptItem,
       integration
     );
 
-    // Set up streaming listeners.
-    // streamingDisposable is always registered (not gated on dashboardProvider) so background
-    // workflows can buffer their output for replay when the user switches back to them.
     let streamingDisposable: { dispose(): void } | undefined;
     let structuredStreamingDisposable: { dispose(): void } | undefined;
     let promptReadyDisposable: { dispose(): void } | undefined;
 
-    // Always register onPromptReady so the CLI command flows to captureOutputInit
-    // (and thus to CLI event emitters) even when there is no dashboard provider.
     promptReadyDisposable = integration.onPromptReady((data) => {
       const cliCommand = context.shouldShowCliCommand
         ? data.cliCommand
         : undefined;
-      if (context.dashboardProvider) {
-        context.dashboardProvider.updateCliOutput(stepIndex, {
+
+      if (target.kind === "queue") {
+        if (context.dashboardProvider && legacyStepIndex !== undefined) {
+          context.dashboardProvider.updateCliOutput(legacyStepIndex, {
+            prompt: promptItem.prompt,
+            response: "",
+            elapsed: 0,
+            tokens: undefined,
+            isStreaming: true,
+            cliCommand,
+            workingDirectory: context.workspaceFolderPath,
+            timestampMs: Date.now(),
+            attemptIndex,
+            rawTextOutput,
+          });
+        }
+
+        if (legacyStepIndex !== undefined) {
+          context.captureOutputInit?.(
+            legacyStepIndex,
+            promptItem.prompt,
+            cliCommand,
+            context.workspaceFolderPath,
+            Date.now(),
+            attemptIndex,
+            rawTextOutput
+          );
+        }
+      } else {
+        context.dashboardProvider?.updateFinalPromptOutput(target.loopIndex, {
           prompt: promptItem.prompt,
           response: "",
           elapsed: 0,
@@ -616,29 +799,41 @@ export class WorkflowExecutor {
           attemptIndex,
           rawTextOutput,
         });
+
+        context.captureFinalPromptOutputInit?.(
+          target.loopIndex,
+          promptItem.prompt,
+          cliCommand,
+          context.workspaceFolderPath,
+          Date.now(),
+          attemptIndex,
+          rawTextOutput
+        );
       }
-      // Always update captureOutputInit with the CLI command once known
-      context.captureOutputInit?.(
-        stepIndex,
-        promptItem.prompt,
-        cliCommand,
-        context.workspaceFolderPath,
-        Date.now(),
-        attemptIndex,
-        rawTextOutput
-      );
     });
 
-    // Always register the chunk listener — routes to dashboard when active, always buffers
     streamingDisposable = integration.onStreamingChunk((chunk) => {
-      Log.append(chunk);
-      context.captureChunk?.(stepIndex, chunk);
-      context.dashboardProvider?.updateCliStreamingChunk(stepIndex, chunk);
+      if (target.kind === "queue" && legacyStepIndex !== undefined) {
+        context.captureChunk?.(legacyStepIndex, chunk);
+        context.dashboardProvider?.updateCliStreamingChunk(
+          legacyStepIndex,
+          chunk
+        );
+      } else if (target.kind === "finalPrompt") {
+        context.captureFinalPromptChunk?.(target.loopIndex, chunk);
+      }
     });
 
     structuredStreamingDisposable = integration.onStreamingEvents((events) => {
-      context.captureEvents?.(stepIndex, events);
-      context.dashboardProvider?.updateCliStreamingEvents(stepIndex, events);
+      if (target.kind === "queue" && legacyStepIndex !== undefined) {
+        context.captureEvents?.(legacyStepIndex, events);
+        context.dashboardProvider?.updateCliStreamingEvents(
+          legacyStepIndex,
+          events
+        );
+      } else if (target.kind === "finalPrompt") {
+        context.captureFinalPromptEvents?.(target.loopIndex, events);
+      }
     });
 
     const disposeListeners = () => {
@@ -665,20 +860,23 @@ export class WorkflowExecutor {
   }
 
   /**
-   * Create a callback for sending retry prompts.
-   * Used by EndConditionHandler for retry orchestration.
+   * Builds the retry-prompt callback passed to `EndConditionHandler`.
+   *
+   * Note: `EndConditionHandler` calls `incrementRetryCount()` on the queue
+   * *before* invoking this callback, so `getCurrentRetryCount()` already
+   * reflects the current attempt number when the callback fires.
    */
   private createSendRetryPromptCallback(
     integration: HarnessIntegration,
-    context: WorkflowContext
+    context: WorkflowExecutionContext,
+    target: ExecutionTarget,
+    legacyStepIndex: number | undefined
   ): SendRetryPromptCallback {
     return async (
       retryPromptItem: PromptItem,
       currentIndex: number
     ): Promise<string | null> => {
-      // incrementRetryCount was already called by EndConditionHandler before this callback is invoked
       const retryAttemptIndex = this.promptQueue.getCurrentRetryCount();
-
       const state = this.promptQueue.getState();
       const workflowFile = this.promptQueue.getWorkflowFile();
       const resolvedProperties = PropertyResolver.resolve(
@@ -686,12 +884,12 @@ export class WorkflowExecutor {
         workflowFile
       );
 
-      Log.info("⏳ Waiting for retry response...");
       const result = await this.executeWithStreaming(
         retryPromptItem,
         integration,
         context,
-        currentIndex,
+        target,
+        target.kind === "queue" ? legacyStepIndex : undefined,
         retryAttemptIndex,
         {
           promptIndex: currentIndex,
@@ -708,14 +906,14 @@ export class WorkflowExecutor {
         return null;
       }
 
-      Log.info("✅ Retry response complete");
       await this.updateDashboardWithResponse(
         context,
         integration,
+        target,
+        target.kind === "queue" ? legacyStepIndex : undefined,
         retryPromptItem,
         result.responseText,
         result.duration,
-        currentIndex,
         retryAttemptIndex
       );
 
@@ -723,39 +921,25 @@ export class WorkflowExecutor {
     };
   }
 
-  /**
-   * Clear pending response state.
-   * Called when starting a new execution or stopping.
-   */
   clearPendingState(): void {
     this.pendingResponseResolver = null;
     this.pendingResponseText = null;
     this.isWaitingForResponse = false;
   }
 
-  /**
-   * Check if there's a pending response from when workflow was paused.
-   */
   hasPendingResponse(): boolean {
     return (
       this.pendingResponseResolver !== null && this.pendingResponseText !== null
     );
   }
 
-  /**
-   * Check if we're currently waiting for a response.
-   */
   isAwaitingResponse(): boolean {
     return this.isWaitingForResponse;
   }
 
-  /**
-   * Resume from pending response.
-   * Called by FlightPathManager.resume() when there's a pending response.
-   */
+  /** Called by `FlightPathManager.resume()` when there is a held response. */
   resumePendingResponse(): void {
     if (this.pendingResponseResolver && this.pendingResponseText !== null) {
-      Log.info("▶️ Resuming with pending response");
       const resolver = this.pendingResponseResolver;
       const responseText = this.pendingResponseText;
 
@@ -766,12 +950,8 @@ export class WorkflowExecutor {
     }
   }
 
-  /**
-   * Log workflow start message to output channel.
-   * Logs workflow metadata including start time, total prompts, and integration type.
-   */
   private logWorkflowStart(
-    context: WorkflowContext,
+    context: WorkflowExecutionContext,
     integration: HarnessIntegration,
     totalPrompts: number
   ): void {
@@ -784,16 +964,12 @@ export class WorkflowExecutor {
       context.currentPromptFilePath ?? "unknown"
     );
     Log.info(
-      `${tag}Workflow started — ${workflowName}, ${totalPrompts} prompt(s), harness: ${integration.getStatus().strategy}`
+      `${tag}Workflow started - ${workflowName}, ${totalPrompts} prompt(s), harness: ${integration.getStatus().strategy}`
     );
   }
 
-  /**
-   * Log workflow completion message to output channel.
-   * Logs completion metadata including end time and prompts completed.
-   */
   private logWorkflowCompletion(
-    context: WorkflowContext,
+    context: WorkflowExecutionContext,
     totalPrompts: number
   ): void {
     if (!context.showCliOutput) {
@@ -806,14 +982,10 @@ export class WorkflowExecutor {
     );
     const completedCount = this.promptQueue.getCompletedCount();
     Log.info(
-      `${tag}Workflow complete ✓ — ${workflowName}, ${completedCount}/${totalPrompts} prompts completed`
+      `${tag}Workflow complete - ${workflowName}, ${completedCount}/${totalPrompts} prompts completed`
     );
   }
 
-  /**
-   * Show the FlightPath dashboard panel.
-   * Attempts to focus the dashboard when execution starts.
-   */
   private async showDashboard(): Promise<void> {
     try {
       this.platform.focusDashboard?.();
@@ -822,10 +994,6 @@ export class WorkflowExecutor {
     }
   }
 
-  /**
-   * Check if workflow has exceeded maximum execution time.
-   * Returns true if workflow should stop, false if it can continue.
-   */
   private async checkExecutionTimeLimit(
     dynamicConfig: DynamicQueueConfig,
     currentIndex: number,
@@ -835,7 +1003,7 @@ export class WorkflowExecutor {
     const unlimitedWorkflow = dynamicConfig.unlimitedMode || maxTimeSec === -1;
 
     if (unlimitedWorkflow) {
-      return false; // Can continue
+      return false;
     }
 
     const elapsedMs = this.promptQueue.getActiveExecutionTime();
@@ -851,18 +1019,33 @@ export class WorkflowExecutor {
       Log.trace(`⏱️ ${message}`);
 
       await this.promptQueue.markErrored();
-      return true; // Should stop
+      return true;
     }
 
-    return false; // Can continue
+    return false;
   }
 
-  /**
-   * Update dashboard to show prompt is starting.
-   * Sets step status to running and updates status message.
-   */
+  private async checkQueueSizeLimit(
+    dynamicConfig: DynamicQueueConfig,
+    totalPrompts: number
+  ): Promise<boolean> {
+    if (dynamicConfig.unlimitedMode || dynamicConfig.maxQueueSize <= 0) {
+      return false;
+    }
+
+    if (totalPrompts <= dynamicConfig.maxQueueSize) {
+      return false;
+    }
+
+    const message = `Workflow stopped - Maximum queue size reached (${totalPrompts}/${dynamicConfig.maxQueueSize}).`;
+    this.platform.warn(message);
+    Log.trace(`📏 ${message}`);
+    await this.promptQueue.markErrored();
+    return true;
+  }
+
   private updateDashboardForPromptStart(
-    context: WorkflowContext,
+    context: WorkflowExecutionContext,
     prompt: PromptItem,
     currentIndex: number
   ): void {
@@ -873,79 +1056,58 @@ export class WorkflowExecutor {
     context.dashboardProvider.updateStepStatus(currentIndex, {
       state: STEP_STATUS.RUNNING,
     });
-
-    // NOTE: Removed redundant "Starting Prompt N:" status message
-    // The CLI output header now shows "[Prompt N] Initial Attempt" with timestamp,
-    // which provides the same information in a more consistent format.
   }
 
-  /**
-   * Handle prompt send failure.
-   * Checks for user-initiated stop, user cancellation, or real errors.
-   * Returns true if workflow should continue, false if it should stop.
-   */
   private async handlePromptSendFailure(
     integration: HarnessIntegration,
-    context: WorkflowContext,
+    context: WorkflowExecutionContext,
     currentIndex: number
   ): Promise<boolean> {
-    // Check if this was a user-initiated stop (not a real error)
     const queueState = this.promptQueue.getState();
     if (queueState.stopped) {
-      Log.info("⏹️ Execution stopped by user");
-      return false; // Stop workflow
+      return false;
     }
 
-    // Check if this was a user cancellation in chat UI
-    // wasLastFailureUserCancellation() returns false by default (CLI)
     if (integration.wasLastFailureUserCancellation()) {
-      Log.info("⏹️ User cancelled in Copilot Chat - stopping workflow");
       this.promptQueue.stop();
-      return false; // Stop workflow
+      return false;
     }
 
-    // Real error - get the specific failure reason and show message
     const failureReason = integration.getLastFailureReason();
-    this.platform.error(
-      `Failed to execute prompt ${currentIndex + 1}: ${failureReason}`
-    );
+    const stepLabel =
+      currentIndex >= 0
+        ? `prompt ${currentIndex + 1}`
+        : `finalPrompt loop ${Math.abs(currentIndex)}`;
+    this.platform.error(`Failed to execute ${stepLabel}: ${failureReason}`);
 
-    // Mark queue as errored
     await this.promptQueue.markErrored();
 
-    // Update dashboard with the specific failure reason
-    if (context.dashboardProvider) {
+    if (context.dashboardProvider && currentIndex >= 0) {
       context.dashboardProvider.updateStepStatus(currentIndex, {
         state: STEP_STATUS.FAILED,
         message: failureReason,
       });
     }
 
-    return false; // Stop workflow
+    return false;
   }
 
-  /**
-   * Update dashboard with response data from integration.
-   * Includes CLI output, tokens, elapsed time, and streaming status.
-   * Also saves to history if enabled.
-   */
   private async updateDashboardWithResponse(
-    context: WorkflowContext,
+    context: WorkflowExecutionContext,
     integration: HarnessIntegration,
+    target: ExecutionTarget,
+    legacyStepIndex: number | undefined,
     prompt: PromptItem,
     responseText: string,
     duration: number,
-    currentIndex: number,
     attemptIndex: number = 0
   ): Promise<void> {
-    // Get structured output if available (CLI integrations only)
     const parsedOutput = integration.getLastParsedOutput?.();
     let structured: DashboardOutput | undefined;
     if (parsedOutput) {
       structured = CliOutputFormatter.toDashboardFormat(parsedOutput);
     }
 
-    // Get token statistics (prefer structured output over legacy parsing)
     let tokens:
       | {
           prompt: number;
@@ -956,8 +1118,8 @@ export class WorkflowExecutor {
           contextWindowSize?: number;
         }
       | undefined;
+
     if (parsedOutput?.metadata.usage) {
-      // Modern path: Use structured metadata directly
       const u = parsedOutput.metadata.usage;
       tokens = {
         prompt: u.inputTokens,
@@ -968,19 +1130,16 @@ export class WorkflowExecutor {
         contextWindowSize: u.contextWindowSize,
       };
     } else {
-      // Legacy fallback: Parse from statistics string (Chat integration)
       const lastResult = integration.getLastResult();
       if (lastResult?.statistics) {
         tokens = integration.parseTokenCounts(lastResult.statistics);
       }
     }
 
-    // Get CLI command if debugging is enabled (returns undefined for non-CLI)
     const cliCommand = context.shouldShowCliCommand
       ? integration.getLastCliCommand()
       : undefined;
 
-    // Build the output object (shared between dashboard and history)
     const cliOutputObj = {
       prompt: prompt.prompt,
       response: responseText,
@@ -995,48 +1154,43 @@ export class WorkflowExecutor {
       rawTextOutput: integration.rawTextOutput || undefined,
     };
 
-    // Use unexpanded prompt to avoid flooding output with large attachments
-    if (context.dashboardProvider) {
-      context.dashboardProvider.updateCliOutput(currentIndex, cliOutputObj);
-    }
-    // Always capture the completed output so it can be replayed when switching back
-    context.captureCompletedOutput?.(currentIndex, cliOutputObj);
-
-    // Save to history (same data, same moment)
-    Log.debug(
-      `🟢 [APPEND-DEBUG] Step ${currentIndex}: About to save to history. historyFilePath="${context.historyFilePath}", hasManager=${!!context.outputHistoryManager}`
-    );
-    if (context.historyFilePath && context.outputHistoryManager) {
-      const statusMessages = this.stepStatusMessages.get(currentIndex) ?? [];
-      Log.debug(
-        `🟢 [APPEND-DEBUG] Step ${currentIndex}: Calling saveStepOutput(path="${context.historyFilePath}", stepIndex=${currentIndex}, outputsCount=1, messagesCount=${statusMessages.length})`
+    if (context.dashboardProvider && legacyStepIndex !== undefined) {
+      context.dashboardProvider.updateCliOutput(legacyStepIndex, cliOutputObj);
+    } else if (context.dashboardProvider && target.kind === "finalPrompt") {
+      context.dashboardProvider.updateFinalPromptOutput(
+        target.loopIndex,
+        cliOutputObj
       );
+    }
+    if (legacyStepIndex !== undefined) {
+      context.captureCompletedOutput?.(legacyStepIndex, cliOutputObj);
+    } else if (target.kind === "finalPrompt") {
+      context.captureFinalPromptCompletedOutput?.(
+        target.loopIndex,
+        cliOutputObj
+      );
+    }
+
+    if (context.historyFilePath && context.outputHistoryManager) {
+      const key = this.getExecutionKey(target);
+      const statusMessages = this.stepStatusMessages.get(key) ?? [];
       await context.outputHistoryManager
-        .saveStepOutput(
+        .saveExecutionOutput(
           context.historyFilePath,
-          currentIndex,
+          target.kind === "queue"
+            ? { kind: "queue", stepIndex: target.stepIndex }
+            : { kind: "finalPrompt", loopIndex: target.loopIndex },
           [cliOutputObj],
           statusMessages
         )
         .catch((err) =>
           Log.warn("Failed to save step output to history:", err)
         );
-      Log.debug(
-        `🟢 [APPEND-DEBUG] Step ${currentIndex}: saveStepOutput completed successfully`
-      );
-    } else {
-      Log.debug(
-        `🔴 [APPEND-DEBUG] Step ${currentIndex}: NOT saving to history - historyFilePath empty or manager missing`
-      );
     }
   }
 
-  /**
-   * Finalize workflow execution by setting appropriate end state.
-   * Marks queue as completed if no errors, pauses, or stops occurred.
-   */
   private async finalizeWorkflowExecution(
-    context: WorkflowContext
+    context: WorkflowExecutionContext
   ): Promise<void> {
     const finalState = this.promptQueue.getState();
     if (
@@ -1046,11 +1200,21 @@ export class WorkflowExecutor {
       finalState.status !== EXECUTION_STATES.ERROR
     ) {
       await this.promptQueue.markCompleted();
-
-      // Only notify dashboard about completion if we actually completed
       if (context.dashboardProvider) {
         context.dashboardProvider.updateExecutionCompleted();
       }
     }
+  }
+
+  private async setFinalPromptRuntime(
+    context: WorkflowExecutionContext,
+    runtime: FinalPromptRuntimeState
+  ): Promise<void> {
+    await this.promptQueue.setFinalPromptRuntime(runtime);
+    context.dashboardProvider?.updateFinalPromptStatus(
+      runtime.status ?? null,
+      runtime.loopCount,
+      runtime.phase
+    );
   }
 }

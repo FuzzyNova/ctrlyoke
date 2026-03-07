@@ -102,7 +102,10 @@ function registerLanguageModelTools(context: vscode.ExtensionContext) {
           // Update dashboard with extended prompts
           if (webviewProvider) {
             const updatedState = promptQueue.getState();
-            webviewProvider.updatePromptsExtended(updatedState.prompts);
+            webviewProvider.updatePromptsExtended(
+              updatedState.prompts,
+              promptQueue.getWorkflowFile().finalPrompt ?? null
+            );
             webviewProvider.updateProgress(
               updatedState.currentIndex,
               updatedState.prompts.length
