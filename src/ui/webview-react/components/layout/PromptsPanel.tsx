@@ -41,6 +41,7 @@ export const PromptsPanel: React.FC<{
     finalPromptStatus,
     finalPromptLoopCount,
     finalPromptPhase,
+    finalPromptOutputs,
   } = useWorkflowStore();
   const {
     promptsCollapsed,
@@ -158,6 +159,45 @@ export const PromptsPanel: React.FC<{
     if (isCLIManaged || !finalPrompt) return;
     sendMessage(MESSAGE_TYPES.UPDATE_FINAL_PROMPT, { finalPrompt: null });
   }, [isCLIManaged, finalPrompt]);
+
+  // Compute resolved harness/model for the final prompt using the same
+  // three-tier logic as regular prompts, so defaults are shown correctly.
+  const getFinalPromptHarnessModel = () => {
+    if (!finalPrompt) return {};
+    if (finalPrompt._runtime?.harness ?? finalPrompt._runtime?.model) {
+      const h = finalPrompt._runtime!.harness;
+      const m = finalPrompt._runtime!.model;
+      return {
+        harnessLabel: h
+          ? (HARNESS_INFO[h as keyof typeof HARNESS_INFO]?.name ?? h)
+          : undefined,
+        harnessIsDefault: false,
+        modelLabel: m,
+        modelIsDefault: false,
+      };
+    }
+    const harnessIsDefault = finalPrompt.harness === undefined;
+    const modelIsDefault = finalPrompt.model === undefined;
+    const effectiveHarness =
+      finalPrompt.harness ?? workflowProperties.harness ?? globalSettings.harness;
+    const effectiveModel =
+      finalPrompt.model ?? workflowProperties.model ?? globalSettings.model;
+    return {
+      harnessLabel:
+        HARNESS_INFO[effectiveHarness as keyof typeof HARNESS_INFO]?.name ??
+        effectiveHarness,
+      harnessIsDefault,
+      modelLabel: effectiveModel,
+      modelIsDefault,
+    };
+  };
+
+  // Get the latest CLI output for the current final prompt loop
+  const finalPromptLatestOutput = (() => {
+    const outputs = finalPromptOutputs[finalPromptLoopCount];
+    if (!outputs || outputs.length === 0) return null;
+    return outputs[outputs.length - 1];
+  })();
 
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
@@ -332,6 +372,8 @@ export const PromptsPanel: React.FC<{
         onSelect={handleFinalPromptSelect}
         onToggleExpanded={toggleFinalPromptFooterExpanded}
         onDisable={handleDisableFinalPrompt}
+        {...getFinalPromptHarnessModel()}
+        latestOutput={finalPromptLatestOutput}
       />
     </div>
   );

@@ -152,7 +152,7 @@ export const EditorFooter: React.FC<EditorFooterProps> = ({
                 isCLIManaged
                   ? "Read-only — workflow is running via FlightPath CLI"
                   : isFinalPromptMode
-                    ? "Disable orchestrator prompt"
+                    ? "Disable final prompt"
                     : isPromptCompleted
                       ? "Cannot delete a completed prompt — use Clear workflow state to reset"
                       : isPromptActivelyRunning

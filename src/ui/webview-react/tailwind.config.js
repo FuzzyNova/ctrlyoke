@@ -166,6 +166,10 @@ module.exports = {
         "bash-status-error": "var(--vscode-charts-red, #c24038)",
         "bash-status-running": "var(--vscode-charts-yellow, #d19a66)",
 
+        // ── Terminal ANSI colors ──
+        "terminal-ansiGreen": "var(--vscode-terminal-ansiGreen, #89d185)",
+        "terminal-ansiRed": "var(--vscode-terminal-ansiRed, #f14c4c)",
+
         // ── Execution state badge backgrounds (VS Code theme vars with fallbacks) ──
         "exec-idle-bg":
           "var(--vscode-statusBarItem-prominentBackground, rgba(128, 128, 128, 0.2))",

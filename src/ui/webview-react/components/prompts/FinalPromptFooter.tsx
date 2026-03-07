@@ -1,10 +1,12 @@
 import React from "react";
 import { StatusIcon } from "./StatusIcon";
+import { PromptItemDetails } from "./PromptItemDetails";
 import type {
   PromptItem,
   StepStatus,
   FinalPromptPhase,
 } from "../../types/messages";
+import type { CliOutput } from "../../store/workflowStore";
 
 interface FinalPromptFooterProps {
   finalPrompt: PromptItem | null;
@@ -17,6 +19,16 @@ interface FinalPromptFooterProps {
   onSelect: () => void;
   onToggleExpanded: () => void;
   onDisable: () => void;
+  /** Resolved harness display name (accounting for workflow/global defaults) */
+  harnessLabel?: string;
+  /** True when harness is inherited (not set at prompt level) */
+  harnessIsDefault?: boolean;
+  /** Resolved model display name (accounting for workflow/global defaults) */
+  modelLabel?: string;
+  /** True when model is inherited (not set at prompt level) */
+  modelIsDefault?: boolean;
+  /** Latest CLI output for the current final prompt loop */
+  latestOutput?: CliOutput | null;
 }
 
 const truncate = (text: string, maxLength: number = 72): string => {
@@ -38,6 +50,11 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
   onSelect,
   onToggleExpanded,
   onDisable,
+  harnessLabel,
+  harnessIsDefault,
+  modelLabel,
+  modelIsDefault,
+  latestOutput,
 }) => {
   const effectiveStatus: StepStatus = status ?? "pending";
   const hasFinalPrompt = !!finalPrompt;
@@ -52,24 +69,28 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
               : "text-foreground"
           }`}
         >
+          {/* Prompt name / text */}
           <div className="text-[11px] leading-relaxed">
             {finalPrompt.name ? finalPrompt.name : truncate(finalPrompt.prompt)}
           </div>
-          <div className="mt-1 text-[10px] opacity-75 flex items-center gap-1">
-            {finalPrompt.harness && <span>{finalPrompt.harness}</span>}
-            {finalPrompt.harness && finalPrompt.model && (
-              <span className="opacity-40">|</span>
-            )}
-            {finalPrompt.model && <span>{finalPrompt.model}</span>}
-            {phase && (
-              <>
-                <span className="opacity-40">|</span>
-                <span>
-                  {phase === "finalPrompt" ? "Orchestrator" : "Queue"}
-                </span>
-              </>
-            )}
-          </div>
+
+          {/* Phase badge */}
+          {phase && (
+            <div className="mt-0.5 text-[10px] opacity-75">
+              {phase === "finalPrompt" ? "Final Prompt" : "Queue"}
+            </div>
+          )}
+
+          {/* Shared metadata rows: harness/model, stats, end condition, etc. */}
+          <PromptItemDetails
+            status={effectiveStatus}
+            harnessLabel={harnessLabel}
+            harnessIsDefault={harnessIsDefault}
+            modelLabel={modelLabel}
+            modelIsDefault={modelIsDefault}
+            latestOutput={latestOutput}
+            isSelected={isSelected}
+          />
         </div>
       )}
 
@@ -95,8 +116,17 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
       >
         <StatusIcon status={effectiveStatus} />
         <span className="text-[11px] font-semibold uppercase tracking-wide">
-          Orchestrator
+          Final Prompt
         </span>
+        {hasFinalPrompt && finalPrompt ? (
+          <span className="text-[12px] font-bold flex-1 opacity-90 text-terminal-ansiGreen">
+            enabled
+          </span>
+        ) : (
+          <span className="text-[12px] flex-1 italic opacity-80 text-foreground">
+            disabled
+          </span>
+        )}
         {loopCount > 0 && (
           <span className="ml-1 px-1.5 py-[1px] rounded bg-badge-bg text-badge-fg text-[10px]">
             Loop {loopCount + 1}
@@ -111,34 +141,36 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
                 e.stopPropagation();
                 onDisable();
               }}
-              title="Disable orchestrator prompt"
-              aria-label="Disable orchestrator prompt"
+              title="Disable final prompt"
+              aria-label="Disable final prompt"
             >
               <i className="codicon codicon-trash text-[12px]" />
             </button>
           )}
-          <button
-            type="button"
-            className="icon-btn py-0 px-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleExpanded();
-            }}
-            title={
-              isExpanded
-                ? "Collapse orchestrator details"
-                : "Expand orchestrator details"
-            }
-            aria-label={
-              isExpanded
-                ? "Collapse orchestrator details"
-                : "Expand orchestrator details"
-            }
-          >
-            <i
-              className={`codicon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"} text-[12px]`}
-            />
-          </button>
+          {hasFinalPrompt && (
+            <button
+              type="button"
+              className="icon-btn py-0 px-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpanded();
+              }}
+              title={
+                isExpanded
+                  ? "Collapse final prompt details"
+                  : "Expand final prompt details"
+              }
+              aria-label={
+                isExpanded
+                  ? "Collapse final prompt details"
+                  : "Expand final prompt details"
+              }
+            >
+              <i
+                className={`codicon ${isExpanded ? "codicon-chevron-down" : "codicon-chevron-up"} text-[12px]`}
+              />
+            </button>
+          )}
         </div>
       </div>
     </div>

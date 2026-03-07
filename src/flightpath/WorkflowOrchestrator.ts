@@ -846,12 +846,14 @@ export class WorkflowOrchestrator {
   async updatePromptInQueue(
     index: number,
     text: string,
-    properties: unknown
+    properties: unknown,
+    promptName?: string
   ): Promise<void> {
     return this.getActiveInstance().updatePromptInQueue(
       index,
       text,
-      properties
+      properties,
+      promptName
     );
   }
 

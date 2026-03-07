@@ -384,7 +384,7 @@ export const OutputSection: React.FC = () => {
                   )}
                   {isFirstForStep && item.target.kind === "finalPrompt" && (
                     <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
-                      Orchestrator Loop {item.target.index + 1}
+                      Final Prompt Loop {item.target.index + 1}
                     </div>
                   )}
                   <StatusMessage
@@ -413,7 +413,7 @@ export const OutputSection: React.FC = () => {
                   )}
                   {isFirstForStep && item.target.kind === "finalPrompt" && (
                     <div className="px-3 pt-2 text-[10px] uppercase tracking-wide text-description-fg">
-                      Orchestrator Loop {item.target.index + 1}
+                      Final Prompt Loop {item.target.index + 1}
                     </div>
                   )}
                   <CliOutput
@@ -422,7 +422,7 @@ export const OutputSection: React.FC = () => {
                     stepLabel={
                       item.target.kind === "queue"
                         ? undefined
-                        : `Orchestrator Loop ${item.target.index + 1}`
+                        : `Final Prompt Loop ${item.target.index + 1}`
                     }
                     attemptIndex={item.attemptIndex || 0}
                     streamingChunk={streamingChunk}

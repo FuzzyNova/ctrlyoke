@@ -392,10 +392,10 @@ export class WebviewMessageRouter {
       return;
     }
 
-    const { index, text, properties } = message;
+    const { index, text, properties, promptName } = message;
 
     try {
-      await manager.updatePromptInQueue(index, text, properties);
+      await manager.updatePromptInQueue(index, text, properties, promptName);
     } catch (error) {
       Log.error("Failed to update prompt:", error);
       vscode.window.showErrorMessage(

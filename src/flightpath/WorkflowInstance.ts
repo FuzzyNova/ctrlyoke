@@ -1306,10 +1306,12 @@ export class WorkflowInstance {
   async updatePromptInQueue(
     index: number,
     text: string,
-    properties: unknown
+    properties: unknown,
+    promptName?: string
   ): Promise<void> {
     const updates: Partial<PromptItem> = {
       prompt: text,
+      ...(promptName !== undefined && { name: promptName || undefined }),
       ...this.buildPromptItemProperties(properties),
     };
     await this.promptQueue.updatePrompt(index, updates);

@@ -327,6 +327,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         index: selectionTarget.index,
         text,
         properties: propertyValues,
+        promptName: promptName.trim(),
       });
     } else if (selectionTarget.kind === "finalPrompt") {
       vscode.postMessage({
@@ -494,7 +495,7 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
         title="Delete Prompt"
         message={
           selectionTarget.kind === "finalPrompt"
-            ? "Disable orchestrator prompt?"
+            ? "Disable final prompt?"
             : `Are you sure you want to delete prompt ${selectionTarget.kind === "queue" ? selectionTarget.index + 1 : 1}?`
         }
         detail="This action cannot be undone."

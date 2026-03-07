@@ -38,7 +38,7 @@ export const EditorSection: React.FC = () => {
   const getModeText = () => {
     if (isEditMode) {
       if (selectionTarget.kind === "finalPrompt") {
-        return "Editing: Orchestrator Prompt";
+        return "Editing: Final Prompt";
       }
       return `Editing: Prompt ${selectionTarget.index + 1} of ${totalPrompts}`;
     }
