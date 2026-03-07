@@ -478,14 +478,22 @@ export class CopilotCliProvider implements ICliProvider {
    * 5. Extract session ID from session.start event
    */
   /**
-   * Augment JSON-mode headless output with context window data from the session log.
+   * Augment JSON-mode headless output with context window data from Copilot log files.
    *
    * Copilot's --output-format json stdout contains output tokens per turn but no input tokens.
-   * The session.truncation events in the session log file contain both postTruncationTokensInMessages
-   * (= input tokens sent to the model) and tokenLimit (= context window size).
+   * Two fallback sources are tried in order:
    *
-   * This is the permanent architecture for Copilot headless — session ID is not available until
-   * the final result event, so real-time log tailing during execution is not feasible.
+   * 1. **session.truncation events** (`~/.copilot/session-state/{sessionId}/events.jsonl`)
+   *    Fires once per model turn with postTruncationTokensInMessages + tokenLimit.
+   *    Only emitted on turns 2+ (when there is existing context to measure) — short or
+   *    single-turn prompts may not have any.
+   *
+   * 2. **CompactionProcessor lines** (`~/.copilot/logs/process-*.log`)
+   *    Always written every turn: "Utilization X% (used/total tokens)".
+   *    Used as the fallback when session.truncation is absent.
+   *
+   * This is the permanent architecture — session ID is not available until the final
+   * `result` event, so real-time log tailing during execution is not feasible.
    */
   async augmentParsedOutput(output: UniversalCliOutput): Promise<UniversalCliOutput> {
     // Plain-text mode: token data comes from stderr stats in parseTokenCounts(), not needed here.
@@ -495,6 +503,7 @@ export class CopilotCliProvider implements ICliProvider {
 
     const sessionId = output.metadata.sessionId;
     if (!sessionId) {
+      Log.debug(`[CopilotCliProvider] augmentParsedOutput: no sessionId in parsed metadata`);
       return output;
     }
 
@@ -504,29 +513,52 @@ export class CopilotCliProvider implements ICliProvider {
     }
 
     const truncation = await CopilotLogParser.extractTruncationDataFromLog(sessionId);
-    if (!truncation) {
-      Log.debug(`[CopilotCliProvider] No truncation data in session log for ${sessionId}`);
+    const outputTokens = output.metadata.usage?.outputTokens ?? 0;
+
+    if (truncation) {
+      const { postTruncationTokensInMessages, tokenLimit } = truncation;
+      Log.debug(
+        `[CopilotCliProvider] Context window from session log: ${postTruncationTokensInMessages}/${tokenLimit} tokens`
+      );
+      return {
+        ...output,
+        metadata: {
+          ...output.metadata,
+          usage: {
+            ...output.metadata.usage,
+            inputTokens: postTruncationTokensInMessages,
+            outputTokens,
+            totalTokens: postTruncationTokensInMessages + outputTokens,
+            contextWindowUsedTokens: postTruncationTokensInMessages,
+            contextWindowSize: tokenLimit,
+          },
+        },
+      };
+    }
+
+    // Fallback: session.truncation only fires when there is enough prior context
+    // (short/first prompts may not emit it). The process log always contains
+    // CompactionProcessor utilization lines which carry the same data.
+    const processCtx = await this.logParser.extractContextFromProcessLog(sessionId);
+    if (!processCtx) {
+      Log.debug(`[CopilotCliProvider] No context window data available for session ${sessionId}`);
       return output;
     }
 
-    const { postTruncationTokensInMessages, tokenLimit } = truncation;
-    const outputTokens = output.metadata.usage?.outputTokens ?? 0;
-
     Log.debug(
-      `[CopilotCliProvider] Context from session log: ${postTruncationTokensInMessages}/${tokenLimit} tokens`
+      `[CopilotCliProvider] Context window from process log: ${processCtx.used}/${processCtx.size} tokens`
     );
-
     return {
       ...output,
       metadata: {
         ...output.metadata,
         usage: {
           ...output.metadata.usage,
-          inputTokens: postTruncationTokensInMessages,
+          inputTokens: processCtx.used,
           outputTokens,
-          totalTokens: postTruncationTokensInMessages + outputTokens,
-          contextWindowUsedTokens: postTruncationTokensInMessages,
-          contextWindowSize: tokenLimit,
+          totalTokens: processCtx.used + outputTokens,
+          contextWindowUsedTokens: processCtx.used,
+          contextWindowSize: processCtx.size,
         },
       },
     };

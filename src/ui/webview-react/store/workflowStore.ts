@@ -16,6 +16,36 @@ import type {
 } from "@root/types/OutputHistoryTypes";
 import { useUiStore } from "./uiStore";
 import { WebviewLog } from "@utils/logger";
+import { CLI_EVENT_TYPES } from "../types/cliEvents";
+
+/**
+ * Merge incoming streaming events into an existing event array.
+ * Consecutive TEXT or THINKING events of the same type (and same label) are
+ * concatenated into a single event so the UI renders them as continuous text
+ * instead of one React element per streaming token.
+ */
+function mergeStreamingEvents(existing: any[], incoming: any[]): any[] {
+  const result = [...existing];
+  for (const event of incoming) {
+    if (event.type === CLI_EVENT_TYPES.TEXT || event.type === CLI_EVENT_TYPES.THINKING) {
+      const last = result[result.length - 1];
+      if (
+        last &&
+        last.type === event.type &&
+        (event.type !== CLI_EVENT_TYPES.THINKING ||
+          (last.data?.label ?? undefined) === (event.data?.label ?? undefined))
+      ) {
+        result[result.length - 1] = {
+          ...last,
+          data: { ...last.data, text: (last.data?.text || "") + (event.data?.text || "") },
+        };
+        continue;
+      }
+    }
+    result.push(event);
+  }
+  return result;
+}
 
 /**
  * Workflow state - Core workflow execution data
@@ -435,7 +465,7 @@ export const useWorkflowStore = create<
           {
             prompt: "",
             response: "",
-            structured: { events: [...events], metadata: {} },
+            structured: { events: mergeStreamingEvents([], events), metadata: {} },
             elapsed: 0,
             isStreaming: true,
             timestampMs: Date.now(),
@@ -443,7 +473,7 @@ export const useWorkflowStore = create<
           },
         ];
       } else {
-        // Append events to existing streaming buffer
+        // Append events to existing streaming buffer, merging consecutive text/thinking deltas
         const streamingBuffer = outputs[streamingIdx];
         const existingStructured = streamingBuffer.structured as any;
         const existingEvents = existingStructured?.events || [];
@@ -454,7 +484,7 @@ export const useWorkflowStore = create<
             ...streamingBuffer,
             structured: {
               ...existingStructured,
-              events: [...existingEvents, ...events],
+              events: mergeStreamingEvents(existingEvents, events),
               metadata: existingStructured?.metadata || {},
             },
           },

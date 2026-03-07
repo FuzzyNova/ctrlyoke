@@ -278,8 +278,8 @@ export class CopilotResponseParser
           timestamp,
           data: {
             path: input.path || input.file_path || "unknown",
-            oldContent: input.old_string || input.oldString,
-            newContent: input.new_string || input.newString,
+            oldContent: input.old_str || input.old_string || input.oldString,
+            newContent: input.new_str || input.new_string || input.newString,
             status: OPERATION_STATUS.INITIATED,
           },
         });
