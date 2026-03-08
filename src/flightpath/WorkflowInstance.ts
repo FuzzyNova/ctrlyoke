@@ -1991,11 +1991,7 @@ export class WorkflowInstance {
       Log.debug(
         `Auto-starting workflow: State=RUNNING, activeIntegration=null, currentIndex=${state.currentIndex}, totalPrompts=${state.prompts.length}`
       );
-      this.startWorkflowExecution(
-        undefined,
-        "",
-        state.workingFilePath || undefined
-      ).catch((error) => {
+      this.autoStartWithHistory(state).catch((error) => {
         Log.error("Auto-start failed:", error);
         this.platform.error(
           `FlightPath: Failed to auto-start workflow: ${error}`
@@ -2006,6 +2002,62 @@ export class WorkflowInstance {
         `State is RUNNING but NOT auto-starting (activeIntegration already exists)`
       );
     }
+  }
+
+  /**
+   * Auto-starts workflow execution with proper history file and EXECUTION_STARTED notification.
+   *
+   * Fixes the Queue+Resume bug on completed workflows:
+   * - Bug 1: historyFilePath was always "" → output never saved to history
+   * - Bug 2: EXECUTION_STARTED was never sent → webview stayed in history view mode,
+   *   hiding live output behind the old run's history data
+   *
+   * Called from onQueueStateChanged when state transitions to RUNNING with no active integration.
+   */
+  private async autoStartWithHistory(state: QueueState): Promise<void> {
+    const workingFilePath = state.workingFilePath || undefined;
+    let historyFilePath = "";
+
+    if (workingFilePath) {
+      const workflowId =
+        this.outputHistoryManager.extractWorkflowId(workingFilePath);
+      historyFilePath =
+        await this.outputHistoryManager.getLatestHistoryFilePath(workflowId);
+    }
+
+    // Send EXECUTION_STARTED so the dashboard switches from history view to live
+    // view and correctly updates step count / continuation state.
+    if (this.isActive && this.dashboardSink) {
+      const fileName =
+        (this.currentPromptFile
+          ? path.basename(this.currentPromptFile.filePath)
+          : undefined) ||
+        this.workflowName ||
+        (workingFilePath ? path.basename(workingFilePath) : "");
+
+      if (state.currentIndex > 0 && historyFilePath) {
+        // Continuation: preserve previously completed steps in the UI output area
+        this.dashboardSink.updateExecutionStarted(
+          fileName,
+          state.prompts.length,
+          true, // isContinuation
+          state.currentIndex // preserveStepCount
+        );
+      } else {
+        // Fresh start: clear all previous output buffers
+        this.stepOutputBuffer.clear();
+        this.completedStepOutputs.clear();
+        this.finalPromptOutputBuffer.clear();
+        this.finalPromptCompletedOutputs.clear();
+        this.finalPromptStatusMessages.clear();
+        this.dashboardSink.updateExecutionStarted(
+          fileName,
+          state.prompts.length
+        );
+      }
+    }
+
+    await this.startWorkflowExecution(undefined, historyFilePath, workingFilePath);
   }
 
   private async initializeNewWorkflow(
