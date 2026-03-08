@@ -82,14 +82,14 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
             }
           }}
         >
-          {/* Prompt name / text */}
-          <div className="text-[11px] leading-relaxed">
+          {/* Prompt name / text — pl-5 matches PromptItemDetails indent */}
+          <div className="pl-5 text-[11px] leading-relaxed">
             {finalPrompt.name ? finalPrompt.name : truncate(finalPrompt.prompt)}
           </div>
 
           {/* Phase badge */}
           {phase && (
-            <div className="mt-0.5 text-[10px] opacity-75">
+            <div className="mt-0.5 pl-5 text-[10px] opacity-75">
               {phase === "finalPrompt" ? "Final Prompt" : "Queue"}
             </div>
           )}
