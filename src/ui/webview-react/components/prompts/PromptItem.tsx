@@ -1,6 +1,8 @@
 import React from "react";
 import { StatusIcon } from "./StatusIcon";
 import { PromptItemDetails } from "./PromptItemDetails";
+import type { PromptOverride } from "./PromptItemDetails";
+export type { PromptOverride };
 import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 
@@ -44,6 +46,8 @@ interface PromptItemProps {
   modelLabel?: string;
   /** True when model is inherited (not set at prompt level) */
   modelIsDefault?: boolean;
+  /** Prompt-level property overrides to display as compact chips */
+  overrides?: PromptOverride[];
 }
 
 /**
@@ -83,6 +87,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
   harnessIsDefault,
   modelLabel,
   modelIsDefault,
+  overrides,
 }) => {
   // Build class names for the container
   const containerClasses = [
@@ -121,7 +126,9 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         <span className="flex-shrink-0 mt-0.5">
           <StatusIcon status={status} />
         </span>
-        <span className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}>
+        <span
+          className={`flex-1 min-w-0 text-xs leading-relaxed ${isSelected ? "text-list-active-fg" : "text-foreground"}`}
+        >
           <span className="font-medium">{index + 1}.</span>{" "}
           {name ? name : truncate(text, 60)}
         </span>
@@ -137,6 +144,7 @@ export const PromptItem: React.FC<PromptItemProps> = ({
         latestOutput={latestOutput}
         details={details}
         isSelected={isSelected}
+        overrides={overrides}
       />
     </div>
   );

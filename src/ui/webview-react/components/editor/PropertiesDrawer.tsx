@@ -5,6 +5,7 @@ import {
 } from "../../store/editorStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUiStore } from "../../store/uiStore";
+import { useWorkflowStore } from "../../store/workflowStore";
 import { type HarnessId } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
@@ -15,6 +16,7 @@ import {
   MultiCheckboxDropdown,
   HarnessDropdown,
   harnessCategory,
+  PriorContextSelect,
 } from "../shared";
 
 /** Max height for dropdowns inside the PropertiesDrawer (px, not vh — the drawer has a fixed height). */
@@ -44,6 +46,7 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
 }) => {
   const {
     properties,
+    selectedPromptIndex,
     setProperty,
     setEndCondition,
     updateEndConditionField,
@@ -57,6 +60,19 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
   } = useSettingsStore();
   const { hiddenDropdownOptions, hideDropdownOption, unhideDropdownOption } =
     useUiStore();
+  const prompts = useWorkflowStore((s) => s.prompts);
+
+  // Build prior prompt list for priorContext custom selection.
+  // For an existing prompt at index N, valid priors are prompts 0..N-1.
+  // For a new prompt (null), all existing prompts are valid priors.
+  const priorPrompts = (() => {
+    const limit =
+      selectedPromptIndex === null ? prompts.length : selectedPromptIndex;
+    return prompts.slice(0, limit).map((p, i) => ({
+      number: i + 1,
+      name: p.name,
+    }));
+  })();
 
   // End condition expanded state
   const [endConditionExpanded, setEndConditionExpanded] = useState(
@@ -328,6 +344,25 @@ export const PropertiesDrawer: React.FC<PropertiesDrawerProps> = ({
                 className="px-2 py-1 text-sm bg-input-bg text-input-fg border border-input-border rounded focus:outline-none focus:border-focus-border"
               />
             </div>
+          </div>
+
+          {/* Row 5: Prior Context (full width) */}
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="prop-prior-context"
+              className="text-xs font-medium text-foreground"
+              title="Inject prior prompt outputs into this prompt's text before sending to the AI"
+            >
+              Prior Context
+            </label>
+            <PriorContextSelect
+              id="prop-prior-context"
+              value={properties.priorContext}
+              onChange={(v) => setProperty("priorContext", v)}
+              showDefault
+              priorPrompts={priorPrompts}
+              dropdownMaxHeight={DRAWER_DROPDOWN_MAX_HEIGHT}
+            />
           </div>
 
           {/* End Condition Section (Full Width) */}

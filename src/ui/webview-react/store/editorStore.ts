@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { VsCodeApi } from "../types/vscode";
 import type { PromptItem } from "./workflowStore";
 import { getVsCodeApi } from "../hooks/useVsCodeApi";
+import type { PriorContext } from "../types/messages";
 
 /**
  * End condition configuration
@@ -28,6 +29,7 @@ export interface PropertyValues {
   sessionId: string; // "" or session ID or prompt number reference
   allowDynamicExtension: string; // "default" | "yes" | "no"
   endCondition?: EndConditionConfig | null;
+  priorContext?: PriorContext; // undefined = inherit/default
 }
 
 /**
@@ -304,6 +306,7 @@ export const useEditorStore = create<
             ? "yes"
             : "no",
       endCondition: promptData.endCondition ?? null,
+      priorContext: promptData.priorContext,
     };
 
     const isFinalPromptTarget = index < 0;
@@ -616,6 +619,11 @@ export const useEditorStore = create<
     // Add end condition if configured
     if (properties.endCondition && properties.endCondition.script.trim()) {
       result.endCondition = properties.endCondition;
+    }
+
+    // Add priorContext if set
+    if (properties.priorContext !== undefined) {
+      result.priorContext = properties.priorContext;
     }
 
     return result;

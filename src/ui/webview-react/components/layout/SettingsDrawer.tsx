@@ -7,7 +7,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useWorkflowStore } from "../../store/workflowStore";
 import { useVsCodeApi } from "../../hooks/useVsCodeApi";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
-import { MESSAGE_TYPES } from "../../types/messages";
+import { MESSAGE_TYPES, type PriorContext } from "../../types/messages";
 import {
   DROPDOWN_NAMESPACES,
   modelNamespaceForHarness,
@@ -19,6 +19,7 @@ import {
   MultiCheckboxDropdown,
   HarnessDropdown,
   harnessCategory,
+  PriorContextSelect,
 } from "../shared";
 
 /**
@@ -121,7 +122,7 @@ export const SettingsPanel: React.FC<{
     getEffectiveResumeSession,
     getEffectiveAllowDynamicExtension,
   } = useSettingsStore();
-  useWorkflowStore(); // For re-renders when workflow changes
+  const prompts = useWorkflowStore((s) => s.prompts);
 
   // End condition enabled state
   const [endConditionEnabled, setEndConditionEnabled] = useState(
@@ -350,6 +351,20 @@ export const SettingsPanel: React.FC<{
         type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
         property: "allowDynamicExtension",
         value: checked,
+      });
+    },
+    [vscode]
+  );
+
+  const handlePriorContextChange = useCallback(
+    (value: PriorContext | undefined) => {
+      const settingsStore = useSettingsStore.getState();
+      settingsStore.updateWorkflowProperty("priorContext", value);
+
+      vscode.postMessage({
+        type: MESSAGE_TYPES.UPDATE_WORKFLOW_PROPERTY,
+        property: "priorContext",
+        value: value,
       });
     },
     [vscode]
@@ -661,6 +676,23 @@ export const SettingsPanel: React.FC<{
               />
             </div>
           </div>
+
+          {/* Prior Context */}
+          <FormField
+            label="Prior Context"
+            htmlFor="settings-prior-context"
+            description="Inject prior prompt outputs into each prompt's text before sending to the AI"
+          >
+            <PriorContextSelect
+              id="settings-prior-context"
+              value={workflowProperties.priorContext}
+              onChange={handlePriorContextChange}
+              priorPrompts={prompts.map((p, i) => ({
+                number: i + 1,
+                name: p.name,
+              }))}
+            />
+          </FormField>
 
           {/* Resume Session & Session ID */}
           <div className="flex flex-col gap-1">

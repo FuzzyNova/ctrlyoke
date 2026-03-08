@@ -3,6 +3,16 @@ import type { StepStatus } from "../../types/messages";
 import type { RetryState, CliOutput } from "../../store/workflowStore";
 import type { PromptDetails } from "./PromptItem";
 
+/**
+ * A single prompt-level property override to display in the overrides row.
+ * label: short display text (e.g. "resume", "ec: my-script.js", "ctx: all")
+ * title: optional full tooltip text for truncated/abbreviated values
+ */
+export interface PromptOverride {
+  label: string;
+  title?: string;
+}
+
 interface PromptItemDetailsProps {
   status: StepStatus;
   harnessLabel?: string;
@@ -13,14 +23,17 @@ interface PromptItemDetailsProps {
   latestOutput?: CliOutput | null;
   details?: PromptDetails;
   isSelected?: boolean;
+  /** Prompt-level property overrides to display as compact chips */
+  overrides?: PromptOverride[];
 }
 
 /**
  * PromptItemDetails - Shared secondary metadata rows for prompt display.
  *
  * Renders harness/model info, retry state, compact stats (context %, session ID,
- * duration), end condition result, and status message. Used by both PromptItem
- * and FinalPromptFooter so future additions automatically appear in both places.
+ * duration), end condition result, status message, and property overrides.
+ * Used by both PromptItem and FinalPromptFooter so future additions automatically
+ * appear in both places.
  */
 export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
   status,
@@ -32,6 +45,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
   latestOutput,
   details,
   isSelected = false,
+  overrides,
 }) => {
   const durationSeconds = details?.duration ?? latestOutput?.elapsed;
   const sessionId = latestOutput?.structured?.metadata?.sessionId;
@@ -85,9 +99,7 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
           {modelLabel && (
             <span>
               {modelLabel}
-              {modelIsDefault && (
-                <span className="opacity-60"> (default)</span>
-              )}
+              {modelIsDefault && <span className="opacity-60"> (default)</span>}
             </span>
           )}
         </div>
@@ -105,7 +117,9 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
 
       {/* Compact stats: context %, session ID, duration — for completed prompts */}
       {status === "completed" &&
-        (contextPct !== undefined || sessionId || durationSeconds !== undefined) && (
+        (contextPct !== undefined ||
+          sessionId ||
+          durationSeconds !== undefined) && (
           <div
             className={`mt-0.5 pl-5 flex items-center gap-1 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
           >
@@ -114,7 +128,10 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
                 <span key="ctx">{contextPct}%</span>
               ) : null,
               sessionId ? (
-                <span key="session" className="inline-flex items-center gap-0.5">
+                <span
+                  key="session"
+                  className="inline-flex items-center gap-0.5"
+                >
                   <span>{sessionId.substring(0, 6)}</span>
                   <button
                     type="button"
@@ -158,7 +175,9 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
             <i className="codicon codicon-error text-bash-status-error" />
           )}
           {details.endConditionResult.message && (
-            <span className="truncate">{details.endConditionResult.message}</span>
+            <span className="truncate">
+              {details.endConditionResult.message}
+            </span>
           )}
         </div>
       )}
@@ -169,6 +188,23 @@ export const PromptItemDetails: React.FC<PromptItemDetailsProps> = ({
           className={`mt-1 pl-5 text-[11px] italic ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
         >
           {details.message}
+        </div>
+      )}
+
+      {/* Property overrides — compact chips for prompt-level overrides */}
+      {overrides && overrides.length > 0 && (
+        <div
+          className={`mt-0.5 pl-5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] opacity-75 ${isSelected ? "text-list-active-fg" : "text-description-fg"}`}
+        >
+          {overrides.map((override, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center px-1 rounded bg-badge-bg text-badge-fg opacity-90"
+              title={override.title ?? override.label}
+            >
+              {override.label}
+            </span>
+          ))}
         </div>
       )}
     </>

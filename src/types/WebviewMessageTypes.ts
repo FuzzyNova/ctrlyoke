@@ -198,6 +198,7 @@ export interface PromptItem {
   sessionId?: string | number;
   allowDynamicExtension?: boolean;
   endCondition?: EndConditionConfig | null;
+  priorContext?: import("./FlightPathTypes").PriorContext;
   _runtime?: {
     harness?: string;
     model?: string;
@@ -206,6 +207,7 @@ export interface PromptItem {
     completedAt?: number;
     retryCount?: number;
     isRetry?: boolean;
+    responseText?: string;
   };
   // Status for UI display
   status?: StepStatus;

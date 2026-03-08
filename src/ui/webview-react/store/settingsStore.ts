@@ -4,6 +4,7 @@ import {
   HARNESS_STATUS_STRINGS,
   type HarnessId,
   type HarnessStatusString,
+  type PriorContext,
 } from "../types/messages";
 
 /**
@@ -75,6 +76,7 @@ export interface WorkflowProperties {
     maxRetries?: number;
     retryPrompt?: string;
   } | null;
+  priorContext?: PriorContext;
 }
 
 /**

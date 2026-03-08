@@ -20,3 +20,7 @@ export {
   harnessCategory,
   type HarnessDropdownProps,
 } from "./HarnessDropdown";
+export {
+  PriorContextSelect,
+  type PriorPrompt,
+} from "./PriorContextSelect";

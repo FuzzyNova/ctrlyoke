@@ -19,7 +19,6 @@ import {
   MESSAGE_TYPES,
   EXECUTION_STATES,
   STEP_STATUS,
-  workflowDisplayStep,
   type ExecutionState,
   type StepStatus,
   type HarnessId,

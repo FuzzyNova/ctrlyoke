@@ -5,7 +5,11 @@ import { useEditorStore } from "@store/editorStore";
 import { useSettingsStore } from "@store/settingsStore";
 import { useElementNarrow } from "../../hooks/useElementNarrow";
 import { HARNESS_INFO } from "../../types/messages";
-import { PromptItem, type PromptDetails } from "../prompts/PromptItem";
+import {
+  PromptItem,
+  type PromptDetails,
+  type PromptOverride,
+} from "../prompts/PromptItem";
 import { FinalPromptFooter } from "../prompts/FinalPromptFooter";
 import { PromptCounter } from "../prompts/PromptCounter";
 import { PanelBar } from "../shared";
@@ -101,6 +105,90 @@ export const PromptsPanel: React.FC<{
     };
   };
 
+  // Compute the prompt-level property overrides to surface as chips.
+  //
+  // A property is shown whenever it is explicitly set at the prompt level
+  // (the field is not undefined), regardless of whether the value matches
+  // the inherited workflow/global default. This gives a reliable "this
+  // prompt has been customised" signal that doesn't change based on what
+  // the workflow-level settings happen to be.
+  const getPromptOverrides = (
+    prompt: (typeof prompts)[0]
+  ): PromptOverride[] => {
+    const result: PromptOverride[] = [];
+
+    // agent — show basename only
+    if (prompt.agent !== undefined) {
+      const basename = prompt.agent.replace(/.*[\\/]/, "");
+      result.push({
+        label: `agent: ${basename}`,
+        title: `agent: ${prompt.agent}`,
+      });
+    }
+
+    // skills — show count
+    if (prompt.skills !== undefined && prompt.skills.length > 0) {
+      result.push({
+        label: `skills: ${prompt.skills.length}`,
+        title: prompt.skills.join(", "),
+      });
+    }
+
+    // allowDynamicExtension — show whenever explicitly set
+    if (prompt.allowDynamicExtension !== undefined) {
+      result.push({
+        label: prompt.allowDynamicExtension ? "dynamic ext" : "no dynamic ext",
+      });
+    }
+
+    // resumeSession — show whenever explicitly set
+    if (prompt.resumeSession !== undefined) {
+      result.push({
+        label: prompt.resumeSession ? "resume" : "no resume",
+      });
+    }
+
+    // priorContext — show whenever explicitly set
+    if (prompt.priorContext !== undefined) {
+      let ctxLabel: string;
+      if (Array.isArray(prompt.priorContext)) {
+        ctxLabel = `ctx: [${prompt.priorContext.join(",")}]`;
+      } else {
+        // "all" | "previous" | "none" | "finalPromptAll" | "finalPromptPrevious"
+        const shortMap: Record<string, string> = {
+          all: "all",
+          previous: "prev",
+          none: "none",
+          finalPromptAll: "fp-all",
+          finalPromptPrevious: "fp-prev",
+        };
+        ctxLabel = `ctx: ${shortMap[prompt.priorContext as string] ?? String(prompt.priorContext)}`;
+      }
+      result.push({
+        label: ctxLabel,
+        title: `priorContext: ${String(prompt.priorContext)}`,
+      });
+    }
+
+    // endCondition — show whenever set (including null = explicitly disabled)
+    if (prompt.endCondition !== undefined) {
+      if (prompt.endCondition === null) {
+        result.push({ label: "ec: disabled" });
+      } else if (prompt.endCondition.script) {
+        const script = prompt.endCondition.script;
+        const basename = script.replace(/.*[\\/]/, "");
+        const short =
+          basename.length > 30 ? basename.substring(0, 30) + "…" : basename;
+        result.push({
+          label: `ec: ${short}`,
+          title: `endCondition: ${script}`,
+        });
+      }
+    }
+
+    return result;
+  };
+
   // Handle clicking a prompt to edit it (disabled in CLI watch mode)
   const handlePromptClick = useCallback(
     (index: number) => {
@@ -180,7 +268,9 @@ export const PromptsPanel: React.FC<{
     const harnessIsDefault = finalPrompt.harness === undefined;
     const modelIsDefault = finalPrompt.model === undefined;
     const effectiveHarness =
-      finalPrompt.harness ?? workflowProperties.harness ?? globalSettings.harness;
+      finalPrompt.harness ??
+      workflowProperties.harness ??
+      globalSettings.harness;
     const effectiveModel =
       finalPrompt.model ?? workflowProperties.model ?? globalSettings.model;
     return {
@@ -199,6 +289,11 @@ export const PromptsPanel: React.FC<{
     if (!outputs || outputs.length === 0) return null;
     return outputs[outputs.length - 1];
   })();
+
+  // Compute overrides for the final prompt (same logic as regular prompts)
+  const finalPromptOverrides = finalPrompt
+    ? getPromptOverrides(finalPrompt)
+    : undefined;
 
   // Determine if workflow is running
   const isRunning = executionState === EXECUTION_STATES.RUNNING;
@@ -337,6 +432,7 @@ export const PromptsPanel: React.FC<{
                 selectionTarget.kind === "queue" &&
                 selectionTarget.index === index;
               const harnessModel = getPromptHarnessModel(prompt);
+              const overrides = getPromptOverrides(prompt);
 
               return (
                 <PromptItem
@@ -355,6 +451,7 @@ export const PromptsPanel: React.FC<{
                   harnessIsDefault={harnessModel.harnessIsDefault}
                   modelLabel={harnessModel.modelLabel}
                   modelIsDefault={harnessModel.modelIsDefault}
+                  overrides={overrides}
                 />
               );
             })}
@@ -379,6 +476,7 @@ export const PromptsPanel: React.FC<{
         onDisable={handleDisableFinalPrompt}
         {...getFinalPromptHarnessModel()}
         latestOutput={finalPromptLatestOutput}
+        overrides={finalPromptOverrides}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { StatusIcon } from "./StatusIcon";
 import { PromptItemDetails } from "./PromptItemDetails";
+import type { PromptOverride } from "./PromptItemDetails";
 import type {
   PromptItem,
   StepStatus,
@@ -29,6 +30,8 @@ interface FinalPromptFooterProps {
   modelIsDefault?: boolean;
   /** Latest CLI output for the current final prompt loop */
   latestOutput?: CliOutput | null;
+  /** Prompt-level property overrides to display as compact chips */
+  overrides?: PromptOverride[];
 }
 
 const truncate = (text: string, maxLength: number = 72): string => {
@@ -55,6 +58,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
   modelLabel,
   modelIsDefault,
   latestOutput,
+  overrides,
 }) => {
   const effectiveStatus: StepStatus = status ?? "pending";
   const hasFinalPrompt = !!finalPrompt;
@@ -94,7 +98,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
             </div>
           )}
 
-          {/* Shared metadata rows: harness/model, stats, end condition, etc. */}
+          {/* Shared metadata rows: harness/model, stats, end condition, overrides, etc. */}
           <PromptItemDetails
             status={effectiveStatus}
             harnessLabel={harnessLabel}
@@ -103,6 +107,7 @@ export const FinalPromptFooter: React.FC<FinalPromptFooterProps> = ({
             modelIsDefault={modelIsDefault}
             latestOutput={latestOutput}
             isSelected={isSelected}
+            overrides={overrides}
           />
         </div>
       )}
