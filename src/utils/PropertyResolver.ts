@@ -357,15 +357,12 @@ export class PropertyResolver {
   }
 
   /**
-   * Resolve priorContext with two-tier precedence.
+   * Resolve priorContext with three-tier precedence.
    *
    * Precedence order:
    * 1. Prompt-level override (prompt.priorContext)
    * 2. Workflow-level default (workflow.priorContext)
-   * 3. No fallback (returns undefined if not specified)
-   *
-   * Note: priorContext is NOT inherited from VS Code settings.
-   * It must be explicitly defined at the prompt or workflow level.
+   * 3. VS Code setting (flightpath.priorContext)
    *
    * @param prompt The prompt to resolve priorContext for
    * @param workflow The parent workflow file
@@ -385,8 +382,11 @@ export class PropertyResolver {
       return workflow.priorContext;
     }
 
-    // 3. No fallback
-    return undefined;
+    // 3. VS Code setting fallback
+    const globalDefault = ConfigurationUtils.getPriorContext();
+    return globalDefault !== "none"
+      ? (globalDefault as PriorContext)
+      : undefined;
   }
 
   /**

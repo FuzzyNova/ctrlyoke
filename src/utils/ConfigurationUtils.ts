@@ -401,6 +401,13 @@ export const ConfigurationUtils = {
   // ============================================================
 
   /**
+   * Get the default prior context injection mode for workflow prompts.
+   */
+  getPriorContext(): string {
+    return getConfig().get<string>("priorContext", "none");
+  },
+
+  /**
    * Check if existing chat session should be resumed per prompt
    */
   shouldResumeExistingSession(): boolean {

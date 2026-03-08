@@ -271,6 +271,7 @@ export class WebviewSettingsSync {
         sessionId: workingFile.sessionId,
         allowDynamicExtension: workingFile.allowDynamicExtension,
         endCondition: workingFile.endCondition,
+        priorContext: workingFile.priorContext,
       };
 
       this.postMessage({
@@ -499,6 +500,7 @@ export class WebviewSettingsSync {
       respectGitignore,
       confirmDeleteOperations:
         ConfigurationUtils.shouldConfirmDeleteOperations(),
+      priorContext: ConfigurationUtils.getPriorContext(),
     };
   }
 

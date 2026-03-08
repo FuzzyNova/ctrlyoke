@@ -886,6 +886,21 @@
           "description": "Default retry prompt template when maxRetries is specified but retryPrompt is not",
           "markdownDescription": "Default template for retry prompts when `maxRetries` is specified in an end condition but `retryPrompt` is not. Supports placeholders: `{scriptOutput}`, `{errorOutput}`, `{expectedValue}`, `{actualValue}`, `{retryCount}`, `{maxRetries}`. Leave empty to require explicit retry prompts."
         },
+        "flightpath.priorContext": {
+          "order": 545,
+          "type": "string",
+          "enum": ["none", "previous", "all", "finalPromptAll", "finalPromptPrevious"],
+          "enumDescriptions": [
+            "No prior context injection (default)",
+            "Inject the previous prompt's output",
+            "Inject all prior prompt outputs",
+            "Inject all finalPrompt outputs",
+            "Inject the previous finalPrompt output"
+          ],
+          "default": "none",
+          "description": "Default prior context injection mode for workflow prompts",
+          "markdownDescription": "Default mode for injecting prior prompt outputs into subsequent prompts. Workflows and individual prompts can override this. `none` disables injection; `previous` injects only the preceding prompt's output; `all` injects all prior outputs; `finalPromptAll`/`finalPromptPrevious` target finalPrompt outputs specifically."
+        },
         "flightpath.resumeExistingSession": {
           "order": 550,
           "type": "boolean",

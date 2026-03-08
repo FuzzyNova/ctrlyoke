@@ -56,6 +56,7 @@ export interface GlobalSettings {
   allowDynamicExtension: boolean;
   respectGitignore: boolean;
   confirmDeleteOperations: boolean;
+  priorContext: string;
 }
 
 /**
@@ -149,6 +150,7 @@ interface SettingsActions {
   getEffectiveAgent: () => string;
   getEffectiveResumeSession: () => boolean;
   getEffectiveAllowDynamicExtension: () => boolean;
+  getEffectivePriorContext: () => PriorContext;
 
   // Reset
   resetSettings: () => void;
@@ -185,6 +187,7 @@ const initialGlobalSettings: GlobalSettings = {
   allowDynamicExtension: false,
   respectGitignore: true,
   confirmDeleteOperations: true,
+  priorContext: "none",
 };
 
 const initialHarnessStatus: Record<HarnessId, HarnessStatus> = {
@@ -351,6 +354,14 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       return (
         workflowProperties.allowDynamicExtension ??
         globalSettings.allowDynamicExtension
+      );
+    },
+
+    getEffectivePriorContext: () => {
+      const { workflowProperties, globalSettings } = get();
+      return (
+        (workflowProperties.priorContext as PriorContext) ??
+        (globalSettings.priorContext as PriorContext)
       );
     },
 

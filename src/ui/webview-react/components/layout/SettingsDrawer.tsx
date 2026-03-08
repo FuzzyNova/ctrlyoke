@@ -121,6 +121,7 @@ export const SettingsPanel: React.FC<{
     getEffectiveSkills,
     getEffectiveResumeSession,
     getEffectiveAllowDynamicExtension,
+    getEffectivePriorContext,
   } = useSettingsStore();
   const prompts = useWorkflowStore((s) => s.prompts);
 
@@ -157,6 +158,7 @@ export const SettingsPanel: React.FC<{
   const effectiveSkills = getEffectiveSkills();
   const effectiveResumeSession = getEffectiveResumeSession();
   const effectiveAllowDynamicExtension = getEffectiveAllowDynamicExtension();
+  const effectivePriorContext = getEffectivePriorContext();
 
   // Derive the active model namespace from the current harness
   const modelNamespace = modelNamespaceForHarness(effectiveHarness);
@@ -182,6 +184,13 @@ export const SettingsPanel: React.FC<{
         return (
           JSON.stringify(workflowValue) !==
           JSON.stringify(globalSettings.skills ?? [])
+        );
+      }
+      // JSON comparison for priorContext — value can be a string or number[]
+      if (property === "priorContext") {
+        return (
+          JSON.stringify(workflowValue) !==
+          JSON.stringify(globalSettings.priorContext)
         );
       }
       const globalValue =
@@ -682,10 +691,19 @@ export const SettingsPanel: React.FC<{
             label="Prior Context"
             htmlFor="settings-prior-context"
             description="Inject prior prompt outputs into each prompt's text before sending to the AI"
+            setAsDefaultButton={
+              <SetAsDefaultButton
+                property="priorContext"
+                show={isDifferentFromGlobal("priorContext")}
+                onSetDefault={() =>
+                  handleSetAsDefault("priorContext", workflowProperties.priorContext)
+                }
+              />
+            }
           >
             <PriorContextSelect
               id="settings-prior-context"
-              value={workflowProperties.priorContext}
+              value={effectivePriorContext}
               onChange={handlePriorContextChange}
               priorPrompts={prompts.map((p, i) => ({
                 number: i + 1,
