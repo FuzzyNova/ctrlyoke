@@ -199,10 +199,13 @@ export abstract class BaseLogParser implements ILogParser {
       parts.push(`Model: ${meta.model}`);
     }
 
-    // Token usage
+    // Token usage — only show if at least one value is non-zero.
+    // When Copilot has only context window data (no real token counts), both
+    // inputTokens and outputTokens are set to 0, which is not meaningful to display.
     if (
       meta.usage?.inputTokens !== undefined &&
-      meta.usage?.outputTokens !== undefined
+      meta.usage?.outputTokens !== undefined &&
+      (meta.usage.inputTokens > 0 || meta.usage.outputTokens > 0)
     ) {
       parts.push(
         `Tokens: ${meta.usage.inputTokens} in / ${meta.usage.outputTokens} out`

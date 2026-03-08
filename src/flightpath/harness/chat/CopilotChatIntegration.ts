@@ -55,7 +55,6 @@ export class CopilotChatIntegration extends HarnessIntegration {
     this.attachmentHandler = new NativeAttachmentHandler((path) =>
       this.resolveWorkspacePath(path)
     );
-    this.initialize();
   }
 
   /**

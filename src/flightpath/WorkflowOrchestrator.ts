@@ -1108,10 +1108,13 @@ export class WorkflowOrchestrator {
       // Auto-retire when a workflow completes, errors, or stops.
       // All dashboard messages (notifyWorkflowSummaryUpdated) have already been
       // sent synchronously above, so there's nothing to wait for.
+      // Guard with has() — workflows restored from disk in a terminal state are
+      // never registered in this.workflows, so there's nothing to retire.
       if (
-        state.status === EXECUTION_STATES.COMPLETED ||
-        state.status === EXECUTION_STATES.ERROR ||
-        state.status === EXECUTION_STATES.STOPPED
+        this.workflows.has(instance.id) &&
+        (state.status === EXECUTION_STATES.COMPLETED ||
+          state.status === EXECUTION_STATES.ERROR ||
+          state.status === EXECUTION_STATES.STOPPED)
       ) {
         Log.debug(
           `onDidChangeState: inst:${instance.id.slice(0, 8)} terminal state ${state.status} — retiring immediately`
