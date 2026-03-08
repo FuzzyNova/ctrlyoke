@@ -19,6 +19,7 @@ export {
   HARNESS_STATUS_STRINGS,
   CLI_EVENT_TYPES,
   OPERATION_STATUS,
+  FINAL_PROMPT_PHASES,
   type MessageType,
   type WebviewLogLevel,
   type ExecutionState,

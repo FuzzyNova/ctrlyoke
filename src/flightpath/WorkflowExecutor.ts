@@ -153,14 +153,16 @@ export class WorkflowExecutor {
     );
 
     const workflowFile = this.promptQueue.getWorkflowFile();
-    const finalPrompt = workflowFile.finalPrompt;
+    const getFinalPrompt = () => this.promptQueue.getWorkflowFile().finalPrompt;
 
-    if (finalPrompt && !this.promptQueue.getFinalPromptRuntime()) {
+    const initialFinalPrompt = getFinalPrompt();
+
+    if (initialFinalPrompt && !this.promptQueue.getFinalPromptRuntime()) {
       await this.setFinalPromptRuntime(context, {
         phase: FINAL_PROMPT_PHASES.QUEUE,
         loopCount: 0,
       });
-    } else if (finalPrompt) {
+    } else if (initialFinalPrompt) {
       const runtime = this.promptQueue.getFinalPromptRuntime();
       context.dashboardProvider?.updateFinalPromptStatus(
         runtime?.status ?? null,
@@ -172,7 +174,7 @@ export class WorkflowExecutor {
     }
 
     let runFinalPromptFirst =
-      !!finalPrompt &&
+      !!initialFinalPrompt &&
       this.promptQueue.getFinalPromptRuntime()?.phase ===
         FINAL_PROMPT_PHASES.FINAL_PROMPT;
 
@@ -204,8 +206,17 @@ export class WorkflowExecutor {
         break;
       }
 
-      if (!finalPrompt) {
+      const currentFinalPrompt = getFinalPrompt();
+      if (!currentFinalPrompt) {
         break;
+      }
+
+      // Initialize runtime if a final prompt was added after execution started
+      if (!this.promptQueue.getFinalPromptRuntime()) {
+        await this.setFinalPromptRuntime(context, {
+          phase: FINAL_PROMPT_PHASES.QUEUE,
+          loopCount: 0,
+        });
       }
 
       const runtime = this.promptQueue.getFinalPromptRuntime();
@@ -221,7 +232,7 @@ export class WorkflowExecutor {
 
       const shouldContinue = await this.executeSinglePrompt(
         { kind: "finalPrompt", loopIndex },
-        finalPrompt,
+        currentFinalPrompt,
         context
       );
       if (!shouldContinue) {
@@ -238,7 +249,7 @@ export class WorkflowExecutor {
       const queueSizeAfter = this.promptQueue.getState().prompts.length;
       if (queueSizeAfter > queueSizeBefore) {
         const finalPromptAllowsDynamic = PropertyResolver.resolve(
-          finalPrompt,
+          currentFinalPrompt,
           workflowFile
         ).allowDynamicExtension;
         if (!finalPromptAllowsDynamic) {

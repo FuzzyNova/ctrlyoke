@@ -13,6 +13,7 @@ import {
   MESSAGE_TYPES,
   STEP_STATUS,
   EXECUTION_STATES,
+  FINAL_PROMPT_PHASES,
   type StepStatus,
 } from "../../types/messages";
 import { sendMessage } from "../../hooks/useMessageHandler";
@@ -368,7 +369,11 @@ export const PromptsPanel: React.FC<{
         phase={finalPromptPhase}
         isExpanded={finalPromptFooterExpanded}
         isSelected={selectionTarget.kind === "finalPrompt"}
-        isReadOnly={isCLIManaged}
+        isReadOnly={
+          isCLIManaged ||
+          (finalPromptPhase === FINAL_PROMPT_PHASES.FINAL_PROMPT &&
+            finalPromptStatus === STEP_STATUS.RUNNING)
+        }
         onSelect={handleFinalPromptSelect}
         onToggleExpanded={toggleFinalPromptFooterExpanded}
         onDisable={handleDisableFinalPrompt}
