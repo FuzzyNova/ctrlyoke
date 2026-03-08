@@ -5,6 +5,7 @@ import {
   keymap,
   ViewPlugin,
   Decoration,
+  highlightActiveLine,
 } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { minimalSetup } from "codemirror";
@@ -14,8 +15,8 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { history, historyKeymap } from "@codemirror/commands";
-import { searchKeymap } from "@codemirror/search";
-import { linter } from "@codemirror/lint";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { linter, lintKeymap } from "@codemirror/lint";
 import { RangeSetBuilder } from "@codemirror/state";
 import { getVsCodeApi } from "../../hooks/useVsCodeApi";
 import { MESSAGE_TYPES } from "../../types/messages";
@@ -64,7 +65,15 @@ interface CodeMirrorEditorProps {
  * - Search support
  */
 export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
-  const { value, onChange, affUri, dicUri, readOnly = false, onRun, onQueue } = props;
+  const {
+    value,
+    onChange,
+    affUri,
+    dicUri,
+    readOnly = false,
+    onRun,
+    onQueue,
+  } = props;
   const placeholderText =
     props.placeholder ||
     "Use @ for files and folders, # for selections and symbols";
@@ -280,6 +289,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           ...historyKeymap,
           ...searchKeymap,
           ...completionKeymap,
+          ...lintKeymap,
           {
             key: "Ctrl-Shift-Enter",
             mac: "Cmd-Shift-Enter",
@@ -300,6 +310,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         placeholder(placeholderText),
         createThemeExtension(),
         createLinterThemeExtension(),
+        highlightActiveLine(),
+        highlightSelectionMatches(),
         createSpellCheckExtension(typoCheckerRef),
         autocompletion({
           override: [customCompletions],
@@ -464,6 +476,26 @@ function createThemeExtension() {
       },
       ".cm-completion-variable .cm-completionLabel": {
         color: "var(--vscode-symbolIcon-variableForeground, #75beff)",
+      },
+      // Find/replace search match highlights (@codemirror/search)
+      ".cm-searchMatch": {
+        backgroundColor:
+          "var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33))",
+        outline:
+          "1px solid var(--vscode-editor-findMatchHighlightBorder, transparent)",
+      },
+      ".cm-searchMatch.cm-searchMatch-selected": {
+        backgroundColor:
+          "var(--vscode-editor-findMatchBackground, rgba(234, 92, 0, 0.7))",
+        outline:
+          "1px solid var(--vscode-editor-findMatchBorder, #f38518)",
+      },
+      // Selection match highlight (highlightSelectionMatches)
+      ".cm-selectionMatch": {
+        backgroundColor:
+          "var(--vscode-editor-selectionHighlightBackground, rgba(173, 214, 255, 0.15))",
+        outline:
+          "1px solid var(--vscode-editor-selectionHighlightBorder, rgba(173, 214, 255, 0.4))",
       },
       // Link styling for clickable @file and #file references
       ".cm-link": {
