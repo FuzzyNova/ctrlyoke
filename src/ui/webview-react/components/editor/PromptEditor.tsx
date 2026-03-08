@@ -404,6 +404,19 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
     setShowDeleteModal(false);
   }, []);
 
+  // Keyboard shortcut handlers for CodeMirror — mirror the footer button disabled states
+  const handleEditorRun = useCallback(() => {
+    if (!isEditMode && !isCLIManaged && promptText.trim().length > 0) {
+      executePrompt(ACTION_TYPES.RUN);
+    }
+  }, [isEditMode, isCLIManaged, promptText, executePrompt]);
+
+  const handleEditorQueue = useCallback(() => {
+    if (!isEditMode && !isCLIManaged && promptText.trim().length > 0) {
+      executePrompt(ACTION_TYPES.QUEUE);
+    }
+  }, [isEditMode, isCLIManaged, promptText, executePrompt]);
+
   // Handle editor text change
   const handleTextChange = useCallback(
     (text: string) => {
@@ -456,6 +469,8 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({
           affUri={affUri}
           dicUri={dicUri}
           readOnly={isCLIManaged}
+          onRun={handleEditorRun}
+          onQueue={handleEditorQueue}
         />
 
         {/* Properties Drawer (slides up from bottom, overlays only editor) */}

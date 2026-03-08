@@ -46,6 +46,10 @@ interface CodeMirrorEditorProps {
   dicUri: string;
   /** When true, the editor is read-only (no edits allowed). */
   readOnly?: boolean;
+  /** Called when Ctrl+Enter (Cmd+Enter on Mac) is pressed. */
+  onRun?: () => void;
+  /** Called when Ctrl+Shift+Enter (Cmd+Shift+Enter on Mac) is pressed. */
+  onQueue?: () => void;
 }
 
 /**
@@ -60,7 +64,7 @@ interface CodeMirrorEditorProps {
  * - Search support
  */
 export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
-  const { value, onChange, affUri, dicUri, readOnly = false } = props;
+  const { value, onChange, affUri, dicUri, readOnly = false, onRun, onQueue } = props;
   const placeholderText =
     props.placeholder ||
     "Use @ for files and folders, # for selections and symbols";
@@ -69,6 +73,8 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   const viewRef = useRef<EditorView | null>(null);
   const typoCheckerRef = useRef<TypoChecker | null>(null);
   const onChangeRef = useRef(onChange);
+  const onRunRef = useRef(onRun);
+  const onQueueRef = useRef(onQueue);
   const readOnlyRef = useRef(readOnly);
   const pendingCompletionResolveRef = useRef<((value: any) => void) | null>(
     null
@@ -78,10 +84,18 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
 
   const vscode = getVsCodeApi();
 
-  // Keep onChange ref current
+  // Keep callback refs current
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    onRunRef.current = onRun;
+  }, [onRun]);
+
+  useEffect(() => {
+    onQueueRef.current = onQueue;
+  }, [onQueue]);
 
   // Update read-only state when prop changes (set contentEditable on the CodeMirror content DOM)
   useEffect(() => {
@@ -262,7 +276,27 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnlyRef.current),
         history(),
-        keymap.of([...historyKeymap, ...searchKeymap, ...completionKeymap]),
+        keymap.of([
+          ...historyKeymap,
+          ...searchKeymap,
+          ...completionKeymap,
+          {
+            key: "Ctrl-Shift-Enter",
+            mac: "Cmd-Shift-Enter",
+            run: () => {
+              onQueueRef.current?.();
+              return true;
+            },
+          },
+          {
+            key: "Ctrl-Enter",
+            mac: "Cmd-Enter",
+            run: () => {
+              onRunRef.current?.();
+              return true;
+            },
+          },
+        ]),
         placeholder(placeholderText),
         createThemeExtension(),
         createLinterThemeExtension(),
