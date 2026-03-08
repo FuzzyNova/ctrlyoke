@@ -47,9 +47,9 @@ interface CodeMirrorEditorProps {
   dicUri: string;
   /** When true, the editor is read-only (no edits allowed). */
   readOnly?: boolean;
-  /** Called when Ctrl+Enter (Cmd+Enter on Mac) is pressed. */
+  /** Called when Alt+Enter is pressed. */
   onRun?: () => void;
-  /** Called when Ctrl+Shift+Enter (Cmd+Shift+Enter on Mac) is pressed. */
+  /** Called when Alt+Shift+Enter is pressed. */
   onQueue?: () => void;
 }
 
@@ -291,16 +291,14 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           ...completionKeymap,
           ...lintKeymap,
           {
-            key: "Ctrl-Shift-Enter",
-            mac: "Cmd-Shift-Enter",
+            key: "Alt-Shift-Enter",
             run: () => {
               onQueueRef.current?.();
               return true;
             },
           },
           {
-            key: "Ctrl-Enter",
-            mac: "Cmd-Enter",
+            key: "Alt-Enter",
             run: () => {
               onRunRef.current?.();
               return true;
