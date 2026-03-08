@@ -74,6 +74,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
     null
   );
   const pendingCompletionTriggerRef = useRef<string | null>(null);
+  const completionSeqRef = useRef(0);
 
   const vscode = getVsCodeApi();
 
@@ -116,83 +117,94 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
   }, [affUri, dicUri]);
 
   // Handle completion response from extension
-  const handleCompletionResponse = useCallback((items: any[], from: number) => {
-    if (!pendingCompletionResolveRef.current) {
-      return;
-    }
+  const handleCompletionResponse = useCallback(
+    (items: any[], from: number, seq?: number) => {
+      // Discard stale responses from earlier requests
+      if (seq !== undefined && seq !== completionSeqRef.current) {
+        return;
+      }
+      if (!pendingCompletionResolveRef.current) {
+        return;
+      }
 
-    const completions = items.map((item, index) => {
-      // Calculate boost from sortText
-      let boost: number;
-      if (item.sortText) {
-        const prefixMatch = item.sortText.match(/^(\d+)_/);
-        if (prefixMatch) {
-          const prefix = parseInt(prefixMatch[1]);
-          boost = 1000 - prefix * 100 - index * 0.01;
+      const completions = items.map((item, index) => {
+        // Calculate boost from sortText
+        let boost: number;
+        if (item.sortText) {
+          const prefixMatch = item.sortText.match(/^(\d+)_/);
+          if (prefixMatch) {
+            const prefix = parseInt(prefixMatch[1]);
+            boost = 1000 - prefix * 100 - index * 0.01;
+          } else {
+            boost = -index;
+          }
         } else {
           boost = -index;
         }
-      } else {
-        boost = -index;
-      }
 
-      // Map VS Code CompletionItemKind to CodeMirror type
-      const kindMap: Record<number, string> = {
-        0: "text",
-        1: "method",
-        2: "function",
-        3: "function",
-        4: "property",
-        5: "variable",
-        6: "class",
-        7: "interface",
-        8: "namespace",
-        9: "property",
-        10: "constant",
-        11: "constant",
-        12: "enum",
-        13: "keyword",
-        14: "text",
-        15: "string",
-        16: "file",
-        17: "text",
-        18: "folder",
-        19: "enum",
-        20: "constant",
-        21: "class",
-      };
+        // Map VS Code CompletionItemKind to CodeMirror type
+        const kindMap: Record<number, string> = {
+          0: "text",
+          1: "method",
+          2: "function",
+          3: "function",
+          4: "property",
+          5: "variable",
+          6: "class",
+          7: "interface",
+          8: "namespace",
+          9: "property",
+          10: "constant",
+          11: "constant",
+          12: "enum",
+          13: "keyword",
+          14: "text",
+          15: "string",
+          16: "file",
+          17: "text",
+          18: "folder",
+          19: "enum",
+          20: "constant",
+          21: "class",
+        };
 
-      const type =
-        item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
+        const type =
+          item.kind !== undefined ? kindMap[item.kind] || "text" : "text";
 
-      return {
-        label: item.label,
-        type,
-        detail: item.detail,
-        boost,
-        // Don't prepend trigger - it stays in the document at position 'from'
-        // We only replace from 'from + 1' onward
-        apply: item.insertText || item.label,
-      };
-    });
+        return {
+          label: item.label,
+          type,
+          detail: item.detail,
+          boost,
+          // Don't prepend trigger - it stays in the document at position 'from'
+          // We only replace from 'from + 1' onward
+          apply: item.insertText || item.label,
+        };
+      });
 
-    // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
-    // matches against "src" instead of "@src" (labels don't include trigger)
-    pendingCompletionResolveRef.current({
-      from: from + 1, // Skip the @ or # trigger character
-      options: completions,
-    });
+      // IMPORTANT: Skip trigger character (@/#) in 'from' position so CodeMirror
+      // matches against "src" instead of "@src" (labels don't include trigger)
+      pendingCompletionResolveRef.current({
+        from: from + 1, // Skip the @ or # trigger character
+        options: completions,
+      });
 
-    pendingCompletionResolveRef.current = null;
-    pendingCompletionTriggerRef.current = null;
-  }, []);
+      pendingCompletionResolveRef.current = null;
+      pendingCompletionTriggerRef.current = null;
+    },
+    []
+  );
 
   // Listen for completion responses from extension
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       if (message.type === MESSAGE_TYPES.COMPLETIONS_RESPONSE) {
-        handleCompletionResponse(message.items || [], message.from);
+        handleCompletionResponse(
+          message.items || [],
+          message.from,
+          message.seq
+        );
       }
     };
 
@@ -214,8 +226,15 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
       const trigger = before.text[0]; // @ or #
       const from = before.from;
 
+      // Assign a sequence number so stale responses can be discarded
+      const seq = ++completionSeqRef.current;
+
       // Request completions from extension host
       return new Promise<CompletionResult | null>((resolve) => {
+        // Cancel any pending completion that will never be fulfilled
+        if (pendingCompletionResolveRef.current) {
+          pendingCompletionResolveRef.current(null);
+        }
         pendingCompletionResolveRef.current = resolve;
         pendingCompletionTriggerRef.current = trigger;
 
@@ -224,6 +243,7 @@ export const CodeMirrorEditor: React.FC<CodeMirrorEditorProps> = (props) => {
           trigger,
           prefix: before.text,
           position: from,
+          seq,
         });
       });
     },

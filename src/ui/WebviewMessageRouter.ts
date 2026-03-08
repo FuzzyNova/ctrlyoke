@@ -156,7 +156,8 @@ export class WebviewMessageRouter {
       await this.handleCompletionRequest(
         message.trigger,
         message.prefix,
-        message.position
+        message.position,
+        message.seq
       );
     });
 
@@ -464,7 +465,8 @@ export class WebviewMessageRouter {
   private async handleCompletionRequest(
     trigger: string,
     prefix: string,
-    position: number
+    position: number,
+    seq?: number
   ): Promise<void> {
     try {
       const items = await this.getCompletionItems(trigger, prefix);
@@ -484,6 +486,7 @@ export class WebviewMessageRouter {
           sortText: item.sortText,
         })),
         from: position,
+        seq,
       });
     } catch (error) {
       Log.error("Failed to get completions:", error);
@@ -491,6 +494,7 @@ export class WebviewMessageRouter {
         type: MESSAGE_TYPES.COMPLETIONS_RESPONSE,
         items: [],
         from: position,
+        seq,
       });
     }
   }

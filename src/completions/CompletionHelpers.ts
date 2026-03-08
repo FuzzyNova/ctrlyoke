@@ -519,11 +519,13 @@ export function getSelectionCompletions(): PlainCompletionItem[] {
     const completionText = `file:${relativePath}:${startLine}-${endLine}`;
 
     // Create label with file name and line range
+    // Label must start with "selection" so both VS Code and CodeMirror can
+    // prefix-match it when the user types #s, #sel, #selection, etc.
     const fileName = path.basename(relativePath);
     const label =
       visibleEditors.length > 1
-        ? `$(selection) ${fileName} (lines ${startLine}-${endLine})`
-        : `$(selection) Current Selection`;
+        ? `selection: ${fileName} (lines ${startLine}-${endLine})`
+        : `selection: Current Selection`;
 
     // Get preview of selected text (first 100 chars)
     const selectedText = document.getText(selection);
@@ -541,7 +543,7 @@ export function getSelectionCompletions(): PlainCompletionItem[] {
         `Insert reference to selected code:\n\n\`#${completionText}\`\n\n` +
         `**Preview:**\n\`\`\`\n${preview}\n\`\`\``,
       sortText: `!000_selection_${selectionIndex.toString().padStart(3, "0")}`,
-      filterText: `file selection ${relativePath} ${fileName}`,
+      filterText: `selection ${relativePath} ${fileName} current`,
     };
 
     items.push(item);
